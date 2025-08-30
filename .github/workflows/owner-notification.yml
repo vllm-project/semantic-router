@@ -1,7 +1,7 @@
 name: Owner Notification
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize]
 
 jobs:
@@ -28,6 +28,7 @@ jobs:
       - name: Find owners and notify
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const path = require('path');
