@@ -11,7 +11,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,11 +32,11 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             // Get changed files
             const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
             console.log('Changed files:', changedFiles);
-            
+
             // Function to find OWNER file for a given file path
             function findOwnerFile(filePath) {
                const parts = filePath.split('/');
