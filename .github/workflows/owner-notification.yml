@@ -1,0 +1,168 @@
+name: Owner Notification
+
+on:
+  pull_request_target:
+    types: [assigned, opened, reopened, synchronize]
+
+jobs:
+  notify-owners:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            **/*
+
+      - name: Find owners and notify
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Get changed files
+            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
+            console.log('Changed files:', changedFiles);
+            
+            // Function to find OWNER file for a given file path
+            function findOwnerFile(filePath) {
+               const parts = filePath.split('/');
+
+               // Check first level directory FIRST (prioritize more specific owners)
+               if (parts.length > 1) {
+                 const firstLevelDir = parts[0];
+                 const ownerPath = path.join(firstLevelDir, 'OWNER');
+                 if (fs.existsSync(ownerPath)) {
+                   const content = fs.readFileSync(ownerPath, 'utf8');
+                   const owners = content.split('\n')
+                     .filter(line => line.trim().startsWith('@'))
+                     .map(line => line.trim());
+                   if (owners.length > 0) {
+                     return { path: firstLevelDir, owners };
+                   }
+                 }
+               }
+
+               // Fall back to root directory
+               if (fs.existsSync('OWNER')) {
+                 const content = fs.readFileSync('OWNER', 'utf8');
+                 const owners = content.split('\n')
+                   .filter(line => line.trim().startsWith('@'))
+                   .map(line => line.trim());
+                 if (owners.length > 0) {
+                   return { path: '.', owners };
+                 }
+               }
+
+               return null;
+             }
+
+            // Collect all owners for changed files
+            const ownerMap = new Map();
+
+            for (const file of changedFiles) {
+              if (!file.trim()) continue;
+
+              const ownerInfo = findOwnerFile(file);
+              if (ownerInfo) {
+                if (!ownerMap.has(ownerInfo.path)) {
+                  ownerMap.set(ownerInfo.path, {
+                    owners: ownerInfo.owners,
+                    files: []
+                  });
+                }
+                ownerMap.get(ownerInfo.path).files.push(file);
+              }
+            }
+
+            if (ownerMap.size === 0) {
+              console.log('No owners found for changed files');
+              return;
+            }
+
+            // Collect all unique owners for assignment
+            const allOwners = new Set();
+            for (const [, info] of ownerMap) {
+              for (const owner of info.owners) {
+                // Remove @ prefix for API call
+                allOwners.add(owner.replace('@', ''));
+              }
+            }
+
+            // Assign owners to the PR
+            if (allOwners.size > 0) {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  assignees: Array.from(allOwners)
+                });
+                console.log(`Assigned PR to: ${Array.from(allOwners).join(', ')}`);
+              } catch (error) {
+                console.log(`Failed to assign PR: ${error.message}`);
+                // Continue with comment creation even if assignment fails
+              }
+            }
+
+            // Create comment content
+            let commentBody = '## 👥 vLLM Semantic Team Notification\n\n';
+            commentBody += 'The following members have been identified for the changed files in this PR and have been automatically assigned:\n\n';
+
+            for (const [dirPath, info] of ownerMap) {
+              commentBody += `### 📁 \`${dirPath === '.' ? 'Root Directory' : dirPath}\`\n`;
+              commentBody += `**Owners:** ${info.owners.join(', ')}\n`;
+              commentBody += `**Files changed:**\n`;
+              for (const file of info.files) {
+                commentBody += `- \`${file}\`\n`;
+              }
+              commentBody += '\n';
+            }
+
+            commentBody += '---\n';
+            commentBody += '*This comment was automatically generated based on the OWNER files in the repository.*';
+
+            // Get existing comments
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            // Check if we already have an owner notification comment
+            const existingComment = comments.find(comment => 
+              comment.user.login === 'github-actions[bot]' && 
+              comment.body.includes('## 👥 vLLM Semantic Team Notification')
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: commentBody
+              });
+              console.log('Updated existing owner notification comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+              console.log('Created new owner notification comment');
+            }
