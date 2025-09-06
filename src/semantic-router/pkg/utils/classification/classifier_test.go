@@ -406,3 +406,49 @@ var _ = Describe("PIIClassification", func() {
 		})
 	})
 })
+
+func TestUpdateBestModel(t *testing.T) {
+
+	classifier := &Classifier{}
+
+	bestScore := 0.5
+	bestQuality := 0.5
+	bestModel := "old-model"
+
+	classifier.updateBestModel(0.8, 0.9, "new-model", &bestScore, &bestQuality, &bestModel)
+	if bestScore != 0.8 || bestQuality != 0.9 || bestModel != "new-model" {
+		t.Errorf("update: got bestScore=%v, bestQuality=%v, bestModel=%v", bestScore, bestQuality, bestModel)
+	}
+
+	classifier.updateBestModel(0.7, 0.7, "another-model", &bestScore, &bestQuality, &bestModel)
+	if bestScore != 0.8 || bestQuality != 0.9 || bestModel != "new-model" {
+		t.Errorf("not update: got bestScore=%v, bestQuality=%v, bestModel=%v", bestScore, bestQuality, bestModel)
+	}
+}
+
+func TestForEachModelScore(t *testing.T) {
+
+	c := &Classifier{}
+	cat := &config.Category{
+		ModelScores: []config.ModelScore{
+			{Model: "model-a", Score: 0.9},
+			{Model: "model-b", Score: 0.8},
+			{Model: "model-c", Score: 0.7},
+		},
+	}
+
+	var models []string
+	c.forEachModelScore(cat, func(ms config.ModelScore) {
+		models = append(models, ms.Model)
+	})
+
+	expected := []string{"model-a", "model-b", "model-c"}
+	if len(models) != len(expected) {
+		t.Fatalf("expected %d models, got %d", len(expected), len(models))
+	}
+	for i, m := range expected {
+		if models[i] != m {
+			t.Errorf("expected model %s at index %d, got %s", m, i, models[i])
+		}
+	}
+}

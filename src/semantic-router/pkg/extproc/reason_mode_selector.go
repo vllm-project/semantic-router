@@ -47,13 +47,29 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 	return false, categoryName
 }
 
+// hasDeepSeekAlias returns true if the model uses a short alias for DeepSeek (e.g., "ds-*")
+// Rules:
+//   - Accept only when the model string starts with: "ds-", "ds_", "ds:", "ds " or exactly equals "ds"
+//   - Do NOT match occurrences of "ds" in the middle of the model name (e.g., "foo-ds-1b")
+func hasDeepSeekAlias(lower string) bool {
+	lower = strings.TrimSpace(lower)
+	if strings.HasPrefix(lower, "ds") {
+		if len(lower) == 2 { // exactly "ds"
+			return true
+		}
+		sep := lower[2]
+		return sep == '-' || sep == '_' || sep == ':' || sep == ' '
+	}
+	return false
+}
+
 // getModelFamilyAndTemplateParam returns a normalized model family name and the template param to be used (if any)
 func getModelFamilyAndTemplateParam(model string) (string, string) {
 	lower := strings.ToLower(strings.TrimSpace(model))
 	if strings.Contains(lower, "qwen3") {
 		return "qwen3", "enable_thinking"
 	}
-	if strings.Contains(lower, "deepseek") || strings.Contains(lower, "ds") {
+	if strings.Contains(lower, "deepseek") || hasDeepSeekAlias(lower) {
 		return "deepseek", "thinking"
 	}
 	// GPT-OSS family and generic GPT fall back to using reasoning_effort (OpenAI-compatible field)

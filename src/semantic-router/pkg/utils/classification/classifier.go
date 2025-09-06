@@ -3,6 +3,7 @@ package classification
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -466,35 +467,24 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 	bestQuality := 0.0
 
 	if c.Config.Classifier.LoadAware {
-		// Load-aware: combine accuracy and TTFT
-		for _, modelScore := range cat.ModelScores {
+		c.forEachModelScore(cat, func(modelScore config.ModelScore) {
 			quality := modelScore.Score
 			model := modelScore.Model
-
 			baseTTFT := c.ModelTTFT[model]
 			load := c.ModelLoad[model]
 			estTTFT := baseTTFT * (1 + float64(load))
 			if estTTFT == 0 {
-				estTTFT = 1 // avoid div by zero
+				estTTFT = 1
 			}
 			score := quality / estTTFT
-			if score > bestScore {
-				bestScore = score
-				bestModel = model
-				bestQuality = quality
-			}
-		}
+			c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
+		})
 	} else {
-		// Not load-aware: pick the model with the highest accuracy only
-		for _, modelScore := range cat.ModelScores {
+		c.forEachModelScore(cat, func(modelScore config.ModelScore) {
 			quality := modelScore.Score
 			model := modelScore.Model
-			if quality > bestScore {
-				bestScore = quality
-				bestModel = model
-				bestQuality = quality
-			}
-		}
+			c.updateBestModel(quality, quality, model, &bestScore, &bestQuality, &bestModel)
+		})
 	}
 
 	if bestModel == "" {
@@ -505,6 +495,13 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 	log.Printf("Selected model %s for category %s with quality %.4f and combined score %.4e",
 		bestModel, categoryName, bestQuality, bestScore)
 	return bestModel
+}
+
+// forEachModelScore traverses the ModelScores document of the category and executes the callback for each element。
+func (c *Classifier) forEachModelScore(cat *config.Category, fn func(modelScore config.ModelScore)) {
+	for _, modelScore := range cat.ModelScores {
+		fn(modelScore)
+	}
 }
 
 // SelectBestModelFromList selects the best model from a list of candidate models for a given category
@@ -534,17 +531,13 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 	bestScore := -1.0
 	bestQuality := 0.0
 
-	if c.Config.Classifier.LoadAware {
-		// Load-aware: combine accuracy and TTFT
-		for _, modelScore := range cat.ModelScores {
-			model := modelScore.Model
-
-			// Check if this model is in the candidate list
-			if !c.contains(candidateModels, model) {
-				continue
-			}
-
-			quality := modelScore.Score
+	filteredFn := func(modelScore config.ModelScore) {
+		model := modelScore.Model
+		if !slices.Contains(candidateModels, model) {
+			return
+		}
+		quality := modelScore.Score
+		if c.Config.Classifier.LoadAware {
 			baseTTFT := c.ModelTTFT[model]
 			load := c.ModelLoad[model]
 			estTTFT := baseTTFT * (1 + float64(load))
@@ -552,30 +545,13 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 				estTTFT = 1 // avoid div by zero
 			}
 			score := quality / estTTFT
-			if score > bestScore {
-				bestScore = score
-				bestModel = model
-				bestQuality = quality
-			}
-		}
-	} else {
-		// Not load-aware: pick the model with the highest accuracy only
-		for _, modelScore := range cat.ModelScores {
-			model := modelScore.Model
-
-			// Check if this model is in the candidate list
-			if !c.contains(candidateModels, model) {
-				continue
-			}
-
-			quality := modelScore.Score
-			if quality > bestScore {
-				bestScore = quality
-				bestModel = model
-				bestQuality = quality
-			}
+			c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
+		} else {
+			c.updateBestModel(quality, quality, model, &bestScore, &bestQuality, &bestModel)
 		}
 	}
+
+	c.forEachModelScore(cat, filteredFn)
 
 	if bestModel == "" {
 		log.Printf("No suitable model found from candidates for category %s, using first candidate", categoryName)
@@ -619,12 +595,11 @@ func (c *Classifier) DecrementModelLoad(model string) {
 	}
 }
 
-// contains checks if a slice contains a string
-func (c *Classifier) contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
+// updateBestModel updates the best model, score, and quality if the new score is better.
+func (c *Classifier) updateBestModel(score, quality float64, model string, bestScore *float64, bestQuality *float64, bestModel *string) {
+	if score > *bestScore {
+		*bestScore = score
+		*bestModel = model
+		*bestQuality = quality
 	}
-	return false
 }

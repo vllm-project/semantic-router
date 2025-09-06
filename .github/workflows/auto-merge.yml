@@ -3,11 +3,6 @@ name: Auto Merge on Owner Approval
 on:
   pull_request_review:
     types: [submitted, dismissed]
-  check_suite:
-    types: [completed]
-  status: {}
-  pull_request:
-    types: [synchronize, labeled, unlabeled]
 
 jobs:
   auto-merge:
