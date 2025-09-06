@@ -174,7 +174,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
 	// Perform security checks
-	if response, shouldReturn := r.performSecurityChecks(userContent, nonUserMessages, ctx); shouldReturn {
+	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages); shouldReturn {
 		return response, nil
 	}
 
@@ -188,7 +188,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 }
 
 // performSecurityChecks performs PII and jailbreak detection
-func (r *OpenAIRouter) performSecurityChecks(userContent string, nonUserMessages []string, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
+func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string) (*ext_proc.ProcessingResponse, bool) {
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
