@@ -497,7 +497,7 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 	return bestModel
 }
 
-// forEachModelScore 遍历 category 的 ModelScores 并对每个元素执行回调
+// forEachModelScore traverses the ModelScores document of the category and executes the callback for each element。
 func (c *Classifier) forEachModelScore(cat *config.Category, fn func(modelScore config.ModelScore)) {
 	for _, modelScore := range cat.ModelScores {
 		fn(modelScore)
