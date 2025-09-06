@@ -1,0 +1,635 @@
+name: PR Approval Notification
+
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+
+jobs:
+  pr-approval-notification:
+    runs-on: ubuntu-latest
+    # Only run on pull requests, not on other events
+    if: github.event.pull_request != null || github.event.pull_request_review != null
+    
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: read
+      statuses: read
+    
+    env:
+      # Configuration options
+      REQUIRED_CHECKS: "test-and-build"  # Comma-separated list of required check names
+      SENSITIVE_PATHS: ".github/workflows/*,OWNER*"  # Comma-separated patterns for sensitive files
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # For pull_request_review events, we need to get the PR info differently
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Get PR information
+        id: pr-info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prNumber;
+            let prData;
+            
+            // Determine PR number based on event type
+            if (context.eventName === 'pull_request_review') {
+              prNumber = context.payload.pull_request.number;
+              prData = context.payload.pull_request;
+            } else if (context.eventName === 'pull_request') {
+              prNumber = context.payload.pull_request.number;
+              prData = context.payload.pull_request;
+            } else if (context.eventName === 'check_suite' || context.eventName === 'status') {
+              // For check_suite and status events, we need to find the PR
+              const { data: prs } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${context.payload.check_suite?.head_branch || context.payload.branches?.[0]?.name}`,
+              });
+              
+              if (prs.length === 0) {
+                console.log('No open PR found for this commit');
+                return;
+              }
+              
+              prNumber = prs[0].number;
+              prData = prs[0];
+            }
+            
+            if (!prNumber) {
+              console.log('Could not determine PR number');
+              return;
+            }
+            
+            // Get fresh PR data
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            
+            console.log(`Processing PR #${prNumber}: ${pr.title}`);
+            console.log(`PR state: ${pr.state}, draft: ${pr.draft}, mergeable: ${pr.mergeable}`);
+            
+            // Set outputs for next steps
+            core.setOutput('pr_number', prNumber);
+            core.setOutput('pr_state', pr.state);
+            core.setOutput('pr_draft', pr.draft);
+            core.setOutput('pr_mergeable', pr.mergeable);
+            core.setOutput('pr_head_sha', pr.head.sha);
+            core.setOutput('pr_base_ref', pr.base.ref);
+            
+            return {
+              number: prNumber,
+              state: pr.state,
+              draft: pr.draft,
+              mergeable: pr.mergeable,
+              head_sha: pr.head.sha,
+              base_ref: pr.base.ref
+            };
+
+      - name: Set default outputs
+        id: set-defaults
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Set default outputs to prevent JSON parsing errors
+            core.setOutput('required_owners', '[]');
+            core.setOutput('owner_map', '{}');
+            core.setOutput('all_approved', 'false');
+            core.setOutput('approved_owners', '[]');
+            core.setOutput('missing_approvals', '[]');
+            core.setOutput('ci_passed', 'false');
+            core.setOutput('failed_checks', '[]');
+            core.setOutput('pending_checks', '[]');
+            core.setOutput('security_passed', 'false');
+            core.setOutput('security_issues', '[]');
+            core.setOutput('sensitive_files', '[]');
+            console.log('Default outputs set');
+
+      - name: Check if auto-merge should proceed
+        id: should-proceed
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const prState = '${{ steps.pr-info.outputs.pr_state }}';
+            const prDraft = '${{ steps.pr-info.outputs.pr_draft }}' === 'true';
+            const prMergeable = '${{ steps.pr-info.outputs.pr_mergeable }}';
+
+            if (!prNumber) {
+              console.log('No PR number available, skipping');
+              return false;
+            }
+
+            // Check basic conditions
+            if (prState !== 'open') {
+              console.log(`PR is not open (state: ${prState}), skipping`);
+              return false;
+            }
+
+            if (prDraft) {
+              console.log('PR is in draft state, skipping auto-merge');
+              return false;
+            }
+
+            if (prMergeable === false) {
+              console.log('PR has merge conflicts, skipping auto-merge');
+              return false;
+            }
+
+            // Check for no-auto-merge label
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            const hasNoAutoMergeLabel = pr.labels.some(label =>
+              label.name.toLowerCase().includes('no-auto-merge')
+            );
+
+            if (hasNoAutoMergeLabel) {
+              console.log('PR has no-auto-merge label, skipping');
+              return false;
+            }
+
+            console.log('Basic checks passed, proceeding with auto-merge evaluation');
+            return true;
+
+      - name: Get changed files
+        if: steps.should-proceed.outputs.result == 'true'
+        id: changed-files
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            **/*
+          base_sha: ${{ github.event.pull_request.base.sha }}
+          sha: ${{ steps.pr-info.outputs.pr_head_sha }}
+
+      - name: Identify owners for changed files
+        if: steps.should-proceed.outputs.result == 'true'
+        id: identify-owners
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Get changed files
+            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
+            console.log('Changed files:', changedFiles);
+
+            // Function to find OWNER file for a given file path (reused from owner-notification.yml)
+            function findOwnerFile(filePath) {
+               const parts = filePath.split('/');
+
+               // Check first level directory FIRST (prioritize more specific owners)
+               if (parts.length > 1) {
+                 const firstLevelDir = parts[0];
+                 const ownerPath = path.join(firstLevelDir, 'OWNER');
+                 if (fs.existsSync(ownerPath)) {
+                   const content = fs.readFileSync(ownerPath, 'utf8');
+                   const owners = content.split('\n')
+                     .filter(line => line.trim().startsWith('@'))
+                     .map(line => line.trim());
+                   if (owners.length > 0) {
+                     return { path: firstLevelDir, owners };
+                   }
+                 }
+               }
+
+               // Fall back to root directory
+               if (fs.existsSync('OWNER')) {
+                 const content = fs.readFileSync('OWNER', 'utf8');
+                 const owners = content.split('\n')
+                   .filter(line => line.trim().startsWith('@'))
+                   .map(line => line.trim());
+                 if (owners.length > 0) {
+                   return { path: '.', owners };
+                 }
+               }
+
+               return null;
+             }
+
+            // Collect all owners for changed files
+            const ownerMap = new Map();
+            const allRequiredOwners = new Set();
+
+            for (const file of changedFiles) {
+              if (!file.trim()) continue;
+
+              const ownerInfo = findOwnerFile(file);
+              if (ownerInfo) {
+                if (!ownerMap.has(ownerInfo.path)) {
+                  ownerMap.set(ownerInfo.path, {
+                    owners: ownerInfo.owners,
+                    files: []
+                  });
+                }
+                ownerMap.get(ownerInfo.path).files.push(file);
+
+                // Add owners to the set of all required owners
+                for (const owner of ownerInfo.owners) {
+                  allRequiredOwners.add(owner.replace('@', ''));
+                }
+              }
+            }
+
+            if (ownerMap.size === 0) {
+              console.log('No owners found for changed files');
+              core.setOutput('required_owners', '[]');
+              core.setOutput('owner_map', '{}');
+              return { required_owners: [], owner_map: {} };
+            }
+
+            const requiredOwners = Array.from(allRequiredOwners);
+            const ownerMapObj = Object.fromEntries(ownerMap);
+
+            console.log('Required owners:', requiredOwners);
+            console.log('Owner mapping:', ownerMapObj);
+
+            // Set outputs for next steps (override defaults)
+            core.setOutput('required_owners', JSON.stringify(requiredOwners));
+            core.setOutput('owner_map', JSON.stringify(ownerMapObj));
+
+            return {
+              required_owners: requiredOwners,
+              owner_map: ownerMapObj
+            };
+
+      - name: Check approval status
+        if: steps.should-proceed.outputs.result == 'true'
+        id: check-approvals
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const requiredOwners = JSON.parse('${{ steps.identify-owners.outputs.required_owners }}');
+
+            if (requiredOwners.length === 0) {
+              console.log('No required owners, approval check passed');
+              core.setOutput('all_approved', 'true');
+              core.setOutput('approved_owners', '[]');
+              core.setOutput('missing_approvals', '[]');
+              return true;
+            }
+
+            // Get all reviews for the PR
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            console.log(`Found ${reviews.length} reviews for PR #${prNumber}`);
+
+            // Get the latest review from each reviewer
+            const latestReviews = new Map();
+            for (const review of reviews) {
+              const reviewer = review.user.login;
+              if (!latestReviews.has(reviewer) ||
+                  new Date(review.submitted_at) > new Date(latestReviews.get(reviewer).submitted_at)) {
+                latestReviews.set(reviewer, review);
+              }
+            }
+
+            // Check which required owners have approved
+            const approvedOwners = [];
+            const missingApprovals = [];
+
+            for (const owner of requiredOwners) {
+              const latestReview = latestReviews.get(owner);
+              if (latestReview && latestReview.state === 'APPROVED') {
+                approvedOwners.push(owner);
+                console.log(`✓ ${owner} has approved`);
+              } else {
+                missingApprovals.push(owner);
+                if (latestReview) {
+                  console.log(`✗ ${owner} has not approved (latest review: ${latestReview.state})`);
+                } else {
+                  console.log(`✗ ${owner} has not reviewed`);
+                }
+              }
+            }
+
+            // Only need ONE owner approval, not all
+            const allApproved = approvedOwners.length > 0;
+
+            console.log(`Approval status: ${approvedOwners.length}/${requiredOwners.length} owners approved`);
+            console.log(`Approved owners: ${approvedOwners.join(', ')}`);
+            if (approvedOwners.length === 0) {
+              console.log(`Missing approvals from any of: ${requiredOwners.join(', ')}`);
+            } else {
+              console.log(`✅ Auto-merge approved by: ${approvedOwners.join(', ')}`);
+            }
+
+            // Set outputs for next steps
+            core.setOutput('all_approved', allApproved.toString());
+            core.setOutput('approved_owners', JSON.stringify(approvedOwners));
+            core.setOutput('missing_approvals', JSON.stringify(missingApprovals));
+
+            return allApproved;
+
+      - name: Check CI status
+        if: steps.should-proceed.outputs.result == 'true' && steps.check-approvals.outputs.all_approved == 'true'
+        id: check-ci
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = '${{ steps.pr-info.outputs.pr_head_sha }}';
+            const requiredChecks = '${{ env.REQUIRED_CHECKS }}'.split(',').map(s => s.trim()).filter(s => s);
+
+            console.log(`Checking CI status for commit ${headSha}`);
+            console.log(`Required checks: ${requiredChecks.join(', ')}`);
+
+            if (requiredChecks.length === 0) {
+              console.log('No required checks configured, CI check passed');
+              core.setOutput('ci_passed', 'true');
+              core.setOutput('failed_checks', '[]');
+              return true;
+            }
+
+            // Get check runs for the commit
+            const { data: checkRuns } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+            });
+
+            // Get status checks for the commit
+            const { data: statusChecks } = await github.rest.repos.getCombinedStatusForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: headSha,
+            });
+
+            console.log(`Found ${checkRuns.check_runs.length} check runs and ${statusChecks.statuses.length} status checks`);
+
+            // Combine all checks
+            const allChecks = new Map();
+
+            // Add check runs
+            for (const checkRun of checkRuns.check_runs) {
+              allChecks.set(checkRun.name, {
+                name: checkRun.name,
+                status: checkRun.status,
+                conclusion: checkRun.conclusion,
+                type: 'check_run'
+              });
+            }
+
+            // Add status checks
+            for (const status of statusChecks.statuses) {
+              if (!allChecks.has(status.context)) {
+                allChecks.set(status.context, {
+                  name: status.context,
+                  status: status.state === 'pending' ? 'in_progress' : 'completed',
+                  conclusion: status.state,
+                  type: 'status'
+                });
+              }
+            }
+
+            // Check required checks
+            const failedChecks = [];
+            const pendingChecks = [];
+
+            for (const requiredCheck of requiredChecks) {
+              const check = allChecks.get(requiredCheck);
+
+              if (!check) {
+                console.log(`✗ Required check '${requiredCheck}' not found`);
+                failedChecks.push(requiredCheck);
+                continue;
+              }
+
+              if (check.status !== 'completed') {
+                console.log(`⏳ Required check '${requiredCheck}' is still running (${check.status})`);
+                pendingChecks.push(requiredCheck);
+                continue;
+              }
+
+              if (check.conclusion === 'success') {
+                console.log(`✓ Required check '${requiredCheck}' passed`);
+              } else {
+                console.log(`✗ Required check '${requiredCheck}' failed (${check.conclusion})`);
+                failedChecks.push(requiredCheck);
+              }
+            }
+
+            const ciPassed = failedChecks.length === 0 && pendingChecks.length === 0;
+
+            console.log(`CI status: ${ciPassed ? 'PASSED' : 'FAILED/PENDING'}`);
+            if (failedChecks.length > 0) {
+              console.log(`Failed checks: ${failedChecks.join(', ')}`);
+            }
+            if (pendingChecks.length > 0) {
+              console.log(`Pending checks: ${pendingChecks.join(', ')}`);
+            }
+
+            // Set outputs for next steps
+            core.setOutput('ci_passed', ciPassed.toString());
+            core.setOutput('failed_checks', JSON.stringify(failedChecks));
+            core.setOutput('pending_checks', JSON.stringify(pendingChecks));
+
+            return ciPassed;
+
+      - name: Check sensitive files and security
+        if: steps.should-proceed.outputs.result == 'true' && steps.check-approvals.outputs.all_approved == 'true' && steps.check-ci.outputs.ci_passed == 'true'
+        id: check-security
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
+            const sensitivePaths = '${{ env.SENSITIVE_PATHS }}'.split(',').map(s => s.trim()).filter(s => s);
+
+            console.log(`Checking security for ${changedFiles.length} changed files`);
+            console.log(`Sensitive path patterns: ${sensitivePaths.join(', ')}`);
+
+            // Check for sensitive file modifications
+            const sensitiveFiles = [];
+
+            for (const file of changedFiles) {
+              if (!file.trim()) continue;
+
+              for (const pattern of sensitivePaths) {
+                // Simple glob pattern matching
+                const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+                if (regex.test(file)) {
+                  sensitiveFiles.push(file);
+                  break;
+                }
+              }
+            }
+
+            // Get PR details for additional security checks
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            const securityIssues = [];
+
+            // Check if PR modifies sensitive files
+            if (sensitiveFiles.length > 0) {
+              console.log(`⚠️  PR modifies sensitive files: ${sensitiveFiles.join(', ')}`);
+              securityIssues.push(`Modifies sensitive files: ${sensitiveFiles.join(', ')}`);
+            }
+
+            // Check if PR is from a fork
+            const isFromFork = pr.head.repo.full_name !== pr.base.repo.full_name;
+            if (isFromFork) {
+              console.log('⚠️  PR is from a fork repository');
+              securityIssues.push('PR is from a fork repository');
+            }
+
+            // Check if PR author is a required owner (additional security for sensitive changes)
+            const requiredOwners = JSON.parse('${{ steps.identify-owners.outputs.required_owners }}');
+            const prAuthor = pr.user.login;
+            const authorIsOwner = requiredOwners.includes(prAuthor);
+
+            if (sensitiveFiles.length > 0 && !authorIsOwner) {
+              console.log(`⚠️  Sensitive files modified by non-owner: ${prAuthor}`);
+              securityIssues.push(`Sensitive files modified by non-owner: ${prAuthor}`);
+            }
+
+            // For now, we'll allow auto-merge even with security warnings, but log them
+            // In a production environment, you might want to block auto-merge for certain security issues
+            const securityPassed = true; // Could be changed to block on certain conditions
+
+            if (securityIssues.length > 0) {
+              console.log(`Security warnings (${securityIssues.length}):`);
+              for (const issue of securityIssues) {
+                console.log(`  - ${issue}`);
+              }
+            } else {
+              console.log('✅ No security issues detected');
+            }
+
+            // Set outputs for next steps
+            core.setOutput('security_passed', securityPassed.toString());
+            core.setOutput('security_issues', JSON.stringify(securityIssues));
+            core.setOutput('sensitive_files', JSON.stringify(sensitiveFiles));
+
+            return securityPassed;
+
+      - name: PR approval evaluation
+        if: always() && steps.should-proceed.outputs.result == 'true'
+        id: auto-merge-evaluation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const allApproved = '${{ steps.check-approvals.outputs.all_approved }}' === 'true';
+            const ciPassed = '${{ steps.check-ci.outputs.ci_passed }}' === 'true';
+            const securityPassed = '${{ steps.check-security.outputs.security_passed }}' === 'true';
+            const missingApprovalsStr = '${{ steps.check-approvals.outputs.missing_approvals }}';
+            const failedChecksStr = '${{ steps.check-ci.outputs.failed_checks }}';
+            const pendingChecksStr = '${{ steps.check-ci.outputs.pending_checks }}';
+            const securityIssuesStr = '${{ steps.check-security.outputs.security_issues }}';
+
+            const missingApprovals = missingApprovalsStr ? JSON.parse(missingApprovalsStr) : [];
+            const failedChecks = failedChecksStr ? JSON.parse(failedChecksStr) : [];
+            const pendingChecks = pendingChecksStr ? JSON.parse(pendingChecksStr) : [];
+            const securityIssues = securityIssuesStr ? JSON.parse(securityIssuesStr) : [];
+
+            console.log(`Final approval evaluation for PR #${prNumber}:`);
+            console.log(`- All approved: ${allApproved}`);
+            console.log(`- CI passed: ${ciPassed}`);
+            console.log(`- Security passed: ${securityPassed}`);
+
+            if (!allApproved) {
+              console.log(`❌ Cannot notify approval: need approval from at least one of: ${JSON.parse('${{ steps.identify-owners.outputs.required_owners }}' || '[]').join(', ')}`);
+              return;
+            }
+
+            if (!ciPassed) {
+              if (failedChecks.length > 0) {
+                console.log(`❌ Cannot notify approval: failed CI checks: ${failedChecks.join(', ')}`);
+              }
+              if (pendingChecks.length > 0) {
+                console.log(`⏳ Cannot notify approval yet: pending CI checks: ${pendingChecks.join(', ')}`);
+              }
+              return;
+            }
+
+            if (!securityPassed) {
+              console.log(`❌ Cannot notify approval: security issues: ${securityIssues.join(', ')}`);
+              return;
+            }
+
+            // All checks passed - ready to notify approval!
+            console.log('🎉 All conditions met for approval notification!');
+
+            // Set flag to proceed with notification
+            core.setOutput('ready_for_merge', 'true');
+
+      - name: Add approval notification comment
+        if: steps.auto-merge-evaluation.outputs.ready_for_merge == 'true'
+        id: add-approval-comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const approvedOwnersStr = '${{ steps.check-approvals.outputs.approved_owners }}';
+            const ownerMapStr = '${{ steps.identify-owners.outputs.owner_map }}';
+            const securityIssuesStr = '${{ steps.check-security.outputs.security_issues }}';
+            const sensitiveFilesStr = '${{ steps.check-security.outputs.sensitive_files }}';
+
+            const approvedOwners = approvedOwnersStr ? JSON.parse(approvedOwnersStr) : [];
+            const ownerMap = ownerMapStr ? JSON.parse(ownerMapStr) : {};
+            const securityIssues = securityIssuesStr ? JSON.parse(securityIssuesStr) : [];
+            const sensitiveFiles = sensitiveFilesStr ? JSON.parse(sensitiveFilesStr) : [];
+
+            console.log(`Adding approval notification comment for PR #${prNumber}`);
+
+            // Create approval notification comment with vLLM logo
+            let commentBody = '<div align="center">\n';
+            commentBody += '<img src="https://raw.githubusercontent.com/vllm-project/semantic-router/main/website/static/img/repo.png" alt="vLLM" width="80%"/>';
+            commentBody += '</div>\n\n';
+            commentBody += '## 🎉 Thanks for your contributions!\n\n';
+            commentBody += `This PR has been approved by the code owners and meets all the requirements for merging. A maintainer will merge it soon.\n\n`;
+
+            // Show approval details
+            commentBody += '### ✅ Approved by\n';
+            for (const owner of approvedOwners) {
+              commentBody += `- @${owner}\n`;
+            }
+            commentBody += '\n';
+
+            commentBody += '**Status:** ✅ Ready for merge\n';
+            commentBody += '**Next steps:** Please be patient while a maintainer merges this PR.\n\n';
+            commentBody += '---\n';
+            commentBody += '*This notification was generated automatically by GitHub Actions.*';
+
+            // Add the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: commentBody
+            });
+
+            console.log(`✅ Added approval notification comment to PR #${prNumber}`);
+
+            // Set outputs for next steps
+            core.setOutput('comment_added', 'true');
+
+            return {
+              success: true,
+              comment_added: true
+            };
+
+

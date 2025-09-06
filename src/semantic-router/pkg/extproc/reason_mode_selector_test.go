@@ -23,10 +23,16 @@ func TestGetModelFamilyAndTemplateParam(t *testing.T) {
 			expectedParam:  "thinking",
 		},
 		{
-			name:           "DeepSeek alias ds",
+			name:           "DeepSeek alias ds (prefix)",
 			model:          "DS-1.5B",
 			expectedFamily: "deepseek",
 			expectedParam:  "thinking",
+		},
+		{
+			name:           "Non-leading ds should not match DeepSeek",
+			model:          "mistral-ds-1b",
+			expectedFamily: "unknown",
+			expectedParam:  "",
 		},
 		{
 			name:           "GPT-OSS family",

@@ -129,6 +129,17 @@ const config = {
             ],
           },
           {
+            type: 'dropdown',
+            label: 'Roadmap',
+            position: 'left',
+            items: [
+              {
+                label: 'v0.1',
+                to: '/roadmap/v0.1',
+              },
+            ],
+          },
+          {
             href: 'https://github.com/vllm-project/semantic-router',
             label: 'GitHub',
             position: 'right',
