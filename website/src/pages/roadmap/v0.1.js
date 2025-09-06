@@ -233,7 +233,7 @@ export default function RoadmapV01() {
               <RoadmapItem
                 title="Reasoning routing quickstart"
                 priority="P0"
-                acceptance="Short guide with config.yaml fields, example request/response, and a comprehensive evaluation command."
+                acceptance="Short guide with config.yaml fields, example request/response, and a comprehensive evaluation command, within a recorded video for demo the reasoning use case.."
               />
               <RoadmapItem
                 title="Policy cookbook and troubleshooting"
