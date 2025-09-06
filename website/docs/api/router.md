@@ -218,6 +218,55 @@ sum by (family, effort) (
 )
 ```
 
+### Cost and Routing Metrics
+
+The router exposes additional metrics for cost accounting and routing decisions.
+
+- `llm_model_cost_usd_total{model}`
+  - Description: Total accumulated USD cost attributed to each model (computed from token usage and per-1M pricing).
+  - Labels:
+    - model: model name used for the request
+
+- `llm_routing_reason_codes_total{reason_code, model}`
+  - Description: Count of routing decisions by reason code and selected model.
+  - Labels:
+    - reason_code: why a routing decision happened (e.g., auto_routing, model_specified, pii_policy_alternative_selected)
+    - model: final selected model
+
+Example PromQL:
+
+```prometheus
+# Cost by model over the last hour
+sum by (model) (increase(llm_model_cost_usd_total[1h]))
+
+# Routing decisions by reason code over the last 15 minutes
+sum by (reason_code) (increase(llm_routing_reason_codes_total[15m]))
+```
+
+### Pricing Configuration
+
+Provide per-1M pricing for your models so the router can compute request cost and emit metrics/logs.
+
+```yaml
+model_config:
+  phi4:
+    pricing:
+      prompt_usd_per_1m: 200.0
+      completion_usd_per_1m: 600.0
+  "mistral-small3.1":
+    pricing:
+      prompt_usd_per_1m: 300.0
+      completion_usd_per_1m: 900.0
+  gemma3:27b:
+    pricing:
+      prompt_usd_per_1m: 500.0
+      completion_usd_per_1m: 1500.0
+```
+
+Notes:
+- Pricing is optional; if omitted, cost is treated as 0 and only token metrics are emitted.
+- Cost is computed as: (prompt_tokens * prompt_usd_per_1m + completion_tokens * completion_usd_per_1m) / 1_000_000.
+
 ## gRPC ExtProc API
 
 For direct integration with the ExtProc protocol:

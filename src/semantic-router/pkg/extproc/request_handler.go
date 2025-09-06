@@ -14,6 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/http"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/pii"
 )
@@ -173,7 +174,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
 	// Perform security checks
-	if response, shouldReturn := r.performSecurityChecks(userContent, nonUserMessages); shouldReturn {
+	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages); shouldReturn {
 		return response, nil
 	}
 
@@ -187,7 +188,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 }
 
 // performSecurityChecks performs PII and jailbreak detection
-func (r *OpenAIRouter) performSecurityChecks(userContent string, nonUserMessages []string) (*ext_proc.ProcessingResponse, bool) {
+func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string) (*ext_proc.ProcessingResponse, bool) {
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
@@ -212,6 +213,13 @@ func (r *OpenAIRouter) performSecurityChecks(userContent string, nonUserMessages
 			log.Printf("JAILBREAK ATTEMPT BLOCKED: %s (confidence: %.3f)", jailbreakType, confidence)
 
 			// Return immediate jailbreak violation response
+			// Structured log for security block
+			observability.LogEvent("security_block", map[string]interface{}{
+				"reason_code":    "jailbreak_detected",
+				"jailbreak_type": jailbreakType,
+				"confidence":     confidence,
+				"request_id":     ctx.RequestID,
+			})
 			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence)
 			return jailbreakResponse, true
 		} else {
@@ -241,6 +249,13 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		if err != nil {
 			log.Printf("Error searching cache: %v", err)
 		} else if found {
+			// Record and log cache hit
+			metrics.RecordCacheHit()
+			observability.LogEvent("cache_hit", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"model":      requestModel,
+				"query":      requestQuery,
+			})
 			// Return immediate response from cache
 			response := http.CreateCacheHitResponse(cachedResponse)
 			return response, true
@@ -313,6 +328,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 								// Select the best allowed model from this category
 								matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
 								log.Printf("Selected alternative model %s that passes PII policy", matchedModel)
+								// Record reason code for selecting alternative due to PII
+								metrics.RecordRoutingReasonCode("pii_policy_alternative_selected", matchedModel)
 							} else {
 								log.Printf("No models in category %s pass PII policy, using default", categoryName)
 								matchedModel = r.Config.DefaultModel
@@ -320,12 +337,24 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 								defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
 								if !defaultAllowed {
 									log.Printf("Default model also violates PII policy, returning error")
+									observability.LogEvent("routing_block", map[string]interface{}{
+										"reason_code": "pii_policy_denied_default_model",
+										"request_id":  ctx.RequestID,
+										"model":       matchedModel,
+										"denied_pii":  defaultDeniedPII,
+									})
 									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII)
 									return piiResponse, nil
 								}
 							}
 						} else {
 							log.Printf("Could not determine category, returning PII violation for model %s", matchedModel)
+							observability.LogEvent("routing_block", map[string]interface{}{
+								"reason_code": "pii_policy_denied",
+								"request_id":  ctx.RequestID,
+								"model":       matchedModel,
+								"denied_pii":  deniedPII,
+							})
 							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII)
 							return piiResponse, nil
 						}
@@ -424,6 +453,20 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				}
 
 				log.Printf("Use new model: %s", matchedModel)
+
+				// Structured log for routing decision (auto)
+				observability.LogEvent("routing_decision", map[string]interface{}{
+					"reason_code":        "auto_routing",
+					"request_id":         ctx.RequestID,
+					"original_model":     originalModel,
+					"selected_model":     matchedModel,
+					"category":           categoryName,
+					"reasoning_enabled":  useReasoning,
+					"reasoning_effort":   effortForMetrics,
+					"selected_endpoint":  selectedEndpoint,
+					"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
+				})
+				metrics.RecordRoutingReasonCode("auto_routing", matchedModel)
 			}
 		}
 	} else if originalModel != "auto" {
@@ -438,6 +481,12 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			// Continue with request on error
 		} else if !allowed {
 			log.Printf("Model %s violates PII policy, returning error", originalModel)
+			observability.LogEvent("routing_block", map[string]interface{}{
+				"reason_code": "pii_policy_denied",
+				"request_id":  ctx.RequestID,
+				"model":       originalModel,
+				"denied_pii":  deniedPII,
+			})
 			piiResponse := http.CreatePIIViolationResponse(originalModel, deniedPII)
 			return piiResponse, nil
 		}
@@ -472,6 +521,19 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				},
 			},
 		}
+		// Structured log for routing decision (explicit model)
+		observability.LogEvent("routing_decision", map[string]interface{}{
+			"reason_code":        "model_specified",
+			"request_id":         ctx.RequestID,
+			"original_model":     originalModel,
+			"selected_model":     originalModel,
+			"category":           "",
+			"reasoning_enabled":  false,
+			"reasoning_effort":   "",
+			"selected_endpoint":  selectedEndpoint,
+			"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
+		})
+		metrics.RecordRoutingReasonCode("model_specified", originalModel)
 	}
 
 	// Save the actual model that will be used for token tracking
