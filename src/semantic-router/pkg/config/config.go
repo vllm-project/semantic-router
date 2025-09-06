@@ -192,6 +192,13 @@ type VLLMEndpoint struct {
 }
 
 // ModelParams represents configuration for model-specific parameters
+type ModelPricing struct {
+	// Price in USD per 1M prompt tokens
+	PromptUSDPer1M float64 `yaml:"prompt_usd_per_1m,omitempty"`
+	// Price in USD per 1M completion tokens
+	CompletionUSDPer1M float64 `yaml:"completion_usd_per_1m,omitempty"`
+}
+
 type ModelParams struct {
 	// Number of parameters in the model
 	ParamCount float64 `yaml:"param_count"`
@@ -207,6 +214,9 @@ type ModelParams struct {
 
 	// Preferred endpoints for this model (optional)
 	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
+
+	// Optional pricing used for cost computation
+	Pricing ModelPricing `yaml:"pricing,omitempty"`
 }
 
 // PIIPolicy represents the PII (Personally Identifiable Information) policy for a model
@@ -362,6 +372,17 @@ func (c *RouterConfig) GetModelContextSize(modelName string, defaultValue float6
 		return modelConfig.ContextSize
 	}
 	return defaultValue
+}
+
+// GetModelPricing returns pricing in USD per 1M tokens for prompt and completion.
+func (c *RouterConfig) GetModelPricing(modelName string) (promptUSDPer1M float64, completionUSDPer1M float64, ok bool) {
+	if modelConfig, okc := c.ModelConfig[modelName]; okc {
+		p := modelConfig.Pricing
+		if p.PromptUSDPer1M != 0 || p.CompletionUSDPer1M != 0 {
+			return p.PromptUSDPer1M, p.CompletionUSDPer1M, true
+		}
+	}
+	return 0, 0, false
 }
 
 // GetModelPIIPolicy returns the PII policy for a given model
