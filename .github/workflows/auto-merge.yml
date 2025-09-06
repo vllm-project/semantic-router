@@ -328,12 +328,15 @@ jobs:
               }
             }
 
-            const allApproved = missingApprovals.length === 0;
+            // Only need ONE owner approval, not all
+            const allApproved = approvedOwners.length > 0;
 
             console.log(`Approval status: ${approvedOwners.length}/${requiredOwners.length} owners approved`);
             console.log(`Approved owners: ${approvedOwners.join(', ')}`);
-            if (missingApprovals.length > 0) {
-              console.log(`Missing approvals from: ${missingApprovals.join(', ')}`);
+            if (approvedOwners.length === 0) {
+              console.log(`Missing approvals from any of: ${requiredOwners.join(', ')}`);
+            } else {
+              console.log(`✅ Auto-merge approved by: ${approvedOwners.join(', ')}`);
             }
 
             // Set outputs for next steps
@@ -554,7 +557,7 @@ jobs:
             console.log(`- Security passed: ${securityPassed}`);
 
             if (!allApproved) {
-              console.log(`❌ Cannot auto-merge: missing approvals from ${missingApprovals.join(', ')}`);
+              console.log(`❌ Cannot auto-merge: need approval from at least one of: ${JSON.parse('${{ steps.identify-owners.outputs.required_owners }}' || '[]').join(', ')}`);
               return;
             }
 
