@@ -9,7 +9,7 @@ const priorityColors = {
 };
 
 const PriorityBadge = ({ priority }) => (
-  <span 
+  <span
     className={styles.priorityBadge}
     style={{ backgroundColor: priorityColors[priority] }}
   >
@@ -17,20 +17,35 @@ const PriorityBadge = ({ priority }) => (
   </span>
 );
 
-const RoadmapItem = ({ title, priority, acceptance, children }) => (
-  <div className={styles.roadmapItem}>
-    <div className={styles.itemHeader}>
-      <h4 className={styles.itemTitle}>{title}</h4>
-      <PriorityBadge priority={priority} />
-    </div>
-    {children && <div className={styles.itemDescription}>{children}</div>}
-    {acceptance && (
-      <div className={styles.acceptance}>
-        <strong>Acceptance:</strong> {acceptance}
+// Counter for generating unique task numbers
+let taskCounter = 0;
+
+const RoadmapItem = ({ title, priority, acceptance, children, id }) => {
+  taskCounter++;
+  const taskId = id || `task-${taskCounter}`;
+  const taskNumber = taskCounter;
+
+  return (
+    <div className={styles.roadmapItem} id={taskId}>
+      <div className={styles.itemHeader}>
+        <h4 className={styles.itemTitle}>
+          <a href={`#${taskId}`} className={styles.taskLink}>
+            #{taskNumber}
+          </a>
+          {' '}
+          {title}
+        </h4>
+        <PriorityBadge priority={priority} />
       </div>
-    )}
-  </div>
-);
+      {children && <div className={styles.itemDescription}>{children}</div>}
+      {acceptance && (
+        <div className={styles.acceptance}>
+          <strong>Acceptance:</strong> {acceptance}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AreaSection = ({ title, children }) => (
   <div className={styles.areaSection}>
@@ -42,6 +57,9 @@ const AreaSection = ({ title, children }) => (
 );
 
 export default function RoadmapV01() {
+  // Reset task counter for consistent numbering on re-renders
+  taskCounter = 0;
+
   return (
     <Layout
       title="Roadmap v0.1"

@@ -323,6 +323,45 @@
   width: 100%;
 }
 
+.taskLink {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(0, 123, 255, 0.1);
+  border: 1px solid rgba(0, 123, 255, 0.2);
+  transition: all 0.3s ease;
+  display: inline-block;
+  margin-right: 0.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.taskLink::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.3s ease;
+}
+
+.taskLink:hover {
+  color: #0056b3;
+  background: rgba(0, 123, 255, 0.15);
+  border-color: rgba(0, 123, 255, 0.4);
+  text-decoration: none;
+  transform: scale(1.05);
+}
+
+.taskLink:hover::before {
+  left: 100%;
+}
+
 .itemDescription {
   margin-bottom: 1.25rem;
   color: var(--ifm-color-emphasis-700);
