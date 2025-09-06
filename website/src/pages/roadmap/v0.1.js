@@ -167,6 +167,11 @@ export default function RoadmapV01() {
                   priority="P2"
                   acceptance="Online model score updates based on model accuracy, latency, and cost metrics; auto-updates model_scores in config; replaces static scoring in A/B test or through RL."
                 />
+                <RoadmapItem
+                  title="Expand the use cases and evaluations"
+                  priority="P2"
+                  acceptance="Explore more use cases and evaluations for different categories, model families and tasks."
+                />
             </AreaSection>
 
             <AreaSection title="Networking (area/networking)">
