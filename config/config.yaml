@@ -55,6 +55,9 @@ model_config:
     param_count: 14000000000  # 14B parameters https://huggingface.co/microsoft/phi-4
     batch_size: 512.0  # vLLM default batch size
     context_size: 16384.0 # based on https://huggingface.co/microsoft/phi-4
+    pricing:
+      prompt_usd_per_1m: 200.0
+      completion_usd_per_1m: 600.0
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
@@ -64,6 +67,9 @@ model_config:
     param_count: 27000000000  # 27B parameters (base version)
     batch_size: 512.0
     context_size: 16384.0
+    pricing:
+      prompt_usd_per_1m: 500.0
+      completion_usd_per_1m: 1500.0
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
@@ -72,6 +78,9 @@ model_config:
     param_count: 22000000000
     batch_size: 512.0
     context_size: 16384.0
+    pricing:
+      prompt_usd_per_1m: 300.0
+      completion_usd_per_1m: 900.0
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
@@ -245,14 +254,13 @@ api:
     max_batch_size: 100          # Maximum number of texts in a single batch
     concurrency_threshold: 5     # Switch to concurrent processing when batch size > this value
     max_concurrency: 8           # Maximum number of concurrent goroutines
-        
+
     # Metrics configuration for monitoring batch classification performance
     metrics:
       enabled: true              # Enable comprehensive metrics collection
-      detailed_goroutine_tracking: true  # Track individual goroutine lifecycle 
-      high_resolution_timing: false      # Use nanosecond precision timing 
+      detailed_goroutine_tracking: true  # Track individual goroutine lifecycle
+      high_resolution_timing: false      # Use nanosecond precision timing
       sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%, 0.5 = 50%)
-      
       # Histogram buckets for metrics (directly configure what you need)
       duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]     
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200] 

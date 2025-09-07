@@ -124,6 +124,29 @@ model_config:
     preferred_endpoints: ["my_endpoint"]
 ```
 
+### Pricing (Optional)
+
+If you want the router to compute USD cost per request and expose Prometheus cost metrics, add per-1M token pricing under each model in `model_config`.
+
+```yaml
+model_config:
+  phi4:
+    pricing:
+      prompt_usd_per_1m: 0.07
+      completion_usd_per_1m: 0.35
+  "mistral-small3.1":
+    pricing:
+      prompt_usd_per_1m: 0.1
+      completion_usd_per_1m: 0.3
+  gemma3:27b:
+    pricing:
+      prompt_usd_per_1m: 0.067
+      completion_usd_per_1m: 0.267
+```
+
+- Cost formula: `(prompt_tokens * prompt_usd_per_1m + completion_tokens * completion_usd_per_1m) / 1_000_000`.
+- When not configured, the router still reports token and latency metrics; cost is treated as 0.
+
 ### Classification Models
 
 Configure the BERT classification models:
