@@ -193,10 +193,12 @@ type VLLMEndpoint struct {
 
 // ModelParams represents configuration for model-specific parameters
 type ModelPricing struct {
-	// Price in USD per 1M prompt tokens
-	PromptUSDPer1M float64 `yaml:"prompt_usd_per_1m,omitempty"`
-	// Price in USD per 1M completion tokens
-	CompletionUSDPer1M float64 `yaml:"completion_usd_per_1m,omitempty"`
+	// ISO currency code for the pricing (e.g., "USD"). Defaults to "USD" when omitted.
+	Currency string `yaml:"currency,omitempty"`
+
+	// Price per 1M tokens (unit: <currency>/1_000_000 tokens)
+	PromptPer1M     float64 `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M float64 `yaml:"completion_per_1m,omitempty"`
 }
 
 type ModelParams struct {
@@ -374,15 +376,20 @@ func (c *RouterConfig) GetModelContextSize(modelName string, defaultValue float6
 	return defaultValue
 }
 
-// GetModelPricing returns pricing in USD per 1M tokens for prompt and completion.
-func (c *RouterConfig) GetModelPricing(modelName string) (promptUSDPer1M float64, completionUSDPer1M float64, ok bool) {
+// GetModelPricing returns pricing per 1M tokens and its currency for the given model.
+// The currency indicates the unit of the returned rates (e.g., "USD").
+func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
 	if modelConfig, okc := c.ModelConfig[modelName]; okc {
 		p := modelConfig.Pricing
-		if p.PromptUSDPer1M != 0 || p.CompletionUSDPer1M != 0 {
-			return p.PromptUSDPer1M, p.CompletionUSDPer1M, true
+		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 {
+			cur := p.Currency
+			if cur == "" {
+				cur = "USD"
+			}
+			return p.PromptPer1M, p.CompletionPer1M, cur, true
 		}
 	}
-	return 0, 0, false
+	return 0, 0, "", false
 }
 
 // GetModelPIIPolicy returns the PII policy for a given model

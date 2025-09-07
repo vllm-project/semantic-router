@@ -56,10 +56,13 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 
 		// Compute and record cost if pricing is configured
 		if r.Config != nil {
-			promptRatePer1M, completionRatePer1M, ok := r.Config.GetModelPricing(ctx.RequestModel)
+			promptRatePer1M, completionRatePer1M, currency, ok := r.Config.GetModelPricing(ctx.RequestModel)
 			if ok {
-				costUSD := (float64(promptTokens)*promptRatePer1M + float64(completionTokens)*completionRatePer1M) / 1_000_000.0
-				metrics.RecordModelCostUSD(ctx.RequestModel, costUSD)
+				costAmount := (float64(promptTokens)*promptRatePer1M + float64(completionTokens)*completionRatePer1M) / 1_000_000.0
+				if currency == "" {
+					currency = "USD"
+				}
+				metrics.RecordModelCost(ctx.RequestModel, currency, costAmount)
 				observability.LogEvent("llm_usage", map[string]interface{}{
 					"request_id":            ctx.RequestID,
 					"model":                 ctx.RequestModel,
@@ -67,7 +70,8 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 					"completion_tokens":     completionTokens,
 					"total_tokens":          promptTokens + completionTokens,
 					"completion_latency_ms": completionLatency.Milliseconds(),
-					"cost_usd":              costUSD,
+					"cost":                  costAmount,
+					"currency":              currency,
 				})
 			} else {
 				observability.LogEvent("llm_usage", map[string]interface{}{
@@ -77,7 +81,8 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 					"completion_tokens":     completionTokens,
 					"total_tokens":          promptTokens + completionTokens,
 					"completion_latency_ms": completionLatency.Milliseconds(),
-					"cost_usd":              0.0,
+					"cost":                  0.0,
+					"currency":              "unknown",
 					"pricing":               "not_configured",
 				})
 			}

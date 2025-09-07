@@ -56,8 +56,9 @@ model_config:
     batch_size: 512.0  # vLLM default batch size
     context_size: 16384.0 # based on https://huggingface.co/microsoft/phi-4
     pricing:
-      prompt_usd_per_1m: 200.0
-      completion_usd_per_1m: 600.0
+      currency: USD
+      prompt_per_1m: 0.07
+      completion_per_1m: 0.35
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
@@ -68,8 +69,9 @@ model_config:
     batch_size: 512.0
     context_size: 16384.0
     pricing:
-      prompt_usd_per_1m: 500.0
-      completion_usd_per_1m: 1500.0
+      currency: USD
+      prompt_per_1m: 0.067
+      completion_per_1m: 0.267
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
@@ -79,8 +81,9 @@ model_config:
     batch_size: 512.0
     context_size: 16384.0
     pricing:
-      prompt_usd_per_1m: 300.0
-      completion_usd_per_1m: 900.0
+      currency: USD
+      prompt_per_1m: 0.1
+      completion_per_1m: 0.3
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types

@@ -102,13 +102,13 @@ var (
 		[]string{"model"},
 	)
 
-	// ModelCostUSD tracks the total USD cost attributed to each model
-	ModelCostUSD = promauto.NewCounterVec(
+	// ModelCost tracks the total cost attributed to each model by currency
+	ModelCost = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "llm_model_cost_usd_total",
-			Help: "The total USD cost attributed to each LLM model",
+			Name: "llm_model_cost_total",
+			Help: "The total cost attributed to each LLM model, labeled by currency",
 		},
-		[]string{"model"},
+		[]string{"model", "currency"},
 	)
 
 	// ModelTokens tracks the number of tokens used by each model
@@ -256,12 +256,15 @@ func RecordModelTokens(model string, tokens float64) {
 	ModelTokens.WithLabelValues(model).Add(tokens)
 }
 
-// RecordModelCostUSD adds the dollar cost attributed to a specific model
-func RecordModelCostUSD(model string, usd float64) {
-	if usd < 0 {
+// RecordModelCost records the cost attributed to a specific model with a currency label
+func RecordModelCost(model string, currency string, amount float64) {
+	if amount < 0 {
 		return
 	}
-	ModelCostUSD.WithLabelValues(model).Add(usd)
+	if currency == "" {
+		currency = "USD"
+	}
+	ModelCost.WithLabelValues(model, currency).Add(amount)
 }
 
 // RecordRoutingReasonCode increments the counter for a routing decision reason code and model
