@@ -1,14 +1,14 @@
 name: PR Approval Notification
 
 on:
-  pull_request_review:
-    types: [submitted, dismissed]
+  pull_request_target:
+    types: [opened, synchronize, reopened, review_requested, ready_for_review, edited, labeled]
 
 jobs:
   pr-approval-notification:
     runs-on: ubuntu-latest
-    # Only run on pull requests, not on other events
-    if: github.event.pull_request != null || github.event.pull_request_review != null
+    # Only run on pull request target events
+    if: github.event.pull_request != null
     
     permissions:
       contents: write
@@ -26,7 +26,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # For pull_request_review events, we need to get the PR info differently
+          # For pull_request_target events, checkout the PR head
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
@@ -36,34 +36,10 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            let prNumber;
-            let prData;
-            
-            // Determine PR number based on event type
-            if (context.eventName === 'pull_request_review') {
-              prNumber = context.payload.pull_request.number;
-              prData = context.payload.pull_request;
-            } else if (context.eventName === 'pull_request') {
-              prNumber = context.payload.pull_request.number;
-              prData = context.payload.pull_request;
-            } else if (context.eventName === 'check_suite' || context.eventName === 'status') {
-              // For check_suite and status events, we need to find the PR
-              const { data: prs } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                head: `${context.repo.owner}:${context.payload.check_suite?.head_branch || context.payload.branches?.[0]?.name}`,
-              });
-              
-              if (prs.length === 0) {
-                console.log('No open PR found for this commit');
-                return;
-              }
-              
-              prNumber = prs[0].number;
-              prData = prs[0];
-            }
-            
+            // For pull_request_target events, PR info is directly available
+            const prNumber = context.payload.pull_request.number;
+            const prData = context.payload.pull_request;
+
             if (!prNumber) {
               console.log('Could not determine PR number');
               return;
@@ -120,12 +96,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const prNumber = '${{ steps.pr-info.outputs.pr_number }}' || null;
             const prState = '${{ steps.pr-info.outputs.pr_state }}';
             const prDraft = '${{ steps.pr-info.outputs.pr_draft }}' === 'true';
             const prMergeable = '${{ steps.pr-info.outputs.pr_mergeable }}';
 
-            if (!prNumber) {
+            if (!prNumber || prNumber === 'null') {
               console.log('No PR number available, skipping');
               return false;
             }
@@ -273,7 +249,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const prNumber = '${{ steps.pr-info.outputs.pr_number }}' || null;
             const requiredOwners = JSON.parse('${{ steps.identify-owners.outputs.required_owners }}');
 
             if (requiredOwners.length === 0) {
@@ -450,7 +426,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const prNumber = '${{ steps.pr-info.outputs.pr_number }}' || null;
             const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
             const sensitivePaths = '${{ env.SENSITIVE_PATHS }}'.split(',').map(s => s.trim()).filter(s => s);
 
@@ -531,7 +507,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const prNumber = '${{ steps.pr-info.outputs.pr_number }}' || null;
             const allApproved = '${{ steps.check-approvals.outputs.all_approved }}' === 'true';
             const ciPassed = '${{ steps.check-ci.outputs.ci_passed }}' === 'true';
             const securityPassed = '${{ steps.check-security.outputs.security_passed }}' === 'true';
@@ -582,7 +558,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const prNumber = ${{ steps.pr-info.outputs.pr_number }};
+            const prNumber = '${{ steps.pr-info.outputs.pr_number }}' || null;
             const approvedOwnersStr = '${{ steps.check-approvals.outputs.approved_owners }}';
             const ownerMapStr = '${{ steps.identify-owners.outputs.owner_map }}';
             const securityIssuesStr = '${{ steps.check-security.outputs.security_issues }}';
