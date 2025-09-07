@@ -1,8 +1,8 @@
 name: PR Approval Notification
 
 on:
-  pull_request_review:
-    types: [submitted, dismissed]
+  pull_request_target:
+    types: [assigned, opened, reopened, synchronize]
 
 jobs:
   pr-approval-notification:
