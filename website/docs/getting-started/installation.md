@@ -10,6 +10,7 @@ This guide will help you set up and install the Semantic Router on your system. 
 
 - **Go**: Version 1.19 or higher
 - **Rust**: Version 1.70 or higher (for Candle bindings)
+- **Python**: Version 3.8 or higher (for model downloads)
 - **HuggingFace CLI**: For model downloads (`pip install huggingface_hub`)
 
 ## Local Installation
@@ -42,6 +43,16 @@ rustc --version
 # If not installed:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
+```
+
+#### Install Python (if not already installed)
+```bash
+# Check if Python is installed
+python --version
+
+# If not installed:
+# macOS: brew install python
+# Ubuntu: sudo apt install python3 python3-pip (Tips: need python3.8+)
 ```
 
 #### Install HuggingFace CLI
