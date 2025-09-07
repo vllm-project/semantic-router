@@ -132,16 +132,16 @@ If you want the router to compute USD cost per request and expose Prometheus cos
 model_config:
   phi4:
     pricing:
-      prompt_usd_per_1m: 200.0
-      completion_usd_per_1m: 600.0
+      prompt_usd_per_1m: 0.07
+      completion_usd_per_1m: 0.35
   "mistral-small3.1":
     pricing:
-      prompt_usd_per_1m: 300.0
-      completion_usd_per_1m: 900.0
+      prompt_usd_per_1m: 0.1
+      completion_usd_per_1m: 0.3
   gemma3:27b:
     pricing:
-      prompt_usd_per_1m: 500.0
-      completion_usd_per_1m: 1500.0
+      prompt_usd_per_1m: 0.067
+      completion_usd_per_1m: 0.267
 ```
 
 - Cost formula: `(prompt_tokens * prompt_usd_per_1m + completion_tokens * completion_usd_per_1m) / 1_000_000`.
