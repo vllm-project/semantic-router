@@ -285,7 +285,7 @@ Perform multiple classification tasks in a single request.
 
 ## Batch Classification
 
-Process multiple texts in a single request for improved efficiency. The API automatically chooses between sequential and concurrent processing based on batch size and configuration.
+Process multiple texts in a single request using **unified batch inference** for maximum efficiency. The API uses a shared ModernBERT encoder with multi-task heads to process all texts simultaneously, providing significant performance improvements over traditional sequential processing.
 
 ### Endpoint
 `POST /classify/batch`
@@ -294,19 +294,28 @@ Process multiple texts in a single request for improved efficiency. The API auto
 
 ```json
 {
-  "texts": [
-    "What is machine learning?",
-    "Write a business plan", 
-    "Calculate the area of a circle",
-    "Solve differential equations"
-  ],
-  "options": {
-    "return_probabilities": true,
-    "confidence_threshold": 0.7,
-    "include_explanation": false
+    "texts": [
+      "What is machine learning?",
+      "Write a business plan",
+      "Calculate the area of a circle",
+      "Solve differential equations"
+    ],
+    "task_type": "intent",
+    "options": {
+      "return_probabilities": true,
+      "confidence_threshold": 0.7,
+      "include_explanation": false
+    }
   }
-}
 ```
+
+**Parameters:**
+- `texts` (required): Array of text strings to classify
+- `task_type` (optional): Specify which classification task results to return. Options: "intent", "pii", "security". Defaults to "intent"
+- `options` (optional): Classification options object:
+  - `return_probabilities` (boolean): Whether to return probability scores for intent classification
+  - `confidence_threshold` (number): Minimum confidence threshold for results
+  - `include_explanation` (boolean): Whether to include classification explanations
 
 ### Response Format
 
@@ -314,67 +323,74 @@ Process multiple texts in a single request for improved efficiency. The API auto
 {
   "results": [
     {
-      "category": "computer science",
-      "confidence": 0.88,
-      "processing_time_ms": 45
+      "category": "chemistry",
+      "confidence": 0.1948343962430954,
+      "processing_time_ms": 60,
+      "probabilities": {
+        "chemistry": 0.1948343962430954
+      }
     },
     {
-      "category": "business",
-      "confidence": 0.92,
-      "processing_time_ms": 38
+      "category": "economics",
+      "confidence": 0.29754528403282166,
+      "processing_time_ms": 60,
+      "probabilities": {
+        "economics": 0.29754528403282166
+      }
     },
     {
-      "category": "math",
-      "confidence": 0.95,
-      "processing_time_ms": 42
+      "category": "psychology",
+      "confidence": 0.3806203603744507,
+      "processing_time_ms": 60,
+      "probabilities": {
+        "psychology": 0.3806203603744507
+      }
     },
     {
-      "category": "math",
-      "confidence": 0.89,
-      "processing_time_ms": 41
+      "category": "chemistry",
+      "confidence": 0.20182815194129944,
+      "processing_time_ms": 60,
+      "probabilities": {
+        "chemistry": 0.20182815194129944
+      }
     }
   ],
   "total_count": 4,
-  "processing_time_ms": 156,
+  "processing_time_ms": 240,
   "statistics": {
     "category_distribution": {
-      "math": 2,
-      "computer science": 1,
-      "business": 1
+      "chemistry": 2,
+      "economics": 1,
+      "psychology": 1
     },
-    "avg_confidence": 0.91,
-    "low_confidence_count": 0
+    "avg_confidence": 0.2687070481479168,
+    "low_confidence_count": 4
   }
 }
 ```
 
 ### Configuration
 
-The batch classification behavior can be configured in `config.yaml`:
-
-```yaml
-api:
-  batch_classification:
-    max_batch_size: 100          # Maximum texts per batch
-    concurrency_threshold: 5     # Switch to concurrent processing when batch > this
-    max_concurrency: 8           # Maximum concurrent goroutines
+**Required Model Directory Structure:**
+```
+./models/
+├── modernbert-base/                                    # Shared encoder (auto-discovered)
+├── category_classifier_modernbert-base_model/         # Intent classification head
+├── pii_classifier_modernbert-base_presidio_token_model/ # PII classification head
+└── jailbreak_classifier_modernbert-base_model/        # Security classification head
 ```
 
-### Processing Strategies
-
-- **Sequential Processing**: Used for small batches (≤ concurrency_threshold) to minimize overhead
-- **Concurrent Processing**: Used for larger batches to improve throughput
-- **Automatic Selection**: The API automatically chooses the optimal strategy based on batch size
+> **Unified Batch Classifier Active**: The API is now using real model weights and proper label mappings. 
 
 ### Error Handling
 
-**Batch Too Large (400 Bad Request):**
+**Unified Classifier Unavailable (503 Service Unavailable):**
 ```json
 {
   "error": {
-    "code": "BATCH_TOO_LARGE",
-    "message": "batch size cannot exceed 100 texts",
-    "timestamp": "2024-03-15T14:30:00Z"
+    "code": "UNIFIED_CLASSIFIER_UNAVAILABLE",
+    "message": "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+    "timestamp": "2025-09-06T14:30:00Z"
   }
 }
 ```
@@ -385,7 +401,18 @@ api:
   "error": {
     "code": "INVALID_INPUT", 
     "message": "texts array cannot be empty",
-    "timestamp": "2024-03-15T14:30:00Z"
+    "timestamp": "2025-09-06T14:33:00Z"
+  }
+}
+```
+
+**Classification Error (500 Internal Server Error):**
+```json
+{
+  "error": {
+    "code": "UNIFIED_CLASSIFICATION_ERROR",
+    "message": "Failed to process batch classification",
+    "timestamp": "2025-09-06T14:35:00Z"
   }
 }
 ```
@@ -700,13 +727,17 @@ class ClassificationClient:
         )
         return response.json()
         
-    def classify_batch(self, texts: List[str], return_probabilities: bool = False) -> Dict:
+    def classify_batch(self, texts: List[str], task_type: str = "intent", return_probabilities: bool = False) -> Dict:
+        payload = {
+            "texts": texts,
+            "task_type": task_type
+        }
+        if return_probabilities:
+            payload["options"] = {"return_probabilities": return_probabilities}
+            
         response = requests.post(
             f"{self.base_url}/api/v1/classify/batch",
-            json={
-                "texts": texts,
-                "options": {"return_probabilities": return_probabilities}
-            }
+            json=payload
         )
         return response.json()
 

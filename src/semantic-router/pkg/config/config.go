@@ -88,17 +88,8 @@ type RouterConfig struct {
 
 // APIConfig represents configuration for API endpoints
 type APIConfig struct {
-	// Batch classification configuration
+	// Batch classification configuration (zero-config auto-discovery)
 	BatchClassification struct {
-		// Maximum number of texts allowed in a single batch request
-		MaxBatchSize int `yaml:"max_batch_size,omitempty"`
-
-		// Threshold for switching from sequential to concurrent processing
-		ConcurrencyThreshold int `yaml:"concurrency_threshold,omitempty"`
-
-		// Maximum number of concurrent goroutines for batch processing
-		MaxConcurrency int `yaml:"max_concurrency,omitempty"`
-
 		// Metrics configuration for batch classification monitoring
 		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 	} `yaml:"batch_classification"`

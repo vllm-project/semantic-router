@@ -1317,9 +1317,7 @@ semantic_cache:
 			yamlContent := `
 api:
   batch_classification:
-    max_batch_size: 50
-    concurrency_threshold: 3
-    max_concurrency: 6
+    auto_unified_batching: true
     metrics:
       enabled: true
       detailed_goroutine_tracking: false
@@ -1333,11 +1331,8 @@ api:
 			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify batch classification configuration
+			// Verify batch classification configuration (zero-config auto-discovery)
 			batchConfig := cfg.API.BatchClassification
-			Expect(batchConfig.MaxBatchSize).To(Equal(50))
-			Expect(batchConfig.ConcurrencyThreshold).To(Equal(3))
-			Expect(batchConfig.MaxConcurrency).To(Equal(6))
 
 			// Verify metrics configuration
 			metricsConfig := batchConfig.Metrics
@@ -1355,16 +1350,15 @@ api:
 			yamlContent := `
 api:
   batch_classification:
-    max_batch_size: 100
+    auto_unified_batching: false
 `
 
 			var cfg config.RouterConfig
 			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify that missing metrics configuration doesn't cause errors
+			// Verify that missing metrics configuration doesn't cause errors (zero-config)
 			batchConfig := cfg.API.BatchClassification
-			Expect(batchConfig.MaxBatchSize).To(Equal(100))
 
 			// Metrics should have zero values (will be handled by defaults in application)
 			metricsConfig := batchConfig.Metrics

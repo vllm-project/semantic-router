@@ -6,12 +6,19 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 pub mod modernbert;
+pub mod unified_classifier;
 
 // Re-export ModernBERT functions and structures
 pub use modernbert::{
     classify_modernbert_jailbreak_text, classify_modernbert_pii_text, classify_modernbert_text,
     init_modernbert_classifier, init_modernbert_jailbreak_classifier,
     init_modernbert_pii_classifier, ModernBertClassificationResult,
+};
+
+// Re-export unified classifier functions and structures
+pub use unified_classifier::{
+    get_unified_classifier, BatchClassificationResult, IntentResult, PIIResult, SecurityResult,
+    UnifiedClassificationResult, UnifiedClassifier, UNIFIED_CLASSIFIER,
 };
 
 use anyhow::{Error as E, Result};
@@ -1309,6 +1316,350 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
         None => {
             eprintln!("BERT jailbreak classifier not initialized");
             default_result
+        }
+    }
+}
+
+// ================================================================================================
+// UNIFIED CLASSIFIER C INTERFACE
+// ================================================================================================
+
+/// C-compatible structure for unified batch results
+#[repr(C)]
+pub struct UnifiedBatchResult {
+    pub intent_results: *mut CIntentResult,
+    pub pii_results: *mut CPIIResult,
+    pub security_results: *mut CSecurityResult,
+    pub batch_size: i32,
+    pub error: bool,
+    pub error_message: *mut c_char,
+}
+
+/// C-compatible intent result
+#[repr(C)]
+pub struct CIntentResult {
+    pub category: *mut c_char,
+    pub confidence: f32,
+    pub probabilities: *mut f32,
+    pub num_probabilities: i32,
+}
+
+/// C-compatible PII result
+#[repr(C)]
+pub struct CPIIResult {
+    pub has_pii: bool,
+    pub pii_types: *mut *mut c_char,
+    pub num_pii_types: i32,
+    pub confidence: f32,
+}
+
+/// C-compatible security result
+#[repr(C)]
+pub struct CSecurityResult {
+    pub is_jailbreak: bool,
+    pub threat_type: *mut c_char,
+    pub confidence: f32,
+}
+
+impl UnifiedBatchResult {
+    /// Create an error result
+    fn error(message: &str) -> Self {
+        let error_msg =
+            CString::new(message).unwrap_or_else(|_| CString::new("Unknown error").unwrap());
+        Self {
+            intent_results: std::ptr::null_mut(),
+            pii_results: std::ptr::null_mut(),
+            security_results: std::ptr::null_mut(),
+            batch_size: 0,
+            error: true,
+            error_message: error_msg.into_raw(),
+        }
+    }
+
+    /// Convert from Rust BatchClassificationResult to C-compatible structure
+    fn from_batch_result(result: BatchClassificationResult) -> Self {
+        let batch_size = result.batch_size as i32;
+
+        // Convert intent results
+        let intent_results = result
+            .intent_results
+            .into_iter()
+            .map(|r| {
+                let probs_len = r.probabilities.len();
+                CIntentResult {
+                    category: CString::new(r.category).unwrap().into_raw(),
+                    confidence: r.confidence,
+                    probabilities: {
+                        let mut probs = r.probabilities.into_boxed_slice();
+                        let ptr = probs.as_mut_ptr();
+                        std::mem::forget(probs);
+                        ptr
+                    },
+                    num_probabilities: probs_len as i32,
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let intent_ptr = Box::into_raw(intent_results) as *mut CIntentResult;
+
+        // Convert PII results
+        let pii_results = result
+            .pii_results
+            .into_iter()
+            .map(|r| {
+                let types_len = r.pii_types.len();
+                CPIIResult {
+                    has_pii: r.has_pii,
+                    pii_types: {
+                        let types: Vec<*mut c_char> = r
+                            .pii_types
+                            .into_iter()
+                            .map(|t| CString::new(t).unwrap().into_raw())
+                            .collect();
+                        let mut types_box = types.into_boxed_slice();
+                        let ptr = types_box.as_mut_ptr();
+                        std::mem::forget(types_box);
+                        ptr
+                    },
+                    num_pii_types: types_len as i32,
+                    confidence: r.confidence,
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let pii_ptr = Box::into_raw(pii_results) as *mut CPIIResult;
+
+        // Convert security results
+        let security_results = result
+            .security_results
+            .into_iter()
+            .map(|r| CSecurityResult {
+                is_jailbreak: r.is_jailbreak,
+                threat_type: CString::new(r.threat_type).unwrap().into_raw(),
+                confidence: r.confidence,
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let security_ptr = Box::into_raw(security_results) as *mut CSecurityResult;
+
+        Self {
+            intent_results: intent_ptr,
+            pii_results: pii_ptr,
+            security_results: security_ptr,
+            batch_size,
+            error: false,
+            error_message: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// Initialize unified classifier (called from Go)
+#[no_mangle]
+pub extern "C" fn init_unified_classifier_c(
+    modernbert_path: *const c_char,
+    intent_head_path: *const c_char,
+    pii_head_path: *const c_char,
+    security_head_path: *const c_char,
+    intent_labels: *const *const c_char,
+    intent_labels_count: usize,
+    pii_labels: *const *const c_char,
+    pii_labels_count: usize,
+    security_labels: *const *const c_char,
+    security_labels_count: usize,
+    use_cpu: bool,
+) -> bool {
+    let modernbert_path = unsafe {
+        match CStr::from_ptr(modernbert_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    let intent_head_path = unsafe {
+        match CStr::from_ptr(intent_head_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    let pii_head_path = unsafe {
+        match CStr::from_ptr(pii_head_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    let security_head_path = unsafe {
+        match CStr::from_ptr(security_head_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    // Convert C string arrays to Rust Vec<String>
+    let intent_labels_vec = unsafe {
+        std::slice::from_raw_parts(intent_labels, intent_labels_count)
+            .iter()
+            .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
+            .collect::<Vec<String>>()
+    };
+
+    let pii_labels_vec = unsafe {
+        std::slice::from_raw_parts(pii_labels, pii_labels_count)
+            .iter()
+            .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
+            .collect::<Vec<String>>()
+    };
+
+    let security_labels_vec = unsafe {
+        std::slice::from_raw_parts(security_labels, security_labels_count)
+            .iter()
+            .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
+            .collect::<Vec<String>>()
+    };
+
+    match UnifiedClassifier::new(
+        modernbert_path,
+        intent_head_path,
+        pii_head_path,
+        security_head_path,
+        intent_labels_vec,
+        pii_labels_vec,
+        security_labels_vec,
+        use_cpu,
+    ) {
+        Ok(classifier) => {
+            let mut global_classifier = UNIFIED_CLASSIFIER.lock().unwrap();
+            *global_classifier = Some(classifier);
+            true
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize unified classifier: {e}");
+            false
+        }
+    }
+}
+
+/// Classify batch of texts using unified classifier (called from Go)
+#[no_mangle]
+pub extern "C" fn classify_unified_batch(
+    texts_ptr: *const *const c_char,
+    num_texts: i32,
+) -> UnifiedBatchResult {
+    if texts_ptr.is_null() || num_texts <= 0 {
+        return UnifiedBatchResult::error("Invalid input parameters");
+    }
+
+    // Convert C strings to Rust strings
+    let texts = unsafe {
+        std::slice::from_raw_parts(texts_ptr, num_texts as usize)
+            .iter()
+            .map(|&ptr| {
+                if ptr.is_null() {
+                    Err("Null text pointer")
+                } else {
+                    CStr::from_ptr(ptr).to_str().map_err(|_| "Invalid UTF-8")
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()
+    };
+
+    let texts = match texts {
+        Ok(t) => t,
+        Err(e) => return UnifiedBatchResult::error(e),
+    };
+
+    // Get unified classifier and perform batch classification
+    match get_unified_classifier() {
+        Ok(classifier_guard) => match classifier_guard.as_ref() {
+            Some(classifier) => match classifier.classify_batch(&texts) {
+                Ok(result) => UnifiedBatchResult::from_batch_result(result),
+                Err(e) => UnifiedBatchResult::error(&format!("Classification failed: {}", e)),
+            },
+            None => UnifiedBatchResult::error("Unified classifier not initialized"),
+        },
+        Err(e) => UnifiedBatchResult::error(&format!("Failed to get classifier: {}", e)),
+    }
+}
+
+/// Free unified batch result memory (called from Go)
+#[no_mangle]
+pub extern "C" fn free_unified_batch_result(result: UnifiedBatchResult) {
+    if result.error {
+        if !result.error_message.is_null() {
+            unsafe {
+                let _ = CString::from_raw(result.error_message);
+            }
+        }
+        return;
+    }
+
+    let batch_size = result.batch_size as usize;
+
+    // Free intent results
+    if !result.intent_results.is_null() {
+        unsafe {
+            let intent_slice = std::slice::from_raw_parts_mut(result.intent_results, batch_size);
+            for intent in intent_slice {
+                if !intent.category.is_null() {
+                    let _ = CString::from_raw(intent.category);
+                }
+                if !intent.probabilities.is_null() {
+                    let _ = Vec::from_raw_parts(
+                        intent.probabilities,
+                        intent.num_probabilities as usize,
+                        intent.num_probabilities as usize,
+                    );
+                }
+            }
+            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+                result.intent_results,
+                batch_size,
+            ));
+        }
+    }
+
+    // Free PII results
+    if !result.pii_results.is_null() {
+        unsafe {
+            let pii_slice = std::slice::from_raw_parts_mut(result.pii_results, batch_size);
+            for pii in pii_slice {
+                if !pii.pii_types.is_null() {
+                    let types_slice =
+                        std::slice::from_raw_parts_mut(pii.pii_types, pii.num_pii_types as usize);
+                    for &mut type_ptr in types_slice {
+                        if !type_ptr.is_null() {
+                            let _ = CString::from_raw(type_ptr);
+                        }
+                    }
+                    let _ = Vec::from_raw_parts(
+                        pii.pii_types,
+                        pii.num_pii_types as usize,
+                        pii.num_pii_types as usize,
+                    );
+                }
+            }
+            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+                result.pii_results,
+                batch_size,
+            ));
+        }
+    }
+
+    // Free security results
+    if !result.security_results.is_null() {
+        unsafe {
+            let security_slice =
+                std::slice::from_raw_parts_mut(result.security_results, batch_size);
+            for security in security_slice {
+                if !security.threat_type.is_null() {
+                    let _ = CString::from_raw(security.threat_type);
+                }
+            }
+            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+                result.security_results,
+                batch_size,
+            ));
         }
     }
 }
