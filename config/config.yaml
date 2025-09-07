@@ -277,10 +277,6 @@ default_model: mistral-small3.1
 # API Configuration
 api:
   batch_classification:
-    max_batch_size: 100          # Maximum number of texts in a single batch
-    concurrency_threshold: 5     # Switch to concurrent processing when batch size > this value
-    max_concurrency: 8           # Maximum number of concurrent goroutines
-
     # Metrics configuration for monitoring batch classification performance
     metrics:
       enabled: true              # Enable comprehensive metrics collection

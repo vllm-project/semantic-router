@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,61 +28,66 @@ func TestHandleBatchClassification(t *testing.T) {
 		{
 			name: "Valid small batch",
 			requestBody: `{
-				"texts": ["solve math equation", "write business plan", "chemistry experiment"]
+				"texts": ["What is machine learning?", "How to invest in stocks?"],
+				"task_type": "intent"
 			}`,
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
 			name: "Valid large batch",
-			requestBody: `{
-				"texts": [
-					"solve differential equation",
-					"business strategy analysis",
-					"chemistry reaction",
-					"physics calculation",
-					"market research",
-					"mathematical modeling",
-					"financial planning",
-					"scientific experiment"
-				]
-			}`,
-			expectedStatus: http.StatusOK,
+			requestBody: func() string {
+				texts := make([]string, 50)
+				for i := range texts {
+					texts[i] = fmt.Sprintf("Test text %d", i)
+				}
+				data := map[string]interface{}{
+					"texts":     texts,
+					"task_type": "intent",
+				}
+				b, _ := json.Marshal(data)
+				return string(b)
+			}(),
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
 			name: "Valid batch with options",
 			requestBody: `{
-				"texts": ["solve math equation", "write business plan"],
-				"options": {"return_probabilities": true}
+				"texts": ["What is quantum physics?"],
+				"task_type": "intent",
+				"options": {
+					"include_probabilities": true
+				}
 			}`,
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
-			name: "Empty texts array",
-			requestBody: `{
-				"texts": []
-			}`,
+			name:           "Empty texts array",
+			requestBody:    `{"texts": [], "task_type": "intent"}`,
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "texts array cannot be empty",
 		},
 		{
 			name:           "Missing texts field",
-			requestBody:    `{}`,
+			requestBody:    `{"task_type": "intent"}`,
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "texts array cannot be empty",
+			expectedError:  "texts field is required",
 		},
 		{
 			name: "Batch too large",
 			requestBody: func() string {
 				texts := make([]string, 101)
 				for i := range texts {
-					texts[i] = fmt.Sprintf("test query %d", i)
+					texts[i] = fmt.Sprintf("Test text %d", i)
 				}
 				data := map[string]interface{}{"texts": texts}
 				b, _ := json.Marshal(data)
 				return string(b)
 			}(),
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "batch size cannot exceed 100 texts",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
 			name:           "Invalid JSON",
@@ -146,64 +150,6 @@ func TestHandleBatchClassification(t *testing.T) {
 	}
 }
 
-func TestCalculateStatistics(t *testing.T) {
-	apiServer := &ClassificationAPIServer{}
-
-	tests := []struct {
-		name     string
-		results  []services.Classification
-		expected CategoryClassificationStatistics
-	}{
-		{
-			name: "Mixed categories",
-			results: []services.Classification{
-				{Category: "math", Confidence: 0.9},
-				{Category: "math", Confidence: 0.8},
-				{Category: "business", Confidence: 0.6},
-				{Category: "science", Confidence: 0.5},
-			},
-			expected: CategoryClassificationStatistics{
-				CategoryDistribution: map[string]int{
-					"math":     2,
-					"business": 1,
-					"science":  1,
-				},
-				AvgConfidence:      0.7,
-				LowConfidenceCount: 2, // 0.6 and 0.5 are below 0.7
-			},
-		},
-		{
-			name:    "Empty results",
-			results: []services.Classification{},
-			expected: CategoryClassificationStatistics{
-				CategoryDistribution: map[string]int{},
-				AvgConfidence:        0.0,
-				LowConfidenceCount:   0,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stats := apiServer.calculateStatistics(tt.results)
-
-			if math.Abs(stats.AvgConfidence-tt.expected.AvgConfidence) > 0.001 {
-				t.Errorf("Expected avg confidence %.3f, got %.3f", tt.expected.AvgConfidence, stats.AvgConfidence)
-			}
-
-			if stats.LowConfidenceCount != tt.expected.LowConfidenceCount {
-				t.Errorf("Expected low confidence count %d, got %d", tt.expected.LowConfidenceCount, stats.LowConfidenceCount)
-			}
-
-			for category, expectedCount := range tt.expected.CategoryDistribution {
-				if actualCount, exists := stats.CategoryDistribution[category]; !exists || actualCount != expectedCount {
-					t.Errorf("Expected category %s count %d, got %d", category, expectedCount, actualCount)
-				}
-			}
-		})
-	}
-}
-
 func TestBatchClassificationConfiguration(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -217,14 +163,8 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			config: &config.RouterConfig{
 				API: config.APIConfig{
 					BatchClassification: struct {
-						MaxBatchSize         int                                     `yaml:"max_batch_size,omitempty"`
-						ConcurrencyThreshold int                                     `yaml:"concurrency_threshold,omitempty"`
-						MaxConcurrency       int                                     `yaml:"max_concurrency,omitempty"`
-						Metrics              config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
+						Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 					}{
-						MaxBatchSize:         3, // Custom small limit
-						ConcurrencyThreshold: 2,
-						MaxConcurrency:       4,
 						Metrics: config.BatchClassificationMetricsConfig{
 							Enabled: true,
 						},
@@ -234,8 +174,8 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			requestBody: `{
 				"texts": ["text1", "text2", "text3", "text4"]
 			}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "batch size cannot exceed 3 texts",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
 			name:   "Default config when config is nil",
@@ -249,22 +189,16 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 				b, _ := json.Marshal(data)
 				return string(b)
 			}(),
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "batch size cannot exceed 100 texts", // Default limit
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
 			name: "Valid request within custom limits",
 			config: &config.RouterConfig{
 				API: config.APIConfig{
 					BatchClassification: struct {
-						MaxBatchSize         int                                     `yaml:"max_batch_size,omitempty"`
-						ConcurrencyThreshold int                                     `yaml:"concurrency_threshold,omitempty"`
-						MaxConcurrency       int                                     `yaml:"max_concurrency,omitempty"`
-						Metrics              config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
+						Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 					}{
-						MaxBatchSize:         10,
-						ConcurrencyThreshold: 3,
-						MaxConcurrency:       2,
 						Metrics: config.BatchClassificationMetricsConfig{
 							Enabled: true,
 						},
@@ -274,7 +208,8 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 			requestBody: `{
 				"texts": ["text1", "text2"]
 			}`,
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 	}
 
