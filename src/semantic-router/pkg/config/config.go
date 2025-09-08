@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -44,6 +45,9 @@ type RouterConfig struct {
 
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
+
+	// Model reasoning configurations to define how different models handle reasoning syntax
+	ModelReasoningConfigs []ModelReasoningConfig `yaml:"model_reasoning_configs,omitempty"`
 
 	// Semantic cache configuration
 	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
@@ -262,6 +266,73 @@ type Category struct {
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
+}
+
+// ModelReasoningSyntax defines how a model handles reasoning mode
+type ModelReasoningSyntax struct {
+	Type      string `yaml:"type"`      // "chat_template_kwargs" or "reasoning_effort"
+	Parameter string `yaml:"parameter"` // "thinking", "enable_thinking", "reasoning_effort", etc.
+}
+
+// ModelReasoningConfig defines reasoning configuration for a model family
+type ModelReasoningConfig struct {
+	Name            string               `yaml:"name"`
+	Patterns        []string             `yaml:"patterns"` // patterns to match against model names
+	ReasoningSyntax ModelReasoningSyntax `yaml:"reasoning_syntax"`
+}
+
+// FindModelReasoningConfig finds the appropriate reasoning configuration for a given model name
+func (rc *RouterConfig) FindModelReasoningConfig(modelName string) *ModelReasoningConfig {
+	if rc == nil || len(rc.ModelReasoningConfigs) == 0 {
+		return nil
+	}
+
+	modelLower := strings.ToLower(strings.TrimSpace(modelName))
+
+	// Look for exact pattern matches first
+	for _, config := range rc.ModelReasoningConfigs {
+		for _, pattern := range config.Patterns {
+			if matchesPattern(modelLower, strings.ToLower(pattern)) {
+				return &config
+			}
+		}
+	}
+
+	// Look for a default/fallback configuration
+	for _, config := range rc.ModelReasoningConfigs {
+		if config.Name == "default" || contains(config.Patterns, "*") {
+			return &config
+		}
+	}
+
+	return nil
+}
+
+// matchesPattern checks if a model name matches a given pattern
+func matchesPattern(modelName, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+
+	// Handle prefix patterns like "ds-", "ds_", "ds:", "ds "
+	if strings.HasSuffix(pattern, "-") || strings.HasSuffix(pattern, "_") ||
+		strings.HasSuffix(pattern, ":") || strings.HasSuffix(pattern, " ") {
+		return strings.HasPrefix(modelName, pattern) ||
+			(len(modelName) >= len(pattern)-1 && modelName == pattern[:len(pattern)-1])
+	}
+
+	// Handle exact matches and contains
+	return strings.Contains(modelName, pattern)
+}
+
+// contains checks if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 var (

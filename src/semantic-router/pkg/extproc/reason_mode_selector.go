@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
 )
 
@@ -47,61 +48,42 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 	return false, categoryName
 }
 
-// hasDeepSeekAlias returns true if the model uses a short alias for DeepSeek (e.g., "ds-*")
-// Rules:
-//   - Accept only when the model string starts with: "ds-", "ds_", "ds:", "ds " or exactly equals "ds"
-//   - Do NOT match occurrences of "ds" in the middle of the model name (e.g., "foo-ds-1b")
-func hasDeepSeekAlias(lower string) bool {
-	lower = strings.TrimSpace(lower)
-	if strings.HasPrefix(lower, "ds") {
-		if len(lower) == 2 { // exactly "ds"
-			return true
-		}
-		sep := lower[2]
-		return sep == '-' || sep == '_' || sep == ':' || sep == ' '
+// getModelReasoningConfig finds the reasoning configuration for a model using the config system
+func (r *OpenAIRouter) getModelReasoningConfig(model string) *config.ModelReasoningConfig {
+	if r.Config == nil {
+		return nil
 	}
-	return false
+	return r.Config.FindModelReasoningConfig(model)
 }
 
-// getModelFamilyAndTemplateParam returns a normalized model family name and the template param to be used (if any)
-func getModelFamilyAndTemplateParam(model string) (string, string) {
-	lower := strings.ToLower(strings.TrimSpace(model))
-	if strings.Contains(lower, "qwen3") {
-		return "qwen3", "enable_thinking"
+// buildReasoningRequestFields returns the appropriate fields to add to the request based on model config
+func (r *OpenAIRouter) buildReasoningRequestFields(model string, useReasoning bool, categoryName string) (map[string]interface{}, string) {
+	modelConfig := r.getModelReasoningConfig(model)
+	if modelConfig == nil {
+		// No configuration found for this model - don't apply any reasoning syntax
+		// Unknown models should not have reasoning fields added
+		return nil, "N/A"
 	}
-	if strings.Contains(lower, "deepseek") || hasDeepSeekAlias(lower) {
-		return "deepseek", "thinking"
-	}
-	// GPT-OSS family and generic GPT fall back to using reasoning_effort (OpenAI-compatible field)
-	if strings.Contains(lower, "gpt-oss") || strings.Contains(lower, "gpt_oss") {
-		return "gpt-oss", "reasoning_effort"
-	}
-	if strings.Contains(lower, "gpt") {
-		return "gpt", "reasoning_effort"
-	}
-	return "unknown", ""
-}
 
-// getChatTemplateKwargs returns the appropriate chat template kwargs based on model and reasoning mode
-func getChatTemplateKwargs(model string, useReasoning bool) map[string]interface{} {
-	lower := strings.ToLower(strings.TrimSpace(model))
+	if !useReasoning {
+		// When reasoning is disabled, don't add any reasoning fields
+		return nil, "N/A"
+	}
 
-	// Qwen3: use enable_thinking true/false
-	if strings.Contains(lower, "qwen3") {
-		return map[string]interface{}{
-			"enable_thinking": useReasoning,
+	// When reasoning is enabled, use the configured syntax
+	switch modelConfig.ReasoningSyntax.Type {
+	case "chat_template_kwargs":
+		kwargs := map[string]interface{}{
+			modelConfig.ReasoningSyntax.Parameter: useReasoning,
 		}
+		return map[string]interface{}{"chat_template_kwargs": kwargs}, "N/A"
+	case "reasoning_effort":
+		effort := r.getReasoningEffort(categoryName)
+		return map[string]interface{}{"reasoning_effort": effort}, effort
+	default:
+		// Unknown reasoning syntax type - don't apply anything
+		return nil, "N/A"
 	}
-
-	// DeepSeek v3 family: use thinking true/false
-	if strings.Contains(lower, "deepseek") || strings.Contains(lower, "ds") {
-		return map[string]interface{}{
-			"thinking": useReasoning,
-		}
-	}
-
-	// Default: no chat template kwargs for unknown models
-	return nil
 }
 
 // setReasoningModeToRequestBody adds chat_template_kwargs to the JSON request body
@@ -120,49 +102,60 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		}
 	}
 
-	family, param := getModelFamilyAndTemplateParam(model)
+	// Get original reasoning effort for potential preservation
+	originalReasoningEffort, hasOriginalEffort := requestMap["reasoning_effort"]
+	if !hasOriginalEffort {
+		originalReasoningEffort = "low" // Default for compatibility
+	}
 
-	// Add chat_template_kwargs for reasoning mode
-	kwargs := getChatTemplateKwargs(model, enabled)
-	if kwargs != nil {
-		requestMap["chat_template_kwargs"] = kwargs
-	} else {
-		delete(requestMap, "chat_template_kwargs")
-	}
-	// Also set Reasoning-Effort in openai request
-	// This is a hack to get the reasoning mode for openai/gpt-oss-20b to work
-	originalReasoningEffort, ok := requestMap["reasoning_effort"]
-	if !ok {
-		// This seems to be the default for openai/gpt-oss models
-		originalReasoningEffort = "low"
-	}
-	var appliedEffort string
+	// Clear existing reasoning-related fields
+	delete(requestMap, "chat_template_kwargs")
+	delete(requestMap, "reasoning_effort")
+
+	var appliedEffort string = "N/A"
+
 	if enabled {
-		// Use configurable reasoning effort based on category
-		effort := r.getReasoningEffort(categoryName)
-		requestMap["reasoning_effort"] = effort
+		// When reasoning is enabled, build the appropriate fields
+		reasoningFields, effort := r.buildReasoningRequestFields(model, enabled, categoryName)
+		for key, value := range reasoningFields {
+			requestMap[key] = value
+		}
 		appliedEffort = effort
 	} else {
-		requestMap["reasoning_effort"] = originalReasoningEffort
-		if s, ok := originalReasoningEffort.(string); ok {
-			appliedEffort = s
+		// When reasoning is disabled, only preserve reasoning_effort for gpt-oss models
+		modelConfig := r.getModelReasoningConfig(model)
+		if modelConfig != nil && modelConfig.Name == "gpt-oss" {
+			requestMap["reasoning_effort"] = originalReasoningEffort
+			if s, ok := originalReasoningEffort.(string); ok {
+				appliedEffort = s
+			}
 		}
+		// For all other models, reasoning fields remain cleared
 	}
 
 	log.Printf("Original reasoning effort: %s", originalReasoningEffort)
-	log.Printf("Added reasoning mode (enabled: %v) and reasoning effort (%s) to request for model: %s", enabled, requestMap["reasoning_effort"], model)
+	log.Printf("Added reasoning mode (enabled: %v) and reasoning effort (%s) to request for model: %s", enabled, appliedEffort, model)
 
 	// Record metrics for template usage and effort when enabled
 	if enabled {
-		// If we applied a known template param, record its usage
-		if kwargs != nil && param != "" {
-			metrics.RecordReasoningTemplateUsage(family, param)
-		} else if kwargs == nil && param == "reasoning_effort" {
-			// For GPT/GPT-OSS, we only set reasoning_effort
-			metrics.RecordReasoningTemplateUsage(family, param)
+		modelConfig := r.getModelReasoningConfig(model)
+		modelFamily := "unknown"
+		templateParam := "reasoning_effort" // default fallback
+
+		if modelConfig != nil {
+			modelFamily = modelConfig.Name
+			if modelConfig.ReasoningSyntax.Type == "chat_template_kwargs" {
+				templateParam = modelConfig.ReasoningSyntax.Parameter
+			} else {
+				templateParam = "reasoning_effort"
+			}
 		}
-		// Record which effort level was used for this family
-		metrics.RecordReasoningEffortUsage(family, appliedEffort)
+
+		// Record template usage and effort
+		metrics.RecordReasoningTemplateUsage(modelFamily, templateParam)
+		if appliedEffort != "N/A" {
+			metrics.RecordReasoningEffortUsage(modelFamily, appliedEffort)
+		}
 	}
 
 	// Serialize back to JSON

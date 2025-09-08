@@ -11,6 +11,7 @@ import (
 func TestReasoningModeIntegration(t *testing.T) {
 	// Create a mock router with reasoning configuration
 	cfg := &config.RouterConfig{
+		DefaultReasoningEffort: "medium",
 		Categories: []config.Category{
 			{
 				Name:                 "math",
@@ -22,6 +23,33 @@ func TestReasoningModeIntegration(t *testing.T) {
 				UseReasoning:         false,
 				ReasoningDescription: "Business content is typically conversational",
 			},
+		},
+		ModelReasoningConfigs: []config.ModelReasoningConfig{
+			{
+				Name:     "deepseek",
+				Patterns: []string{"deepseek", "ds-", "ds_", "ds:", "ds "},
+				ReasoningSyntax: config.ModelReasoningSyntax{
+					Type:      "chat_template_kwargs",
+					Parameter: "thinking",
+				},
+			},
+			{
+				Name:     "qwen3",
+				Patterns: []string{"qwen3"},
+				ReasoningSyntax: config.ModelReasoningSyntax{
+					Type:      "chat_template_kwargs",
+					Parameter: "enable_thinking",
+				},
+			},
+			{
+				Name:     "gpt-oss",
+				Patterns: []string{"gpt-oss", "gpt_oss"},
+				ReasoningSyntax: config.ModelReasoningSyntax{
+					Type:      "reasoning_effort",
+					Parameter: "reasoning_effort",
+				},
+			},
+			// No default config - unknown models should not get reasoning syntax
 		},
 	}
 
@@ -140,55 +168,84 @@ func TestReasoningModeIntegration(t *testing.T) {
 			t.Fatalf("Failed to unmarshal phi4 request: %v", err)
 		}
 
-		// For phi4, chat_template_kwargs should not be added (since it's not supported)
+		// For phi4, no reasoning fields should be added (since it's an unknown model)
 		if _, exists := modifiedRequestPhi4["chat_template_kwargs"]; exists {
-			t.Error("chat_template_kwargs should not be added for unsupported model phi4")
+			t.Error("chat_template_kwargs should not be added for unknown model phi4")
 		}
 
-		// But reasoning_effort should still be set
-		if reasoningEffort, exists := modifiedRequestPhi4["reasoning_effort"]; !exists {
-			t.Error("reasoning_effort should be set for phi4 model")
-		} else if reasoningEffort != "medium" {
-			t.Errorf("Expected reasoning_effort: medium for phi4 model (default), got %v", reasoningEffort)
+		// reasoning_effort should also not be set for unknown models
+		if reasoningEffort, exists := modifiedRequestPhi4["reasoning_effort"]; exists {
+			t.Errorf("reasoning_effort should NOT be set for unknown model phi4, but got %v", reasoningEffort)
 		}
 	})
 
-	// Test case 4: Test getChatTemplateKwargs function
-	t.Run("getChatTemplateKwargs returns correct values", func(t *testing.T) {
-		// Test with DeepSeek model and reasoning enabled
-		kwargs := getChatTemplateKwargs("deepseek-v31", true)
-		if kwargs == nil {
-			t.Error("Expected non-nil kwargs for DeepSeek model with reasoning enabled")
+	// Test case 4: Test buildReasoningRequestFields function with config-driven approach
+	t.Run("buildReasoningRequestFields returns correct values", func(t *testing.T) {
+		// Create a router with sample configurations for testing
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{
+				DefaultReasoningEffort: "medium",
+				ModelReasoningConfigs: []config.ModelReasoningConfig{
+					{
+						Name:     "deepseek",
+						Patterns: []string{"deepseek", "ds-", "ds_", "ds:", "ds "},
+						ReasoningSyntax: config.ModelReasoningSyntax{
+							Type:      "chat_template_kwargs",
+							Parameter: "thinking",
+						},
+					},
+					{
+						Name:     "qwen3",
+						Patterns: []string{"qwen3"},
+						ReasoningSyntax: config.ModelReasoningSyntax{
+							Type:      "chat_template_kwargs",
+							Parameter: "enable_thinking",
+						},
+					},
+					// No default config - unknown models should not get reasoning syntax
+				},
+			},
 		}
 
-		if thinking, ok := kwargs["thinking"]; !ok || thinking != true {
+		// Test with DeepSeek model and reasoning enabled
+		fields, _ := router.buildReasoningRequestFields("deepseek-v31", true, "test-category")
+		if fields == nil {
+			t.Error("Expected non-nil fields for DeepSeek model with reasoning enabled")
+		}
+		if chatKwargs, ok := fields["chat_template_kwargs"]; !ok {
+			t.Error("Expected chat_template_kwargs for DeepSeek model")
+		} else if kwargs, ok := chatKwargs.(map[string]interface{}); !ok {
+			t.Error("Expected chat_template_kwargs to be a map")
+		} else if thinking, ok := kwargs["thinking"]; !ok || thinking != true {
 			t.Errorf("Expected thinking: true for DeepSeek model, got %v", thinking)
 		}
 
 		// Test with DeepSeek model and reasoning disabled
-		kwargs = getChatTemplateKwargs("deepseek-v31", false)
-		if kwargs == nil {
-			t.Error("Expected non-nil kwargs for DeepSeek model with reasoning disabled")
-		}
-
-		if thinking, ok := kwargs["thinking"]; !ok || thinking != false {
-			t.Errorf("Expected thinking: false for DeepSeek model, got %v", thinking)
+		fields, _ = router.buildReasoningRequestFields("deepseek-v31", false, "test-category")
+		if fields != nil {
+			t.Errorf("Expected nil fields for DeepSeek model with reasoning disabled, got %v", fields)
 		}
 
 		// Test with Qwen3 model and reasoning enabled
-		kwargs = getChatTemplateKwargs("qwen3-7b", true)
-		if kwargs == nil {
-			t.Error("Expected non-nil kwargs for Qwen3 model with reasoning enabled")
+		fields, _ = router.buildReasoningRequestFields("qwen3-7b", true, "test-category")
+		if fields == nil {
+			t.Error("Expected non-nil fields for Qwen3 model with reasoning enabled")
 		}
-
-		if enableThinking, ok := kwargs["enable_thinking"]; !ok || enableThinking != true {
+		if chatKwargs, ok := fields["chat_template_kwargs"]; !ok {
+			t.Error("Expected chat_template_kwargs for Qwen3 model")
+		} else if kwargs, ok := chatKwargs.(map[string]interface{}); !ok {
+			t.Error("Expected chat_template_kwargs to be a map")
+		} else if enableThinking, ok := kwargs["enable_thinking"]; !ok || enableThinking != true {
 			t.Errorf("Expected enable_thinking: true for Qwen3 model, got %v", enableThinking)
 		}
 
-		// Test with unknown model (should return nil)
-		kwargs = getChatTemplateKwargs("unknown-model", true)
-		if kwargs != nil {
-			t.Errorf("Expected nil kwargs for unknown model, got %v", kwargs)
+		// Test with unknown model (should return no fields)
+		fields, effort := router.buildReasoningRequestFields("unknown-model", true, "test-category")
+		if fields != nil {
+			t.Errorf("Expected nil fields for unknown model with reasoning enabled, got %v", fields)
+		}
+		if effort != "N/A" {
+			t.Errorf("Expected effort string: N/A for unknown model, got %v", effort)
 		}
 	})
 
