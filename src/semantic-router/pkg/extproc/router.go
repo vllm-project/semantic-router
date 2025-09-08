@@ -37,7 +37,7 @@ type OpenAIRouter struct {
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
-var _ ext_proc.ExternalProcessorServer = &OpenAIRouter{}
+var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
 // NewOpenAIRouter creates a new OpenAI API router instance
 func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {

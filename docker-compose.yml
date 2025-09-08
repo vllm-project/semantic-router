@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+
   # Semantic Router External Processor Service
   semantic-router:
     build:

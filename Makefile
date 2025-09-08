@@ -55,6 +55,12 @@ run-envoy:
 	@echo "Starting Envoy..."
 	func-e run --config-path config/envoy.yaml --component-log-level "ext_proc:trace,router:trace,http:trace"
 
+# Run go vet for all Go modules
+vet:
+	@echo "Running go vet..."
+	@cd candle-binding && go vet ./...
+	@cd src/semantic-router && go vet ./...
+
 # Test the Rust library
 test-binding: rust
 	@echo "Running Go tests with static library..."
@@ -86,7 +92,7 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-test: download-models test-binding test-semantic-router
+test: vet download-models test-binding test-semantic-router
 
 # Clean built artifacts
 clean:

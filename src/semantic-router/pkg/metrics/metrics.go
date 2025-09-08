@@ -102,6 +102,15 @@ var (
 		[]string{"model"},
 	)
 
+	// ModelCost tracks the total cost attributed to each model by currency
+	ModelCost = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_cost_total",
+			Help: "The total cost attributed to each LLM model, labeled by currency",
+		},
+		[]string{"model", "currency"},
+	)
+
 	// ModelTokens tracks the number of tokens used by each model
 	ModelTokens = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -136,6 +145,15 @@ var (
 			Help: "The total number of times a request was rerouted from source model to target model",
 		},
 		[]string{"source_model", "target_model"},
+	)
+
+	// RoutingReasonCodes tracks routing decisions by reason_code and model
+	RoutingReasonCodes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_routing_reason_codes_total",
+			Help: "The total number of routing decisions by reason code and model",
+		},
+		[]string{"reason_code", "model"},
 	)
 
 	// ModelCompletionLatency tracks the latency of completions by model
@@ -236,6 +254,28 @@ func RecordModelRouting(sourceModel, targetModel string) {
 // RecordModelTokens adds the number of tokens used by a specific model
 func RecordModelTokens(model string, tokens float64) {
 	ModelTokens.WithLabelValues(model).Add(tokens)
+}
+
+// RecordModelCost records the cost attributed to a specific model with a currency label
+func RecordModelCost(model string, currency string, amount float64) {
+	if amount < 0 {
+		return
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+	ModelCost.WithLabelValues(model, currency).Add(amount)
+}
+
+// RecordRoutingReasonCode increments the counter for a routing decision reason code and model
+func RecordRoutingReasonCode(reasonCode, model string) {
+	if reasonCode == "" {
+		reasonCode = "unknown"
+	}
+	if model == "" {
+		model = "unknown"
+	}
+	RoutingReasonCodes.WithLabelValues(reasonCode, model).Inc()
 }
 
 // RecordModelTokensDetailed records detailed token usage (prompt and completion)
