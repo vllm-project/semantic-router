@@ -108,7 +108,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		originalReasoningEffort = "low" // Default for compatibility
 	}
 
-	// Clear existing reasoning-related fields
+	// Clear existing reasoning-related fields to start with clean state
 	delete(requestMap, "chat_template_kwargs")
 	delete(requestMap, "reasoning_effort")
 
@@ -117,8 +117,10 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	if enabled {
 		// When reasoning is enabled, build the appropriate fields
 		reasoningFields, effort := r.buildReasoningRequestFields(model, enabled, categoryName)
-		for key, value := range reasoningFields {
-			requestMap[key] = value
+		if reasoningFields != nil {
+			for key, value := range reasoningFields {
+				requestMap[key] = value
+			}
 		}
 		appliedEffort = effort
 	} else {
