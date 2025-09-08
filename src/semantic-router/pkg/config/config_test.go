@@ -631,7 +631,6 @@ prompt_guard:
 		})
 	})
 
-
 	Describe("GetCategoryDescriptions", func() {
 		Context("with categories having descriptions", func() {
 			BeforeEach(func() {

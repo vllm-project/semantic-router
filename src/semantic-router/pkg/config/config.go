@@ -325,7 +325,6 @@ func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
 	return c.DefaultModel
 }
 
-
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.
 // The currency indicates the unit of the returned rates (e.g., "USD").
 func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
