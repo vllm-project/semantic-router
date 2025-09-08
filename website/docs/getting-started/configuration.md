@@ -87,6 +87,35 @@ categories:
     score: 0.8
 
 default_model: your-model
+
+# Model reasoning configurations - define how different models handle reasoning syntax
+model_reasoning_configs:
+  - name: "deepseek"
+    patterns: ["deepseek", "ds-", "ds_", "ds:", "ds "]
+    reasoning_syntax:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+
+  - name: "qwen3"
+    patterns: ["qwen3"]
+    reasoning_syntax:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+
+  - name: "gpt-oss"
+    patterns: ["gpt-oss", "gpt_oss"]
+    reasoning_syntax:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  - name: "gpt"
+    patterns: ["gpt"]
+    reasoning_syntax:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+# Global default reasoning effort level
+default_reasoning_effort: "medium"
 ```
 
 ## Key Configuration Sections
@@ -187,6 +216,98 @@ categories:
     score: 0.8
 
 default_model: your-model          # Fallback model
+```
+
+### Model Reasoning Configuration
+
+Configure how different models handle reasoning mode syntax. This allows you to add new models without code changes:
+
+```yaml
+# Model reasoning configurations - define how different models handle reasoning syntax
+model_reasoning_configs:
+  - name: "deepseek"
+    patterns: ["deepseek", "ds-", "ds_", "ds:", "ds "]
+    reasoning_syntax:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+
+  - name: "qwen3"
+    patterns: ["qwen3"]
+    reasoning_syntax:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+
+  - name: "gpt-oss"
+    patterns: ["gpt-oss", "gpt_oss"]
+    reasoning_syntax:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  - name: "gpt"
+    patterns: ["gpt"]
+    reasoning_syntax:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+# Global default reasoning effort level (when not specified per category)
+default_reasoning_effort: "medium"
+```
+
+#### Model Reasoning Configuration Options
+
+**Configuration Structure:**
+- `name`: A unique identifier for the model family
+- `patterns`: Array of patterns to match against model names
+- `reasoning_syntax.type`: How the model expects reasoning mode to be specified
+  - `"chat_template_kwargs"`: Use chat template parameters (for models like DeepSeek, Qwen3)
+  - `"reasoning_effort"`: Use OpenAI-compatible reasoning_effort field (for GPT models)
+- `reasoning_syntax.parameter`: The specific parameter name the model uses
+
+**Pattern Matching:**
+- Exact matches: `"deepseek"` matches models containing "deepseek"
+- Prefix patterns: `"ds-"` matches models starting with "ds-" (like "ds-1.5b")
+- Multiple patterns: `["deepseek", "ds-", "ds_"]` matches any of these patterns
+
+**Adding New Models:**
+To support a new model family (e.g., Claude), simply add a new configuration:
+
+```yaml
+model_reasoning_configs:
+  - name: "claude"
+    patterns: ["claude"]
+    reasoning_syntax:
+      type: "chat_template_kwargs"
+      parameter: "enable_reasoning"
+```
+
+**Unknown Models:**
+Models that don't match any configured pattern will have no reasoning fields applied when reasoning mode is enabled. This prevents issues with models that don't support reasoning syntax.
+
+**Default Reasoning Effort:**
+Set the global default reasoning effort level used when categories don't specify their own effort level:
+
+```yaml
+default_reasoning_effort: "high"  # Options: "low", "medium", "high"
+```
+
+**Category-Specific Reasoning Effort:**
+Override the default effort level per category:
+
+```yaml
+categories:
+- name: math
+  use_reasoning: true
+  reasoning_effort: "high"        # Use high effort for complex math
+  model_scores:
+  - model: your-model
+    score: 1.0
+
+- name: general
+  use_reasoning: true
+  reasoning_effort: "low"         # Use low effort for general queries
+  model_scores:
+  - model: your-model
+    score: 1.0
 ```
 
 ### Security Features
@@ -575,6 +696,41 @@ make test-auto-prompt-reasoning      # Math query
 make test-auto-prompt-no-reasoning   # General query
 make test-pii                        # PII detection
 make test-prompt-guard               # Jailbreak protection
+```
+
+### Model Reasoning Configuration Issues
+
+**Model not getting reasoning fields:**
+- Check that the model name matches a pattern in `model_reasoning_configs`
+- Verify the pattern syntax (exact matches vs prefixes)
+- Unknown models will have no reasoning fields applied (this is by design)
+
+**Wrong reasoning syntax applied:**
+- Ensure the `reasoning_syntax.type` matches your model's expected format
+- Check the `reasoning_syntax.parameter` name is correct
+- DeepSeek models typically use `chat_template_kwargs` with `"thinking"`
+- GPT models typically use `reasoning_effort`
+
+**Adding support for new models:**
+```yaml
+# Add a new model configuration
+model_reasoning_configs:
+  - name: "my-new-model"
+    patterns: ["my-model"]
+    reasoning_syntax:
+      type: "chat_template_kwargs"  # or "reasoning_effort"
+      parameter: "custom_parameter"
+```
+
+**Testing model reasoning configuration:**
+```bash
+# Test reasoning with your specific model
+curl -X POST http://localhost:8801/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-model-name",
+    "messages": [{"role": "user", "content": "What is 2+2?"}]
+  }'
 ```
 
 ## Configuration Generation
