@@ -102,11 +102,6 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
             "use_cpu": True,
             "jailbreak_mapping_path": "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json",
         },
-        "gpu_config": {
-            "flops": 312000000000000,  # 312e12 fp16
-            "hbm": 2000000000000,  # 2e12 (2 TB/s)
-            "description": "A100-80G",
-        },
         "classifier": {
             "category_model": {
                 "model_id": "models/category_classifier_modernbert-base_model",

@@ -53,9 +53,6 @@ type RouterConfig struct {
 	// Model parameters configuration
 	ModelConfig map[string]ModelParams `yaml:"model_config"`
 
-	// GPU configuration for TTFT calculation
-	GPUConfig GPUConfig `yaml:"gpu_config"`
-
 	// Tools configuration for automatic tool selection
 	Tools ToolsConfig `yaml:"tools"`
 
@@ -191,7 +188,7 @@ type VLLMEndpoint struct {
 	HealthCheckPath string `yaml:"health_check_path,omitempty"`
 }
 
-// ModelParams represents configuration for model-specific parameters
+// ModelPricing represents configuration for model-specific parameters
 type ModelPricing struct {
 	// ISO currency code for the pricing (e.g., "USD"). Defaults to "USD" when omitted.
 	Currency string `yaml:"currency,omitempty"`
@@ -202,15 +199,6 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	// Number of parameters in the model
-	ParamCount float64 `yaml:"param_count"`
-
-	// Default batch size for this model
-	BatchSize float64 `yaml:"batch_size"`
-
-	// Default context size for this model
-	ContextSize float64 `yaml:"context_size"`
-
 	// PII policy configuration for this model
 	PIIPolicy PIIPolicy `yaml:"pii_policy,omitempty"`
 
@@ -251,18 +239,6 @@ const (
 	PIITypeUSSSN           = "US_SSN"            // US Social Security Number
 	PIITypeZipCode         = "ZIP_CODE"          // ZIP/Postal codes
 )
-
-// GPUConfig represents configuration for GPU parameters used in TTFT calculation
-type GPUConfig struct {
-	// FLOPs performance in operations per second
-	FLOPS float64 `yaml:"flops"`
-
-	// HBM memory bandwidth in bytes per second
-	HBM float64 `yaml:"hbm"`
-
-	// Description of the GPU configuration (e.g., "A100-80G")
-	Description string `yaml:"description"`
-}
 
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
 func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
@@ -349,32 +325,6 @@ func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
 	return c.DefaultModel
 }
 
-// GetModelParamCount returns the parameter count for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelParamCount(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.ParamCount
-	}
-	return defaultValue
-}
-
-// GetModelBatchSize returns the batch size for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelBatchSize(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.BatchSize
-	}
-	return defaultValue
-}
-
-// GetModelContextSize returns the context size for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelContextSize(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.ContextSize
-	}
-	return defaultValue
-}
 
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.
 // The currency indicates the unit of the returned rates (e.g., "USD").
