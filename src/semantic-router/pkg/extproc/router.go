@@ -41,10 +41,13 @@ var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
 // NewOpenAIRouter creates a new OpenAI API router instance
 func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
-	cfg, err := config.LoadConfig(configPath)
+	// Always parse fresh config for router construction (supports live reload)
+	cfg, err := config.ParseConfigFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	// Update global config reference for packages that rely on config.GetConfig()
+	config.ReplaceGlobalConfig(cfg)
 
 	initMutex.Lock()
 	defer initMutex.Unlock()
