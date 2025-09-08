@@ -94,7 +94,7 @@ func getChatTemplateKwargs(model string, useReasoning bool) map[string]interface
 	}
 
 	// DeepSeek v3 family: use thinking true/false
-	if strings.Contains(lower, "deepseek") || strings.Contains(lower, "ds") {
+	if strings.Contains(lower, "deepseek") || hasDeepSeekAlias(lower) {
 		return map[string]interface{}{
 			"thinking": useReasoning,
 		}
@@ -122,47 +122,66 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 
 	family, param := getModelFamilyAndTemplateParam(model)
 
-	// Add chat_template_kwargs for reasoning mode
-	kwargs := getChatTemplateKwargs(model, enabled)
-	if kwargs != nil {
-		requestMap["chat_template_kwargs"] = kwargs
-	} else {
-		delete(requestMap, "chat_template_kwargs")
-	}
-	// Also set Reasoning-Effort in openai request
-	// This is a hack to get the reasoning mode for openai/gpt-oss-20b to work
+	// Handle reasoning_effort first
 	originalReasoningEffort, ok := requestMap["reasoning_effort"]
 	if !ok {
 		// This seems to be the default for openai/gpt-oss models
 		originalReasoningEffort = "low"
 	}
 	var appliedEffort string
+
 	if enabled {
-		// Use configurable reasoning effort based on category
-		effort := r.getReasoningEffort(categoryName)
-		requestMap["reasoning_effort"] = effort
-		appliedEffort = effort
-	} else {
-		requestMap["reasoning_effort"] = originalReasoningEffort
-		if s, ok := originalReasoningEffort.(string); ok {
-			appliedEffort = s
+		// When reasoning is enabled
+		if family == "gpt-oss" || family == "gpt" {
+			// For GPT models, use reasoning_effort
+			effort := r.getReasoningEffort(categoryName)
+			requestMap["reasoning_effort"] = effort
+			appliedEffort = effort
+			// Remove chat_template_kwargs for GPT models
+			delete(requestMap, "chat_template_kwargs")
+		} else {
+			// For other models (DeepSeek, Qwen3), use chat_template_kwargs
+			kwargs := getChatTemplateKwargs(model, enabled)
+			if kwargs != nil {
+				requestMap["chat_template_kwargs"] = kwargs
+			}
+			// Remove reasoning_effort for non-GPT models
+			delete(requestMap, "reasoning_effort")
+			appliedEffort = "N/A"
 		}
+	} else {
+		// When reasoning is disabled
+		if family == "gpt-oss" {
+			// For GPT-OSS, preserve original reasoning_effort
+			requestMap["reasoning_effort"] = originalReasoningEffort
+			if s, ok := originalReasoningEffort.(string); ok {
+				appliedEffort = s
+			}
+		} else {
+			// For other models, remove reasoning_effort
+			delete(requestMap, "reasoning_effort")
+			appliedEffort = "N/A"
+		}
+		// Always remove chat_template_kwargs when reasoning is disabled
+		delete(requestMap, "chat_template_kwargs")
 	}
 
 	log.Printf("Original reasoning effort: %s", originalReasoningEffort)
-	log.Printf("Added reasoning mode (enabled: %v) and reasoning effort (%s) to request for model: %s", enabled, requestMap["reasoning_effort"], model)
+	log.Printf("Added reasoning mode (enabled: %v) and reasoning effort (%s) to request for model: %s", enabled, appliedEffort, model)
 
 	// Record metrics for template usage and effort when enabled
 	if enabled {
-		// If we applied a known template param, record its usage
-		if kwargs != nil && param != "" {
+		// Record template param usage based on what we actually applied
+		if family == "gpt-oss" || family == "gpt" {
+			// For GPT models, we used reasoning_effort
+			metrics.RecordReasoningTemplateUsage(family, "reasoning_effort")
+			metrics.RecordReasoningEffortUsage(family, appliedEffort)
+		} else if param != "" {
+			// For other models (DeepSeek, Qwen3), we used chat_template_kwargs
 			metrics.RecordReasoningTemplateUsage(family, param)
-		} else if kwargs == nil && param == "reasoning_effort" {
-			// For GPT/GPT-OSS, we only set reasoning_effort
-			metrics.RecordReasoningTemplateUsage(family, param)
+			// For non-GPT models, effort is N/A
+			metrics.RecordReasoningEffortUsage(family, appliedEffort)
 		}
-		// Record which effort level was used for this family
-		metrics.RecordReasoningEffortUsage(family, appliedEffort)
 	}
 
 	// Serialize back to JSON
