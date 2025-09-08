@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/api"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
 )
 
 func main() {
@@ -22,6 +23,11 @@ func main() {
 		enableAPI   = flag.Bool("enable-api", true, "Enable Classification API server")
 	)
 	flag.Parse()
+
+	// Initialize logging (zap) from environment.
+	if _, err := observability.InitLoggerFromEnv(); err != nil {
+		log.Printf("failed to initialize logger, falling back to stdlib: %v", err)
+	}
 
 	// Check if config file exists
 	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
