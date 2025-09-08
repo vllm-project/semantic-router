@@ -78,7 +78,7 @@ static_resources:
   - name: extproc_service
     connect_timeout: 300s
     per_connection_buffer_limit_bytes: 52428800
-    type: STATIC
+    type: STRICT_DNS
     lb_policy: ROUND_ROBIN
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
