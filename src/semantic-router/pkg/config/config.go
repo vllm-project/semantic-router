@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -439,14 +440,7 @@ func (c *RouterConfig) IsModelAllowedForPIIType(modelName string, piiType string
 	}
 
 	// If allow_by_default is false, only explicitly allowed PII types are permitted
-	for _, allowedPII := range policy.PIITypes {
-		if allowedPII == piiType {
-			return true
-		}
-	}
-
-	// PII type not found in allowed list and allow_by_default is false
-	return false
+	return slices.Contains(policy.PIITypes, piiType)
 }
 
 // IsModelAllowedForPIITypes checks if a model is allowed to process any of the given PII types
@@ -487,11 +481,8 @@ func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
 
 	// First, find all endpoints that can serve this model
 	for _, endpoint := range c.VLLMEndpoints {
-		for _, model := range endpoint.Models {
-			if model == modelName {
-				availableEndpoints = append(availableEndpoints, endpoint)
-				break
-			}
+		if slices.Contains(endpoint.Models, modelName) {
+			availableEndpoints = append(availableEndpoints, endpoint)
 		}
 	}
 
@@ -499,11 +490,8 @@ func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
 		var preferredEndpoints []VLLMEndpoint
 		for _, endpoint := range availableEndpoints {
-			for _, preferredName := range modelConfig.PreferredEndpoints {
-				if endpoint.Name == preferredName {
-					preferredEndpoints = append(preferredEndpoints, endpoint)
-					break
-				}
+			if slices.Contains(modelConfig.PreferredEndpoints, endpoint.Name) {
+				preferredEndpoints = append(preferredEndpoints, endpoint)
 			}
 		}
 		if len(preferredEndpoints) > 0 {
