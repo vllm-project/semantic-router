@@ -3,7 +3,7 @@ package cache
 import (
 	"fmt"
 	"os"
-	
+
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
 )
 
@@ -20,7 +20,7 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
 		// Use in-memory cache as the default backend
-		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f", 
+		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f",
 			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold)
 		options := InMemoryCacheOptions{
 			Enabled:             config.Enabled,
@@ -31,19 +31,19 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		return NewInMemoryCache(options), nil
 
 	case MilvusCacheType:
-		observability.Debugf("Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f", 
+		observability.Debugf("Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
 			config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
 		if config.BackendConfigPath == "" {
 			return nil, fmt.Errorf("backend_config_path is required for Milvus cache backend")
 		}
-		
+
 		// Ensure the Milvus configuration file exists
 		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
 			observability.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
 			return nil, fmt.Errorf("Milvus config file not found: %s", config.BackendConfigPath)
 		}
 		observability.Debugf("Milvus config file found: %s", config.BackendConfigPath)
-		
+
 		options := MilvusCacheOptions{
 			Enabled:             config.Enabled,
 			SimilarityThreshold: config.SimilarityThreshold,

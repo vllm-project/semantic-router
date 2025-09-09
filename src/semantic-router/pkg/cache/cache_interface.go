@@ -40,10 +40,10 @@ type CacheBackend interface {
 
 // CacheStats holds performance metrics and usage statistics for cache operations
 type CacheStats struct {
-	TotalEntries    int     `json:"total_entries"`
-	HitCount        int64   `json:"hit_count"`
-	MissCount       int64   `json:"miss_count"`
-	HitRatio        float64 `json:"hit_ratio"`
+	TotalEntries    int        `json:"total_entries"`
+	HitCount        int64      `json:"hit_count"`
+	MissCount       int64      `json:"miss_count"`
+	HitRatio        float64    `json:"hit_ratio"`
 	LastCleanupTime *time.Time `json:"last_cleanup_time,omitempty"`
 }
 
@@ -53,7 +53,7 @@ type CacheBackendType string
 const (
 	// InMemoryCacheType specifies the in-memory cache backend
 	InMemoryCacheType CacheBackendType = "memory"
-	
+
 	// MilvusCacheType specifies the Milvus vector database backend
 	MilvusCacheType CacheBackendType = "milvus"
 )
@@ -62,7 +62,7 @@ const (
 type CacheConfig struct {
 	// BackendType specifies which cache implementation to use
 	BackendType CacheBackendType `yaml:"backend_type"`
-	
+
 	// Enabled controls whether semantic caching is active
 	Enabled bool `yaml:"enabled"`
 
@@ -74,7 +74,7 @@ type CacheConfig struct {
 
 	// TTLSeconds sets cache entry expiration time (0 disables expiration)
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
-	
+
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 }

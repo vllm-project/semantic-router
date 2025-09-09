@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -168,12 +168,12 @@ development:
 					}
 
 					backend, err := cache.NewCacheBackend(config)
-					
+
 					// Skip test if Milvus is not reachable
 					if err != nil {
 						if strings.Contains(err.Error(), "failed to create Milvus client") ||
-						   strings.Contains(err.Error(), "connection") ||
-						   strings.Contains(err.Error(), "dial") {
+							strings.Contains(err.Error(), "connection") ||
+							strings.Contains(err.Error(), "dial") {
 							Skip("Milvus server not available: " + err.Error())
 						}
 						// For other errors, fail the test
@@ -318,9 +318,9 @@ development:
 				config := cache.CacheConfig{
 					BackendType:         cache.InMemoryCacheType,
 					Enabled:             true,
-					SimilarityThreshold: 0.0,  // Valid: minimum threshold
-					MaxEntries:          0,    // Valid: unlimited entries
-					TTLSeconds:          0,    // Valid: no expiration
+					SimilarityThreshold: 0.0, // Valid: minimum threshold
+					MaxEntries:          0,   // Valid: unlimited entries
+					TTLSeconds:          0,   // Valid: no expiration
 				}
 
 				err := cache.ValidateCacheConfig(config)

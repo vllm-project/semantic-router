@@ -38,7 +38,7 @@ type InMemoryCacheOptions struct {
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
 func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
-	observability.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f", 
+	observability.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f",
 		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold)
 	return &InMemoryCache{
 		entries:             []CacheEntry{},
@@ -57,7 +57,7 @@ func (c *InMemoryCache) IsEnabled() bool {
 // AddPendingRequest stores a request that is awaiting its response
 func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBody []byte) (string, error) {
 	start := time.Now()
-	
+
 	if !c.enabled {
 		return query, nil
 	}
@@ -85,7 +85,7 @@ func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBod
 	}
 
 	c.entries = append(c.entries, entry)
-	observability.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d)", 
+	observability.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d)",
 		len(c.entries), len(embedding))
 
 	// Apply entry limit to prevent unbounded memory growth
@@ -97,12 +97,12 @@ func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBod
 		// Keep only the most recent entries
 		removedCount := len(c.entries) - c.maxEntries
 		c.entries = c.entries[len(c.entries)-c.maxEntries:]
-		observability.Debugf("InMemoryCache: size limit exceeded, removed %d oldest entries (limit: %d)", 
+		observability.Debugf("InMemoryCache: size limit exceeded, removed %d oldest entries (limit: %d)",
 			removedCount, c.maxEntries)
 		observability.LogEvent("cache_trimmed", map[string]interface{}{
-			"backend": "memory",
+			"backend":       "memory",
 			"removed_count": removedCount,
-			"max_entries": c.maxEntries,
+			"max_entries":   c.maxEntries,
 		})
 	}
 
@@ -116,7 +116,7 @@ func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBod
 // UpdateWithResponse completes a pending request by adding the response
 func (c *InMemoryCache) UpdateWithResponse(query string, responseBody []byte) error {
 	start := time.Now()
-	
+
 	if !c.enabled {
 		return nil
 	}
@@ -133,9 +133,9 @@ func (c *InMemoryCache) UpdateWithResponse(query string, responseBody []byte) er
 			// Complete the cache entry with the response
 			c.entries[i].ResponseBody = responseBody
 			c.entries[i].Timestamp = time.Now()
-			observability.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)", 
+			observability.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
 				len(responseBody))
-			
+
 			// Record successful completion
 			metrics.RecordCacheOperation("memory", "update_response", "success", time.Since(start).Seconds())
 			return nil
@@ -150,7 +150,7 @@ func (c *InMemoryCache) UpdateWithResponse(query string, responseBody []byte) er
 // AddEntry stores a complete request-response pair in the cache
 func (c *InMemoryCache) AddEntry(model string, query string, requestBody, responseBody []byte) error {
 	start := time.Now()
-	
+
 	if !c.enabled {
 		return nil
 	}
@@ -178,12 +178,12 @@ func (c *InMemoryCache) AddEntry(model string, query string, requestBody, respon
 	c.cleanupExpiredEntries()
 
 	c.entries = append(c.entries, entry)
-	observability.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d)", 
+	observability.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d)",
 		len(c.entries), len(requestBody), len(responseBody))
 	observability.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend": "memory",
-		"query": query,
-		"model": model,
+		"query":   query,
+		"model":   model,
 	})
 
 	// Apply entry limit if configured
@@ -206,7 +206,7 @@ func (c *InMemoryCache) AddEntry(model string, query string, requestBody, respon
 // FindSimilar searches for semantically similar cached requests
 func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
 	start := time.Now()
-	
+
 	if !c.enabled {
 		observability.Debugf("InMemoryCache.FindSimilar: cache disabled")
 		return nil, false, nil
@@ -215,7 +215,7 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("InMemoryCache.FindSimilar: searching for model='%s', query='%s' (len=%d chars)", 
+	observability.Debugf("InMemoryCache.FindSimilar: searching for model='%s', query='%s' (len=%d chars)",
 		model, queryPreview, len(query))
 
 	// Generate semantic embedding for similarity comparison
@@ -280,10 +280,10 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 		observability.Debugf("InMemoryCache.FindSimilar: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
 			results[0].Similarity, c.similarityThreshold, len(results[0].Entry.ResponseBody))
 		observability.LogEvent("cache_hit", map[string]interface{}{
-			"backend": "memory",
+			"backend":    "memory",
 			"similarity": results[0].Similarity,
-			"threshold": c.similarityThreshold,
-			"model": model,
+			"threshold":  c.similarityThreshold,
+			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
 		metrics.RecordCacheHit()
@@ -294,10 +294,10 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	observability.Debugf("InMemoryCache.FindSimilar: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
 		results[0].Similarity, c.similarityThreshold, len(results))
 	observability.LogEvent("cache_miss", map[string]interface{}{
-		"backend": "memory",
+		"backend":         "memory",
 		"best_similarity": results[0].Similarity,
-		"threshold": c.similarityThreshold,
-		"model": model,
+		"threshold":       c.similarityThreshold,
+		"model":           model,
 		"entries_checked": len(results),
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
@@ -309,7 +309,7 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 func (c *InMemoryCache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Clear all entries to free memory
 	c.entries = nil
 	return nil
@@ -319,27 +319,27 @@ func (c *InMemoryCache) Close() error {
 func (c *InMemoryCache) GetStats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	hits := atomic.LoadInt64(&c.hitCount)
 	misses := atomic.LoadInt64(&c.missCount)
 	total := hits + misses
-	
+
 	var hitRatio float64
 	if total > 0 {
 		hitRatio = float64(hits) / float64(total)
 	}
-	
+
 	stats := CacheStats{
 		TotalEntries: len(c.entries),
 		HitCount:     hits,
 		MissCount:    misses,
 		HitRatio:     hitRatio,
 	}
-	
+
 	if c.lastCleanupTime != nil {
 		stats.LastCleanupTime = c.lastCleanupTime
 	}
-	
+
 	return stats
 }
 
@@ -362,13 +362,13 @@ func (c *InMemoryCache) cleanupExpiredEntries() {
 
 	if len(validEntries) < len(c.entries) {
 		expiredCount := len(c.entries) - len(validEntries)
-		observability.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)", 
+		observability.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
 			expiredCount, len(validEntries))
 		observability.LogEvent("cache_cleanup", map[string]interface{}{
-			"backend": "memory",
-			"expired_count": expiredCount,
+			"backend":         "memory",
+			"expired_count":   expiredCount,
 			"remaining_count": len(validEntries),
-			"ttl_seconds": c.ttlSeconds,
+			"ttl_seconds":     c.ttlSeconds,
 		})
 		c.entries = validEntries
 		cleanupTime := time.Now()
@@ -393,12 +393,12 @@ func (c *InMemoryCache) cleanupExpiredEntriesReadOnly() {
 	}
 
 	if expiredCount > 0 {
-		observability.Debugf("InMemoryCache: found %d expired entries during read (TTL: %ds)", 
+		observability.Debugf("InMemoryCache: found %d expired entries during read (TTL: %ds)",
 			expiredCount, c.ttlSeconds)
 		observability.LogEvent("cache_expired_entries_found", map[string]interface{}{
-			"backend": "memory",
+			"backend":       "memory",
 			"expired_count": expiredCount,
-			"ttl_seconds": c.ttlSeconds,
+			"ttl_seconds":   c.ttlSeconds,
 		})
 	}
 }

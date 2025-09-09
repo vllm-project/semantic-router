@@ -151,7 +151,7 @@ tools:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
-				
+
 				// New fields should have default/zero values when not specified
 				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())
 				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
@@ -1023,7 +1023,7 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(7200))
 				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/cache/milvus.yaml"))
-				
+
 				// MaxEntries should be ignored for Milvus backend
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 			})
@@ -1068,7 +1068,7 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
-				Expect(cfg.SemanticCache.BackendType).To(BeEmpty()) // Should default to empty (memory)
+				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())       // Should default to empty (memory)
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil()) // Will fallback to BERT threshold
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
@@ -1130,7 +1130,7 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
-				
+
 				// GetCacheSimilarityThreshold should return BERT threshold
 				threshold := cfg.GetCacheSimilarityThreshold()
 				Expect(threshold).To(Equal(float32(0.75)))
@@ -1184,7 +1184,7 @@ semantic_cache:
 				// Configuration parsing should succeed
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("redis"))
-				
+
 				// Runtime validation will catch unsupported backend types
 			})
 		})
@@ -1253,7 +1253,7 @@ semantic_cache:
   similarity_threshold: 0.8
   max_entries: 1000
   ttl_seconds: 3600
-  
+
   # Production configuration (commented out)
   # backend_type: "milvus"
   # backend_config_path: "config/cache/milvus.yaml"
