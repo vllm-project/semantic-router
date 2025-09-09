@@ -1,3 +1,4 @@
+
 package cache_test
 
 import (
@@ -88,13 +89,18 @@ var _ = Describe("Cache Package", func() {
 				})
 			})
 
-			Context("with Milvus backend", func() {
-				var milvusConfigPath string
+		Context("with Milvus backend", func() {
+			var milvusConfigPath string
 
-				BeforeEach(func() {
-					// Create a test Milvus configuration file
-					milvusConfigPath = filepath.Join(tempDir, "milvus.yaml")
-					milvusConfig := `
+			BeforeEach(func() {
+				// Skip Milvus tests if environment variable is set
+				if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+					Skip("Milvus tests skipped due to SKIP_MILVUS_TESTS=true")
+				}
+				
+				// Create a test Milvus configuration file
+				milvusConfigPath = filepath.Join(tempDir, "milvus.yaml")
+				milvusConfig := `
 connection:
   host: "localhost"
   port: 19530

@@ -165,6 +165,7 @@ test-jailbreak-classifier: rust
 test-semantic-router: build-router
 	@echo "Testing semantic-router..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
