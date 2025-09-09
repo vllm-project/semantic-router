@@ -4,9 +4,25 @@ bert_model:
   use_cpu: true
 semantic_cache:
   enabled: true
+  backend_type: "memory"  # Options: "memory" or "milvus"
   similarity_threshold: 0.8
-  max_entries: 1000
+  max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
+  
+  # For production environments, use Milvus for scalable caching:
+  # backend_type: "milvus"
+  # backend_config_path: "config/cache/milvus.yaml"
+  
+  # Development/Testing: Use in-memory cache (current configuration)
+  # - Fast startup and no external dependencies
+  # - Limited to single instance scaling
+  # - Data lost on restart
+  
+  # Production: Use Milvus vector database
+  # - Horizontally scalable and persistent
+  # - Supports distributed deployments
+  # - Requires Milvus cluster setup
+  # - To enable: uncomment the lines above and install Milvus dependencies
 tools:
   enabled: true  # Set to true to enable automatic tool selection
   top_k: 3        # Number of most relevant tools to select

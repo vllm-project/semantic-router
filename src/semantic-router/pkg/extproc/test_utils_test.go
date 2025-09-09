@@ -130,7 +130,15 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 		},
 		DefaultModel: "model-b",
-		SemanticCache: config.SemanticCacheConfig{
+		SemanticCache: struct {
+			BackendType         string   `yaml:"backend_type,omitempty"`
+			Enabled             bool     `yaml:"enabled"`
+			SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+			MaxEntries          int      `yaml:"max_entries,omitempty"`
+			TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
+			BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
+		}{
+			BackendType:         "memory",
 			Enabled:             false, // Disable for most tests
 			SimilarityThreshold: &[]float32{0.9}[0],
 			MaxEntries:          100,
@@ -202,13 +210,17 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	}
 
 	// Create semantic cache
-	cacheOptions := cache.SemanticCacheOptions{
+	cacheConfig := cache.CacheConfig{
+		BackendType:         cache.InMemoryCacheType,
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		Enabled:             cfg.SemanticCache.Enabled,
 	}
-	semanticCache := cache.NewSemanticCache(cacheOptions)
+	semanticCache, err := cache.NewCacheBackend(cacheConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create tools database
 	toolsOptions := tools.ToolsDatabaseOptions{

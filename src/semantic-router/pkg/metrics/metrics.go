@@ -193,6 +193,42 @@ var (
 		},
 	)
 
+	// CacheMisses tracks cache misses
+	CacheMisses = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_cache_misses_total",
+			Help: "The total number of cache misses",
+		},
+	)
+
+	// CacheOperationDuration tracks the duration of cache operations by backend and operation type
+	CacheOperationDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_cache_operation_duration_seconds",
+			Help:    "The duration of cache operations in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		},
+		[]string{"backend", "operation"},
+	)
+
+	// CacheOperationTotal tracks the total number of cache operations by backend and operation type
+	CacheOperationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_cache_operations_total",
+			Help: "The total number of cache operations",
+		},
+		[]string{"backend", "operation", "status"},
+	)
+
+	// CacheEntriesTotal tracks the total number of entries in the cache by backend
+	CacheEntriesTotal = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "llm_cache_entries_total",
+			Help: "The total number of entries in the cache",
+		},
+		[]string{"backend"},
+	)
+
 	// CategoryClassifications tracks the number of times each category is classified
 	CategoryClassifications = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -300,6 +336,22 @@ func RecordModelRoutingLatency(seconds float64) {
 // RecordCacheHit records a cache hit
 func RecordCacheHit() {
 	CacheHits.Inc()
+}
+
+// RecordCacheMiss records a cache miss
+func RecordCacheMiss() {
+	CacheMisses.Inc()
+}
+
+// RecordCacheOperation records a cache operation with duration and status
+func RecordCacheOperation(backend, operation, status string, duration float64) {
+	CacheOperationDuration.WithLabelValues(backend, operation).Observe(duration)
+	CacheOperationTotal.WithLabelValues(backend, operation, status).Inc()
+}
+
+// UpdateCacheEntries updates the current number of cache entries for a backend
+func UpdateCacheEntries(backend string, count int) {
+	CacheEntriesTotal.WithLabelValues(backend).Set(float64(count))
 }
 
 // RecordCategoryClassification increments the gauge for a specific category classification

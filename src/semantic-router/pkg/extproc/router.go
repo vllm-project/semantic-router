@@ -27,7 +27,7 @@ type OpenAIRouter struct {
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
 	PIIChecker           *pii.PolicyChecker
-	Cache                *cache.SemanticCache
+	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
 
 	// Map to track pending requests and their unique IDs
@@ -92,17 +92,31 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	log.Printf("Category descriptions: %v", categoryDescriptions)
 
 	// Create semantic cache with config options
-	cacheOptions := cache.SemanticCacheOptions{
+	cacheConfig := cache.CacheConfig{
+		BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		Enabled:             cfg.SemanticCache.Enabled,
+		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
 	}
-	semanticCache := cache.NewSemanticCache(cacheOptions)
+
+	// Use default backend type if not specified
+	if cacheConfig.BackendType == "" {
+		cacheConfig.BackendType = cache.InMemoryCacheType
+	}
+
+	semanticCache, err := cache.NewCacheBackend(cacheConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create semantic cache: %w", err)
+	}
 
 	if semanticCache.IsEnabled() {
-		log.Printf("Semantic cache enabled with threshold: %.4f, max entries: %d, TTL: %d seconds",
-			cacheOptions.SimilarityThreshold, cacheOptions.MaxEntries, cacheOptions.TTLSeconds)
+		log.Printf("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
+			cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.TTLSeconds)
+		if cacheConfig.BackendType == cache.InMemoryCacheType {
+			log.Printf("In-memory cache max entries: %d", cacheConfig.MaxEntries)
+		}
 	} else {
 		log.Println("Semantic cache is disabled")
 	}
