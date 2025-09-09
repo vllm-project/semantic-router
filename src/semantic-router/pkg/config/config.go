@@ -33,7 +33,6 @@ type RouterConfig struct {
 			UseCPU         bool    `yaml:"use_cpu"`
 			PIIMappingPath string  `yaml:"pii_mapping_path"`
 		} `yaml:"pii_model"`
-		LoadAware bool `yaml:"load_aware"`
 	} `yaml:"classifier"`
 
 	// Categories for routing queries

@@ -5,7 +5,6 @@ import (
 	"log"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -148,16 +147,12 @@ type Classifier struct {
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
-	// Model selection fields
-	ModelLoad     map[string]int
-	ModelLoadLock sync.Mutex
-	ModelTTFT     map[string]float64
 	// Jailbreak detection state
 	JailbreakInitialized bool
 }
 
 // NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
-func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
+func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) *Classifier {
 	return &Classifier{
 		categoryInference:    createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
 		jailbreakInitializer: createJailbreakInitializer(cfg.PromptGuard.UseModernBERT),
@@ -168,8 +163,6 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		CategoryMapping:      categoryMapping,
 		PIIMapping:           piiMapping,
 		JailbreakMapping:     jailbreakMapping,
-		ModelLoad:            make(map[string]int),
-		ModelTTFT:            modelTTFT,
 		JailbreakInitialized: false,
 	}
 }
@@ -475,9 +468,6 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 		return c.Config.DefaultModel
 	}
 
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-
 	bestModel, bestScore, bestQuality := c.selectBestModelInternal(cat, nil)
 
 	if bestModel == "" {
@@ -500,25 +490,6 @@ func (c *Classifier) findCategory(categoryName string) *config.Category {
 	return nil
 }
 
-// calculateModelScore calculates the combined score and quality for a model
-func (c *Classifier) calculateModelScore(modelScore config.ModelScore) (float64, float64) {
-	quality := modelScore.Score
-	model := modelScore.Model
-
-	if !c.Config.Classifier.LoadAware {
-		return quality, quality
-	}
-
-	baseTTFT := c.ModelTTFT[model]
-	load := c.ModelLoad[model]
-	estTTFT := baseTTFT * (1 + float64(load))
-	if estTTFT == 0 {
-		estTTFT = 1 // avoid div by zero
-	}
-	score := quality / estTTFT
-	return score, quality
-}
-
 // selectBestModelInternal performs the core model selection logic
 //
 // modelFilter is optional - if provided, only models passing the filter will be considered
@@ -532,8 +503,7 @@ func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter f
 		if modelFilter != nil && !modelFilter(model) {
 			return
 		}
-		score, quality := c.calculateModelScore(modelScore)
-		c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
+		c.updateBestModel(modelScore.Score, modelScore.Score, model, &bestScore, &bestQuality, &bestModel)
 	})
 
 	return bestModel, bestScore, bestQuality
@@ -557,9 +527,6 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		// Return first candidate if category not found
 		return candidateModels[0]
 	}
-
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
 
 	bestModel, bestScore, bestQuality := c.selectBestModelInternal(cat,
 		func(model string) bool {
@@ -590,22 +557,6 @@ func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	}
 
 	return models
-}
-
-// IncrementModelLoad increments the load counter for a model
-func (c *Classifier) IncrementModelLoad(model string) {
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-	c.ModelLoad[model]++
-}
-
-// DecrementModelLoad decrements the load counter for a model
-func (c *Classifier) DecrementModelLoad(model string) {
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-	if c.ModelLoad[model] > 0 {
-		c.ModelLoad[model]--
-	}
 }
 
 // updateBestModel updates the best model, score, and quality if the new score is better.

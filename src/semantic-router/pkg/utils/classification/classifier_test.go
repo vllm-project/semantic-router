@@ -145,37 +145,18 @@ var _ = Describe("category classification and model selection", func() {
 			},
 		}
 		classifier.Config.DefaultModel = "default-model"
-		classifier.Config.Classifier.LoadAware = false
 	})
 
 	Describe("select best model for category", func() {
+		It("should return the best model", func() {
+			model := classifier.SelectBestModelForCategory("technology")
+			Expect(model).To(Equal("model-a"))
+		})
+
 		Context("when category is not found", func() {
 			It("should return the default model", func() {
 				model := classifier.SelectBestModelForCategory("non-existent-category")
 				Expect(model).To(Equal("default-model"))
-			})
-		})
-
-		Context("when category is found and the classifier is not load aware", func() {
-			It("should return the best model", func() {
-				model := classifier.SelectBestModelForCategory("technology")
-				Expect(model).To(Equal("model-a"))
-			})
-		})
-
-		Context("when the classifier is load aware", func() {
-			It("should return the best model", func() {
-				classifier.Config.Classifier.LoadAware = true
-				classifier.ModelTTFT = map[string]float64{
-					"model-a": 1,
-					"model-b": 1,
-				}
-				classifier.ModelLoad = map[string]int{
-					"model-a": 10,
-					"model-b": 1,
-				}
-				model := classifier.SelectBestModelForCategory("technology")
-				Expect(model).To(Equal("model-b"))
 			})
 		})
 
@@ -188,6 +169,11 @@ var _ = Describe("category classification and model selection", func() {
 	})
 
 	Describe("select best model from list", func() {
+		It("should return the best model", func() {
+			model := classifier.SelectBestModelFromList([]string{"model-a"}, "technology")
+			Expect(model).To(Equal("model-a"))
+		})
+
 		Context("when candidate models are empty", func() {
 			It("should return the default model", func() {
 				model := classifier.SelectBestModelFromList([]string{}, "technology")
@@ -198,13 +184,6 @@ var _ = Describe("category classification and model selection", func() {
 		Context("when category is not found", func() {
 			It("should return the first candidate model", func() {
 				model := classifier.SelectBestModelFromList([]string{"model-a"}, "non-existent-category")
-				Expect(model).To(Equal("model-a"))
-			})
-		})
-
-		Context("when category is found and the classifier is not load aware", func() {
-			It("should return the best model", func() {
-				model := classifier.SelectBestModelFromList([]string{"model-a"}, "technology")
 				Expect(model).To(Equal("model-a"))
 			})
 		})
@@ -274,57 +253,7 @@ var _ = Describe("category classification and model selection", func() {
 			Entry("should return nil for non-existent category", row{query: "non-existent", want: nil}),
 		)
 
-		type scoreRow struct {
-			loadAware     bool
-			model         string
-			modelScore    float64
-			expectedScore float64
-			expectedQual  float64
-		}
-
-		DescribeTable("calculate model score",
-			func(r scoreRow) {
-				classifier.ModelTTFT = map[string]float64{"model-a": 2.0}
-				classifier.ModelLoad = map[string]int{"model-a": 10}
-				classifier.Config.Classifier.LoadAware = r.loadAware
-				modelScore := config.ModelScore{Model: r.model, Score: r.modelScore}
-
-				score, quality := classifier.calculateModelScore(modelScore)
-
-				Expect(score).To(BeNumerically("~", r.expectedScore, 0.00001), "score should match expected")
-				Expect(quality).To(BeNumerically("~", r.expectedQual, 0.00001), "quality should match expected")
-			},
-			Entry("load aware disabled - returns quality as both score and quality",
-				scoreRow{
-					loadAware:     false,
-					model:         "model-a",
-					modelScore:    0.9,
-					expectedScore: 0.9,
-					expectedQual:  0.9,
-				}),
-			Entry("load aware enabled - calculates score with load and TTFT",
-				scoreRow{
-					loadAware:     true,
-					model:         "model-a",
-					modelScore:    0.9,
-					expectedScore: 0.0409, // 0.9 / (2.0 * (1 + 10)) = 0.9 / 22.0
-					expectedQual:  0.9,
-				}),
-			Entry("load aware enabled - handles zero TTFT by using 1",
-				scoreRow{
-					loadAware:     true,
-					model:         "model-unknown",
-					modelScore:    0.8,
-					expectedScore: 0.8, // 0.8 / 1 (zero TTFT becomes 1)
-					expectedQual:  0.8,
-				}),
-		)
-
 		Describe("select best model internal", func() {
-			BeforeEach(func() {
-				classifier.Config.Classifier.LoadAware = false
-				classifier.ModelLoad = make(map[string]int)
-			})
 
 			It("should select best model without filter", func() {
 				cat := &config.Category{

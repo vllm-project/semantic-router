@@ -52,7 +52,7 @@ var _ = Describe("Security Checks", func() {
 				},
 			}
 			router.PIIChecker = pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, nil, router.Classifier.ModelTTFT)
+			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, nil)
 		})
 
 		It("should allow requests with no PII", func() {
@@ -97,7 +97,7 @@ var _ = Describe("Security Checks", func() {
 			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil, router.Classifier.ModelTTFT)
+			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
 		})
 
 		Describe("ClassifyPII method", func() {
@@ -339,7 +339,7 @@ var _ = Describe("Security Checks", func() {
 			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil, router.Classifier.ModelTTFT)
+			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
 		})
 
 		Describe("Error handling and edge cases", func() {
@@ -524,7 +524,7 @@ var _ = Describe("Security Checks", func() {
 				IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
 			}
 
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, jailbreakMapping, router.Classifier.ModelTTFT)
+			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, jailbreakMapping)
 		})
 
 		It("should process potential jailbreak attempts", func() {
