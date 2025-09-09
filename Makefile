@@ -162,6 +162,8 @@ test-jailbreak-classifier: rust
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
 # Unit test semantic-router
+# By default, Milvus tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false
+# Example: make test-semantic-router SKIP_MILVUS_TESTS=false
 test-semantic-router: build-router
 	@echo "Testing semantic-router..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
