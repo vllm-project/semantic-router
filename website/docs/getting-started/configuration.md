@@ -88,34 +88,43 @@ categories:
 
 default_model: your-model
 
-# Model reasoning configurations - define how different models handle reasoning syntax
-model_reasoning_configs:
-  - name: "deepseek"
-    patterns: ["deepseek", "ds-", "ds_", "ds:", "ds "]
-    reasoning_syntax:
-      type: "chat_template_kwargs"
-      parameter: "thinking"
-
-  - name: "qwen3"
-    patterns: ["qwen3"]
-    reasoning_syntax:
-      type: "chat_template_kwargs"
-      parameter: "enable_thinking"
-
-  - name: "gpt-oss"
-    patterns: ["gpt-oss", "gpt_oss"]
-    reasoning_syntax:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-
-  - name: "gpt"
-    patterns: ["gpt"]
-    reasoning_syntax:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
+# Reasoning family configurations - define how different model families handle reasoning syntax
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+  
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+  
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
 
 # Global default reasoning effort level
 default_reasoning_effort: "medium"
+
+# Model configurations - assign reasoning families to specific models
+model_config:
+  # Example: DeepSeek model with custom name
+  "ds-v31-custom":
+    reasoning_family: "deepseek"  # This model uses DeepSeek reasoning syntax
+    preferred_endpoints: ["endpoint1"]
+  
+  # Example: Qwen3 model with custom name
+  "my-qwen3-model":
+    reasoning_family: "qwen3"     # This model uses Qwen3 reasoning syntax  
+    preferred_endpoints: ["endpoint2"]
+  
+  # Example: Model without reasoning support
+  "phi4":
+    # No reasoning_family field - this model doesn't support reasoning mode
+    preferred_endpoints: ["endpoint1"]
 ```
 
 ## Key Configuration Sections
@@ -264,9 +273,22 @@ default_reasoning_effort: "medium"
 - `reasoning_syntax.parameter`: The specific parameter name the model uses
 
 **Pattern Matching:**
-- Exact matches: `"deepseek"` matches models containing "deepseek"
-- Prefix patterns: `"ds-"` matches models starting with "ds-" (like "ds-1.5b")
-- Multiple patterns: `["deepseek", "ds-", "ds_"]` matches any of these patterns
+The system supports both simple string patterns and regular expressions for flexible model matching:
+
+- **Simple string matches**: `"deepseek"` matches any model containing "deepseek"
+- **Prefix patterns**: `"ds-"` matches models starting with "ds-" or exactly "ds"
+- **Regular expressions**: `"^gpt-4.*"` matches models starting with "gpt-4"
+- **Wildcard**: `"*"` matches all models (use for fallback configurations)
+- **Multiple patterns**: `["deepseek", "ds-", "^phi.*"]` matches any of these patterns
+
+**Regex Pattern Examples:**
+```yaml
+patterns:
+  - "^gpt-4.*"        # Models starting with "gpt-4"
+  - ".*-instruct$"    # Models ending with "-instruct"
+  - "phi[0-9]+"       # Models like "phi3", "phi4", etc.
+  - "^(llama|mistral)" # Models starting with "llama" or "mistral"
+```
 
 **Adding New Models:**
 To support a new model family (e.g., Claude), simply add a new configuration:

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -46,8 +45,8 @@ type RouterConfig struct {
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 
-	// Model reasoning configurations to define how different models handle reasoning syntax
-	ModelReasoningConfigs []ModelReasoningConfig `yaml:"model_reasoning_configs,omitempty"`
+	// Reasoning family configurations to define how different model families handle reasoning syntax
+	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
 
 	// Semantic cache configuration
 	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
@@ -212,6 +211,16 @@ type ModelParams struct {
 
 	// Optional pricing used for cost computation
 	Pricing ModelPricing `yaml:"pricing,omitempty"`
+
+	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
+	// If empty, the model doesn't support reasoning mode
+	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+}
+
+// ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
+type ReasoningFamilyConfig struct {
+	Type      string `yaml:"type"`      // "chat_template_kwargs" or "reasoning_effort"
+	Parameter string `yaml:"parameter"` // "thinking", "enable_thinking", "reasoning_effort", etc.
 }
 
 // PIIPolicy represents the PII (Personally Identifiable Information) policy for a model
@@ -268,62 +277,30 @@ type Category struct {
 	ModelScores          []ModelScore `yaml:"model_scores"`
 }
 
-// ModelReasoningSyntax defines how a model handles reasoning mode
-type ModelReasoningSyntax struct {
-	Type      string `yaml:"type"`      // "chat_template_kwargs" or "reasoning_effort"
-	Parameter string `yaml:"parameter"` // "thinking", "enable_thinking", "reasoning_effort", etc.
-}
+// Legacy types - can be removed once migration is complete
 
-// ModelReasoningConfig defines reasoning configuration for a model family
-type ModelReasoningConfig struct {
-	Name            string               `yaml:"name"`
-	Patterns        []string             `yaml:"patterns"` // patterns to match against model names
-	ReasoningSyntax ModelReasoningSyntax `yaml:"reasoning_syntax"`
-}
-
-// FindModelReasoningConfig finds the appropriate reasoning configuration for a given model name
-func (rc *RouterConfig) FindModelReasoningConfig(modelName string) *ModelReasoningConfig {
-	if rc == nil || len(rc.ModelReasoningConfigs) == 0 {
+// GetModelReasoningFamily returns the reasoning family configuration for a given model name
+func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
+	if rc == nil || rc.ModelConfig == nil || rc.ReasoningFamilies == nil {
 		return nil
 	}
 
-	modelLower := strings.ToLower(strings.TrimSpace(modelName))
-
-	// Look for exact pattern matches first
-	for _, config := range rc.ModelReasoningConfigs {
-		for _, pattern := range config.Patterns {
-			if matchesPattern(modelLower, strings.ToLower(pattern)) {
-				return &config
-			}
-		}
+	// Look up the model in model_config
+	modelParams, exists := rc.ModelConfig[modelName]
+	if !exists || modelParams.ReasoningFamily == "" {
+		return nil
 	}
 
-	// Look for a default/fallback configuration
-	for _, config := range rc.ModelReasoningConfigs {
-		if config.Name == "default" || contains(config.Patterns, "*") {
-			return &config
-		}
+	// Look up the reasoning family configuration
+	familyConfig, exists := rc.ReasoningFamilies[modelParams.ReasoningFamily]
+	if !exists {
+		return nil
 	}
 
-	return nil
+	return &familyConfig
 }
 
-// matchesPattern checks if a model name matches a given pattern
-func matchesPattern(modelName, pattern string) bool {
-	if pattern == "*" {
-		return true
-	}
-
-	// Handle prefix patterns like "ds-", "ds_", "ds:", "ds "
-	if strings.HasSuffix(pattern, "-") || strings.HasSuffix(pattern, "_") ||
-		strings.HasSuffix(pattern, ":") || strings.HasSuffix(pattern, " ") {
-		return strings.HasPrefix(modelName, pattern) ||
-			(len(modelName) >= len(pattern)-1 && modelName == pattern[:len(pattern)-1])
-	}
-
-	// Handle exact matches and contains
-	return strings.Contains(modelName, pattern)
-}
+// Legacy functions - can be removed once migration is complete
 
 // contains checks if a slice contains a string
 func contains(slice []string, item string) bool {

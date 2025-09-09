@@ -48,41 +48,41 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 	return false, categoryName
 }
 
-// getModelReasoningConfig finds the reasoning configuration for a model using the config system
-func (r *OpenAIRouter) getModelReasoningConfig(model string) *config.ModelReasoningConfig {
+// getModelReasoningFamily finds the reasoning family configuration for a model using the config system
+func (r *OpenAIRouter) getModelReasoningFamily(model string) *config.ReasoningFamilyConfig {
 	if r.Config == nil {
 		return nil
 	}
-	return r.Config.FindModelReasoningConfig(model)
+	return r.Config.GetModelReasoningFamily(model)
 }
 
 // buildReasoningRequestFields returns the appropriate fields to add to the request based on model config
 func (r *OpenAIRouter) buildReasoningRequestFields(model string, useReasoning bool, categoryName string) (map[string]interface{}, string) {
-	modelConfig := r.getModelReasoningConfig(model)
-	if modelConfig == nil {
-		// No configuration found for this model - don't apply any reasoning syntax
-		// Unknown models should not have reasoning fields added
-		return nil, "N/A"
+	familyConfig := r.getModelReasoningFamily(model)
+	if familyConfig == nil {
+		// No reasoning family configured for this model - don't apply any reasoning syntax
+		// Models without reasoning_family don't support reasoning mode
+		return nil, ""
 	}
 
 	if !useReasoning {
 		// When reasoning is disabled, don't add any reasoning fields
-		return nil, "N/A"
+		return nil, ""
 	}
 
-	// When reasoning is enabled, use the configured syntax
-	switch modelConfig.ReasoningSyntax.Type {
+	// When reasoning is enabled, use the configured family syntax
+	switch familyConfig.Type {
 	case "chat_template_kwargs":
 		kwargs := map[string]interface{}{
-			modelConfig.ReasoningSyntax.Parameter: useReasoning,
+			familyConfig.Parameter: useReasoning,
 		}
-		return map[string]interface{}{"chat_template_kwargs": kwargs}, "N/A"
+		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
 	case "reasoning_effort":
 		effort := r.getReasoningEffort(categoryName)
 		return map[string]interface{}{"reasoning_effort": effort}, effort
 	default:
 		// Unknown reasoning syntax type - don't apply anything
-		return nil, "N/A"
+		return nil, ""
 	}
 }
 
@@ -108,11 +108,13 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		originalReasoningEffort = "low" // Default for compatibility
 	}
 
-	// Clear existing reasoning-related fields to start with clean state
+	// Clear both reasoning fields to start with a clean state
 	delete(requestMap, "chat_template_kwargs")
 	delete(requestMap, "reasoning_effort")
 
-	var appliedEffort string = "N/A"
+	var appliedEffort string = ""
+
+	var reasoningApplied bool
 
 	if enabled {
 		// When reasoning is enabled, build the appropriate fields
@@ -121,33 +123,50 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 			for key, value := range reasoningFields {
 				requestMap[key] = value
 			}
+			appliedEffort = effort
+			reasoningApplied = true
+		} else {
+			// Model has no reasoning family configured
+			reasoningApplied = false
 		}
-		appliedEffort = effort
 	} else {
 		// When reasoning is disabled, only preserve reasoning_effort for gpt-oss models
-		modelConfig := r.getModelReasoningConfig(model)
-		if modelConfig != nil && modelConfig.Name == "gpt-oss" {
+		familyConfig := r.getModelReasoningFamily(model)
+		if familyConfig != nil && familyConfig.Type == "reasoning_effort" {
 			requestMap["reasoning_effort"] = originalReasoningEffort
 			if s, ok := originalReasoningEffort.(string); ok {
 				appliedEffort = s
 			}
 		}
+		reasoningApplied = false
 		// For all other models, reasoning fields remain cleared
 	}
 
-	log.Printf("Original reasoning effort: %s", originalReasoningEffort)
-	log.Printf("Added reasoning mode (enabled: %v) and reasoning effort (%s) to request for model: %s", enabled, appliedEffort, model)
+	// Log based on what actually happened
+	if enabled && !reasoningApplied {
+		log.Printf("No reasoning support for model: %s (no reasoning family configured)", model)
+	} else if reasoningApplied {
+		log.Printf("Applied reasoning mode (enabled: %v) with effort (%s) to model: %s", enabled, appliedEffort, model)
+	} else {
+		log.Printf("Reasoning mode disabled for model: %s", model)
+	}
 
 	// Record metrics for template usage and effort when enabled
 	if enabled {
-		modelConfig := r.getModelReasoningConfig(model)
+		familyConfig := r.getModelReasoningFamily(model)
 		modelFamily := "unknown"
 		templateParam := "reasoning_effort" // default fallback
 
-		if modelConfig != nil {
-			modelFamily = modelConfig.Name
-			if modelConfig.ReasoningSyntax.Type == "chat_template_kwargs" {
-				templateParam = modelConfig.ReasoningSyntax.Parameter
+		if familyConfig != nil {
+			// Use the model's actual reasoning family name from model_config
+			if r.Config != nil && r.Config.ModelConfig != nil {
+				if modelParams, exists := r.Config.ModelConfig[model]; exists && modelParams.ReasoningFamily != "" {
+					modelFamily = modelParams.ReasoningFamily
+				}
+			}
+
+			if familyConfig.Type == "chat_template_kwargs" {
+				templateParam = familyConfig.Parameter
 			} else {
 				templateParam = "reasoning_effort"
 			}
@@ -155,7 +174,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 
 		// Record template usage and effort
 		metrics.RecordReasoningTemplateUsage(modelFamily, templateParam)
-		if appliedEffort != "N/A" {
+		if appliedEffort != "" {
 			metrics.RecordReasoningEffortUsage(modelFamily, appliedEffort)
 		}
 	}

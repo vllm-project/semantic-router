@@ -24,32 +24,33 @@ func TestReasoningModeIntegration(t *testing.T) {
 				ReasoningDescription: "Business content is typically conversational",
 			},
 		},
-		ModelReasoningConfigs: []config.ModelReasoningConfig{
-			{
-				Name:     "deepseek",
-				Patterns: []string{"deepseek", "ds-", "ds_", "ds:", "ds "},
-				ReasoningSyntax: config.ModelReasoningSyntax{
-					Type:      "chat_template_kwargs",
-					Parameter: "thinking",
-				},
+		ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+			"deepseek": {
+				Type:      "chat_template_kwargs",
+				Parameter: "thinking",
 			},
-			{
-				Name:     "qwen3",
-				Patterns: []string{"qwen3"},
-				ReasoningSyntax: config.ModelReasoningSyntax{
-					Type:      "chat_template_kwargs",
-					Parameter: "enable_thinking",
-				},
+			"qwen3": {
+				Type:      "chat_template_kwargs",
+				Parameter: "enable_thinking",
 			},
-			{
-				Name:     "gpt-oss",
-				Patterns: []string{"gpt-oss", "gpt_oss"},
-				ReasoningSyntax: config.ModelReasoningSyntax{
-					Type:      "reasoning_effort",
-					Parameter: "reasoning_effort",
-				},
+			"gpt-oss": {
+				Type:      "reasoning_effort",
+				Parameter: "reasoning_effort",
 			},
-			// No default config - unknown models should not get reasoning syntax
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"deepseek-v31": {
+				ReasoningFamily: "deepseek",
+			},
+			"qwen3-model": {
+				ReasoningFamily: "qwen3",
+			},
+			"gpt-oss-model": {
+				ReasoningFamily: "gpt-oss",
+			},
+			"phi4": {
+				// No reasoning family - doesn't support reasoning
+			},
 		},
 	}
 
@@ -185,24 +186,26 @@ func TestReasoningModeIntegration(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{
 				DefaultReasoningEffort: "medium",
-				ModelReasoningConfigs: []config.ModelReasoningConfig{
-					{
-						Name:     "deepseek",
-						Patterns: []string{"deepseek", "ds-", "ds_", "ds:", "ds "},
-						ReasoningSyntax: config.ModelReasoningSyntax{
-							Type:      "chat_template_kwargs",
-							Parameter: "thinking",
-						},
+				ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+					"deepseek": {
+						Type:      "chat_template_kwargs",
+						Parameter: "thinking",
 					},
-					{
-						Name:     "qwen3",
-						Patterns: []string{"qwen3"},
-						ReasoningSyntax: config.ModelReasoningSyntax{
-							Type:      "chat_template_kwargs",
-							Parameter: "enable_thinking",
-						},
+					"qwen3": {
+						Type:      "chat_template_kwargs",
+						Parameter: "enable_thinking",
 					},
-					// No default config - unknown models should not get reasoning syntax
+				},
+				ModelConfig: map[string]config.ModelParams{
+					"deepseek-v31": {
+						ReasoningFamily: "deepseek",
+					},
+					"qwen3-model": {
+						ReasoningFamily: "qwen3",
+					},
+					"phi4": {
+						// No reasoning family - doesn't support reasoning
+					},
 				},
 			},
 		}
@@ -227,7 +230,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with Qwen3 model and reasoning enabled
-		fields, _ = router.buildReasoningRequestFields("qwen3-7b", true, "test-category")
+		fields, _ = router.buildReasoningRequestFields("qwen3-model", true, "test-category")
 		if fields == nil {
 			t.Error("Expected non-nil fields for Qwen3 model with reasoning enabled")
 		}
@@ -244,8 +247,8 @@ func TestReasoningModeIntegration(t *testing.T) {
 		if fields != nil {
 			t.Errorf("Expected nil fields for unknown model with reasoning enabled, got %v", fields)
 		}
-		if effort != "N/A" {
-			t.Errorf("Expected effort string: N/A for unknown model, got %v", effort)
+		if effort != "" {
+			t.Errorf("Expected effort string: empty for unknown model, got %v", effort)
 		}
 	})
 

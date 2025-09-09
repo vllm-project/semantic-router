@@ -7,47 +7,49 @@ import (
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
 )
 
-// TestGetModelFamilyAndTemplateParam verifies model-family detection and template parameter mapping
-// TestModelReasoningConfig tests the new config-driven approach
-func TestModelReasoningConfig(t *testing.T) {
+// TestModelReasoningFamily tests the new family-based configuration approach
+func TestModelReasoningFamily(t *testing.T) {
 	// Create a router with sample model configurations
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			DefaultReasoningEffort: "medium",
-			ModelReasoningConfigs: []config.ModelReasoningConfig{
-				{
-					Name:     "qwen3",
-					Patterns: []string{"qwen3"},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "chat_template_kwargs",
-						Parameter: "enable_thinking",
-					},
+			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+				"qwen3": {
+					Type:      "chat_template_kwargs",
+					Parameter: "enable_thinking",
 				},
-				{
-					Name:     "deepseek",
-					Patterns: []string{"deepseek", "ds-", "ds_", "ds:", "ds "},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "chat_template_kwargs",
-						Parameter: "thinking",
-					},
+				"deepseek": {
+					Type:      "chat_template_kwargs",
+					Parameter: "thinking",
 				},
-				{
-					Name:     "gpt-oss",
-					Patterns: []string{"gpt-oss", "gpt_oss"},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "reasoning_effort",
-						Parameter: "reasoning_effort",
-					},
+				"gpt-oss": {
+					Type:      "reasoning_effort",
+					Parameter: "reasoning_effort",
 				},
-				{
-					Name:     "gpt",
-					Patterns: []string{"gpt"},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "reasoning_effort",
-						Parameter: "reasoning_effort",
-					},
+				"gpt": {
+					Type:      "reasoning_effort",
+					Parameter: "reasoning_effort",
 				},
-				// No default config - unknown models should not get reasoning syntax
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"qwen3-model": {
+					ReasoningFamily: "qwen3",
+				},
+				"ds-v31-custom": {
+					ReasoningFamily: "deepseek",
+				},
+				"my-deepseek": {
+					ReasoningFamily: "deepseek",
+				},
+				"gpt-oss-model": {
+					ReasoningFamily: "gpt-oss",
+				},
+				"custom-gpt": {
+					ReasoningFamily: "gpt",
+				},
+				"phi4": {
+					// No reasoning family - doesn't support reasoning
+				},
 			},
 		},
 	}
@@ -61,47 +63,47 @@ func TestModelReasoningConfig(t *testing.T) {
 		expectConfig      bool
 	}{
 		{
-			name:              "Qwen3 family",
-			model:             "Qwen3-7B",
+			name:              "qwen3-model with qwen3 family",
+			model:             "qwen3-model",
 			expectedConfig:    "qwen3",
 			expectedType:      "chat_template_kwargs",
 			expectedParameter: "enable_thinking",
 			expectConfig:      true,
 		},
 		{
-			name:              "DeepSeek family",
-			model:             "deepseek-v31",
+			name:              "ds-v31-custom with deepseek family",
+			model:             "ds-v31-custom",
 			expectedConfig:    "deepseek",
 			expectedType:      "chat_template_kwargs",
 			expectedParameter: "thinking",
 			expectConfig:      true,
 		},
 		{
-			name:              "DeepSeek alias ds (prefix)",
-			model:             "DS-1.5B",
+			name:              "my-deepseek with deepseek family",
+			model:             "my-deepseek",
 			expectedConfig:    "deepseek",
 			expectedType:      "chat_template_kwargs",
 			expectedParameter: "thinking",
 			expectConfig:      true,
 		},
 		{
-			name:              "GPT-OSS family",
-			model:             "gpt-oss-20b",
+			name:              "gpt-oss-model with gpt-oss family",
+			model:             "gpt-oss-model",
 			expectedConfig:    "gpt-oss",
 			expectedType:      "reasoning_effort",
 			expectedParameter: "reasoning_effort",
 			expectConfig:      true,
 		},
 		{
-			name:              "GPT generic family",
-			model:             "gpt-4o-mini",
+			name:              "custom-gpt with gpt family",
+			model:             "custom-gpt",
 			expectedConfig:    "gpt",
 			expectedType:      "reasoning_effort",
 			expectedParameter: "reasoning_effort",
 			expectConfig:      true,
 		},
 		{
-			name:              "Unknown family (phi4) should have no config",
+			name:              "phi4 - no reasoning family",
 			model:             "phi4",
 			expectedConfig:    "",
 			expectedType:      "",
@@ -109,8 +111,8 @@ func TestModelReasoningConfig(t *testing.T) {
 			expectConfig:      false,
 		},
 		{
-			name:              "Non-matching ds should have no config",
-			model:             "mistral-ds-1b",
+			name:              "unknown model - no config",
+			model:             "unknown-model",
 			expectedConfig:    "",
 			expectedType:      "",
 			expectedParameter: "",
@@ -120,28 +122,25 @@ func TestModelReasoningConfig(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			modelConfig := router.getModelReasoningConfig(tc.model)
+			familyConfig := router.getModelReasoningFamily(tc.model)
 
 			if !tc.expectConfig {
 				// For unknown models, we expect no configuration
-				if modelConfig != nil {
-					t.Fatalf("Expected no model config for %q, got %+v", tc.model, modelConfig)
+				if familyConfig != nil {
+					t.Fatalf("Expected no family config for %q, got %+v", tc.model, familyConfig)
 				}
 				return
 			}
 
 			// For known models, we expect a valid configuration
-			if modelConfig == nil {
-				t.Fatalf("Expected model config for %q, got nil", tc.model)
+			if familyConfig == nil {
+				t.Fatalf("Expected family config for %q, got nil", tc.model)
 			}
-			if modelConfig.Name != tc.expectedConfig {
-				t.Fatalf("Expected config name %q for model %q, got %q", tc.expectedConfig, tc.model, modelConfig.Name)
+			if familyConfig.Type != tc.expectedType {
+				t.Fatalf("Expected type %q for model %q, got %q", tc.expectedType, tc.model, familyConfig.Type)
 			}
-			if modelConfig.ReasoningSyntax.Type != tc.expectedType {
-				t.Fatalf("Expected type %q for model %q, got %q", tc.expectedType, tc.model, modelConfig.ReasoningSyntax.Type)
-			}
-			if modelConfig.ReasoningSyntax.Parameter != tc.expectedParameter {
-				t.Fatalf("Expected parameter %q for model %q, got %q", tc.expectedParameter, tc.model, modelConfig.ReasoningSyntax.Parameter)
+			if familyConfig.Parameter != tc.expectedParameter {
+				t.Fatalf("Expected parameter %q for model %q, got %q", tc.expectedParameter, tc.model, familyConfig.Parameter)
 			}
 		})
 	}
@@ -149,36 +148,37 @@ func TestModelReasoningConfig(t *testing.T) {
 
 // TestSetReasoningModeToRequestBody verifies that reasoning_effort is handled correctly for different model families
 func TestSetReasoningModeToRequestBody(t *testing.T) {
-	// Create a router with model reasoning configurations
+	// Create a router with family-based reasoning configurations
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			DefaultReasoningEffort: "medium",
-			ModelReasoningConfigs: []config.ModelReasoningConfig{
-				{
-					Name:     "deepseek",
-					Patterns: []string{"deepseek", "ds-", "ds_", "ds:", "ds "},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "chat_template_kwargs",
-						Parameter: "thinking",
-					},
+			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+				"deepseek": {
+					Type:      "chat_template_kwargs",
+					Parameter: "thinking",
 				},
-				{
-					Name:     "qwen3",
-					Patterns: []string{"qwen3"},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "chat_template_kwargs",
-						Parameter: "enable_thinking",
-					},
+				"qwen3": {
+					Type:      "chat_template_kwargs",
+					Parameter: "enable_thinking",
 				},
-				{
-					Name:     "gpt-oss",
-					Patterns: []string{"gpt-oss", "gpt_oss"},
-					ReasoningSyntax: config.ModelReasoningSyntax{
-						Type:      "reasoning_effort",
-						Parameter: "reasoning_effort",
-					},
+				"gpt-oss": {
+					Type:      "reasoning_effort",
+					Parameter: "reasoning_effort",
 				},
-				// No default config - unknown models should not get reasoning syntax
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"ds-v31-custom": {
+					ReasoningFamily: "deepseek",
+				},
+				"qwen3-model": {
+					ReasoningFamily: "qwen3",
+				},
+				"gpt-oss-model": {
+					ReasoningFamily: "gpt-oss",
+				},
+				"phi4": {
+					// No reasoning family - doesn't support reasoning
+				},
 			},
 		},
 	}
@@ -194,7 +194,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 	}{
 		{
 			name:                       "GPT-OSS model with reasoning disabled - preserve reasoning_effort",
-			model:                      "gpt-oss-20b",
+			model:                      "gpt-oss-model",
 			enabled:                    false,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   true,
@@ -211,7 +211,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			expectedChatTemplateKwargs: false,
 		},
 		{
-			name:                       "Phi4 model with reasoning enabled - no fields set (unknown model)",
+			name:                       "Phi4 model with reasoning enabled - no fields set (no reasoning family)",
 			model:                      "phi4",
 			enabled:                    true,
 			initialReasoningEffort:     "low",
@@ -221,7 +221,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 		},
 		{
 			name:                       "DeepSeek model with reasoning disabled - remove reasoning_effort",
-			model:                      "deepseek-v31",
+			model:                      "ds-v31-custom",
 			enabled:                    false,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
@@ -230,7 +230,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 		},
 		{
 			name:                       "GPT-OSS model with reasoning enabled - set reasoning_effort",
-			model:                      "gpt-oss-20b",
+			model:                      "gpt-oss-model",
 			enabled:                    true,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   true,
@@ -239,7 +239,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 		},
 		{
 			name:                       "DeepSeek model with reasoning enabled - set chat_template_kwargs",
-			model:                      "deepseek-v31",
+			model:                      "ds-v31-custom",
 			enabled:                    true,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
@@ -247,26 +247,8 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			expectedChatTemplateKwargs: true,
 		},
 		{
-			name:                       "DeepSeek alias (ds-) with reasoning enabled - set chat_template_kwargs",
-			model:                      "ds-1.5b",
-			enabled:                    true,
-			initialReasoningEffort:     "low",
-			expectReasoningEffortKey:   false,
-			expectedReasoningEffort:    nil,
-			expectedChatTemplateKwargs: true,
-		},
-		{
-			name:                       "DeepSeek alias (ds-) with reasoning disabled - no fields set",
-			model:                      "ds-1.5b",
-			enabled:                    false,
-			initialReasoningEffort:     "low",
-			expectReasoningEffortKey:   false,
-			expectedReasoningEffort:    nil,
-			expectedChatTemplateKwargs: false,
-		},
-		{
-			name:                       "Non-matching ds model - no fields set (unknown model)",
-			model:                      "mistral-ds-7b",
+			name:                       "Unknown model - no fields set",
+			model:                      "unknown-model",
 			enabled:                    true,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
@@ -275,7 +257,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 		},
 		{
 			name:                       "Qwen3 model with reasoning enabled - set chat_template_kwargs",
-			model:                      "qwen3-7b",
+			model:                      "qwen3-model",
 			enabled:                    true,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
@@ -284,7 +266,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 		},
 		{
 			name:                       "Qwen3 model with reasoning disabled - no fields set",
-			model:                      "qwen3-7b",
+			model:                      "qwen3-model",
 			enabled:                    false,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
