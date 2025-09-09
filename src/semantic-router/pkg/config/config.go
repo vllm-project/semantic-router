@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -44,6 +45,9 @@ type RouterConfig struct {
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 
+	// Reasoning family configurations to define how different model families handle reasoning syntax
+	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+
 	// Semantic cache configuration
 	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
 
@@ -52,9 +56,6 @@ type RouterConfig struct {
 
 	// Model parameters configuration
 	ModelConfig map[string]ModelParams `yaml:"model_config"`
-
-	// GPU configuration for TTFT calculation
-	GPUConfig GPUConfig `yaml:"gpu_config"`
 
 	// Tools configuration for automatic tool selection
 	Tools ToolsConfig `yaml:"tools"`
@@ -191,22 +192,35 @@ type VLLMEndpoint struct {
 	HealthCheckPath string `yaml:"health_check_path,omitempty"`
 }
 
-// ModelParams represents configuration for model-specific parameters
+// ModelPricing represents configuration for model-specific parameters
+type ModelPricing struct {
+	// ISO currency code for the pricing (e.g., "USD"). Defaults to "USD" when omitted.
+	Currency string `yaml:"currency,omitempty"`
+
+	// Price per 1M tokens (unit: <currency>/1_000_000 tokens)
+	PromptPer1M     float64 `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M float64 `yaml:"completion_per_1m,omitempty"`
+}
+
 type ModelParams struct {
-	// Number of parameters in the model
-	ParamCount float64 `yaml:"param_count"`
-
-	// Default batch size for this model
-	BatchSize float64 `yaml:"batch_size"`
-
-	// Default context size for this model
-	ContextSize float64 `yaml:"context_size"`
-
 	// PII policy configuration for this model
 	PIIPolicy PIIPolicy `yaml:"pii_policy,omitempty"`
 
 	// Preferred endpoints for this model (optional)
 	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
+
+	// Optional pricing used for cost computation
+	Pricing ModelPricing `yaml:"pricing,omitempty"`
+
+	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
+	// If empty, the model doesn't support reasoning mode
+	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+}
+
+// ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
+type ReasoningFamilyConfig struct {
+	Type      string `yaml:"type"`      // "chat_template_kwargs" or "reasoning_effort"
+	Parameter string `yaml:"parameter"` // "thinking", "enable_thinking", "reasoning_effort", etc.
 }
 
 // PIIPolicy represents the PII (Personally Identifiable Information) policy for a model
@@ -240,18 +254,6 @@ const (
 	PIITypeZipCode         = "ZIP_CODE"          // ZIP/Postal codes
 )
 
-// GPUConfig represents configuration for GPU parameters used in TTFT calculation
-type GPUConfig struct {
-	// FLOPs performance in operations per second
-	FLOPS float64 `yaml:"flops"`
-
-	// HBM memory bandwidth in bytes per second
-	HBM float64 `yaml:"hbm"`
-
-	// Description of the GPU configuration (e.g., "A100-80G")
-	Description string `yaml:"description"`
-}
-
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
 func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	if c.SemanticCache.SimilarityThreshold != nil {
@@ -275,32 +277,93 @@ type Category struct {
 	ModelScores          []ModelScore `yaml:"model_scores"`
 }
 
+// Legacy types - can be removed once migration is complete
+
+// GetModelReasoningFamily returns the reasoning family configuration for a given model name
+func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
+	if rc == nil || rc.ModelConfig == nil || rc.ReasoningFamilies == nil {
+		return nil
+	}
+
+	// Look up the model in model_config
+	modelParams, exists := rc.ModelConfig[modelName]
+	if !exists || modelParams.ReasoningFamily == "" {
+		return nil
+	}
+
+	// Look up the reasoning family configuration
+	familyConfig, exists := rc.ReasoningFamilies[modelParams.ReasoningFamily]
+	if !exists {
+		return nil
+	}
+
+	return &familyConfig
+}
+
+// Legacy functions - can be removed once migration is complete
+
+// contains checks if a slice contains a string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 var (
 	config     *RouterConfig
 	configOnce sync.Once
 	configErr  error
+	configMu   sync.RWMutex
 )
 
-// LoadConfig loads the configuration from the specified YAML file
+// LoadConfig loads the configuration from the specified YAML file once and caches it globally.
 func LoadConfig(configPath string) (*RouterConfig, error) {
 	configOnce.Do(func() {
-		data, err := os.ReadFile(configPath)
+		cfg, err := ParseConfigFile(configPath)
 		if err != nil {
-			configErr = fmt.Errorf("failed to read config file: %w", err)
+			configErr = err
 			return
 		}
-
-		config = &RouterConfig{}
-		if err := yaml.Unmarshal(data, config); err != nil {
-			configErr = fmt.Errorf("failed to parse config file: %w", err)
-			return
-		}
+		configMu.Lock()
+		config = cfg
+		configMu.Unlock()
 	})
-
 	if configErr != nil {
 		return nil, configErr
 	}
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config, nil
+}
+
+// ParseConfigFile parses the YAML config file without touching the global cache.
+func ParseConfigFile(configPath string) (*RouterConfig, error) {
+	// Resolve symlinks to handle Kubernetes ConfigMap mounts
+	resolved, _ := filepath.EvalSymlinks(configPath)
+	if resolved == "" {
+		resolved = configPath
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+	cfg := &RouterConfig{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	return cfg, nil
+}
+
+// ReplaceGlobalConfig replaces the globally cached config. It is safe for concurrent readers.
+func ReplaceGlobalConfig(newCfg *RouterConfig) {
+	configMu.Lock()
+	defer configMu.Unlock()
+	config = newCfg
+	// Do not reset configOnce to avoid racing re-parses via LoadConfig; callers should use ParseConfigFile for fresher reads.
+	configErr = nil
 }
 
 // GetConfig returns the current configuration
@@ -337,31 +400,20 @@ func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
 	return c.DefaultModel
 }
 
-// GetModelParamCount returns the parameter count for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelParamCount(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.ParamCount
+// GetModelPricing returns pricing per 1M tokens and its currency for the given model.
+// The currency indicates the unit of the returned rates (e.g., "USD").
+func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
+	if modelConfig, okc := c.ModelConfig[modelName]; okc {
+		p := modelConfig.Pricing
+		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 {
+			cur := p.Currency
+			if cur == "" {
+				cur = "USD"
+			}
+			return p.PromptPer1M, p.CompletionPer1M, cur, true
+		}
 	}
-	return defaultValue
-}
-
-// GetModelBatchSize returns the batch size for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelBatchSize(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.BatchSize
-	}
-	return defaultValue
-}
-
-// GetModelContextSize returns the context size for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelContextSize(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.ContextSize
-	}
-	return defaultValue
+	return 0, 0, "", false
 }
 
 // GetModelPIIPolicy returns the PII policy for a given model

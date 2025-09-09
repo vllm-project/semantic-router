@@ -137,6 +137,10 @@ jobs:
             }
 
             commentBody += '---\n';
+            commentBody += '<div align="center">\n';
+            commentBody += '<img src="https://raw.githubusercontent.com/vllm-project/semantic-router/main/website/static/img/repo.png" alt="vLLM" width="80%"/>';
+            commentBody += '</div>\n\n';
+            commentBody += '## 🎉 Thanks for your contributions!\n\n';
             commentBody += '*This comment was automatically generated based on the OWNER files in the repository.*';
 
             // Get existing comments

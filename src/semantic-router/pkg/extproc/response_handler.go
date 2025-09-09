@@ -9,6 +9,7 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
 )
 
 // handleResponseHeaders processes the response headers
@@ -52,6 +53,40 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		)
 		metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 		r.Classifier.DecrementModelLoad(ctx.RequestModel)
+
+		// Compute and record cost if pricing is configured
+		if r.Config != nil {
+			promptRatePer1M, completionRatePer1M, currency, ok := r.Config.GetModelPricing(ctx.RequestModel)
+			if ok {
+				costAmount := (float64(promptTokens)*promptRatePer1M + float64(completionTokens)*completionRatePer1M) / 1_000_000.0
+				if currency == "" {
+					currency = "USD"
+				}
+				metrics.RecordModelCost(ctx.RequestModel, currency, costAmount)
+				observability.LogEvent("llm_usage", map[string]interface{}{
+					"request_id":            ctx.RequestID,
+					"model":                 ctx.RequestModel,
+					"prompt_tokens":         promptTokens,
+					"completion_tokens":     completionTokens,
+					"total_tokens":          promptTokens + completionTokens,
+					"completion_latency_ms": completionLatency.Milliseconds(),
+					"cost":                  costAmount,
+					"currency":              currency,
+				})
+			} else {
+				observability.LogEvent("llm_usage", map[string]interface{}{
+					"request_id":            ctx.RequestID,
+					"model":                 ctx.RequestModel,
+					"prompt_tokens":         promptTokens,
+					"completion_tokens":     completionTokens,
+					"total_tokens":          promptTokens + completionTokens,
+					"completion_latency_ms": completionLatency.Milliseconds(),
+					"cost":                  0.0,
+					"currency":              "unknown",
+					"pricing":               "not_configured",
+				})
+			}
+		}
 	}
 
 	// Check if this request has a pending cache entry

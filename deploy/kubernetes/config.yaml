@@ -20,10 +20,6 @@ prompt_guard:
   threshold: 0.7
   use_cpu: true
   jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
-gpu_config:
-  flops: 312000000000000  # 312e12 fp16
-  hbm: 2000000000000      # 2e12 (2 TB/s)
-  description: "A100-80G" # https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-us-nvidia-1758950-r4-web.pdf
 
 # vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
 vllm_endpoints:
@@ -52,26 +48,17 @@ vllm_endpoints:
 
 model_config:
   phi4:
-    param_count: 14000000000  # 14B parameters https://huggingface.co/microsoft/phi-4
-    batch_size: 512.0  # vLLM default batch size
-    context_size: 16384.0 # based on https://huggingface.co/microsoft/phi-4
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
     # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
     preferred_endpoints: ["endpoint1", "endpoint3"]
   gemma3:27b:
-    param_count: 27000000000  # 27B parameters (base version)
-    batch_size: 512.0
-    context_size: 16384.0
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
     preferred_endpoints: ["endpoint1"]
   "mistral-small3.1":
-    param_count: 22000000000
-    batch_size: 512.0
-    context_size: 16384.0
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
