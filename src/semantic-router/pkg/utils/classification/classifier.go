@@ -468,15 +468,14 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 		return c.Config.DefaultModel
 	}
 
-	bestModel, bestScore, bestQuality := c.selectBestModelInternal(cat, nil)
+	bestModel, bestScore := c.selectBestModelInternal(cat, nil)
 
 	if bestModel == "" {
 		log.Printf("No models found for category %s, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
-	log.Printf("Selected model %s for category %s with quality %.4f and combined score %.4e",
-		bestModel, categoryName, bestQuality, bestScore)
+	log.Printf("Selected model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
@@ -493,20 +492,19 @@ func (c *Classifier) findCategory(categoryName string) *config.Category {
 // selectBestModelInternal performs the core model selection logic
 //
 // modelFilter is optional - if provided, only models passing the filter will be considered
-func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter func(string) bool) (string, float64, float64) {
+func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter func(string) bool) (string, float64) {
 	bestModel := ""
 	bestScore := -1.0
-	bestQuality := 0.0
 
 	c.forEachModelScore(cat, func(modelScore config.ModelScore) {
 		model := modelScore.Model
 		if modelFilter != nil && !modelFilter(model) {
 			return
 		}
-		c.updateBestModel(modelScore.Score, modelScore.Score, model, &bestScore, &bestQuality, &bestModel)
+		c.updateBestModel(modelScore.Score, model, &bestScore, &bestModel)
 	})
 
-	return bestModel, bestScore, bestQuality
+	return bestModel, bestScore
 }
 
 // forEachModelScore traverses the ModelScores document of the category and executes the callback for each element.
@@ -528,7 +526,7 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		return candidateModels[0]
 	}
 
-	bestModel, bestScore, bestQuality := c.selectBestModelInternal(cat,
+	bestModel, bestScore := c.selectBestModelInternal(cat,
 		func(model string) bool {
 			return slices.Contains(candidateModels, model)
 		})
@@ -538,8 +536,7 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		return candidateModels[0]
 	}
 
-	log.Printf("Selected best model %s for category %s with quality %.4f and combined score %.4e",
-		bestModel, categoryName, bestQuality, bestScore)
+	log.Printf("Selected best model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
@@ -559,11 +556,10 @@ func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	return models
 }
 
-// updateBestModel updates the best model, score, and quality if the new score is better.
-func (c *Classifier) updateBestModel(score, quality float64, model string, bestScore *float64, bestQuality *float64, bestModel *string) {
+// updateBestModel updates the best model, score if the new score is better.
+func (c *Classifier) updateBestModel(score float64, model string, bestScore *float64, bestModel *string) {
 	if score > *bestScore {
 		*bestScore = score
 		*bestModel = model
-		*bestQuality = quality
 	}
 }

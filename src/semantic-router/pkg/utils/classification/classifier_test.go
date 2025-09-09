@@ -264,10 +264,9 @@ var _ = Describe("category classification and model selection", func() {
 					},
 				}
 
-				bestModel, score, quality := classifier.selectBestModelInternal(cat, nil)
+				bestModel, score := classifier.selectBestModelInternal(cat, nil)
 
 				Expect(bestModel).To(Equal("model-a"))
-				Expect(quality).To(BeNumerically("~", 0.9, 0.001))
 				Expect(score).To(BeNumerically("~", 0.9, 0.001))
 			})
 
@@ -284,10 +283,9 @@ var _ = Describe("category classification and model selection", func() {
 					return model == "model-b" || model == "model-c"
 				}
 
-				bestModel, score, quality := classifier.selectBestModelInternal(cat, filter)
+				bestModel, score := classifier.selectBestModelInternal(cat, filter)
 
 				Expect(bestModel).To(Equal("model-b"))
-				Expect(quality).To(BeNumerically("~", 0.8, 0.001))
 				Expect(score).To(BeNumerically("~", 0.8, 0.001))
 			})
 
@@ -303,11 +301,10 @@ var _ = Describe("category classification and model selection", func() {
 					return model == "non-existent-model"
 				}
 
-				bestModel, score, quality := classifier.selectBestModelInternal(cat, filter)
+				bestModel, score := classifier.selectBestModelInternal(cat, filter)
 
 				Expect(bestModel).To(Equal(""))
 				Expect(score).To(BeNumerically("~", -1.0, 0.001))
-				Expect(quality).To(BeNumerically("~", 0.0, 0.001))
 			})
 
 			It("should return empty when category has no models", func() {
@@ -316,11 +313,10 @@ var _ = Describe("category classification and model selection", func() {
 					ModelScores: []config.ModelScore{},
 				}
 
-				bestModel, score, quality := classifier.selectBestModelInternal(cat, nil)
+				bestModel, score := classifier.selectBestModelInternal(cat, nil)
 
 				Expect(bestModel).To(Equal(""))
 				Expect(score).To(BeNumerically("~", -1.0, 0.001))
-				Expect(quality).To(BeNumerically("~", 0.0, 0.001))
 			})
 		})
 	})
@@ -869,17 +865,16 @@ func TestUpdateBestModel(t *testing.T) {
 	classifier := &Classifier{}
 
 	bestScore := 0.5
-	bestQuality := 0.5
 	bestModel := "old-model"
 
-	classifier.updateBestModel(0.8, 0.9, "new-model", &bestScore, &bestQuality, &bestModel)
-	if bestScore != 0.8 || bestQuality != 0.9 || bestModel != "new-model" {
-		t.Errorf("update: got bestScore=%v, bestQuality=%v, bestModel=%v", bestScore, bestQuality, bestModel)
+	classifier.updateBestModel(0.8, "new-model", &bestScore, &bestModel)
+	if bestScore != 0.8 || bestModel != "new-model" {
+		t.Errorf("update: got bestScore=%v, bestModel=%v", bestScore, bestModel)
 	}
 
-	classifier.updateBestModel(0.7, 0.7, "another-model", &bestScore, &bestQuality, &bestModel)
-	if bestScore != 0.8 || bestQuality != 0.9 || bestModel != "new-model" {
-		t.Errorf("not update: got bestScore=%v, bestQuality=%v, bestModel=%v", bestScore, bestQuality, bestModel)
+	classifier.updateBestModel(0.7, "another-model", &bestScore, &bestModel)
+	if bestScore != 0.8 || bestModel != "new-model" {
+		t.Errorf("not update: got bestScore=%v, bestModel=%v", bestScore, bestModel)
 	}
 }
 
