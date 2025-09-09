@@ -199,10 +199,42 @@ requestBody := buildRequestBody(model, messages, useReasoning, stream)
 func TestAddReasoningModeToRequestBody(t *testing.T) {
 	fmt.Println("=== Testing addReasoningModeToRequestBody Function ===")
 
-	// Create a mock router with minimal config
-	router := &OpenAIRouter{}
+	// Create a mock router with family-based reasoning config
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			DefaultReasoningEffort: "medium",
+			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+				"deepseek": {
+					Type:      "chat_template_kwargs",
+					Parameter: "thinking",
+				},
+				"qwen3": {
+					Type:      "chat_template_kwargs",
+					Parameter: "enable_thinking",
+				},
+				"gpt-oss": {
+					Type:      "reasoning_effort",
+					Parameter: "reasoning_effort",
+				},
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"deepseek-v31": {
+					ReasoningFamily: "deepseek",
+				},
+				"qwen3-model": {
+					ReasoningFamily: "qwen3",
+				},
+				"gpt-oss-model": {
+					ReasoningFamily: "gpt-oss",
+				},
+				"phi4": {
+					// No reasoning family - doesn't support reasoning
+				},
+			},
+		},
+	}
 
-	// Test case 1: Basic request body
+	// Test case 1: Basic request body with model that has NO reasoning support (phi4)
 	originalRequest := map[string]interface{}{
 		"model": "phi4",
 		"messages": []map[string]interface{}{
@@ -235,29 +267,76 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 		return
 	}
 
-	// Check if chat_template_kwargs was added
-	if chatTemplateKwargs, exists := modifiedRequest["chat_template_kwargs"]; exists {
+	// Check that chat_template_kwargs was NOT added for phi4 (since it has no reasoning_family)
+	if _, exists := modifiedRequest["chat_template_kwargs"]; exists {
+		fmt.Println("ERROR: chat_template_kwargs should not be added for phi4 (no reasoning family configured)")
+	} else {
+		fmt.Println("SUCCESS: chat_template_kwargs correctly not added for phi4 (no reasoning support)")
+	}
+
+	// Check that reasoning_effort was NOT added for phi4
+	if _, exists := modifiedRequest["reasoning_effort"]; exists {
+		fmt.Println("ERROR: reasoning_effort should not be added for phi4 (no reasoning family configured)")
+	} else {
+		fmt.Println("SUCCESS: reasoning_effort correctly not added for phi4 (no reasoning support)")
+	}
+
+	// Test case 2: Request with model that HAS reasoning support (deepseek-v31)
+	fmt.Println("\n--- Test Case 2: Model with reasoning support ---")
+	deepseekRequest := map[string]interface{}{
+		"model": "deepseek-v31",
+		"messages": []map[string]interface{}{
+			{"role": "user", "content": "What is 2 + 2?"},
+		},
+		"stream": false,
+	}
+
+	deepseekBody, err := json.Marshal(deepseekRequest)
+	if err != nil {
+		fmt.Printf("Error marshaling deepseek request: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Original deepseek request:\n%s\n\n", string(deepseekBody))
+
+	// Add reasoning mode to DeepSeek model
+	modifiedDeepseekBody, err := router.setReasoningModeToRequestBody(deepseekBody, true, "math")
+	if err != nil {
+		fmt.Printf("Error adding reasoning mode to deepseek: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Modified deepseek request with reasoning:\n%s\n\n", string(modifiedDeepseekBody))
+
+	var modifiedDeepseekRequest map[string]interface{}
+	if err := json.Unmarshal(modifiedDeepseekBody, &modifiedDeepseekRequest); err != nil {
+		fmt.Printf("Error unmarshaling modified deepseek request: %v\n", err)
+		return
+	}
+
+	// Check that chat_template_kwargs WAS added for deepseek-v31
+	if chatTemplateKwargs, exists := modifiedDeepseekRequest["chat_template_kwargs"]; exists {
 		if kwargs, ok := chatTemplateKwargs.(map[string]interface{}); ok {
 			if thinking, hasThinking := kwargs["thinking"]; hasThinking {
 				if thinkingBool, isBool := thinking.(bool); isBool && thinkingBool {
-					fmt.Println("✅ SUCCESS: chat_template_kwargs with thinking: true was correctly added")
+					fmt.Println("SUCCESS: chat_template_kwargs with thinking: true correctly added for deepseek-v31")
 				} else {
-					fmt.Printf("❌ ERROR: thinking value is not true, got: %v\n", thinking)
+					fmt.Printf("ERROR: thinking value is not true for deepseek-v31, got: %v\n", thinking)
 				}
 			} else {
-				fmt.Println("❌ ERROR: thinking field not found in chat_template_kwargs")
+				fmt.Println("ERROR: thinking field not found in chat_template_kwargs for deepseek-v31")
 			}
 		} else {
-			fmt.Printf("❌ ERROR: chat_template_kwargs is not a map, got: %T\n", chatTemplateKwargs)
+			fmt.Printf("ERROR: chat_template_kwargs is not a map for deepseek-v31, got: %T\n", chatTemplateKwargs)
 		}
 	} else {
-		fmt.Println("❌ ERROR: chat_template_kwargs not found in modified request")
+		fmt.Println("ERROR: chat_template_kwargs not found for deepseek-v31 (should be present)")
 	}
 
-	// Test case 2: Request with existing fields
-	fmt.Println("\n--- Test Case 2: Request with existing fields ---")
+	// Test case 3: Request with existing fields
+	fmt.Println("\n--- Test Case 3: Request with existing fields ---")
 	complexRequest := map[string]interface{}{
-		"model": "phi4",
+		"model": "deepseek-v31",
 		"messages": []map[string]interface{}{
 			{"role": "system", "content": "You are a helpful assistant"},
 			{"role": "user", "content": "Solve x^2 + 5x + 6 = 0"},
@@ -290,20 +369,20 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 	allFieldsPreserved := true
 	for _, field := range originalFields {
 		if _, exists := modifiedComplexRequest[field]; !exists {
-			fmt.Printf("❌ ERROR: Original field '%s' was lost\n", field)
+			fmt.Printf("ERROR: Original field '%s' was lost\n", field)
 			allFieldsPreserved = false
 		}
 	}
 
 	if allFieldsPreserved {
-		fmt.Println("✅ SUCCESS: All original fields preserved")
+		fmt.Println("SUCCESS: All original fields preserved")
 	}
 
-	// Verify chat_template_kwargs was added
+	// Verify chat_template_kwargs was added for deepseek-v31
 	if _, exists := modifiedComplexRequest["chat_template_kwargs"]; exists {
-		fmt.Println("✅ SUCCESS: chat_template_kwargs added to complex request")
-		fmt.Printf("Final modified request:\n%s\n", string(modifiedComplexBody))
+		fmt.Println("SUCCESS: chat_template_kwargs added to complex deepseek request")
+		fmt.Printf("Final modified deepseek request:\n%s\n", string(modifiedComplexBody))
 	} else {
-		fmt.Println("❌ ERROR: chat_template_kwargs not added to complex request")
+		fmt.Println("ERROR: chat_template_kwargs not added to complex deepseek request")
 	}
 }

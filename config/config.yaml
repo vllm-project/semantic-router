@@ -57,6 +57,28 @@ model_config:
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
     # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
     preferred_endpoints: ["endpoint1", "endpoint3"]
+    # Reasoning family - phi4 doesn't support reasoning, so omit this field
+  
+  # Example: DeepSeek model with custom name
+  "ds-v31-custom":
+    reasoning_family: "deepseek"  # This model uses DeepSeek reasoning syntax
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
+  
+  # Example: Qwen3 model with custom name  
+  "my-qwen3-model":
+    reasoning_family: "qwen3"     # This model uses Qwen3 reasoning syntax
+    preferred_endpoints: ["endpoint2"]
+    pii_policy:
+      allow_by_default: true
+  
+  # Example: GPT-OSS model with custom name
+  "custom-gpt-oss":
+    reasoning_family: "gpt-oss"   # This model uses GPT-OSS reasoning syntax
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
   gemma3:27b:
     pricing:
       currency: USD
@@ -235,7 +257,6 @@ categories:
   - model: phi4
     score: 0.2
 default_model: mistral-small3.1
-default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high)
 
 # API Configuration
 api:
@@ -252,4 +273,25 @@ api:
       sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%, 0.5 = 50%)
       # Histogram buckets for metrics (directly configure what you need)
       duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200] 
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+# Reasoning family configurations - define how different model families handle reasoning syntax
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+  
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+  
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+# Global default reasoning effort level
+default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high) 
