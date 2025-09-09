@@ -222,6 +222,10 @@ pre-commit run --all-files
 - Use meaningful variable and function names
 - Add comments for exported functions and types
 - Write unit tests for new functionality
+- **Keep Go modules tidy:** Run `go mod tidy` in the appropriate directory after adding or removing dependencies
+  - For `candle-binding`: `cd candle-binding && go mod tidy`
+  - For `src/semantic-router`: `cd src/semantic-router && go mod tidy`
+  - The CI will automatically check that `go.mod` and `go.sum` files are tidy using `make check-go-mod-tidy`
 
 ### Rust Code
 - Follow Rust formatting (`cargo fmt`)
@@ -241,6 +245,11 @@ pre-commit run --all-files
    make test
    python e2e-tests/run_all_tests.py
    ```
+
+   The `make test` command includes:
+   - `go vet` for static analysis
+   - `check-go-mod-tidy` for Go module dependency verification
+   - Unit tests for all components
 
 2. **Create a pull request** with:
    - Clear description of changes
