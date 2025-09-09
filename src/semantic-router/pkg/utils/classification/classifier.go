@@ -446,14 +446,7 @@ func (c *Classifier) ClassifyAndSelectBestModel(query string) string {
 
 // SelectBestModelForCategory selects the best model from a category based on score and TTFT
 func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
-	var cat *config.Category
-	for i, category := range c.Config.Categories {
-		if strings.EqualFold(category.Name, categoryName) {
-			cat = &c.Config.Categories[i]
-			break
-		}
-	}
-
+	cat := c.findCategory(categoryName)
 	if cat == nil {
 		log.Printf("Could not find matching category %s in config, using default model", categoryName)
 		return c.Config.DefaultModel
@@ -462,30 +455,7 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 	c.ModelLoadLock.Lock()
 	defer c.ModelLoadLock.Unlock()
 
-	bestModel := ""
-	bestScore := -1.0
-	bestQuality := 0.0
-
-	if c.Config.Classifier.LoadAware {
-		c.forEachModelScore(cat, func(modelScore config.ModelScore) {
-			quality := modelScore.Score
-			model := modelScore.Model
-			baseTTFT := c.ModelTTFT[model]
-			load := c.ModelLoad[model]
-			estTTFT := baseTTFT * (1 + float64(load))
-			if estTTFT == 0 {
-				estTTFT = 1
-			}
-			score := quality / estTTFT
-			c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
-		})
-	} else {
-		c.forEachModelScore(cat, func(modelScore config.ModelScore) {
-			quality := modelScore.Score
-			model := modelScore.Model
-			c.updateBestModel(quality, quality, model, &bestScore, &bestQuality, &bestModel)
-		})
-	}
+	bestModel, bestScore, bestQuality := c.selectBestModelInternal(cat, nil)
 
 	if bestModel == "" {
 		log.Printf("No models found for category %s, using default model", categoryName)
@@ -495,6 +465,55 @@ func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 	log.Printf("Selected model %s for category %s with quality %.4f and combined score %.4e",
 		bestModel, categoryName, bestQuality, bestScore)
 	return bestModel
+}
+
+// findCategory finds the category configuration by name (case-insensitive)
+func (c *Classifier) findCategory(categoryName string) *config.Category {
+	for i, category := range c.Config.Categories {
+		if strings.EqualFold(category.Name, categoryName) {
+			return &c.Config.Categories[i]
+		}
+	}
+	return nil
+}
+
+// calculateModelScore calculates the combined score and quality for a model
+func (c *Classifier) calculateModelScore(modelScore config.ModelScore) (float64, float64) {
+	quality := modelScore.Score
+	model := modelScore.Model
+
+	if !c.Config.Classifier.LoadAware {
+		return quality, quality
+	}
+
+	baseTTFT := c.ModelTTFT[model]
+	load := c.ModelLoad[model]
+	estTTFT := baseTTFT * (1 + float64(load))
+	if estTTFT == 0 {
+		estTTFT = 1 // avoid div by zero
+	}
+	score := quality / estTTFT
+	return score, quality
+}
+
+// selectBestModelInternal performs the core model selection logic
+//
+// modelFilter is optional - if provided, only models passing the filter will be considered
+func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter func(string) bool) (string, float64, float64) {
+	bestModel := ""
+	bestScore := -1.0
+	bestQuality := 0.0
+
+	c.forEachModelScore(cat, func(modelScore config.ModelScore) {
+		model := modelScore.Model
+		if modelFilter != nil && !modelFilter(model) {
+			return
+		}
+		score, quality := c.calculateModelScore(modelScore)
+		c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
+	})
+
+	return bestModel, bestScore, bestQuality
 }
 
 // forEachModelScore traverses the ModelScores document of the category and executes the callback for each element.
@@ -510,15 +529,7 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		return c.Config.DefaultModel
 	}
 
-	// Find the category configuration
-	var cat *config.Category
-	for i, category := range c.Config.Categories {
-		if strings.EqualFold(category.Name, categoryName) {
-			cat = &c.Config.Categories[i]
-			break
-		}
-	}
-
+	cat := c.findCategory(categoryName)
 	if cat == nil {
 		// Return first candidate if category not found
 		return candidateModels[0]
@@ -527,31 +538,10 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 	c.ModelLoadLock.Lock()
 	defer c.ModelLoadLock.Unlock()
 
-	bestModel := ""
-	bestScore := -1.0
-	bestQuality := 0.0
-
-	filteredFn := func(modelScore config.ModelScore) {
-		model := modelScore.Model
-		if !slices.Contains(candidateModels, model) {
-			return
-		}
-		quality := modelScore.Score
-		if c.Config.Classifier.LoadAware {
-			baseTTFT := c.ModelTTFT[model]
-			load := c.ModelLoad[model]
-			estTTFT := baseTTFT * (1 + float64(load))
-			if estTTFT == 0 {
-				estTTFT = 1 // avoid div by zero
-			}
-			score := quality / estTTFT
-			c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
-		} else {
-			c.updateBestModel(quality, quality, model, &bestScore, &bestQuality, &bestModel)
-		}
-	}
-
-	c.forEachModelScore(cat, filteredFn)
+	bestModel, bestScore, bestQuality := c.selectBestModelInternal(cat,
+		func(model string) bool {
+			return slices.Contains(candidateModels, model)
+		})
 
 	if bestModel == "" {
 		log.Printf("No suitable model found from candidates for category %s, using first candidate", categoryName)
