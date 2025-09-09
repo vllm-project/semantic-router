@@ -424,6 +424,81 @@ func (m *MockJailbreakInference) Classify(text string) (candle_binding.ClassResu
 	return m.classifyResult, m.classifyError
 }
 
+type MockJailbreakInitializer struct {
+	InitError error
+}
+
+func (m *MockJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	return m.InitError
+}
+
+var _ = Describe("initialize jailbreak classifier", func() {
+	var (
+		classifier               *Classifier
+		mockJailbreakInitializer *MockJailbreakInitializer
+	)
+
+	BeforeEach(func() {
+		mockJailbreakInitializer = &MockJailbreakInitializer{InitError: nil}
+		cfg := &config.RouterConfig{}
+		cfg.PromptGuard.Enabled = true
+		cfg.PromptGuard.ModelID = "test-model"
+		cfg.PromptGuard.JailbreakMappingPath = "test-mapping"
+		cfg.PromptGuard.Threshold = 0.7
+		classifier = &Classifier{
+			jailbreakInitializer: mockJailbreakInitializer,
+			Config:               cfg,
+			JailbreakMapping: &JailbreakMapping{
+				LabelToIdx: map[string]int{"jailbreak": 0, "benign": 1},
+				IdxToLabel: map[string]string{"0": "jailbreak", "1": "benign"},
+			},
+			JailbreakInitialized: false,
+		}
+	})
+
+	It("should initialize jailbreak classifier", func() {
+		err := classifier.InitializeJailbreakClassifier()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(classifier.JailbreakInitialized).To(BeTrue())
+	})
+
+	Context("when jailbreak mapping is not initialized", func() {
+		It("should return nil", func() {
+			classifier.JailbreakMapping = nil
+			err := classifier.InitializeJailbreakClassifier()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(classifier.JailbreakInitialized).To(BeFalse())
+		})
+	})
+
+	Context("when not enough jailbreak types", func() {
+		It("should return error", func() {
+			classifier.JailbreakMapping = &JailbreakMapping{
+				LabelToIdx: map[string]int{"jailbreak": 0},
+				IdxToLabel: map[string]string{"0": "jailbreak"},
+			}
+
+			err := classifier.InitializeJailbreakClassifier()
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not enough jailbreak types for classification"))
+			Expect(classifier.JailbreakInitialized).To(BeFalse())
+		})
+	})
+
+	Context("when initialize jailbreak classifier fails", func() {
+		It("should return error", func() {
+			mockJailbreakInitializer.InitError = errors.New("initialize jailbreak classifier failed")
+
+			err := classifier.InitializeJailbreakClassifier()
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("initialize jailbreak classifier failed"))
+			Expect(classifier.JailbreakInitialized).To(BeFalse())
+		})
+	})
+})
+
 var _ = Describe("jailbreak detection", func() {
 	var (
 		classifier         *Classifier

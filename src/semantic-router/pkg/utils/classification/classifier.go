@@ -37,6 +37,40 @@ func createCategoryInference(useModernBERT bool) CategoryInference {
 	return &LinearCategoryInference{}
 }
 
+type JailbreakInitializer interface {
+	Init(modelID string, useCPU bool, numClasses ...int) error
+}
+
+type LinearJailbreakInitializer struct{}
+
+func (c *LinearJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
+	}
+	log.Printf("Initialized linear jailbreak classifier with %d classes", numClasses[0])
+	return nil
+}
+
+type ModernBertJailbreakInitializer struct{}
+
+func (c *ModernBertJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier: %w", err)
+	}
+	log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
+	return nil
+}
+
+// createJailbreakInitializer creates the appropriate jailbreak initializer based on configuration
+func createJailbreakInitializer(useModernBERT bool) JailbreakInitializer {
+	if useModernBERT {
+		return &ModernBertJailbreakInitializer{}
+	}
+	return &LinearJailbreakInitializer{}
+}
+
 type JailbreakInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
@@ -105,9 +139,10 @@ type PIIAnalysisResult struct {
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	// Dependencies
-	categoryInference  CategoryInference
-	jailbreakInference JailbreakInference
-	piiInference       PIIInference
+	categoryInference    CategoryInference
+	jailbreakInitializer JailbreakInitializer
+	jailbreakInference   JailbreakInference
+	piiInference         PIIInference
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -124,9 +159,10 @@ type Classifier struct {
 // NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
 	return &Classifier{
-		categoryInference:  createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
-		jailbreakInference: createJailbreakInference(cfg.PromptGuard.UseModernBERT),
-		piiInference:       createPIIInference(),
+		categoryInference:    createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
+		jailbreakInitializer: createJailbreakInitializer(cfg.PromptGuard.UseModernBERT),
+		jailbreakInference:   createJailbreakInference(cfg.PromptGuard.UseModernBERT),
+		piiInference:         createPIIInference(),
 
 		Config:               cfg,
 		CategoryMapping:      categoryMapping,
@@ -149,21 +185,8 @@ func (c *Classifier) InitializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
-	var err error
-	if c.Config.PromptGuard.UseModernBERT {
-		// Initialize ModernBERT jailbreak classifier
-		err = candle_binding.InitModernBertJailbreakClassifier(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier: %w", err)
-		}
-		log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
-	} else {
-		// Initialize linear jailbreak classifier
-		err = candle_binding.InitJailbreakClassifier(c.Config.PromptGuard.ModelID, numClasses, c.Config.PromptGuard.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
-		}
-		log.Printf("Initialized linear jailbreak classifier with %d classes", numClasses)
+	if err := c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses); err != nil {
+		return err
 	}
 
 	c.JailbreakInitialized = true
