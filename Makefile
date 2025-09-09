@@ -61,6 +61,24 @@ vet:
 	@cd candle-binding && go vet ./...
 	@cd src/semantic-router && go vet ./...
 
+# Check go mod tidy for all Go modules
+check-go-mod-tidy:
+	@echo "Checking go mod tidy for all Go modules..."
+	@echo "Checking candle-binding..."
+	@cd candle-binding && go mod tidy && \
+		(git diff --exit-code go.mod 2>/dev/null || (echo "ERROR: go.mod file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.mod && exit 1)) && \
+		(test ! -f go.sum || git diff --exit-code go.sum 2>/dev/null || (echo "ERROR: go.sum file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.sum && exit 1))
+	@echo "✅ candle-binding go mod tidy check passed"
+	@echo "Checking src/semantic-router..."
+	@cd src/semantic-router && go mod tidy && \
+		if ! git diff --exit-code go.mod go.sum; then \
+			echo "ERROR: go.mod or go.sum files are not tidy in src/semantic-router. Please run 'go mod tidy' in src/semantic-router directory and commit the changes."; \
+			git diff go.mod go.sum; \
+			exit 1; \
+		fi
+	@echo "✅ src/semantic-router go mod tidy check passed"
+	@echo "✅ All go mod tidy checks passed"
+
 # Test the Rust library
 test-binding: rust
 	@echo "Running Go tests with static library..."
@@ -92,7 +110,7 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-test: vet download-models test-binding test-semantic-router
+test: vet check-go-mod-tidy download-models test-binding test-semantic-router
 
 # Clean built artifacts
 clean:
