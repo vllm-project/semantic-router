@@ -51,6 +51,9 @@ jobs:
           ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
+    - name: Check go mod tidy
+      run: make check-go-mod-tidy
+
     - name: Build Rust library
       run: make rust
 
