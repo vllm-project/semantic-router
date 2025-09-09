@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -52,9 +53,6 @@ type RouterConfig struct {
 
 	// Model parameters configuration
 	ModelConfig map[string]ModelParams `yaml:"model_config"`
-
-	// GPU configuration for TTFT calculation
-	GPUConfig GPUConfig `yaml:"gpu_config"`
 
 	// Tools configuration for automatic tool selection
 	Tools ToolsConfig `yaml:"tools"`
@@ -191,7 +189,7 @@ type VLLMEndpoint struct {
 	HealthCheckPath string `yaml:"health_check_path,omitempty"`
 }
 
-// ModelParams represents configuration for model-specific parameters
+// ModelPricing represents configuration for model-specific parameters
 type ModelPricing struct {
 	// ISO currency code for the pricing (e.g., "USD"). Defaults to "USD" when omitted.
 	Currency string `yaml:"currency,omitempty"`
@@ -202,15 +200,6 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	// Number of parameters in the model
-	ParamCount float64 `yaml:"param_count"`
-
-	// Default batch size for this model
-	BatchSize float64 `yaml:"batch_size"`
-
-	// Default context size for this model
-	ContextSize float64 `yaml:"context_size"`
-
 	// PII policy configuration for this model
 	PIIPolicy PIIPolicy `yaml:"pii_policy,omitempty"`
 
@@ -252,18 +241,6 @@ const (
 	PIITypeZipCode         = "ZIP_CODE"          // ZIP/Postal codes
 )
 
-// GPUConfig represents configuration for GPU parameters used in TTFT calculation
-type GPUConfig struct {
-	// FLOPs performance in operations per second
-	FLOPS float64 `yaml:"flops"`
-
-	// HBM memory bandwidth in bytes per second
-	HBM float64 `yaml:"hbm"`
-
-	// Description of the GPU configuration (e.g., "A100-80G")
-	Description string `yaml:"description"`
-}
-
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
 func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	if c.SemanticCache.SimilarityThreshold != nil {
@@ -291,28 +268,54 @@ var (
 	config     *RouterConfig
 	configOnce sync.Once
 	configErr  error
+	configMu   sync.RWMutex
 )
 
-// LoadConfig loads the configuration from the specified YAML file
+// LoadConfig loads the configuration from the specified YAML file once and caches it globally.
 func LoadConfig(configPath string) (*RouterConfig, error) {
 	configOnce.Do(func() {
-		data, err := os.ReadFile(configPath)
+		cfg, err := ParseConfigFile(configPath)
 		if err != nil {
-			configErr = fmt.Errorf("failed to read config file: %w", err)
+			configErr = err
 			return
 		}
-
-		config = &RouterConfig{}
-		if err := yaml.Unmarshal(data, config); err != nil {
-			configErr = fmt.Errorf("failed to parse config file: %w", err)
-			return
-		}
+		configMu.Lock()
+		config = cfg
+		configMu.Unlock()
 	})
-
 	if configErr != nil {
 		return nil, configErr
 	}
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config, nil
+}
+
+// ParseConfigFile parses the YAML config file without touching the global cache.
+func ParseConfigFile(configPath string) (*RouterConfig, error) {
+	// Resolve symlinks to handle Kubernetes ConfigMap mounts
+	resolved, _ := filepath.EvalSymlinks(configPath)
+	if resolved == "" {
+		resolved = configPath
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+	cfg := &RouterConfig{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	return cfg, nil
+}
+
+// ReplaceGlobalConfig replaces the globally cached config. It is safe for concurrent readers.
+func ReplaceGlobalConfig(newCfg *RouterConfig) {
+	configMu.Lock()
+	defer configMu.Unlock()
+	config = newCfg
+	// Do not reset configOnce to avoid racing re-parses via LoadConfig; callers should use ParseConfigFile for fresher reads.
+	configErr = nil
 }
 
 // GetConfig returns the current configuration
@@ -347,33 +350,6 @@ func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
 
 	// Fall back to default model if category has no models
 	return c.DefaultModel
-}
-
-// GetModelParamCount returns the parameter count for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelParamCount(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.ParamCount
-	}
-	return defaultValue
-}
-
-// GetModelBatchSize returns the batch size for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelBatchSize(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.BatchSize
-	}
-	return defaultValue
-}
-
-// GetModelContextSize returns the context size for a given model
-// If the model is not found in the config, returns the default value
-func (c *RouterConfig) GetModelContextSize(modelName string, defaultValue float64) float64 {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.ContextSize
-	}
-	return defaultValue
 }
 
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.

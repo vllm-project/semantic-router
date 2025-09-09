@@ -50,9 +50,6 @@ vllm_endpoints:
 # Model configuration
 model_config:
   "your-model":
-    param_count: 7000000000    # Model parameters
-    batch_size: 512.0
-    context_size: 4096.0
     pii_policy:
       allow_by_default: true
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
@@ -115,9 +112,6 @@ Configure model-specific settings:
 ```yaml
 model_config:
   "llama2-7b":
-    param_count: 7000000000     # Model size in parameters
-    batch_size: 512.0           # Batch size
-    context_size: 4096.0        # Context window
     pii_policy:
       allow_by_default: true    # Allow PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]

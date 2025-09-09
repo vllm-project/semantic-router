@@ -105,25 +105,14 @@ vllm_endpoints:
 
 model_config:
   "model-a":
-    param_count: 1000000000
-    batch_size: 32
-    context_size: 8192
     pii_policy:
       allow_by_default: false
       pii_types_allowed: ["NO_PII", "ORGANIZATION"]
     preferred_endpoints: ["endpoint1"]
   "model-b":
-    param_count: 175000000
-    batch_size: 64
-    context_size: 4096
     pii_policy:
       allow_by_default: true
     preferred_endpoints: ["endpoint1", "endpoint2"]
-
-gpu_config:
-  flops: 312000000000000
-  hbm: 2000000000000
-  description: "A100-80G"
 
 tools:
   enabled: true
@@ -172,13 +161,8 @@ tools:
 
 				// Verify model config
 				Expect(cfg.ModelConfig).To(HaveKey("model-a"))
-				Expect(cfg.ModelConfig["model-a"].ParamCount).To(Equal(float64(1000000000)))
 				Expect(cfg.ModelConfig["model-a"].PIIPolicy.AllowByDefault).To(BeFalse())
 				Expect(cfg.ModelConfig["model-a"].PIIPolicy.PIITypes).To(ContainElements("NO_PII", "ORGANIZATION"))
-
-				// Verify GPU config
-				Expect(cfg.GPUConfig.FLOPS).To(Equal(float64(312000000000000)))
-				Expect(cfg.GPUConfig.Description).To(Equal("A100-80G"))
 
 				// Verify tools config
 				Expect(cfg.Tools.Enabled).To(BeTrue())
@@ -430,7 +414,8 @@ model_config:
     pii_policy:
       allow_by_default: true
   "unconfigured-model":
-    param_count: 1000000
+    pii_policy:
+      allow_by_default: true
 `
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
@@ -646,74 +631,6 @@ prompt_guard:
 		})
 	})
 
-	Describe("Model Parameter Functions", func() {
-		BeforeEach(func() {
-			configContent := `
-model_config:
-  "configured-model":
-    param_count: 175000000
-    batch_size: 32
-    context_size: 4096
-`
-			err := os.WriteFile(configFile, []byte(configContent), 0o644)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		Describe("GetModelParamCount", func() {
-			It("should return configured value for existing model", func() {
-				cfg, err := config.LoadConfig(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				count := cfg.GetModelParamCount("configured-model", 1000000)
-				Expect(count).To(Equal(float64(175000000)))
-			})
-
-			It("should return default value for non-existent model", func() {
-				cfg, err := config.LoadConfig(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				count := cfg.GetModelParamCount("unknown-model", 999999)
-				Expect(count).To(Equal(float64(999999)))
-			})
-		})
-
-		Describe("GetModelBatchSize", func() {
-			It("should return configured value for existing model", func() {
-				cfg, err := config.LoadConfig(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				batchSize := cfg.GetModelBatchSize("configured-model", 16)
-				Expect(batchSize).To(Equal(float64(32)))
-			})
-
-			It("should return default value for non-existent model", func() {
-				cfg, err := config.LoadConfig(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				batchSize := cfg.GetModelBatchSize("unknown-model", 64)
-				Expect(batchSize).To(Equal(float64(64)))
-			})
-		})
-
-		Describe("GetModelContextSize", func() {
-			It("should return configured value for existing model", func() {
-				cfg, err := config.LoadConfig(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				contextSize := cfg.GetModelContextSize("configured-model", 2048)
-				Expect(contextSize).To(Equal(float64(4096)))
-			})
-
-			It("should return default value for non-existent model", func() {
-				cfg, err := config.LoadConfig(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				contextSize := cfg.GetModelContextSize("unknown-model", 8192)
-				Expect(contextSize).To(Equal(float64(8192)))
-			})
-		})
-	})
-
 	Describe("GetCategoryDescriptions", func() {
 		Context("with categories having descriptions", func() {
 			BeforeEach(func() {
@@ -805,18 +722,15 @@ semantic_cache:
 			configContent := `
 model_config:
   "large-model":
-    param_count: 1.7976931348623157e+308
-gpu_config:
-  flops: 1e20
-  hbm: 1e15
+    pii_policy:
+      allow_by_default: true
 `
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
 			cfg, err := config.LoadConfig(configFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.ModelConfig["large-model"].ParamCount).To(Equal(1.7976931348623157e+308))
-			Expect(cfg.GPUConfig.FLOPS).To(Equal(1e20))
+			Expect(cfg.ModelConfig["large-model"].PIIPolicy.AllowByDefault).To(BeTrue())
 		})
 
 		It("should handle special string values", func() {

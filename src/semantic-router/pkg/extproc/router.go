@@ -14,7 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/classification"
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/pii"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/ttft"
 )
 
 var (
@@ -41,10 +40,13 @@ var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
 // NewOpenAIRouter creates a new OpenAI API router instance
 func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
-	cfg, err := config.LoadConfig(configPath)
+	// Always parse fresh config for router construction (supports live reload)
+	cfg, err := config.ParseConfigFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	// Update global config reference for packages that rely on config.GetConfig()
+	config.ReplaceGlobalConfig(cfg)
 
 	initMutex.Lock()
 	defer initMutex.Unlock()
@@ -129,8 +131,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create utility components
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-	ttftCalculator := ttft.NewCalculator(cfg.GPUConfig)
-	modelTTFT := ttftCalculator.InitializeModelTTFT(cfg)
+	modelTTFT := make(map[string]float64) // Empty TTFT map since load balancing is disabled
 	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping, modelTTFT)
 
 	// Create global classification service for API access
