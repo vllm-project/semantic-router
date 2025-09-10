@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // NewCacheBackend creates a cache backend instance from the provided configuration

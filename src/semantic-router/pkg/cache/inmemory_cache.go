@@ -11,8 +11,8 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
