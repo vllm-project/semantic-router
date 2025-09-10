@@ -6,12 +6,12 @@ repos:
     rev: v6.0.0
     hooks:
     -   id: trailing-whitespace
-        files: \.(go|rs|py)$
+        files: \.(go|rs|py|js)$
     -   id: end-of-file-fixer
-        files: \.(go|rs|py)$
+        files: \.(go|rs|py|js)$
     -   id: check-added-large-files
         args: ['--maxkb=500']
-        files: \.(go|rs|py)$
+        files: \.(go|rs|py|js)$
 
 # Go specific hooks
 -   repo: local
@@ -21,6 +21,15 @@ repos:
         entry: gofmt -w
         language: system
         files: \.go$
+
+# JavaScript specific hooks
+-   repo: local
+    hooks:
+      -   id: js-lint
+          name: js lint
+          entry: npm run lint
+          language: system
+          files: \.js$
 
 # Rust specific hooks  
 -   repo: local

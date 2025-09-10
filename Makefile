@@ -215,3 +215,11 @@ docs-serve: docs-build
 docs-clean:
 	@echo "Cleaning documentation build artifacts..."
 	cd website && npm run clear
+
+docs-lint:
+	@echo "Linting documentation..."
+	cd website && npm run lint
+
+docs-lint-fix:
+	@echo "Fixing documentation lint issues..."
+	cd website && npm run lint:fix
