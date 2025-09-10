@@ -12,11 +12,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/http"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/pii"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
 // parseOpenAIRequest parses the raw JSON using the OpenAI SDK types

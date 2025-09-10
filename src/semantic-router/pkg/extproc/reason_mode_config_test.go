@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestReasoningModeConfiguration demonstrates how the reasoning mode works with the new config-based approach

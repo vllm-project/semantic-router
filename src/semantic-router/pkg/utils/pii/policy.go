@@ -4,7 +4,7 @@ import (
 	"log"
 	"slices"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // PolicyChecker handles PII policy validation

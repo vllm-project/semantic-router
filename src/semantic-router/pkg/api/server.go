@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // ClassificationAPIServer holds the server state and dependencies
