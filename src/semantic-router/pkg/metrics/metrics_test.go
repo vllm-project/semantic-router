@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestMain ensures metrics are initialized before running tests

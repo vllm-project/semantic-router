@@ -8,12 +8,12 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/cache"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/services"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/tools"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/classification"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/pii"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
 var (

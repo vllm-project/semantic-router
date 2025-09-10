@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestClassifier(t *testing.T) {

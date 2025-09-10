@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 )
 
 // shouldUseReasoningMode determines if reasoning mode should be enabled based on the query category

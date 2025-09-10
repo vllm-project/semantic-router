@@ -8,8 +8,8 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 )
 
 var _ = Describe("Endpoint Selection", func() {
