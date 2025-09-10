@@ -1,6 +1,6 @@
-import React from 'react';
-import Layout from '@theme/Layout';
-import styles from './work-groups.module.css';
+import React from 'react'
+import Layout from '@theme/Layout'
+import styles from './work-groups.module.css'
 
 const workingGroups = [
   // First column - Core areas
@@ -10,7 +10,7 @@ const workingGroups = [
     label: 'area/core',
     icon: '🧠',
     skills: ['Machine learning', 'BERT models', 'Classification algorithms'],
-    needs: ['Model optimization', 'Algorithm improvements', 'Reasoning logic']
+    needs: ['Model optimization', 'Algorithm improvements', 'Reasoning logic'],
   },
   {
     name: 'Research',
@@ -18,7 +18,7 @@ const workingGroups = [
     label: 'area/research',
     icon: '🔬',
     skills: ['Model Training', 'Model Fine-Tuning', 'Deep Learning'],
-    needs: ['SLM research', 'Latency optimization', 'Context improvement']
+    needs: ['SLM research', 'Latency optimization', 'Context improvement'],
   },
   {
     name: 'Networking',
@@ -26,7 +26,7 @@ const workingGroups = [
     label: 'area/networking',
     icon: '🌐',
     skills: ['Envoy proxy', 'Network protocols', 'Performance optimization'],
-    needs: ['Load balancing', 'Traffic routing', 'Network security']
+    needs: ['Load balancing', 'Traffic routing', 'Network security'],
   },
   // Second column - Operations and monitoring
   {
@@ -35,7 +35,7 @@ const workingGroups = [
     label: 'area/observability',
     icon: '📈',
     skills: ['Prometheus/Grafana', 'OpenTelemetry', 'Log aggregation', 'Monitoring systems'],
-    needs: ['Metrics implementation', 'Tracing integration', 'Dashboard creation', 'Log standardization']
+    needs: ['Metrics implementation', 'Tracing integration', 'Dashboard creation', 'Log standardization'],
   },
   {
     name: 'Bench',
@@ -43,7 +43,7 @@ const workingGroups = [
     label: 'area/benchmark',
     icon: '📊',
     skills: ['Performance testing', 'Benchmarking tools', 'Data analysis'],
-    needs: ['Benchmark frameworks', 'Performance metrics', 'Testing automation']
+    needs: ['Benchmark frameworks', 'Performance metrics', 'Testing automation'],
   },
   {
     name: 'Environment',
@@ -51,7 +51,7 @@ const workingGroups = [
     label: 'area/environment',
     icon: '🐳',
     skills: ['Docker', 'Kubernetes', 'Cloud platforms', 'DevOps'],
-    needs: ['Helm charts', 'Deployment automation', 'Cloud integrations']
+    needs: ['Helm charts', 'Deployment automation', 'Cloud integrations'],
   },
   // Third column - Development and user experience
   {
@@ -60,7 +60,7 @@ const workingGroups = [
     label: 'area/tooling, area/ci',
     icon: '🔧',
     skills: ['CI/CD tools', 'Build automation', 'Release processes'],
-    needs: ['Test automation', 'Release pipelines', 'Quality assurance']
+    needs: ['Test automation', 'Release pipelines', 'Quality assurance'],
   },
   {
     name: 'User Experience',
@@ -68,7 +68,7 @@ const workingGroups = [
     label: 'area/user-experience',
     icon: '👥',
     skills: ['API design', 'UX/UI', 'Developer experience'],
-    needs: ['API improvements', 'CLI enhancements', 'User feedback integration']
+    needs: ['API improvements', 'CLI enhancements', 'User feedback integration'],
   },
   {
     name: 'Docs',
@@ -76,9 +76,9 @@ const workingGroups = [
     label: 'area/document',
     icon: '📚',
     skills: ['Technical writing', 'Documentation tools', 'User experience design'],
-    needs: ['API documentation', 'Tutorials', 'Deployment guides']
-  }
-];
+    needs: ['API documentation', 'Tutorials', 'Deployment guides'],
+  },
+]
 
 function WorkGroupCard({ group }) {
   return (
@@ -108,19 +108,20 @@ function WorkGroupCard({ group }) {
         </ul>
       </div>
     </div>
-  );
+  )
 }
 
 export default function WorkGroups() {
   return (
     <Layout
       title="Work Groups"
-      description="vLLM Semantic Router Community Working Groups">
+      description="vLLM Semantic Router Community Working Groups"
+    >
       <div className={styles.container}>
         <header className={styles.header}>
           <h1>vLLM Semantic Router Work Groups 👋</h1>
         </header>
-        
+
         <main className={styles.main}>
           <section className={styles.intro}>
             <h2>🌍 WG Initialization</h2>
@@ -128,15 +129,17 @@ export default function WorkGroups() {
               We are looking for interests around vLLM Semantic Router project and separate it into different WGs.
             </p>
             <p>
-              Please comment on{' '}
-              <a 
-                href="https://github.com/vllm-project/semantic-router/issues/15" 
-                target="_blank" 
+              Please comment on
+              {' '}
+              <a
+                href="https://github.com/vllm-project/semantic-router/issues/15"
+                target="_blank"
                 rel="noopener noreferrer"
                 className={styles.link}
               >
                 GitHub Issue #15
-              </a>{' '}
+              </a>
+              {' '}
               if you are interested in one or more.
             </p>
           </section>
@@ -155,8 +158,8 @@ export default function WorkGroups() {
           <section className={styles.promotion}>
             <h2>🔝 Community Promotion</h2>
             <p>
-              We are grateful for any contributions, and if you show consistent contributions to the above specify area, 
-              you will be promoting as its maintainer after votes from maintainer team, and you will be invited to 
+              We are grateful for any contributions, and if you show consistent contributions to the above specify area,
+              you will be promoting as its maintainer after votes from maintainer team, and you will be invited to
               semantic-router-maintainer group, and granted WRITE access to this repo.
             </p>
           </section>
@@ -164,10 +167,36 @@ export default function WorkGroups() {
           <section className={styles.getInvolved}>
             <h2>How to Get Involved</h2>
             <ol className={styles.stepsList}>
-              <li><strong>Choose Your Interest Area:</strong> Review the working groups above and identify which areas align with your skills and interests</li>
-              <li><strong>Join the Discussion:</strong> Comment on <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">GitHub Issue #15</a> to express your interest</li>
-              <li><strong>Start Contributing:</strong> Look for issues labeled with the corresponding area tags (e.g., <code>area/document</code>, <code>area/core</code>)</li>
-              <li><strong>Collaborate:</strong> Connect with other community members working in the same areas</li>
+              <li>
+                <strong>Choose Your Interest Area:</strong>
+                {' '}
+                Review the working groups above and identify which areas align with your skills and interests
+              </li>
+              <li>
+                <strong>Join the Discussion:</strong>
+                {' '}
+                Comment on
+                {' '}
+                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">GitHub Issue #15</a>
+                {' '}
+                to express your interest
+              </li>
+              <li>
+                <strong>Start Contributing:</strong>
+                {' '}
+                Look for issues labeled with the corresponding area tags (e.g.,
+                {' '}
+                <code>area/document</code>
+                ,
+                {' '}
+                <code>area/core</code>
+                )
+              </li>
+              <li>
+                <strong>Collaborate:</strong>
+                {' '}
+                Connect with other community members working in the same areas
+              </li>
             </ol>
           </section>
 
@@ -175,13 +204,24 @@ export default function WorkGroups() {
             <h2>Contact</h2>
             <p>For questions about working groups or to get involved:</p>
             <ul>
-              <li>Open an issue on <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-              <li>Join the discussion on <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">Issue #15</a></li>
-              <li>Check out our <a href="/docs/intro">documentation</a> to get started</li>
+              <li>
+                Open an issue on
+                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub</a>
+              </li>
+              <li>
+                Join the discussion on
+                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">Issue #15</a>
+              </li>
+              <li>
+                Check out our
+                <a href="/docs/intro">documentation</a>
+                {' '}
+                to get started
+              </li>
             </ul>
           </section>
         </main>
       </div>
     </Layout>
-  );
+  )
 }

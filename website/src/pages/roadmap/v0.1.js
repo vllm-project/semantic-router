@@ -1,12 +1,12 @@
-import React from 'react';
-import Layout from '@theme/Layout';
-import styles from './roadmap.module.css';
+import React from 'react'
+import Layout from '@theme/Layout'
+import styles from './roadmap.module.css'
 
 const priorityColors = {
-  'P0': '#dc3545', // Red for critical
-  'P1': '#fd7e14', // Orange for important
-  'P2': '#6c757d', // Gray for nice-to-have
-};
+  P0: '#dc3545', // Red for critical
+  P1: '#fd7e14', // Orange for important
+  P2: '#6c757d', // Gray for nice-to-have
+}
 
 const PriorityBadge = ({ priority }) => (
   <span
@@ -15,22 +15,23 @@ const PriorityBadge = ({ priority }) => (
   >
     {priority}
   </span>
-);
+)
 
 // Counter for generating unique task numbers
-let taskCounter = 0;
+let taskCounter = 0
 
 const RoadmapItem = ({ title, priority, acceptance, children, id }) => {
-  taskCounter++;
-  const taskId = id || `task-${taskCounter}`;
-  const taskNumber = taskCounter;
+  taskCounter++
+  const taskId = id || `task-${taskCounter}`
+  const taskNumber = taskCounter
 
   return (
     <div className={styles.roadmapItem} id={taskId}>
       <div className={styles.itemHeader}>
         <h4 className={styles.itemTitle}>
           <a href={`#${taskId}`} className={styles.taskLink}>
-            #{taskNumber}
+            #
+            {taskNumber}
           </a>
           {' '}
           {title}
@@ -40,12 +41,14 @@ const RoadmapItem = ({ title, priority, acceptance, children, id }) => {
       {children && <div className={styles.itemDescription}>{children}</div>}
       {acceptance && (
         <div className={styles.acceptance}>
-          <strong>Acceptance:</strong> {acceptance}
+          <strong>Acceptance:</strong>
+          {' '}
+          {acceptance}
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
 const AreaSection = ({ title, children }) => (
   <div className={styles.areaSection}>
@@ -54,11 +57,11 @@ const AreaSection = ({ title, children }) => (
       {children}
     </div>
   </div>
-);
+)
 
 export default function RoadmapV01() {
   // Reset task counter for consistent numbering on re-renders
-  taskCounter = 0;
+  taskCounter = 0
 
   return (
     <Layout
@@ -72,7 +75,7 @@ export default function RoadmapV01() {
             <p className={styles.subtitle}>
               Productizing Intelligent Routing with Comprehensive Evaluation
             </p>
-            
+
             <div className={styles.goalSection}>
               <h2>Release Goal</h2>
               <p>
@@ -84,13 +87,25 @@ export default function RoadmapV01() {
                 <li>Comprehensive benchmarking and monitoring beyond MMLU-Pro</li>
                 <li>Production-ready caching and observability</li>
               </ol>
-              
+
               <div className={styles.keyDeliverables}>
                 <h3>Key P0 Deliverables</h3>
                 <ul>
-                  <li><strong>Router intelligence:</strong> Reasoning controller, ExtProc plugins, semantic caching</li>
-                  <li><strong>Operations:</strong> K8s operator, benchmarks, monitoring</li>
-                  <li><strong>Quality:</strong> Test coverage, integration tests, structured logging</li>
+                  <li>
+                    <strong>Router intelligence:</strong>
+                    {' '}
+                    Reasoning controller, ExtProc plugins, semantic caching
+                  </li>
+                  <li>
+                    <strong>Operations:</strong>
+                    {' '}
+                    K8s operator, benchmarks, monitoring
+                  </li>
+                  <li>
+                    <strong>Quality:</strong>
+                    {' '}
+                    Test coverage, integration tests, structured logging
+                  </li>
                 </ul>
               </div>
             </div>
@@ -131,7 +146,7 @@ export default function RoadmapV01() {
                   acceptance="Configurable reasoning effort levels per category; template handling for different model families (GPT OSS/Qwen3/DeepSeek/etc); metrics for reasoning mode decisions and model-specific template usage."
                 />
               </div>
-              
+
               <div className={styles.subsection}>
                 <h4>Routing Logic</h4>
                 <RoadmapItem
@@ -145,7 +160,7 @@ export default function RoadmapV01() {
                   acceptance="Endpoint selection using request concurrency and/or TTFT/TPOT. Using SLO driven metrics to automatic failover with load weighted selection between redundant endpoints; circuit breaker with error rate and load signal deviation thresholds."
                 />
               </div>
-              
+
               <div className={styles.subsection}>
                 <h4>Semantic Cache</h4>
                 <RoadmapItem
@@ -162,16 +177,16 @@ export default function RoadmapV01() {
                 priority="P1"
                 acceptance="Routing formula combining quality (model_scores), load (ModelLoad counter), and latency (ModelCompletionLatency histogram), and token usage and pricing; configurable for broad SLO based targets; documented in architecture guide."
               />
-                <RoadmapItem
-                  title="Dynamic model scoring system"
-                  priority="P2"
-                  acceptance="Online model score updates based on model accuracy, latency, and cost metrics; auto-updates model_scores in config; replaces static scoring in A/B test or through RL."
-                />
-                <RoadmapItem
-                  title="Expand the use cases and evaluations"
-                  priority="P2"
-                  acceptance="Explore more use cases and evaluations for different categories, model families and tasks."
-                />
+              <RoadmapItem
+                title="Dynamic model scoring system"
+                priority="P2"
+                acceptance="Online model score updates based on model accuracy, latency, and cost metrics; auto-updates model_scores in config; replaces static scoring in A/B test or through RL."
+              />
+              <RoadmapItem
+                title="Expand the use cases and evaluations"
+                priority="P2"
+                acceptance="Explore more use cases and evaluations for different categories, model families and tasks."
+              />
             </AreaSection>
 
             <AreaSection title="Networking (area/networking)">
@@ -273,5 +288,5 @@ export default function RoadmapV01() {
         </div>
       </div>
     </Layout>
-  );
+  )
 }

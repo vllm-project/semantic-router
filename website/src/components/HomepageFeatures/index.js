@@ -1,13 +1,17 @@
-import React from 'react';
-import clsx from 'clsx';
-import styles from './styles.module.css';
+import React from 'react'
+import clsx from 'clsx'
+import styles from './styles.module.css'
 
 const FeatureList = [
   {
     title: '🧠 Intelligent Routing',
     description: (
       <>
-        Powered by <strong>ModernBERT Fine-Tuned Models</strong> for
+        Powered by
+        {' '}
+        <strong>ModernBERT Fine-Tuned Models</strong>
+        {' '}
+        for
         intelligent intent understanding, it understands context, intent,
         and complexity to route requests to the best LLM.
       </>
@@ -17,7 +21,15 @@ const FeatureList = [
     title: '🛡️ AI-Powered Security',
     description: (
       <>
-        Advanced <strong>PII Detection</strong> and <strong>Prompt Guard</strong> to identify and block jailbreak attempts, ensuring secure and responsible AI interactions
+        Advanced
+        {' '}
+        <strong>PII Detection</strong>
+        {' '}
+        and
+        {' '}
+        <strong>Prompt Guard</strong>
+        {' '}
+        to identify and block jailbreak attempts, ensuring secure and responsible AI interactions
         across your infrastructure.
       </>
     ),
@@ -26,7 +38,11 @@ const FeatureList = [
     title: '⚡ Semantic Caching',
     description: (
       <>
-        Intelligent <strong>Similarity Cache</strong> that stores semantic representations
+        Intelligent
+        {' '}
+        <strong>Similarity Cache</strong>
+        {' '}
+        that stores semantic representations
         of prompts, dramatically reducing token usage and latency through smart content matching.
       </>
     ),
@@ -35,7 +51,10 @@ const FeatureList = [
     title: '🤖 Auto-Reasoning Engine',
     description: (
       <>
-        Auto reasoning engine that analyzes request <strong>complexity</strong>, domain expertise
+        Auto reasoning engine that analyzes request
+        {' '}
+        <strong>complexity</strong>
+        , domain expertise
         requirements, and performance constraints to automatically select the best model for each task.
       </>
     ),
@@ -44,7 +63,10 @@ const FeatureList = [
     title: '🔬 Real-time Analytics',
     description: (
       <>
-        Comprehensive monitoring and analytics dashboard with <strong>neural network insights</strong>,
+        Comprehensive monitoring and analytics dashboard with
+        {' '}
+        <strong>neural network insights</strong>
+        ,
         model performance metrics, and intelligent routing decisions visualization.
       </>
     ),
@@ -53,14 +75,17 @@ const FeatureList = [
     title: '🚀 Scalable Architecture',
     description: (
       <>
-        Cloud-native design with <strong>distributed neural processing</strong>, auto-scaling capabilities,
+        Cloud-native design with
+        {' '}
+        <strong>distributed neural processing</strong>
+        , auto-scaling capabilities,
         and seamless integration with existing LLM infrastructure and model serving platforms.
       </>
     ),
   },
-];
+]
 
-function Feature({title, description}) {
+function Feature({ title, description }) {
   return (
     <div className={clsx('col col--4')}>
       <div className={clsx('card', styles.featureCard)}>
@@ -70,7 +95,7 @@ function Feature({title, description}) {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 export default function HomepageFeatures() {
@@ -92,5 +117,5 @@ export default function HomepageFeatures() {
         </div>
       </div>
     </section>
-  );
+  )
 }

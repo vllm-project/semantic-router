@@ -27,7 +27,7 @@ repos:
     hooks:
       -   id: js-lint
           name: js lint
-          entry: bash -c 'cd website && npm run lint'
+          entry: bash -c 'cd website && npm install eslint && npm run lint'
           language: system
           files: \.js$
 

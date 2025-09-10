@@ -1,6 +1,6 @@
-import React from 'react';
-import Layout from '@theme/Layout';
-import styles from './team.module.css';
+import React from 'react'
+import Layout from '@theme/Layout'
+import styles from './team.module.css'
 
 const coreTeam = [
   {
@@ -11,7 +11,7 @@ const coreTeam = [
     github: 'https://github.com/rootfs',
     linkedin: 'https://www.linkedin.com/in/huaminchen',
     bio: 'Distinguished Engineer at Red Hat, driving innovation in cloud-native and AI/LLM Inference technologies.',
-    expertise: ['Cloud Native', 'Kubernetes', 'Container Technologies', 'System Architecture']
+    expertise: ['Cloud Native', 'Kubernetes', 'Container Technologies', 'System Architecture'],
   },
   {
     name: 'Chen Wang',
@@ -21,7 +21,7 @@ const coreTeam = [
     github: 'https://github.com/wangchen615',
     linkedin: 'https://www.linkedin.com/in/chenw615/',
     bio: 'Senior Staff Research Scientist at IBM, focusing on advanced AI systems and research.',
-    expertise: ['AI Systems', 'Research Leadership', 'Machine Learning', 'Innovation']
+    expertise: ['AI Systems', 'Research Leadership', 'Machine Learning', 'Innovation'],
   },
   {
     name: 'Yue Zhu',
@@ -31,7 +31,7 @@ const coreTeam = [
     github: 'https://github.com/yuezhu1',
     linkedin: 'https://www.linkedin.com/in/yue-zhu-b26526a3/',
     bio: 'Staff Research Scientist at IBM, specializing in AI research and LLM Inference.',
-    expertise: ['Machine Learning', 'AI Research', 'Data Science', 'Research & Development']
+    expertise: ['Machine Learning', 'AI Research', 'Data Science', 'Research & Development'],
   },
   {
     name: 'Xunzhuo Liu',
@@ -41,11 +41,9 @@ const coreTeam = [
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
     bio: 'Software Engineer at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
-    expertise: ['System Architecture', 'ML Infrastructure', 'Open Source', 'Software Engineering']
+    expertise: ['System Architecture', 'ML Infrastructure', 'Open Source', 'Software Engineering'],
   },
-];
-
-
+]
 
 const contributors = [
   {
@@ -54,9 +52,9 @@ const contributors = [
     avatar: 'https://github.com/github.png',
     github: '/community/contributing',
     bio: 'Join our community and help make vLLM Semantic Router even better!',
-    expertise: ['Your Skills Here']
+    expertise: ['Your Skills Here'],
   },
-];
+]
 
 function TeamMember({ member, isContributor = false }) {
   return (
@@ -71,7 +69,13 @@ function TeamMember({ member, isContributor = false }) {
           <h3 className={styles.memberName}>{member.name}</h3>
           <p className={styles.memberRole}>
             {member.role}
-            {member.company && <span className={styles.company}> @ {member.company}</span>}
+            {member.company && (
+              <span className={styles.company}>
+                {' '}
+                @
+                {member.company}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -118,14 +122,15 @@ function TeamMember({ member, isContributor = false }) {
         )}
       </div>
     </div>
-  );
+  )
 }
 
 export default function Team() {
   return (
     <Layout
       title="Team"
-      description="Meet the team behind vLLM Semantic Router">
+      description="Meet the team behind vLLM Semantic Router"
+    >
       <div className={styles.container}>
         <header className={styles.header}>
           <h1>Meet Our Team 👥</h1>
@@ -133,7 +138,7 @@ export default function Team() {
             The passionate individuals building the future of intelligent LLM routing
           </p>
         </header>
-        
+
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>🌟 Core Team</h2>
@@ -146,8 +151,6 @@ export default function Team() {
               ))}
             </div>
           </section>
-
-
 
           <section className={styles.section}>
             <h2>🤝 Join Our Team</h2>
@@ -166,11 +169,11 @@ export default function Team() {
             <div className={styles.recognitionCard}>
               <h3>Contributor Recognition</h3>
               <p>
-                We believe in recognizing the valuable contributions of our community members. 
-                Contributors who show consistent dedication and quality work in specific areas 
+                We believe in recognizing the valuable contributions of our community members.
+                Contributors who show consistent dedication and quality work in specific areas
                 may be invited to become maintainers with write access to the repository.
               </p>
-              
+
               <div className={styles.pathToMaintainer}>
                 <h4>Path to Maintainership:</h4>
                 <div className={styles.steps}>
@@ -181,15 +184,18 @@ export default function Team() {
                       <p>Make consistent, quality contributions to your area of interest</p>
                     </div>
                   </div>
-                  
+
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>2</span>
                     <div>
                       <h5>Join a Working Group</h5>
-                      <p>Participate actively in one of our <a href="/community/work-groups">Working Groups</a></p>
+                      <p>
+                        Participate actively in one of our
+                        <a href="/community/work-groups">Working Groups</a>
+                      </p>
                     </div>
                   </div>
-                  
+
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>3</span>
                     <div>
@@ -197,7 +203,7 @@ export default function Team() {
                       <p>Receive nomination and approval from the maintainer team</p>
                     </div>
                   </div>
-                  
+
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>4</span>
                     <div>
@@ -220,7 +226,7 @@ export default function Team() {
                   Contributing Guide
                 </a>
               </div>
-              
+
               <div className={styles.involvementCard}>
                 <h3>👥 Join Working Groups</h3>
                 <p>Find your area of expertise and connect with like-minded contributors.</p>
@@ -228,7 +234,7 @@ export default function Team() {
                   View Work Groups
                 </a>
               </div>
-              
+
               <div className={styles.involvementCard}>
                 <h3>💬 Join Discussions</h3>
                 <p>Participate in community discussions and share your ideas.</p>
@@ -241,5 +247,5 @@ export default function Team() {
         </main>
       </div>
     </Layout>
-  );
+  )
 }

@@ -1,18 +1,18 @@
-import React from 'react';
-import clsx from 'clsx';
-import Link from '@docusaurus/Link';
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import Layout from '@theme/Layout';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
-import TypewriterCode from '@site/src/components/TypewriterCode';
-import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground';
-import AIChipAnimation from '@site/src/components/AIChipAnimation';
-import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection';
+import React from 'react'
+import clsx from 'clsx'
+import Link from '@docusaurus/Link'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import Layout from '@theme/Layout'
+import HomepageFeatures from '@site/src/components/HomepageFeatures'
+import TypewriterCode from '@site/src/components/TypewriterCode'
+import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground'
+import AIChipAnimation from '@site/src/components/AIChipAnimation'
+import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 
-import styles from './index.module.css';
+import styles from './index.module.css'
 
 function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
+  const { siteConfig } = useDocusaurusContext()
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <NeuralNetworkBackground />
@@ -26,11 +26,19 @@ function HomepageHeader() {
                 className={styles.vllmLogo}
               />
               <h1 className="hero__title">
-                <span className={styles.aiGlow}>AI-Powered</span> vLLM Semantic Router
+                <span className={styles.aiGlow}>AI-Powered</span>
+                {' '}
+                vLLM Semantic Router
               </h1>
             </div>
             <p className="hero__subtitle">
-              🧠 Intelligent <strong>Auto Reasoning</strong> Router for Efficient LLM Inference on <strong>Mixture-of-Models</strong>
+              🧠 Intelligent
+              {' '}
+              <strong>Auto Reasoning</strong>
+              {' '}
+              Router for Efficient LLM Inference on
+              {' '}
+              <strong>Mixture-of-Models</strong>
               <br />
               <span className={styles.techBadges}>
                 <span className={styles.techBadge}>🧬 Neural Networks</span>
@@ -46,13 +54,14 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
-            to="/docs/intro">
+            to="/docs/intro"
+          >
             🚀 Get Started - 5min ⏱️
           </Link>
         </div>
       </div>
     </header>
-  );
+  )
 }
 
 function AITechShowcase() {
@@ -94,7 +103,7 @@ function AITechShowcase() {
         </div>
       </div>
     </section>
-  );
+  )
 }
 
 function FlowDiagram() {
@@ -115,15 +124,16 @@ function FlowDiagram() {
         </div>
       </div>
     </section>
-  );
+  )
 }
 
 export default function Home() {
-  const {siteConfig} = useDocusaurusContext();
+  const { siteConfig } = useDocusaurusContext()
   return (
     <Layout
       title={`${siteConfig.title}`}
-      description="AI-Powered Intelligent Mixture-of-Models Router with Neural Network Processing">
+      description="AI-Powered Intelligent Mixture-of-Models Router with Neural Network Processing"
+    >
       <HomepageHeader />
       <main>
         <AITechShowcase />
@@ -151,5 +161,5 @@ export default function Home() {
         <AcknowledgementsSection />
       </main>
     </Layout>
-  );
+  )
 }

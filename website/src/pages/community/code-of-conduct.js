@@ -1,12 +1,13 @@
-import React from 'react';
-import Layout from '@theme/Layout';
-import styles from './community-page.module.css';
+import React from 'react'
+import Layout from '@theme/Layout'
+import styles from './community-page.module.css'
 
 export default function CodeOfConduct() {
   return (
     <Layout
       title="Code of Conduct"
-      description="vLLM Semantic Router Community Code of Conduct">
+      description="vLLM Semantic Router Community Code of Conduct"
+    >
       <div className={styles.container}>
         <header className={styles.header}>
           <h1>Code of Conduct 📜</h1>
@@ -14,7 +15,7 @@ export default function CodeOfConduct() {
             Our commitment to fostering an open, welcoming, and inclusive community.
           </p>
         </header>
-        
+
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>🤝 Our Pledge</h2>
@@ -47,7 +48,7 @@ export default function CodeOfConduct() {
                   <li>Focusing on what is best not just for us as individuals, but for the overall community</li>
                 </ul>
               </div>
-              
+
               <div className={styles.card}>
                 <h3>Examples of unacceptable behavior:</h3>
                 <ul>
@@ -100,7 +101,11 @@ export default function CodeOfConduct() {
                 reported to the community leaders responsible for enforcement through:
               </p>
               <ul>
-                <li><a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a> (for public issues)</li>
+                <li>
+                  <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
+                  {' '}
+                  (for public issues)
+                </li>
                 <li>Direct contact with project maintainers</li>
                 <li>Email to the project team</li>
               </ul>
@@ -119,30 +124,62 @@ export default function CodeOfConduct() {
                 Community leaders will follow these Community Impact Guidelines in determining
                 the consequences for any action they deem in violation of this Code of Conduct:
               </p>
-              
+
               <div className={styles.enforcementGrid}>
                 <div className={styles.enforcementItem}>
                   <h4>1. Correction</h4>
-                  <p><strong>Community Impact:</strong> Use of inappropriate language or other behavior deemed unprofessional or unwelcome in the community.</p>
-                  <p><strong>Consequence:</strong> A private, written warning from community leaders, providing clarity around the nature of the violation and an explanation of why the behavior was inappropriate.</p>
+                  <p>
+                    <strong>Community Impact:</strong>
+                    {' '}
+                    Use of inappropriate language or other behavior deemed unprofessional or unwelcome in the community.
+                  </p>
+                  <p>
+                    <strong>Consequence:</strong>
+                    {' '}
+                    A private, written warning from community leaders, providing clarity around the nature of the violation and an explanation of why the behavior was inappropriate.
+                  </p>
                 </div>
-                
+
                 <div className={styles.enforcementItem}>
                   <h4>2. Warning</h4>
-                  <p><strong>Community Impact:</strong> A violation through a single incident or series of actions.</p>
-                  <p><strong>Consequence:</strong> A warning with consequences for continued behavior. No interaction with the people involved for a specified period of time.</p>
+                  <p>
+                    <strong>Community Impact:</strong>
+                    {' '}
+                    A violation through a single incident or series of actions.
+                  </p>
+                  <p>
+                    <strong>Consequence:</strong>
+                    {' '}
+                    A warning with consequences for continued behavior. No interaction with the people involved for a specified period of time.
+                  </p>
                 </div>
-                
+
                 <div className={styles.enforcementItem}>
                   <h4>3. Temporary Ban</h4>
-                  <p><strong>Community Impact:</strong> A serious violation of community standards, including sustained inappropriate behavior.</p>
-                  <p><strong>Consequence:</strong> A temporary ban from any sort of interaction or public communication with the community for a specified period of time.</p>
+                  <p>
+                    <strong>Community Impact:</strong>
+                    {' '}
+                    A serious violation of community standards, including sustained inappropriate behavior.
+                  </p>
+                  <p>
+                    <strong>Consequence:</strong>
+                    {' '}
+                    A temporary ban from any sort of interaction or public communication with the community for a specified period of time.
+                  </p>
                 </div>
-                
+
                 <div className={styles.enforcementItem}>
                   <h4>4. Permanent Ban</h4>
-                  <p><strong>Community Impact:</strong> Demonstrating a pattern of violation of community standards, including sustained inappropriate behavior, harassment of an individual, or aggression toward or disparagement of classes of individuals.</p>
-                  <p><strong>Consequence:</strong> A permanent ban from any sort of public interaction within the community.</p>
+                  <p>
+                    <strong>Community Impact:</strong>
+                    {' '}
+                    Demonstrating a pattern of violation of community standards, including sustained inappropriate behavior, harassment of an individual, or aggression toward or disparagement of classes of individuals.
+                  </p>
+                  <p>
+                    <strong>Consequence:</strong>
+                    {' '}
+                    A permanent ban from any sort of public interaction within the community.
+                  </p>
                 </div>
               </div>
             </div>
@@ -152,13 +189,19 @@ export default function CodeOfConduct() {
             <h2>📚 Attribution</h2>
             <div className={styles.card}>
               <p>
-                This Code of Conduct is adapted from the <a href="https://www.contributor-covenant.org/" target="_blank" rel="noopener noreferrer">Contributor Covenant</a>,
-                version 2.0, available at <a href="https://www.contributor-covenant.org/version/2/0/code_of_conduct.html" target="_blank" rel="noopener noreferrer">https://www.contributor-covenant.org/version/2/0/code_of_conduct.html</a>.
+                This Code of Conduct is adapted from the
+                {' '}
+                <a href="https://www.contributor-covenant.org/" target="_blank" rel="noopener noreferrer">Contributor Covenant</a>
+                ,
+                version 2.0, available at
+                {' '}
+                <a href="https://www.contributor-covenant.org/version/2/0/code_of_conduct.html" target="_blank" rel="noopener noreferrer">https://www.contributor-covenant.org/version/2/0/code_of_conduct.html</a>
+                .
               </p>
             </div>
           </section>
         </main>
       </div>
     </Layout>
-  );
+  )
 }
