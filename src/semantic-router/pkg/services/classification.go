@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
 )
 
 // Global classification service instance

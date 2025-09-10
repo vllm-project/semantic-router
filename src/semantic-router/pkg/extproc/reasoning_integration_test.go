@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestReasoningModeIntegration tests the complete reasoning mode integration

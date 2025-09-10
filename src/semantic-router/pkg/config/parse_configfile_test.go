@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {

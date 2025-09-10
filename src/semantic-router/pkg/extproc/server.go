@@ -13,7 +13,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/fsnotify/fsnotify"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"google.golang.org/grpc"
 )
 

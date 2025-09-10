@@ -8,8 +8,8 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/openai/openai-go"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // handleResponseHeaders processes the response headers
