@@ -46,6 +46,7 @@ const sidebars = {
       items: [
         'getting-started/installation',
         'getting-started/configuration',
+        'getting-started/reasoning-routing-quickstart',
       ],
     },
     {
