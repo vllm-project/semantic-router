@@ -370,9 +370,6 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
-				// Track the model load for the selected model
-				r.Classifier.IncrementModelLoad(matchedModel)
-
 				// Track the model routing change
 				metrics.RecordModelRouting(originalModel, matchedModel)
 

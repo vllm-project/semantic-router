@@ -60,7 +60,6 @@ classifier:
     use_cpu: true
     use_modernbert: false
     pii_mapping_path: "/path/to/pii.json"
-  load_aware: true
 
 categories:
   - name: "general"
@@ -138,7 +137,6 @@ tools:
 				// Verify classifier config
 				Expect(cfg.Classifier.CategoryModel.ModelID).To(Equal("test-category-model"))
 				Expect(cfg.Classifier.CategoryModel.UseModernBERT).To(BeTrue())
-				Expect(cfg.Classifier.LoadAware).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))

@@ -2,6 +2,7 @@ package pii
 
 import (
 	"log"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/semantic-router/pkg/config"
 )
@@ -59,14 +60,7 @@ func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, 
 		}
 
 		// If allow_by_default is false, check if this PII type is explicitly allowed
-		isAllowed := false
-		for _, allowedPII := range policy.PIITypes {
-			if allowedPII == piiType {
-				isAllowed = true
-				break
-			}
-		}
-
+		isAllowed := slices.Contains(policy.PIITypes, piiType)
 		if !isAllowed {
 			deniedPII = append(deniedPII, piiType)
 		}

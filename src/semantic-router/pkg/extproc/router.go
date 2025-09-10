@@ -131,8 +131,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create utility components
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-	modelTTFT := make(map[string]float64) // Empty TTFT map since load balancing is disabled
-	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping, modelTTFT)
+	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
 
 	// Create global classification service for API access
 	services.NewClassificationService(classifier, cfg)
