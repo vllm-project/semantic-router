@@ -1,4 +1,4 @@
-name: Run Test
+name: Test And Build
 
 on:
   schedule:

@@ -5,7 +5,6 @@ import (
 	"log"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -35,6 +34,40 @@ func createCategoryInference(useModernBERT bool) CategoryInference {
 		return &ModernBertCategoryInference{}
 	}
 	return &LinearCategoryInference{}
+}
+
+type JailbreakInitializer interface {
+	Init(modelID string, useCPU bool, numClasses ...int) error
+}
+
+type LinearJailbreakInitializer struct{}
+
+func (c *LinearJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
+	}
+	log.Printf("Initialized linear jailbreak classifier with %d classes", numClasses[0])
+	return nil
+}
+
+type ModernBertJailbreakInitializer struct{}
+
+func (c *ModernBertJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier: %w", err)
+	}
+	log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
+	return nil
+}
+
+// createJailbreakInitializer creates the appropriate jailbreak initializer based on configuration
+func createJailbreakInitializer(useModernBERT bool) JailbreakInitializer {
+	if useModernBERT {
+		return &ModernBertJailbreakInitializer{}
+	}
+	return &LinearJailbreakInitializer{}
 }
 
 type JailbreakInference interface {
@@ -105,35 +138,31 @@ type PIIAnalysisResult struct {
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	// Dependencies
-	categoryInference  CategoryInference
-	jailbreakInference JailbreakInference
-	piiInference       PIIInference
+	categoryInference    CategoryInference
+	jailbreakInitializer JailbreakInitializer
+	jailbreakInference   JailbreakInference
+	piiInference         PIIInference
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
-	// Model selection fields
-	ModelLoad     map[string]int
-	ModelLoadLock sync.Mutex
-	ModelTTFT     map[string]float64
 	// Jailbreak detection state
 	JailbreakInitialized bool
 }
 
 // NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
-func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping, modelTTFT map[string]float64) *Classifier {
+func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) *Classifier {
 	return &Classifier{
-		categoryInference:  createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
-		jailbreakInference: createJailbreakInference(cfg.PromptGuard.UseModernBERT),
-		piiInference:       createPIIInference(),
+		categoryInference:    createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
+		jailbreakInitializer: createJailbreakInitializer(cfg.PromptGuard.UseModernBERT),
+		jailbreakInference:   createJailbreakInference(cfg.PromptGuard.UseModernBERT),
+		piiInference:         createPIIInference(),
 
 		Config:               cfg,
 		CategoryMapping:      categoryMapping,
 		PIIMapping:           piiMapping,
 		JailbreakMapping:     jailbreakMapping,
-		ModelLoad:            make(map[string]int),
-		ModelTTFT:            modelTTFT,
 		JailbreakInitialized: false,
 	}
 }
@@ -149,21 +178,8 @@ func (c *Classifier) InitializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
-	var err error
-	if c.Config.PromptGuard.UseModernBERT {
-		// Initialize ModernBERT jailbreak classifier
-		err = candle_binding.InitModernBertJailbreakClassifier(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier: %w", err)
-		}
-		log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
-	} else {
-		// Initialize linear jailbreak classifier
-		err = candle_binding.InitJailbreakClassifier(c.Config.PromptGuard.ModelID, numClasses, c.Config.PromptGuard.UseCPU)
-		if err != nil {
-			return fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
-		}
-		log.Printf("Initialized linear jailbreak classifier with %d classes", numClasses)
+	if err := c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses); err != nil {
+		return err
 	}
 
 	c.JailbreakInitialized = true
@@ -446,55 +462,49 @@ func (c *Classifier) ClassifyAndSelectBestModel(query string) string {
 
 // SelectBestModelForCategory selects the best model from a category based on score and TTFT
 func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
-	var cat *config.Category
-	for i, category := range c.Config.Categories {
-		if strings.EqualFold(category.Name, categoryName) {
-			cat = &c.Config.Categories[i]
-			break
-		}
-	}
-
+	cat := c.findCategory(categoryName)
 	if cat == nil {
 		log.Printf("Could not find matching category %s in config, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-
-	bestModel := ""
-	bestScore := -1.0
-	bestQuality := 0.0
-
-	if c.Config.Classifier.LoadAware {
-		c.forEachModelScore(cat, func(modelScore config.ModelScore) {
-			quality := modelScore.Score
-			model := modelScore.Model
-			baseTTFT := c.ModelTTFT[model]
-			load := c.ModelLoad[model]
-			estTTFT := baseTTFT * (1 + float64(load))
-			if estTTFT == 0 {
-				estTTFT = 1
-			}
-			score := quality / estTTFT
-			c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
-		})
-	} else {
-		c.forEachModelScore(cat, func(modelScore config.ModelScore) {
-			quality := modelScore.Score
-			model := modelScore.Model
-			c.updateBestModel(quality, quality, model, &bestScore, &bestQuality, &bestModel)
-		})
-	}
+	bestModel, bestScore := c.selectBestModelInternal(cat, nil)
 
 	if bestModel == "" {
 		log.Printf("No models found for category %s, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
-	log.Printf("Selected model %s for category %s with quality %.4f and combined score %.4e",
-		bestModel, categoryName, bestQuality, bestScore)
+	log.Printf("Selected model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
+}
+
+// findCategory finds the category configuration by name (case-insensitive)
+func (c *Classifier) findCategory(categoryName string) *config.Category {
+	for i, category := range c.Config.Categories {
+		if strings.EqualFold(category.Name, categoryName) {
+			return &c.Config.Categories[i]
+		}
+	}
+	return nil
+}
+
+// selectBestModelInternal performs the core model selection logic
+//
+// modelFilter is optional - if provided, only models passing the filter will be considered
+func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter func(string) bool) (string, float64) {
+	bestModel := ""
+	bestScore := -1.0
+
+	c.forEachModelScore(cat, func(modelScore config.ModelScore) {
+		model := modelScore.Model
+		if modelFilter != nil && !modelFilter(model) {
+			return
+		}
+		c.updateBestModel(modelScore.Score, model, &bestScore, &bestModel)
+	})
+
+	return bestModel, bestScore
 }
 
 // forEachModelScore traverses the ModelScores document of the category and executes the callback for each element.
@@ -510,56 +520,23 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		return c.Config.DefaultModel
 	}
 
-	// Find the category configuration
-	var cat *config.Category
-	for i, category := range c.Config.Categories {
-		if strings.EqualFold(category.Name, categoryName) {
-			cat = &c.Config.Categories[i]
-			break
-		}
-	}
-
+	cat := c.findCategory(categoryName)
 	if cat == nil {
 		// Return first candidate if category not found
 		return candidateModels[0]
 	}
 
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-
-	bestModel := ""
-	bestScore := -1.0
-	bestQuality := 0.0
-
-	filteredFn := func(modelScore config.ModelScore) {
-		model := modelScore.Model
-		if !slices.Contains(candidateModels, model) {
-			return
-		}
-		quality := modelScore.Score
-		if c.Config.Classifier.LoadAware {
-			baseTTFT := c.ModelTTFT[model]
-			load := c.ModelLoad[model]
-			estTTFT := baseTTFT * (1 + float64(load))
-			if estTTFT == 0 {
-				estTTFT = 1 // avoid div by zero
-			}
-			score := quality / estTTFT
-			c.updateBestModel(score, quality, model, &bestScore, &bestQuality, &bestModel)
-		} else {
-			c.updateBestModel(quality, quality, model, &bestScore, &bestQuality, &bestModel)
-		}
-	}
-
-	c.forEachModelScore(cat, filteredFn)
+	bestModel, bestScore := c.selectBestModelInternal(cat,
+		func(model string) bool {
+			return slices.Contains(candidateModels, model)
+		})
 
 	if bestModel == "" {
 		log.Printf("No suitable model found from candidates for category %s, using first candidate", categoryName)
 		return candidateModels[0]
 	}
 
-	log.Printf("Selected best model %s for category %s with quality %.4f and combined score %.4e",
-		bestModel, categoryName, bestQuality, bestScore)
+	log.Printf("Selected best model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
@@ -579,27 +556,10 @@ func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	return models
 }
 
-// IncrementModelLoad increments the load counter for a model
-func (c *Classifier) IncrementModelLoad(model string) {
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-	c.ModelLoad[model]++
-}
-
-// DecrementModelLoad decrements the load counter for a model
-func (c *Classifier) DecrementModelLoad(model string) {
-	c.ModelLoadLock.Lock()
-	defer c.ModelLoadLock.Unlock()
-	if c.ModelLoad[model] > 0 {
-		c.ModelLoad[model]--
-	}
-}
-
-// updateBestModel updates the best model, score, and quality if the new score is better.
-func (c *Classifier) updateBestModel(score, quality float64, model string, bestScore *float64, bestQuality *float64, bestModel *string) {
+// updateBestModel updates the best model, score if the new score is better.
+func (c *Classifier) updateBestModel(score float64, model string, bestScore *float64, bestModel *string) {
 	if score > *bestScore {
 		*bestScore = score
 		*bestModel = model
-		*bestQuality = quality
 	}
 }

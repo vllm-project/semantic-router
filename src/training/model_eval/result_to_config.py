@@ -117,7 +117,6 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
                 "use_cpu": True,
                 "pii_mapping_path": "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
             },
-            "load_aware": False,
         },
         "categories": [],
         "default_reasoning_effort": "medium",  # Default reasoning effort level (low, medium, high)

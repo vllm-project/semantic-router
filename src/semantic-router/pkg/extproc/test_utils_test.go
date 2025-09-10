@@ -95,7 +95,6 @@ func CreateTestConfig() *config.RouterConfig {
 				UseCPU         bool    `yaml:"use_cpu"`
 				PIIMappingPath string  `yaml:"pii_mapping_path"`
 			} `yaml:"pii_model"`
-			LoadAware bool `yaml:"load_aware"`
 		}{
 			CategoryModel: struct {
 				ModelID             string  `yaml:"model_id"`
@@ -119,7 +118,6 @@ func CreateTestConfig() *config.RouterConfig {
 				UseCPU:         true,
 				PIIMappingPath: "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
 			},
-			LoadAware: true,
 		},
 		Categories: []config.Category{
 			{
@@ -220,11 +218,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
 	// Create classifier
-	modelTTFT := map[string]float64{
-		"model-a": 2.5,
-		"model-b": 1.8,
-	}
-	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil, modelTTFT)
+	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
 
 	// Create PII checker
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)

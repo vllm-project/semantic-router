@@ -52,7 +52,6 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			float64(completionTokens),
 		)
 		metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
-		r.Classifier.DecrementModelLoad(ctx.RequestModel)
 
 		// Compute and record cost if pricing is configured
 		if r.Config != nil {

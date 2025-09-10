@@ -112,7 +112,6 @@ classifier:
     threshold: 0.7
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
-  load_aware: false
 categories:
 - name: business
   use_reasoning: false
