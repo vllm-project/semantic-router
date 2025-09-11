@@ -563,45 +563,53 @@ func (s *ClassificationAPIServer) processConcurrently(texts []string, options *C
 	if s.config != nil && s.config.API.BatchClassification.MaxConcurrency > 0 {
 		maxConcurrency = s.config.API.BatchClassification.MaxConcurrency
 	}
+	// Get the actual number of workers to start
+	numWorkers := min(len(texts), maxConcurrency)
 
 	results := make([]services.Classification, len(texts))
 	errors := make([]error, len(texts))
 
-	semaphore := make(chan struct{}, maxConcurrency)
+	// Create a channel for tasks
+	taskChan := make(chan int, batchSize)
 	var wg sync.WaitGroup
 
-	for i, text := range texts {
+	// Start a fixed number of worker goroutines
+	for i := range numWorkers {
 		wg.Add(1)
-		go func(index int, txt string) {
+		go func(workerID int) {
 			defer wg.Done()
 
 			// Record goroutine start (if detailed tracking is enabled)
 			metricsConfig := metrics.GetBatchMetricsConfig()
 			if metricsConfig.DetailedGoroutineTracking {
 				metrics.ConcurrentGoroutines.WithLabelValues(batchID).Inc()
-
-				defer func() {
-					// Record goroutine end
-					metrics.ConcurrentGoroutines.WithLabelValues(batchID).Dec()
-				}()
+				// Record goroutine end
+				defer metrics.ConcurrentGoroutines.WithLabelValues(batchID).Dec()
 			}
 
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			// TODO: Refactor candle-binding to support batch mode for better performance
-			// This would allow processing multiple texts in a single model inference call
-			// instead of individual calls, significantly improving throughput
-			result, err := s.classifySingleText(txt, options)
-			if err != nil {
-				errors[index] = err
-				metrics.RecordBatchClassificationError(processingType, "classification_failed")
-				return
+			// Worker goroutine loops to process tasks from the channel
+			for taskIndex := range taskChan {
+				// TODO: Refactor candle-binding to support batch mode for better performance
+				// This would allow processing multiple texts in a single model inference call
+				// instead of individual calls, significantly improving throughput
+				result, err := s.classifySingleText(texts[taskIndex], options)
+				if err != nil {
+					errors[taskIndex] = err
+					metrics.RecordBatchClassificationError(processingType, "classification_failed")
+					continue
+				}
+				results[taskIndex] = result
 			}
-			results[index] = result
-		}(i, text)
+		}(i)
 	}
 
+	// Send tasks to the channel
+	for i := range texts {
+		taskChan <- i
+	}
+	close(taskChan)
+
+	// Wait for all workers to finish processing
 	wg.Wait()
 
 	// Check for errors
