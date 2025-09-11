@@ -96,7 +96,6 @@ example_prd.txt
 .windsurfrules
 scripts/prd.txt
 .env.taskmaster
-package-lock.json
 
 website/build
 .docusaurus

@@ -27,9 +27,11 @@ repos:
     hooks:
       -   id: js-lint
           name: js lint
-          entry: bash -c 'cd website && npm install eslint && npm run lint'
+          entry: bash -c 'cd website && npm install 2>/dev/null || true && npm run lint'
           language: system
           files: \.js$
+          exclude: ^(\node_modules/)
+          pass_filenames: false
 
 # Rust specific hooks  
 -   repo: local
