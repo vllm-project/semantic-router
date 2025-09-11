@@ -49,6 +49,7 @@ func createCategoryInitializer(useModernBERT bool) CategoryInitializer {
 
 type CategoryInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
+	ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error)
 }
 
 type LinearCategoryInference struct{}
@@ -57,10 +58,18 @@ func (c *LinearCategoryInference) Classify(text string) (candle_binding.ClassRes
 	return candle_binding.ClassifyText(text)
 }
 
+func (c *LinearCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	return candle_binding.ClassifyTextWithProbabilities(text)
+}
+
 type ModernBertCategoryInference struct{}
 
 func (c *ModernBertCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return candle_binding.ClassifyModernBertText(text)
+}
+
+func (c *ModernBertCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	return candle_binding.ClassifyModernBertTextWithProbabilities(text)
 }
 
 // createCategoryInference creates the appropriate category inference based on configuration
@@ -457,8 +466,8 @@ func (c *Classifier) initializePIIClassifier() error {
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
-	if c.CategoryMapping == nil {
-		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category mapping not initialized")
+	if !c.IsCategoryEnabled() {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category classification is not properly configured")
 	}
 
 	// Get full probability distribution
@@ -466,13 +475,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 	var err error
 
 	start := time.Now()
-	if c.Config.Classifier.CategoryModel.UseModernBERT {
-		// Use ModernBERT classifier with full probability distribution support
-		result, err = candle_binding.ClassifyModernBertTextWithProbabilities(text)
-	} else {
-		// Use linear classifier with full probability distribution
-		result, err = candle_binding.ClassifyTextWithProbabilities(text)
-	}
+	result, err = c.categoryInference.ClassifyWithProbabilities(text)
 	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
 
 	if err != nil {

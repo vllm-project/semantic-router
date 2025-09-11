@@ -1,7 +1,9 @@
 package entropy
 
 import (
+	"cmp"
 	"math"
+	"slices"
 )
 
 // EntropyResult contains the results of entropy-based analysis
@@ -128,34 +130,13 @@ func MakeEntropyBasedReasoningDecision(
 
 	case "high":
 		// High uncertainty - use weighted decision from top 2 categories
-		weightedReasoningScore := 0.0
-		totalWeight := 0.0
-		for i := 0; i < min(2, len(topCategories)); i++ {
-			cat := topCategories[i]
-			if useReasoning, exists := categoryReasoningMap[cat.Category]; exists {
-				weight := float64(cat.Probability)
-				if useReasoning {
-					weightedReasoningScore += weight
-				}
-				totalWeight += weight
-			}
+		topTwoCategories := topCategories
+		if len(topTwoCategories) > 2 {
+			topTwoCategories = topTwoCategories[:2]
 		}
-
-		useReasoning := false
-		confidence := 0.5
-		if totalWeight > 0 {
-			reasoningRatio := weightedReasoningScore / totalWeight
-			useReasoning = reasoningRatio > 0.5
-			confidence = math.Abs(reasoningRatio-0.5) + 0.5 // Convert to confidence
-		}
-
-		return ReasoningDecision{
-			UseReasoning:     useReasoning,
-			Confidence:       confidence,
-			DecisionReason:   "high_uncertainty_weighted_decision",
-			FallbackStrategy: "top_two_categories_weighted",
-			TopCategories:    topCategories,
-		}
+		decision := makeWeightedDecision(topTwoCategories, categoryReasoningMap, "high_uncertainty_weighted_decision")
+		decision.FallbackStrategy = "top_two_categories_weighted"
+		return decision
 
 	case "medium":
 		// Medium uncertainty - trust top category if above threshold, otherwise weighted
@@ -228,13 +209,9 @@ func getTopCategories(probabilities []float32, categoryNames []string, topN int)
 	}
 
 	// Sort by probability (descending)
-	for i := 0; i < len(pairs)-1; i++ {
-		for j := i + 1; j < len(pairs); j++ {
-			if pairs[j].Probability > pairs[i].Probability {
-				pairs[i], pairs[j] = pairs[j], pairs[i]
-			}
-		}
-	}
+	slices.SortFunc(pairs, func(a, b CategoryProbability) int {
+		return cmp.Compare(b.Probability, a.Probability) // Note: b, a for descending
+	})
 
 	// Return top N
 	n := min(topN, len(pairs))

@@ -221,3 +221,133 @@ func TestGetTopCategories(t *testing.T) {
 		t.Errorf("Expected third category to be physics with 0.15, got %s with %f", result[2].Category, result[2].Probability)
 	}
 }
+
+// TestEntropyCalculationConsistency tests that entropy calculations are consistent across different scenarios
+func TestEntropyCalculationConsistency(t *testing.T) {
+	testCases := []struct {
+		name          string
+		probabilities []float32
+		description   string
+	}{
+		{
+			name:          "Identical high confidence distributions",
+			probabilities: []float32{0.9, 0.05, 0.03, 0.02},
+			description:   "Both calculations should produce identical entropy for same probability distribution",
+		},
+		{
+			name:          "Identical medium uncertainty distributions",
+			probabilities: []float32{0.5, 0.3, 0.15, 0.05},
+			description:   "Both calculations should handle medium uncertainty identically",
+		},
+		{
+			name:          "Identical uniform distributions",
+			probabilities: []float32{0.25, 0.25, 0.25, 0.25},
+			description:   "Both calculations should handle maximum entropy identically",
+		},
+	}
+
+	categoryNames := []string{"physics", "biology", "chemistry", "other"}
+	categoryReasoningMap := map[string]bool{
+		"physics":   false,
+		"biology":   false,
+		"chemistry": true,
+		"other":     true,
+	}
+	threshold := 0.7
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test with same probability distribution for consistency
+			decision1 := MakeEntropyBasedReasoningDecision(
+				tc.probabilities, categoryNames, categoryReasoningMap, threshold)
+
+			decision2 := MakeEntropyBasedReasoningDecision(
+				tc.probabilities, categoryNames, categoryReasoningMap, threshold)
+
+			// Verify decisions are identical
+			if decision1.UseReasoning != decision2.UseReasoning {
+				t.Errorf("Decisions should be identical, got %v vs %v",
+					decision1.UseReasoning, decision2.UseReasoning)
+			}
+
+			if decision1.DecisionReason != decision2.DecisionReason {
+				t.Errorf("Decision reasons should be identical, got '%s' vs '%s'",
+					decision1.DecisionReason, decision2.DecisionReason)
+			}
+
+			// Verify entropy calculations are consistent
+			entropy1 := CalculateEntropy(tc.probabilities)
+			entropy2 := CalculateEntropy(tc.probabilities)
+
+			if math.Abs(entropy1-entropy2) > 0.001 {
+				t.Errorf("Entropy calculations should be identical, got %.6f vs %.6f",
+					entropy1, entropy2)
+			}
+
+			t.Logf("Consistency test '%s' passed: %s", tc.name, tc.description)
+		})
+	}
+}
+
+// TestEntropyMetricsIntegration tests that entropy integrates properly with metrics calculations
+func TestEntropyMetricsIntegration(t *testing.T) {
+	// Test that entropy calculations work with the metrics system
+	testCases := []struct {
+		name                string
+		probabilities       []float32
+		expectedEntropy     float64
+		expectedUncertainty string
+		tolerance           float64
+	}{
+		{
+			name:                "Low entropy metrics",
+			probabilities:       []float32{0.85, 0.08, 0.04, 0.03},
+			expectedEntropy:     0.828,    // Corrected based on actual calculation
+			expectedUncertainty: "medium", // Corrected based on actual normalized entropy
+			tolerance:           0.01,
+		},
+		{
+			name:                "High entropy metrics",
+			probabilities:       []float32{0.4, 0.35, 0.15, 0.1},
+			expectedEntropy:     1.802,       // Corrected based on actual calculation
+			expectedUncertainty: "very_high", // Corrected based on actual normalized entropy
+			tolerance:           0.01,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Calculate entropy using the entropy package
+			entropyValue := CalculateEntropy(tc.probabilities)
+
+			if math.Abs(entropyValue-tc.expectedEntropy) > tc.tolerance {
+				t.Errorf("Expected entropy %.3f, got %.3f (tolerance: %.3f)",
+					tc.expectedEntropy, entropyValue, tc.tolerance)
+			}
+
+			// Calculate normalized entropy for uncertainty level using the package
+			normalizedEntropy := CalculateNormalizedEntropy(tc.probabilities)
+
+			var uncertaintyLevel string
+			if normalizedEntropy >= 0.8 {
+				uncertaintyLevel = "very_high"
+			} else if normalizedEntropy >= 0.6 {
+				uncertaintyLevel = "high"
+			} else if normalizedEntropy >= 0.4 {
+				uncertaintyLevel = "medium"
+			} else if normalizedEntropy >= 0.2 {
+				uncertaintyLevel = "low"
+			} else {
+				uncertaintyLevel = "very_low"
+			}
+
+			if uncertaintyLevel != tc.expectedUncertainty {
+				t.Errorf("Expected uncertainty level '%s', got '%s'",
+					tc.expectedUncertainty, uncertaintyLevel)
+			}
+
+			t.Logf("Entropy metrics test '%s' passed: entropy=%.3f, uncertainty=%s",
+				tc.name, entropyValue, uncertaintyLevel)
+		})
+	}
+}

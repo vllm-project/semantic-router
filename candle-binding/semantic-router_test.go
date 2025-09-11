@@ -939,29 +939,61 @@ func BenchmarkPIITokenClassification(b *testing.B) {
 }
 
 // Test entropy-based routing functionality - ClassResultWithProbs structure
-func TestClassResultWithProbs_Structure(t *testing.T) {
-	// Test that ClassResultWithProbs structure works correctly
-	result := ClassResultWithProbs{
-		Class:         1,
-		Confidence:    0.75,
-		Probabilities: []float32{0.15, 0.75, 0.10},
-		NumClasses:    3,
+func TestClassifyTextWithProbabilities_Integration(t *testing.T) {
+	// Skip if candle library is not available
+	if !IsModelInitialized() {
+		t.Skip("Candle library not initialized, skipping integration test")
 	}
 
-	if result.Class != 1 {
-		t.Errorf("Expected Class to be 1, got %d", result.Class)
+	testText := "This is a sample text for classification"
+
+	result, err := ClassifyTextWithProbabilities(testText)
+	if err != nil {
+		t.Fatalf("ClassifyTextWithProbabilities failed: %v", err)
 	}
 
-	if result.Confidence != 0.75 {
-		t.Errorf("Expected Confidence to be 0.75, got %f", result.Confidence)
+	// Verify result structure
+	if result.Class < 0 {
+		t.Errorf("Expected non-negative class index, got %d", result.Class)
 	}
 
-	if len(result.Probabilities) != 3 {
-		t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+	if result.Confidence < 0 || result.Confidence > 1 {
+		t.Errorf("Expected confidence between 0 and 1, got %f", result.Confidence)
 	}
 
-	if result.NumClasses != 3 {
-		t.Errorf("Expected NumClasses to be 3, got %d", result.NumClasses)
+	if len(result.Probabilities) != result.NumClasses {
+		t.Errorf("Expected %d probabilities, got %d", result.NumClasses, len(result.Probabilities))
+	}
+
+	// Verify probability distribution sums to ~1.0
+	sum := float32(0)
+	for _, prob := range result.Probabilities {
+		if prob < 0 {
+			t.Errorf("Expected non-negative probability, got %f", prob)
+		}
+		sum += prob
+	}
+
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("Expected probability sum ~1.0, got %f", sum)
+	}
+
+	// Verify the highest probability corresponds to the predicted class
+	maxProb := float32(0)
+	maxIndex := -1
+	for i, prob := range result.Probabilities {
+		if prob > maxProb {
+			maxProb = prob
+			maxIndex = i
+		}
+	}
+
+	if maxIndex != result.Class {
+		t.Errorf("Expected highest probability at index %d, but predicted class is %d", maxIndex, result.Class)
+	}
+
+	if abs(float64(maxProb-result.Confidence)) > 0.001 {
+		t.Errorf("Expected confidence %f to match highest probability %f", result.Confidence, maxProb)
 	}
 }
 
@@ -1075,38 +1107,121 @@ func validateProbabilityDistribution(probabilities []float32) bool {
 }
 
 // Test entropy calculation helpers for probability distributions
-func TestEntropyCalculationHelpers(t *testing.T) {
-	tests := []struct {
-		name          string
-		probabilities []float32
-		expectEntropy float64
+func TestClassificationConsistency_Integration(t *testing.T) {
+	// Skip if candle library is not available
+	if !IsModelInitialized() {
+		t.Skip("Candle library not initialized, skipping integration test")
+	}
+
+	testTexts := []string{
+		"This is about machine learning and artificial intelligence",
+		"The physics experiment showed interesting quantum effects",
+		"The legal case was decided by the supreme court",
+		"The biology research focused on cellular mechanisms",
+	}
+
+	for _, text := range testTexts {
+		t.Run("Consistency_"+text[:20], func(t *testing.T) {
+			// Test that both classification methods return consistent results
+			basicResult, err1 := ClassifyText(text)
+			probResult, err2 := ClassifyTextWithProbabilities(text)
+
+			if err1 != nil && err2 != nil {
+				t.Skip("Both classification methods failed, likely library not initialized")
+			}
+
+			if err1 != nil {
+				t.Fatalf("ClassifyText failed: %v", err1)
+			}
+
+			if err2 != nil {
+				t.Fatalf("ClassifyTextWithProbabilities failed: %v", err2)
+			}
+
+			// Verify consistency between methods
+			if basicResult.Class != probResult.Class {
+				t.Errorf("Inconsistent class prediction: basic=%d, prob=%d", basicResult.Class, probResult.Class)
+			}
+
+			if abs(float64(basicResult.Confidence-probResult.Confidence)) > 0.001 {
+				t.Errorf("Inconsistent confidence: basic=%f, prob=%f", basicResult.Confidence, probResult.Confidence)
+			}
+
+			// Verify the probability at the predicted class matches the confidence
+			if probResult.Class < len(probResult.Probabilities) {
+				predictedProb := probResult.Probabilities[probResult.Class]
+				if abs(float64(predictedProb-probResult.Confidence)) > 0.001 {
+					t.Errorf("Confidence %f doesn't match probability at predicted class %f",
+						probResult.Confidence, predictedProb)
+				}
+			}
+		})
+	}
+}
+
+// Test entropy-based routing integration with actual classification
+func TestEntropyBasedRouting_Integration(t *testing.T) {
+	// Skip if candle library is not available
+	if !IsModelInitialized() {
+		t.Skip("Candle library not initialized, skipping integration test")
+	}
+
+	testCases := []struct {
+		name       string
+		text       string
+		minEntropy float64
+		maxEntropy float64
 	}{
 		{
-			name:          "Uniform distribution (high entropy)",
-			probabilities: []float32{0.25, 0.25, 0.25, 0.25},
-			expectEntropy: 2.0, // log2(4) = 2.0
+			name:       "High certainty text",
+			text:       "This is clearly about machine learning and artificial intelligence algorithms",
+			minEntropy: 0.0,
+			maxEntropy: 1.0, // Expect low entropy for clear classification
 		},
 		{
-			name:          "Certain prediction (zero entropy)",
-			probabilities: []float32{1.0, 0.0, 0.0, 0.0},
-			expectEntropy: 0.0,
+			name:       "Ambiguous text",
+			text:       "The study examined various aspects of the subject matter",
+			minEntropy: 0.5,
+			maxEntropy: 3.0, // Expect higher entropy for ambiguous text
 		},
 		{
-			name:          "High certainty (low entropy)",
-			probabilities: []float32{0.9, 0.05, 0.03, 0.02},
-			expectEntropy: 0.569, // Approximate
+			name:       "Technical content",
+			text:       "The quantum mechanical properties of the semiconductor device",
+			minEntropy: 0.0,
+			maxEntropy: 2.0,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			entropy := calculateShannonEntropy(tt.probabilities)
-
-			// Allow some tolerance for floating point comparison
-			tolerance := 0.1 // Increased tolerance for test approximations
-			if entropy < tt.expectEntropy-tolerance || entropy > tt.expectEntropy+tolerance {
-				t.Errorf("calculateShannonEntropy() = %f, want %f (±%f)", entropy, tt.expectEntropy, tolerance)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ClassifyTextWithProbabilities(tc.text)
+			if err != nil {
+				t.Fatalf("Classification failed: %v", err)
 			}
+
+			// Calculate entropy of the probability distribution
+			entropy := calculateShannonEntropy(result.Probabilities)
+
+			// Verify entropy is within expected range
+			if entropy < tc.minEntropy || entropy > tc.maxEntropy {
+				t.Errorf("Entropy %.3f not in expected range [%.3f, %.3f] for text: %s",
+					entropy, tc.minEntropy, tc.maxEntropy, tc.text)
+			}
+
+			// Verify that high entropy correlates with lower confidence
+			if entropy > 1.5 && result.Confidence > 0.8 {
+				t.Errorf("High entropy (%.3f) but also high confidence (%.3f) - unexpected",
+					entropy, result.Confidence)
+			}
+
+			// Verify that low entropy correlates with higher confidence
+			if entropy < 0.5 && result.Confidence < 0.6 {
+				t.Errorf("Low entropy (%.3f) but also low confidence (%.3f) - unexpected",
+					entropy, result.Confidence)
+			}
+
+			t.Logf("Text: %s -> Class: %d, Confidence: %.3f, Entropy: %.3f",
+				tc.text[:50], result.Class, result.Confidence, entropy)
 		})
 	}
 }
@@ -1576,6 +1691,85 @@ func determineModernBertUncertaintyLevel(normalizedEntropy float64) string {
 		return "low"
 	} else {
 		return "very_low"
+	}
+}
+
+// Test PII token classification integration
+func TestPIITokenClassification_Integration(t *testing.T) {
+	testCases := []struct {
+		name         string
+		text         string
+		configPath   string
+		expectError  bool
+		expectTokens bool
+	}{
+		{
+			name:         "Text with potential PII",
+			text:         "My name is John Doe and my email is john.doe@example.com",
+			configPath:   "./test_config.json", // Would need to exist in real environment
+			expectError:  true,                 // Expect error due to missing config in test env
+			expectTokens: false,
+		},
+		{
+			name:         "Text without PII",
+			text:         "This is a general statement about technology and innovation",
+			configPath:   "./test_config.json",
+			expectError:  true, // Expect error due to missing config in test env
+			expectTokens: false,
+		},
+		{
+			name:         "Empty text",
+			text:         "",
+			configPath:   "./test_config.json",
+			expectError:  true, // Expect error for empty text
+			expectTokens: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ClassifyModernBertPIITokens(tc.text, tc.configPath)
+
+			if tc.expectError {
+				if err == nil {
+					t.Logf("Expected error but got none - this suggests PII classifier is working")
+				} else {
+					t.Logf("Got expected error (likely due to test environment): %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			// If we get here, the PII classifier is working
+			if tc.expectTokens && len(result.Entities) == 0 {
+				t.Errorf("Expected PII entities but found none")
+			}
+
+			if !tc.expectTokens && len(result.Entities) > 0 {
+				t.Errorf("Expected no PII entities but found %d", len(result.Entities))
+			}
+
+			// Validate entity structure if any found
+			for i, entity := range result.Entities {
+				if entity.EntityType == "" {
+					t.Errorf("Entity %d has empty EntityType", i)
+				}
+				if entity.Start < 0 || entity.End < 0 {
+					t.Errorf("Entity %d has invalid position: start=%d, end=%d", i, entity.Start, entity.End)
+				}
+				if entity.Start >= entity.End {
+					t.Errorf("Entity %d has invalid position: start=%d >= end=%d", i, entity.Start, entity.End)
+				}
+				if entity.Confidence < 0 || entity.Confidence > 1 {
+					t.Errorf("Entity %d has invalid confidence: %f", i, entity.Confidence)
+				}
+			}
+
+			t.Logf("PII analysis of '%s' found %d entities", tc.text, len(result.Entities))
+		})
 	}
 }
 

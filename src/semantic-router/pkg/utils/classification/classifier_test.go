@@ -2,7 +2,6 @@ package classification
 
 import (
 	"errors"
-	"math"
 	"strings"
 	"testing"
 
@@ -11,6 +10,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
 func TestClassifier(t *testing.T) {
@@ -19,12 +19,18 @@ func TestClassifier(t *testing.T) {
 }
 
 type MockCategoryInference struct {
-	classifyResult candle_binding.ClassResult
-	classifyError  error
+	classifyResult          candle_binding.ClassResult
+	classifyError           error
+	classifyWithProbsResult candle_binding.ClassResultWithProbs
+	classifyWithProbsError  error
 }
 
 func (m *MockCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
 	return m.classifyResult, m.classifyError
+}
+
+func (m *MockCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	return m.classifyWithProbsResult, m.classifyWithProbsError
 }
 
 type MockCategoryInitializer struct{ InitError error }
@@ -183,6 +189,81 @@ var _ = Describe("category classification and model selection", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(category).To(Equal(""))
 				Expect(score).To(BeNumerically("~", 0.8, 0.001))
+			})
+		})
+	})
+
+	Describe("category classification with entropy", func() {
+		Context("when category mapping is not initialized", func() {
+			It("should return error", func() {
+				classifier.CategoryMapping = nil
+				_, _, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
+			})
+		})
+
+		Context("when classification succeeds with probabilities", func() {
+			It("should return category and entropy decision", func() {
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         2,
+					Confidence:    0.95,
+					Probabilities: []float32{0.02, 0.03, 0.95},
+					NumClasses:    3,
+				}
+
+				// Add UseReasoning configuration for the categories
+				classifier.Config.Categories = []config.Category{
+					{Name: "technology", UseReasoning: false},
+					{Name: "sports", UseReasoning: false},
+					{Name: "politics", UseReasoning: true},
+				}
+
+				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(category).To(Equal("politics"))
+				Expect(confidence).To(BeNumerically("~", 0.95, 0.001))
+				Expect(reasoningDecision.UseReasoning).To(BeTrue()) // Politics uses reasoning
+				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
+			})
+		})
+
+		Context("when classification confidence is below threshold", func() {
+			It("should return empty category but still provide entropy decision", func() {
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         0,
+					Confidence:    0.3,
+					Probabilities: []float32{0.3, 0.35, 0.35},
+					NumClasses:    3,
+				}
+
+				classifier.Config.Categories = []config.Category{
+					{Name: "technology", UseReasoning: false},
+					{Name: "sports", UseReasoning: true},
+					{Name: "politics", UseReasoning: true},
+				}
+
+				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(category).To(Equal(""))
+				Expect(confidence).To(BeNumerically("~", 0.3, 0.001))
+				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
+			})
+		})
+
+		Context("when model inference fails", func() {
+			It("should return error", func() {
+				mockCategoryModel.classifyWithProbsError = errors.New("model inference failed")
+
+				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Some text")
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("classification error"))
+				Expect(category).To(Equal(""))
+				Expect(confidence).To(BeNumerically("~", 0.0, 0.001))
+				Expect(reasoningDecision.UseReasoning).To(BeFalse())
 			})
 		})
 	})
@@ -1042,8 +1123,8 @@ func TestClassifyCategoryWithEntropy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Import entropy package for testing
-			decision := makeEntropyBasedReasoningDecision(
+			// Use actual entropy package for testing
+			decision := entropy.MakeEntropyBasedReasoningDecision(
 				tc.probabilities,
 				categoryNames,
 				categoryReasoningMap,
@@ -1074,92 +1155,6 @@ func TestClassifyCategoryWithEntropy(t *testing.T) {
 	}
 }
 
-// Mock entropy decision for testing (simplified version)
-type ReasoningDecision struct {
-	UseReasoning     bool
-	Confidence       float64
-	DecisionReason   string
-	FallbackStrategy string
-	TopCategories    []CategoryProbability
-}
-
-type CategoryProbability struct {
-	Category    string
-	Probability float32
-}
-
-// Simplified entropy-based decision function for testing
-func makeEntropyBasedReasoningDecision(probabilities []float32, categoryNames []string, categoryReasoningMap map[string]bool, threshold float64) ReasoningDecision {
-	if len(probabilities) == 0 || len(categoryNames) == 0 {
-		return ReasoningDecision{
-			UseReasoning:     false,
-			Confidence:       0.0,
-			DecisionReason:   "default_no_reasoning",
-			FallbackStrategy: "default_no_reasoning",
-			TopCategories:    []CategoryProbability{},
-		}
-	}
-
-	// Find max probability and index
-	maxProb := float32(0.0)
-	maxIndex := 0
-	for i, prob := range probabilities {
-		if prob > maxProb {
-			maxProb = prob
-			maxIndex = i
-		}
-	}
-
-	// Calculate Shannon entropy (base 2)
-	entropy := float64(0.0)
-	for _, prob := range probabilities {
-		if prob > 0 {
-			entropy -= float64(prob) * math.Log2(float64(prob))
-		}
-	}
-
-	// Build top categories
-	topCategories := []CategoryProbability{}
-	for i, prob := range probabilities {
-		if i < len(categoryNames) {
-			topCategories = append(topCategories, CategoryProbability{
-				Category:    categoryNames[i],
-				Probability: prob,
-			})
-		}
-	}
-
-	// Simple decision logic based on entropy and category
-	var useReasoning bool
-	var reason string
-	var fallback string
-
-	if entropy > 2.0 { // Very high entropy (uniform-like)
-		useReasoning = true
-		reason = "very_high_uncertainty_conservative_default"
-		fallback = "high_uncertainty_reasoning_enabled"
-	} else if entropy < 1.5 { // Low entropy (high certainty) - adjusted threshold
-		// Check if top category uses reasoning
-		topCategory := categoryNames[maxIndex]
-		useReasoning = categoryReasoningMap[topCategory]
-		reason = "low_uncertainty_trust_classification"
-		fallback = "trust_top_category"
-	} else { // Medium entropy
-		reason = "medium_uncertainty_top_category_above_threshold"
-		fallback = "trust_top_category"
-		topCategory := categoryNames[maxIndex]
-		useReasoning = categoryReasoningMap[topCategory]
-	}
-
-	return ReasoningDecision{
-		UseReasoning:     useReasoning,
-		Confidence:       float64(maxProb),
-		DecisionReason:   reason,
-		FallbackStrategy: fallback,
-		TopCategories:    topCategories,
-	}
-}
-
 // TestClassifyCategoryWithEntropyModernBERT tests entropy-based classification specifically for ModernBERT
 func TestClassifyCategoryWithEntropyModernBERT(t *testing.T) {
 	testCases := []struct {
@@ -1181,8 +1176,8 @@ func TestClassifyCategoryWithEntropyModernBERT(t *testing.T) {
 		{
 			name:                 "ModernBERT Very high uncertainty uniform distribution",
 			probabilities:        []float32{0.25, 0.25, 0.25, 0.25}, // Uniform distribution
-			expectedUseReasoning: false,                             // Changed: uniform distribution leads to medium uncertainty decision
-			expectedReason:       "medium_uncertainty_top_category_above_threshold",
+			expectedUseReasoning: true,                              // Uniform distribution has very high entropy
+			expectedReason:       "very_high_uncertainty_conservative_default",
 			expectedCategory:     "physics", // First category by index
 			description:          "ModernBERT uniform uncertainty should enable reasoning for safety",
 		},
@@ -1190,15 +1185,15 @@ func TestClassifyCategoryWithEntropyModernBERT(t *testing.T) {
 			name:                 "ModernBERT Medium uncertainty physics vs biology",
 			probabilities:        []float32{0.50, 0.35, 0.10, 0.05}, // Physics vs biology
 			expectedUseReasoning: false,
-			expectedReason:       "medium_uncertainty_top_category_above_threshold",
+			expectedReason:       "high_uncertainty_weighted_decision", // This distribution has high entropy
 			expectedCategory:     "physics",
 			description:          "ModernBERT medium uncertainty with physics should not use reasoning",
 		},
 		{
 			name:                 "ModernBERT High uncertainty other category",
 			probabilities:        []float32{0.40, 0.20, 0.25, 0.15}, // Physics category wins (index 0)
-			expectedUseReasoning: false,
-			expectedReason:       "medium_uncertainty_top_category_above_threshold",
+			expectedUseReasoning: true,                              // This has very high entropy, so conservative default
+			expectedReason:       "very_high_uncertainty_conservative_default",
 			expectedCategory:     "physics", // Index 0 - physics (highest probability)
 			description:          "ModernBERT high uncertainty with physics should not use reasoning",
 		},
@@ -1206,8 +1201,8 @@ func TestClassifyCategoryWithEntropyModernBERT(t *testing.T) {
 			name:                 "ModernBERT Low uncertainty chemistry classification",
 			probabilities:        []float32{0.08, 0.12, 0.75, 0.05}, // Strong chemistry prediction
 			expectedUseReasoning: true,
-			expectedReason:       "low_uncertainty_trust_classification",
-			expectedCategory:     "chemistry", // Index 2 - chemistry
+			expectedReason:       "medium_uncertainty_top_category_above_threshold", // This is medium entropy, not low
+			expectedCategory:     "chemistry",                                       // Index 2 - chemistry
 			description:          "ModernBERT confident chemistry classification should use reasoning",
 		},
 	}
@@ -1225,8 +1220,8 @@ func TestClassifyCategoryWithEntropyModernBERT(t *testing.T) {
 				"other":     true,
 			}
 
-			// Use the same helper function but for ModernBERT context
-			reasoningDecision := makeEntropyBasedReasoningDecision(
+			// Use the actual entropy package for ModernBERT context
+			reasoningDecision := entropy.MakeEntropyBasedReasoningDecision(
 				tc.probabilities,
 				categoryNames,
 				categoryReasoningMap,
@@ -1284,153 +1279,4 @@ func TestClassifyCategoryWithEntropyModernBERT(t *testing.T) {
 			t.Logf("ModernBERT Test '%s' passed: %s", tc.name, tc.description)
 		})
 	}
-}
-
-// TestModernBERTEntropyVsLinearBERTConsistency tests that ModernBERT and linear BERT produce consistent entropy results
-func TestModernBERTEntropyVsLinearBERTConsistency(t *testing.T) {
-	testCases := []struct {
-		name          string
-		probabilities []float32
-		description   string
-	}{
-		{
-			name:          "Identical high confidence distributions",
-			probabilities: []float32{0.9, 0.05, 0.03, 0.02},
-			description:   "Both models should produce identical entropy for same probability distribution",
-		},
-		{
-			name:          "Identical medium uncertainty distributions",
-			probabilities: []float32{0.5, 0.3, 0.15, 0.05},
-			description:   "Both models should handle medium uncertainty identically",
-		},
-		{
-			name:          "Identical uniform distributions",
-			probabilities: []float32{0.25, 0.25, 0.25, 0.25},
-			description:   "Both models should handle maximum entropy identically",
-		},
-	}
-
-	categoryNames := []string{"physics", "biology", "chemistry", "other"}
-	categoryReasoningMap := map[string]bool{
-		"physics":   false,
-		"biology":   false,
-		"chemistry": true,
-		"other":     true,
-	}
-	threshold := 0.7
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Test with same probability distribution for both "models"
-			// (In reality, this tests the entropy calculation consistency)
-
-			modernBertDecision := makeEntropyBasedReasoningDecision(
-				tc.probabilities, categoryNames, categoryReasoningMap, threshold)
-
-			linearBertDecision := makeEntropyBasedReasoningDecision(
-				tc.probabilities, categoryNames, categoryReasoningMap, threshold)
-
-			// Verify decisions are identical
-			if modernBertDecision.UseReasoning != linearBertDecision.UseReasoning {
-				t.Errorf("ModernBERT and Linear BERT should make same reasoning decision, got %v vs %v",
-					modernBertDecision.UseReasoning, linearBertDecision.UseReasoning)
-			}
-
-			if modernBertDecision.DecisionReason != linearBertDecision.DecisionReason {
-				t.Errorf("ModernBERT and Linear BERT should have same decision reason, got '%s' vs '%s'",
-					modernBertDecision.DecisionReason, linearBertDecision.DecisionReason)
-			}
-
-			// Verify entropy calculations are consistent
-			modernBertEntropy := calculateShannonEntropy(tc.probabilities)
-			linearBertEntropy := calculateShannonEntropy(tc.probabilities)
-
-			if math.Abs(modernBertEntropy-linearBertEntropy) > 0.001 {
-				t.Errorf("Entropy calculations should be identical, got %.6f vs %.6f",
-					modernBertEntropy, linearBertEntropy)
-			}
-
-			t.Logf("Consistency test '%s' passed: %s", tc.name, tc.description)
-		})
-	}
-}
-
-// TestModernBERTEntropyMetricsIntegration tests that ModernBERT entropy integrates properly with metrics
-func TestModernBERTEntropyMetricsIntegration(t *testing.T) {
-	// Test that ModernBERT entropy calculations work with the metrics system
-	testCases := []struct {
-		name                string
-		probabilities       []float32
-		expectedEntropy     float64
-		expectedUncertainty string
-		tolerance           float64
-	}{
-		{
-			name:                "ModernBERT Low entropy metrics",
-			probabilities:       []float32{0.85, 0.08, 0.04, 0.03},
-			expectedEntropy:     0.828,    // Corrected based on actual calculation
-			expectedUncertainty: "medium", // Corrected based on actual normalized entropy
-			tolerance:           0.01,
-		},
-		{
-			name:                "ModernBERT High entropy metrics",
-			probabilities:       []float32{0.4, 0.35, 0.15, 0.1},
-			expectedEntropy:     1.802,       // Corrected based on actual calculation
-			expectedUncertainty: "very_high", // Corrected based on actual normalized entropy
-			tolerance:           0.01,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Calculate entropy using the same method as the metrics system
-			entropy := calculateShannonEntropy(tc.probabilities)
-
-			if math.Abs(entropy-tc.expectedEntropy) > tc.tolerance {
-				t.Errorf("Expected entropy %.3f, got %.3f (tolerance: %.3f)",
-					tc.expectedEntropy, entropy, tc.tolerance)
-			}
-
-			// Calculate normalized entropy for uncertainty level
-			maxEntropy := math.Log2(float64(len(tc.probabilities)))
-			normalizedEntropy := entropy / maxEntropy
-
-			var uncertaintyLevel string
-			if normalizedEntropy >= 0.8 {
-				uncertaintyLevel = "very_high"
-			} else if normalizedEntropy >= 0.6 {
-				uncertaintyLevel = "high"
-			} else if normalizedEntropy >= 0.4 {
-				uncertaintyLevel = "medium"
-			} else if normalizedEntropy >= 0.2 {
-				uncertaintyLevel = "low"
-			} else {
-				uncertaintyLevel = "very_low"
-			}
-
-			if uncertaintyLevel != tc.expectedUncertainty {
-				t.Errorf("Expected uncertainty level '%s', got '%s'",
-					tc.expectedUncertainty, uncertaintyLevel)
-			}
-
-			t.Logf("ModernBERT metrics test '%s' passed: entropy=%.3f, uncertainty=%s",
-				tc.name, entropy, uncertaintyLevel)
-		})
-	}
-}
-
-// Helper function for ModernBERT entropy testing (reuses existing logic)
-func calculateShannonEntropy(probabilities []float32) float64 {
-	if len(probabilities) == 0 {
-		return 0.0
-	}
-
-	entropy := 0.0
-	for _, prob := range probabilities {
-		if prob > 0 {
-			entropy -= float64(prob) * math.Log2(float64(prob))
-		}
-	}
-
-	return entropy
 }
