@@ -1,12 +1,13 @@
-import React from 'react';
-import Layout from '@theme/Layout';
-import styles from './community-page.module.css';
+import React from 'react'
+import Layout from '@theme/Layout'
+import styles from './community-page.module.css'
 
 export default function Contributing() {
   return (
     <Layout
       title="Contributing Guide"
-      description="How to contribute to vLLM Semantic Router">
+      description="How to contribute to vLLM Semantic Router"
+    >
       <div className={styles.container}>
         <header className={styles.header}>
           <h1>Contributing to vLLM Semantic Router 🤝</h1>
@@ -14,14 +15,18 @@ export default function Contributing() {
             We welcome contributions from the community! Here's how you can help make vLLM Semantic Router better.
           </p>
         </header>
-        
+
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>🎯 Ways to Contribute</h2>
             <div className={styles.contributeGrid}>
               <div className={styles.card}>
                 <h3>🐛 Bug Reports</h3>
-                <p>Found a bug? Please report it on our <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</p>
+                <p>
+                  Found a bug? Please report it on our
+                  <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
+                  .
+                </p>
                 <ul>
                   <li>Use a clear and descriptive title</li>
                   <li>Provide steps to reproduce</li>
@@ -76,7 +81,7 @@ export default function Contributing() {
                     <p>Discuss your idea or bug report with the community first.</p>
                   </div>
                 </div>
-                
+
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>2</span>
                   <div>
@@ -84,7 +89,7 @@ export default function Contributing() {
                     <p>Create a new branch for your changes from the main branch.</p>
                   </div>
                 </div>
-                
+
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>3</span>
                   <div>
@@ -92,7 +97,7 @@ export default function Contributing() {
                     <p>Implement your changes following our coding standards.</p>
                   </div>
                 </div>
-                
+
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>4</span>
                   <div>
@@ -100,7 +105,7 @@ export default function Contributing() {
                     <p>Run tests and ensure your changes don't break existing functionality.</p>
                   </div>
                 </div>
-                
+
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>5</span>
                   <div>
@@ -115,7 +120,11 @@ export default function Contributing() {
           <section className={styles.section}>
             <h2>🏷️ Working Group Areas</h2>
             <p>
-              Consider joining one of our <a href="/community/work-groups">Working Groups</a> to focus your contributions:
+              Consider joining one of our
+              {' '}
+              <a href="/community/work-groups">Working Groups</a>
+              {' '}
+              to focus your contributions:
             </p>
             <div className={styles.tagGrid}>
               <span className={styles.tag}>area/document</span>
@@ -133,14 +142,26 @@ export default function Contributing() {
             <div className={styles.card}>
               <p>Need help with your contribution? Reach out to us:</p>
               <ul>
-                <li><a href="https://github.com/vllm-project/semantic-router/discussions" target="_blank" rel="noopener noreferrer">GitHub Discussions</a> - For general questions and discussions</li>
-                <li><a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a> - For bug reports and feature requests</li>
-                <li><a href="/community/work-groups">Work Groups</a> - Join a specific working group</li>
+                <li>
+                  <a href="https://github.com/vllm-project/semantic-router/discussions" target="_blank" rel="noopener noreferrer">GitHub Discussions</a>
+                  {' '}
+                  - For general questions and discussions
+                </li>
+                <li>
+                  <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
+                  {' '}
+                  - For bug reports and feature requests
+                </li>
+                <li>
+                  <a href="/community/work-groups">Work Groups</a>
+                  {' '}
+                  - Join a specific working group
+                </li>
               </ul>
             </div>
           </section>
         </main>
       </div>
     </Layout>
-  );
+  )
 }

@@ -1,9 +1,9 @@
-import React from 'react';
-import styles from './index.module.css';
-import acknowledgementsData from './data.json';
+import React from 'react'
+import styles from './index.module.css'
+import acknowledgementsData from './data.json'
 
 function AcknowledgementsSection() {
-  const { title, subtitle, projects } = acknowledgementsData;
+  const { title, subtitle, projects } = acknowledgementsData
 
   return (
     <section className={styles.acknowledgementsSection}>
@@ -16,7 +16,7 @@ function AcknowledgementsSection() {
             {subtitle}
           </p>
           <div className={styles.projectsGrid}>
-            {projects.map((project) => (
+            {projects.map(project => (
               <a
                 key={project.id}
                 href={project.url}
@@ -39,7 +39,7 @@ function AcknowledgementsSection() {
         </div>
       </div>
     </section>
-  );
+  )
 }
 
-export default AcknowledgementsSection;
+export default AcknowledgementsSection

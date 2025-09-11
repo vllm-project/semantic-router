@@ -10,7 +10,7 @@ on:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
-    name: Run pre-commit hooks on Go, Rust, and Python files
+    name: Run pre-commit hooks on Go, Rust, JavaScripts and Python files
 
     steps:
     - name: Check out the repo
@@ -27,6 +27,11 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.24'
+
+    - name: Set up Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: 23
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
@@ -60,6 +65,13 @@ jobs:
           ~/go/pkg/mod
         key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
 
+    - name: Cache Node dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/website/node_modules
+        key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package.json') }}
+
     - name: Cache pre-commit environments
       uses: actions/cache@v4
       with:
@@ -69,13 +81,14 @@ jobs:
     - name: Install pre-commit
       run: pip install pre-commit
 
-    - name: Run pre-commit on Go, Rust, and Python files
+    - name: Run pre-commit on Go, Rust, JavaScript and Python files
       run: |
-        # Find all Go, Rust, and Python files (excluding vendored/generated code)
-        FILES=$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" \) \
+        # Find all Go, Rust, JavaScripts and Python files (excluding vendored/generated code)
+        FILES=$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" \) \
           ! -path "./target/*" \
           ! -path "./candle-binding/target/*" \
           ! -path "./.git/*" \
+          ! -path "./node_modules/*" \
           ! -path "./vendor/*" \
           ! -path "./__pycache__/*" \
           ! -path "./site/*" \
@@ -86,7 +99,7 @@ jobs:
           echo "Running pre-commit on files: $FILES"
           pre-commit run --files $FILES
         else
-          echo "No Go, Rust, or Python files found to check"
+          echo "No Go, Rust, JavaScript or Python files found to check"
         fi
 
     - name: Show pre-commit results

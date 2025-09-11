@@ -1,25 +1,25 @@
-import React, { useEffect, useRef } from 'react';
-import styles from './AIChipAnimation.module.css';
+import React, { useEffect, useRef } from 'react'
+import styles from './AIChipAnimation.module.css'
 
 const AIChipAnimation = () => {
-  const svgRef = useRef(null);
+  const svgRef = useRef(null)
 
   useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
+    const svg = svgRef.current
+    if (!svg) return
 
     // Add pulsing animation to circuit paths
-    const paths = svg.querySelectorAll('.circuit-path');
+    const paths = svg.querySelectorAll('.circuit-path')
     paths.forEach((path, index) => {
-      path.style.animationDelay = `${index * 0.2}s`;
-    });
+      path.style.animationDelay = `${index * 0.2}s`
+    })
 
     // Add data flow animation
-    const dataPoints = svg.querySelectorAll('.data-point');
+    const dataPoints = svg.querySelectorAll('.data-point')
     dataPoints.forEach((point, index) => {
-      point.style.animationDelay = `${index * 0.3}s`;
-    });
-  }, []);
+      point.style.animationDelay = `${index * 0.3}s`
+    })
+  }, [])
 
   return (
     <div className={styles.chipContainer}>
@@ -41,7 +41,7 @@ const AIChipAnimation = () => {
           strokeWidth="2"
           className={styles.chipBase}
         />
-        
+
         {/* Circuit patterns */}
         <g className={styles.circuitGroup}>
           {/* Horizontal circuits */}
@@ -66,7 +66,7 @@ const AIChipAnimation = () => {
             fill="none"
             className="circuit-path"
           />
-          
+
           {/* Vertical circuits */}
           <path
             d="M 120 70 L 120 110 L 130 120 L 130 160 L 120 170 L 120 210 L 130 220 L 130 230"
@@ -97,7 +97,7 @@ const AIChipAnimation = () => {
           <circle cx="250" cy="120" r="15" fill="url(#coreGradient)" className={styles.processingCore} />
           <circle cx="150" cy="180" r="15" fill="url(#coreGradient)" className={styles.processingCore} />
           <circle cx="250" cy="180" r="15" fill="url(#coreGradient)" className={styles.processingCore} />
-          
+
           {/* Core labels */}
           <text x="150" y="125" textAnchor="middle" className={styles.coreLabel}>AI</text>
           <text x="250" y="125" textAnchor="middle" className={styles.coreLabel}>ML</text>
@@ -111,7 +111,7 @@ const AIChipAnimation = () => {
           <circle cx="160" cy="110" r="3" fill="#FDB516" className="data-point" />
           <circle cx="230" cy="100" r="3" fill="#FDB516" className="data-point" />
           <circle cx="310" cy="110" r="3" fill="#FDB516" className="data-point" />
-          
+
           <circle cx="100" cy="140" r="3" fill="#30A2FF" className="data-point" />
           <circle cx="180" cy="130" r="3" fill="#30A2FF" className="data-point" />
           <circle cx="250" cy="140" r="3" fill="#30A2FF" className="data-point" />
@@ -129,7 +129,7 @@ const AIChipAnimation = () => {
           <rect x="30" y="180" width="20" height="4" fill="#8CC5FF" />
           <rect x="30" y="200" width="20" height="4" fill="#8CC5FF" />
           <rect x="30" y="220" width="20" height="4" fill="#8CC5FF" />
-          
+
           {/* Right pins */}
           <rect x="350" y="80" width="20" height="4" fill="#8CC5FF" />
           <rect x="350" y="100" width="20" height="4" fill="#8CC5FF" />
@@ -148,19 +148,19 @@ const AIChipAnimation = () => {
             <stop offset="50%" stopColor="#16213e" />
             <stop offset="100%" stopColor="#0f3460" />
           </linearGradient>
-          
+
           <linearGradient id="chipBorder" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#58A6FF" />
             <stop offset="50%" stopColor="#30A2FF" />
             <stop offset="100%" stopColor="#0969DA" />
           </linearGradient>
-          
+
           <linearGradient id="circuitGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#58A6FF" />
             <stop offset="50%" stopColor="#FDB516" />
             <stop offset="100%" stopColor="#58A6FF" />
           </linearGradient>
-          
+
           <radialGradient id="coreGradient" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#FDB516" />
             <stop offset="70%" stopColor="#30A2FF" />
@@ -168,13 +168,13 @@ const AIChipAnimation = () => {
           </radialGradient>
         </defs>
       </svg>
-      
+
       <div className={styles.chipLabel}>
         <span className={styles.chipTitle}>Neural Processing Unit</span>
         <span className={styles.chipSubtitle}>Embedding • Classify • Similarity</span>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AIChipAnimation;
+export default AIChipAnimation
