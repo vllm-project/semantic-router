@@ -49,7 +49,26 @@ type RouterConfig struct {
 	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
 
 	// Semantic cache configuration
-	SemanticCache SemanticCacheConfig `yaml:"semantic_cache"`
+	SemanticCache struct {
+		// Type of cache backend to use
+		BackendType string `yaml:"backend_type,omitempty"`
+
+		// Enable semantic caching
+		Enabled bool `yaml:"enabled"`
+
+		// Similarity threshold for cache hits (0.0-1.0)
+		// If not specified, will use the BertModel.Threshold
+		SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+
+		// Maximum number of cache entries to keep (applies to in-memory cache)
+		MaxEntries int `yaml:"max_entries,omitempty"`
+
+		// Time-to-live for cache entries in seconds (0 means no expiration)
+		TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+		// Path to backend-specific configuration file
+		BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+	} `yaml:"semantic_cache"`
 
 	// Prompt guard configuration
 	PromptGuard PromptGuardConfig `yaml:"prompt_guard"`
@@ -65,22 +84,6 @@ type RouterConfig struct {
 
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
-}
-
-// SemanticCacheConfig represents configuration for the semantic cache
-type SemanticCacheConfig struct {
-	// Enable semantic caching
-	Enabled bool `yaml:"enabled"`
-
-	// Similarity threshold for cache hits (0.0-1.0)
-	// If not specified, will use the BertModel.Threshold
-	SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
-
-	// Maximum number of cache entries to keep
-	MaxEntries int `yaml:"max_entries,omitempty"`
-
-	// Time-to-live for cache entries in seconds (0 means no expiration)
-	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
 }
 
 // APIConfig represents configuration for API endpoints

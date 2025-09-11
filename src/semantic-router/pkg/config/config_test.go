@@ -146,11 +146,15 @@ tools:
 				// Verify default model
 				Expect(cfg.DefaultModel).To(Equal("model-b"))
 
-				// Verify semantic cache
+				// Verify semantic cache (legacy fields)
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
+
+				// New fields should have default/zero values when not specified
+				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())
+				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
@@ -964,6 +968,311 @@ default_model: "missing-default-model"
 				err = cfg.ValidateEndpoints()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("missing-default-model"))
+			})
+		})
+	})
+
+	Describe("Semantic Cache Backend Configuration", func() {
+		Context("with memory backend configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.85
+  max_entries: 2000
+  ttl_seconds: 1800
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse memory backend configuration correctly", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
+				Expect(cfg.SemanticCache.MaxEntries).To(Equal(2000))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(1800))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
+			})
+		})
+
+		Context("with milvus backend configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+  backend_type: "milvus"
+  similarity_threshold: 0.9
+  ttl_seconds: 7200
+  backend_config_path: "config/cache/milvus.yaml"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse milvus backend configuration correctly", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(7200))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/cache/milvus.yaml"))
+
+				// MaxEntries should be ignored for Milvus backend
+				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
+			})
+		})
+
+		Context("with disabled cache", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: false
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should preserve configuration even when cache is disabled", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeFalse())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.8)))
+			})
+		})
+
+		Context("with minimal configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should handle minimal configuration with default values", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())       // Should default to empty (memory)
+				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil()) // Will fallback to BERT threshold
+				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
+			})
+		})
+
+		Context("with comprehensive configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+bert_model:
+  threshold: 0.7
+
+semantic_cache:
+  enabled: true
+  backend_type: "milvus"
+  similarity_threshold: 0.95
+  ttl_seconds: 14400
+  backend_config_path: "config/cache/production_milvus.yaml"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse all semantic cache fields correctly", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.95)))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(14400))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/cache/production_milvus.yaml"))
+
+				// Verify threshold resolution
+				threshold := cfg.GetCacheSimilarityThreshold()
+				Expect(threshold).To(Equal(float32(0.95))) // Should use cache threshold, not BERT
+			})
+		})
+
+		Context("threshold fallback behavior", func() {
+			BeforeEach(func() {
+				configContent := `
+bert_model:
+  threshold: 0.75
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  max_entries: 500
+  # No similarity_threshold specified
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should fall back to BERT threshold when cache threshold not specified", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
+
+				// GetCacheSimilarityThreshold should return BERT threshold
+				threshold := cfg.GetCacheSimilarityThreshold()
+				Expect(threshold).To(Equal(float32(0.75)))
+			})
+		})
+
+		Context("with edge case values", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 1.0
+  max_entries: 0
+  ttl_seconds: -1
+  backend_config_path: ""
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should handle edge case values correctly", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(1.0)))
+				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(-1))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
+			})
+		})
+
+		Context("with unsupported backend type", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+  backend_type: "redis"
+  similarity_threshold: 0.8
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse unsupported backend type without error (validation happens at runtime)", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Configuration parsing should succeed
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("redis"))
+
+				// Runtime validation will catch unsupported backend types
+			})
+		})
+
+		Context("with production-like configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: false
+
+semantic_cache:
+  enabled: true
+  backend_type: "milvus"
+  similarity_threshold: 0.85
+  ttl_seconds: 86400  # 24 hours
+  backend_config_path: "config/cache/milvus.yaml"
+
+categories:
+  - name: "production"
+    description: "Production workload"
+    model_scores:
+      - model: "gpt-4"
+        score: 0.95
+
+default_model: "gpt-4"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should handle production-like configuration correctly", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify BERT config
+				Expect(cfg.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
+				Expect(cfg.BertModel.Threshold).To(Equal(float32(0.6)))
+				Expect(cfg.BertModel.UseCPU).To(BeFalse())
+
+				// Verify semantic cache config
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(86400))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/cache/milvus.yaml"))
+
+				// Verify threshold resolution
+				threshold := cfg.GetCacheSimilarityThreshold()
+				Expect(threshold).To(Equal(float32(0.85))) // Should use cache threshold
+
+				// Verify other config is still working
+				Expect(cfg.DefaultModel).To(Equal("gpt-4"))
+				Expect(cfg.Categories).To(HaveLen(1))
+			})
+		})
+
+		Context("with multiple backend configurations in comments", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  # Development configuration
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+
+  # Production configuration (commented out)
+  # backend_type: "milvus"
+  # backend_config_path: "config/cache/milvus.yaml"
+  # max_entries is ignored for Milvus
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse active configuration and ignore commented alternatives", func() {
+				cfg, err := config.LoadConfig(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.BackendType).To(Equal("memory"))
+				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.8)))
+				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
+				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
+				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty()) // Comments are ignored
 			})
 		})
 	})

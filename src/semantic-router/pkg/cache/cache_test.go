@@ -1,17 +1,16 @@
 package cache_test
 
 import (
-	"encoding/json"
-	"fmt"
-	"sync"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
-	"time"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	candle "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 )
 
 func TestCache(t *testing.T) {
@@ -20,680 +19,622 @@ func TestCache(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	err := candle.InitModel("", true)
+	// Initialize BERT model once for all cache tests (Linux only)
+	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
 	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = Describe("Cache Package", func() {
 	var (
-		semanticCache  *cache.SemanticCache
-		defaultOptions cache.SemanticCacheOptions
+		tempDir string
 	)
 
 	BeforeEach(func() {
-		defaultOptions = cache.SemanticCacheOptions{
-			SimilarityThreshold: 0.8,
-			MaxEntries:          100,
-			TTLSeconds:          3600,
-			Enabled:             true,
-		}
-		semanticCache = cache.NewSemanticCache(defaultOptions)
+		var err error
+		tempDir, err = os.MkdirTemp("", "cache_test")
+		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Describe("NewSemanticCache", func() {
-		It("should create a cache with correct options", func() {
-			options := cache.SemanticCacheOptions{
-				SimilarityThreshold: 0.9,
-				MaxEntries:          50,
-				TTLSeconds:          1800,
+	AfterEach(func() {
+		os.RemoveAll(tempDir)
+	})
+
+	Describe("Cache Factory", func() {
+		Describe("NewCacheBackend", func() {
+			Context("with memory backend", func() {
+				It("should create in-memory cache backend successfully", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.InMemoryCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						MaxEntries:          1000,
+						TTLSeconds:          3600,
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(backend).NotTo(BeNil())
+					Expect(backend.IsEnabled()).To(BeTrue())
+				})
+
+				It("should create disabled cache when enabled is false", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.InMemoryCacheType,
+						Enabled:             false,
+						SimilarityThreshold: 0.8,
+						MaxEntries:          1000,
+						TTLSeconds:          3600,
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(backend).NotTo(BeNil())
+					Expect(backend.IsEnabled()).To(BeFalse())
+				})
+
+				It("should default to memory backend when backend_type is empty", func() {
+					config := cache.CacheConfig{
+						BackendType:         "", // Empty should default to memory
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						MaxEntries:          500,
+						TTLSeconds:          1800,
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(backend).NotTo(BeNil())
+					Expect(backend.IsEnabled()).To(BeTrue())
+				})
+			})
+
+			Context("with Milvus backend", func() {
+				var milvusConfigPath string
+
+				BeforeEach(func() {
+					// Skip Milvus tests if environment variable is set
+					if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+						Skip("Milvus tests skipped due to SKIP_MILVUS_TESTS=true")
+					}
+
+					// Create a test Milvus configuration file
+					milvusConfigPath = filepath.Join(tempDir, "milvus.yaml")
+					milvusConfig := `
+connection:
+  host: "localhost"
+  port: 19530
+  database: "test_cache"
+  timeout: 30
+
+collection:
+  name: "test_semantic_cache"
+  description: "Test semantic cache collection"
+  vector_field:
+    name: "embedding"
+    dimension: 512
+    metric_type: "IP"
+  index:
+    type: "HNSW"
+    params:
+      M: 16
+      efConstruction: 64
+
+search:
+  params:
+    ef: 64
+  topk: 10
+  consistency_level: "Session"
+
+development:
+  auto_create_collection: true
+  verbose_errors: true
+`
+					err := os.WriteFile(milvusConfigPath, []byte(milvusConfig), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should return error when backend_config_path is missing", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.MilvusCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+						// BackendConfigPath is missing
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("backend_config_path is required"))
+					Expect(backend).To(BeNil())
+				})
+
+				It("should return error when backend_config_path file doesn't exist", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.MilvusCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+						BackendConfigPath:   "/nonexistent/milvus.yaml",
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("config file not found"))
+					Expect(backend).To(BeNil())
+				})
+
+				It("should create Milvus cache backend successfully with valid config", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.MilvusCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.85,
+						TTLSeconds:          7200,
+						BackendConfigPath:   milvusConfigPath,
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+
+					// Skip test if Milvus is not reachable
+					if err != nil {
+						if strings.Contains(err.Error(), "failed to create Milvus client") ||
+							strings.Contains(err.Error(), "connection") ||
+							strings.Contains(err.Error(), "dial") {
+							Skip("Milvus server not available: " + err.Error())
+						}
+						// For other errors, fail the test
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						// If Milvus is available, creation should succeed
+						Expect(backend).NotTo(BeNil())
+						Expect(backend.IsEnabled()).To(BeTrue())
+					}
+				})
+
+				It("should handle disabled Milvus cache", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.MilvusCacheType,
+						Enabled:             false,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+						BackendConfigPath:   milvusConfigPath,
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(backend).NotTo(BeNil())
+					Expect(backend.IsEnabled()).To(BeFalse())
+				})
+			})
+
+			Context("with unsupported backend type", func() {
+				It("should return error for unsupported backend type", func() {
+					config := cache.CacheConfig{
+						BackendType:         "redis", // Unsupported
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("unsupported cache backend type"))
+					Expect(backend).To(BeNil())
+				})
+			})
+		})
+
+		Describe("ValidateCacheConfig", func() {
+			It("should validate enabled memory backend configuration", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					MaxEntries:          1000,
+					TTLSeconds:          3600,
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should validate disabled cache configuration", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             false,
+					SimilarityThreshold: 2.0, // Invalid, but should be ignored for disabled cache
+					MaxEntries:          -1,  // Invalid, but should be ignored for disabled cache
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).NotTo(HaveOccurred()) // Disabled cache should skip validation
+			})
+
+			It("should return error for invalid similarity threshold", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 1.5, // Invalid: > 1.0
+					MaxEntries:          1000,
+					TTLSeconds:          3600,
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("similarity_threshold must be between 0.0 and 1.0"))
+			})
+
+			It("should return error for negative similarity threshold", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: -0.1, // Invalid: < 0.0
+					MaxEntries:          1000,
+					TTLSeconds:          3600,
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("similarity_threshold must be between 0.0 and 1.0"))
+			})
+
+			It("should return error for negative TTL", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					MaxEntries:          1000,
+					TTLSeconds:          -1, // Invalid: negative TTL
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("ttl_seconds cannot be negative"))
+			})
+
+			It("should return error for negative max entries in memory backend", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					MaxEntries:          -1, // Invalid: negative max entries
+					TTLSeconds:          3600,
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("max_entries cannot be negative"))
+			})
+
+			It("should return error for Milvus backend without config path", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.MilvusCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					TTLSeconds:          3600,
+					// BackendConfigPath is missing
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("backend_config_path is required for Milvus"))
+			})
+
+			It("should validate edge case values", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.0, // Valid: minimum threshold
+					MaxEntries:          0,   // Valid: unlimited entries
+					TTLSeconds:          0,   // Valid: no expiration
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should validate maximum threshold value", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 1.0, // Valid: maximum threshold
+					MaxEntries:          10000,
+					TTLSeconds:          86400,
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Describe("GetDefaultCacheConfig", func() {
+			It("should return valid default configuration", func() {
+				config := cache.GetDefaultCacheConfig()
+
+				Expect(config.BackendType).To(Equal(cache.InMemoryCacheType))
+				Expect(config.Enabled).To(BeTrue())
+				Expect(config.SimilarityThreshold).To(Equal(float32(0.8)))
+				Expect(config.MaxEntries).To(Equal(1000))
+				Expect(config.TTLSeconds).To(Equal(3600))
+				Expect(config.BackendConfigPath).To(BeEmpty())
+
+				// Default config should pass validation
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Describe("GetAvailableCacheBackends", func() {
+			It("should return information about available backends", func() {
+				backends := cache.GetAvailableCacheBackends()
+
+				Expect(backends).To(HaveLen(2)) // Memory and Milvus
+
+				// Check memory backend info
+				memoryBackend := backends[0]
+				Expect(memoryBackend.Type).To(Equal(cache.InMemoryCacheType))
+				Expect(memoryBackend.Name).To(Equal("In-Memory Cache"))
+				Expect(memoryBackend.Description).To(ContainSubstring("in-memory semantic cache"))
+				Expect(memoryBackend.Features).To(ContainElement("Fast access"))
+				Expect(memoryBackend.Features).To(ContainElement("No external dependencies"))
+
+				// Check Milvus backend info
+				milvusBackend := backends[1]
+				Expect(milvusBackend.Type).To(Equal(cache.MilvusCacheType))
+				Expect(milvusBackend.Name).To(Equal("Milvus Vector Database"))
+				Expect(milvusBackend.Description).To(ContainSubstring("Milvus vector database"))
+				Expect(milvusBackend.Features).To(ContainElement("Highly scalable"))
+				Expect(milvusBackend.Features).To(ContainElement("Persistent storage"))
+			})
+		})
+	})
+
+	Describe("InMemoryCache", func() {
+		var (
+			inMemoryCache cache.CacheBackend
+		)
+
+		BeforeEach(func() {
+			options := cache.InMemoryCacheOptions{
 				Enabled:             true,
+				SimilarityThreshold: 0.8,
+				MaxEntries:          100,
+				TTLSeconds:          300,
 			}
-			c := cache.NewSemanticCache(options)
-			Expect(c).NotTo(BeNil())
-			Expect(c.IsEnabled()).To(BeTrue())
+			inMemoryCache = cache.NewInMemoryCache(options)
 		})
 
-		It("should create a disabled cache when specified", func() {
-			options := cache.SemanticCacheOptions{
-				Enabled: false,
+		AfterEach(func() {
+			if inMemoryCache != nil {
+				inMemoryCache.Close()
 			}
-			c := cache.NewSemanticCache(options)
-			Expect(c.IsEnabled()).To(BeFalse())
+			// BERT model is initialized once per process, no need to reset
 		})
-	})
 
-	Describe("IsEnabled", func() {
-		It("should return the correct enabled status", func() {
-			enabledCache := cache.NewSemanticCache(cache.SemanticCacheOptions{Enabled: true})
-			Expect(enabledCache.IsEnabled()).To(BeTrue())
+		It("should implement CacheBackend interface", func() {
+			// Check that the concrete type implements the interface
+			var _ cache.CacheBackend = inMemoryCache
+			Expect(inMemoryCache).NotTo(BeNil())
+		})
 
-			disabledCache := cache.NewSemanticCache(cache.SemanticCacheOptions{Enabled: false})
+		It("should report enabled status correctly", func() {
+			Expect(inMemoryCache.IsEnabled()).To(BeTrue())
+
+			// Create disabled cache
+			disabledOptions := cache.InMemoryCacheOptions{
+				Enabled:             false,
+				SimilarityThreshold: 0.8,
+				MaxEntries:          100,
+				TTLSeconds:          300,
+			}
+			disabledCache := cache.NewInMemoryCache(disabledOptions)
+			defer disabledCache.Close()
+
 			Expect(disabledCache.IsEnabled()).To(BeFalse())
 		})
-	})
 
-	Describe("AddEntry", func() {
-		Context("when cache is enabled", func() {
-			It("should add a complete entry successfully", func() {
-				model := "model-a"
-				query := "What is the capital of France?"
-				requestBody := []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "What is the capital of France?"}]}`)
-				responseBody := []byte(`{"choices": [{"message": {"content": "Paris"}}]}`)
-
-				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should handle empty query gracefully", func() {
-				model := "model-a"
-				query := ""
-				requestBody := []byte(`{"model": "model-a"}`)
-				responseBody := []byte(`{"choices": []}`)
-
-				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-				// Should not error, but may not generate embedding for empty query
-				// The actual behavior depends on the candle_binding implementation
-				Expect(err).To(Or(BeNil(), HaveOccurred()))
-			})
-
-			Context("with max entries limit", func() {
-				BeforeEach(func() {
-					options := cache.SemanticCacheOptions{
-						SimilarityThreshold: 0.8,
-						MaxEntries:          3,
-						TTLSeconds:          0, // No TTL for this test
-						Enabled:             true,
-					}
-					semanticCache = cache.NewSemanticCache(options)
-				})
-
-				It("should enforce max entries limit by removing oldest entries", func() {
-					// Add entries beyond the limit
-					for i := 0; i < 5; i++ {
-						query := fmt.Sprintf("Query %d", i)
-						model := "model-a"
-						requestBody := []byte(fmt.Sprintf(`{"query": "%s"}`, query))
-						responseBody := []byte(fmt.Sprintf(`{"response": "Response %d"}`, i))
-
-						err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-						Expect(err).To(Or(BeNil(), HaveOccurred())) // Embedding generation might fail in test
-
-						// Small delay to ensure different timestamps
-						time.Sleep(time.Millisecond)
-					}
-
-					// The cache should not exceed max entries
-					// We can't directly access the entries count, but we can test the behavior
-					// by checking that older entries are removed
-				})
-			})
+		It("should handle basic cache operations without embeddings", func() {
+			// Test GetStats on empty cache
+			stats := inMemoryCache.GetStats()
+			Expect(stats.TotalEntries).To(Equal(0))
+			Expect(stats.HitCount).To(Equal(int64(0)))
+			Expect(stats.MissCount).To(Equal(int64(0)))
+			Expect(stats.HitRatio).To(Equal(0.0))
 		})
 
-		Context("when cache is disabled", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{Enabled: false}
-				semanticCache = cache.NewSemanticCache(options)
-			})
-
-			It("should return immediately without error", func() {
-				model := "model-a"
-				query := "Test query"
-				requestBody := []byte(`{"test": "data"}`)
-				responseBody := []byte(`{"result": "success"}`)
-
-				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-				Expect(err).NotTo(HaveOccurred())
-			})
-		})
-	})
-
-	Describe("AddPendingRequest", func() {
-		Context("when cache is enabled", func() {
-			It("should add a pending request and return the query", func() {
-				model := "model-a"
-				query := "What is machine learning?"
-				requestBody := []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "What is machine learning?"}]}`)
-
-				returnedQuery, err := semanticCache.AddPendingRequest(model, query, requestBody)
-				Expect(err).To(Or(BeNil(), HaveOccurred())) // Embedding generation might fail
-				if err == nil {
-					Expect(returnedQuery).To(Equal(query))
-				}
-			})
-
-			It("should handle empty query", func() {
-				model := "model-a"
-				query := ""
-				requestBody := []byte(`{"model": "model-a"}`)
-
-				returnedQuery, err := semanticCache.AddPendingRequest(model, query, requestBody)
-				// Should handle empty query gracefully
-				Expect(err).To(Or(BeNil(), HaveOccurred()))
-				if err == nil {
-					Expect(returnedQuery).To(Equal(query))
-				}
-			})
-		})
-
-		Context("when cache is disabled", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{Enabled: false}
-				semanticCache = cache.NewSemanticCache(options)
-			})
-
-			It("should return the query without processing", func() {
-				model := "model-a"
-				query := "Test query"
-				requestBody := []byte(`{"test": "data"}`)
-
-				returnedQuery, err := semanticCache.AddPendingRequest(model, query, requestBody)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(returnedQuery).To(Equal(query))
-			})
-		})
-	})
-
-	Describe("UpdateWithResponse", func() {
-		Context("when cache is enabled", func() {
-			It("should update a pending request with response", func() {
-				model := "model-a"
-				query := "Test query for update"
-				requestBody := []byte(`{"model": "model-a"}`)
-				responseBody := []byte(`{"response": "test response"}`)
-
-				// First add a pending request
-				_, err := semanticCache.AddPendingRequest(model, query, requestBody)
-				Expect(err).NotTo(HaveOccurred())
-
-				// Then update it with response
-				err = semanticCache.UpdateWithResponse(query, responseBody)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("should return error for non-existent pending request", func() {
-				query := "Non-existent query"
-				responseBody := []byte(`{"response": "test"}`)
-
-				err := semanticCache.UpdateWithResponse(query, responseBody)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("no pending request found"))
-			})
-		})
-
-		Context("when cache is disabled", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{Enabled: false}
-				semanticCache = cache.NewSemanticCache(options)
-			})
-
-			It("should return immediately without error", func() {
-				query := "Test query"
-				responseBody := []byte(`{"response": "test"}`)
-
-				err := semanticCache.UpdateWithResponse(query, responseBody)
-				Expect(err).NotTo(HaveOccurred())
-			})
-		})
-	})
-
-	Describe("FindSimilar", func() {
-		Context("when cache is enabled", func() {
-			It("should return cache miss for empty cache", func() {
-				model := "model-a"
-				query := "What is AI?"
-
-				response, found, err := semanticCache.FindSimilar(model, query)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(found).To(BeFalse())
-				Expect(response).To(BeNil())
-			})
-
-			It("should handle empty query gracefully", func() {
-				model := "model-a"
-				query := ""
-
-				response, found, err := semanticCache.FindSimilar(model, query)
-				// Should handle empty query
-				Expect(err).To(Or(BeNil(), HaveOccurred()))
-				if err == nil {
-					Expect(found).To(BeFalse())
-					Expect(response).To(BeNil())
-				}
-			})
-
-			Context("with entries in cache", func() {
-				BeforeEach(func() {
-					// Add some test entries if possible
-					model := "model-a"
-					query := "What is the weather?"
-					requestBody := []byte(`{"model": "model-a"}`)
-					responseBody := []byte(`{"weather": "sunny"}`)
-
-					err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-					if err != nil {
-						Skip("Skipping test due to candle_binding dependency")
-					}
-				})
-
-				It("should find similar entries based on model matching", func() {
-					model := "model-a"
-					query := "Weather information"
-
-					_, _, err := semanticCache.FindSimilar(model, query)
-					Expect(err).NotTo(HaveOccurred())
-					// Result depends on embedding similarity and threshold
-				})
-
-				It("should not find entries for different models", func() {
-					model := "model-b" // Different model
-					query := "What is the weather?"
-
-					response, found, err := semanticCache.FindSimilar(model, query)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(found).To(BeFalse())
-					Expect(response).To(BeNil())
-				})
-			})
-		})
-
-		Context("when cache is disabled", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{Enabled: false}
-				semanticCache = cache.NewSemanticCache(options)
-			})
-
-			It("should return cache miss immediately", func() {
-				model := "model-a"
-				query := "Any query"
-
-				response, found, err := semanticCache.FindSimilar(model, query)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(found).To(BeFalse())
-				Expect(response).To(BeNil())
-			})
-		})
-	})
-
-	Describe("TTL Functionality", func() {
-		Context("with TTL enabled", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{
-					SimilarityThreshold: 0.8,
-					MaxEntries:          100,
-					TTLSeconds:          1, // 1 second TTL for testing
-					Enabled:             true,
-				}
-				semanticCache = cache.NewSemanticCache(options)
-			})
-
-			It("should expire entries after TTL", func() {
-				model := "model-a"
-				query := "TTL test query"
-				requestBody := []byte(`{"model": "model-a"}`)
-				responseBody := []byte(`{"response": "test"}`)
-
-				// Add entry
-				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-				if err != nil {
-					Skip("Skipping test due to candle_binding dependency")
-				}
-
-				// Wait for TTL to expire
-				time.Sleep(2 * time.Second)
-
-				// Try to find the entry - should trigger cleanup and not find expired entry
-				_, _, err = semanticCache.FindSimilar(model, query)
-				Expect(err).NotTo(HaveOccurred())
-				// Entry should be expired and not found, or found but will be cleaned up
-			})
-		})
-
-		Context("without TTL", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{
-					SimilarityThreshold: 0.8,
-					MaxEntries:          100,
-					TTLSeconds:          0, // No TTL
-					Enabled:             true,
-				}
-				semanticCache = cache.NewSemanticCache(options)
-			})
-
-			It("should not expire entries", func() {
-				model := "model-a"
-				query := "No TTL test query"
-				requestBody := []byte(`{"model": "model-a"}`)
-				responseBody := []byte(`{"response": "test"}`)
-
-				// Add entry
-				err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-				if err != nil {
-					Skip("Skipping test due to candle_binding dependency")
-				}
-
-				// Wait some time
-				time.Sleep(100 * time.Millisecond)
-
-				// Entry should still be searchable
-				_, _, err = semanticCache.FindSimilar(model, query)
-				Expect(err).NotTo(HaveOccurred())
-				// Without TTL, entry should persist (subject to similarity matching)
-			})
-		})
-	})
-
-	Describe("Concurrent Access", func() {
-		It("should handle concurrent AddEntry calls safely", func() {
-			const numGoroutines = 10
-			var wg sync.WaitGroup
-			errors := make([]error, numGoroutines)
-
-			wg.Add(numGoroutines)
-			for i := 0; i < numGoroutines; i++ {
-				go func(index int) {
-					defer wg.Done()
-					model := "model-a"
-					query := fmt.Sprintf("Concurrent query %d", index)
-					requestBody := []byte(fmt.Sprintf(`{"index": %d}`, index))
-					responseBody := []byte(fmt.Sprintf(`{"result": %d}`, index))
-
-					err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-					errors[index] = err
-				}(i)
-			}
-
-			wg.Wait()
-
-			// Check that no race conditions occurred
-			// Some errors might occur due to candle_binding, but no panics should happen
-			for i := 0; i < numGoroutines; i++ {
-				// We don't assert on specific errors since candle_binding might not be available
-				// The important thing is that no race conditions or panics occurred
-			}
-		})
-
-		It("should handle concurrent FindSimilar calls safely", func() {
-			const numGoroutines = 10
-			var wg sync.WaitGroup
-			results := make([]bool, numGoroutines)
-			errors := make([]error, numGoroutines)
-
-			wg.Add(numGoroutines)
-			for i := 0; i < numGoroutines; i++ {
-				go func(index int) {
-					defer wg.Done()
-					model := "model-a"
-					query := fmt.Sprintf("Search query %d", index)
-
-					_, found, err := semanticCache.FindSimilar(model, query)
-					results[index] = found
-					errors[index] = err
-				}(i)
-			}
-
-			wg.Wait()
-
-			// Check that no race conditions occurred
-			for i := 0; i < numGoroutines; i++ {
-				// We don't assert on specific results since cache is likely empty
-				// The important thing is that no race conditions or panics occurred
-			}
-		})
-
-		It("should handle mixed concurrent operations safely", func() {
-			const numGoroutines = 20
-			var wg sync.WaitGroup
-
-			wg.Add(numGoroutines)
-			for i := 0; i < numGoroutines; i++ {
-				go func(index int) {
-					defer wg.Done()
-					model := "model-a"
-					query := fmt.Sprintf("Mixed operation query %d", index)
-
-					if index%2 == 0 {
-						// Add entry
-						requestBody := []byte(fmt.Sprintf(`{"index": %d}`, index))
-						responseBody := []byte(fmt.Sprintf(`{"result": %d}`, index))
-						semanticCache.AddEntry(model, query, requestBody, responseBody)
-					} else {
-						// Search for similar
-						semanticCache.FindSimilar(model, query)
-					}
-				}(i)
-			}
-
-			wg.Wait()
-			// If we reach here without panic, the concurrent access handling is working
-		})
-	})
-
-	Describe("ExtractQueryFromOpenAIRequest", func() {
-		It("should extract model and query from valid OpenAI request", func() {
-			request := cache.OpenAIRequest{
-				Model: "model-a",
-				Messages: []cache.ChatMessage{
-					{Role: "system", Content: "You are a helpful assistant."},
-					{Role: "user", Content: "What is the capital of France?"},
-					{Role: "assistant", Content: "The capital of France is Paris."},
-					{Role: "user", Content: "What about Germany?"},
-				},
-			}
-
-			requestBody, err := json.Marshal(request)
+		It("should handle AddEntry operation with embeddings", func() {
+			err := inMemoryCache.AddEntry("test-model", "test query", []byte("request"), []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
 
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("model-a"))
-			Expect(query).To(Equal("What about Germany?")) // Should get the last user message
+			stats := inMemoryCache.GetStats()
+			Expect(stats.TotalEntries).To(Equal(1))
 		})
 
-		It("should handle request with only system messages", func() {
-			request := cache.OpenAIRequest{
-				Model: "model-b",
-				Messages: []cache.ChatMessage{
-					{Role: "system", Content: "You are a helpful assistant."},
-				},
+		It("should handle FindSimilar operation with embeddings", func() {
+			// First add an entry
+			err := inMemoryCache.AddEntry("test-model", "test query", []byte("request"), []byte("response"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Search for similar query
+			response, found, err := inMemoryCache.FindSimilar("test-model", "test query")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue()) // Should find exact match
+			Expect(response).To(Equal([]byte("response")))
+
+			// Search for different model (should not match)
+			response, found, err = inMemoryCache.FindSimilar("different-model", "test query")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse()) // Should not match different model
+			Expect(response).To(BeNil())
+		})
+
+		It("should handle AddPendingRequest and UpdateWithResponse", func() {
+			query, err := inMemoryCache.AddPendingRequest("test-model", "test query", []byte("request"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(query).To(Equal("test query"))
+
+			// Update with response
+			err = inMemoryCache.UpdateWithResponse("test query", []byte("response"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should now be able to find it
+			response, found, err := inMemoryCache.FindSimilar("test-model", "test query")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(response).To(Equal([]byte("response")))
+		})
+
+		It("should respect similarity threshold", func() {
+			// Add entry with a very high similarity threshold
+			highThresholdOptions := cache.InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: 0.99, // Very high threshold
+				MaxEntries:          100,
+				TTLSeconds:          300,
 			}
+			highThresholdCache := cache.NewInMemoryCache(highThresholdOptions)
+			defer highThresholdCache.Close()
 
-			requestBody, err := json.Marshal(request)
+			err := highThresholdCache.AddEntry("test-model", "machine learning", []byte("request"), []byte("ml response"))
 			Expect(err).NotTo(HaveOccurred())
 
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
+			// Exact match should work
+			response, found, err := highThresholdCache.FindSimilar("test-model", "machine learning")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("model-b"))
-			Expect(query).To(BeEmpty()) // No user messages
+			Expect(found).To(BeTrue())
+			Expect(response).To(Equal([]byte("ml response")))
+
+			// Different query should not match due to high threshold
+			response, found, err = highThresholdCache.FindSimilar("test-model", "artificial intelligence")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse())
+			Expect(response).To(BeNil())
 		})
 
-		It("should handle request with multiple user messages", func() {
-			request := cache.OpenAIRequest{
-				Model: "model-a",
-				Messages: []cache.ChatMessage{
-					{Role: "user", Content: "First user message"},
-					{Role: "assistant", Content: "Assistant response"},
-					{Role: "user", Content: "Second user message"},
-					{Role: "user", Content: "Third user message"},
-				},
-			}
-
-			requestBody, err := json.Marshal(request)
+		It("should track hit and miss statistics", func() {
+			// Add an entry with a specific query
+			err := inMemoryCache.AddEntry("test-model", "What is machine learning?", []byte("request"), []byte("ML is a subset of AI"))
 			Expect(err).NotTo(HaveOccurred())
 
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
+			// Search for the exact cached query (should be a hit)
+			response, found, err := inMemoryCache.FindSimilar("test-model", "What is machine learning?")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("model-a"))
-			Expect(query).To(Equal("Third user message")) // Should get the last user message
+			Expect(found).To(BeTrue())
+			Expect(response).To(Equal([]byte("ML is a subset of AI")))
+
+			// Search for a completely unrelated query (should be a miss)
+			response, found, err = inMemoryCache.FindSimilar("test-model", "How do I cook pasta?")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse())
+			Expect(response).To(BeNil())
+
+			// Check statistics
+			stats := inMemoryCache.GetStats()
+			Expect(stats.HitCount).To(Equal(int64(1)))
+			Expect(stats.MissCount).To(Equal(int64(1)))
+			Expect(stats.HitRatio).To(Equal(0.5))
 		})
 
-		It("should handle empty messages array", func() {
-			request := cache.OpenAIRequest{
-				Model:    "model-a",
-				Messages: []cache.ChatMessage{},
-			}
-
-			requestBody, err := json.Marshal(request)
-			Expect(err).NotTo(HaveOccurred())
-
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("model-a"))
-			Expect(query).To(BeEmpty())
-		})
-
-		It("should return error for invalid JSON", func() {
-			invalidJSON := []byte(`{"model": "model-a", "messages": [invalid json}`)
-
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(invalidJSON)
+		It("should handle error when updating non-existent pending request", func() {
+			err := inMemoryCache.UpdateWithResponse("non-existent-query", []byte("response"))
 			Expect(err).To(HaveOccurred())
-			Expect(model).To(BeEmpty())
-			Expect(query).To(BeEmpty())
-			Expect(err.Error()).To(ContainSubstring("invalid request body"))
+			Expect(err.Error()).To(ContainSubstring("no pending request found"))
 		})
 
-		It("should handle missing model field", func() {
-			request := map[string]interface{}{
-				"messages": []cache.ChatMessage{
-					{Role: "user", Content: "Test message"},
-				},
-			}
-
-			requestBody, err := json.Marshal(request)
+		It("should handle close operation", func() {
+			err := inMemoryCache.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(BeEmpty()) // Missing model field
-			Expect(query).To(Equal("Test message"))
+			// Stats should show zero entries after close
+			stats := inMemoryCache.GetStats()
+			Expect(stats.TotalEntries).To(Equal(0))
 		})
 
-		It("should handle request with empty content", func() {
-			request := cache.OpenAIRequest{
-				Model: "model-a",
-				Messages: []cache.ChatMessage{
-					{Role: "user", Content: ""},
-					{Role: "user", Content: "Non-empty message"},
-				},
+		It("should handle disabled cache operations gracefully", func() {
+			disabledOptions := cache.InMemoryCacheOptions{
+				Enabled:             false,
+				SimilarityThreshold: 0.8,
+				MaxEntries:          100,
+				TTLSeconds:          300,
 			}
+			disabledCache := cache.NewInMemoryCache(disabledOptions)
+			defer disabledCache.Close()
 
-			requestBody, err := json.Marshal(request)
+			// Disabled cache operations should not error but should be no-ops
+			// They should NOT try to generate embeddings
+			query, err := disabledCache.AddPendingRequest("model", "query", []byte("request"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(query).To(Equal("query"))
+
+			err = disabledCache.UpdateWithResponse("query", []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
 
-			model, query, err := cache.ExtractQueryFromOpenAIRequest(requestBody)
+			err = disabledCache.AddEntry("model", "query", []byte("request"), []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(model).To(Equal("model-a"))
-			Expect(query).To(Equal("Non-empty message")) // Should get the last non-empty user message
+
+			response, found, err := disabledCache.FindSimilar("model", "query")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse())
+			Expect(response).To(BeNil())
+
+			// Stats should show zero activity
+			stats := disabledCache.GetStats()
+			Expect(stats.TotalEntries).To(Equal(0))
+			Expect(stats.HitCount).To(Equal(int64(0)))
+			Expect(stats.MissCount).To(Equal(int64(0)))
 		})
 	})
 
-	Describe("Edge Cases and Error Conditions", func() {
-		It("should handle very large request/response bodies", func() {
-			model := "model-a"
-			query := "Large data test"
-			largeData := make([]byte, 1024*1024) // 1MB of data
-			for i := range largeData {
-				largeData[i] = byte(i % 256)
-			}
-
-			err := semanticCache.AddEntry(model, query, largeData, largeData)
-			// Should handle large data gracefully
-			Expect(err).To(Or(BeNil(), HaveOccurred()))
-		})
-
-		It("should handle special characters in queries", func() {
-			model := "model-a"
-			query := "Query with special chars: 你好, émoji 🚀, and unicode ∀∃∅"
-			requestBody := []byte(`{"special": "chars"}`)
-			responseBody := []byte(`{"response": "special"}`)
-
-			err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-			Expect(err).To(Or(BeNil(), HaveOccurred()))
-		})
-
-		It("should handle very long queries", func() {
-			model := "model-a"
-			query := string(make([]byte, 10000)) // Very long query
-			for i := range query {
-				query = query[:i] + "a"
-			}
-			requestBody := []byte(`{"long": "query"}`)
-			responseBody := []byte(`{"response": "long"}`)
-
-			err := semanticCache.AddEntry(model, query, requestBody, responseBody)
-			Expect(err).To(Or(BeNil(), HaveOccurred()))
-		})
-
-		It("should handle nil request/response bodies", func() {
-			model := "model-a"
-			query := "Nil test"
-
-			err := semanticCache.AddEntry(model, query, nil, nil)
-			Expect(err).To(Or(BeNil(), HaveOccurred()))
+	Describe("Cache Backend Types", func() {
+		It("should have correct backend type constants", func() {
+			Expect(cache.InMemoryCacheType).To(Equal(cache.CacheBackendType("memory")))
+			Expect(cache.MilvusCacheType).To(Equal(cache.CacheBackendType("milvus")))
 		})
 	})
 
-	Describe("Similarity Threshold Edge Cases", func() {
-		Context("with very low threshold", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{
-					SimilarityThreshold: 0.0, // Very low threshold
-					MaxEntries:          100,
-					TTLSeconds:          0,
-					Enabled:             true,
-				}
-				semanticCache = cache.NewSemanticCache(options)
-			})
+	Describe("Cache Configuration Types", func() {
+		It("should support all required configuration fields", func() {
+			config := cache.CacheConfig{
+				BackendType:         cache.MilvusCacheType,
+				Enabled:             true,
+				SimilarityThreshold: 0.9,
+				MaxEntries:          2000,
+				TTLSeconds:          7200,
+				BackendConfigPath:   "config/cache/milvus.yaml",
+			}
 
-			It("should potentially match more entries", func() {
-				// Add an entry
-				model := "model-a"
-				query1 := "What is AI?"
-				requestBody := []byte(`{"model": "model-a"}`)
-				responseBody := []byte(`{"response": "AI info"}`)
+			// Verify all fields are accessible
+			Expect(string(config.BackendType)).To(Equal("milvus"))
+			Expect(config.Enabled).To(BeTrue())
+			Expect(config.SimilarityThreshold).To(Equal(float32(0.9)))
+			Expect(config.MaxEntries).To(Equal(2000))
+			Expect(config.TTLSeconds).To(Equal(7200))
+			Expect(config.BackendConfigPath).To(Equal("config/cache/milvus.yaml"))
+		})
+	})
 
-				err := semanticCache.AddEntry(model, query1, requestBody, responseBody)
-				if err != nil {
-					Skip("Skipping test due to candle_binding dependency")
-				}
+	Describe("Cache Stats", func() {
+		It("should calculate hit ratio correctly", func() {
+			stats := cache.CacheStats{
+				TotalEntries: 100,
+				HitCount:     75,
+				MissCount:    25,
+				HitRatio:     0.75,
+			}
 
-				// Search with different query
-				query2 := "Completely different query"
-				_, _, err = semanticCache.FindSimilar(model, query2)
-				Expect(err).NotTo(HaveOccurred())
-				// With very low threshold, might find matches
-			})
+			Expect(stats.HitRatio).To(Equal(0.75))
+			Expect(stats.HitCount + stats.MissCount).To(Equal(int64(100)))
 		})
 
-		Context("with very high threshold", func() {
-			BeforeEach(func() {
-				options := cache.SemanticCacheOptions{
-					SimilarityThreshold: 0.999, // Very high threshold
-					MaxEntries:          100,
-					TTLSeconds:          0,
-					Enabled:             true,
-				}
-				semanticCache = cache.NewSemanticCache(options)
-			})
+		It("should handle zero values correctly", func() {
+			stats := cache.CacheStats{
+				TotalEntries: 0,
+				HitCount:     0,
+				MissCount:    0,
+				HitRatio:     0.0,
+			}
 
-			It("should rarely match entries", func() {
-				// Add an entry
-				model := "model-a"
-				query1 := "What is AI?"
-				requestBody := []byte(`{"model": "model-a"}`)
-				responseBody := []byte(`{"response": "AI info"}`)
-
-				err := semanticCache.AddEntry(model, query1, requestBody, responseBody)
-				if err != nil {
-					Skip("Skipping test due to candle_binding dependency")
-				}
-
-				// Search with slightly different query
-				query2 := "What is artificial intelligence?"
-				_, found, err := semanticCache.FindSimilar(model, query2)
-				Expect(err).NotTo(HaveOccurred())
-				// With very high threshold, should rarely find matches
-				Expect(found).To(BeFalse())
-			})
+			Expect(stats.HitRatio).To(Equal(0.0))
+			Expect(stats.TotalEntries).To(Equal(0))
 		})
 	})
 })
