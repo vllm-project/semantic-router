@@ -52,7 +52,9 @@ var _ = Describe("Security Checks", func() {
 				},
 			}
 			router.PIIChecker = pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, nil)
+			var err error
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, nil)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should allow requests with no PII", func() {
@@ -97,7 +99,8 @@ var _ = Describe("Security Checks", func() {
 			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Describe("ClassifyPII method", func() {
@@ -339,7 +342,8 @@ var _ = Describe("Security Checks", func() {
 			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Describe("Error handling and edge cases", func() {
@@ -516,15 +520,20 @@ var _ = Describe("Security Checks", func() {
 	Context("with jailbreak detection enabled", func() {
 		BeforeEach(func() {
 			cfg.PromptGuard.Enabled = true
-			cfg.PromptGuard.ModelID = "test-jailbreak-model"
+			// TODO: Use a real model path here; this should be moved to an integration test later.
+			cfg.PromptGuard.ModelID = "../../../../models/jailbreak_classifier_modernbert-base_model"
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
+			cfg.PromptGuard.UseModernBERT = true
+			cfg.PromptGuard.UseCPU = true
 
 			jailbreakMapping := &classification.JailbreakMapping{
 				LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1},
 				IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"},
 			}
 
-			router.Classifier = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, jailbreakMapping)
+			var err error
+			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, router.Classifier.PIIMapping, jailbreakMapping)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should process potential jailbreak attempts", func() {

@@ -35,15 +35,12 @@ var _ = Describe("category classification and model selection", func() {
 		mockCategoryModel = &MockCategoryInference{}
 		cfg := &config.RouterConfig{}
 		cfg.Classifier.CategoryModel.Threshold = 0.5
-
-		classifier = &Classifier{
-			categoryInference: mockCategoryModel,
-			Config:            cfg,
-			CategoryMapping: &CategoryMapping{
+		classifier, _ = newClassifierWithOptions(cfg,
+			withCategory(&CategoryMapping{
 				CategoryToIdx: map[string]int{"technology": 0, "sports": 1, "politics": 2},
 				IdxToCategory: map[string]string{"0": "technology", "1": "sports", "2": "politics"},
-			},
-		}
+			}, mockCategoryModel),
+		)
 	})
 
 	Describe("classify category", func() {
@@ -357,80 +354,15 @@ func (m *MockJailbreakInitializer) Init(modelID string, useCPU bool, numClasses 
 	return m.InitError
 }
 
-var _ = Describe("initialize jailbreak classifier", func() {
+var _ = Describe("jailbreak detection", func() {
 	var (
 		classifier               *Classifier
 		mockJailbreakInitializer *MockJailbreakInitializer
+		mockJailbreakModel       *MockJailbreakInference
 	)
 
 	BeforeEach(func() {
 		mockJailbreakInitializer = &MockJailbreakInitializer{InitError: nil}
-		cfg := &config.RouterConfig{}
-		cfg.PromptGuard.Enabled = true
-		cfg.PromptGuard.ModelID = "test-model"
-		cfg.PromptGuard.JailbreakMappingPath = "test-mapping"
-		cfg.PromptGuard.Threshold = 0.7
-		classifier = &Classifier{
-			jailbreakInitializer: mockJailbreakInitializer,
-			Config:               cfg,
-			JailbreakMapping: &JailbreakMapping{
-				LabelToIdx: map[string]int{"jailbreak": 0, "benign": 1},
-				IdxToLabel: map[string]string{"0": "jailbreak", "1": "benign"},
-			},
-			JailbreakInitialized: false,
-		}
-	})
-
-	It("should initialize jailbreak classifier", func() {
-		err := classifier.InitializeJailbreakClassifier()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(classifier.JailbreakInitialized).To(BeTrue())
-	})
-
-	Context("when jailbreak mapping is not initialized", func() {
-		It("should return nil", func() {
-			classifier.JailbreakMapping = nil
-			err := classifier.InitializeJailbreakClassifier()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(classifier.JailbreakInitialized).To(BeFalse())
-		})
-	})
-
-	Context("when not enough jailbreak types", func() {
-		It("should return error", func() {
-			classifier.JailbreakMapping = &JailbreakMapping{
-				LabelToIdx: map[string]int{"jailbreak": 0},
-				IdxToLabel: map[string]string{"0": "jailbreak"},
-			}
-
-			err := classifier.InitializeJailbreakClassifier()
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not enough jailbreak types for classification"))
-			Expect(classifier.JailbreakInitialized).To(BeFalse())
-		})
-	})
-
-	Context("when initialize jailbreak classifier fails", func() {
-		It("should return error", func() {
-			mockJailbreakInitializer.InitError = errors.New("initialize jailbreak classifier failed")
-
-			err := classifier.InitializeJailbreakClassifier()
-
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("initialize jailbreak classifier failed"))
-			Expect(classifier.JailbreakInitialized).To(BeFalse())
-		})
-	})
-})
-
-var _ = Describe("jailbreak detection", func() {
-	var (
-		classifier         *Classifier
-		mockJailbreakModel *MockJailbreakInference
-	)
-
-	BeforeEach(func() {
 		mockJailbreakModel = &MockJailbreakInference{}
 		mockJailbreakModel.responseMap = make(map[string]MockJailbreakInferenceResponse)
 		cfg := &config.RouterConfig{}
@@ -438,27 +370,78 @@ var _ = Describe("jailbreak detection", func() {
 		cfg.PromptGuard.ModelID = "test-model"
 		cfg.PromptGuard.JailbreakMappingPath = "test-mapping"
 		cfg.PromptGuard.Threshold = 0.7
-
-		classifier = &Classifier{
-			jailbreakInference: mockJailbreakModel,
-			Config:             cfg,
-			JailbreakMapping: &JailbreakMapping{
+		classifier, _ = newClassifierWithOptions(cfg,
+			withJailbreak(&JailbreakMapping{
 				LabelToIdx: map[string]int{"jailbreak": 0, "benign": 1},
 				IdxToLabel: map[string]string{"0": "jailbreak", "1": "benign"},
-			},
-			JailbreakInitialized: true,
-		}
+			}, mockJailbreakInitializer, mockJailbreakModel),
+		)
+	})
+
+	Describe("initialize jailbreak classifier", func() {
+		It("should initialize jailbreak classifier", func() {
+			err := classifier.initializeJailbreakClassifier()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Context("when jailbreak mapping is not initialized", func() {
+			It("should return error", func() {
+				classifier.JailbreakMapping = nil
+				err := classifier.initializeJailbreakClassifier()
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when not enough jailbreak types", func() {
+			It("should return error", func() {
+				classifier.JailbreakMapping = &JailbreakMapping{
+					LabelToIdx: map[string]int{"jailbreak": 0},
+					IdxToLabel: map[string]string{"0": "jailbreak"},
+				}
+
+				err := classifier.initializeJailbreakClassifier()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not enough jailbreak types for classification"))
+			})
+		})
+
+		Context("when initialize jailbreak classifier fails", func() {
+			It("should return error", func() {
+				mockJailbreakInitializer.InitError = errors.New("initialize jailbreak classifier failed")
+
+				err := classifier.initializeJailbreakClassifier()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("initialize jailbreak classifier failed"))
+			})
+		})
 	})
 
 	Describe("check for jailbreak", func() {
-		Context("when jailbreak mapping is not initialized", func() {
-			It("should return false", func() {
-				classifier.JailbreakMapping = nil
+		type row struct {
+			Enabled              bool
+			ModelID              string
+			JailbreakMappingPath string
+			JailbreakMapping     *JailbreakMapping
+		}
+
+		DescribeTable("when jailbreak detection is not enabled or properly configured",
+			func(r row) {
+				classifier.Config.PromptGuard.Enabled = r.Enabled
+				classifier.Config.PromptGuard.ModelID = r.ModelID
+				classifier.Config.PromptGuard.JailbreakMappingPath = r.JailbreakMappingPath
+				classifier.JailbreakMapping = r.JailbreakMapping
 				isJailbreak, _, _, err := classifier.CheckForJailbreak("Some text")
-				Expect(err).ToNot(HaveOccurred())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("jailbreak detection is not enabled or properly configured"))
 				Expect(isJailbreak).To(BeFalse())
-			})
-		})
+			},
+			Entry("Enabled is false", row{Enabled: false}),
+			Entry("ModelID is empty", row{ModelID: ""}),
+			Entry("JailbreakMappingPath is empty", row{JailbreakMappingPath: ""}),
+			Entry("JailbreakMapping is nil", row{JailbreakMapping: nil}),
+		)
 
 		Context("when text is empty", func() {
 			It("should return false", func() {
@@ -543,7 +526,8 @@ var _ = Describe("jailbreak detection", func() {
 			It("should return empty list", func() {
 				classifier.JailbreakMapping = nil
 				hasJailbreak, _, err := classifier.AnalyzeContentForJailbreak([]string{"Some text"})
-				Expect(err).ToNot(HaveOccurred())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("jailbreak detection is not enabled or properly configured"))
 				Expect(hasJailbreak).To(BeFalse())
 			})
 		})
@@ -614,14 +598,12 @@ var _ = Describe("PII detection", func() {
 		cfg.Classifier.PIIModel.ModelID = "test-pii-model"
 		cfg.Classifier.PIIModel.Threshold = 0.7
 
-		classifier = &Classifier{
-			piiInference: mockPIIModel,
-			Config:       cfg,
-			PIIMapping: &PIIMapping{
+		classifier, _ = newClassifierWithOptions(cfg,
+			withPII(&PIIMapping{
 				LabelToIdx: map[string]int{"PERSON": 0, "EMAIL": 1},
 				IdxToLabel: map[string]string{"0": "PERSON", "1": "EMAIL"},
-			},
-		}
+			}, mockPIIModel),
+		)
 	})
 
 	Describe("classify PII", func() {
@@ -821,26 +803,24 @@ var _ = Describe("get models for category", func() {
 	var c *Classifier
 
 	BeforeEach(func() {
-		c = &Classifier{
-			Config: &config.RouterConfig{
-				Categories: []config.Category{
-					{
-						Name: "Toxicity",
-						ModelScores: []config.ModelScore{
-							{Model: "m1"}, {Model: "m2"},
-						},
-					},
-					{
-						Name:        "Toxicity", // duplicate name, should be ignored by "first wins"
-						ModelScores: []config.ModelScore{{Model: "mX"}},
-					},
-					{
-						Name:        "Jailbreak",
-						ModelScores: []config.ModelScore{{Model: "jb1"}},
+		c, _ = newClassifierWithOptions(&config.RouterConfig{
+			Categories: []config.Category{
+				{
+					Name: "Toxicity",
+					ModelScores: []config.ModelScore{
+						{Model: "m1"}, {Model: "m2"},
 					},
 				},
+				{
+					Name:        "Toxicity", // duplicate name, should be ignored by "first wins"
+					ModelScores: []config.ModelScore{{Model: "mX"}},
+				},
+				{
+					Name:        "Jailbreak",
+					ModelScores: []config.ModelScore{{Model: "jb1"}},
+				},
 			},
-		}
+		})
 	})
 
 	type row struct {

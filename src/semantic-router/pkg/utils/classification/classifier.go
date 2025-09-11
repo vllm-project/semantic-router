@@ -147,30 +147,71 @@ type Classifier struct {
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
-	// Jailbreak detection state
-	JailbreakInitialized bool
 }
 
-// NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
-func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) *Classifier {
-	return &Classifier{
-		categoryInference:    createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
-		jailbreakInitializer: createJailbreakInitializer(cfg.PromptGuard.UseModernBERT),
-		jailbreakInference:   createJailbreakInference(cfg.PromptGuard.UseModernBERT),
-		piiInference:         createPIIInference(),
+type option func(*Classifier)
 
-		Config:               cfg,
-		CategoryMapping:      categoryMapping,
-		PIIMapping:           piiMapping,
-		JailbreakMapping:     jailbreakMapping,
-		JailbreakInitialized: false,
+func withCategory(categoryMapping *CategoryMapping, categoryInference CategoryInference) option {
+	return func(c *Classifier) {
+		c.CategoryMapping = categoryMapping
+		c.categoryInference = categoryInference
 	}
 }
 
+func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference JailbreakInference) option {
+	return func(c *Classifier) {
+		c.JailbreakMapping = jailbreakMapping
+		c.jailbreakInitializer = jailbreakInitializer
+		c.jailbreakInference = jailbreakInference
+	}
+}
+
+func withPII(piiMapping *PIIMapping, piiInference PIIInference) option {
+	return func(c *Classifier) {
+		c.PIIMapping = piiMapping
+		c.piiInference = piiInference
+	}
+}
+
+// initModels initializes the models for the classifier
+func initModels(classifier *Classifier) (*Classifier, error) {
+	if classifier.IsJailbreakEnabled() {
+		if err := classifier.initializeJailbreakClassifier(); err != nil {
+			return nil, fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
+		}
+	}
+	return classifier, nil
+}
+
+// newClassifierWithOptions creates a new classifier with the given options
+func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Classifier, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config is nil")
+	}
+
+	classifier := &Classifier{Config: cfg}
+
+	for _, option := range options {
+		option(classifier)
+	}
+
+	return initModels(classifier)
+}
+
+// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities
+func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
+	return newClassifierWithOptions(
+		cfg,
+		withCategory(categoryMapping, createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT)),
+		withJailbreak(jailbreakMapping, createJailbreakInitializer(cfg.PromptGuard.UseModernBERT), createJailbreakInference(cfg.PromptGuard.UseModernBERT)),
+		withPII(piiMapping, createPIIInference()),
+	)
+}
+
 // InitializeJailbreakClassifier initializes the jailbreak classification model
-func (c *Classifier) InitializeJailbreakClassifier() error {
-	if !c.IsJailbreakEnabled() {
-		return nil
+func (c *Classifier) initializeJailbreakClassifier() error {
+	if c.JailbreakMapping == nil || c.jailbreakInitializer == nil {
+		return fmt.Errorf("jailbreak mapping or model initializer is nil")
 	}
 
 	numClasses := c.JailbreakMapping.GetJailbreakTypeCount()
@@ -182,7 +223,6 @@ func (c *Classifier) InitializeJailbreakClassifier() error {
 		return err
 	}
 
-	c.JailbreakInitialized = true
 	return nil
 }
 
@@ -193,8 +233,8 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts
 func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, error) {
-	if !c.IsJailbreakEnabled() || !c.JailbreakInitialized {
-		return false, "", 0.0, nil
+	if !c.IsJailbreakEnabled() {
+		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
 
 	if text == "" {
@@ -236,8 +276,8 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 
 // AnalyzeContentForJailbreak analyzes multiple content pieces for jailbreak attempts
 func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []JailbreakDetection, error) {
-	if !c.IsJailbreakEnabled() || !c.JailbreakInitialized {
-		return false, nil, nil
+	if !c.IsJailbreakEnabled() {
+		return false, nil, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
 
 	var detections []JailbreakDetection

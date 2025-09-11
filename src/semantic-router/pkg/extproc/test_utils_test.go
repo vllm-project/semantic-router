@@ -218,7 +218,10 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
 	// Create classifier
-	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create PII checker
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)

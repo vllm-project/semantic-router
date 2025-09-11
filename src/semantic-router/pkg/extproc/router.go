@@ -131,18 +131,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create utility components
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create classifier: %w", err)
+	}
 
 	// Create global classification service for API access
 	services.NewClassificationService(classifier, cfg)
-
-	// Initialize jailbreak classifier if enabled
-	if jailbreakMapping != nil {
-		err = classifier.InitializeJailbreakClassifier()
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
-		}
-	}
 
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -218,37 +214,6 @@ func initializeModels(cfg *config.RouterConfig, categoryMapping *classification.
 				return fmt.Errorf("failed to initialize ModernBERT PII token classifier model: %w", err)
 			}
 			log.Printf("Initialized ModernBERT PII token classifier for entity detection")
-		}
-	}
-
-	// Initialize jailbreak classifier if enabled
-	if jailbreakMapping != nil {
-		// Get the number of jailbreak types from the mapping
-		numJailbreakClasses := jailbreakMapping.GetJailbreakTypeCount()
-		if numJailbreakClasses < 2 {
-			log.Printf("Warning: Not enough jailbreak types for classification, need at least 2, got %d", numJailbreakClasses)
-		} else {
-			// Use the jailbreak classifier model
-			jailbreakClassifierModelID := cfg.PromptGuard.ModelID
-			if jailbreakClassifierModelID == "" {
-				jailbreakClassifierModelID = cfg.BertModel.ModelID
-			}
-
-			if cfg.PromptGuard.UseModernBERT {
-				// Initialize ModernBERT jailbreak classifier
-				err = candle_binding.InitModernBertJailbreakClassifier(jailbreakClassifierModelID, cfg.PromptGuard.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier model: %w", err)
-				}
-				log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
-			} else {
-				// Initialize linear jailbreak classifier
-				err = candle_binding.InitJailbreakClassifier(jailbreakClassifierModelID, numJailbreakClasses, cfg.PromptGuard.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize jailbreak classifier model: %w", err)
-				}
-				log.Printf("Initialized linear jailbreak classifier with %d jailbreak types", numJailbreakClasses)
-			}
 		}
 	}
 
