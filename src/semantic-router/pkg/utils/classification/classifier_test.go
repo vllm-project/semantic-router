@@ -25,33 +25,91 @@ func (m *MockCategoryInference) Classify(text string) (candle_binding.ClassResul
 	return m.classifyResult, m.classifyError
 }
 
+type MockCategoryInitializer struct{ InitError error }
+
+func (m *MockCategoryInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	return m.InitError
+}
+
 var _ = Describe("category classification and model selection", func() {
 	var (
-		classifier        *Classifier
-		mockCategoryModel *MockCategoryInference
+		classifier              *Classifier
+		mockCategoryInitializer *MockCategoryInitializer
+		mockCategoryModel       *MockCategoryInference
 	)
 
 	BeforeEach(func() {
+		mockCategoryInitializer = &MockCategoryInitializer{InitError: nil}
 		mockCategoryModel = &MockCategoryInference{}
 		cfg := &config.RouterConfig{}
+		cfg.Classifier.CategoryModel.ModelID = "model-id"
+		cfg.Classifier.CategoryModel.CategoryMappingPath = "category-mapping-path"
 		cfg.Classifier.CategoryModel.Threshold = 0.5
 		classifier, _ = newClassifierWithOptions(cfg,
 			withCategory(&CategoryMapping{
 				CategoryToIdx: map[string]int{"technology": 0, "sports": 1, "politics": 2},
 				IdxToCategory: map[string]string{"0": "technology", "1": "sports", "2": "politics"},
-			}, mockCategoryModel),
+			}, mockCategoryInitializer, mockCategoryModel),
 		)
 	})
 
-	Describe("classify category", func() {
+	Describe("initialize category classifier", func() {
+		It("should succeed", func() {
+			err := classifier.initializeCategoryClassifier()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		Context("when category mapping is not initialized", func() {
 			It("should return error", func() {
 				classifier.CategoryMapping = nil
-				_, _, err := classifier.ClassifyCategory("Some text")
+				err := classifier.initializeCategoryClassifier()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("category mapping not initialized"))
+				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
 			})
 		})
+
+		Context("when not enough categories", func() {
+			It("should return error", func() {
+				classifier.CategoryMapping = &CategoryMapping{
+					CategoryToIdx: map[string]int{"technology": 0},
+					IdxToCategory: map[string]string{"0": "technology"},
+				}
+				err := classifier.initializeCategoryClassifier()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not enough categories for classification"))
+			})
+		})
+
+		Context("when initialize category classifier fails", func() {
+			It("should return error", func() {
+				mockCategoryInitializer.InitError = errors.New("initialize category classifier failed")
+				err := classifier.initializeCategoryClassifier()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("initialize category classifier failed"))
+			})
+		})
+	})
+
+	Describe("classify category", func() {
+		type row struct {
+			ModelID             string
+			CategoryMappingPath string
+			CategoryMapping     *CategoryMapping
+		}
+
+		DescribeTable("when category classification is not properly configured",
+			func(r row) {
+				classifier.Config.Classifier.CategoryModel.ModelID = r.ModelID
+				classifier.Config.Classifier.CategoryModel.CategoryMappingPath = r.CategoryMappingPath
+				classifier.CategoryMapping = r.CategoryMapping
+				_, _, err := classifier.ClassifyCategory("Some text")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
+			},
+			Entry("ModelID is empty", row{ModelID: ""}),
+			Entry("CategoryMappingPath is empty", row{CategoryMappingPath: ""}),
+			Entry("CategoryMapping is nil", row{CategoryMapping: nil}),
+		)
 
 		Context("when classification succeeds with high confidence", func() {
 			It("should return the correct category", func() {
@@ -379,7 +437,7 @@ var _ = Describe("jailbreak detection", func() {
 	})
 
 	Describe("initialize jailbreak classifier", func() {
-		It("should initialize jailbreak classifier", func() {
+		It("should succeed", func() {
 			err := classifier.initializeJailbreakClassifier()
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -389,6 +447,7 @@ var _ = Describe("jailbreak detection", func() {
 				classifier.JailbreakMapping = nil
 				err := classifier.initializeJailbreakClassifier()
 				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("jailbreak detection is not properly configured"))
 			})
 		})
 
@@ -398,9 +457,7 @@ var _ = Describe("jailbreak detection", func() {
 					LabelToIdx: map[string]int{"jailbreak": 0},
 					IdxToLabel: map[string]string{"0": "jailbreak"},
 				}
-
 				err := classifier.initializeJailbreakClassifier()
-
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not enough jailbreak types for classification"))
 			})
@@ -409,9 +466,7 @@ var _ = Describe("jailbreak detection", func() {
 		Context("when initialize jailbreak classifier fails", func() {
 			It("should return error", func() {
 				mockJailbreakInitializer.InitError = errors.New("initialize jailbreak classifier failed")
-
 				err := classifier.initializeJailbreakClassifier()
-
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("initialize jailbreak classifier failed"))
 			})
@@ -559,6 +614,10 @@ var _ = Describe("jailbreak detection", func() {
 	})
 })
 
+type MockPIIInitializer struct{ InitError error }
+
+func (m *MockPIIInitializer) Init(modelID string, useCPU bool) error { return m.InitError }
+
 type MockPIIInferenceResponse struct {
 	classifyTokensResult candle_binding.TokenClassificationResult
 	classifyTokensError  error
@@ -587,34 +646,86 @@ func (m *MockPIIInference) ClassifyTokens(text string, configPath string) (candl
 
 var _ = Describe("PII detection", func() {
 	var (
-		classifier   *Classifier
-		mockPIIModel *MockPIIInference
+		classifier         *Classifier
+		mockPIIInitializer *MockPIIInitializer
+		mockPIIModel       *MockPIIInference
 	)
 
 	BeforeEach(func() {
+		mockPIIInitializer = &MockPIIInitializer{InitError: nil}
 		mockPIIModel = &MockPIIInference{}
 		mockPIIModel.responseMap = make(map[string]MockPIIInferenceResponse)
 		cfg := &config.RouterConfig{}
 		cfg.Classifier.PIIModel.ModelID = "test-pii-model"
+		cfg.Classifier.PIIModel.PIIMappingPath = "test-pii-mapping-path"
 		cfg.Classifier.PIIModel.Threshold = 0.7
 
 		classifier, _ = newClassifierWithOptions(cfg,
 			withPII(&PIIMapping{
 				LabelToIdx: map[string]int{"PERSON": 0, "EMAIL": 1},
 				IdxToLabel: map[string]string{"0": "PERSON", "1": "EMAIL"},
-			}, mockPIIModel),
+			}, mockPIIInitializer, mockPIIModel),
 		)
 	})
 
-	Describe("classify PII", func() {
+	Describe("initialize PII classifier", func() {
+		It("should succeed", func() {
+			err := classifier.initializePIIClassifier()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		Context("when PII mapping is not initialized", func() {
-			It("should return empty list", func() {
+			It("should return error", func() {
 				classifier.PIIMapping = nil
-				piiTypes, err := classifier.ClassifyPII("Some text")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(piiTypes).To(BeEmpty())
+				err := classifier.initializePIIClassifier()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("PII detection is not properly configured"))
 			})
 		})
+
+		Context("when not enough PII types", func() {
+			It("should return error", func() {
+				classifier.PIIMapping = &PIIMapping{
+					LabelToIdx: map[string]int{"PERSON": 0},
+					IdxToLabel: map[string]string{"0": "PERSON"},
+				}
+				err := classifier.initializePIIClassifier()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not enough PII types for classification"))
+			})
+		})
+
+		Context("when initialize PII classifier fails", func() {
+			It("should return error", func() {
+				mockPIIInitializer.InitError = errors.New("initialize PII classifier failed")
+				err := classifier.initializePIIClassifier()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("initialize PII classifier failed"))
+			})
+		})
+	})
+
+	Describe("classify PII", func() {
+		type row struct {
+			ModelID        string
+			PIIMappingPath string
+			PIIMapping     *PIIMapping
+		}
+
+		DescribeTable("when PII detection is not properly configured",
+			func(r row) {
+				classifier.Config.Classifier.PIIModel.ModelID = r.ModelID
+				classifier.Config.Classifier.PIIModel.PIIMappingPath = r.PIIMappingPath
+				classifier.PIIMapping = r.PIIMapping
+				piiTypes, err := classifier.ClassifyPII("Some text")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("PII detection is not properly configured"))
+				Expect(piiTypes).To(BeEmpty())
+			},
+			Entry("ModelID is empty", row{ModelID: ""}),
+			Entry("PIIMappingPath is empty", row{PIIMappingPath: ""}),
+			Entry("PIIMapping is nil", row{PIIMapping: nil}),
+		)
 
 		Context("when text is empty", func() {
 			It("should return empty list", func() {
@@ -708,10 +819,11 @@ var _ = Describe("PII detection", func() {
 
 	Describe("analyze content for PII", func() {
 		Context("when PII mapping is not initialized", func() {
-			It("should return empty list", func() {
+			It("should return error", func() {
 				classifier.PIIMapping = nil
 				hasPII, _, err := classifier.AnalyzeContentForPII([]string{"Some text"})
-				Expect(err).ToNot(HaveOccurred())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("PII detection is not properly configured"))
 				Expect(hasPII).To(BeFalse())
 			})
 		})

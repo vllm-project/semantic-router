@@ -16,11 +16,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
-var (
-	initialized bool
-	initMutex   sync.Mutex
-)
-
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests
 type OpenAIRouter struct {
 	Config               *config.RouterConfig
@@ -47,9 +42,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 	// Update global config reference for packages that rely on config.GetConfig()
 	config.ReplaceGlobalConfig(cfg)
-
-	initMutex.Lock()
-	defer initMutex.Unlock()
 
 	// Load category mapping if classifier is enabled
 	var categoryMapping *classification.CategoryMapping
@@ -81,11 +73,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		log.Printf("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
-	if !initialized {
-		if err := initializeModels(cfg, categoryMapping, piiMapping, jailbreakMapping); err != nil {
-			return nil, err
-		}
-		initialized = true
+	// Initialize the BERT model for similarity search
+	if err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); err != nil {
+		return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
@@ -154,68 +144,4 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	router.logReasoningConfiguration()
 
 	return router, nil
-}
-
-// initializeModels initializes the BERT and classifier models
-func initializeModels(cfg *config.RouterConfig, categoryMapping *classification.CategoryMapping, piiMapping *classification.PIIMapping, jailbreakMapping *classification.JailbreakMapping) error {
-	// Initialize the BERT model for similarity search
-	err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU)
-	if err != nil {
-		return fmt.Errorf("failed to initialize BERT model: %w", err)
-	}
-
-	// Initialize the classifier model if enabled
-	if categoryMapping != nil {
-		// Get the number of categories from the mapping
-		numClasses := categoryMapping.GetCategoryCount()
-		if numClasses < 2 {
-			log.Printf("Warning: Not enough categories for classification, need at least 2, got %d", numClasses)
-		} else {
-			// Use the category classifier model
-			classifierModelID := cfg.Classifier.CategoryModel.ModelID
-			if classifierModelID == "" {
-				classifierModelID = cfg.BertModel.ModelID
-			}
-
-			if cfg.Classifier.CategoryModel.UseModernBERT {
-				// Initialize ModernBERT classifier
-				err = candle_binding.InitModernBertClassifier(classifierModelID, cfg.Classifier.CategoryModel.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize ModernBERT classifier model: %w", err)
-				}
-				log.Printf("Initialized ModernBERT category classifier (classes auto-detected from model)")
-			} else {
-				// Initialize linear classifier
-				err = candle_binding.InitClassifier(classifierModelID, numClasses, cfg.Classifier.CategoryModel.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize classifier model: %w", err)
-				}
-				log.Printf("Initialized linear category classifier with %d categories", numClasses)
-			}
-		}
-	}
-
-	// Initialize PII classifier if enabled
-	if piiMapping != nil {
-		// Get the number of PII types from the mapping
-		numPIIClasses := piiMapping.GetPIITypeCount()
-		if numPIIClasses < 2 {
-			log.Printf("Warning: Not enough PII types for classification, need at least 2, got %d", numPIIClasses)
-		} else {
-			// Use the PII classifier model
-			piiClassifierModelID := cfg.Classifier.PIIModel.ModelID
-			if piiClassifierModelID == "" {
-				piiClassifierModelID = cfg.BertModel.ModelID
-			}
-
-			// Initialize ModernBERT PII token classifier for entity detection
-			err = candle_binding.InitModernBertPIITokenClassifier(piiClassifierModelID, cfg.Classifier.PIIModel.UseCPU)
-			if err != nil {
-				return fmt.Errorf("failed to initialize ModernBERT PII token classifier model: %w", err)
-			}
-			log.Printf("Initialized ModernBERT PII token classifier for entity detection")
-		}
-	}
-
-	return nil
 }
