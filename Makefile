@@ -1,7 +1,65 @@
-.PHONY: all build clean test docker-build podman-build docker-run podman-run
+.PHONY: all build clean test docker-build podman-build docker-run podman-run start-milvus stop-milvus restart-milvus milvus-status clean-milvus test-milvus-cache test-semantic-router-milvus help
 
 # Default target
 all: build
+
+# Help target
+help:
+	@echo "Available targets:"
+	@echo "  Build targets:"
+	@echo "    all                     - Build everything (default)"
+	@echo "    build                   - Build Rust library and Go router"
+	@echo "    rust                    - Build only the Rust library"
+	@echo "    build-router            - Build only the Go router"
+	@echo "    clean                   - Clean build artifacts"
+	@echo ""
+	@echo "  Run targets:"
+	@echo "    run-router              - Run the router (CONFIG_FILE=config/config.yaml)"
+	@echo "    run-envoy               - Run Envoy proxy"
+	@echo ""
+	@echo "  Test targets:"
+	@echo "    test                    - Run all tests"
+	@echo "    test-binding            - Test candle-binding"
+	@echo "    test-semantic-router    - Test semantic router"
+	@echo "    test-category-classifier - Test category classifier"
+	@echo "    test-pii-classifier     - Test PII classifier"
+	@echo "    test-jailbreak-classifier - Test jailbreak classifier"
+	@echo ""
+	@echo "  Milvus targets (CONTAINER_RUNTIME=docker|podman):"
+	@echo "    start-milvus            - Start Milvus container for testing"
+	@echo "    stop-milvus             - Stop and remove Milvus container"
+	@echo "    restart-milvus          - Restart Milvus container"
+	@echo "    milvus-status           - Check Milvus container status"
+	@echo "    clean-milvus            - Stop container and clean data"
+	@echo "    test-milvus-cache       - Test cache with Milvus backend"
+	@echo "    test-semantic-router-milvus - Test router with Milvus cache"
+	@echo "    Example: CONTAINER_RUNTIME=podman make start-milvus"
+	@echo ""
+	@echo "  Demo targets:"
+	@echo "    test-auto-prompt-reasoning - Test reasoning mode"
+	@echo "    test-auto-prompt-no-reasoning - Test normal mode"
+	@echo "    test-pii                - Test PII detection"
+	@echo "    test-prompt-guard       - Test jailbreak detection"
+	@echo "    test-tools              - Test tool auto-selection"
+	@echo ""
+	@echo "  Documentation targets:"
+	@echo "    docs-dev                - Start documentation dev server"
+	@echo "    docs-build              - Build documentation"
+	@echo "    docs-serve              - Serve built documentation"
+	@echo "    docs-clean              - Clean documentation artifacts"
+	@echo ""
+	@echo "  Environment variables:"
+	@echo "    CONTAINER_RUNTIME       - Container runtime (docker|podman, default: docker)"
+	@echo "    CONFIG_FILE             - Config file path (default: config/config.yaml)"
+	@echo "    VLLM_ENDPOINT           - vLLM endpoint URL for testing"
+	@echo ""
+	@echo "  Usage examples:"
+	@echo "    make start-milvus                    # Use Docker (default)"
+	@echo "    CONTAINER_RUNTIME=podman make start-milvus  # Use Podman"
+	@echo "    CONFIG_FILE=custom.yaml make run-router     # Use custom config"
+
+# Container runtime (docker or podman)
+CONTAINER_RUNTIME ?= docker
 
 # vLLM env var
 VLLM_ENDPOINT ?=
@@ -30,7 +88,7 @@ rust:
 build-router: rust
 	@echo "Building router..."
 	@mkdir -p bin
-	@cd src/semantic-router && go build -o ../../bin/router cmd/main.go
+	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
 
 # Config file path with default
 CONFIG_FILE ?= config/config.yaml
@@ -104,9 +162,12 @@ test-jailbreak-classifier: rust
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
 # Unit test semantic-router
+# By default, Milvus tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false
+# Example: make test-semantic-router SKIP_MILVUS_TESTS=false
 test-semantic-router: build-router
 	@echo "Testing semantic-router..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
@@ -194,6 +255,65 @@ download-models:
 	@if [ ! -d "models/pii_classifier_modernbert_base_presidio_token_model" ]; then \
 		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
 	fi
+
+# Milvus container management
+start-milvus:
+	@echo "Starting Milvus container for testing with $(CONTAINER_RUNTIME)..."
+	@mkdir -p /tmp/milvus-data
+	@$(CONTAINER_RUNTIME) run -d \
+		--name milvus-semantic-cache \
+		--security-opt seccomp:unconfined \
+		-e ETCD_USE_EMBED=true \
+		-e ETCD_DATA_DIR=/var/lib/milvus/etcd \
+		-e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
+		-e COMMON_STORAGETYPE=local \
+		-e CLUSTER_ENABLED=false \
+		-p 19530:19530 \
+		-p 9091:9091 \
+		-v /tmp/milvus-data:/var/lib/milvus \
+		milvusdb/milvus:v2.3.3 \
+		milvus run standalone
+	@echo "Waiting for Milvus to be ready..."
+	@sleep 15
+	@echo "Milvus should be available at localhost:19530"
+
+stop-milvus:
+	@echo "Stopping Milvus container..."
+	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache || true
+	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache || true
+	@sudo rm -rf /tmp/milvus-data || true
+	@echo "Milvus container stopped and removed"
+
+restart-milvus: stop-milvus start-milvus
+
+milvus-status:
+	@echo "Checking Milvus container status..."
+	@if $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q milvus-semantic-cache; then \
+		echo "Milvus container is running:"; \
+		$(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
+	else \
+		echo "Milvus container is not running"; \
+		echo "Run 'make start-milvus' to start it"; \
+	fi
+
+clean-milvus: stop-milvus
+	@echo "Cleaning up Milvus data..."
+	@sudo rm -rf milvus-data || rm -rf milvus-data
+	@echo "Milvus data directory cleaned"
+
+# Test semantic cache with Milvus backend
+test-milvus-cache: start-milvus rust
+	@echo "Testing semantic cache with Milvus backend..."
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./pkg/cache/
+	@echo "Consider running 'make stop-milvus' when done testing"
+
+# Test semantic-router with Milvus enabled
+test-semantic-router-milvus: build-router start-milvus
+	@echo "Testing semantic-router with Milvus cache backend..."
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./...
+	@echo "Consider running 'make stop-milvus' when done testing"
 
 # Documentation targets
 docs-install:

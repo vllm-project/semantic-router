@@ -29,13 +29,16 @@ var _ = Describe("Caching Functionality", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Override cache with enabled configuration
-		cacheOptions := cache.SemanticCacheOptions{
+		cacheConfig := cache.CacheConfig{
+			BackendType:         cache.InMemoryCacheType,
 			Enabled:             true,
 			SimilarityThreshold: 0.9,
 			MaxEntries:          100,
 			TTLSeconds:          3600,
 		}
-		router.Cache = cache.NewSemanticCache(cacheOptions)
+		cacheBackend, err := cache.NewCacheBackend(cacheConfig)
+		Expect(err).NotTo(HaveOccurred())
+		router.Cache = cacheBackend
 	})
 
 	It("should handle cache miss scenario", func() {
@@ -207,13 +210,16 @@ var _ = Describe("Caching Functionality", func() {
 	Context("with cache disabled", func() {
 		BeforeEach(func() {
 			cfg.SemanticCache.Enabled = false
-			cacheOptions := cache.SemanticCacheOptions{
+			cacheConfig := cache.CacheConfig{
+				BackendType:         cache.InMemoryCacheType,
 				Enabled:             false,
 				SimilarityThreshold: 0.9,
 				MaxEntries:          100,
 				TTLSeconds:          3600,
 			}
-			router.Cache = cache.NewSemanticCache(cacheOptions)
+			cacheBackend, err := cache.NewCacheBackend(cacheConfig)
+			Expect(err).NotTo(HaveOccurred())
+			router.Cache = cacheBackend
 		})
 
 		It("should process requests normally without caching", func() {

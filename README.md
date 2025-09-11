@@ -34,7 +34,10 @@ The screenshot below shows the LLM Router dashboard in Grafana.
 
 ![LLM Router Dashboard](./website/static/img/grafana_screenshot.png)
 
-The router is implemented in two ways: Golang (with Rust FFI based on Candle) and Python. Benchmarking will be conducted to determine the best implementation.
+The router is implemented in two ways: 
+- Golang (with Rust FFI based on the [candle](https://github.com/huggingface/candle) rust ML framework)
+- Python
+Benchmarking will be conducted to determine the best implementation.
 
 #### Auto-Selection of Tools
 

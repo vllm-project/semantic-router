@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/metadata"
@@ -130,7 +129,15 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 		},
 		DefaultModel: "model-b",
-		SemanticCache: config.SemanticCacheConfig{
+		SemanticCache: struct {
+			BackendType         string   `yaml:"backend_type,omitempty"`
+			Enabled             bool     `yaml:"enabled"`
+			SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+			MaxEntries          int      `yaml:"max_entries,omitempty"`
+			TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
+			BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
+		}{
+			BackendType:         "memory",
 			Enabled:             false, // Disable for most tests
 			SimilarityThreshold: &[]float32{0.9}[0],
 			MaxEntries:          100,
@@ -195,20 +202,23 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 		return nil, err
 	}
 
-	// Initialize models using candle-binding
-	err = initializeTestModels(cfg, categoryMapping, piiMapping)
-	if err != nil {
-		return nil, err
+	// Initialize the BERT model for similarity search
+	if err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); err != nil {
+		return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
 	}
 
 	// Create semantic cache
-	cacheOptions := cache.SemanticCacheOptions{
+	cacheConfig := cache.CacheConfig{
+		BackendType:         cache.InMemoryCacheType,
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		Enabled:             cfg.SemanticCache.Enabled,
 	}
-	semanticCache := cache.NewSemanticCache(cacheOptions)
+	semanticCache, err := cache.NewCacheBackend(cacheConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create tools database
 	toolsOptions := tools.ToolsDatabaseOptions{
@@ -218,7 +228,10 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
 	// Create classifier
-	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create PII checker
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
@@ -237,68 +250,4 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	router.InitializeForTesting()
 
 	return router, nil
-}
-
-// initializeTestModels initializes the BERT and classifier models for testing
-func initializeTestModels(cfg *config.RouterConfig, categoryMapping *classification.CategoryMapping, piiMapping *classification.PIIMapping) error {
-	// Initialize the BERT model for similarity search
-	err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU)
-	if err != nil {
-		return fmt.Errorf("failed to initialize BERT model: %w", err)
-	}
-
-	// Initialize the classifier model if enabled
-	if categoryMapping != nil {
-		// Get the number of categories from the mapping
-		numClasses := categoryMapping.GetCategoryCount()
-		if numClasses < 2 {
-			log.Printf("Warning: Not enough categories for classification, need at least 2, got %d", numClasses)
-		} else {
-			// Use the category classifier model
-			classifierModelID := cfg.Classifier.CategoryModel.ModelID
-			if classifierModelID == "" {
-				classifierModelID = cfg.BertModel.ModelID
-			}
-
-			if cfg.Classifier.CategoryModel.UseModernBERT {
-				// Initialize ModernBERT classifier
-				err = candle_binding.InitModernBertClassifier(classifierModelID, cfg.Classifier.CategoryModel.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize ModernBERT classifier model: %w", err)
-				}
-				log.Printf("Initialized ModernBERT category classifier (classes auto-detected from model)")
-			} else {
-				// Initialize linear classifier
-				err = candle_binding.InitClassifier(classifierModelID, numClasses, cfg.Classifier.CategoryModel.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize classifier model: %w", err)
-				}
-				log.Printf("Initialized linear category classifier with %d categories", numClasses)
-			}
-		}
-	}
-
-	// Initialize PII classifier if enabled
-	if piiMapping != nil {
-		// Get the number of PII types from the mapping
-		numPIIClasses := piiMapping.GetPIITypeCount()
-		if numPIIClasses < 2 {
-			log.Printf("Warning: Not enough PII types for classification, need at least 2, got %d", numPIIClasses)
-		} else {
-			// Use the PII classifier model
-			piiClassifierModelID := cfg.Classifier.PIIModel.ModelID
-			if piiClassifierModelID == "" {
-				piiClassifierModelID = cfg.BertModel.ModelID
-			}
-
-			// Initialize ModernBERT PII token classifier for entity detection
-			err = candle_binding.InitModernBertPIITokenClassifier(piiClassifierModelID, cfg.Classifier.PIIModel.UseCPU)
-			if err != nil {
-				return fmt.Errorf("failed to initialize ModernBERT PII token classifier model: %w", err)
-			}
-			log.Printf("Initialized ModernBERT PII token classifier for entity detection")
-		}
-	}
-
-	return nil
 }

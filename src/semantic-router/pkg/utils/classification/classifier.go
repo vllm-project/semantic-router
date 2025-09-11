@@ -12,6 +12,40 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 )
 
+type CategoryInitializer interface {
+	Init(modelID string, useCPU bool, numClasses ...int) error
+}
+
+type LinearCategoryInitializer struct{}
+
+func (c *LinearCategoryInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitClassifier(modelID, numClasses[0], useCPU)
+	if err != nil {
+		return err
+	}
+	log.Printf("Initialized linear category classifier with %d classes", numClasses[0])
+	return nil
+}
+
+type ModernBertCategoryInitializer struct{}
+
+func (c *ModernBertCategoryInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitModernBertClassifier(modelID, useCPU)
+	if err != nil {
+		return err
+	}
+	log.Printf("Initialized ModernBERT category classifier (classes auto-detected from model)")
+	return nil
+}
+
+// createCategoryInitializer creates the appropriate category initializer based on configuration
+func createCategoryInitializer(useModernBERT bool) CategoryInitializer {
+	if useModernBERT {
+		return &ModernBertCategoryInitializer{}
+	}
+	return &LinearCategoryInitializer{}
+}
+
 type CategoryInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
@@ -45,7 +79,7 @@ type LinearJailbreakInitializer struct{}
 func (c *LinearJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
 	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
 	if err != nil {
-		return fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
+		return err
 	}
 	log.Printf("Initialized linear jailbreak classifier with %d classes", numClasses[0])
 	return nil
@@ -56,7 +90,7 @@ type ModernBertJailbreakInitializer struct{}
 func (c *ModernBertJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
 	err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
 	if err != nil {
-		return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier: %w", err)
+		return err
 	}
 	log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
 	return nil
@@ -94,6 +128,24 @@ func createJailbreakInference(useModernBERT bool) JailbreakInference {
 	return &LinearJailbreakInference{}
 }
 
+type PIIInitializer interface {
+	Init(modelID string, useCPU bool) error
+}
+
+type ModernBertPIIInitializer struct{}
+
+func (c *ModernBertPIIInitializer) Init(modelID string, useCPU bool) error {
+	err := candle_binding.InitModernBertPIITokenClassifier(modelID, useCPU)
+	if err != nil {
+		return err
+	}
+	log.Printf("Initialized ModernBERT PII token classifier for entity detection")
+	return nil
+}
+
+// createPIIInitializer creates the appropriate PII initializer (currently only ModernBERT)
+func createPIIInitializer() PIIInitializer { return &ModernBertPIIInitializer{} }
+
 type PIIInference interface {
 	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
 }
@@ -105,9 +157,7 @@ func (c *ModernBertPIIInference) ClassifyTokens(text string, configPath string) 
 }
 
 // createPIIInference creates the appropriate PII inference (currently only ModernBERT)
-func createPIIInference() PIIInference {
-	return &ModernBertPIIInference{}
-}
+func createPIIInference() PIIInference { return &ModernBertPIIInference{} }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
 type JailbreakDetection struct {
@@ -138,52 +188,151 @@ type PIIAnalysisResult struct {
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	// Dependencies
+	categoryInitializer  CategoryInitializer
 	categoryInference    CategoryInference
 	jailbreakInitializer JailbreakInitializer
 	jailbreakInference   JailbreakInference
+	piiInitializer       PIIInitializer
 	piiInference         PIIInference
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
-	// Jailbreak detection state
-	JailbreakInitialized bool
 }
 
-// NewClassifier creates a new classifier with model selection and jailbreak detection capabilities
-func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) *Classifier {
-	return &Classifier{
-		categoryInference:    createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT),
-		jailbreakInitializer: createJailbreakInitializer(cfg.PromptGuard.UseModernBERT),
-		jailbreakInference:   createJailbreakInference(cfg.PromptGuard.UseModernBERT),
-		piiInference:         createPIIInference(),
+type option func(*Classifier)
 
-		Config:               cfg,
-		CategoryMapping:      categoryMapping,
-		PIIMapping:           piiMapping,
-		JailbreakMapping:     jailbreakMapping,
-		JailbreakInitialized: false,
+func withCategory(categoryMapping *CategoryMapping, categoryInitializer CategoryInitializer, categoryInference CategoryInference) option {
+	return func(c *Classifier) {
+		c.CategoryMapping = categoryMapping
+		c.categoryInitializer = categoryInitializer
+		c.categoryInference = categoryInference
 	}
 }
 
-// InitializeJailbreakClassifier initializes the jailbreak classification model
-func (c *Classifier) InitializeJailbreakClassifier() error {
-	if !c.IsJailbreakEnabled() {
-		return nil
+func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference JailbreakInference) option {
+	return func(c *Classifier) {
+		c.JailbreakMapping = jailbreakMapping
+		c.jailbreakInitializer = jailbreakInitializer
+		c.jailbreakInference = jailbreakInference
+	}
+}
+
+func withPII(piiMapping *PIIMapping, piiInitializer PIIInitializer, piiInference PIIInference) option {
+	return func(c *Classifier) {
+		c.PIIMapping = piiMapping
+		c.piiInitializer = piiInitializer
+		c.piiInference = piiInference
+	}
+}
+
+// initModels initializes the models for the classifier
+func initModels(classifier *Classifier) (*Classifier, error) {
+	if classifier.IsCategoryEnabled() {
+		if err := classifier.initializeCategoryClassifier(); err != nil {
+			return nil, err
+		}
 	}
 
-	numClasses := c.JailbreakMapping.GetJailbreakTypeCount()
+	if classifier.IsJailbreakEnabled() {
+		if err := classifier.initializeJailbreakClassifier(); err != nil {
+			return nil, err
+		}
+	}
+
+	if classifier.IsPIIEnabled() {
+		if err := classifier.initializePIIClassifier(); err != nil {
+			return nil, err
+		}
+	}
+
+	return classifier, nil
+}
+
+// newClassifierWithOptions creates a new classifier with the given options
+func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Classifier, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config is nil")
+	}
+
+	classifier := &Classifier{Config: cfg}
+
+	for _, option := range options {
+		option(classifier)
+	}
+
+	return initModels(classifier)
+}
+
+// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities
+func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
+	return newClassifierWithOptions(
+		cfg,
+		withCategory(categoryMapping, createCategoryInitializer(cfg.Classifier.CategoryModel.UseModernBERT), createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT)),
+		withJailbreak(jailbreakMapping, createJailbreakInitializer(cfg.PromptGuard.UseModernBERT), createJailbreakInference(cfg.PromptGuard.UseModernBERT)),
+		withPII(piiMapping, createPIIInitializer(), createPIIInference()),
+	)
+}
+
+// IsCategoryEnabled checks if category classification is properly configured
+func (c *Classifier) IsCategoryEnabled() bool {
+	return c.Config.Classifier.CategoryModel.ModelID != "" && c.Config.Classifier.CategoryModel.CategoryMappingPath != "" && c.CategoryMapping != nil
+}
+
+// initializeCategoryClassifier initializes the category classification model
+func (c *Classifier) initializeCategoryClassifier() error {
+	if !c.IsCategoryEnabled() || c.categoryInitializer == nil {
+		return fmt.Errorf("category classification is not properly configured")
+	}
+
+	numClasses := c.CategoryMapping.GetCategoryCount()
 	if numClasses < 2 {
-		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
+		return fmt.Errorf("not enough categories for classification, need at least 2, got %d", numClasses)
 	}
 
-	if err := c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses); err != nil {
-		return err
+	return c.categoryInitializer.Init(c.Config.Classifier.CategoryModel.ModelID, c.Config.Classifier.CategoryModel.UseCPU, numClasses)
+}
+
+// ClassifyCategory performs category classification on the given text
+func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
+	if !c.IsCategoryEnabled() {
+		return "", 0.0, fmt.Errorf("category classification is not properly configured")
 	}
 
-	c.JailbreakInitialized = true
-	return nil
+	// Use appropriate classifier based on configuration
+	var result candle_binding.ClassResult
+	var err error
+
+	start := time.Now()
+	result, err = c.categoryInference.Classify(text)
+	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
+
+	if err != nil {
+		return "", 0.0, fmt.Errorf("classification error: %w", err)
+	}
+
+	log.Printf("Classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
+
+	// Check confidence threshold
+	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
+		log.Printf("Classification confidence (%.4f) below threshold (%.4f)",
+			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
+		return "", float64(result.Confidence), nil
+	}
+
+	// Convert class index to category name
+	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
+	if !ok {
+		log.Printf("Class index %d not found in category mapping", result.Class)
+		return "", float64(result.Confidence), nil
+	}
+
+	// Record the category classification metric
+	metrics.RecordCategoryClassification(categoryName)
+
+	log.Printf("Classified as category: %s", categoryName)
+	return categoryName, float64(result.Confidence), nil
 }
 
 // IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured
@@ -191,10 +340,24 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 	return c.Config.PromptGuard.Enabled && c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != "" && c.JailbreakMapping != nil
 }
 
+// initializeJailbreakClassifier initializes the jailbreak classification model
+func (c *Classifier) initializeJailbreakClassifier() error {
+	if !c.IsJailbreakEnabled() || c.jailbreakInitializer == nil {
+		return fmt.Errorf("jailbreak detection is not properly configured")
+	}
+
+	numClasses := c.JailbreakMapping.GetJailbreakTypeCount()
+	if numClasses < 2 {
+		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
+	}
+
+	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
+}
+
 // CheckForJailbreak analyzes the given text for jailbreak attempts
 func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, error) {
-	if !c.IsJailbreakEnabled() || !c.JailbreakInitialized {
-		return false, "", 0.0, nil
+	if !c.IsJailbreakEnabled() {
+		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
 
 	if text == "" {
@@ -236,8 +399,8 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 
 // AnalyzeContentForJailbreak analyzes multiple content pieces for jailbreak attempts
 func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []JailbreakDetection, error) {
-	if !c.IsJailbreakEnabled() || !c.JailbreakInitialized {
-		return false, nil, nil
+	if !c.IsJailbreakEnabled() {
+		return false, nil, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
 
 	var detections []JailbreakDetection
@@ -272,51 +435,29 @@ func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []J
 	return hasJailbreak, detections, nil
 }
 
-// ClassifyCategory performs category classification on the given text
-func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
-	if c.CategoryMapping == nil {
-		return "", 0.0, fmt.Errorf("category mapping not initialized")
+// IsPIIEnabled checks if PII detection is properly configured
+func (c *Classifier) IsPIIEnabled() bool {
+	return c.Config.Classifier.PIIModel.ModelID != "" && c.Config.Classifier.PIIModel.PIIMappingPath != "" && c.PIIMapping != nil
+}
+
+// initializePIIClassifier initializes the PII token classification model
+func (c *Classifier) initializePIIClassifier() error {
+	if !c.IsPIIEnabled() || c.piiInitializer == nil {
+		return fmt.Errorf("PII detection is not properly configured")
 	}
 
-	// Use appropriate classifier based on configuration
-	var result candle_binding.ClassResult
-	var err error
-
-	start := time.Now()
-	result, err = c.categoryInference.Classify(text)
-	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
-
-	if err != nil {
-		return "", 0.0, fmt.Errorf("classification error: %w", err)
+	numPIIClasses := c.PIIMapping.GetPIITypeCount()
+	if numPIIClasses < 2 {
+		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	log.Printf("Classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
-
-	// Check confidence threshold
-	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
-		log.Printf("Classification confidence (%.4f) below threshold (%.4f)",
-			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
-		return "", float64(result.Confidence), nil
-	}
-
-	// Convert class index to category name
-	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
-	if !ok {
-		log.Printf("Class index %d not found in category mapping", result.Class)
-		return "", float64(result.Confidence), nil
-	}
-
-	// Record the category classification metric
-	metrics.RecordCategoryClassification(categoryName)
-
-	log.Printf("Classified as category: %s", categoryName)
-	return categoryName, float64(result.Confidence), nil
+	return c.piiInitializer.Init(c.Config.Classifier.PIIModel.ModelID, c.Config.Classifier.PIIModel.UseCPU)
 }
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types
 func (c *Classifier) ClassifyPII(text string) ([]string, error) {
-	if c.PIIMapping == nil {
-		return []string{}, nil // No PII classifier enabled
+	if !c.IsPIIEnabled() {
+		return []string{}, fmt.Errorf("PII detection is not properly configured")
 	}
 
 	if text == "" {
@@ -389,8 +530,8 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 
 // AnalyzeContentForPII performs detailed PII analysis on multiple content pieces
 func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnalysisResult, error) {
-	if c.PIIMapping == nil {
-		return false, nil, nil // No PII classifier enabled
+	if !c.IsPIIEnabled() {
+		return false, nil, fmt.Errorf("PII detection is not properly configured")
 	}
 
 	var analysisResults []PIIAnalysisResult

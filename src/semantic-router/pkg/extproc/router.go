@@ -16,18 +16,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
-var (
-	initialized bool
-	initMutex   sync.Mutex
-)
-
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests
 type OpenAIRouter struct {
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
 	PIIChecker           *pii.PolicyChecker
-	Cache                *cache.SemanticCache
+	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
 
 	// Map to track pending requests and their unique IDs
@@ -47,9 +42,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 	// Update global config reference for packages that rely on config.GetConfig()
 	config.ReplaceGlobalConfig(cfg)
-
-	initMutex.Lock()
-	defer initMutex.Unlock()
 
 	// Load category mapping if classifier is enabled
 	var categoryMapping *classification.CategoryMapping
@@ -81,28 +73,40 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		log.Printf("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
-	if !initialized {
-		if err := initializeModels(cfg, categoryMapping, piiMapping, jailbreakMapping); err != nil {
-			return nil, err
-		}
-		initialized = true
+	// Initialize the BERT model for similarity search
+	if err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); err != nil {
+		return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
 	log.Printf("Category descriptions: %v", categoryDescriptions)
 
 	// Create semantic cache with config options
-	cacheOptions := cache.SemanticCacheOptions{
+	cacheConfig := cache.CacheConfig{
+		BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		Enabled:             cfg.SemanticCache.Enabled,
+		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
 	}
-	semanticCache := cache.NewSemanticCache(cacheOptions)
+
+	// Use default backend type if not specified
+	if cacheConfig.BackendType == "" {
+		cacheConfig.BackendType = cache.InMemoryCacheType
+	}
+
+	semanticCache, err := cache.NewCacheBackend(cacheConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create semantic cache: %w", err)
+	}
 
 	if semanticCache.IsEnabled() {
-		log.Printf("Semantic cache enabled with threshold: %.4f, max entries: %d, TTL: %d seconds",
-			cacheOptions.SimilarityThreshold, cacheOptions.MaxEntries, cacheOptions.TTLSeconds)
+		log.Printf("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
+			cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.TTLSeconds)
+		if cacheConfig.BackendType == cache.InMemoryCacheType {
+			log.Printf("In-memory cache max entries: %d", cacheConfig.MaxEntries)
+		}
 	} else {
 		log.Println("Semantic cache is disabled")
 	}
@@ -131,18 +135,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create utility components
 	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-	classifier := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create classifier: %w", err)
+	}
 
 	// Create global classification service for API access
 	services.NewClassificationService(classifier, cfg)
-
-	// Initialize jailbreak classifier if enabled
-	if jailbreakMapping != nil {
-		err = classifier.InitializeJailbreakClassifier()
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize jailbreak classifier: %w", err)
-		}
-	}
 
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -158,99 +158,4 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	router.logReasoningConfiguration()
 
 	return router, nil
-}
-
-// initializeModels initializes the BERT and classifier models
-func initializeModels(cfg *config.RouterConfig, categoryMapping *classification.CategoryMapping, piiMapping *classification.PIIMapping, jailbreakMapping *classification.JailbreakMapping) error {
-	// Initialize the BERT model for similarity search
-	err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU)
-	if err != nil {
-		return fmt.Errorf("failed to initialize BERT model: %w", err)
-	}
-
-	// Initialize the classifier model if enabled
-	if categoryMapping != nil {
-		// Get the number of categories from the mapping
-		numClasses := categoryMapping.GetCategoryCount()
-		if numClasses < 2 {
-			log.Printf("Warning: Not enough categories for classification, need at least 2, got %d", numClasses)
-		} else {
-			// Use the category classifier model
-			classifierModelID := cfg.Classifier.CategoryModel.ModelID
-			if classifierModelID == "" {
-				classifierModelID = cfg.BertModel.ModelID
-			}
-
-			if cfg.Classifier.CategoryModel.UseModernBERT {
-				// Initialize ModernBERT classifier
-				err = candle_binding.InitModernBertClassifier(classifierModelID, cfg.Classifier.CategoryModel.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize ModernBERT classifier model: %w", err)
-				}
-				log.Printf("Initialized ModernBERT category classifier (classes auto-detected from model)")
-			} else {
-				// Initialize linear classifier
-				err = candle_binding.InitClassifier(classifierModelID, numClasses, cfg.Classifier.CategoryModel.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize classifier model: %w", err)
-				}
-				log.Printf("Initialized linear category classifier with %d categories", numClasses)
-			}
-		}
-	}
-
-	// Initialize PII classifier if enabled
-	if piiMapping != nil {
-		// Get the number of PII types from the mapping
-		numPIIClasses := piiMapping.GetPIITypeCount()
-		if numPIIClasses < 2 {
-			log.Printf("Warning: Not enough PII types for classification, need at least 2, got %d", numPIIClasses)
-		} else {
-			// Use the PII classifier model
-			piiClassifierModelID := cfg.Classifier.PIIModel.ModelID
-			if piiClassifierModelID == "" {
-				piiClassifierModelID = cfg.BertModel.ModelID
-			}
-
-			// Initialize ModernBERT PII token classifier for entity detection
-			err = candle_binding.InitModernBertPIITokenClassifier(piiClassifierModelID, cfg.Classifier.PIIModel.UseCPU)
-			if err != nil {
-				return fmt.Errorf("failed to initialize ModernBERT PII token classifier model: %w", err)
-			}
-			log.Printf("Initialized ModernBERT PII token classifier for entity detection")
-		}
-	}
-
-	// Initialize jailbreak classifier if enabled
-	if jailbreakMapping != nil {
-		// Get the number of jailbreak types from the mapping
-		numJailbreakClasses := jailbreakMapping.GetJailbreakTypeCount()
-		if numJailbreakClasses < 2 {
-			log.Printf("Warning: Not enough jailbreak types for classification, need at least 2, got %d", numJailbreakClasses)
-		} else {
-			// Use the jailbreak classifier model
-			jailbreakClassifierModelID := cfg.PromptGuard.ModelID
-			if jailbreakClassifierModelID == "" {
-				jailbreakClassifierModelID = cfg.BertModel.ModelID
-			}
-
-			if cfg.PromptGuard.UseModernBERT {
-				// Initialize ModernBERT jailbreak classifier
-				err = candle_binding.InitModernBertJailbreakClassifier(jailbreakClassifierModelID, cfg.PromptGuard.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize ModernBERT jailbreak classifier model: %w", err)
-				}
-				log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
-			} else {
-				// Initialize linear jailbreak classifier
-				err = candle_binding.InitJailbreakClassifier(jailbreakClassifierModelID, numJailbreakClasses, cfg.PromptGuard.UseCPU)
-				if err != nil {
-					return fmt.Errorf("failed to initialize jailbreak classifier model: %w", err)
-				}
-				log.Printf("Initialized linear jailbreak classifier with %d jailbreak types", numJailbreakClasses)
-			}
-		}
-	}
-
-	return nil
 }
