@@ -273,6 +273,62 @@ var (
 		},
 		[]string{"family", "effort"},
 	)
+
+	// EntropyClassificationDecisions tracks entropy-based reasoning decisions
+	EntropyClassificationDecisions = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_entropy_classification_decisions_total",
+			Help: "The total number of entropy-based classification decisions by uncertainty level and reasoning outcome",
+		},
+		[]string{"uncertainty_level", "reasoning_enabled", "decision_reason", "top_category"},
+	)
+
+	// EntropyValues tracks the distribution of entropy values in classifications
+	EntropyValues = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_entropy_values",
+			Help:    "Distribution of Shannon entropy values in classification decisions",
+			Buckets: []float64{0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0},
+		},
+		[]string{"category", "classification_type"},
+	)
+
+	// ClassificationConfidence tracks confidence scores from probability distributions
+	ClassificationConfidence = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_classification_confidence",
+			Help:    "Distribution of classification confidence scores",
+			Buckets: []float64{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		},
+		[]string{"category", "classification_method"},
+	)
+
+	// EntropyClassificationLatency tracks the latency of entropy-based classification
+	EntropyClassificationLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "llm_entropy_classification_latency_seconds",
+			Help:    "The latency of entropy-based classification operations in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
+		},
+	)
+
+	// ProbabilityDistributionQuality tracks quality metrics of probability distributions
+	ProbabilityDistributionQuality = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_probability_distribution_quality_total",
+			Help: "Quality indicators for probability distributions from classification models",
+		},
+		[]string{"quality_check", "status"},
+	)
+
+	// EntropyFallbackUsage tracks when entropy-based routing falls back to traditional methods
+	EntropyFallbackUsage = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_entropy_fallback_usage_total",
+			Help: "The number of times entropy-based routing falls back to traditional classification",
+		},
+		[]string{"fallback_reason", "fallback_strategy"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model
@@ -612,4 +668,103 @@ func RecordReasoningEffortUsage(family, effort string) {
 		effort = "unspecified"
 	}
 	ReasoningEffortUsage.WithLabelValues(family, effort).Inc()
+}
+
+// RecordEntropyClassificationDecision records an entropy-based classification decision
+func RecordEntropyClassificationDecision(uncertaintyLevel string, reasoningEnabled bool, decisionReason string, topCategory string) {
+	if uncertaintyLevel == "" {
+		uncertaintyLevel = "unknown"
+	}
+	if decisionReason == "" {
+		decisionReason = "unspecified"
+	}
+	if topCategory == "" {
+		topCategory = "none"
+	}
+
+	reasoningStatus := "false"
+	if reasoningEnabled {
+		reasoningStatus = "true"
+	}
+
+	EntropyClassificationDecisions.WithLabelValues(uncertaintyLevel, reasoningStatus, decisionReason, topCategory).Inc()
+}
+
+// RecordEntropyValue records the entropy value for a classification
+func RecordEntropyValue(category string, classificationType string, entropyValue float64) {
+	if category == "" {
+		category = "unknown"
+	}
+	if classificationType == "" {
+		classificationType = "standard"
+	}
+
+	EntropyValues.WithLabelValues(category, classificationType).Observe(entropyValue)
+}
+
+// RecordClassificationConfidence records the confidence score from classification
+func RecordClassificationConfidence(category string, classificationMethod string, confidence float64) {
+	if category == "" {
+		category = "unknown"
+	}
+	if classificationMethod == "" {
+		classificationMethod = "traditional"
+	}
+
+	ClassificationConfidence.WithLabelValues(category, classificationMethod).Observe(confidence)
+}
+
+// RecordEntropyClassificationLatency records the latency of entropy-based classification
+func RecordEntropyClassificationLatency(seconds float64) {
+	EntropyClassificationLatency.Observe(seconds)
+}
+
+// RecordProbabilityDistributionQuality records quality checks for probability distributions
+func RecordProbabilityDistributionQuality(qualityCheck string, status string) {
+	if qualityCheck == "" {
+		qualityCheck = "unknown"
+	}
+	if status == "" {
+		status = "unknown"
+	}
+
+	ProbabilityDistributionQuality.WithLabelValues(qualityCheck, status).Inc()
+}
+
+// RecordEntropyFallback records when entropy-based routing falls back to traditional methods
+func RecordEntropyFallback(fallbackReason string, fallbackStrategy string) {
+	if fallbackReason == "" {
+		fallbackReason = "unknown"
+	}
+	if fallbackStrategy == "" {
+		fallbackStrategy = "unspecified"
+	}
+
+	EntropyFallbackUsage.WithLabelValues(fallbackReason, fallbackStrategy).Inc()
+}
+
+// RecordEntropyClassificationMetrics records comprehensive entropy-based classification metrics
+func RecordEntropyClassificationMetrics(
+	category string,
+	uncertaintyLevel string,
+	entropyValue float64,
+	confidence float64,
+	reasoningEnabled bool,
+	decisionReason string,
+	topCategory string,
+	latencySeconds float64,
+) {
+	// Record the main decision
+	RecordEntropyClassificationDecision(uncertaintyLevel, reasoningEnabled, decisionReason, topCategory)
+
+	// Record entropy value
+	RecordEntropyValue(category, "entropy_based", entropyValue)
+
+	// Record confidence
+	RecordClassificationConfidence(category, "entropy_based", confidence)
+
+	// Record latency if provided
+	if latencySeconds > 0 {
+		RecordEntropyClassificationLatency(latencySeconds)
+	}
 }

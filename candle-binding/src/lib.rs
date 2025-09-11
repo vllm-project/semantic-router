@@ -604,6 +604,73 @@ impl BertClassifier {
 
         Ok((predicted_idx, max_prob))
     }
+
+    // Classify text and return full probability distribution
+    pub fn classify_text_with_probs(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
+        let tokens = self
+            .tokenizer
+            .encode(text, true)
+            .map_err(E::msg)?
+            .get_ids()
+            .to_vec();
+
+        let token_ids = Tensor::new(&tokens[..], &self.device)?.unsqueeze(0)?;
+        let token_type_ids = token_ids.zeros_like()?;
+        let position_ids = Tensor::arange(0, tokens.len() as i64, &self.device)?
+            .unsqueeze(0)?
+            .to_dtype(candle_core::DType::U32)?;
+
+        let embeddings = self
+            .model
+            .forward(&token_ids, &token_type_ids, Some(&position_ids))?;
+
+        // Pool embeddings (mean pooling)
+        let (_n_sentence, n_tokens, _hidden_size) = embeddings.dims3()?;
+        let embeddings = embeddings.sum(1)?;
+        let pooled_embedding = (embeddings / (n_tokens as f64))?;
+
+        // Get classification head weights and bias
+        let weights = self.classification_head.weight();
+        let bias = self.classification_head.bias().unwrap();
+
+        // Apply classification head
+        // If weights are already transposed to [in_features, out_features]
+        let logits = pooled_embedding.matmul(&weights)?;
+
+        // Add bias
+        let logits = logits.broadcast_add(&bias)?;
+
+        // If logits has shape [1, num_classes], squeeze it to get [num_classes]
+        let logits = if logits.dims().len() > 1 {
+            logits.squeeze(0)?
+        } else {
+            logits
+        };
+
+        // Apply softmax to get probabilities
+        let logits_vec = logits.to_vec1::<f32>()?;
+        let max_logit = logits_vec.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let exp_values: Vec<f32> = logits_vec.iter().map(|&x| (x - max_logit).exp()).collect();
+        let exp_sum: f32 = exp_values.iter().sum();
+        let probabilities: Vec<f32> = exp_values.iter().map(|&x| x / exp_sum).collect();
+
+        // Get the predicted class with highest probability
+        let (predicted_idx, &max_prob) = probabilities
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or((0, &0.0));
+
+        // Ensure we don't return a class index outside our expected range
+        if predicted_idx >= self.num_classes {
+            return Err(E::msg(format!(
+                "Invalid class index: {} (num_classes: {})",
+                predicted_idx, self.num_classes
+            )));
+        }
+
+        Ok((predicted_idx, max_prob, probabilities))
+    }
 }
 
 // Tokenize text (called from Go)
@@ -977,6 +1044,15 @@ pub struct ClassificationResult {
     pub confidence: f32,
 }
 
+// Structure to hold classification result with full probability distribution
+#[repr(C)]
+pub struct ClassificationResultWithProbs {
+    pub class: i32,
+    pub confidence: f32,
+    pub probabilities: *mut f32,
+    pub num_classes: i32,
+}
+
 // Initialize the BERT classifier model (called from Go)
 #[no_mangle]
 pub extern "C" fn init_classifier(
@@ -1106,6 +1182,65 @@ pub extern "C" fn classify_text(text: *const c_char) -> ClassificationResult {
         None => {
             eprintln!("BERT classifier not initialized");
             default_result
+        }
+    }
+}
+
+// Classify text and return full probability distribution (called from Go)
+#[no_mangle]
+pub extern "C" fn classify_text_with_probabilities(
+    text: *const c_char,
+) -> ClassificationResultWithProbs {
+    let default_result = ClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    let bert_opt = BERT_CLASSIFIER.lock().unwrap();
+    match &*bert_opt {
+        Some(classifier) => match classifier.classify_text_with_probs(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                // Allocate memory for probabilities array
+                let prob_len = probabilities.len();
+                let prob_ptr = Box::into_raw(probabilities.into_boxed_slice()) as *mut f32;
+
+                ClassificationResultWithProbs {
+                    class: class_idx as i32,
+                    confidence,
+                    probabilities: prob_ptr,
+                    num_classes: prob_len as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!("Error classifying text with probabilities: {e}");
+                default_result
+            }
+        },
+        None => {
+            eprintln!("BERT classifier not initialized");
+            default_result
+        }
+    }
+}
+
+// Free the probability array allocated by classify_text_with_probabilities
+#[no_mangle]
+pub extern "C" fn free_probabilities(probabilities: *mut f32, num_classes: i32) {
+    if !probabilities.is_null() && num_classes > 0 {
+        unsafe {
+            let _: Box<[f32]> = Box::from_raw(std::slice::from_raw_parts_mut(
+                probabilities,
+                num_classes as usize,
+            ));
         }
     }
 }

@@ -363,9 +363,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				log.Printf("Routing to model: %s", matchedModel)
 
-				// Check reasoning mode for this category
-				useReasoning, categoryName := r.getReasoningModeAndCategory(userContent)
-				log.Printf("Reasoning mode decision for this query: %v on [%s] model", useReasoning, matchedModel)
+				// Check reasoning mode for this category using entropy-based approach
+				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
+				log.Printf("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
+					useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 				// Record reasoning decision metric with the effort that will be applied if enabled
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)

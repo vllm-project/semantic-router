@@ -10,6 +10,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
 type CategoryInitializer interface {
@@ -452,6 +453,138 @@ func (c *Classifier) initializePIIClassifier() error {
 	}
 
 	return c.piiInitializer.Init(c.Config.Classifier.PIIModel.ModelID, c.Config.Classifier.PIIModel.UseCPU)
+}
+
+// ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
+func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
+	if c.CategoryMapping == nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category mapping not initialized")
+	}
+
+	// Get full probability distribution
+	var result candle_binding.ClassResultWithProbs
+	var err error
+
+	start := time.Now()
+	if c.Config.Classifier.CategoryModel.UseModernBERT {
+		// Use ModernBERT classifier with full probability distribution support
+		result, err = candle_binding.ClassifyModernBertTextWithProbabilities(text)
+	} else {
+		// Use linear classifier with full probability distribution
+		result, err = candle_binding.ClassifyTextWithProbabilities(text)
+	}
+	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
+
+	if err != nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
+	}
+
+	log.Printf("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
+		result.Class, result.Confidence, len(result.Probabilities) > 0)
+
+	// Get category names for all classes
+	categoryNames := make([]string, len(result.Probabilities))
+	for i := range result.Probabilities {
+		if name, ok := c.CategoryMapping.GetCategoryFromIndex(i); ok {
+			categoryNames[i] = name
+		} else {
+			categoryNames[i] = fmt.Sprintf("unknown_%d", i)
+		}
+	}
+
+	// Build category reasoning map from configuration
+	categoryReasoningMap := make(map[string]bool)
+	for _, category := range c.Config.Categories {
+		categoryReasoningMap[strings.ToLower(category.Name)] = category.UseReasoning
+	}
+
+	// Make entropy-based reasoning decision
+	entropyStart := time.Now()
+	reasoningDecision := entropy.MakeEntropyBasedReasoningDecision(
+		result.Probabilities,
+		categoryNames,
+		categoryReasoningMap,
+		float64(c.Config.Classifier.CategoryModel.Threshold),
+	)
+	entropyLatency := time.Since(entropyStart).Seconds()
+
+	// Calculate entropy value for metrics
+	entropyValue := entropy.CalculateEntropy(result.Probabilities)
+
+	// Determine top category for metrics
+	topCategory := "none"
+	if len(reasoningDecision.TopCategories) > 0 {
+		topCategory = reasoningDecision.TopCategories[0].Category
+	}
+
+	// Validate probability distribution quality
+	probSum := float32(0.0)
+	for _, prob := range result.Probabilities {
+		probSum += prob
+	}
+
+	// Record probability distribution quality checks
+	if probSum >= 0.99 && probSum <= 1.01 {
+		metrics.RecordProbabilityDistributionQuality("sum_check", "valid")
+	} else {
+		metrics.RecordProbabilityDistributionQuality("sum_check", "invalid")
+		log.Printf("Warning: Probability distribution sum is %.3f (should be ~1.0)", probSum)
+	}
+
+	// Check for negative probabilities
+	hasNegative := false
+	for _, prob := range result.Probabilities {
+		if prob < 0 {
+			hasNegative = true
+			break
+		}
+	}
+
+	if hasNegative {
+		metrics.RecordProbabilityDistributionQuality("negative_check", "invalid")
+	} else {
+		metrics.RecordProbabilityDistributionQuality("negative_check", "valid")
+	}
+
+	// Calculate uncertainty level from entropy value
+	entropyResult := entropy.AnalyzeEntropy(result.Probabilities)
+	uncertaintyLevel := entropyResult.UncertaintyLevel
+
+	// Record comprehensive entropy classification metrics
+	metrics.RecordEntropyClassificationMetrics(
+		topCategory,
+		uncertaintyLevel,
+		entropyValue,
+		reasoningDecision.Confidence,
+		reasoningDecision.UseReasoning,
+		reasoningDecision.DecisionReason,
+		topCategory,
+		entropyLatency,
+	)
+
+	// Check confidence threshold for category determination
+	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
+		log.Printf("Classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
+			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
+
+		// Still return reasoning decision based on entropy even if confidence is low
+		return "", float64(result.Confidence), reasoningDecision, nil
+	}
+
+	// Convert class index to category name
+	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
+	if !ok {
+		log.Printf("Class index %d not found in category mapping", result.Class)
+		return "", float64(result.Confidence), reasoningDecision, nil
+	}
+
+	// Record the category classification metric
+	metrics.RecordCategoryClassification(categoryName)
+
+	log.Printf("Classified as category: %s, reasoning_decision: use=%t, confidence=%.3f, reason=%s",
+		categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
+
+	return categoryName, float64(result.Confidence), reasoningDecision, nil
 }
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types

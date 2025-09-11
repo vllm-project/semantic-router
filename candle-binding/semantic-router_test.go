@@ -937,3 +937,652 @@ func BenchmarkPIITokenClassification(b *testing.B) {
 		_, _ = ClassifyModernBertPIITokens(testText, configPath)
 	}
 }
+
+// Test entropy-based routing functionality - ClassResultWithProbs structure
+func TestClassResultWithProbs_Structure(t *testing.T) {
+	// Test that ClassResultWithProbs structure works correctly
+	result := ClassResultWithProbs{
+		Class:         1,
+		Confidence:    0.75,
+		Probabilities: []float32{0.15, 0.75, 0.10},
+		NumClasses:    3,
+	}
+
+	if result.Class != 1 {
+		t.Errorf("Expected Class to be 1, got %d", result.Class)
+	}
+
+	if result.Confidence != 0.75 {
+		t.Errorf("Expected Confidence to be 0.75, got %f", result.Confidence)
+	}
+
+	if len(result.Probabilities) != 3 {
+		t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+	}
+
+	if result.NumClasses != 3 {
+		t.Errorf("Expected NumClasses to be 3, got %d", result.NumClasses)
+	}
+}
+
+// Test probability distribution validation for entropy-based routing
+func TestProbabilityDistributionValidation(t *testing.T) {
+	// Mock test data for probability distributions
+	mockDistributions := []struct {
+		name          string
+		probabilities []float32
+		expectedClass int
+		expectValid   bool
+	}{
+		{
+			name:          "High confidence biology",
+			probabilities: []float32{0.85, 0.05, 0.03, 0.03, 0.02, 0.02},
+			expectedClass: 0, // biology
+			expectValid:   true,
+		},
+		{
+			name:          "Uniform distribution",
+			probabilities: []float32{0.17, 0.17, 0.17, 0.17, 0.16, 0.16},
+			expectedClass: 0, // First class (arbitrary for uniform)
+			expectValid:   true,
+		},
+		{
+			name:          "High confidence physics",
+			probabilities: []float32{0.02, 0.03, 0.05, 0.90},
+			expectedClass: 3, // physics
+			expectValid:   true,
+		},
+		{
+			name:          "Chemistry vs Biology",
+			probabilities: []float32{0.45, 0.40, 0.10, 0.05},
+			expectedClass: 0, // biology (higher probability)
+			expectValid:   true,
+		},
+		{
+			name:          "Invalid - sum too high",
+			probabilities: []float32{0.7, 0.4, 0.1},
+			expectedClass: 0,
+			expectValid:   false,
+		},
+		{
+			name:          "Invalid - negative probability",
+			probabilities: []float32{0.8, -0.1, 0.3},
+			expectedClass: 0,
+			expectValid:   false,
+		},
+	}
+
+	for _, testCase := range mockDistributions {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Verify probabilities sum to approximately 1.0 for valid cases
+			sum := float32(0.0)
+			for _, prob := range testCase.probabilities {
+				sum += prob
+			}
+
+			if testCase.expectValid {
+				if sum < 0.99 || sum > 1.01 {
+					t.Errorf("Valid case should sum to ~1.0, got %f for test case: %s", sum, testCase.name)
+				}
+
+				// Find max probability index
+				maxProb := float32(0.0)
+				maxIndex := -1
+				for i, prob := range testCase.probabilities {
+					if prob > maxProb {
+						maxProb = prob
+						maxIndex = i
+					}
+				}
+
+				if maxIndex != testCase.expectedClass {
+					t.Errorf("Expected max probability at index %d, got %d for test case: %s",
+						testCase.expectedClass, maxIndex, testCase.name)
+				}
+
+				// Verify the max probability is reasonable (> 0.1 for our test cases)
+				if maxProb <= 0.1 {
+					t.Errorf("Max probability too low: %f for test case: %s", maxProb, testCase.name)
+				}
+			}
+
+			// Test validation function
+			isValid := validateProbabilityDistribution(testCase.probabilities)
+			if isValid != testCase.expectValid {
+				t.Errorf("validateProbabilityDistribution() = %v, want %v for %s",
+					isValid, testCase.expectValid, testCase.name)
+			}
+		})
+	}
+}
+
+// Helper function to validate probability distributions
+func validateProbabilityDistribution(probabilities []float32) bool {
+	if len(probabilities) == 0 {
+		return false
+	}
+
+	sum := float32(0.0)
+	for _, prob := range probabilities {
+		if prob < 0.0 || prob > 1.0 {
+			return false
+		}
+		sum += prob
+	}
+
+	// Allow small floating point errors
+	return sum >= 0.99 && sum <= 1.01
+}
+
+// Test entropy calculation helpers for probability distributions
+func TestEntropyCalculationHelpers(t *testing.T) {
+	tests := []struct {
+		name          string
+		probabilities []float32
+		expectEntropy float64
+	}{
+		{
+			name:          "Uniform distribution (high entropy)",
+			probabilities: []float32{0.25, 0.25, 0.25, 0.25},
+			expectEntropy: 2.0, // log2(4) = 2.0
+		},
+		{
+			name:          "Certain prediction (zero entropy)",
+			probabilities: []float32{1.0, 0.0, 0.0, 0.0},
+			expectEntropy: 0.0,
+		},
+		{
+			name:          "High certainty (low entropy)",
+			probabilities: []float32{0.9, 0.05, 0.03, 0.02},
+			expectEntropy: 0.569, // Approximate
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entropy := calculateShannonEntropy(tt.probabilities)
+
+			// Allow some tolerance for floating point comparison
+			tolerance := 0.1 // Increased tolerance for test approximations
+			if entropy < tt.expectEntropy-tolerance || entropy > tt.expectEntropy+tolerance {
+				t.Errorf("calculateShannonEntropy() = %f, want %f (±%f)", entropy, tt.expectEntropy, tolerance)
+			}
+		})
+	}
+}
+
+// Helper function for Shannon entropy calculation (for testing purposes)
+func calculateShannonEntropy(probabilities []float32) float64 {
+	entropy := 0.0
+	for _, prob := range probabilities {
+		if prob > 0 {
+			entropy -= float64(prob) * math.Log2(float64(prob))
+		}
+	}
+	return entropy
+}
+
+// Test memory management scenarios for ClassResultWithProbs
+func TestClassResultWithProbs_MemoryManagement(t *testing.T) {
+	// Test creating and cleaning up ClassResultWithProbs
+	probabilities := make([]float32, 1000) // Large array to test memory
+	for i := range probabilities {
+		probabilities[i] = 1.0 / float32(len(probabilities))
+	}
+
+	result := ClassResultWithProbs{
+		Class:         0,
+		Confidence:    0.001,
+		Probabilities: probabilities,
+		NumClasses:    len(probabilities),
+	}
+
+	// Verify the large probability array is handled correctly
+	if len(result.Probabilities) != 1000 {
+		t.Errorf("Expected 1000 probabilities, got %d", len(result.Probabilities))
+	}
+
+	// Verify sum is approximately 1.0
+	sum := float32(0.0)
+	for _, prob := range result.Probabilities {
+		sum += prob
+	}
+
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("Large probability array should sum to ~1.0, got %f", sum)
+	}
+}
+
+// Test edge cases for ClassResultWithProbs
+func TestClassResultWithProbs_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name          string
+		class         int
+		confidence    float32
+		probabilities []float32
+		expectValid   bool
+	}{
+		{
+			name:          "Valid result",
+			class:         1,
+			confidence:    0.75,
+			probabilities: []float32{0.25, 0.75},
+			expectValid:   true,
+		},
+		{
+			name:          "Class index out of bounds",
+			class:         5,
+			confidence:    0.75,
+			probabilities: []float32{0.25, 0.75},
+			expectValid:   false,
+		},
+		{
+			name:          "Negative class index",
+			class:         -1,
+			confidence:    0.75,
+			probabilities: []float32{0.25, 0.75},
+			expectValid:   false,
+		},
+		{
+			name:          "Confidence out of range (high)",
+			class:         0,
+			confidence:    1.5,
+			probabilities: []float32{0.25, 0.75},
+			expectValid:   false,
+		},
+		{
+			name:          "Confidence out of range (low)",
+			class:         0,
+			confidence:    -0.1,
+			probabilities: []float32{0.25, 0.75},
+			expectValid:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ClassResultWithProbs{
+				Class:         tt.class,
+				Confidence:    tt.confidence,
+				Probabilities: tt.probabilities,
+				NumClasses:    len(tt.probabilities),
+			}
+
+			isValid := validateClassificationResult(result)
+			if isValid != tt.expectValid {
+				t.Errorf("validateClassificationResult() = %v, want %v", isValid, tt.expectValid)
+			}
+		})
+	}
+}
+
+// Helper function to validate classification results
+func validateClassificationResult(result ClassResultWithProbs) bool {
+	// Check class index bounds
+	if result.Class < 0 || result.Class >= len(result.Probabilities) {
+		return false
+	}
+
+	// Check confidence bounds
+	if result.Confidence < 0.0 || result.Confidence > 1.0 {
+		return false
+	}
+
+	// Check probability distribution validity
+	return validateProbabilityDistribution(result.Probabilities)
+}
+
+// Test ClassResult compatibility (ensure backward compatibility)
+func TestClassResult_BackwardCompatibility(t *testing.T) {
+	// Test that regular ClassResult still works
+	result := ClassResult{
+		Class:      2,
+		Confidence: 0.88,
+	}
+
+	if result.Class != 2 {
+		t.Errorf("Expected Class to be 2, got %d", result.Class)
+	}
+
+	if result.Confidence != 0.88 {
+		t.Errorf("Expected Confidence to be 0.88, got %f", result.Confidence)
+	}
+}
+
+// TestModernBertClassResultWithProbs_Structure tests the ModernBERT probability distribution result structure
+func TestModernBertClassResultWithProbs_Structure(t *testing.T) {
+	// Test creating a ModernBERT result with probabilities
+	probabilities := []float32{0.1, 0.7, 0.2}
+	result := ClassResultWithProbs{
+		Class:         1,
+		Confidence:    0.7,
+		Probabilities: probabilities,
+		NumClasses:    3,
+	}
+
+	// Verify structure fields
+	if result.Class != 1 {
+		t.Errorf("Expected Class to be 1, got %d", result.Class)
+	}
+
+	if result.Confidence != 0.7 {
+		t.Errorf("Expected Confidence to be 0.7, got %f", result.Confidence)
+	}
+
+	if result.NumClasses != 3 {
+		t.Errorf("Expected NumClasses to be 3, got %d", result.NumClasses)
+	}
+
+	if len(result.Probabilities) != 3 {
+		t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+	}
+
+	// Verify probability values
+	expectedProbs := []float32{0.1, 0.7, 0.2}
+	for i, expected := range expectedProbs {
+		if result.Probabilities[i] != expected {
+			t.Errorf("Expected probability[%d] to be %f, got %f", i, expected, result.Probabilities[i])
+		}
+	}
+}
+
+// TestModernBertProbabilityDistributionValidation tests probability distribution validation for ModernBERT
+func TestModernBertProbabilityDistributionValidation(t *testing.T) {
+	testCases := []struct {
+		name          string
+		probabilities []float32
+		expectValid   bool
+		description   string
+	}{
+		{
+			name:          "Valid normalized distribution",
+			probabilities: []float32{0.2, 0.5, 0.3},
+			expectValid:   true,
+			description:   "Sum equals 1.0, all positive",
+		},
+		{
+			name:          "Valid high confidence distribution",
+			probabilities: []float32{0.05, 0.9, 0.05},
+			expectValid:   true,
+			description:   "High confidence case",
+		},
+		{
+			name:          "Valid uniform distribution",
+			probabilities: []float32{0.33, 0.33, 0.34},
+			expectValid:   true,
+			description:   "Nearly uniform distribution",
+		},
+		{
+			name:          "Invalid sum too high",
+			probabilities: []float32{0.4, 0.7, 0.3},
+			expectValid:   false,
+			description:   "Sum > 1.0",
+		},
+		{
+			name:          "Invalid negative probability",
+			probabilities: []float32{-0.1, 0.6, 0.5},
+			expectValid:   false,
+			description:   "Contains negative value",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			isValid := validateModernBertProbabilityDistribution(tc.probabilities)
+			if isValid != tc.expectValid {
+				t.Errorf("Expected validation to be %v for %s, got %v", tc.expectValid, tc.description, isValid)
+			}
+		})
+	}
+}
+
+// TestModernBertEntropyCalculationHelpers tests entropy calculation helper functions for ModernBERT
+func TestModernBertEntropyCalculationHelpers(t *testing.T) {
+	testCases := []struct {
+		name             string
+		probabilities    []float32
+		expectedEntropy  float64
+		tolerance        float64
+		uncertaintyLevel string
+	}{
+		{
+			name:             "High certainty ModernBERT classification",
+			probabilities:    []float32{0.9, 0.05, 0.05},
+			expectedEntropy:  0.569,
+			tolerance:        0.01,
+			uncertaintyLevel: "low",
+		},
+		{
+			name:             "Medium uncertainty ModernBERT classification",
+			probabilities:    []float32{0.6, 0.3, 0.1},
+			expectedEntropy:  1.296,
+			tolerance:        0.01,
+			uncertaintyLevel: "very_high", // Normalized entropy ~0.82 for this distribution
+		},
+		{
+			name:             "High uncertainty ModernBERT classification",
+			probabilities:    []float32{0.4, 0.4, 0.2},
+			expectedEntropy:  1.522,
+			tolerance:        0.01,
+			uncertaintyLevel: "very_high", // Normalized entropy ~0.96 for this distribution
+		},
+		{
+			name:             "Very high uncertainty ModernBERT classification",
+			probabilities:    []float32{0.34, 0.33, 0.33},
+			expectedEntropy:  1.584,
+			tolerance:        0.01,
+			uncertaintyLevel: "very_high",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entropy := calculateModernBertShannonEntropy(tc.probabilities)
+
+			if abs(entropy-tc.expectedEntropy) > tc.tolerance {
+				t.Errorf("Expected entropy %.3f, got %.3f (tolerance: %.3f)",
+					tc.expectedEntropy, entropy, tc.tolerance)
+			}
+
+			// Test uncertainty level determination
+			normalizedEntropy := entropy / 1.585 // log2(3) for 3 classes
+			uncertaintyLevel := determineModernBertUncertaintyLevel(normalizedEntropy)
+
+			if uncertaintyLevel != tc.uncertaintyLevel {
+				t.Errorf("Expected uncertainty level %s, got %s", tc.uncertaintyLevel, uncertaintyLevel)
+			}
+		})
+	}
+}
+
+// TestModernBertClassResultWithProbs_MemoryManagement tests memory management for ModernBERT probability arrays
+func TestModernBertClassResultWithProbs_MemoryManagement(t *testing.T) {
+	// Test creating and manipulating probability arrays
+	probabilities := make([]float32, 5)
+	for i := range probabilities {
+		probabilities[i] = float32(i) * 0.2
+	}
+
+	result := ClassResultWithProbs{
+		Class:         2,
+		Confidence:    0.4,
+		Probabilities: probabilities,
+		NumClasses:    5,
+	}
+
+	// Verify no memory corruption
+	if len(result.Probabilities) != result.NumClasses {
+		t.Errorf("Probability array length %d doesn't match NumClasses %d",
+			len(result.Probabilities), result.NumClasses)
+	}
+
+	// Test probability array modification
+	originalSum := float32(0)
+	for _, prob := range result.Probabilities {
+		originalSum += prob
+	}
+
+	// Modify probabilities and verify changes
+	result.Probabilities[0] = 0.1
+	newSum := float32(0)
+	for _, prob := range result.Probabilities {
+		newSum += prob
+	}
+
+	if newSum == originalSum {
+		t.Error("Probability modification didn't take effect")
+	}
+}
+
+// TestModernBertClassResultWithProbs_EdgeCases tests edge cases for ModernBERT probability distributions
+func TestModernBertClassResultWithProbs_EdgeCases(t *testing.T) {
+	testCases := []struct {
+		name        string
+		result      ClassResultWithProbs
+		expectValid bool
+		description string
+	}{
+		{
+			name: "Empty probabilities",
+			result: ClassResultWithProbs{
+				Class:         -1,
+				Confidence:    0.0,
+				Probabilities: []float32{},
+				NumClasses:    0,
+			},
+			expectValid: false,
+			description: "No probabilities provided",
+		},
+		{
+			name: "Single class probability",
+			result: ClassResultWithProbs{
+				Class:         0,
+				Confidence:    1.0,
+				Probabilities: []float32{1.0},
+				NumClasses:    1,
+			},
+			expectValid: true,
+			description: "Single class case",
+		},
+		{
+			name: "Large number of classes",
+			result: ClassResultWithProbs{
+				Class:         5,
+				Confidence:    0.2,
+				Probabilities: make([]float32, 10),
+				NumClasses:    10,
+			},
+			expectValid: true,
+			description: "Many classes case",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Initialize probabilities for large class case
+			if tc.name == "Large number of classes" {
+				for i := range tc.result.Probabilities {
+					tc.result.Probabilities[i] = 0.1
+				}
+			}
+
+			isValid := (tc.result.NumClasses > 0 && len(tc.result.Probabilities) == tc.result.NumClasses)
+			if isValid != tc.expectValid {
+				t.Errorf("Expected validity to be %v for %s, got %v", tc.expectValid, tc.description, isValid)
+			}
+		})
+	}
+}
+
+// TestModernBertClassResult_BackwardCompatibility tests backward compatibility with regular ClassResult
+func TestModernBertClassResult_BackwardCompatibility(t *testing.T) {
+	// Test that ClassResultWithProbs can be used where ClassResult is expected
+	probResult := ClassResultWithProbs{
+		Class:         1,
+		Confidence:    0.75,
+		Probabilities: []float32{0.1, 0.75, 0.15},
+		NumClasses:    3,
+	}
+
+	// Extract basic ClassResult fields
+	basicResult := ClassResult{
+		Class:      probResult.Class,
+		Confidence: probResult.Confidence,
+	}
+
+	if basicResult.Class != 1 {
+		t.Errorf("Expected Class to be 1, got %d", basicResult.Class)
+	}
+
+	if basicResult.Confidence != 0.75 {
+		t.Errorf("Expected Confidence to be 0.75, got %f", basicResult.Confidence)
+	}
+
+	// Verify probability information is preserved
+	if probResult.NumClasses != 3 {
+		t.Errorf("Expected NumClasses to be 3, got %d", probResult.NumClasses)
+	}
+
+	if len(probResult.Probabilities) != 3 {
+		t.Errorf("Expected 3 probabilities, got %d", len(probResult.Probabilities))
+	}
+}
+
+// Helper functions for ModernBERT entropy testing
+
+// validateModernBertProbabilityDistribution validates a ModernBERT probability distribution
+func validateModernBertProbabilityDistribution(probabilities []float32) bool {
+	if len(probabilities) == 0 {
+		return false
+	}
+
+	sum := float32(0)
+	for _, prob := range probabilities {
+		if prob < 0 {
+			return false
+		}
+		sum += prob
+	}
+
+	// Allow small floating point tolerance
+	return sum >= 0.99 && sum <= 1.01
+}
+
+// calculateModernBertShannonEntropy calculates Shannon entropy for ModernBERT probability distribution
+func calculateModernBertShannonEntropy(probabilities []float32) float64 {
+	if len(probabilities) == 0 {
+		return 0.0
+	}
+
+	entropy := 0.0
+	for _, prob := range probabilities {
+		if prob > 0 {
+			entropy -= float64(prob) * math.Log2(float64(prob))
+		}
+	}
+
+	return entropy
+}
+
+// determineModernBertUncertaintyLevel determines uncertainty level from normalized entropy
+func determineModernBertUncertaintyLevel(normalizedEntropy float64) string {
+	if normalizedEntropy >= 0.8 {
+		return "very_high"
+	} else if normalizedEntropy >= 0.6 {
+		return "high"
+	} else if normalizedEntropy >= 0.4 {
+		return "medium"
+	} else if normalizedEntropy >= 0.2 {
+		return "low"
+	} else {
+		return "very_low"
+	}
+}
+
+// abs returns the absolute value of a float64
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}

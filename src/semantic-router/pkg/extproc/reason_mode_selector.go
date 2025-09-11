@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
 // shouldUseReasoningMode determines if reasoning mode should be enabled based on the query category
@@ -46,6 +47,42 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 	// If category not found in config, default to no reasoning
 	log.Printf("Category '%s' not found in configuration, defaulting to no reasoning mode", categoryName)
 	return false, categoryName
+}
+
+// getEntropyBasedReasoningModeAndCategory uses entropy-based analysis for reasoning decisions
+func (r *OpenAIRouter) getEntropyBasedReasoningModeAndCategory(query string) (bool, string, entropy.ReasoningDecision) {
+	// Use the classifier with entropy analysis
+	categoryName, confidence, reasoningDecision, err := r.Classifier.ClassifyCategoryWithEntropy(query)
+
+	if err != nil {
+		log.Printf("Entropy-based classification error: %v, falling back to traditional method", err)
+
+		// Record fallback metrics
+		metrics.RecordEntropyFallback("classification_error", "traditional_method")
+
+		useReasoning, category := r.getReasoningModeAndCategory(query)
+
+		// Record traditional classification confidence for comparison
+		metrics.RecordClassificationConfidence(category, "traditional_fallback", 0.5)
+
+		return useReasoning, category, entropy.ReasoningDecision{
+			UseReasoning:     useReasoning,
+			Confidence:       0.5,
+			DecisionReason:   "fallback_traditional_classification",
+			FallbackStrategy: "classification_error_fallback",
+		}
+	}
+
+	// Log the entropy-based decision
+	log.Printf("Entropy-based reasoning decision: category='%s', confidence=%.3f, use_reasoning=%t, reason=%s, strategy=%s",
+		categoryName, confidence, reasoningDecision.UseReasoning, reasoningDecision.DecisionReason, reasoningDecision.FallbackStrategy)
+
+	// If we have top categories from entropy analysis, log them
+	if len(reasoningDecision.TopCategories) > 0 {
+		log.Printf("Top predicted categories: %v", reasoningDecision.TopCategories)
+	}
+
+	return reasoningDecision.UseReasoning, categoryName, reasoningDecision
 }
 
 // getModelReasoningFamily finds the reasoning family configuration for a model using the config system

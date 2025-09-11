@@ -78,11 +78,27 @@ typedef struct {
     float confidence;
 } ClassificationResult;
 
+// Classification result with full probability distribution structure
+typedef struct {
+    int class;
+    float confidence;
+    float* probabilities;
+    int num_classes;
+} ClassificationResultWithProbs;
+
 // ModernBERT Classification result structure
 typedef struct {
     int class;
     float confidence;
 } ModernBertClassificationResult;
+
+// ModernBERT Classification result with full probability distribution structure
+typedef struct {
+    int class;
+    float confidence;
+    float* probabilities;
+    int num_classes;
+} ModernBertClassificationResultWithProbs;
 
 extern SimilarityResult find_most_similar(const char* query, const char** candidates, int num_candidates, int max_length);
 extern EmbeddingResult get_text_embedding(const char* text, int max_length);
@@ -91,9 +107,13 @@ extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
 extern ClassificationResult classify_text(const char* text);
+extern ClassificationResultWithProbs classify_text_with_probabilities(const char* text);
+extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
+extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
 */
@@ -135,6 +155,14 @@ type SimResult struct {
 type ClassResult struct {
 	Class      int     // Class index
 	Confidence float32 // Confidence score
+}
+
+// ClassResultWithProbs represents the result of a text classification with full probability distribution
+type ClassResultWithProbs struct {
+	Class         int       // Class index
+	Confidence    float32   // Confidence score
+	Probabilities []float32 // Full probability distribution
+	NumClasses    int       // Number of classes
 }
 
 // TokenEntity represents a single detected entity in token classification
@@ -452,6 +480,36 @@ func ClassifyText(text string) (ClassResult, error) {
 	}, nil
 }
 
+// ClassifyTextWithProbabilities classifies the provided text and returns the predicted class, confidence, and full probability distribution
+func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify text with probabilities")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // ClassifyPIIText classifies the provided text for PII detection and returns the predicted class and confidence
 func ClassifyPIIText(text string) (ClassResult, error) {
 	cText := C.CString(text)
@@ -596,6 +654,36 @@ func ClassifyModernBertText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyModernBertTextWithProbabilities classifies the provided text using ModernBERT and returns the predicted class, confidence, and full probability distribution
+func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_modernbert_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify text with probabilities using ModernBERT")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 

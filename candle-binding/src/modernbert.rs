@@ -280,6 +280,15 @@ pub struct ModernBertClassificationResult {
     pub confidence: f32,
 }
 
+// Structure to hold classification result with full probability distribution
+#[repr(C)]
+pub struct ModernBertClassificationResultWithProbs {
+    pub class: i32,
+    pub confidence: f32,
+    pub probabilities: *mut f32,
+    pub num_classes: i32,
+}
+
 // Structure to hold token classification entity result
 #[repr(C)]
 pub struct ModernBertTokenEntity {
@@ -554,6 +563,104 @@ impl ModernBertClassifier {
             .unwrap_or((0, &0.0));
 
         Ok((predicted_idx, max_prob))
+    }
+
+    /// Classify text and return full probability distribution
+    pub fn classify_text_with_probs(&self, text: &str) -> Result<(usize, f32, Vec<f32>)> {
+        if self.is_token_classification {
+            return Err(E::msg(
+                "Use classify_tokens for token classification models",
+            ));
+        }
+
+        // Set up tokenizer
+        let mut tokenizer = self.tokenizer.clone();
+
+        // Set up padding - use config's pad_token_id and no truncation
+        tokenizer
+            .with_padding(Some(PaddingParams {
+                strategy: PaddingStrategy::BatchLongest,
+                pad_id: self.pad_token_id,
+                ..Default::default()
+            }))
+            .with_truncation(None)
+            .map_err(E::msg)?;
+
+        // Tokenize input text
+        let tokens = tokenizer.encode_batch(vec![text], true).map_err(E::msg)?;
+
+        // Create tensors - convert to u32 for ModernBERT
+        let token_ids = tokens
+            .iter()
+            .map(|tokens| {
+                let tokens: Vec<u32> = tokens.get_ids().to_vec();
+                Tensor::new(tokens.as_slice(), &self.device)
+            })
+            .collect::<candle_core::Result<Vec<_>>>()?;
+
+        let attention_mask = tokens
+            .iter()
+            .map(|tokens| {
+                let tokens: Vec<u32> = tokens.get_attention_mask().to_vec();
+                Tensor::new(tokens.as_slice(), &self.device)
+            })
+            .collect::<candle_core::Result<Vec<_>>>()?;
+
+        let input_ids = Tensor::stack(&token_ids, 0)?;
+        let attention_mask = Tensor::stack(&attention_mask, 0)?;
+
+        // Input validation
+        if input_ids.dims().len() != 2 {
+            return Err(E::msg(format!(
+                "Expected input_ids to have 2 dimensions [batch_size, seq_len], got {:?}",
+                input_ids.dims()
+            )));
+        }
+        if attention_mask.dims().len() != 2 {
+            return Err(E::msg(format!(
+                "Expected attention_mask to have 2 dimensions [batch_size, seq_len], got {:?}",
+                attention_mask.dims()
+            )));
+        }
+        if input_ids.dims()[0] != attention_mask.dims()[0]
+            || input_ids.dims()[1] != attention_mask.dims()[1]
+        {
+            return Err(E::msg(format!(
+                "input_ids and attention_mask must have same shape, got {:?} vs {:?}",
+                input_ids.dims(),
+                attention_mask.dims()
+            )));
+        }
+
+        // Run through ModernBERT model
+        let output = match &self.model {
+            ModernBertModel::Sequence(model) => model.forward(&input_ids, &attention_mask)?,
+            ModernBertModel::Token(_) => {
+                return Err(E::msg(
+                    "Internal error: token model in sequence classification",
+                ))
+            }
+        };
+
+        // Remove batch dimension if present
+        let probabilities = if output.dims().len() > 1 {
+            output.squeeze(0)?
+        } else {
+            output
+        };
+
+        // Convert to vector and get full probability distribution
+        let probabilities_vec = probabilities.to_vec1::<f32>()?;
+
+        // Get the predicted class with highest probability
+        let (predicted_idx, &max_prob) = probabilities_vec
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or((0, &0.0));
+
+        // Return predicted class, max probability, and full distribution
+        Ok((predicted_idx, max_prob, probabilities_vec))
     }
 
     pub fn classify_tokens(
@@ -838,6 +945,65 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
         None => {
             eprintln!("ModernBERT classifier not initialized");
             default_result
+        }
+    }
+}
+
+// Classify text and return full probability distribution using ModernBERT (called from Go)
+#[no_mangle]
+pub extern "C" fn classify_modernbert_text_with_probabilities(
+    text: *const c_char,
+) -> ModernBertClassificationResultWithProbs {
+    let default_result = ModernBertClassificationResultWithProbs {
+        class: -1,
+        confidence: 0.0,
+        probabilities: std::ptr::null_mut(),
+        num_classes: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    let bert_opt = MODERNBERT_CLASSIFIER.lock().unwrap();
+    match &*bert_opt {
+        Some(classifier) => match classifier.classify_text_with_probs(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                // Allocate memory for probabilities array
+                let prob_len = probabilities.len();
+                let prob_ptr = Box::into_raw(probabilities.into_boxed_slice()) as *mut f32;
+
+                ModernBertClassificationResultWithProbs {
+                    class: class_idx as i32,
+                    confidence,
+                    probabilities: prob_ptr,
+                    num_classes: prob_len as i32,
+                }
+            }
+            Err(e) => {
+                eprintln!("Error classifying text with probabilities using ModernBERT: {e}");
+                default_result
+            }
+        },
+        None => {
+            eprintln!("ModernBERT classifier not initialized");
+            default_result
+        }
+    }
+}
+
+// Free the probability array allocated by classify_modernbert_text_with_probabilities
+#[no_mangle]
+pub extern "C" fn free_modernbert_probabilities(probabilities: *mut f32, num_classes: i32) {
+    if !probabilities.is_null() && num_classes > 0 {
+        unsafe {
+            let _: Box<[f32]> = Box::from_raw(std::slice::from_raw_parts_mut(
+                probabilities,
+                num_classes as usize,
+            ));
         }
     }
 }
