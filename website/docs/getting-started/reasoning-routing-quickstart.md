@@ -31,7 +31,7 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models: ["deepseek-v3", "qwen3-7b", "openai/gpt-oss-20b"]
+    models: ["deepseek-v31", "qwen3-30b", "openai/gpt-oss-20b"]
     weight: 1
 
 # Reasoning family configurations (how to express reasoning for a family)
@@ -54,10 +54,10 @@ default_reasoning_effort: medium  # low | medium | high
 
 # Map concrete model names to a reasoning family
 model_config:
-  "deepseek-v3":
+  "deepseek-v31":
     reasoning_family: "deepseek"
     preferred_endpoints: ["endpoint1"]
-  "qwen3-7b":
+  "qwen3-30b":
     reasoning_family: "qwen3"
     preferred_endpoints: ["endpoint1"]
   "openai/gpt-oss-20b":
@@ -73,22 +73,14 @@ categories:
   model_scores:
   - model: openai/gpt-oss-20b
     score: 1.0
-  - model: deepseek-v3
+  - model: deepseek-v31
     score: 0.8
-  - model: qwen3-7b
+  - model: qwen3-30b
     score: 0.8
 
-- name: general
-  use_reasoning: false
-  reasoning_description: "General chit-chat doesn’t need reasoning"
-  model_scores:
-  - model: qwen3-7b
-    score: 1.0
-  - model: deepseek-v3
-    score: 0.8
 
 # A safe default when no category is confidently selected
-default_model: qwen3-7b
+default_model: qwen3-30b
 ```
 
 Notes
@@ -96,7 +88,8 @@ Notes
 - A model only gets reasoning fields if it has a model_config.&lt;MODEL&gt;.reasoning_family that maps to a reasoning_families entry.
 - DeepSeek/Qwen3 (chat_template_kwargs): the router injects chat_template_kwargs only when reasoning is enabled. When disabled, no chat_template_kwargs are added.
 - GPT/GPT-OSS (reasoning_effort): when reasoning is enabled, the router sets reasoning_effort based on the category (fallback to default_reasoning_effort). When reasoning is disabled, if the request already contains reasoning_effort and the model’s family type is reasoning_effort, the router preserves the original value; otherwise it is absent.
-- For more stable classification, you can add category descriptions in config and keep them semantically distinctive.
+- Category descriptions (for example, description and reasoning_description) are informational only today; they do not affect routing or classification.
+- Categories must be from MMLU-Pro at the moment; avoid free-form categories like "general". If you want generic categories, consider opening an issue to map them to MMLU-Pro.
 
 2) Start the router
 Option A: Local build + Envoy
