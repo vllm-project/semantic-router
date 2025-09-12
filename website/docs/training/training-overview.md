@@ -41,18 +41,21 @@ graph TB
 [ModernBERT](https://arxiv.org/abs/2412.13663) represents the latest evolution in BERT architecture with several key improvements over traditional BERT models:
 
 #### 1. **Enhanced Architecture**
+
 - **Rotary Position Embedding (RoPE)**: Better handling of positional information
 - **GeGLU Activation**: Improved gradient flow and representation capacity  
 - **Attention Bias Removal**: Cleaner attention mechanisms
 - **Modern Layer Normalization**: Better training stability
 
 #### 2. **Training Improvements**
+
 - **Longer Context**: Trained on sequences up to 8,192 tokens vs BERT's 512
 - **Better Data**: Trained on higher-quality, more recent datasets
 - **Improved Tokenization**: More efficient vocabulary and tokenization
 - **Anti-overfitting Techniques**: Built-in regularization improvements
 
 #### 3. **Performance Benefits**
+
 ```python
 # Performance comparison on classification tasks
 model_performance = {
@@ -212,6 +215,7 @@ class UnifiedBERTFinetuning:
 **Purpose**: Route queries to specialized models based on academic/professional domains.
 
 #### Dataset: MMLU-Pro Academic Domains
+
 ```python
 # Dataset composition
 mmlu_categories = {
@@ -245,6 +249,7 @@ mmlu_categories = {
 ```
 
 #### Training Configuration
+
 ```yaml
 model_config:
   base_model: "modernbert-base"
@@ -264,6 +269,7 @@ evaluation_metrics:
 ```
 
 #### Model Performance
+
 ```python
 category_performance = {
     "overall_accuracy": 0.942,
@@ -286,6 +292,7 @@ category_performance = {
 **Purpose**: Identify personally identifiable information to protect user privacy.
 
 #### Dataset: Microsoft Presidio + Custom Synthetic Data
+
 ```python
 # PII entity types and examples
 pii_entities = {
@@ -323,6 +330,7 @@ pii_entities = {
 ```
 
 #### Training Approach: Token Classification
+
 ```python
 class PIITokenClassifier:
     def __init__(self):
@@ -353,6 +361,7 @@ class PIITokenClassifier:
 ```
 
 #### Performance Metrics
+
 ```python
 pii_performance = {
     "overall_f1": 0.957,
@@ -376,6 +385,7 @@ pii_performance = {
 **Purpose**: Identify and block attempts to circumvent AI safety measures.
 
 #### Dataset: Jailbreak Classification Dataset
+
 ```python
 jailbreak_dataset = {
     "benign": {
@@ -402,6 +412,7 @@ jailbreak_dataset = {
 ```
 
 #### Training Strategy
+
 ```python
 class JailbreakDetector:
     def __init__(self):
@@ -423,6 +434,7 @@ class JailbreakDetector:
 ```
 
 #### Performance Analysis
+
 ```python
 jailbreak_performance = {
     "overall_metrics": {
@@ -451,6 +463,7 @@ jailbreak_performance = {
 **Purpose**: Classify queries for tool selection and function calling optimization.
 
 #### Dataset: Glaive Function Calling v2
+
 ```python
 intent_categories = {
     "information_retrieval": {
@@ -499,6 +512,7 @@ intent_categories = {
 ## Training Infrastructure
 
 ### Hardware Requirements
+
 ```yaml
 training_infrastructure:
   gpu_requirements:
@@ -517,6 +531,7 @@ training_infrastructure:
 ```
 
 ### Training Pipeline Automation
+
 ```python
 class TrainingPipeline:
     def __init__(self, config_path):

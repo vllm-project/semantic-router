@@ -343,3 +343,11 @@ docs-lint:
 docs-lint-fix:
 	@echo "Fixing documentation lint issues..."
 	cd website && npm run lint:fix
+
+markdown-lint:
+	@echo "Linting markdown files..."
+	markdownlint -c markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules
+
+markdown-lint-fix:
+	@echo "Fixing markdown lint issues..."
+	markdownlint -c markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules --fix
