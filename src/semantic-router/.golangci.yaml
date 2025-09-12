@@ -1,0 +1,24 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - gosec
+    - govet
+    - revive
+    - unused
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gosec
+        path: ^*_test.go
+issues:
+  fix: true
+formatters:
+  enable:
+    - gofmt
