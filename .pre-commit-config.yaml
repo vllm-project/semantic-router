@@ -1,7 +1,7 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
-# Basic hooks for Go, Rust, Python files only
+# Basic hooks for Go, Rust, Python And JavaScript files only
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -21,6 +21,16 @@ repos:
         entry: gofmt -w
         language: system
         files: \.go$
+
+# Markdown specific hooks
+-   repo: local
+    hooks:
+      -   id: md-fmt
+          name: md fmt
+          entry: bash -c "make markdown-lint"
+          language: system
+          files: \.md$
+          exclude: ^(\node_modules/)
 
 # JavaScript specific hooks
 -   repo: local

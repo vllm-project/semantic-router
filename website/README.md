@@ -5,12 +5,14 @@ This directory contains the Docusaurus-based documentation website for the vLLM 
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 18+ 
 - npm or yarn
 
 ### Development
 
 Start the development server with hot reload:
+
 ```bash
 # From project root
 make docs-dev
@@ -24,6 +26,7 @@ The site will be available at http://localhost:3000
 ### Production Build
 
 Build the static site for production:
+
 ```bash
 # From project root
 make docs-build
@@ -35,6 +38,7 @@ cd website && npm run build
 ### Preview Production Build
 
 Serve the production build locally:
+
 ```bash
 # From project root
 make docs-serve
@@ -46,18 +50,21 @@ cd website && npm run serve
 ## 🎨 Features
 
 ### ✨ Modern Tech-Inspired Design
+
 - **Dark theme by default** with neon blue/green accents
 - **Glassmorphism effects** with backdrop blur and transparency
 - **Gradient backgrounds** and animated hover effects
 - **Responsive design** optimized for all devices
 
 ### 🔧 Enhanced Functionality
+
 - **Mermaid diagram support** with dark theme optimization
 - **Advanced code highlighting** with multiple language support
 - **Interactive navigation** with smooth animations
 - **Search functionality** (ready for Algolia integration)
 
 ### 📱 User Experience
+
 - **Fast loading** with optimized builds
 - **Accessible design** following WCAG guidelines
 - **Mobile-first** responsive layout
@@ -82,6 +89,7 @@ website/
 
 ### Themes and Colors
 Edit `src/css/custom.css` to modify:
+
 - Color scheme and gradients
 - Typography and spacing
 - Component styling
@@ -89,12 +97,14 @@ Edit `src/css/custom.css` to modify:
 
 ### Navigation
 Update `sidebars.js` to modify:
+
 - Documentation structure
 - Category organization
 - Page ordering
 
 ### Site Configuration
 Modify `docusaurus.config.js` for:
+
 - Site metadata
 - Plugin configuration
 - Theme settings

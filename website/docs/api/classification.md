@@ -5,6 +5,7 @@ The Classification API provides direct access to the Semantic Router's classific
 ## API Endpoints
 
 ### Base URL
+
 ```
 http://localhost:8080/api/v1/classify
 ```
@@ -12,11 +13,13 @@ http://localhost:8080/api/v1/classify
 ## Server Status
 
 The Classification API server runs alongside the main Semantic Router ExtProc server:
+
 - **Classification API**: `http://localhost:8080` (HTTP REST API)
 - **ExtProc Server**: `http://localhost:50051` (gRPC for Envoy integration)
 - **Metrics Server**: `http://localhost:9190` (Prometheus metrics)
 
 Start the server with:
+
 ```bash
 make run-router
 ```
@@ -24,6 +27,7 @@ make run-router
 ## Implementation Status
 
 ### ✅ Fully Implemented
+
 - `GET /health` - Health check endpoint
 - `POST /api/v1/classify/intent` - Intent classification with real model inference
 - `POST /api/v1/classify/pii` - PII detection with real model inference
@@ -33,6 +37,7 @@ make run-router
 - `GET /info/classifier` - Detailed classifier capabilities and configuration
 
 ### 🔄 Placeholder Implementation
+
 - `POST /api/v1/classify/combined` - Returns "not implemented" response
 - `GET /metrics/classification` - Returns "not implemented" response
 - `GET /config/classification` - Returns "not implemented" response
@@ -122,6 +127,7 @@ Classify user queries into routing categories.
 ### Available Categories
 
 The current model supports the following 14 categories:
+
 - `business`
 - `law`
 - `psychology`
@@ -369,6 +375,7 @@ api:
 ### Error Handling
 
 **Batch Too Large (400 Bad Request):**
+
 ```json
 {
   "error": {
@@ -380,6 +387,7 @@ api:
 ```
 
 **Empty Batch (400 Bad Request):**
+
 ```json
 {
   "error": {
@@ -625,6 +633,7 @@ Get real-time classification performance metrics.
 ### Example Error Responses
 
 **Invalid Input (400 Bad Request):**
+
 ```json
 {
   "error": {
@@ -636,6 +645,7 @@ Get real-time classification performance metrics.
 ```
 
 **Not Implemented (501 Not Implemented):**
+
 ```json
 {
   "error": {

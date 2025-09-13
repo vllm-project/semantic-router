@@ -10,21 +10,25 @@ This Docker Compose configuration allows you to quickly run Semantic Router + En
 ## Install in Docker Compose
 
 1. **Clone the repository and navigate to the project directory**
+
    ```bash
    git clone <repository-url>
    cd semantic_router
    ```
 
 2. **Download required models** (if not already present):
+
    ```bash
    make download-models
    ```
+
    This will download the necessary ML models for classification:
    - Category classifier (ModernBERT-base)
    - PII classifier (ModernBERT-base)
    - Jailbreak classifier (ModernBERT-base)
 
 3. **Start the services using Docker Compose**
+
    ```bash
    # Start core services (semantic-router + envoy)
    docker-compose up --build

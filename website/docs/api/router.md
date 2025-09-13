@@ -271,6 +271,7 @@ model_config:
 ```
 
 Notes:
+
 - Pricing is optional; if omitted, cost is treated as 0 and only token metrics are emitted.
 - Cost is computed as: (prompt_tokens * prompt_per_1m + completion_tokens * completion_per_1m) / 1_000_000 (in the configured currency).
 

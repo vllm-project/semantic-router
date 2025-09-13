@@ -14,6 +14,7 @@ This directory contains the trained model files for the dual classifier. Due to 
 ## To generate these files:
 
 Run the training script to create a new model:
+
 ```bash
 cd dual_classifier
 python train_example.py
@@ -22,6 +23,7 @@ python train_example.py
 ## Alternative storage:
 
 For sharing large model files, consider:
+
 - Git LFS (Large File Storage)
 - Cloud storage (S3, Google Drive, etc.)
 - Model registries (HuggingFace Hub, MLflow, etc.) 

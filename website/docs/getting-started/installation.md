@@ -25,6 +25,7 @@ cd semantic-router
 ### 2. Install Dependencies
 
 #### Install Go (if not already installed)
+
 ```bash
 # Check if Go is installed
 go version
@@ -36,6 +37,7 @@ go version
 ```
 
 #### Install Rust (if not already installed)
+
 ```bash
 # Check if Rust is installed
 rustc --version
@@ -46,6 +48,7 @@ source ~/.cargo/env
 ```
 
 #### Install Python (if not already installed)
+
 ```bash
 # Check if Python is installed
 python --version
@@ -56,6 +59,7 @@ python --version
 ```
 
 #### Install HuggingFace CLI
+
 ```bash
 pip install huggingface_hub
 ```
@@ -68,6 +72,7 @@ make build
 ```
 
 This command will:
+
 - Build the Rust candle-binding library
 - Build the Go router binary
 - Place the executable in `bin/router`
@@ -80,6 +85,7 @@ make download-models
 ```
 
 This downloads the CPU-optimized BERT models for:
+
 - Category classification
 - PII detection
 - Jailbreak detection
@@ -118,11 +124,13 @@ The default configuration includes example endpoints that you should update for 
 Open two terminals and run:
 
 **Terminal 1: Start Envoy Proxy**
+
 ```bash
 make run-envoy
 ```
 
 **Terminal 2: Start Semantic Router**
+
 ```bash
 make run-router
 ```
