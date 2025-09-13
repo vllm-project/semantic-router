@@ -452,10 +452,31 @@ def evaluate_model_router_transparent(
                 )
             )
 
-        for future in tqdm(
-            futures, total=len(futures), desc=f"Evaluating {model} (Router-Transparent)"
-        ):
-            results.append(future.result())
+        try:
+            for future in tqdm(
+                futures,
+                total=len(futures),
+                desc=f"Evaluating {model} (Router-Transparent)",
+            ):
+                results.append(future.result())
+        except KeyboardInterrupt:
+            print(
+                "\n⚠️  Router evaluation interrupted by user. Saving partial results..."
+            )
+            # Cancel remaining futures
+            for future in futures:
+                future.cancel()
+            # Collect results from completed futures
+            for future in futures:
+                if future.done() and not future.cancelled():
+                    try:
+                        results.append(future.result())
+                    except Exception:
+                        pass  # Skip failed results
+            if not results:
+                print("❌ No router results to save.")
+                raise
+            print(f"✅ Saved {len(results)} partial router results.")
 
     return pd.DataFrame(results)
 
@@ -558,10 +579,27 @@ def evaluate_model_vllm_multimode(
 
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = [executor.submit(run_variants, q) for q in questions]
-        for future in tqdm(
-            futures, total=len(futures), desc=f"Evaluating {model} (vLLM modes)"
-        ):
-            results.extend(future.result())
+        try:
+            for future in tqdm(
+                futures, total=len(futures), desc=f"Evaluating {model} (vLLM modes)"
+            ):
+                results.extend(future.result())
+        except KeyboardInterrupt:
+            print("\n⚠️  Benchmark interrupted by user. Saving partial results...")
+            # Cancel remaining futures
+            for future in futures:
+                future.cancel()
+            # Collect results from completed futures
+            for future in futures:
+                if future.done() and not future.cancelled():
+                    try:
+                        results.extend(future.result())
+                    except Exception:
+                        pass  # Skip failed results
+            if not results:
+                print("❌ No results to save.")
+                raise
+            print(f"✅ Saved {len(results)} partial results.")
 
     return pd.DataFrame(results)
 

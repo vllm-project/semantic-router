@@ -215,10 +215,10 @@ run_dataset_benchmark() {
         --router-models "$ROUTER_MODEL" \
         --output-dir "$OUTPUT_BASE/router_$dataset" \
         --seed 42
-    
+
     # Extract and save router metrics immediately
     extract_and_save_metrics "$dataset" "Router" "$OUTPUT_BASE/router_$dataset"
-    
+
     # vLLM benchmark  
     echo -e "${YELLOW}  ⚡ Running vLLM evaluation...${NC}"
     python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
@@ -245,13 +245,24 @@ generate_plots() {
     for dataset in "${!DATASET_CONFIGS[@]}"; do
         echo -e "${YELLOW}  📊 Plotting $dataset results...${NC}"
         
-        python3 -m vllm_semantic_router_bench.bench_plot \
-            --router-dir "$OUTPUT_BASE/router_$dataset" \
-            --vllm-dir "$OUTPUT_BASE/vllm_$dataset" \
-            --output-dir "$OUTPUT_BASE/plots_$dataset" \
-            --dataset-name "$dataset"
+        # Find the summary.json files
+        ROUTER_SUMMARY=$(find "$OUTPUT_BASE/router_$dataset" -name "summary.json" -type f | head -1)
+        VLLM_SUMMARY=$(find "$OUTPUT_BASE/vllm_$dataset" -name "summary.json" -type f | head -1)
+
+        if [[ -f "$VLLM_SUMMARY" ]]; then
+            PLOT_CMD="python3 -m vllm_semantic_router_bench.bench_plot --summary \"$VLLM_SUMMARY\" --out-dir \"$OUTPUT_BASE/plots_$dataset\""
+
+            if [[ -f "$ROUTER_SUMMARY" ]]; then
+                PLOT_CMD="$PLOT_CMD --router-summary \"$ROUTER_SUMMARY\""
+            fi
+
+            echo -e "${BLUE}    Running: $PLOT_CMD${NC}"
+            eval $PLOT_CMD
+        else
+            echo -e "${RED}    ⚠️  No vLLM summary.json found for $dataset, skipping plots${NC}"
+        fi
     done
-    
+
     echo -e "${GREEN}  ✅ All plots generated${NC}"
     echo ""
 }
