@@ -166,6 +166,26 @@ var (
 		[]string{"model"},
 	)
 
+	// ModelTTFT tracks time to first token by model
+	ModelTTFT = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_ttft_seconds",
+			Help:    "Time to first token for LLM model responses in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"model"},
+	)
+
+	// ModelTPOT tracks time per output token by model
+	ModelTPOT = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_model_tpot_seconds",
+			Help:    "Time per output token (completion latency / completion tokens) for LLM model responses in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"model"},
+	)
+
 	// ModelRoutingLatency tracks the latency of model routing
 	ModelRoutingLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
@@ -382,6 +402,28 @@ func RecordModelTokensDetailed(model string, promptTokens, completionTokens floa
 // RecordModelCompletionLatency records the latency of a model completion
 func RecordModelCompletionLatency(model string, seconds float64) {
 	ModelCompletionLatency.WithLabelValues(model).Observe(seconds)
+}
+
+// RecordModelTTFT records time to first token for a model
+func RecordModelTTFT(model string, seconds float64) {
+	if seconds <= 0 {
+		return
+	}
+	if model == "" {
+		model = "unknown"
+	}
+	ModelTTFT.WithLabelValues(model).Observe(seconds)
+}
+
+// RecordModelTPOT records time per output token (seconds per token) for a model
+func RecordModelTPOT(model string, secondsPerToken float64) {
+	if secondsPerToken <= 0 {
+		return
+	}
+	if model == "" {
+		model = "unknown"
+	}
+	ModelTPOT.WithLabelValues(model).Observe(secondsPerToken)
 }
 
 // RecordModelRoutingLatency records the latency of model routing
