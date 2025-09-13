@@ -188,14 +188,14 @@ def get_dataset_optimal_tokens(dataset_info):
     dataset_name = dataset_info.name.lower()
     difficulty = dataset_info.difficulty_level.lower()
 
-    # Optimized token limits per dataset
+    # Optimized token limits per dataset (increased for reasoning mode support)
     dataset_tokens = {
-        "gpqa": 500,  # Graduate-level scientific reasoning
-        "truthfulqa": 250,  # Misconception analysis
-        "hellaswag": 250,  # Natural continuation reasoning
-        "arc": 220,  # Elementary/middle school science
-        "commonsenseqa": 300,  # Common sense reasoning
-        "mmlu": 150 if difficulty == "undergraduate" else 200,  # Academic knowledge
+        "gpqa": 1500,  # Graduate-level scientific reasoning
+        "truthfulqa": 800,  # Misconception analysis
+        "hellaswag": 800,  # Natural continuation reasoning
+        "arc": 800,  # Elementary/middle school science
+        "commonsenseqa": 1000,  # Common sense reasoning
+        "mmlu": 600 if difficulty == "undergraduate" else 800,  # Academic knowledge
     }
 
     # Find matching dataset
