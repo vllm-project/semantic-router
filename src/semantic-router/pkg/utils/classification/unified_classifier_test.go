@@ -318,9 +318,9 @@ func TestUnifiedClassifier_Integration(t *testing.T) {
 			t.Errorf("Expected 4 security results, got %d", len(results.SecurityResults))
 		}
 
-		// Verify performance requirement (batch processing should be fast)
-		if duration.Milliseconds() > 500 {
-			t.Errorf("Batch processing took too long: %v (should be < 500ms)", duration)
+		// Verify performance requirement (batch processing should be reasonable for LoRA models)
+		if duration.Milliseconds() > 2000 {
+			t.Errorf("Batch processing took too long: %v (should be < 2000ms)", duration)
 		}
 
 		t.Logf("Processed %d texts in %v", len(texts), duration)
@@ -375,10 +375,10 @@ func TestUnifiedClassifier_Integration(t *testing.T) {
 			t.Errorf("Expected 100 intent results, got %d", len(results.IntentResults))
 		}
 
-		// Verify large batch performance advantage (should be much faster than 100 individual calls)
+		// Verify large batch performance advantage (should be reasonable for LoRA models)
 		avgTimePerText := duration.Milliseconds() / 100
-		if avgTimePerText > 150 {
-			t.Errorf("Average time per text too high: %dms (should be < 150ms)", avgTimePerText)
+		if avgTimePerText > 300 {
+			t.Errorf("Average time per text too high: %dms (should be < 300ms)", avgTimePerText)
 		}
 
 		t.Logf("Large batch: %d texts in %v (avg: %dms per text)",

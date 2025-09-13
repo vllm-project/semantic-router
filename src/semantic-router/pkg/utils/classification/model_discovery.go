@@ -9,21 +9,54 @@ import (
 
 // ModelPaths holds the discovered model paths
 type ModelPaths struct {
+	// Legacy ModernBERT models (low confidence)
 	ModernBertBase     string
 	IntentClassifier   string
 	PIIClassifier      string
 	SecurityClassifier string
+
+	// LoRA models
+	LoRAIntentClassifier   string
+	LoRAPIIClassifier      string
+	LoRASecurityClassifier string
+	LoRAArchitecture       string // "bert", "roberta", "modernbert"
 }
 
 // IsComplete checks if all required models are found
 func (mp *ModelPaths) IsComplete() bool {
+	return mp.HasLoRAModels() || mp.HasLegacyModels()
+}
+
+// HasLoRAModels checks if LoRA models are available
+func (mp *ModelPaths) HasLoRAModels() bool {
+	return mp.LoRAIntentClassifier != "" &&
+		mp.LoRAPIIClassifier != "" &&
+		mp.LoRASecurityClassifier != "" &&
+		mp.LoRAArchitecture != ""
+}
+
+// HasLegacyModels checks if legacy ModernBERT models are available
+func (mp *ModelPaths) HasLegacyModels() bool {
 	return mp.ModernBertBase != "" &&
 		mp.IntentClassifier != "" &&
 		mp.PIIClassifier != "" &&
 		mp.SecurityClassifier != ""
 }
 
+// PreferLoRA returns true if LoRA models should be used (higher confidence)
+func (mp *ModelPaths) PreferLoRA() bool {
+	return mp.HasLoRAModels()
+}
+
+// ArchitectureModels holds models for a specific architecture
+type ArchitectureModels struct {
+	Intent   string
+	PII      string
+	Security string
+}
+
 // AutoDiscoverModels automatically discovers model files in the models directory
+// Uses intelligent architecture selection: BERT > RoBERTa > ModernBERT
 func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 	if modelsDir == "" {
 		modelsDir = "./models"
@@ -34,9 +67,17 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 		return nil, fmt.Errorf("models directory does not exist: %s", modelsDir)
 	}
 
-	paths := &ModelPaths{}
+	// Collect all available LoRA models by architecture
+	architectureModels := map[string]*ArchitectureModels{
+		"bert":       {Intent: "", PII: "", Security: ""},
+		"roberta":    {Intent: "", PII: "", Security: ""},
+		"modernbert": {Intent: "", PII: "", Security: ""},
+	}
 
-	// Walk through the models directory
+	// Legacy models for fallback
+	legacyPaths := &ModelPaths{}
+
+	// Walk through the models directory to collect all models
 	err := filepath.Walk(modelsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -49,42 +90,55 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 
 		dirName := strings.ToLower(info.Name())
 
-		// Match known model patterns
+		// Collect LoRA models by architecture
 		switch {
+		case strings.HasPrefix(dirName, "lora_intent_classifier"):
+			arch := detectArchitectureFromPath(dirName)
+			if architectureModels[arch].Intent == "" {
+				architectureModels[arch].Intent = path
+			}
+
+		case strings.HasPrefix(dirName, "lora_pii_detector"):
+			arch := detectArchitectureFromPath(dirName)
+			if architectureModels[arch].PII == "" {
+				architectureModels[arch].PII = path
+			}
+
+		case strings.HasPrefix(dirName, "lora_jailbreak_classifier"):
+			arch := detectArchitectureFromPath(dirName)
+			if architectureModels[arch].Security == "" {
+				architectureModels[arch].Security = path
+			}
+
+		// Legacy ModernBERT models (fallback for backward compatibility)
 		case strings.Contains(dirName, "modernbert") && strings.Contains(dirName, "base") && !strings.Contains(dirName, "classifier"):
 			// ModernBERT base model: "modernbert-base", "modernbert_base", etc.
-			if paths.ModernBertBase == "" { // Take the first match
-				paths.ModernBertBase = path
+			if legacyPaths.ModernBertBase == "" {
+				legacyPaths.ModernBertBase = path
 			}
 
 		case strings.Contains(dirName, "category") && strings.Contains(dirName, "classifier"):
-			// Intent/Category classifier: "category_classifier_modernbert-base_model", etc.
-			if paths.IntentClassifier == "" {
-				paths.IntentClassifier = path
+			if legacyPaths.IntentClassifier == "" {
+				legacyPaths.IntentClassifier = path
 			}
-			// If no dedicated ModernBERT base found, use this classifier as shared encoder
-			if paths.ModernBertBase == "" && strings.Contains(dirName, "modernbert") {
-				paths.ModernBertBase = path
+			if legacyPaths.ModernBertBase == "" && strings.Contains(dirName, "modernbert") {
+				legacyPaths.ModernBertBase = path
 			}
 
 		case strings.Contains(dirName, "pii") && strings.Contains(dirName, "classifier"):
-			// PII classifier: "pii_classifier_modernbert-base_presidio_token_model", etc.
-			if paths.PIIClassifier == "" {
-				paths.PIIClassifier = path
+			if legacyPaths.PIIClassifier == "" {
+				legacyPaths.PIIClassifier = path
 			}
-			// If no dedicated ModernBERT base found, use this classifier as shared encoder
-			if paths.ModernBertBase == "" && strings.Contains(dirName, "modernbert") {
-				paths.ModernBertBase = path
+			if legacyPaths.ModernBertBase == "" && strings.Contains(dirName, "modernbert") {
+				legacyPaths.ModernBertBase = path
 			}
 
 		case (strings.Contains(dirName, "jailbreak") || strings.Contains(dirName, "security")) && strings.Contains(dirName, "classifier"):
-			// Security/Jailbreak classifier: "jailbreak_classifier_modernbert-base_model", etc.
-			if paths.SecurityClassifier == "" {
-				paths.SecurityClassifier = path
+			if legacyPaths.SecurityClassifier == "" {
+				legacyPaths.SecurityClassifier = path
 			}
-			// If no dedicated ModernBERT base found, use this classifier as shared encoder
-			if paths.ModernBertBase == "" && strings.Contains(dirName, "modernbert") {
-				paths.ModernBertBase = path
+			if legacyPaths.ModernBertBase == "" && strings.Contains(dirName, "modernbert") {
+				legacyPaths.ModernBertBase = path
 			}
 		}
 
@@ -94,7 +148,44 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 		return nil, fmt.Errorf("error scanning models directory: %v", err)
 	}
 
-	return paths, nil
+	// Intelligent architecture selection based on performance priority: BERT > RoBERTa > ModernBERT
+	architecturePriority := []string{"bert", "roberta", "modernbert"}
+
+	for _, arch := range architecturePriority {
+		models := architectureModels[arch]
+		// Check if this architecture has a complete set of models
+		if models.Intent != "" && models.PII != "" && models.Security != "" {
+			return &ModelPaths{
+				LoRAIntentClassifier:   models.Intent,
+				LoRAPIIClassifier:      models.PII,
+				LoRASecurityClassifier: models.Security,
+				LoRAArchitecture:       arch,
+				// Copy legacy paths for fallback compatibility
+				ModernBertBase:     legacyPaths.ModernBertBase,
+				IntentClassifier:   legacyPaths.IntentClassifier,
+				PIIClassifier:      legacyPaths.PIIClassifier,
+				SecurityClassifier: legacyPaths.SecurityClassifier,
+			}, nil
+		}
+	}
+
+	// If no complete LoRA architecture set found, return legacy models
+	return legacyPaths, nil
+}
+
+// detectArchitectureFromPath detects model architecture from directory name
+func detectArchitectureFromPath(dirName string) string {
+	switch {
+	case strings.Contains(dirName, "bert-base-uncased"):
+		return "bert"
+	case strings.Contains(dirName, "roberta-base"):
+		return "roberta"
+	case strings.Contains(dirName, "modernbert-base"):
+		return "modernbert"
+	default:
+		// Default fallback
+		return "bert"
+	}
 }
 
 // ValidateModelPaths validates that all discovered paths contain valid model files
@@ -103,26 +194,50 @@ func ValidateModelPaths(paths *ModelPaths) error {
 		return fmt.Errorf("model paths is nil")
 	}
 
-	// Check each path
-	modelChecks := map[string]string{
-		"ModernBERT base":     paths.ModernBertBase,
-		"Intent classifier":   paths.IntentClassifier,
-		"PII classifier":      paths.PIIClassifier,
-		"Security classifier": paths.SecurityClassifier,
-	}
-
-	for name, path := range modelChecks {
-		if path == "" {
-			return fmt.Errorf("%s model not found", name)
+	// If LoRA models are available, validate them
+	if paths.HasLoRAModels() {
+		loraChecks := map[string]string{
+			"LoRA Intent classifier":   paths.LoRAIntentClassifier,
+			"LoRA PII classifier":      paths.LoRAPIIClassifier,
+			"LoRA Security classifier": paths.LoRASecurityClassifier,
 		}
 
-		// Check if directory exists and contains model files
-		if err := validateModelDirectory(path, name); err != nil {
-			return err
+		for name, path := range loraChecks {
+			if path == "" {
+				return fmt.Errorf("%s model not found", name)
+			}
+
+			// Check if directory exists and contains model files
+			if err := validateModelDirectory(path, name); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
 
-	return nil
+	// If no LoRA models, validate legacy models
+	if paths.HasLegacyModels() {
+		legacyChecks := map[string]string{
+			"ModernBERT base":     paths.ModernBertBase,
+			"Intent classifier":   paths.IntentClassifier,
+			"PII classifier":      paths.PIIClassifier,
+			"Security classifier": paths.SecurityClassifier,
+		}
+
+		for name, path := range legacyChecks {
+			if path == "" {
+				return fmt.Errorf("%s model not found", name)
+			}
+
+			// Check if directory exists and contains model files
+			if err := validateModelDirectory(path, name); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("no valid models found (neither LoRA nor legacy)")
 }
 
 // validateModelDirectory checks if a directory contains valid model files
@@ -213,6 +328,7 @@ func GetModelDiscoveryInfo(modelsDir string) map[string]interface{} {
 }
 
 // AutoInitializeUnifiedClassifier attempts to auto-discover and initialize the unified classifier
+// Prioritizes LoRA models over legacy ModernBERT models
 func AutoInitializeUnifiedClassifier(modelsDir string) (*UnifiedClassifier, error) {
 	// Discover models
 	paths, err := AutoDiscoverModels(modelsDir)
@@ -225,6 +341,40 @@ func AutoInitializeUnifiedClassifier(modelsDir string) (*UnifiedClassifier, erro
 		return nil, fmt.Errorf("model validation failed: %v", err)
 	}
 
+	// Check if we should use LoRA models
+	if paths.PreferLoRA() {
+		return initializeLoRAUnifiedClassifier(paths)
+	}
+
+	// Fallback to legacy ModernBERT initialization
+	return initializeLegacyUnifiedClassifier(paths)
+}
+
+// initializeLoRAUnifiedClassifier initializes with LoRA models
+func initializeLoRAUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, error) {
+	// Create unified classifier instance with LoRA mode
+	classifier := &UnifiedClassifier{
+		initialized: false,
+		useLoRA:     true, // Mark as LoRA mode for high confidence
+	}
+
+	// Store LoRA model paths for later initialization
+	// The actual C initialization will be done in unified_classifier.go
+	classifier.loraModelPaths = &LoRAModelPaths{
+		IntentPath:   paths.LoRAIntentClassifier,
+		PIIPath:      paths.LoRAPIIClassifier,
+		SecurityPath: paths.LoRASecurityClassifier,
+		Architecture: paths.LoRAArchitecture,
+	}
+
+	// Mark as initialized - the actual C initialization will be lazy-loaded
+	classifier.initialized = true
+
+	return classifier, nil
+}
+
+// initializeLegacyUnifiedClassifier initializes with legacy ModernBERT models
+func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, error) {
 	// Load intent labels from the actual model's mapping file
 	categoryMappingPath := filepath.Join(paths.IntentClassifier, "category_mapping.json")
 	categoryMapping, err := LoadCategoryMapping(categoryMappingPath)

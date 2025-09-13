@@ -35,7 +35,34 @@ typedef struct {
     char* error_message;
 } UnifiedBatchResult;
 
-// C function declarations
+// High-confidence LoRA result structures
+typedef struct {
+    char* category;
+    float confidence;
+} LoRAIntentResult;
+
+typedef struct {
+    bool has_pii;
+    char** pii_types;
+    int num_pii_types;
+    float confidence;
+} LoRAPIIResult;
+
+typedef struct {
+    bool is_jailbreak;
+    char* threat_type;
+    float confidence;
+} LoRASecurityResult;
+
+typedef struct {
+    LoRAIntentResult* intent_results;
+    LoRAPIIResult* pii_results;
+    LoRASecurityResult* security_results;
+    int batch_size;
+    float avg_confidence;
+} LoRABatchResult;
+
+// C function declarations - Legacy low confidence functions
 bool init_unified_classifier_c(const char* modernbert_path, const char* intent_head_path,
                                const char* pii_head_path, const char* security_head_path,
                                const char** intent_labels, int intent_labels_count,
@@ -45,11 +72,18 @@ bool init_unified_classifier_c(const char* modernbert_path, const char* intent_h
 UnifiedBatchResult classify_unified_batch(const char** texts, int num_texts);
 void free_unified_batch_result(UnifiedBatchResult result);
 void free_cstring(char* s);
+
+// High-confidence LoRA functions - Solves low confidence issue
+bool init_lora_unified_classifier(const char* intent_model_path, const char* pii_model_path,
+                                  const char* security_model_path, const char* architecture, bool use_cpu);
+LoRABatchResult classify_batch_with_lora(const char** texts, int num_texts);
+void free_lora_batch_result(LoRABatchResult result);
 */
 import "C"
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 	"unsafe"
@@ -67,10 +101,21 @@ type UnifiedClassifierStats struct {
 }
 
 // UnifiedClassifier provides true batch inference with shared ModernBERT backbone
+// LoRAModelPaths holds paths to LoRA model files
+type LoRAModelPaths struct {
+	IntentPath   string
+	PIIPath      string
+	SecurityPath string
+	Architecture string
+}
+
 type UnifiedClassifier struct {
-	initialized bool
-	mu          sync.Mutex
-	stats       UnifiedClassifierStats
+	initialized     bool
+	mu              sync.Mutex
+	stats           UnifiedClassifierStats
+	useLoRA         bool            // True if using high-confidence LoRA models (solves PR 71)
+	loraModelPaths  *LoRAModelPaths // Paths to LoRA models
+	loraInitialized bool            // True if LoRA C bindings are initialized
 }
 
 // UnifiedBatchResults contains results from all classification tasks
@@ -197,7 +242,7 @@ func (uc *UnifiedClassifier) Initialize(
 }
 
 // ClassifyBatch performs true batch inference on multiple texts
-// This is the core method that provides significant performance improvements
+// Automatically uses high-confidence LoRA models if available
 func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty text batch")
@@ -213,6 +258,26 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 		return nil, fmt.Errorf("unified classifier not initialized")
 	}
 
+	// Choose implementation based on model type
+	if uc.useLoRA {
+		return uc.classifyBatchWithLoRA(texts, startTime)
+	} else {
+		return uc.classifyBatchLegacy(texts, startTime)
+	}
+}
+
+// classifyBatchWithLoRA uses high-confidence LoRA models
+func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string, startTime time.Time) (*UnifiedBatchResults, error) {
+	log.Printf("Using LoRA models for batch classification, batch size: %d", len(texts))
+
+	// Lazy initialization of LoRA C bindings
+	if !uc.loraInitialized {
+		if err := uc.initializeLoRABindings(); err != nil {
+			return nil, fmt.Errorf("failed to initialize loRA bindings: %v", err)
+		}
+		uc.loraInitialized = true
+	}
+
 	// Convert Go strings to C string array
 	cTexts := make([]*C.char, len(texts))
 	for i, text := range texts {
@@ -226,7 +291,40 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 		}
 	}()
 
-	// Call the unified batch classification
+	// Call the high-confidence LoRA batch classification
+	result := C.classify_batch_with_lora(&cTexts[0], C.int(len(texts)))
+	defer C.free_lora_batch_result(result)
+
+	if result.batch_size <= 0 {
+		return nil, fmt.Errorf("loRA batch classification failed")
+	}
+
+	// Convert LoRA results to unified format
+	results := uc.convertLoRAResultsToGo(&result)
+
+	// Update performance statistics
+	processingTime := time.Since(startTime)
+	uc.updateStats(len(texts), processingTime)
+	return results, nil
+}
+
+// classifyBatchLegacy uses legacy ModernBERT models (lower confidence)
+func (uc *UnifiedClassifier) classifyBatchLegacy(texts []string, startTime time.Time) (*UnifiedBatchResults, error) {
+
+	// Convert Go strings to C string array
+	cTexts := make([]*C.char, len(texts))
+	for i, text := range texts {
+		cTexts[i] = C.CString(text)
+	}
+
+	// Ensure C strings are freed
+	defer func() {
+		for _, cText := range cTexts {
+			C.free(unsafe.Pointer(cText))
+		}
+	}()
+
+	// Call the legacy unified batch classification
 	result := C.classify_unified_batch(&cTexts[0], C.int(len(texts)))
 	defer C.free_unified_batch_result(result)
 
@@ -247,6 +345,104 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 	uc.updateStats(len(texts), processingTime)
 
 	return results, nil
+}
+
+// convertLoRAResultsToGo converts LoRA C results to unified Go structures
+func (uc *UnifiedClassifier) convertLoRAResultsToGo(result *C.LoRABatchResult) *UnifiedBatchResults {
+	batchSize := int(result.batch_size)
+	results := &UnifiedBatchResults{
+		IntentResults:   make([]IntentResult, batchSize),
+		PIIResults:      make([]PIIResult, batchSize),
+		SecurityResults: make([]SecurityResult, batchSize),
+		BatchSize:       batchSize,
+	}
+
+	// Convert intent results
+	if result.intent_results != nil {
+		intentSlice := (*[1000]C.LoRAIntentResult)(unsafe.Pointer(result.intent_results))[:batchSize:batchSize]
+		for i, cIntent := range intentSlice {
+			results.IntentResults[i] = IntentResult{
+				Category:      C.GoString(cIntent.category),
+				Confidence:    float32(cIntent.confidence),
+				Probabilities: []float32{float32(cIntent.confidence)}, // Simplified
+			}
+		}
+	}
+
+	// Convert PII results
+	if result.pii_results != nil {
+		piiSlice := (*[1000]C.LoRAPIIResult)(unsafe.Pointer(result.pii_results))[:batchSize:batchSize]
+		for i, cPII := range piiSlice {
+			piiResult := PIIResult{
+				HasPII:     bool(cPII.has_pii),
+				PIITypes:   []string{},
+				Confidence: float32(cPII.confidence),
+			}
+
+			// Convert PII types
+			if cPII.pii_types != nil && cPII.num_pii_types > 0 {
+				piiTypesSlice := (*[1000]*C.char)(unsafe.Pointer(cPII.pii_types))[:cPII.num_pii_types:cPII.num_pii_types]
+				for _, cType := range piiTypesSlice {
+					piiResult.PIITypes = append(piiResult.PIITypes, C.GoString(cType))
+				}
+			}
+
+			results.PIIResults[i] = piiResult
+		}
+	}
+
+	// Convert security results
+	if result.security_results != nil {
+		securitySlice := (*[1000]C.LoRASecurityResult)(unsafe.Pointer(result.security_results))[:batchSize:batchSize]
+		for i, cSecurity := range securitySlice {
+			results.SecurityResults[i] = SecurityResult{
+				IsJailbreak: bool(cSecurity.is_jailbreak),
+				ThreatType:  C.GoString(cSecurity.threat_type),
+				Confidence:  float32(cSecurity.confidence),
+			}
+		}
+	}
+
+	return results
+}
+
+// initializeLoRABindings initializes the LoRA C bindings lazily
+func (uc *UnifiedClassifier) initializeLoRABindings() error {
+	if uc.loraModelPaths == nil {
+		return fmt.Errorf("loRA model paths not configured")
+	}
+
+	log.Printf("Initializing LoRA models: Intent=%s, PII=%s, Security=%s, Architecture=%s",
+		uc.loraModelPaths.IntentPath, uc.loraModelPaths.PIIPath, uc.loraModelPaths.SecurityPath, uc.loraModelPaths.Architecture)
+
+	// Convert Go strings to C strings
+	cIntentPath := C.CString(uc.loraModelPaths.IntentPath)
+	defer C.free(unsafe.Pointer(cIntentPath))
+
+	cPIIPath := C.CString(uc.loraModelPaths.PIIPath)
+	defer C.free(unsafe.Pointer(cPIIPath))
+
+	cSecurityPath := C.CString(uc.loraModelPaths.SecurityPath)
+	defer C.free(unsafe.Pointer(cSecurityPath))
+
+	cArch := C.CString(uc.loraModelPaths.Architecture)
+	defer C.free(unsafe.Pointer(cArch))
+
+	// Initialize LoRA unified classifier
+	success := C.init_lora_unified_classifier(
+		cIntentPath,
+		cPIIPath,
+		cSecurityPath,
+		cArch,
+		C.bool(true), // Use CPU for now
+	)
+
+	if !success {
+		return fmt.Errorf("c.init_lora_unified_classifier failed")
+	}
+
+	log.Printf("LoRA C bindings initialized successfully")
+	return nil
 }
 
 // convertCResultsToGo converts C results to Go structures
