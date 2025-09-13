@@ -17,8 +17,8 @@ func (r *OpenAIRouter) HandleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 }
 
 // HandleResponseHeaders exposes handleResponseHeaders for testing
-func (r *OpenAIRouter) HandleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders) (*ext_proc.ProcessingResponse, error) {
-	return r.handleResponseHeaders(v)
+func (r *OpenAIRouter) HandleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	return r.handleResponseHeaders(v, ctx)
 }
 
 // HandleResponseBody exposes handleResponseBody for testing

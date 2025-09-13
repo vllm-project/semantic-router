@@ -108,6 +108,10 @@ type RequestContext struct {
 	RequestQuery        string
 	StartTime           time.Time
 	ProcessingStartTime time.Time
+
+	// TTFT tracking
+	TTFTRecorded bool
+	TTFTSeconds  float64
 }
 
 // handleRequestHeaders processes the request headers
