@@ -17,8 +17,10 @@ from tqdm import tqdm
 
 # This benchmark supports two usage patterns:
 # 1) Router-transparent: send a single neutral prompt; router/model decides reasoning.
-# 2) Policy evaluation: run NR (neutral), XC (explicit CoT), and optionally AR (automatic reasoning via extra_body)
-#    per question, then aggregate according to policies like Always-NR, Always-XC, CR-XC, Oracle, etc.
+# 2) vLLM 3-case evaluation: run realistic scenarios that match router decision patterns:
+#    - NR: Plain prompt, no reasoning toggle (baseline/fast)
+#    - XC: CoT prompt, no reasoning toggle (prompt-based reasoning)
+#    - NR_REASONING: Plain prompt, reasoning toggle ON (model-based reasoning)
 
 
 ANSWER_PATTERN = re.compile(r"(?:answer(?:\sis)?:?\s*)([A-J])", re.IGNORECASE)
@@ -76,7 +78,7 @@ def parse_args():
         type=str,
         nargs="+",
         default=["NR", "XC"],
-        help="Prompt styles to run on vLLM: NR (neutral), XC (explicit CoT)",
+        help="DEPRECATED: vLLM now runs 3 fixed realistic modes: NR (plain), XC (CoT), NR_REASONING (plain+toggle)",
     )
     parser.add_argument(
         "--run-router",
@@ -340,7 +342,17 @@ def call_model(
         total_tokens = getattr(usage, "total_tokens", None) if usage else None
         return text, True, prompt_tokens, completion_tokens, total_tokens
     except Exception as e:
-        print(f"Model call failed: {e}")
+        print(f"❌ Model call failed: {e}")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   Model: {model}")
+        print(f"   Endpoint: {getattr(client, '_base_url', 'unknown')}")
+        print(f"   API key set: {'Yes' if getattr(client, 'api_key', None) else 'No'}")
+        if hasattr(e, "response"):
+            print(f"   HTTP status: {getattr(e.response, 'status_code', 'unknown')}")
+            print(f"   Response text: {getattr(e.response, 'text', 'unknown')}")
+        import traceback
+
+        print(f"   Full traceback: {traceback.format_exc()}")
         return "ERROR", False, None, None, None
 
 
@@ -352,7 +364,7 @@ def build_extra_body_for_model(
     - DeepSeek v3.1: {"chat_template_kwargs": {"thinking": true/false}}
     - GPT-OSS: {"reasoning_effort": "low|medium|high"} when ON; if not provided, then low
     """
-    # reasoning: True -> ON, False -> OFF, None -> base
+    # reasoning: True -> ON, False -> OFF, None -> base (default behavior)
 
     lower = model_name.lower()
     if (("ds" in lower) or ("deepseek" in lower)) and (
@@ -360,10 +372,11 @@ def build_extra_body_for_model(
     ):
         if reasoning is True:
             return {"chat_template_kwargs": {"thinking": True}}
-        if reasoning is None or reasoning is False:
+        elif reasoning is False:
             return {"chat_template_kwargs": {"thinking": False}}
-        # Base: do not set thinking for DeepSeek
-        return None
+        else:  # reasoning is None (base mode)
+            # Base: do not set thinking for DeepSeek - let it use default behavior
+            return None
 
     # Qwen3 family
     if "qwen3" in lower:
@@ -375,12 +388,13 @@ def build_extra_body_for_model(
 
     # GPT OSS family
     if "gpt-oss" in lower or "openai/gpt-oss" in lower or "gpt_oss" in lower:
-        # Base -> low effort, On -> provided effort (e.g., high)
         if reasoning is True:
             return {"reasoning_effort": "high"}
-        if reasoning is None or reasoning is False:
+        elif reasoning is False:
             return {"reasoning_effort": "low"}
-        return None
+        else:  # reasoning is None (base mode)
+            # Base: do not set reasoning_effort - let it use default behavior
+            return None
 
     return None
 
@@ -450,8 +464,17 @@ def evaluate_model_router_transparent(
     max_tokens: int,
     temperature: float,
 ) -> pd.DataFrame:
+    """
+    Evaluate router in transparent mode - send plain prompts and let router decide reasoning.
+
+    This represents the 'auto' mode where the router internally decides whether to use
+    reasoning or not based on the question complexity.
+    """
     client = OpenAI(base_url=endpoint, api_key=api_key or None)
     print(f"Using model: {model}, endpoint: {endpoint}")
+    print(
+        f"API key provided: {'Yes' if api_key else 'No'} (length: {len(api_key) if api_key else 0})"
+    )
 
     results: List[Dict[str, Any]] = []
     questions_data = df.to_dict("records")
@@ -491,37 +514,57 @@ def evaluate_model_vllm_multimode(
     temperature: float,
     exec_modes: List[str],
 ) -> pd.DataFrame:
-    """Run vLLM with NR/XC prompts and reasoning ON/OFF variants."""
-    client = OpenAI(base_url=endpoint, api_key=api_key or None)
+    """Run vLLM with 3 realistic reasoning scenarios.
+
+    The 3 scenarios represent real-world router decision patterns:
+    1. NR - Plain prompt, no reasoning toggle (fast baseline)
+    2. XC - CoT prompt, no reasoning toggle (prompt-based reasoning)
+    3. NR_REASONING - Plain prompt, reasoning toggle ON (model-based reasoning)
+    """
+    client = OpenAI(base_url=endpoint, api_key=api_key or "dummy-key")
     print(f"Using vLLM model: {model}, endpoint: {endpoint}")
 
     results: List[Dict[str, Any]] = []
     questions_data = df.to_dict("records")
 
-    # Define mode variants: (label, prompt_mode, reasoning_flag)
-    mode_variants: List[Tuple[str, str, Optional[bool]]] = []
-    for m in exec_modes:
-        if m.upper() == "NR":
-            mode_variants.extend(
-                [
-                    ("VLLM_NR_base", "NR", None),
-                    ("VLLM_NR_reason_on", "NR", True),
-                    ("VLLM_NR_reason_off", "NR", False),
-                ]
-            )
-        elif m.upper() == "XC":
-            mode_variants.extend(
-                [
-                    ("VLLM_XC_base", "XC", None),
-                    ("VLLM_XC_reason_on", "XC", True),
-                    ("VLLM_XC_reason_off", "XC", False),
-                ]
-            )
+    # Define 3 realistic mode variants: (label, prompt_mode, reasoning_flag)
+    # For DeepSeek and Qwen3 models, explicitly set reasoning flags for all modes
+    model_lower = model.lower()
+    is_deepseek_or_qwen = (
+        (("ds" in model_lower) or ("deepseek" in model_lower))
+        and ("v31" in model_lower or "v3.1" in model_lower or "v3" in model_lower)
+    ) or ("qwen3" in model_lower)
+
+    if is_deepseek_or_qwen:
+        mode_variants: List[Tuple[str, str, Optional[bool]]] = [
+            ("VLLM_NR", "NR", False),  # Plain prompt, reasoning OFF (baseline)
+            ("VLLM_XC", "XC", False),  # CoT prompt, reasoning OFF (prompt reasoning)
+            (
+                "VLLM_NR_REASONING",
+                "NR",
+                True,
+            ),  # Plain prompt, reasoning ON (model reasoning)
+        ]
+    else:
+        mode_variants: List[Tuple[str, str, Optional[bool]]] = [
+            ("VLLM_NR", "NR", None),  # Plain prompt, no toggle (baseline)
+            ("VLLM_XC", "XC", None),  # CoT prompt, no toggle (prompt reasoning)
+            (
+                "VLLM_NR_REASONING",
+                "NR",
+                True,
+            ),  # Plain prompt, toggle ON (model reasoning)
+        ]
 
     def run_variants(q: Dict[str, Any]) -> List[Dict[str, Any]]:
         local_records: List[Dict[str, Any]] = []
         for label, prompt_mode, reasoning_flag in mode_variants:
             extra_body = build_extra_body_for_model(model, reasoning_flag)
+            # Debug: print extra_body for first question to verify configuration
+            if q == questions_data[0]:
+                print(
+                    f"  {label}: reasoning_flag={reasoning_flag}, extra_body={extra_body}"
+                )
             rec = process_question_single(
                 client,
                 model,

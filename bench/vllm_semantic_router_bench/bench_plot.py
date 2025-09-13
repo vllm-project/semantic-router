@@ -6,12 +6,18 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib import colormaps
 
+# This script plots benchmark results from the 3-case vLLM design:
+# - VLLM_NR: Plain prompt, no reasoning toggle (baseline)
+# - VLLM_XC: CoT prompt, no reasoning toggle (prompt reasoning)
+# - VLLM_NR_REASONING: Plain prompt, reasoning toggle ON (model reasoning)
+# - router: Router auto mode for comparison
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--summary",
     type=Path,
     required=True,
-    help="Path to summary.json produced by the bench",
+    help="Path to vLLM summary.json produced by the 3-case benchmark",
 )
 parser.add_argument(
     "--router-summary",
@@ -56,7 +62,7 @@ parser.add_argument(
     "--max-modes",
     type=int,
     default=None,
-    help="If set, plot only the top N modes by mean of the current metric",
+    help="If set, plot only the top N modes by mean of the current metric (default: all 3 modes)",
 )
 parser.add_argument(
     "--xtick-rotation",
@@ -175,7 +181,41 @@ def plot_metric(metric: str, out_path: Path):
 
     x = range(len(cats))
 
-    # Determine modes to plot, optionally limiting to top-N by mean of metric
+    # Plot router per-category metric FIRST (with both line and diamonds)
+    # This ensures router trend is visible even if vLLM dots overlap
+    if s_router is not None:
+        router_cat = s_router.get("category_metrics", {})
+        router_vals = []
+        router_x = []
+        for idx, c in enumerate(cats):
+            v = router_cat.get(c, {}).get(metric)
+            if v is not None:
+                router_x.append(idx)
+                router_vals.append(v)
+        if router_vals:
+            # Connect router points with a line and draw larger diamond markers
+            ax.plot(
+                router_x,
+                router_vals,
+                color="tab:red",
+                linestyle="-",
+                linewidth=2.0 * args.font_scale,
+                alpha=0.85,
+                zorder=1,  # Lower zorder so it's plotted first
+            )
+            ax.scatter(
+                router_x,
+                router_vals,
+                s=90 * args.font_scale,
+                color="tab:red",
+                marker="D",
+                label="router",
+                zorder=2,  # Lower zorder so it's plotted first
+                edgecolors="white",
+                linewidths=0.6 * args.font_scale,
+            )
+
+    # Then plot vLLM modes on top
     all_modes = sorted({m for c in cats for m in cat_by_mode.get(c, {}).keys()})
     if len(all_modes) > 0:
 
@@ -213,7 +253,7 @@ def plot_metric(metric: str, out_path: Path):
                     linestyle=linestyles[i % len(linestyles)],
                     linewidth=1.4 * args.font_scale,
                     alpha=0.6,
-                    zorder=2,
+                    zorder=3,  # Higher zorder so vLLM lines are on top
                 )
             if args.style in ("points", "both"):
                 ax.scatter(
@@ -225,49 +265,27 @@ def plot_metric(metric: str, out_path: Path):
                     alpha=0.85,
                     edgecolors="white",
                     linewidths=0.5 * args.font_scale,
-                    zorder=3,
+                    zorder=4,  # Higher zorder so vLLM points are on top
                 )
 
-    # Overlay router per-category metric as diamonds, if provided
-    if s_router is not None:
-        router_cat = s_router.get("category_metrics", {})
-        router_vals = []
-        router_x = []
-        for idx, c in enumerate(cats):
-            v = router_cat.get(c, {}).get(metric)
-            if v is not None:
-                router_x.append(idx)
-                router_vals.append(v)
-        if router_vals:
-            # Connect router points with a line and draw larger diamond markers
-            ax.plot(
-                router_x,
-                router_vals,
-                color="tab:red",
-                linestyle="-",
-                linewidth=2.0 * args.font_scale,
-                alpha=0.85,
-                zorder=4,
-            )
-            ax.scatter(
-                router_x,
-                router_vals,
-                s=90 * args.font_scale,
-                color="tab:red",
-                marker="D",
-                label="router",
-                zorder=5,
-                edgecolors="white",
-                linewidths=0.6 * args.font_scale,
-            )
+    # Set x-axis labels with threshold for readability
+    MAX_CATEGORY_LABELS = 20  # Hide labels if more than this many categories
 
     ax.set_xticks(list(x))
-    ax.set_xticklabels(
-        cats,
-        rotation=args.xtick_rotation,
-        ha="right",
-        fontsize=int(14 * args.font_scale),
-    )
+    if len(cats) <= MAX_CATEGORY_LABELS:
+        ax.set_xticklabels(
+            cats,
+            rotation=args.xtick_rotation,
+            ha="right",
+            fontsize=int(14 * args.font_scale),
+        )
+    else:
+        # Too many categories - hide labels to avoid clutter
+        ax.set_xticklabels([])
+        ax.set_xlabel(
+            f"Categories ({len(cats)} total - labels hidden for readability)",
+            fontsize=int(16 * args.font_scale),
+        )
     # Control horizontal fit by expanding/shrinking x-limits around the first/last category
     if len(cats) > 0:
         n = len(cats)
@@ -333,7 +351,13 @@ def plot_metric(metric: str, out_path: Path):
     plt.close(fig)
 
 
-args.out_dir.mkdir(parents=True, exist_ok=True)
-for metric in args.metrics:
-    out_path = args.out_dir / f"bench_plot_{metric}.png"
-    plot_metric(metric, out_path)
+def main():
+    """Main entry point for the plotting script."""
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    for metric in args.metrics:
+        out_path = args.out_dir / f"bench_plot_{metric}.png"
+        plot_metric(metric, out_path)
+
+
+if __name__ == "__main__":
+    main()

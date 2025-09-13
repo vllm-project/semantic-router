@@ -1,0 +1,43 @@
+# Include package metadata and documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+include pyproject.toml
+include setup.py
+
+# Include shell scripts
+include *.sh
+include comprehensive_bench.sh
+include benchmark_comparison.sh
+
+# Include dataset implementations
+recursive-include dataset_implementations *.py
+
+# Include example configurations and documentation
+include quick_comparison.md
+
+# Exclude development and testing files
+exclude test_*.py
+exclude *_test.py
+exclude test_*.sh
+exclude .gitignore
+exclude .pre-commit-config.yaml
+
+# Exclude build artifacts
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .coverage
+global-exclude htmlcov
+
+# Exclude results and temporary files
+global-exclude results/
+global-exclude *.log
+global-exclude *.tmp
