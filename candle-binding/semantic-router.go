@@ -51,6 +51,24 @@ typedef struct {
 extern ModernBertTokenClassificationResult classify_modernbert_pii_tokens(const char* text, const char* model_config_path);
 extern void free_modernbert_token_result(ModernBertTokenClassificationResult result);
 
+// BERT token classification structures (compatible with ModernBERT)
+typedef struct {
+    char* entity_type;
+    int start;
+    int end;
+    char* text;
+    float confidence;
+} BertTokenEntity;
+
+typedef struct {
+    BertTokenEntity* entities;
+    int num_entities;
+} BertTokenClassificationResult;
+
+extern bool init_bert_token_classifier(const char* model_path, int num_classes, bool use_cpu);
+extern BertTokenClassificationResult classify_bert_pii_tokens(const char* text, const char* id2label_json);
+extern void free_bert_token_classification_result(BertTokenClassificationResult result);
+
 // Similarity result structure
 typedef struct {
     int index;
@@ -111,11 +129,51 @@ extern ClassificationResultWithProbs classify_text_with_probabilities(const char
 extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
+extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
+
+// New official Candle BERT functions
+extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
+extern bool init_candle_bert_token_classifier(const char* model_path, int num_classes, bool use_cpu);
+extern ClassificationResult classify_candle_bert_text(const char* text);
+extern BertTokenClassificationResult classify_candle_bert_tokens(const char* text);
+extern BertTokenClassificationResult classify_candle_bert_tokens_with_labels(const char* text, const char* id2label_json);
+
+// LoRA Unified Classifier C structures
+typedef struct {
+    char* category;
+    float confidence;
+} LoRAIntentResult;
+
+typedef struct {
+    bool has_pii;
+    char** pii_types;
+    int num_pii_types;
+    float confidence;
+} LoRAPIIResult;
+
+typedef struct {
+    bool is_jailbreak;
+    char* threat_type;
+    float confidence;
+} LoRASecurityResult;
+
+typedef struct {
+    LoRAIntentResult* intent_results;
+    LoRAPIIResult* pii_results;
+    LoRASecurityResult* security_results;
+    int batch_size;
+    float avg_confidence;
+} LoRABatchResult;
+
+// LoRA Unified Classifier C declarations
+extern bool init_lora_unified_classifier(const char* intent_model_path, const char* pii_model_path, const char* security_model_path, const char* architecture, bool use_cpu);
+extern LoRABatchResult classify_batch_with_lora(const char** texts, int num_texts);
+extern void free_lora_batch_result(LoRABatchResult result);
 */
 import "C"
 
@@ -137,6 +195,8 @@ var (
 	modernbertJailbreakClassifierInitErr  error
 	modernbertPiiTokenClassifierInitOnce  sync.Once
 	modernbertPiiTokenClassifierInitErr   error
+	bertTokenClassifierInitOnce           sync.Once
+	bertTokenClassifierInitErr            error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -177,6 +237,32 @@ type TokenEntity struct {
 // TokenClassificationResult represents the result of token classification
 type TokenClassificationResult struct {
 	Entities []TokenEntity // Array of detected entities
+}
+
+// LoRA Unified Classifier structures
+type LoRAIntentResult struct {
+	Category   string
+	Confidence float32
+}
+
+type LoRAPIIResult struct {
+	HasPII     bool
+	PIITypes   []string
+	Confidence float32
+}
+
+type LoRASecurityResult struct {
+	IsJailbreak bool
+	ThreatType  string
+	Confidence  float32
+}
+
+type LoRABatchResult struct {
+	IntentResults   []LoRAIntentResult
+	PIIResults      []LoRAPIIResult
+	SecurityResults []LoRASecurityResult
+	BatchSize       int
+	AvgConfidence   float32
 }
 
 // InitModel initializes the BERT model with the specified model ID
@@ -779,3 +865,339 @@ func ClassifyModernBertPIITokens(text string, modelConfigPath string) (TokenClas
 		Entities: entities,
 	}, nil
 }
+
+// ================================================================================================
+// BERT TOKEN CLASSIFICATION GO BINDINGS
+// ================================================================================================
+
+// InitBertTokenClassifier initializes the BERT token classifier
+func InitBertTokenClassifier(modelPath string, numClasses int, useCPU bool) error {
+	var err error
+	bertTokenClassifierInitOnce.Do(func() {
+		log.Printf("Initializing BERT token classifier: %s", modelPath)
+
+		cModelPath := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelPath))
+
+		success := C.init_bert_token_classifier(cModelPath, C.int(numClasses), C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize BERT token classifier")
+			return
+		}
+
+		log.Printf("BERT token classifier initialized successfully")
+	})
+
+	// Reset the once so we can try again with a different model if needed
+	if err != nil {
+		bertTokenClassifierInitOnce = sync.Once{}
+	}
+
+	bertTokenClassifierInitErr = err
+	return err
+}
+
+// ClassifyBertPIITokens performs token classification for PII detection using BERT
+func ClassifyBertPIITokens(text string, id2labelJson string) (TokenClassificationResult, error) {
+	if bertTokenClassifierInitErr != nil {
+		return TokenClassificationResult{}, fmt.Errorf("BERT token classifier not initialized: %v", bertTokenClassifierInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cId2Label := C.CString(id2labelJson)
+	defer C.free(unsafe.Pointer(cId2Label))
+
+	// Call the Rust function
+	result := C.classify_bert_pii_tokens(cText, cId2Label)
+	defer C.free_bert_token_classification_result(result)
+
+	// Check for errors
+	if result.num_entities < 0 {
+		return TokenClassificationResult{}, fmt.Errorf("failed to classify PII tokens with BERT")
+	}
+
+	// Handle empty result (no entities found)
+	if result.num_entities == 0 {
+		return TokenClassificationResult{Entities: []TokenEntity{}}, nil
+	}
+
+	// Convert C result to Go structures
+	numEntities := int(result.num_entities)
+	entities := make([]TokenEntity, numEntities)
+
+	// Access the C array safely
+	cEntities := (*[1 << 20]C.BertTokenEntity)(unsafe.Pointer(result.entities))[:numEntities:numEntities]
+
+	for i := 0; i < numEntities; i++ {
+		entities[i] = TokenEntity{
+			EntityType: C.GoString(cEntities[i].entity_type),
+			Start:      int(cEntities[i].start),
+			End:        int(cEntities[i].end),
+			Text:       C.GoString(cEntities[i].text),
+			Confidence: float32(cEntities[i].confidence),
+		}
+	}
+
+	return TokenClassificationResult{
+		Entities: entities,
+	}, nil
+}
+
+// ClassifyBertText performs sequence classification using BERT
+func ClassifyBertText(text string) (ClassResult, error) {
+	if bertTokenClassifierInitErr != nil {
+		return ClassResult{}, fmt.Errorf("BERT classifier not initialized: %v", bertTokenClassifierInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_bert_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text with BERT")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ================================================================================================
+// END OF BERT TOKEN CLASSIFICATION GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// NEW OFFICIAL CANDLE BERT GO BINDINGS
+// ================================================================================================
+
+// InitCandleBertClassifier initializes a BERT sequence classifier using official Candle implementation
+func InitCandleBertClassifier(modelPath string, numClasses int, useCPU bool) bool {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	return bool(C.init_candle_bert_classifier(cModelPath, C.int(numClasses), C.bool(useCPU)))
+}
+
+// InitCandleBertTokenClassifier initializes a BERT token classifier using official Candle implementation
+func InitCandleBertTokenClassifier(modelPath string, numClasses int, useCPU bool) bool {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	return bool(C.init_candle_bert_token_classifier(cModelPath, C.int(numClasses), C.bool(useCPU)))
+}
+
+// ClassifyCandleBertText classifies text using official Candle BERT implementation
+func ClassifyCandleBertText(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_candle_bert_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text with Candle BERT")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyCandleBertTokens classifies tokens using official Candle BERT token classifier
+func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
+	if text == "" {
+		return TokenClassificationResult{}, fmt.Errorf("text cannot be empty")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_candle_bert_tokens(cText)
+	defer C.free_bert_token_classification_result(result)
+
+	if result.num_entities < 0 {
+		return TokenClassificationResult{}, fmt.Errorf("failed to classify tokens with Candle BERT")
+	}
+
+	if result.num_entities == 0 {
+		return TokenClassificationResult{Entities: []TokenEntity{}}, nil
+	}
+
+	// Convert C result to Go
+	entities := make([]TokenEntity, result.num_entities)
+	cEntities := (*[1000]C.BertTokenEntity)(unsafe.Pointer(result.entities))[:result.num_entities:result.num_entities]
+
+	for i, cEntity := range cEntities {
+		entities[i] = TokenEntity{
+			EntityType: C.GoString(cEntity.entity_type),
+			Start:      int(cEntity.start),
+			End:        int(cEntity.end),
+			Text:       C.GoString(cEntity.text),
+			Confidence: float32(cEntity.confidence),
+		}
+	}
+
+	return TokenClassificationResult{
+		Entities: entities,
+	}, nil
+}
+
+// ClassifyCandleBertTokensWithLabels classifies tokens using official Candle BERT with proper label mapping
+func ClassifyCandleBertTokensWithLabels(text string, id2labelJSON string) (TokenClassificationResult, error) {
+	if text == "" {
+		return TokenClassificationResult{}, fmt.Errorf("text cannot be empty")
+	}
+	if id2labelJSON == "" {
+		return TokenClassificationResult{}, fmt.Errorf("id2label mapping cannot be empty")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cLabels := C.CString(id2labelJSON)
+	defer C.free(unsafe.Pointer(cLabels))
+
+	result := C.classify_candle_bert_tokens_with_labels(cText, cLabels)
+	defer C.free_bert_token_classification_result(result)
+
+	if result.num_entities < 0 {
+		return TokenClassificationResult{}, fmt.Errorf("failed to classify tokens with Candle BERT")
+	}
+
+	if result.num_entities == 0 {
+		return TokenClassificationResult{Entities: []TokenEntity{}}, nil
+	}
+
+	// Convert C result to Go
+	entities := make([]TokenEntity, result.num_entities)
+	cEntities := (*[1000]C.BertTokenEntity)(unsafe.Pointer(result.entities))[:result.num_entities:result.num_entities]
+
+	for i, cEntity := range cEntities {
+		entities[i] = TokenEntity{
+			EntityType: C.GoString(cEntity.entity_type),
+			Start:      int(cEntity.start),
+			End:        int(cEntity.end),
+			Text:       C.GoString(cEntity.text),
+			Confidence: float32(cEntity.confidence),
+		}
+	}
+
+	return TokenClassificationResult{
+		Entities: entities,
+	}, nil
+}
+
+// ================================================================================================
+// END OF NEW OFFICIAL CANDLE BERT GO BINDINGS
+// ================================================================================================
+// LORA UNIFIED CLASSIFIER GO BINDINGS
+// ================================================================================================
+
+// InitLoRAUnifiedClassifier initializes the LoRA Unified Classifier
+func InitLoRAUnifiedClassifier(intentModelPath, piiModelPath, securityModelPath, architecture string, useCPU bool) error {
+	cIntentPath := C.CString(intentModelPath)
+	defer C.free(unsafe.Pointer(cIntentPath))
+
+	cPIIPath := C.CString(piiModelPath)
+	defer C.free(unsafe.Pointer(cPIIPath))
+
+	cSecurityPath := C.CString(securityModelPath)
+	defer C.free(unsafe.Pointer(cSecurityPath))
+
+	cArch := C.CString(architecture)
+	defer C.free(unsafe.Pointer(cArch))
+
+	log.Printf("Initializing LoRA Unified Classifier with architecture: %s", architecture)
+
+	success := C.init_lora_unified_classifier(cIntentPath, cPIIPath, cSecurityPath, cArch, C.bool(useCPU))
+	if !success {
+		return fmt.Errorf("failed to initialize LoRA Unified Classifier")
+	}
+
+	log.Printf("LoRA Unified Classifier initialized successfully")
+	return nil
+}
+
+// ClassifyBatchWithLoRA performs batch classification using LoRA models
+func ClassifyBatchWithLoRA(texts []string) (LoRABatchResult, error) {
+	if len(texts) == 0 {
+		return LoRABatchResult{}, fmt.Errorf("empty text batch")
+	}
+
+	// Convert Go strings to C strings
+	cTexts := make([]*C.char, len(texts))
+	for i, text := range texts {
+		cTexts[i] = C.CString(text)
+		defer C.free(unsafe.Pointer(cTexts[i]))
+	}
+
+	log.Printf("Processing batch with LoRA models, batch size: %d", len(texts))
+
+	// Call C function
+	cResult := C.classify_batch_with_lora((**C.char)(unsafe.Pointer(&cTexts[0])), C.int(len(texts)))
+	defer C.free_lora_batch_result(cResult)
+
+	if cResult.batch_size <= 0 {
+		return LoRABatchResult{}, fmt.Errorf("batch classification failed")
+	}
+
+	// Convert C results to Go
+	result := LoRABatchResult{
+		BatchSize:     int(cResult.batch_size),
+		AvgConfidence: float32(cResult.avg_confidence),
+	}
+
+	// Convert intent results
+	if cResult.intent_results != nil {
+		intentSlice := (*[1000]C.LoRAIntentResult)(unsafe.Pointer(cResult.intent_results))[:cResult.batch_size:cResult.batch_size]
+		for _, cIntent := range intentSlice {
+			result.IntentResults = append(result.IntentResults, LoRAIntentResult{
+				Category:   C.GoString(cIntent.category),
+				Confidence: float32(cIntent.confidence),
+			})
+		}
+	}
+
+	// Convert PII results
+	if cResult.pii_results != nil {
+		piiSlice := (*[1000]C.LoRAPIIResult)(unsafe.Pointer(cResult.pii_results))[:cResult.batch_size:cResult.batch_size]
+		for _, cPII := range piiSlice {
+			piiResult := LoRAPIIResult{
+				HasPII:     bool(cPII.has_pii),
+				Confidence: float32(cPII.confidence),
+			}
+
+			// Convert PII types
+			if cPII.pii_types != nil && cPII.num_pii_types > 0 {
+				piiTypesSlice := (*[1000]*C.char)(unsafe.Pointer(cPII.pii_types))[:cPII.num_pii_types:cPII.num_pii_types]
+				for _, cType := range piiTypesSlice {
+					piiResult.PIITypes = append(piiResult.PIITypes, C.GoString(cType))
+				}
+			}
+
+			result.PIIResults = append(result.PIIResults, piiResult)
+		}
+	}
+
+	// Convert security results
+	if cResult.security_results != nil {
+		securitySlice := (*[1000]C.LoRASecurityResult)(unsafe.Pointer(cResult.security_results))[:cResult.batch_size:cResult.batch_size]
+		for _, cSecurity := range securitySlice {
+			result.SecurityResults = append(result.SecurityResults, LoRASecurityResult{
+				IsJailbreak: bool(cSecurity.is_jailbreak),
+				ThreatType:  C.GoString(cSecurity.threat_type),
+				Confidence:  float32(cSecurity.confidence),
+			})
+		}
+	}
+
+	return result, nil
+}
+
+// ================================================================================================
+// END OF LORA UNIFIED CLASSIFIER GO BINDINGS
+// ================================================================================================

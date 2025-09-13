@@ -245,6 +245,12 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 	t.Logf("  Intent Classifier: %s", paths.IntentClassifier)
 	t.Logf("  PII Classifier: %s", paths.PIIClassifier)
 	t.Logf("  Security Classifier: %s", paths.SecurityClassifier)
+	t.Logf("  LoRA Intent Classifier: %s", paths.LoRAIntentClassifier)
+	t.Logf("  LoRA PII Classifier: %s", paths.LoRAPIIClassifier)
+	t.Logf("  LoRA Security Classifier: %s", paths.LoRASecurityClassifier)
+	t.Logf("  LoRA Architecture: %s", paths.LoRAArchitecture)
+	t.Logf("  Has LoRA Models: %v", paths.HasLoRAModels())
+	t.Logf("  Prefer LoRA: %v", paths.PreferLoRA())
 	t.Logf("  Is Complete: %v", paths.IsComplete())
 
 	// Check that we found the required models
@@ -278,6 +284,37 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 		t.Error("Model paths are not complete")
 	} else {
 		t.Log("✅ All required models found")
+	}
+}
+
+// TestAutoInitializeUnifiedClassifier tests the full initialization process
+func TestAutoInitializeUnifiedClassifier(t *testing.T) {
+	// Test with real models directory
+	classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
+	if err != nil {
+		t.Fatalf("AutoInitializeUnifiedClassifier() failed: %v", err)
+	}
+
+	if classifier == nil {
+		t.Fatal("AutoInitializeUnifiedClassifier() returned nil classifier")
+	}
+
+	t.Logf("✅ Unified classifier initialized successfully")
+	t.Logf("  Use LoRA: %v", classifier.useLoRA)
+	t.Logf("  Initialized: %v", classifier.initialized)
+
+	if classifier.useLoRA {
+		t.Log("✅ Using high-confidence LoRA models")
+		if classifier.loraModelPaths == nil {
+			t.Error("LoRA model paths should not be nil when useLoRA is true")
+		} else {
+			t.Logf("  LoRA Intent Path: %s", classifier.loraModelPaths.IntentPath)
+			t.Logf("  LoRA PII Path: %s", classifier.loraModelPaths.PIIPath)
+			t.Logf("  LoRA Security Path: %s", classifier.loraModelPaths.SecurityPath)
+			t.Logf("  LoRA Architecture: %s", classifier.loraModelPaths.Architecture)
+		}
+	} else {
+		t.Log("Using legacy ModernBERT models")
 	}
 }
 

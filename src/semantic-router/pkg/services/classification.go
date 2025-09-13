@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -45,6 +46,11 @@ func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedCl
 
 // NewClassificationServiceWithAutoDiscovery creates a service with auto-discovery
 func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
+	// Debug: Check current working directory
+	wd, _ := os.Getwd()
+	log.Printf("Debug: Current working directory: %s", wd)
+	log.Printf("Debug: Attempting to discover models in: ./models")
+
 	// Always try to auto-discover and initialize unified classifier for batch processing
 	unifiedClassifier, err := classification.AutoInitializeUnifiedClassifier("./models")
 	if err != nil {

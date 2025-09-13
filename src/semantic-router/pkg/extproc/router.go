@@ -8,6 +8,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -141,8 +142,17 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
 
-	// Create global classification service for API access
-	services.NewClassificationService(classifier, cfg)
+	// Create global classification service for API access with auto-discovery
+	// This will prioritize LoRA models over legacy ModernBERT
+	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	if err != nil {
+		log.Printf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
+		services.NewClassificationService(classifier, cfg)
+	} else {
+		log.Printf("Router initialization: Using auto-discovered unified classifier")
+		// The service is already set as global in NewUnifiedClassificationService
+		_ = autoSvc
+	}
 
 	router := &OpenAIRouter{
 		Config:               cfg,
