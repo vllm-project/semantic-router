@@ -1,0 +1,91 @@
+# Router Configuration Template
+# This template is used by the reasoning evaluation script to generate optimized configs
+
+# BERT model configuration for semantic similarity
+bert_model:
+  model_id: "sentence-transformers/all-MiniLM-L12-v2"
+  threshold: 0.6
+  use_cpu: true
+
+# Semantic caching configuration
+semantic_cache:
+  enabled: false  # Disabled by default for development
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+
+# Tool selection configuration
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+# Prompt guard (jailbreak detection) configuration
+prompt_guard:
+  enabled: false  # Disabled by default for development
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+# Classification models configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 8000
+    models:
+      - ""  # Will be populated by evaluation script
+    weight: 1  # Load balancing weight
+    health_check_path: "/health"  # Optional health check endpoint
+
+# Model-specific configuration
+model_config:
+  # Will be populated by evaluation script with model-specific settings
+  # Example structure:
+  # "model-name":
+  #   reasoning_family: "qwen3"  # or "deepseek", "gpt-oss", etc.
+  #   preferred_endpoints: ["endpoint1"]
+  #   pii_policy:
+  #     allow_by_default: true
+
+# These will be populated by the evaluation script
+default_model: ""
+default_reasoning_effort: "high"
+categories: []
+
+# Reasoning family configurations - define how different model families handle reasoning syntax
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+  
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+  
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
