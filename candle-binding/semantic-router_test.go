@@ -1,10 +1,13 @@
 package candle_binding
 
 import (
+	"context"
+	"fmt"
 	"math"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -404,6 +407,99 @@ func TestModernBERTClassifiers(t *testing.T) {
 
 		t.Logf("ModernBERT jailbreak classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
 	})
+}
+
+func TestModernBertClassifier_ConcurrentClassificationSafety(t *testing.T) {
+	// init
+	if err := InitModernBertClassifier(CategoryClassifierModelPath, true); err != nil {
+		t.Skipf("ModernBERT classifier not available: %v", err)
+	}
+
+	texts := []string{
+		"This is a test sentence for classification",
+		"Another example text to classify with ModernBERT",
+		"The quick brown fox jumps over the lazy dog",
+		"Machine learning models are becoming more efficient",
+		"Natural language processing is a fascinating field",
+	}
+
+	// Baseline (single-threaded)
+	baseline := make(map[string]ClassResult, len(texts))
+	for _, txt := range texts {
+		res, err := ClassifyModernBertText(txt)
+		if err != nil {
+			t.Fatalf("baseline call failed for %q: %v", txt, err)
+		}
+		baseline[txt] = res
+	}
+
+	const numGoroutines = 10
+	const iterationsPerGoroutine = 5
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, numGoroutines*iterationsPerGoroutine)
+	var total int64
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for g := range numGoroutines {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := range iterationsPerGoroutine {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				txt := texts[(id+i)%len(texts)]
+				res, err := ClassifyModernBertText(txt)
+				if err != nil {
+					errCh <- fmt.Errorf("gor %d iter %d classify error: %v", id, i, err)
+					cancel() // stop early
+					return
+				}
+
+				// Strict: class must match baseline
+				base := baseline[txt]
+				if res.Class != base.Class {
+					errCh <- fmt.Errorf("gor %d iter %d: class mismatch for %q: got %d expected %d", id, i, txt, res.Class, base.Class)
+					cancel()
+					return
+				}
+
+				// Allow small FP differences
+				if math.Abs(float64(res.Confidence)-float64(base.Confidence)) > 0.05 {
+					errCh <- fmt.Errorf("gor %d iter %d: confidence mismatch for %q: got %f expected %f", id, i, txt, res.Confidence, base.Confidence)
+					cancel()
+					return
+				}
+
+				atomic.AddInt64(&total, 1)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	errs := 0
+	for e := range errCh {
+		t.Error(e)
+		errs++
+	}
+	if errs > 0 {
+		t.Fatalf("concurrency test failed with %d errors", errs)
+	}
+
+	expected := int64(numGoroutines * iterationsPerGoroutine)
+	if total != expected {
+		t.Fatalf("expected %d successful results, got %d", expected, total)
+	}
+
+	t.Logf("concurrent test OK: goroutines=%d iterations=%d", numGoroutines, iterationsPerGoroutine)
 }
 
 // TestModernBERTPIITokenClassification tests the PII token classification functionality
