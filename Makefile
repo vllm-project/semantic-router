@@ -141,7 +141,7 @@ check-go-mod-tidy:
 test-binding: rust
 	@echo "Running Go tests with static library..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		cd candle-binding && CGO_ENABLED=1 go test -v
+		cd candle-binding && CGO_ENABLED=1 go test -v -race
 
 # Test with the candle-binding library
 test-category-classifier: rust
