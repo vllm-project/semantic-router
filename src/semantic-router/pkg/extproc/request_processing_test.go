@@ -342,7 +342,13 @@ var _ = Describe("Request Processing", func() {
 				},
 			}
 
-			response, err := router.HandleResponseHeaders(responseHeaders)
+			ctx := &extproc.RequestContext{
+				Headers:             make(map[string]string),
+				RequestModel:        "model-a",
+				ProcessingStartTime: time.Now().Add(-50 * time.Millisecond),
+			}
+
+			response, err := router.HandleResponseHeaders(responseHeaders, ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response).NotTo(BeNil())
 

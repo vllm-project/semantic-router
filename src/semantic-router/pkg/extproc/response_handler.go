@@ -13,7 +13,16 @@ import (
 )
 
 // handleResponseHeaders processes the response headers
-func (r *OpenAIRouter) handleResponseHeaders(_ *ext_proc.ProcessingRequest_ResponseHeaders) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleResponseHeaders(_ *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	// Best-effort TTFT measurement: record on first response headers if we have a start time and model
+	if ctx != nil && !ctx.TTFTRecorded && !ctx.ProcessingStartTime.IsZero() && ctx.RequestModel != "" {
+		ttft := time.Since(ctx.ProcessingStartTime).Seconds()
+		if ttft > 0 {
+			metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+			ctx.TTFTSeconds = ttft
+			ctx.TTFTRecorded = true
+		}
+	}
 
 	// Allow the response to continue without modification
 	response := &ext_proc.ProcessingResponse{
@@ -52,6 +61,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			float64(completionTokens),
 		)
 		metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
+
+		// Record TPOT (time per output token) if completion tokens are available
+		if completionTokens > 0 {
+			timePerToken := completionLatency.Seconds() / float64(completionTokens)
+			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+		}
 
 		// Compute and record cost if pricing is configured
 		if r.Config != nil {
