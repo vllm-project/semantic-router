@@ -73,8 +73,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			}
 
 		case *ext_proc.ProcessingRequest_RequestBody:
-			observability.Debugf("Processing Request Body - THIS IS WHERE ROUTING HAPPENS")
-
 			response, err := r.handleRequestBody(v, ctx)
 			if err != nil {
 				observability.Errorf("handleRequestBody failed: %v", err)
