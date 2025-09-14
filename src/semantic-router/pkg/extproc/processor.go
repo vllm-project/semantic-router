@@ -7,6 +7,7 @@ import (
 	"log"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -32,15 +33,26 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			// Handle gRPC status-based cancellations/timeouts
 			if s, ok := status.FromError(err); ok {
 				switch s.Code() {
-				case codes.Canceled, codes.DeadlineExceeded:
+				case codes.Canceled:
 					log.Println("Stream canceled gracefully")
+					metrics.RecordRequestError(ctx.RequestModel, "cancellation")
+					return nil
+				case codes.DeadlineExceeded:
+					log.Println("Stream deadline exceeded")
+					metrics.RecordRequestError(ctx.RequestModel, "timeout")
 					return nil
 				}
 			}
 
 			// Handle context cancellation from the server-side context
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, context.Canceled) {
 				log.Println("Stream canceled gracefully")
+				metrics.RecordRequestError(ctx.RequestModel, "cancellation")
+				return nil
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				log.Println("Stream deadline exceeded")
+				metrics.RecordRequestError(ctx.RequestModel, "timeout")
 				return nil
 			}
 

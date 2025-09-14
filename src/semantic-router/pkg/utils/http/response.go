@@ -6,10 +6,11 @@ import (
 	"log"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations

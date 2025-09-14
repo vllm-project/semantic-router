@@ -3,8 +3,10 @@ package extproc
 import (
 	"encoding/json"
 	"log"
+	"strconv"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/openai/openai-go"
@@ -13,7 +15,18 @@ import (
 )
 
 // handleResponseHeaders processes the response headers
-func (r *OpenAIRouter) handleResponseHeaders(_ *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	// Detect upstream HTTP status and record non-2xx as errors
+	if v != nil && v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
+		if statusCode := getStatusFromHeaders(v.ResponseHeaders.Headers); statusCode != 0 {
+			if statusCode >= 500 {
+				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_5xx")
+			} else if statusCode >= 400 {
+				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_4xx")
+			}
+		}
+	}
+
 	// Best-effort TTFT measurement: record on first response headers if we have a start time and model
 	if ctx != nil && !ctx.TTFTRecorded && !ctx.ProcessingStartTime.IsZero() && ctx.RequestModel != "" {
 		ttft := time.Since(ctx.ProcessingStartTime).Seconds()
@@ -38,6 +51,35 @@ func (r *OpenAIRouter) handleResponseHeaders(_ *ext_proc.ProcessingRequest_Respo
 	return response, nil
 }
 
+// getStatusFromHeaders extracts :status pseudo-header value as integer
+func getStatusFromHeaders(headerMap *core.HeaderMap) int {
+	if headerMap == nil {
+		return 0
+	}
+	for _, hv := range headerMap.Headers {
+		if hv.Key == ":status" {
+			if hv.Value != "" {
+				if code, err := strconv.Atoi(hv.Value); err == nil {
+					return code
+				}
+			}
+			if len(hv.RawValue) > 0 {
+				if code, err := strconv.Atoi(string(hv.RawValue)); err == nil {
+					return code
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func getModelFromCtx(ctx *RequestContext) string {
+	if ctx == nil || ctx.RequestModel == "" {
+		return "unknown"
+	}
+	return ctx.RequestModel
+}
+
 // handleResponseBody processes the response body
 func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_ResponseBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	completionLatency := time.Since(ctx.StartTime)
@@ -49,6 +91,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	var parsed openai.ChatCompletion
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {
 		log.Printf("Error parsing tokens from response: %v", err)
+		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 	}
 	promptTokens := int(parsed.Usage.PromptTokens)
 	completionTokens := int(parsed.Usage.CompletionTokens)

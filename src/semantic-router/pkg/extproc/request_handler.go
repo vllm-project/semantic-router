@@ -164,6 +164,10 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
 		log.Printf("Error parsing OpenAI request: %v", err)
+		// Attempt to determine model for labeling (may be unknown here)
+		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
+		// Count this request as well, with unknown model if necessary
+		metrics.RecordModelRequest(ctx.RequestModel)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}
 
@@ -171,8 +175,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	originalModel := string(openAIRequest.Model)
 	log.Printf("Original model: %s", originalModel)
 
-	// Record the initial request to this model
+	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(originalModel)
+	// Also set the model on context early so error metrics can label it
+	if ctx.RequestModel == "" {
+		ctx.RequestModel = originalModel
+	}
 
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
@@ -202,6 +210,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 		if err != nil {
 			log.Printf("Error performing jailbreak analysis: %v", err)
 			// Continue processing despite jailbreak analysis error
+			metrics.RecordRequestError(ctx.RequestModel, "classification_failed")
 		} else if hasJailbreak {
 			// Find the first jailbreak detection for response
 			var jailbreakType string
@@ -224,6 +233,8 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 				"confidence":     confidence,
 				"request_id":     ctx.RequestID,
 			})
+			// Count this as a blocked request
+			metrics.RecordRequestError(ctx.RequestModel, "jailbreak_block")
 			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence)
 			return jailbreakResponse, true
 		} else {
@@ -347,6 +358,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 										"model":       matchedModel,
 										"denied_pii":  defaultDeniedPII,
 									})
+									metrics.RecordRequestError(matchedModel, "pii_policy_denied")
 									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII)
 									return piiResponse, nil
 								}
@@ -359,6 +371,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 								"model":       matchedModel,
 								"denied_pii":  deniedPII,
 							})
+							metrics.RecordRequestError(matchedModel, "pii_policy_denied")
 							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII)
 							return piiResponse, nil
 						}
@@ -397,12 +410,14 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				modifiedBody, err := serializeOpenAIRequest(openAIRequest)
 				if err != nil {
 					log.Printf("Error serializing modified request: %v", err)
+					metrics.RecordRequestError(actualModel, "serialization_error")
 					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 				}
 
 				modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
 				if err != nil {
 					log.Printf("Error setting reasoning mode %v to request: %v", useReasoning, err)
+					metrics.RecordRequestError(actualModel, "serialization_error")
 					return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
 				}
 
@@ -489,6 +504,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				"model":       originalModel,
 				"denied_pii":  deniedPII,
 			})
+			metrics.RecordRequestError(originalModel, "pii_policy_denied")
 			piiResponse := http.CreatePIIViolationResponse(originalModel, deniedPII)
 			return piiResponse, nil
 		}
@@ -595,6 +611,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 			openAIRequest.Tools = nil
 			return r.updateRequestWithTools(openAIRequest, response, ctx)
 		}
+		metrics.RecordRequestError(getModelFromCtx(ctx), "classification_failed")
 		return err
 	}
 
@@ -613,6 +630,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 			// Convert the tool to OpenAI SDK format
 			toolBytes, err := json.Marshal(tool)
 			if err != nil {
+				metrics.RecordRequestError(getModelFromCtx(ctx), "serialization_error")
 				return err
 			}
 			var sdkTool openai.ChatCompletionToolParam

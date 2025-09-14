@@ -102,6 +102,15 @@ var (
 		[]string{"model"},
 	)
 
+	// RequestErrorsTotal tracks request errors categorized by reason
+	RequestErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_request_errors_total",
+			Help: "The total number of request errors categorized by reason (e.g., timeout, upstream_5xx, pii_policy_denied, jailbreak_block, parse_error, serialization_error, cancellation)",
+		},
+		[]string{"model", "reason"},
+	)
+
 	// ModelCost tracks the total cost attributed to each model by currency
 	ModelCost = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -353,7 +362,30 @@ var (
 
 // RecordModelRequest increments the counter for requests to a specific model
 func RecordModelRequest(model string) {
+	if model == "" {
+		model = "unknown"
+	}
 	ModelRequests.WithLabelValues(model).Inc()
+}
+
+// RecordRequestError increments request error counters labeled by model and normalized reason
+func RecordRequestError(model, reason string) {
+	if model == "" {
+		model = "unknown"
+	}
+	if reason == "" {
+		reason = "unknown"
+	}
+	// Normalize a few common variants to canonical reasons
+	switch reason {
+	case "deadline_exceeded":
+		reason = "timeout"
+	case "upstream_500", "upstream_502", "upstream_503", "upstream_504":
+		reason = "upstream_5xx"
+	case "upstream_400", "upstream_401", "upstream_403", "upstream_404", "upstream_429":
+		reason = "upstream_4xx"
+	}
+	RequestErrorsTotal.WithLabelValues(model, reason).Inc()
 }
 
 // RecordModelRouting records that a request was routed from one model to another
