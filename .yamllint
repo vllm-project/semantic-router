@@ -1,0 +1,57 @@
+ignore: |
+  # This directory fails checks since many files
+  # are templated. Instead, we run the linter
+  # after running `make generate-manifests` which creates
+  # the Install YAML in bin/
+  .git
+  .github
+  node_modules
+
+rules:
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+    min-spaces-inside-empty: -1
+    max-spaces-inside-empty: -1
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+    min-spaces-inside-empty: -1
+    max-spaces-inside-empty: -1
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+  commas:
+    max-spaces-before: 1
+    min-spaces-after: 1
+    max-spaces-after: 1
+  comments:
+    level: warning
+    require-starting-space: true
+    min-spaces-from-content: 2
+  comments-indentation:
+    level: warning
+  document-end: disable
+  document-start: disable
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: true
+  hyphens:
+    max-spaces-after: 1
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+    check-multi-line-strings: false
+  key-duplicates: enable
+  key-ordering: disable
+  new-line-at-end-of-file: enable
+  new-lines:
+    type: unix
+  trailing-spaces: enable
+  truthy:
+    check-keys: false
+    level: warning

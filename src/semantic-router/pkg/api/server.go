@@ -1,13 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -50,13 +50,22 @@ type SystemInfo struct {
 
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {
-	Texts   []string               `json:"texts"`
-	Options *ClassificationOptions `json:"options,omitempty"`
+	Texts    []string               `json:"texts"`
+	TaskType string                 `json:"task_type,omitempty"` // "intent", "pii", "security", or "all"
+	Options  *ClassificationOptions `json:"options,omitempty"`
+}
+
+// BatchClassificationResult represents a single classification result with optional probabilities
+type BatchClassificationResult struct {
+	Category         string             `json:"category"`
+	Confidence       float64            `json:"confidence"`
+	ProcessingTimeMs int64              `json:"processing_time_ms"`
+	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
 }
 
 // BatchClassificationResponse represents the response from batch classification
 type BatchClassificationResponse struct {
-	Results          []services.Classification        `json:"results"`
+	Results          []BatchClassificationResult      `json:"results"`
 	TotalCount       int                              `json:"total_count"`
 	ProcessingTimeMs int64                            `json:"processing_time_ms"`
 	Statistics       CategoryClassificationStatistics `json:"statistics"`
@@ -87,9 +96,16 @@ func StartClassificationAPI(configPath string, port int) error {
 	// Create classification service - try to get global service with retry
 	classificationSvc := getClassificationServiceWithRetry(5, 500*time.Millisecond)
 	if classificationSvc == nil {
-		// If no global service exists after retries, create a placeholder service
-		log.Printf("No global classification service found after retries, using placeholder service")
-		classificationSvc = services.NewPlaceholderClassificationService()
+		// If no global service exists, try auto-discovery unified classifier
+		log.Printf("No global classification service found, attempting auto-discovery...")
+		autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+		if err != nil {
+			log.Printf("Auto-discovery failed: %v, using placeholder service", err)
+			classificationSvc = services.NewPlaceholderClassificationService()
+		} else {
+			log.Printf("Auto-discovery successful, using unified classifier service")
+			classificationSvc = autoSvc
+		}
 	}
 
 	// Initialize batch metrics configuration
@@ -236,64 +252,82 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 }
 
 func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWriter, r *http.Request) {
+	// Record batch classification request
+	metrics.RecordBatchClassificationRequest("unified")
+
+	// Start timing for duration metrics
 	start := time.Now()
+
+	// First, read the raw body to check if texts field exists
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		metrics.RecordBatchClassificationError("unified", "read_body_failed")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Failed to read request body")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	// Check if texts field exists in JSON
+	var rawReq map[string]interface{}
+	if err := json.Unmarshal(body, &rawReq); err != nil {
+		metrics.RecordBatchClassificationError("unified", "invalid_json")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
+		return
+	}
+
+	// Check if texts field is present
+	if _, exists := rawReq["texts"]; !exists {
+		metrics.RecordBatchClassificationError("unified", "missing_texts_field")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts field is required")
+		return
+	}
 
 	var req BatchClassificationRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
+		metrics.RecordBatchClassificationError("unified", "parse_request_failed")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}
 
-	// Input validation
+	// Input validation - now we know texts field exists, check if it's empty
 	if len(req.Texts) == 0 {
 		// Record validation error in metrics
-		metrics.RecordBatchClassificationError("validation", "empty_texts")
+		metrics.RecordBatchClassificationError("unified", "empty_texts")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
 		return
 	}
 
-	// Get max batch size from config, default to 100
-	maxBatchSize := 100
-	if s.config != nil && s.config.API.BatchClassification.MaxBatchSize > 0 {
-		maxBatchSize = s.config.API.BatchClassification.MaxBatchSize
-	}
+	// Record the number of texts being processed
+	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
 
-	if len(req.Texts) > maxBatchSize {
-		// Record validation error in metrics
-		metrics.RecordBatchClassificationError("validation", "batch_too_large")
-		s.writeErrorResponse(w, http.StatusBadRequest, "BATCH_TOO_LARGE",
-			fmt.Sprintf("batch size cannot exceed %d texts", maxBatchSize))
+	// Batch classification requires unified classifier
+	if !s.classificationSvc.HasUnifiedClassifier() {
+		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "UNIFIED_CLASSIFIER_UNAVAILABLE",
+			"Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.")
 		return
 	}
 
-	// Get concurrency threshold from config, default to 5
-	concurrencyThreshold := 5
-	if s.config != nil && s.config.API.BatchClassification.ConcurrencyThreshold > 0 {
-		concurrencyThreshold = s.config.API.BatchClassification.ConcurrencyThreshold
-	}
-
-	// Process texts based on batch size
-	var results []services.Classification
-	var err error
-
-	if len(req.Texts) <= concurrencyThreshold {
-		results, err = s.processSequentially(req.Texts, req.Options)
-	} else {
-		results, err = s.processConcurrently(req.Texts, req.Options)
-	}
-
+	// Use unified classifier for true batch processing with options support
+	unifiedResults, err := s.classificationSvc.ClassifyBatchUnifiedWithOptions(req.Texts, req.Options)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		metrics.RecordBatchClassificationError("unified", "classification_failed")
+		s.writeErrorResponse(w, http.StatusInternalServerError, "UNIFIED_CLASSIFICATION_ERROR", err.Error())
 		return
 	}
 
-	// Calculate statistics
-	statistics := s.calculateStatistics(results)
+	// Convert unified results to legacy format based on requested task type
+	results := s.extractRequestedResults(unifiedResults, req.TaskType, req.Options)
+	statistics := s.calculateUnifiedStatistics(unifiedResults)
+
+	// Record successful processing duration
+	duration := time.Since(start).Seconds()
+	metrics.RecordBatchClassificationDuration("unified", len(req.Texts), duration)
 
 	response := BatchClassificationResponse{
 		Results:          results,
 		TotalCount:       len(req.Texts),
-		ProcessingTimeMs: time.Since(start).Milliseconds(),
+		ProcessingTimeMs: unifiedResults.ProcessingTimeMs,
 		Statistics:       statistics,
 	}
 
@@ -511,161 +545,101 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 	}
 }
 
-// processSequentially handles small batches with sequential processing
-func (s *ClassificationAPIServer) processSequentially(texts []string, options *ClassificationOptions) ([]services.Classification, error) {
-	start := time.Now()
-	processingType := "sequential"
-	batchSize := len(texts)
-
-	// Record request and batch size metrics
-	metrics.RecordBatchClassificationRequest(processingType)
-	metrics.RecordBatchSizeDistribution(processingType, batchSize)
-
-	// Defer recording processing time and text count
-	defer func() {
-		duration := time.Since(start).Seconds()
-		metrics.RecordBatchClassificationDuration(processingType, batchSize, duration)
-		metrics.RecordBatchClassificationTexts(processingType, batchSize)
-	}()
-
-	results := make([]services.Classification, len(texts))
-	for i, text := range texts {
-		result, err := s.classifySingleText(text, options)
-		if err != nil {
-			metrics.RecordBatchClassificationError(processingType, "classification_failed")
-			return nil, fmt.Errorf("failed to classify text at index %d: %w", i, err)
-		}
-		results[i] = result
+// extractRequestedResults converts unified results to batch format based on task type
+func (s *ClassificationAPIServer) extractRequestedResults(unifiedResults *services.UnifiedBatchResponse, taskType string, options *ClassificationOptions) []BatchClassificationResult {
+	// Determine the correct batch size based on task type
+	var batchSize int
+	switch taskType {
+	case "pii":
+		batchSize = len(unifiedResults.PIIResults)
+	case "security":
+		batchSize = len(unifiedResults.SecurityResults)
+	default:
+		batchSize = len(unifiedResults.IntentResults)
 	}
-	return results, nil
-}
 
-// processConcurrently handles large batches with concurrent processing
-func (s *ClassificationAPIServer) processConcurrently(texts []string, options *ClassificationOptions) ([]services.Classification, error) {
-	start := time.Now()
-	processingType := "concurrent"
-	batchSize := len(texts)
-	batchID := fmt.Sprintf("batch_%d", time.Now().UnixNano())
+	results := make([]BatchClassificationResult, batchSize)
 
-	// Record request and batch size metrics
-	metrics.RecordBatchClassificationRequest(processingType)
-	metrics.RecordBatchSizeDistribution(processingType, batchSize)
-
-	// Defer recording processing time and text count
-	defer func() {
-		duration := time.Since(start).Seconds()
-		metrics.RecordBatchClassificationDuration(processingType, batchSize, duration)
-		metrics.RecordBatchClassificationTexts(processingType, batchSize)
-	}()
-
-	// Get max concurrency from config, default to 8
-	maxConcurrency := 8
-	if s.config != nil && s.config.API.BatchClassification.MaxConcurrency > 0 {
-		maxConcurrency = s.config.API.BatchClassification.MaxConcurrency
-	}
-	// Get the actual number of workers to start
-	numWorkers := min(len(texts), maxConcurrency)
-
-	results := make([]services.Classification, len(texts))
-	errors := make([]error, len(texts))
-
-	// Create a channel for tasks
-	taskChan := make(chan int, batchSize)
-	var wg sync.WaitGroup
-
-	// Start a fixed number of worker goroutines
-	for i := range numWorkers {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-
-			// Record goroutine start (if detailed tracking is enabled)
-			metricsConfig := metrics.GetBatchMetricsConfig()
-			if metricsConfig.DetailedGoroutineTracking {
-				metrics.ConcurrentGoroutines.WithLabelValues(batchID).Inc()
-				// Record goroutine end
-				defer metrics.ConcurrentGoroutines.WithLabelValues(batchID).Dec()
-			}
-
-			// Worker goroutine loops to process tasks from the channel
-			for taskIndex := range taskChan {
-				// TODO: Refactor candle-binding to support batch mode for better performance
-				// This would allow processing multiple texts in a single model inference call
-				// instead of individual calls, significantly improving throughput
-				result, err := s.classifySingleText(texts[taskIndex], options)
-				if err != nil {
-					errors[taskIndex] = err
-					metrics.RecordBatchClassificationError(processingType, "classification_failed")
-					continue
+	switch taskType {
+	case "pii":
+		// Convert PII results to batch format
+		for i, piiResult := range unifiedResults.PIIResults {
+			category := "no_pii"
+			if piiResult.HasPII {
+				if len(piiResult.PIITypes) > 0 {
+					category = piiResult.PIITypes[0] // Use first PII type
+				} else {
+					category = "pii_detected"
 				}
-				results[taskIndex] = result
 			}
-		}(i)
-	}
+			results[i] = BatchClassificationResult{
+				Category:         category,
+				Confidence:       float64(piiResult.Confidence),
+				ProcessingTimeMs: unifiedResults.ProcessingTimeMs / int64(len(unifiedResults.PIIResults)),
+			}
+		}
+	case "security":
+		// Convert security results to batch format
+		for i, securityResult := range unifiedResults.SecurityResults {
+			category := "safe"
+			if securityResult.IsJailbreak {
+				category = securityResult.ThreatType
+			}
+			results[i] = BatchClassificationResult{
+				Category:         category,
+				Confidence:       float64(securityResult.Confidence),
+				ProcessingTimeMs: unifiedResults.ProcessingTimeMs / int64(len(unifiedResults.SecurityResults)),
+			}
+		}
+	case "intent":
+		fallthrough
+	default:
+		// Convert intent results to batch format with probabilities support (default)
+		for i, intentResult := range unifiedResults.IntentResults {
+			result := BatchClassificationResult{
+				Category:         intentResult.Category,
+				Confidence:       float64(intentResult.Confidence),
+				ProcessingTimeMs: unifiedResults.ProcessingTimeMs / int64(len(unifiedResults.IntentResults)),
+			}
 
-	// Send tasks to the channel
-	for i := range texts {
-		taskChan <- i
-	}
-	close(taskChan)
+			// Add probabilities if requested and available
+			if options != nil && options.ReturnProbabilities && len(intentResult.Probabilities) > 0 {
+				result.Probabilities = make(map[string]float64)
+				// Convert probabilities array to map (assuming they match category order)
+				// For now, just include the main category probability
+				result.Probabilities[intentResult.Category] = float64(intentResult.Confidence)
+			}
 
-	// Wait for all workers to finish processing
-	wg.Wait()
-
-	// Check for errors
-	for i, err := range errors {
-		if err != nil {
-			return nil, fmt.Errorf("failed to classify text at index %d: %w", i, err)
+			results[i] = result
 		}
 	}
 
-	return results, nil
+	return results
 }
 
-// classifySingleText processes a single text using existing service
-func (s *ClassificationAPIServer) classifySingleText(text string, options *ClassificationOptions) (services.Classification, error) {
-	// Convert API options to service options
-	var serviceOptions *services.IntentOptions
-	if options != nil {
-		serviceOptions = &services.IntentOptions{
-			ReturnProbabilities: options.ReturnProbabilities,
-			ConfidenceThreshold: options.ConfidenceThreshold,
-			IncludeExplanation:  options.IncludeExplanation,
-		}
-	}
+// calculateUnifiedStatistics calculates statistics from unified batch results
+func (s *ClassificationAPIServer) calculateUnifiedStatistics(unifiedResults *services.UnifiedBatchResponse) CategoryClassificationStatistics {
+	// For now, calculate statistics based on intent results
+	// This maintains compatibility with existing API expectations
 
-	individualReq := services.IntentRequest{
-		Text:    text,
-		Options: serviceOptions,
-	}
-
-	response, err := s.classificationSvc.ClassifyIntent(individualReq)
-	if err != nil {
-		return services.Classification{}, err
-	}
-
-	return response.Classification, nil
-}
-
-// calculateStatistics computes batch processing statistics
-func (s *ClassificationAPIServer) calculateStatistics(results []services.Classification) CategoryClassificationStatistics {
 	categoryDistribution := make(map[string]int)
-	var totalConfidence float64
+	totalConfidence := 0.0
 	lowConfidenceCount := 0
+	lowConfidenceThreshold := 0.7
 
-	for _, result := range results {
-		if result.Category != "" {
-			categoryDistribution[result.Category]++
-		}
-		totalConfidence += result.Confidence
-		if result.Confidence < 0.7 {
+	for _, intentResult := range unifiedResults.IntentResults {
+		categoryDistribution[intentResult.Category]++
+		confidence := float64(intentResult.Confidence)
+		totalConfidence += confidence
+
+		if confidence < lowConfidenceThreshold {
 			lowConfidenceCount++
 		}
 	}
 
 	avgConfidence := 0.0
-	if len(results) > 0 {
-		avgConfidence = totalConfidence / float64(len(results))
+	if len(unifiedResults.IntentResults) > 0 {
+		avgConfidence = totalConfidence / float64(len(unifiedResults.IntentResults))
 	}
 
 	return CategoryClassificationStatistics{

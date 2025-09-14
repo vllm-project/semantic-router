@@ -16,6 +16,7 @@ Semantic routing is the process of **dynamically selecting the most suitable lan
 ## The Evolution of LLM Routing
 
 ### Traditional Approach: One-Size-Fits-All
+
 ```mermaid
 graph LR
     Query[User Query] --> Model[Single LLM<br/>GPT-4, Claude, etc.]
@@ -30,6 +31,7 @@ graph LR
 - No flexibility in model selection
 
 ### Modern Approach: Semantic Routing
+
 ```mermaid
 graph TB
     Query[User Query] --> Router[Semantic Router<br/>BERT Classifier]
@@ -124,6 +126,7 @@ graph TB
 - **Benchmark Performance**: Evaluated on MMLU, GSM8K, and MT Bench
 
 **Training Approach:**
+
 ```python
 # RouteLLM training conceptually
 preference_data = load_chatbot_arena_data()  # Human comparisons
@@ -147,6 +150,7 @@ GPT-5 introduces a revolutionary **router-as-coordinator** architecture:
 - **Efficiency**: Computation flows along optimal paths
 
 **Operational Flow:**
+
 ```mermaid
 sequenceDiagram
     participant User
@@ -173,6 +177,7 @@ sequenceDiagram
 ## Why Mixture of Models is Superior
 
 ### 1. **Economic Efficiency**
+
 ```
 Traditional: All queries → GPT-4 ($0.03/1K tokens)
 MoM Routing: 
@@ -182,16 +187,19 @@ MoM Routing:
 ```
 
 ### 2. **Performance Specialization**
+
 - **Domain Expertise**: Code generation models excel at programming tasks
 - **Task Optimization**: Math models optimized for numerical reasoning
 - **Context Efficiency**: Smaller models for simpler tasks reduce latency
 
 ### 3. **Flexibility and Scalability**
+
 - **Model Independence**: Each model can be updated independently
 - **Provider Diversity**: Mix OpenAI, Anthropic, local, and fine-tuned models
 - **Easy Extensions**: Add new specialized models without system redesign
 
 ### 4. **Risk Distribution**
+
 - **Vendor Independence**: Not locked into single provider
 - **Failure Isolation**: One model failure doesn't affect others
 - **A/B Testing**: Easy to test new models in production
@@ -201,6 +209,7 @@ MoM Routing:
 ### Case Study: Enterprise API Gateway
 
 **Before Semantic Routing:**
+
 ```
 Workload: 100K queries/day
 Model: GPT-4 for all queries
@@ -209,6 +218,7 @@ Quality: High but inconsistent for simple tasks
 ```
 
 **After Semantic Routing:**
+
 ```
 Workload: 100K queries/day distributed as:
   - 60% simple → GPT-3.5: $120/day

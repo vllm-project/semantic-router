@@ -74,7 +74,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			}
 
 		case *ext_proc.ProcessingRequest_ResponseHeaders:
-			response, err := r.handleResponseHeaders(v)
+			response, err := r.handleResponseHeaders(v, ctx)
 			if err != nil {
 				return err
 			}

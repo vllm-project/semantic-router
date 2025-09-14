@@ -10,6 +10,7 @@ A dual-purpose neural network classifier using DistilBERT for both **category cl
 This project implements a **proof-of-concept** dual-task learning system that demonstrates:
 
 ### ✅ **Key Accomplishments (Task 2)**
+
 - ✅ **Dual-Purpose Architecture**: Single DistilBERT model (~67M parameters) for both category classification and PII detection
 - ✅ **Memory Efficiency**: Shared backbone reduces parameters vs. two separate models
 - ✅ **Synthetic Data Pipeline**: Complete data generation with 10 categories and 5 PII pattern types
@@ -20,6 +21,7 @@ This project implements a **proof-of-concept** dual-task learning system that de
 - ✅ **Production-Ready Features**: Progress tracking, metrics, and model checkpointing
 
 ### 🔬 **POC Characteristics**
+
 - **Data Source**: **Synthetic data generation** (not real-world datasets)
 - **Scale**: Small-scale validation (50 training, 20 validation samples)
 - **Purpose**: Architecture validation and training pipeline proof
@@ -27,11 +29,13 @@ This project implements a **proof-of-concept** dual-task learning system that de
 - **PII Patterns**: 5 predefined types (email, phone, SSN, name, address)
 
 ### 🚀 **Next Steps Roadmap**
+
 - **Task 3**: Real dataset integration (transition from synthetic to production data)
 - **Task 4**: Advanced training optimization and scaling
 - **Task 5**: Rust implementation with Candle framework
 
 This POC successfully demonstrates that:
+
 - The dual-head architecture works effectively
 - Multi-task learning can be implemented efficiently
 - The training pipeline is robust and measurable
@@ -45,6 +49,7 @@ This POC successfully demonstrates that:
 
 #### `dual_classifier.py`
 **Main Model Implementation**
+
 - Contains the `DualClassifier` class built on DistilBERT
 - Implements dual-head architecture:
   - **Category Head**: Sequence-level classification for 10 categories
@@ -55,6 +60,7 @@ This POC successfully demonstrates that:
 
 #### `trainer.py`
 **Training Infrastructure**
+
 - `DualTaskDataset`: PyTorch Dataset class for handling dual-task data
 - `DualTaskLoss`: Combined loss function for both classification tasks
 - `DualTaskTrainer`: Complete training pipeline with:
@@ -66,6 +72,7 @@ This POC successfully demonstrates that:
 
 #### `data_generator.py`
 **Synthetic Data Generation**
+
 - `SyntheticDataGenerator`: Creates realistic training data
 - **Categories**: 10 predefined categories with template texts
 - **PII Patterns**: 5 types (email, phone, SSN, name, address)
@@ -79,6 +86,7 @@ This POC successfully demonstrates that:
 
 #### `train_example.py`
 **Training Demonstration**
+
 - Complete end-to-end training example
 - Shows system performance monitoring (CPU, memory, GPU)
 - Demonstrates model training with synthetic data
@@ -88,6 +96,7 @@ This POC successfully demonstrates that:
 
 #### `example.py`
 **Basic Usage Example**
+
 - Simple demonstration of model usage
 - Shows how to:
   - Initialize the DualClassifier
@@ -98,6 +107,7 @@ This POC successfully demonstrates that:
 
 #### `test_existing_model.py`
 **Trained Model Validation**
+
 - Tests loading and using a pre-trained model
 - Validates that saved models work correctly
 - Demonstrates prediction on sample texts
@@ -108,6 +118,7 @@ This POC successfully demonstrates that:
 
 #### `test_dual_classifier_system.py`
 **Comprehensive Test Suite**
+
 - **14 Test Cases** covering all components:
   - Synthetic data generator functionality
   - Dataset creation and tokenization
@@ -120,6 +131,7 @@ This POC successfully demonstrates that:
 
 #### `test_dual_classifier.py`
 **Core Model Tests**
+
 - Unit tests for the `DualClassifier` class
 - Tests model initialization, forward pass, and prediction methods
 - Validates tensor shapes and output formats
@@ -130,6 +142,7 @@ This POC successfully demonstrates that:
 
 #### `requirements.txt`
 **Project Dependencies**
+
 - **PyTorch**: `>=2.0.0,<=2.2.2` (Neural network backend)
 - **Transformers**: `>=4.36.0,<4.45.0` (DistilBERT model)
 - **NumPy**: `>=1.24.0,<2.0` (Numerical operations)
@@ -141,6 +154,7 @@ This POC successfully demonstrates that:
 
 #### `DUAL_CLASSIFIER_SYSTEM_TEST_SUMMARY.md`
 **Test Results & Documentation**
+
 - Comprehensive testing summary with all results
 - Performance benchmarks and system requirements
 - Technical achievements and success criteria
@@ -151,6 +165,7 @@ This POC successfully demonstrates that:
 
 #### `trained_model/` Directory
 **Saved Model Files**
+
 - `model.pt` (258MB): Complete trained model state
 - `config.json`: Model configuration and hyperparameters
 - `training_history.json`: Training metrics and loss curves
@@ -161,26 +176,31 @@ This POC successfully demonstrates that:
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 2. Run Basic Example
+
 ```bash
 python example.py
 ```
 
 ### 3. Train Your Own Model
+
 ```bash
 python train_example.py
 ```
 
 ### 4. Test Existing Model
+
 ```bash
 python test_existing_model.py
 ```
 
 ### 5. Run Full Test Suite
+
 ```bash
 python -m pytest test_dual_classifier_system.py -v
 ```
@@ -188,6 +208,7 @@ python -m pytest test_dual_classifier_system.py -v
 ## 🏗️ Architecture
 
 ### Model Architecture
+
 - **Base Model**: DistilBERT (66M parameters)
 - **Total Parameters**: 67,553,292
 - **Category Head**: 10-class sequence classification
@@ -195,6 +216,7 @@ python -m pytest test_dual_classifier_system.py -v
 - **Shared Backbone**: Memory-efficient design
 
 ### Training Pipeline
+
 - **Multi-task Loss**: Weighted combination of category and PII losses
 - **Metrics**: Category accuracy and PII F1-score
 - **Data**: Synthetic generation with configurable PII injection
@@ -203,11 +225,13 @@ python -m pytest test_dual_classifier_system.py -v
 ## 📊 Performance
 
 ### Training Performance
+
 - **Training Time**: ~18.6 seconds for 50 samples
 - **System Requirements**: 8-core CPU, 16GB RAM (no GPU required)
 - **Memory Efficiency**: Single model vs. two separate models
 
 ### Model Performance
+
 - **Category Accuracy**: 45% (on small synthetic dataset)
 - **PII F1-Score**: 91.09%
 - **Training Loss**: 1.4948 (final)
@@ -216,6 +240,7 @@ python -m pytest test_dual_classifier_system.py -v
 ## 🧪 Testing
 
 The project includes comprehensive testing with 14 test cases covering:
+
 - ✅ Synthetic data generation
 - ✅ Dataset creation and tokenization
 - ✅ Loss function computation
@@ -228,6 +253,7 @@ All tests pass with excellent performance ratings.
 ## 📈 Next Steps
 
 This implementation provides a foundation for:
+
 - **Task 3**: Real dataset integration
 - **Task 4**: Advanced training optimization
 - **Task 5**: Rust implementation with Candle framework
@@ -235,6 +261,7 @@ This implementation provides a foundation for:
 ## 🤝 Usage Examples
 
 ### Basic Prediction
+
 ```python
 from dual_classifier import DualClassifier
 
@@ -301,12 +328,14 @@ for token, pred in zip(tokens, pii_predictions):
 ```
 
 **Key Points:**
+
 - 📍 **Single Input, Dual Output**: One text → category + PII results simultaneously
 - 🔄 **`encode_text()`**: Just preprocessing, no predictions
 - 🎯 **`predict()`**: Does BOTH tasks at once using shared DistilBERT backbone
 - 🧠 **Memory Efficient**: Single model handles both tasks vs. separate models
 
 ### Training New Model
+
 ```python
 from trainer import DualTaskTrainer
 from data_generator import create_sample_datasets

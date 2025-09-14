@@ -19,6 +19,7 @@ require (
 	github.com/onsi/gomega v1.38.0
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.0
+	github.com/prometheus/client_model v0.6.2
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.71.1
@@ -47,7 +48,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect

@@ -22,7 +22,6 @@ The deployment consists of:
 
 ## Deployment
 
-
 ```bash
 kubectl apply -k deploy/kubernetes/
 
