@@ -2,6 +2,7 @@ package classification
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -272,17 +273,32 @@ func BenchmarkUnifiedClassifier_SingleVsBatch(b *testing.B) {
 	})
 }
 
+// Global classifier instance for integration tests to avoid repeated initialization
+var globalTestClassifier *UnifiedClassifier
+var globalTestClassifierOnce sync.Once
+
+// getTestClassifier returns a shared classifier instance for all integration tests
+func getTestClassifier(t *testing.T) *UnifiedClassifier {
+	globalTestClassifierOnce.Do(func() {
+		classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
+		if err != nil {
+			t.Logf("Failed to initialize classifier: %v", err)
+			return
+		}
+		if classifier != nil && classifier.IsInitialized() {
+			globalTestClassifier = classifier
+			t.Logf("Global test classifier initialized successfully")
+		}
+	})
+	return globalTestClassifier
+}
+
 // Integration Tests - These require actual models to be available
 func TestUnifiedClassifier_Integration(t *testing.T) {
-	// Skip if models are not available
-	classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
-	if err != nil {
-		t.Skipf("Skipping integration tests - models not available: %v", err)
-		return
-	}
-
-	if classifier == nil || !classifier.IsInitialized() {
-		t.Skip("Skipping integration tests - classifier not initialized")
+	// Get shared classifier instance
+	classifier := getTestClassifier(t)
+	if classifier == nil {
+		t.Skip("Skipping integration tests - classifier not available")
 		return
 	}
 
@@ -427,24 +443,36 @@ func TestUnifiedClassifier_Integration(t *testing.T) {
 	})
 }
 
+// getBenchmarkClassifier returns a shared classifier instance for benchmarks
+func getBenchmarkClassifier(b *testing.B) *UnifiedClassifier {
+	// Reuse the global test classifier for benchmarks
+	globalTestClassifierOnce.Do(func() {
+		classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
+		if err != nil {
+			b.Logf("Failed to initialize classifier: %v", err)
+			return
+		}
+		if classifier != nil && classifier.IsInitialized() {
+			globalTestClassifier = classifier
+			b.Logf("Global benchmark classifier initialized successfully")
+		}
+	})
+	return globalTestClassifier
+}
+
 // Performance benchmarks with real models
 func BenchmarkUnifiedClassifier_RealModels(b *testing.B) {
-	classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
-	if err != nil {
-		b.Skipf("Skipping benchmark - models not available: %v", err)
-		return
-	}
-
-	if classifier == nil || !classifier.IsInitialized() {
-		b.Skip("Skipping benchmark - classifier not initialized")
+	classifier := getBenchmarkClassifier(b)
+	if classifier == nil {
+		b.Skip("Skipping benchmark - classifier not available")
 		return
 	}
 
 	texts := []string{
-		"What is machine learning?",
-		"How to invest in stocks?",
-		"Write a Python function",
-		"Calculate the area of a circle",
+		"What is the best strategy for corporate mergers and acquisitions?",
+		"How do antitrust laws affect business competition?",
+		"What are the psychological factors that influence consumer behavior?",
+		"Explain the legal requirements for contract formation",
 	}
 
 	b.ResetTimer()
@@ -457,14 +485,9 @@ func BenchmarkUnifiedClassifier_RealModels(b *testing.B) {
 }
 
 func BenchmarkUnifiedClassifier_BatchSizeComparison(b *testing.B) {
-	classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
-	if err != nil {
-		b.Skipf("Skipping benchmark - models not available: %v", err)
-		return
-	}
-
-	if classifier == nil || !classifier.IsInitialized() {
-		b.Skip("Skipping benchmark - classifier not initialized")
+	classifier := getBenchmarkClassifier(b)
+	if classifier == nil {
+		b.Skip("Skipping benchmark - classifier not available")
 		return
 	}
 

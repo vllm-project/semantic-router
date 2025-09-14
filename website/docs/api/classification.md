@@ -316,6 +316,7 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 ```
 
 **Parameters:**
+
 - `texts` (required): Array of text strings to classify
 - `task_type` (optional): Specify which classification task results to return. Options: "intent", "pii", "security". Defaults to "intent"
 - `options` (optional): Classification options object:
@@ -380,6 +381,7 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 **Supported Model Directory Structures:**
 
 **High-Confidence LoRA Models (Recommended):**
+
 ```
 ./models/
 ├── lora_intent_classifier_bert-base-uncased_model/     # BERT Intent 
@@ -394,6 +396,7 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 ```
 
 **Legacy ModernBERT Models (Fallback):**
+
 ```
 ./models/
 ├── modernbert-base/                                    # Shared encoder (auto-discovered)
@@ -414,12 +417,14 @@ The API automatically scans the `./models/` directory and selects the best avail
 3. **Task Optimization**: Each task uses its specialized model for optimal performance
 
 **Performance Characteristics:**
+
 - **Latency**: ~200-400ms per batch (4 texts)
 - **Throughput**: Supports concurrent requests
 - **Memory**: CPU-only inference supported
 - **Accuracy**: 0.99+ confidence for in-domain texts with LoRA models
 
 **Model Loading:**
+
 ```
 [INFO] Auto-discovery successful, using unified classifier service
 [INFO] Using LoRA models for batch classification, batch size: 4
@@ -430,6 +435,7 @@ The API automatically scans the `./models/` directory and selects the best avail
 ### Error Handling
 
 **Unified Classifier Unavailable (503 Service Unavailable):**
+
 ```json
 {
   "error": {
@@ -441,6 +447,7 @@ The API automatically scans the `./models/` directory and selects the best avail
 ```
 
 **Empty Batch (400 Bad Request):**
+
 ```json
 {
   "error": {
@@ -452,6 +459,7 @@ The API automatically scans the `./models/` directory and selects the best avail
 ```
 
 **Classification Error (500 Internal Server Error):**
+
 ```json
 {
   "error": {

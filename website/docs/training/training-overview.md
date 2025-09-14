@@ -577,6 +577,7 @@ class TrainingPipeline:
 **LoRA Enhanced Training** provides parameter-efficient fine-tuning alternatives to the traditional full fine-tuning approach. LoRA models achieve comparable performance while using significantly fewer trainable parameters and computational resources.
 
 #### LoRA vs Traditional Training Comparison
+
 ```python
 training_comparison = {
     "traditional_training": {
@@ -599,6 +600,7 @@ training_comparison = {
 ### LoRA Architecture Benefits
 
 #### Parameter Efficiency
+
 ```python
 # LoRA mathematical foundation: ΔW = B @ A * (alpha/r)
 lora_config = {
@@ -619,6 +621,7 @@ lora_config = {
 **Purpose**: Parameter-efficient intent classification using LoRA adaptation of ModernBERT.
 
 #### Dataset: MMLU-Pro Academic Domains (LoRA Optimized)
+
 ```python
 # LoRA training dataset configuration
 lora_intent_dataset = {
@@ -654,6 +657,7 @@ lora_intent_dataset = {
 ```
 
 #### LoRA Training Configuration
+
 ```yaml
 lora_intent_config:
   base_model: "answerdotai/ModernBERT-base"
@@ -676,6 +680,7 @@ lora_intent_config:
 ```
 
 #### Performance Metrics
+
 ```python
 # ACTUAL VERIFICATION RESULTS - Based on real Python/Go testing
 lora_intent_performance = {
@@ -722,6 +727,7 @@ lora_intent_performance = {
 **Purpose**: Parameter-efficient PII detection using LoRA adaptation for token classification.
 
 #### Dataset: Microsoft Presidio (LoRA Optimized)
+
 ```python
 # LoRA PII training dataset - ACTUAL TRAINING DATA
 lora_pii_dataset = {
@@ -749,6 +755,7 @@ lora_pii_dataset = {
 ```
 
 #### LoRA Training Configuration
+
 ```yaml
 lora_pii_config:
   base_model: "answerdotai/ModernBERT-base"
@@ -771,6 +778,7 @@ lora_pii_config:
 ```
 
 #### Performance Metrics
+
 ```python
 # ACTUAL VERIFICATION RESULTS - Based on real Python/Go testing
 lora_pii_performance = {
@@ -825,6 +833,7 @@ lora_pii_performance = {
 **Purpose**: Parameter-efficient jailbreak detection using LoRA adaptation for binary classification.
 
 #### Dataset: Multi-Source Security Dataset (LoRA Optimized)
+
 ```python
 # LoRA security training dataset - ACTUAL TRAINING DATA
 lora_security_dataset = {
@@ -871,6 +880,7 @@ lora_security_dataset = {
 ```
 
 #### LoRA Training Configuration
+
 ```yaml
 lora_security_config:
   base_model: "answerdotai/ModernBERT-base"
@@ -893,6 +903,7 @@ lora_security_config:
 ```
 
 #### Performance Metrics
+
 ```python
 # ACTUAL VERIFICATION RESULTS - Based on real Python/Go testing
 lora_security_performance = {
@@ -939,6 +950,7 @@ lora_security_performance = {
 ### LoRA Training Commands
 
 #### Quick Start
+
 ```bash
 # Train Intent Classification LoRA
 cd src/training/classifier_model_fine_tuning_lora
@@ -954,6 +966,7 @@ python jailbreak_bert_finetuning_lora.py --model modernbert-base --epochs 3 --lo
 ```
 
 #### Hardware Requirements (LoRA)
+
 ```yaml
 lora_training_infrastructure:
   gpu_requirements:

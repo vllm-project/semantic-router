@@ -256,12 +256,41 @@ download-models:
 		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
 	fi
 
-	# LoRA Enhanced Models (Note: These need to be trained locally)
-	@echo "LoRA models need to be trained locally using the training scripts:"
-	@echo "  - Intent Classification: python src/training/training_lora/classifier_model_fine_tuning_lora/ft_linear_lora.py"
-	@echo "  - PII Detection: python src/training/training_lora/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py"
-	@echo "  - Security Detection: python src/training/training_lora/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py"
-	@echo "See website/docs/training/training-overview.md for detailed instructions."
+	@if [ ! -d "lora_intent_classifier_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model --local-dir models/lora_intent_classifier_bert-base-uncased_model; \
+	fi
+
+	@if [ ! -d "models/lora_intent_classifier_roberta-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_roberta-base_model --local-dir models/lora_intent_classifier_roberta-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_intent_classifier_modernbert-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_modernbert-base_model --local-dir models/lora_intent_classifier_modernbert-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_pii_detector_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model --local-dir models/lora_pii_detector_bert-base-uncased_model; \
+	fi
+
+	@if [ ! -d "models/lora_pii_detector_roberta-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_roberta-base_model --local-dir models/lora_pii_detector_roberta-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_pii_detector_modernbert-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_modernbert-base_model --local-dir models/lora_pii_detector_modernbert-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model; \
+	fi
+
+	@if [ ! -d "models/lora_jailbreak_classifier_roberta-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_roberta-base_model --local-dir models/lora_jailbreak_classifier_roberta-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_jailbreak_classifier_modernbert-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_modernbert-base_model --local-dir models/lora_jailbreak_classifier_modernbert-base_model; \
+	fi
 
 # Milvus container management
 start-milvus:

@@ -370,6 +370,12 @@ func initializeLoRAUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, err
 	// Mark as initialized - the actual C initialization will be lazy-loaded
 	classifier.initialized = true
 
+	// Pre-initialize LoRA C bindings to avoid lazy loading during first API call
+	if err := classifier.initializeLoRABindings(); err != nil {
+		return nil, fmt.Errorf("failed to pre-initialize LoRA bindings: %v", err)
+	}
+	classifier.loraInitialized = true
+
 	return classifier, nil
 }
 

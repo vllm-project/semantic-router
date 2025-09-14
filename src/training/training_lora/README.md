@@ -20,10 +20,13 @@ This directory contains **LoRA (Low-Rank Adaptation)** training scripts for fine
 ### Technical Details
 
 LoRA decomposes weight updates into two smaller matrices:
+
 ```
 W = W₀ + ΔW = W₀ + BA
 ```
+
 Where:
+
 - `W₀`: Original frozen weights
 - `B`: Low-rank matrix (d × r)  
 - `A`: Low-rank matrix (r × k)
@@ -34,16 +37,19 @@ Where:
 Our LoRA implementation supports three transformer architectures:
 
 ### BERT-base-uncased
+
 - **Target Modules**: `attention.self.query`, `attention.self.value`, `attention.output.dense`, `intermediate.dense`, `output.dense`
 - **Performance**: Excellent (0.99+ confidence)
 - **Training Time**: ~45-60 minutes per task
 
 ### RoBERTa-base  
+
 - **Target Modules**: Same as BERT
 - **Performance**: Excellent (0.99+ confidence)
 - **Training Time**: ~45-60 minutes per task
 
 ### ModernBERT-base
+
 - **Target Modules**: `attn.Wqkv`, `attn.Wo`, `mlp.Wi`, `mlp.Wo`
 - **Performance**: Good (0.5-0.7 confidence)
 - **Training Time**: ~30-45 minutes per task
@@ -78,7 +84,6 @@ src/training/training_lora/
 
 1. **Python Environment**:
 
-
 2. **Required Libraries**:
    - `torch`, `transformers`, `peft`, `datasets`
    - `accelerate`, `tqdm`, `scikit-learn`
@@ -86,12 +91,14 @@ src/training/training_lora/
 ### Training a Model
 
 **Option 1: Automated Training (Recommended)**
+
 ```bash
 cd classifier_model_fine_tuning_lora/
 ./train_cpu_optimized.sh
 ```
 
 **Option 2: Manual Training**
+
 ```bash
 cd classifier_model_fine_tuning_lora/
 python ft_linear_lora.py \
@@ -106,11 +113,13 @@ python ft_linear_lora.py \
 ### Verification
 
 **Python Verification**:
+
 ```bash
 python ft_linear_lora.py --mode test --model_path ./models/lora_intent_classifier_bert-base-uncased_r16_model_rust
 ```
 
 **Go Verification**:
+
 ```bash
 LD_LIBRARY_PATH=~/candle-binding/target/release \
 go run ft_linear_lora_verifier.go --model models/lora_intent_classifier_bert-base-uncased_r16_model_rust
@@ -166,18 +175,21 @@ training_args = TrainingArguments(
 ## 🎯 Task-Specific Details
 
 ### Intent Classification
+
 - **Task Type**: Sequence Classification
 - **Classes**: `business`, `law`, `psychology`
 - **Dataset**: Synthetic business/legal/psychology queries
 - **Metric**: Accuracy, Confidence
 
 ### PII Detection  
+
 - **Task Type**: Token Classification
 - **Labels**: `PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `STREET_ADDRESS`, `US_SSN`, etc.
 - **Dataset**: Presidio synthetic dataset (29K examples)
 - **Metric**: Token-level F1, Entity-level accuracy
 
 ### Security Detection
+
 - **Task Type**: Sequence Classification  
 - **Classes**: `safe`, `unsafe`
 - **Dataset**: Toxic-chat, Salad-data

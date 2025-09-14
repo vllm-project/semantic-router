@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use anyhow::{Error as E, Result};
 use candle_core::{Device, IndexOp, Tensor};
@@ -41,6 +42,7 @@ pub struct PIIResult {
     pub has_pii: bool,
     pub pii_types: Vec<String>,
     pub confidence: f32,
+    pub entities: Vec<String>, // Added for batch processing
 }
 
 /// Security detection result
@@ -67,10 +69,10 @@ pub struct UnifiedClassifier {
     architecture: String, // "bert", "roberta", or "modernbert"
     device: Device,
 
-    // High-confidence LoRA classifiers
-    intent_classifier: Option<CandleBertClassifier>,
-    pii_classifier: Option<CandleBertTokenClassifier>,
-    security_classifier: Option<CandleBertClassifier>,
+    // High-confidence LoRA classifiers wrapped in Arc for thread safety
+    intent_classifier: Option<Arc<CandleBertClassifier>>,
+    pii_classifier: Option<Arc<CandleBertTokenClassifier>>,
+    security_classifier: Option<Arc<CandleBertClassifier>>,
 
     // Legacy ModernBERT support (for backward compatibility)
     encoder: Option<ModernBert>,
@@ -146,7 +148,7 @@ impl UnifiedClassifier {
                 matches!(self.device, Device::Cpu),
             )?;
 
-            self.intent_classifier = Some(intent_classifier);
+            self.intent_classifier = Some(Arc::new(intent_classifier));
             self.intent_mapping = intent_labels;
         }
 
@@ -161,7 +163,7 @@ impl UnifiedClassifier {
                 matches!(self.device, Device::Cpu),
             )?;
 
-            self.security_classifier = Some(security_classifier);
+            self.security_classifier = Some(Arc::new(security_classifier));
             self.security_mapping = security_labels;
         }
 
@@ -176,7 +178,7 @@ impl UnifiedClassifier {
                 matches!(self.device, Device::Cpu),
             )?;
 
-            self.pii_classifier = Some(pii_classifier);
+            self.pii_classifier = Some(Arc::new(pii_classifier));
             self.pii_mapping = pii_labels;
         }
 
@@ -342,121 +344,185 @@ impl UnifiedClassifier {
         self.classify_batch_legacy(texts)
     }
 
-    /// High-confidence batch classification using LoRA models
+    /// High-confidence batch classification using LoRA models with PARALLEL PROCESSING
     fn classify_batch_with_lora(&self, texts: &[&str]) -> Result<BatchClassificationResult> {
-        // Using LoRA models for batch classification
+        // PERFORMANCE OPTIMIZATION: Parallel execution of 3 LoRA models
+        // Instead of sequential: Intent -> PII -> Security (3x time)
+        // Use parallel: Intent || PII || Security (1x time + overhead)
 
-        let mut intent_results = Vec::new();
-        let mut pii_results = Vec::new();
-        let mut security_results = Vec::new();
+        let texts_vec: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
 
-        for text in texts {
-            // Intent classification with high confidence
-            let intent_result = if let Some(classifier) = &self.intent_classifier {
-                match classifier.classify_text(text) {
-                    Ok((class_id, confidence)) => {
-                        let category = self
-                            .intent_mapping
-                            .get(&class_id)
-                            .unwrap_or(&format!("UNKNOWN_{}", class_id))
-                            .clone();
-                        IntentResult {
-                            category,
-                            confidence,
-                            probabilities: Vec::new(), // Simplified for now
-                        }
+        // Clone classifiers for thread safety (they're already Arc-wrapped internally)
+        let intent_classifier = self.intent_classifier.clone();
+        let pii_classifier = self.pii_classifier.clone();
+        let security_classifier = self.security_classifier.clone();
+
+        // Clone mappings for thread safety
+        let intent_mapping = self.intent_mapping.clone();
+        let pii_mapping = self.pii_mapping.clone();
+        let security_mapping = self.security_mapping.clone();
+
+        // Spawn parallel threads for each classification task
+        let intent_handle = {
+            let texts_clone = texts_vec.clone();
+            let mapping_clone = intent_mapping.clone();
+            thread::spawn(move || -> Result<Vec<IntentResult>> {
+                if let Some(classifier) = intent_classifier {
+                    let texts_refs: Vec<&str> = texts_clone.iter().map(|s| s.as_str()).collect();
+                    match classifier.classify_batch(&texts_refs) {
+                        Ok(batch_results) => Ok(batch_results
+                            .into_iter()
+                            .map(|(class_id, confidence)| {
+                                let category = mapping_clone
+                                    .get(&class_id)
+                                    .unwrap_or(&format!("UNKNOWN_{}", class_id))
+                                    .clone();
+                                IntentResult {
+                                    category,
+                                    confidence,
+                                    probabilities: Vec::new(),
+                                }
+                            })
+                            .collect()),
+                        Err(_) => Ok(texts_clone
+                            .iter()
+                            .map(|_| IntentResult {
+                                category: "ERROR".to_string(),
+                                confidence: 0.0,
+                                probabilities: Vec::new(),
+                            })
+                            .collect()),
                     }
-                    Err(_) => IntentResult {
-                        category: "ERROR".to_string(),
-                        confidence: 0.0,
-                        probabilities: Vec::new(),
-                    },
+                } else {
+                    Ok(texts_clone
+                        .iter()
+                        .map(|_| IntentResult {
+                            category: "NO_CLASSIFIER".to_string(),
+                            confidence: 0.0,
+                            probabilities: Vec::new(),
+                        })
+                        .collect())
                 }
-            } else {
-                IntentResult {
-                    category: "NO_CLASSIFIER".to_string(),
-                    confidence: 0.0,
-                    probabilities: Vec::new(),
-                }
-            };
+            })
+        };
 
-            // PII classification with high confidence
-            let pii_result = if let Some(classifier) = &self.pii_classifier {
-                match classifier.classify_tokens(text) {
-                    Ok(token_results) => {
-                        let mut entities = Vec::new();
-                        let mut max_confidence = 0.0f32;
+        let pii_handle = {
+            let texts_clone = texts_vec.clone();
+            let mapping_clone = pii_mapping.clone();
+            thread::spawn(move || -> Result<Vec<PIIResult>> {
+                if let Some(classifier) = pii_classifier {
+                    let texts_refs: Vec<&str> = texts_clone.iter().map(|s| s.as_str()).collect();
+                    match classifier.classify_tokens_batch(&texts_refs) {
+                        Ok(batch_results) => Ok(batch_results
+                            .into_iter()
+                            .map(|token_results| {
+                                let entities: Vec<String> = token_results
+                                    .iter()
+                                    .filter(|(_, class_id, confidence)| {
+                                        *class_id > 0 && *confidence > 0.5
+                                    })
+                                    .map(|(_token, class_id, _)| {
+                                        mapping_clone
+                                            .get(class_id)
+                                            .unwrap_or(&format!("UNKNOWN_{}", class_id))
+                                            .clone()
+                                    })
+                                    .collect();
 
-                        for (_token, class_id, confidence) in token_results {
-                            if class_id == 0 {
-                                continue;
-                            } // Skip O labels
-
-                            let entity_type = self
-                                .pii_mapping
-                                .get(&class_id)
-                                .unwrap_or(&format!("PII_{}", class_id))
-                                .clone();
-
-                            entities.push(entity_type);
-                            max_confidence = max_confidence.max(confidence);
-                        }
-
-                        PIIResult {
-                            has_pii: !entities.is_empty(),
-                            pii_types: entities,
-                            confidence: max_confidence,
-                        }
+                                PIIResult {
+                                    has_pii: !entities.is_empty(),
+                                    pii_types: entities.clone(),
+                                    confidence: token_results
+                                        .iter()
+                                        .map(|(_, _, conf)| *conf)
+                                        .fold(0.0, f32::max),
+                                    entities,
+                                }
+                            })
+                            .collect()),
+                        Err(_) => Ok(texts_clone
+                            .iter()
+                            .map(|_| PIIResult {
+                                has_pii: false,
+                                pii_types: Vec::new(),
+                                confidence: 0.0,
+                                entities: Vec::new(),
+                            })
+                            .collect()),
                     }
-                    Err(_) => PIIResult {
-                        has_pii: false,
-                        pii_types: vec!["ERROR".to_string()],
-                        confidence: 0.0,
-                    },
+                } else {
+                    Ok(texts_clone
+                        .iter()
+                        .map(|_| PIIResult {
+                            has_pii: false,
+                            pii_types: Vec::new(),
+                            confidence: 0.0,
+                            entities: Vec::new(),
+                        })
+                        .collect())
                 }
-            } else {
-                PIIResult {
-                    has_pii: false,
-                    pii_types: vec!["NO_CLASSIFIER".to_string()],
-                    confidence: 0.0,
-                }
-            };
+            })
+        };
 
-            // Security classification with high confidence
-            let security_result = if let Some(classifier) = &self.security_classifier {
-                match classifier.classify_text(text) {
-                    Ok((class_id, confidence)) => {
-                        let threat_type = self
-                            .security_mapping
-                            .get(&class_id)
-                            .unwrap_or(&format!("THREAT_{}", class_id))
-                            .clone();
-                        SecurityResult {
-                            is_jailbreak: class_id != 0,
-                            threat_type,
-                            confidence,
-                        }
+        let security_handle = {
+            let texts_clone = texts_vec.clone();
+            let mapping_clone = security_mapping.clone();
+            thread::spawn(move || -> Result<Vec<SecurityResult>> {
+                if let Some(classifier) = security_classifier {
+                    let texts_refs: Vec<&str> = texts_clone.iter().map(|s| s.as_str()).collect();
+                    match classifier.classify_batch(&texts_refs) {
+                        Ok(batch_results) => Ok(batch_results
+                            .into_iter()
+                            .map(|(class_id, confidence)| {
+                                let threat_type = mapping_clone
+                                    .get(&class_id)
+                                    .unwrap_or(&format!("UNKNOWN_{}", class_id))
+                                    .clone();
+
+                                SecurityResult {
+                                    is_jailbreak: class_id == 1,
+                                    threat_type,
+                                    confidence,
+                                }
+                            })
+                            .collect()),
+                        Err(_) => Ok(texts_clone
+                            .iter()
+                            .map(|_| SecurityResult {
+                                is_jailbreak: false,
+                                threat_type: "ERROR".to_string(),
+                                confidence: 0.0,
+                            })
+                            .collect()),
                     }
-                    Err(_) => SecurityResult {
-                        is_jailbreak: false,
-                        threat_type: "ERROR".to_string(),
-                        confidence: 0.0,
-                    },
+                } else {
+                    Ok(texts_clone
+                        .iter()
+                        .map(|_| SecurityResult {
+                            is_jailbreak: false,
+                            threat_type: "NO_CLASSIFIER".to_string(),
+                            confidence: 0.0,
+                        })
+                        .collect())
                 }
-            } else {
-                SecurityResult {
-                    is_jailbreak: false,
-                    threat_type: "NO_CLASSIFIER".to_string(),
-                    confidence: 0.0,
-                }
-            };
+            })
+        };
 
-            intent_results.push(intent_result);
-            pii_results.push(pii_result);
-            security_results.push(security_result);
-        }
+        // Wait for all threads to complete and collect results
+        let intent_results = intent_handle
+            .join()
+            .map_err(|_| E::msg("Intent classification thread panicked"))?
+            .map_err(|e| E::msg(format!("Intent classification failed: {}", e)))?;
 
-        // LoRA batch classification completed
+        let pii_results = pii_handle
+            .join()
+            .map_err(|_| E::msg("PII classification thread panicked"))?
+            .map_err(|e| E::msg(format!("PII classification failed: {}", e)))?;
+
+        let security_results = security_handle
+            .join()
+            .map_err(|_| E::msg("Security classification thread panicked"))?
+            .map_err(|e| E::msg(format!("Security classification failed: {}", e)))?;
 
         Ok(BatchClassificationResult {
             intent_results,
@@ -636,6 +702,7 @@ impl UnifiedClassifier {
                 has_pii: !pii_types.is_empty(),
                 pii_types,
                 confidence: max_confidence,
+                entities: Vec::new(), // Simplified for now
             });
         }
 
