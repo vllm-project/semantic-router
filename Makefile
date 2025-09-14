@@ -141,7 +141,7 @@ check-go-mod-tidy:
 test-binding: rust
 	@echo "Running Go tests with static library..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		cd candle-binding && CGO_ENABLED=1 go test -v
+		cd candle-binding && CGO_ENABLED=1 go test -v -race
 
 # Test with the candle-binding library
 test-category-classifier: rust
@@ -256,6 +256,42 @@ download-models:
 		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
 	fi
 
+	@if [ ! -d "lora_intent_classifier_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model --local-dir models/lora_intent_classifier_bert-base-uncased_model; \
+	fi
+
+	@if [ ! -d "models/lora_intent_classifier_roberta-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_roberta-base_model --local-dir models/lora_intent_classifier_roberta-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_intent_classifier_modernbert-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_modernbert-base_model --local-dir models/lora_intent_classifier_modernbert-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_pii_detector_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model --local-dir models/lora_pii_detector_bert-base-uncased_model; \
+	fi
+
+	@if [ ! -d "models/lora_pii_detector_roberta-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_roberta-base_model --local-dir models/lora_pii_detector_roberta-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_pii_detector_modernbert-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_modernbert-base_model --local-dir models/lora_pii_detector_modernbert-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model; \
+	fi
+
+	@if [ ! -d "models/lora_jailbreak_classifier_roberta-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_roberta-base_model --local-dir models/lora_jailbreak_classifier_roberta-base_model; \
+	fi
+
+	@if [ ! -d "models/lora_jailbreak_classifier_modernbert-base_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_modernbert-base_model --local-dir models/lora_jailbreak_classifier_modernbert-base_model; \
+	fi
+
 # Milvus container management
 start-milvus:
 	@echo "Starting Milvus container for testing with $(CONTAINER_RUNTIME)..."
@@ -343,3 +379,15 @@ docs-lint:
 docs-lint-fix:
 	@echo "Fixing documentation lint issues..."
 	cd website && npm run lint:fix
+
+markdown-lint:
+	@echo "Linting markdown files..."
+	markdownlint -c markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules
+
+markdown-lint-fix:
+	@echo "Fixing markdown lint issues..."
+	markdownlint -c markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules --fix
+
+yaml-lint:
+	@echo "Linting YAML files..."
+	yamllint --config-file=.yamllint .

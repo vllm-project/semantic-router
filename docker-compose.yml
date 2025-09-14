@@ -16,7 +16,7 @@ services:
     networks:
       - semantic-network
     healthcheck:
-      test: ["CMD", "curl","-f", "localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -67,7 +67,7 @@ model_config:
 # Classifier configuration for text classification
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model" #TODO: Use local model for now before the code can download the entire model from huggingface
+    model_id: "models/category_classifier_modernbert-base_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
@@ -79,116 +79,117 @@ classifier:
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 categories:
-- name: business
-  model_scores:
-  - model: phi4
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.4
-  - model: mistral-small3.1
-    score: 0.2
-- name: law
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: phi4
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.4
-- name: psychology
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.6
-  - model: gemma3:27b
-    score: 0.4
-  - model: phi4
-    score: 0.4
-- name: biology
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.6
-  - model: phi4
-    score: 0.2
-- name: chemistry
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.6
-  - model: phi4
-    score: 0.6
-- name: history
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.8
-  - model: phi4
-    score: 0.6
-  - model: gemma3:27b
-    score: 0.4
-- name: other
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: phi4
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.6
-- name: health
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: phi4
-    score: 0.8
-  - model: mistral-small3.1
-    score: 0.6
-- name: economics
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: mistral-small3.1
-    score: 0.8
-  - model: phi4
-    score: 0.0
-- name: math
-  model_scores:
-  - model: phi4
-    score: 1.0
-  - model: mistral-small3.1
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.6
-- name: physics
-  model_scores:
-  - model: gemma3:27b
-    score: 0.4
-  - model: phi4
-    score: 0.4
-  - model: mistral-small3.1
-    score: 0.4
-- name: computer science
-  model_scores:
-  - model: gemma3:27b
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.6
-  - model: phi4
-    score: 0.0
-- name: philosophy
-  model_scores:
-  - model: phi4
-    score: 0.6
-  - model: gemma3:27b
-    score: 0.2
-  - model: mistral-small3.1
-    score: 0.2
-- name: engineering
-  model_scores:
-  - model: gemma3:27b
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.6
-  - model: phi4
-    score: 0.2
+  - name: business
+    model_scores:
+      - model: phi4
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.4
+      - model: mistral-small3.1
+        score: 0.2
+  - name: law
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: phi4
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.4
+  - name: psychology
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.6
+      - model: gemma3:27b
+        score: 0.4
+      - model: phi4
+        score: 0.4
+  - name: biology
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.6
+      - model: phi4
+        score: 0.2
+  - name: chemistry
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.6
+      - model: phi4
+        score: 0.6
+  - name: history
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.8
+      - model: phi4
+        score: 0.6
+      - model: gemma3:27b
+        score: 0.4
+  - name: other
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: phi4
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.6
+  - name: health
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: phi4
+        score: 0.8
+      - model: mistral-small3.1
+        score: 0.6
+  - name: economics
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: mistral-small3.1
+        score: 0.8
+      - model: phi4
+        score: 0.0
+  - name: math
+    model_scores:
+      - model: phi4
+        score: 1.0
+      - model: mistral-small3.1
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.6
+  - name: physics
+    model_scores:
+      - model: gemma3:27b
+        score: 0.4
+      - model: phi4
+        score: 0.4
+      - model: mistral-small3.1
+        score: 0.4
+  - name: computer science
+    model_scores:
+      - model: gemma3:27b
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.6
+      - model: phi4
+        score: 0.0
+  - name: philosophy
+    model_scores:
+      - model: phi4
+        score: 0.6
+      - model: gemma3:27b
+        score: 0.2
+      - model: mistral-small3.1
+        score: 0.2
+  - name: engineering
+    model_scores:
+      - model: gemma3:27b
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.6
+      - model: phi4
+        score: 0.2
+
 default_model: mistral-small3.1

@@ -80,6 +80,7 @@ graph TB
 - **Timeout Management**: Configures appropriate timeouts for different model types
 
 **Configuration Highlights**:
+
 ```yaml
 # Envoy listener configuration
 listeners:
@@ -107,6 +108,7 @@ http_filters:
 **Role**: The brain of the system that makes intelligent routing decisions.
 
 **Architecture**:
+
 ```go
 type OpenAIRouter struct {
     Config               *config.RouterConfig
@@ -122,6 +124,7 @@ type OpenAIRouter struct {
 ```
 
 **Processing Pipeline**:
+
 ```mermaid
 sequenceDiagram
     participant E as Envoy
@@ -157,6 +160,7 @@ sequenceDiagram
 The classification system uses ModernBERT models for multiple classification tasks:
 
 #### Category Classification
+
 ```mermaid
 graph LR
     Query[User Query] --> Tokenizer[ModernBERT Tokenizer]
@@ -182,6 +186,7 @@ graph LR
 ```
 
 #### Multi-Task Architecture
+
 ```python
 # Conceptual model architecture
 class SemanticRouter:
