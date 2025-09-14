@@ -6,13 +6,98 @@
 
 set -e
 
-# Configuration
+# Default Configuration
 VENV_PATH="../.venv"
 ROUTER_ENDPOINT="http://127.0.0.1:8801/v1"
 VLLM_ENDPOINT="http://127.0.0.1:8000/v1"
-VLLM_MODEL="openai/gpt-oss-20b"
+VLLM_MODEL=""  # Will be auto-detected from endpoint if not specified
 ROUTER_MODEL="auto"
 OUTPUT_BASE="results/comprehensive_research_$(date +%Y%m%d_%H%M%S)"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --vllm-model)
+            VLLM_MODEL="$2"
+            shift 2
+            ;;
+        --vllm-endpoint)
+            VLLM_ENDPOINT="$2"
+            shift 2
+            ;;
+        --router-endpoint)
+            ROUTER_ENDPOINT="$2"
+            shift 2
+            ;;
+        --router-model)
+            ROUTER_MODEL="$2"
+            shift 2
+            ;;
+        --output-base)
+            OUTPUT_BASE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --vllm-model MODEL      Specify vLLM model (auto-detected if not provided)"
+            echo "  --vllm-endpoint URL     vLLM endpoint URL (default: http://127.0.0.1:8000/v1)"
+            echo "  --router-endpoint URL   Router endpoint URL (default: http://127.0.0.1:8801/v1)"
+            echo "  --router-model MODEL    Router model (default: auto)"
+            echo "  --output-base DIR       Output directory base (default: results/comprehensive_research_TIMESTAMP)"
+            echo "  --help, -h              Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Auto-detect vLLM model if not specified
+if [[ -z "$VLLM_MODEL" ]]; then
+    echo -e "${BLUE}🔍 Auto-detecting vLLM model from endpoint...${NC}"
+    
+    # Try to fetch models from the vLLM endpoint
+    VLLM_MODELS_JSON=$(curl -s "$VLLM_ENDPOINT/models" 2>/dev/null || echo "")
+    
+    if [[ -n "$VLLM_MODELS_JSON" ]]; then
+        # Extract the first model ID from the JSON response
+        VLLM_MODEL=$(echo "$VLLM_MODELS_JSON" | python3 -c "
+import json
+import sys
+try:
+    data = json.load(sys.stdin)
+    if 'data' in data and len(data['data']) > 0:
+        print(data['data'][0]['id'])
+    else:
+        print('')
+except:
+    print('')
+" 2>/dev/null)
+        
+        if [[ -n "$VLLM_MODEL" ]]; then
+            echo -e "${GREEN}✅ Auto-detected vLLM model: $VLLM_MODEL${NC}"
+        else
+            echo -e "${RED}❌ Failed to parse models from endpoint response${NC}"
+            echo -e "${YELLOW}⚠️  Using fallback model: openai/gpt-oss-20b${NC}"
+            VLLM_MODEL="openai/gpt-oss-20b"
+        fi
+    else
+        echo -e "${RED}❌ Failed to fetch models from vLLM endpoint: $VLLM_ENDPOINT${NC}"
+        echo -e "${YELLOW}⚠️  Using fallback model: openai/gpt-oss-20b${NC}"
+        VLLM_MODEL="openai/gpt-oss-20b"
+    fi
+fi
 
 # Single persistent CSV file for all research results
 PERSISTENT_RESEARCH_CSV="results/research_results_master.csv"
@@ -27,13 +112,6 @@ declare -A DATASET_CONFIGS=(
     ["commonsenseqa"]=20 # 1 category × 20 = 20 samples
     ["hellaswag"]=8      # ~50 activities × 8 = ~400 samples
 )
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
 echo -e "${BLUE}🔬 COMPREHENSIVE MULTI-DATASET BENCHMARK FOR RESEARCH${NC}"
 echo -e "${BLUE}====================================================${NC}"
@@ -142,9 +220,9 @@ try:
         
         # Determine model name
         if '$mode' == 'router':
-            model_name = 'auto'
+            model_name = '$ROUTER_MODEL'
         else:
-            model_name = 'openai/gpt-oss-20b'
+            model_name = '$VLLM_MODEL'
         
         # For vLLM, we might have multiple modes (NR, NR_REASONING)
         if '$mode' == 'vllm' and 'mode' in df.columns:
