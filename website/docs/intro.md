@@ -7,7 +7,7 @@ sidebar_position: 1
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/vllm-project/semantic-router/blob/main/LICENSE)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vllm-project/semantic-router/src/semantic-router)](https://goreportcard.com/report/github.com/vllm-project/semantic-router/src/semantic-router)
-![](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
+![Test And Build](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
 
 An intelligent **Mixture-of-Models (MoM)** router that acts as an Envoy External Processor (ExtProc) to intelligently direct OpenAI API requests to the most suitable backend model from a defined pool. Using BERT-based semantic understanding and classification, it optimizes both performance and cost efficiency.
 
@@ -15,21 +15,25 @@ An intelligent **Mixture-of-Models (MoM)** router that acts as an Envoy External
 
 ### 🎯 **Auto-selection of Models**
 Intelligently routes requests to specialized models based on semantic understanding:
+
 - **Math queries** → Math-specialized models
 - **Creative writing** → Creative-specialized models  
 - **Code generation** → Code-specialized models
 - **General queries** → Balanced general-purpose models
 
 ### 🛡️ **Security & Privacy**
+
 - **PII Detection**: Automatically detects and handles personally identifiable information
 - **Prompt Guard**: Identifies and blocks jailbreak attempts
 - **Safe Routing**: Ensures sensitive prompts are handled appropriately
 
 ### ⚡ **Performance Optimization**
+
 - **Semantic Cache**: Caches semantic representations to reduce latency
 - **Tool Selection**: Auto-selects relevant tools to reduce token usage and improve tool selection accuracy
 
 ### 🏗️ **Architecture**
+
 - **Envoy ExtProc Integration**: Seamlessly integrates with Envoy proxy
 - **Dual Implementation**: Available in both Go (with Rust FFI) and Python
 - **Scalable Design**: Production-ready with comprehensive monitoring
@@ -39,7 +43,6 @@ Intelligently routes requests to specialized models based on semantic understand
 Our testing shows significant improvements in model accuracy through specialized routing:
 
 ![Model Accuracy](/img/category_accuracies.png)
-
 
 ## 🛠️ Architecture Overview
 
@@ -84,6 +87,7 @@ graph TB
 ## 📈 Monitoring & Observability
 
 The router provides comprehensive monitoring through:
+
 - **Grafana Dashboard**: Real-time metrics and performance tracking
 - **Prometheus Metrics**: Detailed routing statistics and performance data
 - **Request Tracing**: Full visibility into routing decisions and performance

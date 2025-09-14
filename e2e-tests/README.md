@@ -38,11 +38,13 @@ This test suite provides a progressive approach to testing the Semantic Router, 
 ## Running Tests
 
 Individual tests can be run with:
+
 ```
 python tests/XX-test-name.py
 ```
 
 Or run all tests sequentially with:
+
 ```
 cd tests && python -m pytest
 ```

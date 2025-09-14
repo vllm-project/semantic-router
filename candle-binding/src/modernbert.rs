@@ -268,7 +268,7 @@ pub struct ModernBertClassifier {
 }
 
 lazy_static::lazy_static! {
-    static ref MODERNBERT_CLASSIFIER: Arc<Mutex<Option<ModernBertClassifier>>> = Arc::new(Mutex::new(None));
+   static ref MODERNBERT_CLASSIFIER: Arc<Mutex<Option<Arc<ModernBertClassifier>>>> = Arc::new(Mutex::new(None));
     static ref MODERNBERT_PII_CLASSIFIER: Arc<Mutex<Option<ModernBertClassifier>>> = Arc::new(Mutex::new(None));
     static ref MODERNBERT_JAILBREAK_CLASSIFIER: Arc<Mutex<Option<ModernBertClassifier>>> = Arc::new(Mutex::new(None));
 }
@@ -830,7 +830,7 @@ pub extern "C" fn init_modernbert_classifier(model_id: *const c_char, use_cpu: b
     match ModernBertClassifier::new(model_id, use_cpu) {
         Ok(classifier) => {
             let mut bert_opt = MODERNBERT_CLASSIFIER.lock().unwrap();
-            *bert_opt = Some(classifier);
+            *bert_opt = Some(Arc::new(classifier));
             true
         }
         Err(e) => {
@@ -930,20 +930,23 @@ pub extern "C" fn classify_modernbert_text(text: *const c_char) -> ModernBertCla
         }
     };
 
-    let bert_opt = MODERNBERT_CLASSIFIER.lock().unwrap();
-    match &*bert_opt {
-        Some(classifier) => match classifier.classify_text(text) {
-            Ok((class_idx, confidence)) => ModernBertClassificationResult {
-                class: class_idx as i32,
-                confidence,
-            },
-            Err(e) => {
-                eprintln!("Error classifying text with ModernBERT: {e}");
-                default_result
-            }
-        },
-        None => {
+    let classifier_arc = {
+        let guard = MODERNBERT_CLASSIFIER.lock().unwrap();
+        if let Some(arc) = guard.as_ref() {
+            Arc::clone(arc)
+        } else {
             eprintln!("ModernBERT classifier not initialized");
+            return default_result;
+        }
+    };
+
+    match classifier_arc.classify_text(text) {
+        Ok((class_idx, confidence)) => ModernBertClassificationResult {
+            class: class_idx as i32,
+            confidence,
+        },
+        Err(e) => {
+            eprintln!("Error classifying text with ModernBERT: {e}");
             default_result
         }
     }
@@ -968,28 +971,31 @@ pub extern "C" fn classify_modernbert_text_with_probabilities(
         }
     };
 
-    let bert_opt = MODERNBERT_CLASSIFIER.lock().unwrap();
-    match &*bert_opt {
-        Some(classifier) => match classifier.classify_text_with_probs(text) {
-            Ok((class_idx, confidence, probabilities)) => {
-                // Allocate memory for probabilities array
-                let prob_len = probabilities.len();
-                let prob_ptr = Box::into_raw(probabilities.into_boxed_slice()) as *mut f32;
-
-                ModernBertClassificationResultWithProbs {
-                    class: class_idx as i32,
-                    confidence,
-                    probabilities: prob_ptr,
-                    num_classes: prob_len as i32,
-                }
-            }
-            Err(e) => {
-                eprintln!("Error classifying text with probabilities using ModernBERT: {e}");
-                default_result
-            }
-        },
-        None => {
+    let classifier_arc = {
+        let guard = MODERNBERT_CLASSIFIER.lock().unwrap();
+        if let Some(arc) = guard.as_ref() {
+            Arc::clone(arc)
+        } else {
             eprintln!("ModernBERT classifier not initialized");
+            return default_result;
+        }
+    };
+
+    match classifier_arc.classify_text_with_probs(text) {
+        Ok((class_idx, confidence, probabilities)) => {
+            // Allocate memory for probabilities array
+            let prob_len = probabilities.len();
+            let prob_ptr = Box::into_raw(probabilities.into_boxed_slice()) as *mut f32;
+
+            ModernBertClassificationResultWithProbs {
+                class: class_idx as i32,
+                confidence,
+                probabilities: prob_ptr,
+                num_classes: prob_len as i32,
+            }
+        }
+        Err(e) => {
+            eprintln!("Error classifying text with probabilities using ModernBERT: {e}");
             default_result
         }
     }

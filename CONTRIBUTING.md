@@ -29,18 +29,22 @@ Before you begin, ensure you have the following installed:
 ### Initial Setup
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/vllm-project/semantic-router.git
    cd semantic-router
    ```
 
 2. **Download required models:**
+
    ```bash
    make download-models
    ```
+
    This downloads the pre-trained classification models from Hugging Face.
 
 3. **Install Python dependencies(Optional):**
+
    ```bash
    # For training and development
    pip install -r requirements.txt
@@ -54,6 +58,7 @@ Before you begin, ensure you have the following installed:
 The project consists of multiple components that need to be built in order:
 
 ### Build Everything
+
 ```bash
 make build
 ```
@@ -61,11 +66,13 @@ make build
 ### Build Individual Components
 
 1. **Rust library (Candle binding):**
+
    ```bash
    make rust
    ```
 
 2. **Go router:**
+
    ```bash
    make build-router
    ```
@@ -73,11 +80,13 @@ make build
 ### Running the System
 
 1. **Start Envoy proxy** (in one terminal):
+
    ```bash
    make run-envoy
    ```
 
 2. **Start the semantic router** (in another terminal):
+
    ```bash
    make run-router
    ```
@@ -87,16 +96,19 @@ make build
 ### Unit Tests
 
 1. **Test Rust bindings:**
+
    ```bash
    make test-binding
    ```
 
 2. **Test Go semantic router:**
+
    ```bash
    make test-semantic-router
    ```
 
 3. **Test individual classifiers:**
+
    ```bash
    make test-category-classifier
    make test-pii-classifier
@@ -141,18 +153,19 @@ python e2e-tests/run_all_tests.py --check-only
 
 The test suite includes:
 
-+ Basic client request tests
-+ Envoy ExtProc interaction tests
-+ Router classification tests
-+ Semantic cache tests
-+ Category-specific tests
-+ Metrics validation tests
+- Basic client request tests
+- Envoy ExtProc interaction tests
+- Router classification tests
+- Semantic cache tests
+- Category-specific tests
+- Metrics validation tests
 
 ## Development Workflow
 
 ### Making Changes
 
 1. **Create a feature branch:**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -160,6 +173,7 @@ The test suite includes:
 2. **Make your changes** following the project structure and coding standards.
 
 3. **Build and test:**
+
    ```bash
    make clean
    make build
@@ -167,6 +181,7 @@ The test suite includes:
    ```
 
 4. **Run end-to-end tests:**
+
    ```bash
    # Start services
    make run-envoy &
@@ -179,6 +194,7 @@ The test suite includes:
 5. **Commit your changes:**
 
    Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**.
+
    ```bash
    git add .
    git commit -s -m "feat: add your feature description"
@@ -197,6 +213,7 @@ The test suite includes:
 Before submitting a PR, please run the pre-commit hooks to ensure code quality and consistency. **These checks are mandatory** and will be automatically run on every commit once installed.
 
 **Step 1: Install pre-commit tool**
+
 ```bash
 # Using pip (recommended)
 pip install pre-commit
@@ -209,6 +226,7 @@ brew install pre-commit
 ```
 
 **Step 2: Install pre-commit hooks for this repository**
+
 ```bash
 # Install pre-commit hooks
 pre-commit install
@@ -218,6 +236,7 @@ pre-commit run --all-files
 ```
 
 ### Go Code
+
 - Follow standard Go formatting (`gofmt`)
 - Use meaningful variable and function names
 - Add comments for exported functions and types
@@ -228,12 +247,14 @@ pre-commit run --all-files
   - The CI will automatically check that `go.mod` and `go.sum` files are tidy using `make check-go-mod-tidy`
 
 ### Rust Code
+
 - Follow Rust formatting (`cargo fmt`)
 - Use `cargo clippy` for linting
 - Handle errors appropriately with `Result` types
 - Document public APIs
 
 ### Python Code
+
 - Follow PEP 8 style guidelines
 - Use type hints where appropriate
 - Write docstrings for functions and classes
@@ -241,6 +262,7 @@ pre-commit run --all-files
 ## Submitting Changes
 
 1. **Ensure all tests pass:**
+
    ```bash
    make test
    python e2e-tests/run_all_tests.py

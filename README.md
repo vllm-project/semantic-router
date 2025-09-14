@@ -6,17 +6,17 @@
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/candle-semantic-router.svg)](https://crates.io/crates/candle-semantic-router)
-![](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
+![Test And Build](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
 
 **📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/getting-started/installation) | 📣 [Blog](https://vllm-semantic-router.com/blog/) | 📖 [API Reference](https://vllm-semantic-router.com/docs/api/router/)**
 
-![](./website/static/img/code.png)
+![code](./website/static/img/code.png)
 
 </div>
 
 ## Innovations ✨
 
-![](./website/static/img/architecture.png)
+![architecture](./website/static/img/architecture.png)
 
 ### Intelligent Routing 🧠
 
@@ -35,6 +35,7 @@ The screenshot below shows the LLM Router dashboard in Grafana.
 ![LLM Router Dashboard](./website/static/img/grafana_screenshot.png)
 
 The router is implemented in two ways: 
+
 - Golang (with Rust FFI based on the [candle](https://github.com/huggingface/candle) rust ML framework)
 - Python
 Benchmarking will be conducted to determine the best implementation.
@@ -64,6 +65,7 @@ For comprehensive documentation including detailed setup instructions, architect
 **👉 [Complete Documentation at Read the Docs](https://vllm-semantic-router.com/)**
 
 The documentation includes:
+
 - **[Installation Guide](https://vllm-semantic-router.com/docs/getting-started/installation/)** - Complete setup instructions
 - **[System Architecture](https://vllm-semantic-router.com/docs/architecture/system-architecture/)** - Technical deep dive
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work

@@ -265,6 +265,7 @@ default_reasoning_effort: "medium"
 #### Model Reasoning Configuration Options
 
 **Configuration Structure:**
+
 - `name`: A unique identifier for the model family
 - `patterns`: Array of patterns to match against model names
 - `reasoning_syntax.type`: How the model expects reasoning mode to be specified
@@ -282,6 +283,7 @@ The system supports both simple string patterns and regular expressions for flex
 - **Multiple patterns**: `["deepseek", "ds-", "^phi.*"]` matches any of these patterns
 
 **Regex Pattern Examples:**
+
 ```yaml
 patterns:
   - "^gpt-4.*"        # Models starting with "gpt-4"
@@ -429,11 +431,13 @@ api:
 The configuration includes preset examples for quick setup. Here's how to use them:
 
 **Step 1: Choose your scenario**
+
 - `fast` - For real-time APIs (microsecond to millisecond response times)
 - `standard` - For typical web APIs (millisecond to second response times)  
 - `slow` - For batch processing or heavy computation (seconds to minutes)
 
 **Step 2: Copy the preset values**
+
 ```yaml
 # Example: Switch to fast API configuration
 # Copy from preset_examples.fast and paste to the actual config:
@@ -442,6 +446,7 @@ size_buckets: [1, 2, 3, 5, 8, 10]
 ```
 
 **Step 3: Restart the service**
+
 ```bash
 pkill -f "router"
 make run-router
@@ -463,6 +468,7 @@ The system provides sensible default batch size ranges that work well for most u
 ### Configuration Examples by Use Case
 
 **Real-time Chat API (fast preset)**
+
 ```yaml
 # Copy these values to your config for sub-millisecond monitoring
 duration_buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
@@ -471,6 +477,7 @@ size_buckets: [1, 2, 3, 5, 8, 10]
 ```
 
 **E-commerce API (standard preset)**
+
 ```yaml
 # Copy these values for typical web API response times
 duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
@@ -479,6 +486,7 @@ size_buckets: [1, 2, 5, 10, 20, 50, 100]
 ```
 
 **Data Processing Pipeline (slow preset)**
+
 ```yaml
 # Copy these values for heavy computation workloads
 duration_buckets: [0.1, 0.5, 1, 5, 10, 30, 60, 120]
@@ -492,6 +500,7 @@ batch_size_ranges:
 ```
 
 **Available Metrics:**
+
 - `batch_classification_requests_total` - Total number of batch requests
 - `batch_classification_duration_seconds` - Processing duration histogram
 - `batch_classification_texts_total` - Total number of texts processed
@@ -576,6 +585,7 @@ make run-router
 ### Common Configuration Patterns
 
 **Multiple Models:**
+
 ```yaml
 vllm_endpoints:
   - name: "math_endpoint"
@@ -601,6 +611,7 @@ categories:
 ```
 
 **Load Balancing:**
+
 ```yaml
 vllm_endpoints:
   - name: "endpoint1"
@@ -658,6 +669,7 @@ classifier:
 ### Development vs Production
 
 **Development:**
+
 ```yaml
 # Relaxed settings for testing
 classifier:
@@ -670,6 +682,7 @@ semantic_cache:
 ```
 
 **Production:**
+
 ```yaml
 # Strict settings for production
 classifier:
@@ -686,12 +699,14 @@ semantic_cache:
 ### Common Issues
 
 **Invalid YAML syntax:**
+
 ```bash
 # Validate YAML syntax
 python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"
 ```
 
 **Missing model files:**
+
 ```bash
 # Check if models are downloaded
 ls -la models/
@@ -699,12 +714,14 @@ ls -la models/
 ```
 
 **Endpoint connectivity:**
+
 ```bash
 # Test your backend server
 curl -f http://your-server:8000/health
 ```
 
 **Configuration not taking effect:**
+
 ```bash
 # Restart the router after config changes
 make run-router
@@ -723,17 +740,20 @@ make test-prompt-guard               # Jailbreak protection
 ### Model Reasoning Configuration Issues
 
 **Model not getting reasoning fields:**
+
 - Check that the model name matches a pattern in `model_reasoning_configs`
 - Verify the pattern syntax (exact matches vs prefixes)
 - Unknown models will have no reasoning fields applied (this is by design)
 
 **Wrong reasoning syntax applied:**
+
 - Ensure the `reasoning_syntax.type` matches your model's expected format
 - Check the `reasoning_syntax.parameter` name is correct
 - DeepSeek models typically use `chat_template_kwargs` with `"thinking"`
 - GPT models typically use `reasoning_effort`
 
 **Adding support for new models:**
+
 ```yaml
 # Add a new model configuration
 model_reasoning_configs:
@@ -745,6 +765,7 @@ model_reasoning_configs:
 ```
 
 **Testing model reasoning configuration:**
+
 ```bash
 # Test reasoning with your specific model
 curl -X POST http://localhost:8801/v1/chat/completions \
@@ -762,6 +783,7 @@ The Semantic Router supports automated configuration generation based on model p
 ### Benchmarking Workflow
 
 1. **Run MMLU-Pro Evaluation:**
+
    ```bash
    # Evaluate models using MMLU-Pro benchmark
    python src/training/model_eval/mmlu_pro_vllm_eval.py \
@@ -774,6 +796,7 @@ The Semantic Router supports automated configuration generation based on model p
    ```
 
 2. **Generate Configuration:**
+
    ```bash
    # Generate config.yaml from benchmark results
    python src/training/model_eval/result_to_config.py \
@@ -845,6 +868,7 @@ make test
 ```
 
 This workflow ensures your configuration is:
+
 - Based on actual model performance
 - Properly tested before deployment
 - Version controlled for tracking changes
