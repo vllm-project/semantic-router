@@ -1,7 +1,7 @@
 package extproc
 
 import (
-	"log"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // classifyAndSelectBestModel chooses best models based on category classification and model quality and expected TTFT
@@ -17,7 +17,7 @@ func (r *OpenAIRouter) findCategoryForClassification(query string) string {
 
 	categoryName, _, err := r.Classifier.ClassifyCategory(query)
 	if err != nil {
-		log.Printf("Category classification error: %v", err)
+		observability.Errorf("Category classification error: %v", err)
 		return ""
 	}
 

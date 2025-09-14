@@ -3,14 +3,13 @@ package http
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
@@ -45,7 +44,7 @@ func CreatePIIViolationResponse(model string, deniedPII []string) *ext_proc.Proc
 	responseBody, err := json.Marshal(openAIResponse)
 	if err != nil {
 		// Log the error and return a fallback response
-		log.Printf("Error marshaling OpenAI response: %v", err)
+		observability.Errorf("Error marshaling OpenAI response: %v", err)
 		responseBody = []byte(`{"error": "Failed to generate response"}`)
 	}
 
@@ -108,7 +107,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32) 
 	responseBody, err := json.Marshal(openAIResponse)
 	if err != nil {
 		// Log the error and return a fallback response
-		log.Printf("Error marshaling jailbreak response: %v", err)
+		observability.Errorf("Error marshaling jailbreak response: %v", err)
 		responseBody = []byte(`{"error": "Failed to generate response"}`)
 	}
 

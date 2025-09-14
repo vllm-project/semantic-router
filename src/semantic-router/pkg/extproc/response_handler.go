@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"encoding/json"
-	"log"
 	"strconv"
 	"time"
 
@@ -90,7 +89,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Parse tokens from the response JSON using OpenAI SDK types
 	var parsed openai.ChatCompletion
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {
-		log.Printf("Error parsing tokens from response: %v", err)
+		observability.Errorf("Error parsing tokens from response: %v", err)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 	}
 	promptTokens := int(parsed.Usage.PromptTokens)
@@ -158,10 +157,10 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if exists && ctx.RequestQuery != "" && responseBody != nil {
 		err := r.Cache.UpdateWithResponse(string(cacheID), responseBody)
 		if err != nil {
-			log.Printf("Error updating cache: %v", err)
+			observability.Errorf("Error updating cache: %v", err)
 			// Continue even if cache update fails
 		} else {
-			log.Printf("Cache updated for request ID: %s", ctx.RequestID)
+			observability.Infof("Cache updated for request ID: %s", ctx.RequestID)
 		}
 	}
 

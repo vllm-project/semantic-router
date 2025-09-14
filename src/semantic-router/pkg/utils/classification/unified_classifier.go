@@ -83,10 +83,11 @@ import "C"
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // UnifiedClassifierStats holds performance statistics
@@ -268,7 +269,7 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 
 // classifyBatchWithLoRA uses high-confidence LoRA models
 func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string, startTime time.Time) (*UnifiedBatchResults, error) {
-	log.Printf("Using LoRA models for batch classification, batch size: %d", len(texts))
+	observability.Infof("Using LoRA models for batch classification, batch size: %d", len(texts))
 
 	// Lazy initialization of LoRA C bindings
 	if !uc.loraInitialized {
@@ -412,7 +413,7 @@ func (uc *UnifiedClassifier) initializeLoRABindings() error {
 		return fmt.Errorf("loRA model paths not configured")
 	}
 
-	log.Printf("Initializing LoRA models: Intent=%s, PII=%s, Security=%s, Architecture=%s",
+	observability.Infof("Initializing LoRA models: Intent=%s, PII=%s, Security=%s, Architecture=%s",
 		uc.loraModelPaths.IntentPath, uc.loraModelPaths.PIIPath, uc.loraModelPaths.SecurityPath, uc.loraModelPaths.Architecture)
 
 	// Convert Go strings to C strings
@@ -441,7 +442,7 @@ func (uc *UnifiedClassifier) initializeLoRABindings() error {
 		return fmt.Errorf("c.init_lora_unified_classifier failed")
 	}
 
-	log.Printf("LoRA C bindings initialized successfully")
+	observability.Infof("LoRA C bindings initialized successfully")
 	return nil
 }
 

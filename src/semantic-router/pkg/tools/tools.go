@@ -3,13 +3,13 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"sync"
 
 	"github.com/openai/openai-go"
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // ToolEntry represents a tool stored in the tools database
@@ -75,7 +75,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 		// Generate embedding for the description
 		embedding, err := candle_binding.GetEmbedding(entry.Description, 512)
 		if err != nil {
-			log.Printf("Warning: Failed to generate embedding for tool %s: %v", entry.Tool.Function.Name, err)
+			observability.Warnf("Failed to generate embedding for tool %s: %v", entry.Tool.Function.Name, err)
 			continue
 		}
 
@@ -84,10 +84,10 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 
 		// Add to the database
 		db.entries = append(db.entries, entry)
-		log.Printf("Loaded tool: %s - %s", entry.Tool.Function.Name, entry.Description)
+		observability.Infof("Loaded tool: %s - %s", entry.Tool.Function.Name, entry.Description)
 	}
 
-	log.Printf("Loaded %d tools from file: %s", len(toolEntries), filePath)
+	observability.Infof("Loaded %d tools from file: %s", len(toolEntries), filePath)
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 	defer db.mu.Unlock()
 
 	db.entries = append(db.entries, entry)
-	log.Printf("Added tool: %s (%s)", tool.Function.Name, description)
+	observability.Infof("Added tool: %s (%s)", tool.Function.Name, description)
 
 	return nil
 }
@@ -149,7 +149,7 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 		})
 
 		// Debug logging to see similarity scores
-		log.Printf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
+		observability.Debugf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
 			entry.Tool.Function.Name, dotProduct, db.similarityThreshold)
 	}
 
@@ -168,12 +168,12 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 	for i := 0; i < len(results) && i < topK; i++ {
 		if results[i].Similarity >= db.similarityThreshold {
 			selectedTools = append(selectedTools, results[i].Entry.Tool)
-			log.Printf("Selected tool: %s (similarity=%.4f)",
+			observability.Infof("Selected tool: %s (similarity=%.4f)",
 				results[i].Entry.Tool.Function.Name, results[i].Similarity)
 		}
 	}
 
-	log.Printf("Found %d similar tools for query: %s", len(selectedTools), query)
+	observability.Infof("Found %d similar tools for query: %s", len(selectedTools), query)
 	return selectedTools, nil
 }
 

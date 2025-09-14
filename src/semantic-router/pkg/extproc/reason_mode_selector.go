@@ -3,11 +3,11 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -24,7 +24,7 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 
 	// If no category was determined (empty string), default to no reasoning
 	if categoryName == "" {
-		log.Printf("No category determined for query, defaulting to no reasoning mode")
+		observability.Infof("No category determined for query, defaulting to no reasoning mode")
 		return false, ""
 	}
 
@@ -38,14 +38,14 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 			if category.UseReasoning {
 				reasoningStatus = "ENABLED"
 			}
-			log.Printf("Reasoning mode decision: Category '%s' → %s",
+			observability.Infof("Reasoning mode decision: Category '%s' → %s",
 				categoryName, reasoningStatus)
 			return category.UseReasoning, categoryName
 		}
 	}
 
 	// If category not found in config, default to no reasoning
-	log.Printf("Category '%s' not found in configuration, defaulting to no reasoning mode", categoryName)
+	observability.Infof("Category '%s' not found in configuration, defaulting to no reasoning mode", categoryName)
 	return false, categoryName
 }
 
@@ -55,7 +55,7 @@ func (r *OpenAIRouter) getEntropyBasedReasoningModeAndCategory(query string) (bo
 	categoryName, confidence, reasoningDecision, err := r.Classifier.ClassifyCategoryWithEntropy(query)
 
 	if err != nil {
-		log.Printf("Entropy-based classification error: %v, falling back to traditional method", err)
+		observability.Warnf("Entropy-based classification error: %v, falling back to traditional method", err)
 
 		// Record fallback metrics
 		metrics.RecordEntropyFallback("classification_error", "traditional_method")
@@ -74,12 +74,12 @@ func (r *OpenAIRouter) getEntropyBasedReasoningModeAndCategory(query string) (bo
 	}
 
 	// Log the entropy-based decision
-	log.Printf("Entropy-based reasoning decision: category='%s', confidence=%.3f, use_reasoning=%t, reason=%s, strategy=%s",
+	observability.Infof("Entropy-based reasoning decision: category='%s', confidence=%.3f, use_reasoning=%t, reason=%s, strategy=%s",
 		categoryName, confidence, reasoningDecision.UseReasoning, reasoningDecision.DecisionReason, reasoningDecision.FallbackStrategy)
 
 	// If we have top categories from entropy analysis, log them
 	if len(reasoningDecision.TopCategories) > 0 {
-		log.Printf("Top predicted categories: %v", reasoningDecision.TopCategories)
+		observability.Infof("Top predicted categories: %v", reasoningDecision.TopCategories)
 	}
 
 	return reasoningDecision.UseReasoning, categoryName, reasoningDecision
@@ -181,11 +181,11 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 
 	// Log based on what actually happened
 	if enabled && !reasoningApplied {
-		log.Printf("No reasoning support for model: %s (no reasoning family configured)", model)
+		observability.Infof("No reasoning support for model: %s (no reasoning family configured)", model)
 	} else if reasoningApplied {
-		log.Printf("Applied reasoning mode (enabled: %v) with effort (%s) to model: %s", enabled, appliedEffort, model)
+		observability.Infof("Applied reasoning mode (enabled: %v) with effort (%s) to model: %s", enabled, appliedEffort, model)
 	} else {
-		log.Printf("Reasoning mode disabled for model: %s", model)
+		observability.Infof("Reasoning mode disabled for model: %s", model)
 	}
 
 	// Record metrics for template usage and effort when enabled
@@ -228,7 +228,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 // logReasoningConfiguration logs the reasoning mode configuration for all categories during startup
 func (r *OpenAIRouter) logReasoningConfiguration() {
 	if len(r.Config.Categories) == 0 {
-		log.Printf("No categories configured for reasoning mode")
+		observability.Infof("No categories configured for reasoning mode")
 		return
 	}
 
@@ -243,14 +243,14 @@ func (r *OpenAIRouter) logReasoningConfiguration() {
 		}
 	}
 
-	log.Printf("Reasoning configuration - Total categories: %d", len(r.Config.Categories))
+	observability.Infof("Reasoning configuration - Total categories: %d", len(r.Config.Categories))
 
 	if len(reasoningEnabled) > 0 {
-		log.Printf("Reasoning ENABLED for categories (%d): %v", len(reasoningEnabled), reasoningEnabled)
+		observability.Infof("Reasoning ENABLED for categories (%d): %v", len(reasoningEnabled), reasoningEnabled)
 	}
 
 	if len(reasoningDisabled) > 0 {
-		log.Printf("Reasoning DISABLED for categories (%d): %v", len(reasoningDisabled), reasoningDisabled)
+		observability.Infof("Reasoning DISABLED for categories (%d): %v", len(reasoningDisabled), reasoningDisabled)
 	}
 }
 
@@ -266,7 +266,7 @@ func (r *OpenAIRouter) ClassifyAndDetermineReasoningMode(query string) (string, 
 	if useReasoning {
 		reasoningStatus = "enabled"
 	}
-	log.Printf("Model selection complete: model=%s, reasoning=%s", bestModel, reasoningStatus)
+	observability.Infof("Model selection complete: model=%s, reasoning=%s", bestModel, reasoningStatus)
 
 	return bestModel, useReasoning
 }
@@ -284,7 +284,7 @@ func (r *OpenAIRouter) LogReasoningConfigurationSummary() {
 		}
 	}
 
-	log.Printf("Reasoning mode summary: %d/%d categories have reasoning enabled", enabledCount, len(r.Config.Categories))
+	observability.Infof("Reasoning mode summary: %d/%d categories have reasoning enabled", enabledCount, len(r.Config.Categories))
 }
 
 // getReasoningEffort returns the reasoning effort level for a given category

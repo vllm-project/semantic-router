@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"log"
 	"slices"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -24,7 +24,7 @@ func (c *LinearCategoryInitializer) Init(modelID string, useCPU bool, numClasses
 	if err != nil {
 		return err
 	}
-	log.Printf("Initialized linear category classifier with %d classes", numClasses[0])
+	observability.Infof("Initialized linear category classifier with %d classes", numClasses[0])
 	return nil
 }
 
@@ -35,7 +35,7 @@ func (c *ModernBertCategoryInitializer) Init(modelID string, useCPU bool, numCla
 	if err != nil {
 		return err
 	}
-	log.Printf("Initialized ModernBERT category classifier (classes auto-detected from model)")
+	observability.Infof("Initialized ModernBERT category classifier (classes auto-detected from model)")
 	return nil
 }
 
@@ -91,7 +91,7 @@ func (c *LinearJailbreakInitializer) Init(modelID string, useCPU bool, numClasse
 	if err != nil {
 		return err
 	}
-	log.Printf("Initialized linear jailbreak classifier with %d classes", numClasses[0])
+	observability.Infof("Initialized linear jailbreak classifier with %d classes", numClasses[0])
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (c *ModernBertJailbreakInitializer) Init(modelID string, useCPU bool, numCl
 	if err != nil {
 		return err
 	}
-	log.Printf("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
+	observability.Infof("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
 	return nil
 }
 
@@ -149,7 +149,7 @@ func (c *ModernBertPIIInitializer) Init(modelID string, useCPU bool) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Initialized ModernBERT PII token classifier for entity detection")
+	observability.Infof("Initialized ModernBERT PII token classifier for entity detection")
 	return nil
 }
 
@@ -322,11 +322,11 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 		return "", 0.0, fmt.Errorf("classification error: %w", err)
 	}
 
-	log.Printf("Classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
+	observability.Infof("Classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
 
 	// Check confidence threshold
 	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
-		log.Printf("Classification confidence (%.4f) below threshold (%.4f)",
+		observability.Infof("Classification confidence (%.4f) below threshold (%.4f)",
 			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
 		return "", float64(result.Confidence), nil
 	}
@@ -334,14 +334,14 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 	// Convert class index to category name
 	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
 	if !ok {
-		log.Printf("Class index %d not found in category mapping", result.Class)
+		observability.Warnf("Class index %d not found in category mapping", result.Class)
 		return "", float64(result.Confidence), nil
 	}
 
 	// Record the category classification metric
 	metrics.RecordCategoryClassification(categoryName)
 
-	log.Printf("Classified as category: %s", categoryName)
+	observability.Infof("Classified as category: %s", categoryName)
 	return categoryName, float64(result.Confidence), nil
 }
 
@@ -385,7 +385,7 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 	if err != nil {
 		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
-	log.Printf("Jailbreak classification result: %v", result)
+	observability.Infof("Jailbreak classification result: %v", result)
 
 	// Get the jailbreak type name from the class index
 	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(result.Class)
@@ -397,10 +397,10 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 	isJailbreak := result.Confidence >= c.Config.PromptGuard.Threshold && jailbreakType == "jailbreak"
 
 	if isJailbreak {
-		log.Printf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
+		observability.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
 			jailbreakType, result.Confidence, c.Config.PromptGuard.Threshold)
 	} else {
-		log.Printf("BENIGN: '%s' (confidence: %.3f, threshold: %.3f)",
+		observability.Infof("BENIGN: '%s' (confidence: %.3f, threshold: %.3f)",
 			jailbreakType, result.Confidence, c.Config.PromptGuard.Threshold)
 	}
 
@@ -423,7 +423,7 @@ func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []J
 
 		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreak(content)
 		if err != nil {
-			log.Printf("Error analyzing content %d: %v", i, err)
+			observability.Errorf("Error analyzing content %d: %v", i, err)
 			continue
 		}
 
@@ -482,7 +482,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 	}
 
-	log.Printf("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
+	observability.Infof("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
 		result.Class, result.Confidence, len(result.Probabilities) > 0)
 
 	// Get category names for all classes
@@ -531,7 +531,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 		metrics.RecordProbabilityDistributionQuality("sum_check", "valid")
 	} else {
 		metrics.RecordProbabilityDistributionQuality("sum_check", "invalid")
-		log.Printf("Warning: Probability distribution sum is %.3f (should be ~1.0)", probSum)
+		observability.Warnf("Probability distribution sum is %.3f (should be ~1.0)", probSum)
 	}
 
 	// Check for negative probabilities
@@ -567,7 +567,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 
 	// Check confidence threshold for category determination
 	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
-		log.Printf("Classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
+		observability.Infof("Classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
 			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
 
 		// Still return reasoning decision based on entropy even if confidence is low
@@ -577,14 +577,14 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 	// Convert class index to category name
 	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
 	if !ok {
-		log.Printf("Class index %d not found in category mapping", result.Class)
+		observability.Warnf("Class index %d not found in category mapping", result.Class)
 		return "", float64(result.Confidence), reasoningDecision, nil
 	}
 
 	// Record the category classification metric
 	metrics.RecordCategoryClassification(categoryName)
 
-	log.Printf("Classified as category: %s, reasoning_decision: use=%t, confidence=%.3f, reason=%s",
+	observability.Infof("Classified as category: %s, reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 
 	return categoryName, float64(result.Confidence), reasoningDecision, nil
@@ -610,7 +610,7 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 	}
 
 	if len(tokenResult.Entities) > 0 {
-		log.Printf("PII token classification found %d entities", len(tokenResult.Entities))
+		observability.Infof("PII token classification found %d entities", len(tokenResult.Entities))
 	}
 
 	// Extract unique PII types from detected entities
@@ -618,7 +618,7 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 	for _, entity := range tokenResult.Entities {
 		if entity.Confidence >= c.Config.Classifier.PIIModel.Threshold {
 			piiTypes[entity.EntityType] = true
-			log.Printf("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
+			observability.Infof("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
 				entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
 		}
 	}
@@ -630,7 +630,7 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 	}
 
 	if len(result) > 0 {
-		log.Printf("Detected PII types: %v", result)
+		observability.Infof("Detected PII types: %v", result)
 	}
 
 	return result, nil
@@ -646,7 +646,7 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 			//TODO: classifier may not handle the entire content, so we need to split the content into smaller chunks
 			piiTypes, err := c.ClassifyPII(content)
 			if err != nil {
-				log.Printf("PII classification error: %v", err)
+				observability.Errorf("PII classification error: %v", err)
 				// Continue without PII enforcement on error
 			} else {
 				// Add all detected PII types, avoiding duplicates
@@ -654,7 +654,7 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 					if !seenPII[piiType] {
 						detectedPII = append(detectedPII, piiType)
 						seenPII[piiType] = true
-						log.Printf("Detected PII type '%s' in content", piiType)
+						observability.Infof("Detected PII type '%s' in content", piiType)
 					}
 				}
 			}
@@ -688,7 +688,7 @@ func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnal
 		tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
 		metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 		if err != nil {
-			log.Printf("Error analyzing content %d: %v", i, err)
+			observability.Errorf("Error analyzing content %d: %v", i, err)
 			continue
 		}
 
@@ -724,12 +724,12 @@ func (c *Classifier) ClassifyAndSelectBestModel(query string) string {
 	// First, classify the text to determine the category
 	categoryName, confidence, err := c.ClassifyCategory(query)
 	if err != nil {
-		log.Printf("Classification error: %v, falling back to default model", err)
+		observability.Errorf("Classification error: %v, falling back to default model", err)
 		return c.Config.DefaultModel
 	}
 
 	if categoryName == "" {
-		log.Printf("Classification confidence (%.4f) below threshold, using default model", confidence)
+		observability.Infof("Classification confidence (%.4f) below threshold, using default model", confidence)
 		return c.Config.DefaultModel
 	}
 
@@ -741,18 +741,18 @@ func (c *Classifier) ClassifyAndSelectBestModel(query string) string {
 func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
 	cat := c.findCategory(categoryName)
 	if cat == nil {
-		log.Printf("Could not find matching category %s in config, using default model", categoryName)
+		observability.Warnf("Could not find matching category %s in config, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
 	bestModel, bestScore := c.selectBestModelInternal(cat, nil)
 
 	if bestModel == "" {
-		log.Printf("No models found for category %s, using default model", categoryName)
+		observability.Warnf("No models found for category %s, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
-	log.Printf("Selected model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
+	observability.Infof("Selected model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
@@ -809,11 +809,11 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		})
 
 	if bestModel == "" {
-		log.Printf("No suitable model found from candidates for category %s, using first candidate", categoryName)
+		observability.Warnf("No suitable model found from candidates for category %s, using first candidate", categoryName)
 		return candidateModels[0]
 	}
 
-	log.Printf("Selected best model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
+	observability.Infof("Selected best model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 

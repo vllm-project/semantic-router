@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"runtime"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -97,13 +97,13 @@ func StartClassificationAPI(configPath string, port int) error {
 	classificationSvc := getClassificationServiceWithRetry(5, 500*time.Millisecond)
 	if classificationSvc == nil {
 		// If no global service exists, try auto-discovery unified classifier
-		log.Printf("No global classification service found, attempting auto-discovery...")
+		observability.Infof("No global classification service found, attempting auto-discovery...")
 		autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
 		if err != nil {
-			log.Printf("Auto-discovery failed: %v, using placeholder service", err)
+			observability.Warnf("Auto-discovery failed: %v, using placeholder service", err)
 			classificationSvc = services.NewPlaceholderClassificationService()
 		} else {
-			log.Printf("Auto-discovery successful, using unified classifier service")
+			observability.Infof("Auto-discovery successful, using unified classifier service")
 			classificationSvc = autoSvc
 		}
 	}
@@ -138,7 +138,7 @@ func StartClassificationAPI(configPath string, port int) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	log.Printf("Classification API server listening on port %d", port)
+	observability.Infof("Classification API server listening on port %d", port)
 	return server.ListenAndServe()
 }
 
@@ -146,17 +146,17 @@ func StartClassificationAPI(configPath string, port int) error {
 func getClassificationServiceWithRetry(maxRetries int, retryInterval time.Duration) *services.ClassificationService {
 	for i := 0; i < maxRetries; i++ {
 		if svc := services.GetGlobalClassificationService(); svc != nil {
-			log.Printf("Found global classification service on attempt %d/%d", i+1, maxRetries)
+			observability.Infof("Found global classification service on attempt %d/%d", i+1, maxRetries)
 			return svc
 		}
 
 		if i < maxRetries-1 { // Don't sleep on the last attempt
-			log.Printf("Global classification service not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
+			observability.Infof("Global classification service not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
 			time.Sleep(retryInterval)
 		}
 	}
 
-	log.Printf("Failed to find global classification service after %d attempts", maxRetries)
+	observability.Warnf("Failed to find global classification service after %d attempts", maxRetries)
 	return nil
 }
 
@@ -387,7 +387,7 @@ func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statu
 	w.WriteHeader(statusCode)
 
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("Failed to encode JSON response: %v", err)
+		observability.Errorf("Failed to encode JSON response: %v", err)
 	}
 }
 

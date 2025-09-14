@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"fmt"
-	"log"
 	"sync"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
@@ -51,7 +51,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
-		log.Printf("Loaded category mapping with %d categories", categoryMapping.GetCategoryCount())
+		observability.Infof("Loaded category mapping with %d categories", categoryMapping.GetCategoryCount())
 	}
 
 	// Load PII mapping if PII classifier is enabled
@@ -61,7 +61,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
-		log.Printf("Loaded PII mapping with %d PII types", piiMapping.GetPIITypeCount())
+		observability.Infof("Loaded PII mapping with %d PII types", piiMapping.GetPIITypeCount())
 	}
 
 	// Load jailbreak mapping if prompt guard is enabled
@@ -71,7 +71,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
 		}
-		log.Printf("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
+		observability.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
 	// Initialize the BERT model for similarity search
@@ -80,7 +80,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
-	log.Printf("Category descriptions: %v", categoryDescriptions)
+	observability.Infof("Category descriptions: %v", categoryDescriptions)
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
@@ -103,13 +103,13 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	if semanticCache.IsEnabled() {
-		log.Printf("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
+		observability.Infof("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
 			cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.TTLSeconds)
 		if cacheConfig.BackendType == cache.InMemoryCacheType {
-			log.Printf("In-memory cache max entries: %d", cacheConfig.MaxEntries)
+			observability.Infof("In-memory cache max entries: %d", cacheConfig.MaxEntries)
 		}
 	} else {
-		log.Println("Semantic cache is disabled")
+		observability.Infof("Semantic cache is disabled")
 	}
 
 	// Create tools database with config options
@@ -126,12 +126,12 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Load tools from file if enabled and path is provided
 	if toolsDatabase.IsEnabled() && cfg.Tools.ToolsDBPath != "" {
 		if err := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); err != nil {
-			log.Printf("Warning: Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, err)
+			observability.Warnf("Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, err)
 		}
-		log.Printf("Tools database enabled with threshold: %.4f, top-k: %d",
+		observability.Infof("Tools database enabled with threshold: %.4f, top-k: %d",
 			toolsThreshold, cfg.Tools.TopK)
 	} else {
-		log.Println("Tools database is disabled")
+		observability.Infof("Tools database is disabled")
 	}
 
 	// Create utility components
@@ -146,10 +146,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// This will prioritize LoRA models over legacy ModernBERT
 	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
 	if err != nil {
-		log.Printf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
+		observability.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
 		services.NewClassificationService(classifier, cfg)
 	} else {
-		log.Printf("Router initialization: Using auto-discovered unified classifier")
+		observability.Infof("Router initialization: Using auto-discovered unified classifier")
 		// The service is already set as global in NewUnifiedClassificationService
 		_ = autoSvc
 	}

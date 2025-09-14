@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
 	"time"
 
@@ -118,11 +117,11 @@ type RequestContext struct {
 func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_RequestHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Record start time for overall request processing
 	ctx.StartTime = time.Now()
-	log.Println("Received request headers")
+	observability.Infof("Received request headers")
 
 	// Store headers for later use
 	headers := v.RequestHeaders.Headers
-	log.Printf("Processing %d request headers", len(headers.Headers))
+	observability.Infof("Processing %d request headers", len(headers.Headers))
 	for _, h := range headers.Headers {
 		// Prefer Value when available; fall back to RawValue
 		headerValue := h.Value
@@ -154,7 +153,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 // handleRequestBody processes the request body
 func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	log.Println("Received request body")
+	observability.Infof("Received request body")
 	// Record start time for model routing
 	ctx.ProcessingStartTime = time.Now()
 	// Save the original request body
@@ -163,7 +162,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Parse the OpenAI request using SDK types
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
-		log.Printf("Error parsing OpenAI request: %v", err)
+		observability.Errorf("Error parsing OpenAI request: %v", err)
 		// Attempt to determine model for labeling (may be unknown here)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 		// Count this request as well, with unknown model if necessary
@@ -173,7 +172,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Store the original model
 	originalModel := string(openAIRequest.Model)
-	log.Printf("Original model: %s", originalModel)
+	observability.Infof("Original model: %s", originalModel)
 
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(originalModel)
@@ -208,7 +207,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 	if r.Classifier.IsJailbreakEnabled() {
 		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
 		if err != nil {
-			log.Printf("Error performing jailbreak analysis: %v", err)
+			observability.Errorf("Error performing jailbreak analysis: %v", err)
 			// Continue processing despite jailbreak analysis error
 			metrics.RecordRequestError(ctx.RequestModel, "classification_failed")
 		} else if hasJailbreak {
@@ -223,7 +222,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 				}
 			}
 
-			log.Printf("JAILBREAK ATTEMPT BLOCKED: %s (confidence: %.3f)", jailbreakType, confidence)
+			observability.Warnf("JAILBREAK ATTEMPT BLOCKED: %s (confidence: %.3f)", jailbreakType, confidence)
 
 			// Return immediate jailbreak violation response
 			// Structured log for security block
@@ -238,7 +237,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence)
 			return jailbreakResponse, true
 		} else {
-			log.Printf("No jailbreak detected in request content")
+			observability.Infof("No jailbreak detected in request content")
 		}
 	}
 
@@ -250,7 +249,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 	// Extract the model and query for cache lookup
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
-		log.Printf("Error extracting query from request: %v", err)
+		observability.Errorf("Error extracting query from request: %v", err)
 		// Continue without caching
 		return nil, false
 	}
@@ -262,7 +261,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		// Try to find a similar cached response
 		cachedResponse, found, err := r.Cache.FindSimilar(requestModel, requestQuery)
 		if err != nil {
-			log.Printf("Error searching cache: %v", err)
+			observability.Errorf("Error searching cache: %v", err)
 		} else if found {
 			// Record and log cache hit
 			metrics.RecordCacheHit()
@@ -279,7 +278,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		// Cache miss, store the request for later
 		cacheID, err := r.Cache.AddPendingRequest(requestModel, requestQuery, ctx.OriginalRequestBody)
 		if err != nil {
-			log.Printf("Error adding pending request to cache: %v", err)
+			observability.Errorf("Error adding pending request to cache: %v", err)
 		} else {
 			r.pendingRequestsLock.Lock()
 			r.pendingRequests[ctx.RequestID] = []byte(cacheID)
@@ -307,7 +306,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	actualModel := originalModel
 	var selectedEndpoint string
 	if originalModel == "auto" && (len(nonUserMessages) > 0 || userContent != "") {
-		log.Printf("Using Auto Model Selection")
+		observability.Infof("Using Auto Model Selection")
 		// Determine text to use for classification/similarity
 		var classificationText string
 		if len(userContent) > 0 {
@@ -324,16 +323,16 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Get detected PII for policy checking
 				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 				if r.PIIChecker.IsPIIEnabled(matchedModel) {
-					log.Printf("PII policy enabled for model %s", matchedModel)
+					observability.Infof("PII policy enabled for model %s", matchedModel)
 					detectedPII := r.Classifier.DetectPIIInContent(allContent)
 
 					// Check if the initially selected model passes PII policy
 					allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
 					if err != nil {
-						log.Printf("Error checking PII policy for model %s: %v", matchedModel, err)
+						observability.Errorf("Error checking PII policy for model %s: %v", matchedModel, err)
 						// Continue with original selection on error
 					} else if !allowed {
-						log.Printf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
+						observability.Warnf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
 						// Find alternative models from the same category that pass PII policy
 						categoryName := r.findCategoryForClassification(classificationText)
 						if categoryName != "" {
@@ -342,16 +341,16 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 							if len(allowedModels) > 0 {
 								// Select the best allowed model from this category
 								matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
-								log.Printf("Selected alternative model %s that passes PII policy", matchedModel)
+								observability.Infof("Selected alternative model %s that passes PII policy", matchedModel)
 								// Record reason code for selecting alternative due to PII
 								metrics.RecordRoutingReasonCode("pii_policy_alternative_selected", matchedModel)
 							} else {
-								log.Printf("No models in category %s pass PII policy, using default", categoryName)
+								observability.Warnf("No models in category %s pass PII policy, using default", categoryName)
 								matchedModel = r.Config.DefaultModel
 								// Check if default model passes policy
 								defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
 								if !defaultAllowed {
-									log.Printf("Default model also violates PII policy, returning error")
+									observability.Errorf("Default model also violates PII policy, returning error")
 									observability.LogEvent("routing_block", map[string]interface{}{
 										"reason_code": "pii_policy_denied_default_model",
 										"request_id":  ctx.RequestID,
@@ -364,7 +363,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 								}
 							}
 						} else {
-							log.Printf("Could not determine category, returning PII violation for model %s", matchedModel)
+							observability.Warnf("Could not determine category, returning PII violation for model %s", matchedModel)
 							observability.LogEvent("routing_block", map[string]interface{}{
 								"reason_code": "pii_policy_denied",
 								"request_id":  ctx.RequestID,
@@ -378,11 +377,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					}
 				}
 
-				log.Printf("Routing to model: %s", matchedModel)
+				observability.Infof("Routing to model: %s", matchedModel)
 
 				// Check reasoning mode for this category using entropy-based approach
 				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
-				log.Printf("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
+				observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
 					useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 				// Record reasoning decision metric with the effort that will be applied if enabled
 				effortForMetrics := r.getReasoningEffort(categoryName)
@@ -398,9 +397,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
 				if endpointFound {
 					selectedEndpoint = endpointAddress
-					log.Printf("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
+					observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
 				} else {
-					log.Printf("Warning: No endpoint found for model %s, using fallback", matchedModel)
+					observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
 				}
 
 				// Modify the model in the request
@@ -409,14 +408,14 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Serialize the modified request
 				modifiedBody, err := serializeOpenAIRequest(openAIRequest)
 				if err != nil {
-					log.Printf("Error serializing modified request: %v", err)
+					observability.Errorf("Error serializing modified request: %v", err)
 					metrics.RecordRequestError(actualModel, "serialization_error")
 					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 				}
 
 				modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
 				if err != nil {
-					log.Printf("Error setting reasoning mode %v to request: %v", useReasoning, err)
+					observability.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
 					metrics.RecordRequestError(actualModel, "serialization_error")
 					return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
 				}
@@ -454,7 +453,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					SetHeaders:    setHeaders,
 				}
 
-				log.Printf("ActualModel = '%s'", actualModel)
+				observability.Debugf("ActualModel = '%s'", actualModel)
 
 				// Set the response with body mutation and content-length removal
 				response = &ext_proc.ProcessingResponse{
@@ -469,7 +468,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					},
 				}
 
-				log.Printf("Use new model: %s", matchedModel)
+				observability.Infof("Use new model: %s", matchedModel)
 
 				// Structured log for routing decision (auto)
 				observability.LogEvent("routing_decision", map[string]interface{}{
@@ -487,17 +486,17 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			}
 		}
 	} else if originalModel != "auto" {
-		log.Printf("Using specified model: %s", originalModel)
+		observability.Infof("Using specified model: %s", originalModel)
 		// For non-auto models, check PII policy compliance
 		allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 		detectedPII := r.Classifier.DetectPIIInContent(allContent)
 
 		allowed, deniedPII, err := r.PIIChecker.CheckPolicy(originalModel, detectedPII)
 		if err != nil {
-			log.Printf("Error checking PII policy for model %s: %v", originalModel, err)
+			observability.Errorf("Error checking PII policy for model %s: %v", originalModel, err)
 			// Continue with request on error
 		} else if !allowed {
-			log.Printf("Model %s violates PII policy, returning error", originalModel)
+			observability.Errorf("Model %s violates PII policy, returning error", originalModel)
 			observability.LogEvent("routing_block", map[string]interface{}{
 				"reason_code": "pii_policy_denied",
 				"request_id":  ctx.RequestID,
@@ -513,9 +512,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(originalModel)
 		if endpointFound {
 			selectedEndpoint = endpointAddress
-			log.Printf("Selected endpoint address: %s for model: %s", selectedEndpoint, originalModel)
+			observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, originalModel)
 		} else {
-			log.Printf("Warning: No endpoint found for model %s, using fallback", originalModel)
+			observability.Warnf("No endpoint found for model %s, using fallback", originalModel)
 		}
 		setHeaders := []*core.HeaderValueOption{}
 		if selectedEndpoint != "" {
@@ -559,7 +558,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 	// Handle tool selection based on tool_choice field
 	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
-		log.Printf("Error in tool selection: %v", err)
+		observability.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request
 	}
 
@@ -588,12 +587,12 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 	}
 
 	if classificationText == "" {
-		log.Printf("No content available for tool classification")
+		observability.Infof("No content available for tool classification")
 		return nil
 	}
 
 	if !r.ToolsDatabase.IsEnabled() {
-		log.Printf("Tools database is disabled")
+		observability.Infof("Tools database is disabled")
 		return nil
 	}
 
@@ -607,7 +606,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 	selectedTools, err := r.ToolsDatabase.FindSimilarTools(classificationText, topK)
 	if err != nil {
 		if r.Config.Tools.FallbackToEmpty {
-			log.Printf("Tool selection failed, falling back to no tools: %v", err)
+			observability.Warnf("Tool selection failed, falling back to no tools: %v", err)
 			openAIRequest.Tools = nil
 			return r.updateRequestWithTools(openAIRequest, response, ctx)
 		}
@@ -617,10 +616,10 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 
 	if len(selectedTools) == 0 {
 		if r.Config.Tools.FallbackToEmpty {
-			log.Printf("No suitable tools found, falling back to no tools")
+			observability.Infof("No suitable tools found, falling back to no tools")
 			openAIRequest.Tools = nil
 		} else {
-			log.Printf("No suitable tools found above threshold")
+			observability.Infof("No suitable tools found above threshold")
 			openAIRequest.Tools = []openai.ChatCompletionToolParam{} // Empty array
 		}
 	} else {
@@ -641,7 +640,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		}
 
 		openAIRequest.Tools = tools
-		log.Printf("Auto-selected %d tools for query: %s", len(selectedTools), classificationText)
+		observability.Infof("Auto-selected %d tools for query: %s", len(selectedTools), classificationText)
 	}
 
 	return r.updateRequestWithTools(openAIRequest, response, ctx)

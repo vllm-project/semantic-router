@@ -2,11 +2,11 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
 )
 
@@ -48,19 +48,19 @@ func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedCl
 func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
 	// Debug: Check current working directory
 	wd, _ := os.Getwd()
-	log.Printf("Debug: Current working directory: %s", wd)
-	log.Printf("Debug: Attempting to discover models in: ./models")
+	observability.Debugf("Debug: Current working directory: %s", wd)
+	observability.Debugf("Debug: Attempting to discover models in: ./models")
 
 	// Always try to auto-discover and initialize unified classifier for batch processing
 	unifiedClassifier, err := classification.AutoInitializeUnifiedClassifier("./models")
 	if err != nil {
 		// Log the discovery failure but don't fail - fall back to legacy processing
-		log.Printf("Info: Unified classifier auto-discovery failed: %v. Using legacy processing.", err)
+		observability.Infof("Unified classifier auto-discovery failed: %v. Using legacy processing.", err)
 		return NewClassificationService(nil, config), nil
 	}
 
 	// Success! Create service with unified classifier
-	log.Printf("Success: Unified classifier auto-discovered and initialized. Using batch processing.")
+	observability.Infof("Unified classifier auto-discovered and initialized. Using batch processing.")
 	return NewUnifiedClassificationService(unifiedClassifier, config), nil
 }
 
