@@ -21,6 +21,5 @@ configMapGenerator:
 namespace: semantic-router
 
 images:
- - name: ghcr.io/vllm-project/semantic-router/extproc
-   newTag: latest
-
+- name: ghcr.io/vllm-project/semantic-router/extproc
+  newTag: latest

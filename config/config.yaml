@@ -8,16 +8,16 @@ semantic_cache:
   similarity_threshold: 0.8
   max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
-  
+
   # For production environments, use Milvus for scalable caching:
   # backend_type: "milvus"
   # backend_config_path: "config/cache/milvus.yaml"
-  
+
   # Development/Testing: Use in-memory cache (current configuration)
   # - Fast startup and no external dependencies
   # - Limited to single instance scaling
   # - Data lost on restart
-  
+
   # Production: Use Milvus vector database
   # - Horizontally scalable and persistent
   # - Supports distributed deployments
@@ -74,21 +74,21 @@ model_config:
     # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
     preferred_endpoints: ["endpoint1", "endpoint3"]
     # Reasoning family - phi4 doesn't support reasoning, so omit this field
-  
+
   # Example: DeepSeek model with custom name
   "ds-v31-custom":
     reasoning_family: "deepseek"  # This model uses DeepSeek reasoning syntax
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true
-  
-  # Example: Qwen3 model with custom name  
+
+  # Example: Qwen3 model with custom name
   "my-qwen3-model":
     reasoning_family: "qwen3"     # This model uses Qwen3 reasoning syntax
     preferred_endpoints: ["endpoint2"]
     pii_policy:
       allow_by_default: true
-  
+
   # Example: GPT-OSS model with custom name
   "custom-gpt-oss":
     reasoning_family: "gpt-oss"   # This model uses GPT-OSS reasoning syntax
@@ -117,161 +117,162 @@ model_config:
 # Classifier configuration for text classification
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model" #TODO: Use local model for now before the code can download the entire model from huggingface
+    model_id: "models/category_classifier_modernbert-base_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
   pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model" #TODO: Use local model for now before the code can download the entire model from huggingface
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
     use_modernbert: true
     threshold: 0.7
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 categories:
-- name: business
-  use_reasoning: false
-  reasoning_description: "Business content is typically conversational"
-  reasoning_effort: low  # Business conversations need low reasoning effort
-  model_scores:
-  - model: phi4
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.4
-  - model: mistral-small3.1
-    score: 0.2
-- name: law
-  use_reasoning: false
-  reasoning_description: "Legal content is typically explanatory"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: phi4
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.4
-- name: psychology
-  use_reasoning: false
-  reasoning_description: "Psychology content is usually explanatory"
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.6
-  - model: gemma3:27b
-    score: 0.4
-  - model: phi4
-    score: 0.4
-- name: biology
-  use_reasoning: true
-  reasoning_description: "Biological processes benefit from structured analysis"
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.6
-  - model: phi4
-    score: 0.2
-- name: chemistry
-  use_reasoning: true
-  reasoning_description: "Chemical reactions and formulas require systematic thinking"
-  reasoning_effort: high  # Chemistry requires high reasoning effort
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.6
-  - model: phi4
-    score: 0.6
-- name: history
-  use_reasoning: false
-  reasoning_description: "Historical content is narrative-based"
-  model_scores:
-  - model: mistral-small3.1
-    score: 0.8
-  - model: phi4
-    score: 0.6
-  - model: gemma3:27b
-    score: 0.4
-- name: other
-  use_reasoning: false
-  reasoning_description: "General content doesn't require reasoning"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: phi4
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.6
-- name: health
-  use_reasoning: false
-  reasoning_description: "Health information is typically informational"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: phi4
-    score: 0.8
-  - model: mistral-small3.1
-    score: 0.6
-- name: economics
-  use_reasoning: false
-  reasoning_description: "Economic discussions are usually explanatory"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.8
-  - model: mistral-small3.1
-    score: 0.8
-  - model: phi4
-    score: 0.0
-- name: math
-  use_reasoning: true
-  reasoning_description: "Mathematical problems require step-by-step reasoning"
-  reasoning_effort: high  # Math problems need high reasoning effort
-  model_scores:
-  - model: phi4
-    score: 1.0
-  - model: mistral-small3.1
-    score: 0.8
-  - model: gemma3:27b
-    score: 0.6
-- name: physics
-  use_reasoning: true
-  reasoning_description: "Physics concepts need logical analysis"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.4
-  - model: phi4
-    score: 0.4
-  - model: mistral-small3.1
-    score: 0.4
-- name: computer science
-  use_reasoning: true
-  reasoning_description: "Programming and algorithms need logical reasoning"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.6
-  - model: phi4
-    score: 0.0
-- name: philosophy
-  use_reasoning: false
-  reasoning_description: "Philosophical discussions are conversational"
-  model_scores:
-  - model: phi4
-    score: 0.6
-  - model: gemma3:27b
-    score: 0.2
-  - model: mistral-small3.1
-    score: 0.2
-- name: engineering
-  use_reasoning: true
-  reasoning_description: "Engineering problems require systematic problem-solving"
-  model_scores:
-  - model: gemma3:27b
-    score: 0.6
-  - model: mistral-small3.1
-    score: 0.6
-  - model: phi4
-    score: 0.2
+  - name: business
+    use_reasoning: false
+    reasoning_description: "Business content is typically conversational"
+    reasoning_effort: low  # Business conversations need low reasoning effort
+    model_scores:
+      - model: phi4
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.4
+      - model: mistral-small3.1
+        score: 0.2
+  - name: law
+    use_reasoning: false
+    reasoning_description: "Legal content is typically explanatory"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: phi4
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.4
+  - name: psychology
+    use_reasoning: false
+    reasoning_description: "Psychology content is usually explanatory"
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.6
+      - model: gemma3:27b
+        score: 0.4
+      - model: phi4
+        score: 0.4
+  - name: biology
+    use_reasoning: true
+    reasoning_description: "Biological processes benefit from structured analysis"
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.6
+      - model: phi4
+        score: 0.2
+  - name: chemistry
+    use_reasoning: true
+    reasoning_description: "Chemical reactions and formulas require systematic thinking"
+    reasoning_effort: high  # Chemistry requires high reasoning effort
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.6
+      - model: phi4
+        score: 0.6
+  - name: history
+    use_reasoning: false
+    reasoning_description: "Historical content is narrative-based"
+    model_scores:
+      - model: mistral-small3.1
+        score: 0.8
+      - model: phi4
+        score: 0.6
+      - model: gemma3:27b
+        score: 0.4
+  - name: other
+    use_reasoning: false
+    reasoning_description: "General content doesn't require reasoning"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: phi4
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.6
+  - name: health
+    use_reasoning: false
+    reasoning_description: "Health information is typically informational"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: phi4
+        score: 0.8
+      - model: mistral-small3.1
+        score: 0.6
+  - name: economics
+    use_reasoning: false
+    reasoning_description: "Economic discussions are usually explanatory"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+      - model: mistral-small3.1
+        score: 0.8
+      - model: phi4
+        score: 0.0
+  - name: math
+    use_reasoning: true
+    reasoning_description: "Mathematical problems require step-by-step reasoning"
+    reasoning_effort: high  # Math problems need high reasoning effort
+    model_scores:
+      - model: phi4
+        score: 1.0
+      - model: mistral-small3.1
+        score: 0.8
+      - model: gemma3:27b
+        score: 0.6
+  - name: physics
+    use_reasoning: true
+    reasoning_description: "Physics concepts need logical analysis"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.4
+      - model: phi4
+        score: 0.4
+      - model: mistral-small3.1
+        score: 0.4
+  - name: computer science
+    use_reasoning: true
+    reasoning_description: "Programming and algorithms need logical reasoning"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.6
+      - model: phi4
+        score: 0.0
+  - name: philosophy
+    use_reasoning: false
+    reasoning_description: "Philosophical discussions are conversational"
+    model_scores:
+      - model: phi4
+        score: 0.6
+      - model: gemma3:27b
+        score: 0.2
+      - model: mistral-small3.1
+        score: 0.2
+  - name: engineering
+    use_reasoning: true
+    reasoning_description: "Engineering problems require systematic problem-solving"
+    model_scores:
+      - model: gemma3:27b
+        score: 0.6
+      - model: mistral-small3.1
+        score: 0.6
+      - model: phi4
+        score: 0.2
+
 default_model: mistral-small3.1
 
 # API Configuration
@@ -296,18 +297,18 @@ reasoning_families:
   deepseek:
     type: "chat_template_kwargs"
     parameter: "thinking"
-  
+
   qwen3:
     type: "chat_template_kwargs"
     parameter: "enable_thinking"
-  
+
   gpt-oss:
     type: "reasoning_effort"
     parameter: "reasoning_effort"
-  
+
   gpt:
     type: "reasoning_effort"
     parameter: "reasoning_effort"
 
 # Global default reasoning effort level
-default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high) 
+default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high)

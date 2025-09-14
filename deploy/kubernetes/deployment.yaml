@@ -23,10 +23,10 @@ spec:
           set -e
           echo "Installing Hugging Face CLI..."
           pip install --no-cache-dir huggingface_hub[cli]
-          
+
           echo "Downloading models to persistent volume..."
           cd /app/models
-          
+
           # Download category classifier model
           if [ ! -d "category_classifier_modernbert-base_model" ]; then
             echo "Downloading category classifier model..."
@@ -34,15 +34,15 @@ spec:
           else
             echo "Category classifier model already exists, skipping..."
           fi
-          
-          # Download PII classifier model  
+
+          # Download PII classifier model
           if [ ! -d "pii_classifier_modernbert-base_model" ]; then
             echo "Downloading PII classifier model..."
             huggingface-cli download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model
           else
             echo "PII classifier model already exists, skipping..."
           fi
-          
+
           # Download jailbreak classifier model
           if [ ! -d "jailbreak_classifier_modernbert-base_model" ]; then
             echo "Downloading jailbreak classifier model..."
@@ -50,7 +50,7 @@ spec:
           else
             echo "Jailbreak classifier model already exists, skipping..."
           fi
-          
+
           # Download PII token classifier model
           if [ ! -d "pii_classifier_modernbert-base_presidio_token_model" ]; then
             echo "Downloading PII token classifier model..."
@@ -58,7 +58,7 @@ spec:
           else
             echo "PII token classifier model already exists, skipping..."
           fi
-          
+
           echo "All models downloaded successfully!"
           ls -la /app/models/
         env:

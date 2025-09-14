@@ -10,7 +10,7 @@ on:
 jobs:
   pre-commit:
     runs-on: ubuntu-latest
-    name: Run pre-commit hooks on Go, Rust, JavaScripts, Markdown and Python files
+    name: Run pre-commit hooks check file lint
 
     steps:
     - name: Check out the repo
@@ -47,6 +47,7 @@ jobs:
           build-essential \
           pkg-config 
         npm install -g markdownlint-cli
+        pip install --user yamllint
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -82,10 +83,10 @@ jobs:
     - name: Install pre-commit
       run: pip install pre-commit
 
-    - name: Run pre-commit on Go, Rust, JavaScript, Markdown and Python files
+    - name: Run pre-commit on Go, Rust, JavaScript, Markdown, Yaml and Python files
       run: |
         # Find all Go, Rust, JavaScripts, Markdown and Python files (excluding vendored/generated code)
-        FILES=$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.md" \) \
+        FILES=$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" \) \
           ! -path "./target/*" \
           ! -path "./candle-binding/target/*" \
           ! -path "./.git/*" \
@@ -100,7 +101,7 @@ jobs:
           echo "Running pre-commit on files: $FILES"
           pre-commit run --files $FILES
         else
-          echo "No Go, Rust, JavaScript, Markdown or Python files found to check"
+          echo "No Go, Rust, JavaScript, Markdown, Yaml, or Python files found to check"
         fi
 
     - name: Show pre-commit results

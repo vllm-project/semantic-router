@@ -351,3 +351,7 @@ markdown-lint:
 markdown-lint-fix:
 	@echo "Fixing markdown lint issues..."
 	markdownlint -c markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules --fix
+
+yaml-lint:
+	@echo "Linting YAML files..."
+	yamllint --config-file=.yamllint .
