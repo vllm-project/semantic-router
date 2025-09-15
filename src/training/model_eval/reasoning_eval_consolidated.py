@@ -63,6 +63,9 @@ EFFECT_SIZE_MEDIUM = 0.2  # Cohen's h threshold for medium effect size
 BAYESIAN_THRESHOLD = 0.8  # Bayesian probability threshold for strong evidence
 MIN_IMPROVEMENT = 0.10  # Minimum improvement threshold for Bayesian pathway
 
+# Model API configuration
+MAX_TOKENS_REASONING = 6144  # Maximum tokens for reasoning mode (allows full reasoning chains)
+
 
 def parse_args() -> argparse.Namespace:
     """
@@ -221,8 +224,8 @@ def build_reasoning_params(model: str, reasoning: bool) -> Optional[Dict[str, An
     model_lower = model.lower()
 
     # vLLM-hosted model families with specific reasoning implementations
-    if "deepseek" in model_lower and ("v31" in model_lower):
-        # DeepSeek v3.1 reasoning via chat template kwargs
+    if "deepseek" in model_lower and re.search(r"v3(?:[._]?1(?:\.\d+)?)?", model_lower):
+        # DeepSeek v3.x reasoning via chat template kwargs
         return {"chat_template_kwargs": {"thinking": reasoning}}
     elif "qwen3" in model_lower:
         # Qwen3 reasoning via chat template kwargs
@@ -272,7 +275,7 @@ def call_model(
         params = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 6144,  # Increased for reasoning mode support (allows full reasoning chains)
+            "max_tokens": MAX_TOKENS_REASONING,
             "temperature": 0.0,
         }
 
@@ -694,7 +697,7 @@ def load_config_template(template_path: str = "") -> Dict:
             return config
     except FileNotFoundError:
         print(f"⚠️  Warning: Template file not found at {template_path}")
-        # exit with error
+        return None
 
 
 def generate_config(
@@ -717,6 +720,9 @@ def generate_config(
     """
     # Load template
     config = load_config_template(template_path)
+    if config is None:
+        print("❌ Cannot generate config without template. Exiting.")
+        return None
 
     # Set model-specific values
     config["default_model"] = model
@@ -734,7 +740,7 @@ def generate_config(
     model_lower = model.lower()
     if "qwen3" in model_lower:
         reasoning_family = "qwen3"
-    elif "deepseek" in model_lower and ("v31" in model_lower):
+    elif "deepseek" in model_lower and re.search(r"v3(?:[._]?1(?:\.\d+)?)?", model_lower):
         reasoning_family = "deepseek"
     elif "gpt-oss" in model_lower:
         reasoning_family = "gpt-oss"
