@@ -64,7 +64,9 @@ BAYESIAN_THRESHOLD = 0.8  # Bayesian probability threshold for strong evidence
 MIN_IMPROVEMENT = 0.10  # Minimum improvement threshold for Bayesian pathway
 
 # Model API configuration
-MAX_TOKENS_REASONING = 6144  # Maximum tokens for reasoning mode (allows full reasoning chains)
+MAX_TOKENS_REASONING = (
+    6144  # Maximum tokens for reasoning mode (allows full reasoning chains)
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -740,7 +742,9 @@ def generate_config(
     model_lower = model.lower()
     if "qwen3" in model_lower:
         reasoning_family = "qwen3"
-    elif "deepseek" in model_lower and re.search(r"v3(?:[._]?1(?:\.\d+)?)?", model_lower):
+    elif "deepseek" in model_lower and re.search(
+        r"v3(?:[._]?1(?:\.\d+)?)?", model_lower
+    ):
         reasoning_family = "deepseek"
     elif "gpt-oss" in model_lower:
         reasoning_family = "gpt-oss"
