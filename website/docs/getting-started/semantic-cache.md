@@ -81,7 +81,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto", 
+    "model": "auto",
     "messages": [{"role": "user", "content": "Explain machine learning"}]
   }'
 ```
@@ -106,7 +106,7 @@ Run with Milvus support:
 make run-router
 ```
 
-# Stop Milvus when done
+Stop Milvus when done:
 ```bash
 make stop-milvus
 ```
@@ -148,7 +148,7 @@ sum by (backend) (rate(llm_cache_operations_total[5m]))
 Monitor these key indicators:
 
 1. **Hit Ratio**: Higher ratios indicate better cache effectiveness
-2. **Operation Latency**: Cache lookups should be significantly faster than LLM calls  
+2. **Operation Latency**: Cache lookups should be significantly faster than LLM calls
 3. **Entry Count**: Monitor cache size for memory management
 4. **Backend Performance**: Compare memory vs Milvus operation times
 
