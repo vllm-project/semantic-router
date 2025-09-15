@@ -223,7 +223,7 @@ def evaluate_model_arc(
 
     # Convert DataFrame rows to dictionaries for processing
     questions_data = df.to_dict("records")
-    
+
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
         futures = []
         for question_data in questions_data:
@@ -303,7 +303,7 @@ def save_results_arc(
         "failed_queries": analysis["failed_queries"],
         "avg_response_time": analysis["avg_response_time"],
     }
-    
+
     with open(os.path.join(model_dir, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
 
@@ -339,7 +339,7 @@ def main():
 
     if args.models and len(args.models) == 1 and "," in args.models[0]:
         args.models = args.models[0].split(",")
-    
+
     print(f"Models to evaluate: {args.models}")
 
     # Load dataset
