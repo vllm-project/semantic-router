@@ -84,7 +84,7 @@ python mmlu_pro_vllm_eval.py \
 
 ### What it outputs per model:
 
-- **results/<model_name>_(direct|cot)/**
+- **results/Model_Name_(direct|cot)/**
   - **detailed_results.csv**: one row per question with is_correct and category
   - **analysis.json**: overall_accuracy, category_accuracy map, avg_response_time, counts
   - **summary.json**: condensed metrics
@@ -113,7 +113,7 @@ python arc_challenge_vllm_eval.py \
 
 ### What it outputs per model:
 
-- **results/<model_name>_(direct|cot)/**
+- **results/Model_Name_(direct|cot)/**
   - **detailed_results.csv**: one row per question with is_correct and category
   - **analysis.json**: overall_accuracy, avg_response_time
   - **summary.json**: condensed metrics
@@ -199,7 +199,7 @@ python src/training/model_eval/result_to_config.py \
 - Constructs a new config:
   - default_model: the best average performer across categories
   - categories: For each category present in results, ranks models by accuracy:
-    - category.model_scores = [{model: "<name>", score: <float>}, ...], highest first
+    - category.model_scores = `[{ model: "Model_Name", score: 0.87 }, ...]`, highest first
   - category reasoning settings: auto-filled from a built-in mapping (math, physics, chemistry, CS, engineering -> high reasoning; others default to low/medium; you can adjust after generation)
   - Leaves out any special “auto” placeholder models if present
 
