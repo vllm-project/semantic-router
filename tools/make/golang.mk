@@ -26,3 +26,19 @@ check-go-mod-tidy:
 		fi
 	@echo "✅ src/semantic-router go mod tidy check passed"
 	@echo "✅ All go mod tidy checks passed"
+
+# Controller-gen targets
+install-controller-gen:
+	@echo "Installing controller-gen..."
+	@cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+
+generate-crd: install-controller-gen
+	@echo "Generating CRD manifests..."
+	@cd src/semantic-router && controller-gen crd:crdVersions=v1,allowDangerousTypes=true paths=./pkg/apis/vllm.ai/v1alpha1 output:crd:artifacts:config=../../deploy/kubernetes/crds
+
+generate-deepcopy: install-controller-gen
+	@echo "Generating deepcopy methods..."
+	@cd src/semantic-router && controller-gen object:headerFile=./hack/boilerplate.go.txt paths=./pkg/apis/vllm.ai/v1alpha1
+
+generate-api: generate-deepcopy generate-crd
+	@echo "Generated all API artifacts"

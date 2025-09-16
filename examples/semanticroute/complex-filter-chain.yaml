@@ -1,0 +1,59 @@
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRoute
+metadata:
+  name: complex-route
+  namespace: default
+  labels:
+    app: semantic-router
+    scenario: complex-filter-chain
+spec:
+  rules:
+  - intents:
+    - category: "computer science"
+      description: "Programming, algorithms, data structures"
+      threshold: 0.7
+    - category: "math"
+      description: "Mathematics, calculus, algebra"
+      threshold: 0.7
+    modelRefs:
+    - modelName: gpt-oss
+      address: 127.0.0.1
+      port: 8080
+      weight: 100
+    filters:
+    - type: PIIDetection
+      enabled: true
+      config:
+        allowByDefault: false
+        pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
+        threshold: 0.7
+        action: "block"
+    - type: PromptGuard
+      enabled: true
+      config:
+        threshold: 0.7
+        action: "block"
+        customRules:
+        - name: "sensitive-data-rule"
+          pattern: "(?i)(password|secret|token|key)"
+          action: "block"
+          description: "Block requests containing sensitive data keywords"
+    - type: SemanticCache
+      enabled: true
+      config:
+        similarityThreshold: 0.8
+        maxEntries: 1000
+        ttlSeconds: 3600
+        backend: "memory"
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: true
+        reasoningEffort: "medium"
+        maxReasoningSteps: 10
+        reasoningTimeout: 30
+    defaultModel:
+      modelName: deepseek-v31
+      address: 127.0.0.1
+      port: 8088

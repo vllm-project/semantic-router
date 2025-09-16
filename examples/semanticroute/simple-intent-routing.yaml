@@ -1,0 +1,26 @@
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRoute
+metadata:
+  name: reasoning-route
+  namespace: default
+  labels:
+    app: semantic-router
+    scenario: simple-intent
+spec:
+  rules:
+  - intents:
+    - category: "computer science"
+      description: "Programming, algorithms, data structures, software engineering"
+      threshold: 0.7
+    - category: "math"
+      description: "Mathematics, calculus, algebra, statistics"
+      threshold: 0.7
+    modelRefs:
+    - modelName: gpt-oss
+      address: 127.0.0.1
+      port: 8080
+      weight: 100
+    defaultModel:
+      modelName: deepseek-v31
+      address: 127.0.0.1
+      port: 8088
