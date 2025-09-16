@@ -113,6 +113,14 @@ run-envoy:
 	@echo "Starting Envoy..."
 	func-e run --config-path config/envoy.yaml --component-log-level "ext_proc:trace,router:trace,http:trace"
 
+golang-lint-install:
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
+
+golang-lint:
+	@echo "Running golangci-lint..."
+	@cd src/semantic-router && golangci-lint
+
+
 # Run go vet for all Go modules
 vet:
 	@echo "Running go vet..."
@@ -171,7 +179,7 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-test: vet check-go-mod-tidy download-models test-binding test-semantic-router
+test: vet check-go-mod-tidy golangci-lint download-models test-binding test-semantic-router
 
 # Clean built artifacts
 clean:
