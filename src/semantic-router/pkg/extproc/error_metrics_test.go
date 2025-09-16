@@ -43,7 +43,6 @@ func getCounterValue(metricName string, want map[string]string) float64 {
 
 func TestRequestParseErrorIncrementsErrorCounter(t *testing.T) {
 	r := &OpenAIRouter{}
-	r.InitializeForTesting()
 
 	ctx := &RequestContext{}
 	// Invalid JSON triggers parse error
@@ -65,7 +64,6 @@ func TestRequestParseErrorIncrementsErrorCounter(t *testing.T) {
 
 func TestResponseParseErrorIncrementsErrorCounter(t *testing.T) {
 	r := &OpenAIRouter{}
-	r.InitializeForTesting()
 
 	ctx := &RequestContext{RequestModel: "model-a"}
 	// Invalid JSON triggers parse error in response body handler
@@ -86,7 +84,6 @@ func TestResponseParseErrorIncrementsErrorCounter(t *testing.T) {
 
 func TestUpstreamStatusIncrements4xx5xxCounters(t *testing.T) {
 	r := &OpenAIRouter{}
-	r.InitializeForTesting()
 
 	ctx := &RequestContext{RequestModel: "m"}
 

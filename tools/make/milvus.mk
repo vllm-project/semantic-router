@@ -66,3 +66,24 @@ test-semantic-router-milvus: build-router start-milvus
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./...
 	@echo "Consider running 'make stop-milvus' when done testing"
+
+# Milvus UI (Attu) management
+start-milvus-ui: ## Start Attu UI to browse Milvus data
+	@$(LOG_TARGET)
+	@echo "Starting Attu (Milvus UI) with $(CONTAINER_RUNTIME)..."
+	@$(CONTAINER_RUNTIME) run -d \
+		--name milvus-ui \
+		--add-host=host.docker.internal:host-gateway \
+		-e MILVUS_URL=host.docker.internal:19530 \
+		-p 18000:3000 \
+		zilliz/attu:v2.3.5
+	@echo "Waiting for Attu to be ready..."
+	@sleep 3
+	@echo "Open UI: http://localhost:18000 (Milvus at host.docker.internal:19530)"
+
+stop-milvus-ui:
+	@$(LOG_TARGET)
+	@echo "Stopping Attu (Milvus UI) container..."
+	@$(CONTAINER_RUNTIME) stop milvus-ui || true
+	@$(CONTAINER_RUNTIME) rm milvus-ui || true
+	@echo "Attu container stopped and removed"

@@ -45,8 +45,6 @@ var _ = Describe("Metrics recording", func() {
 	BeforeEach(func() {
 		// Use a minimal router that doesn't require external models
 		router = &OpenAIRouter{}
-		// Initialize internal maps used by handlers
-		router.InitializeForTesting()
 	})
 
 	It("records TTFT on response headers", func() {
