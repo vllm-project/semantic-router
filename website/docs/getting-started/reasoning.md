@@ -1,4 +1,4 @@
-# Reasoning Routing Quickstart
+# Reasoning Routing
 
 This short guide shows how to enable and verify “reasoning routing” in the Semantic Router:
 
