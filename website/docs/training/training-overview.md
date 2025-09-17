@@ -1001,4 +1001,4 @@ lora_training_infrastructure:
 
 ## Next
 
-- See: [Model Performance Evaluation](/training/model-performance-eval)
+- See: [Model Performance Evaluation](/docs/training/model-performance-eval)
