@@ -10,13 +10,13 @@ import json
 import os
 import sys
 import time
+import unittest
 import uuid
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"

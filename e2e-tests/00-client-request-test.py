@@ -14,14 +14,13 @@ import unittest
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed to match other tests
+DEFAULT_MODEL = "gemma3:27b"  # Use configured model
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 

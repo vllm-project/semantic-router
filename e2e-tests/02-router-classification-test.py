@@ -10,19 +10,19 @@ import json
 import os
 import sys
 import time
+import unittest
 from collections import defaultdict
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
 ROUTER_METRICS_URL = "http://localhost:9190/metrics"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed from gemma3:27b to match make test-prompt
+DEFAULT_MODEL = "gemma3:27b"  # Use configured model
 
 # Category test cases - each designed to trigger a specific classifier category
 CATEGORY_TEST_CASES = [

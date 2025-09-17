@@ -10,18 +10,18 @@ These tests use custom headers to trace request processing.
 import json
 import os
 import sys
+import unittest
 import uuid
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed from gemma3:27b to match make test-prompt
+DEFAULT_MODEL = "gemma3:27b"  # Use configured model
 
 
 class EnvoyExtProcTest(SemanticRouterTestBase):
