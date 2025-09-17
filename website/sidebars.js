@@ -38,7 +38,7 @@ const sidebars = {
       label: 'Model Training',
       items: [
         'training/training-overview',
-        'training/model_performance_eval',
+        'training/model-performance-eval',
       ],
     },
     {

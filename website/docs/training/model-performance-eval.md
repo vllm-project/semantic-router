@@ -12,12 +12,12 @@ In short, evaluation converts anecdotes into measurable signals that improve qua
 
 ---
 
-This guide documents the automated workflow to evaluate models (MMLU-Pro and ARC Challenge) via a vLLM-compatible OpenAI endpoint, generate a performance-based routing config, and update categories.model_scores in config.
+This guide documents the automated workflow to evaluate models (MMLU-Pro and ARC Challenge) via a vLLM-compatible OpenAI endpoint, generate a performance-based routing config, and update `categories.model_scores` in config.
 
 see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_eval)
 
 ### What you'll run end-to-end
-#### 1) Evaluate models: 
+#### 1) Evaluate models 
 
 - per-category accuracies
 - ARC Challenge: overall accuracy
@@ -26,8 +26,10 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
 
 - bar/heatmap plot of per-category accuracies
 
-**TODO**  a picture needed
-#### 3) Generate an updated config.yaml:
+![Bar](/img/bar.png)
+![Heatmap](/img/heatmap.png)
+
+#### 3) Generate an updated config.yaml
 
 - Rank models per category into categories.model_scores
 - Set default_model to the best average performer
@@ -38,11 +40,21 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
 - A running vLLM-compatible OpenAI endpoint serving your models
   - Endpoint URL like http://localhost:8000/v1
   - Optional API key if your endpoint requires one
+
+  ```bash
+  # Terminal 1
+  vllm serve microsoft/phi-4 --port 11434 --served_model_name phi4
+
+  # Terminal 2
+  vllm serve Qwen/Qwen3-0.6B --port 11435 --served_model_name qwen3-0.6B
+  ```
+
 - Python packages for evaluation scripts:
-  - From the repo root: matplotlib
+  - From the repo root: matplotlib in [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/requirements.txt)
   - From `/src/training/model_eval`: [requirements.txt](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/requirements.txt)
 
   ```bash
+  # We will work at this dir in this guide
   cd /src/training/model_eval
   pip install -r requirements.txt
   ```
@@ -54,24 +66,36 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
 ## 2.Evaluate on MMLU-Pro
 see script in [mmul_pro_vllm_eval.py](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/mmlu_pro_vllm_eval.py)
 
-### Example usage patterns:
+### Example usage patterns
 
 ```bash
 # Evaluate a few models, few samples per category, direct prompting
 python mmlu_pro_vllm_eval.py \
-  --endpoint http://localhost:8000/v1 \
-  --models gemma3:27b phi4 mistral-small3.1 \
+  --endpoint http://localhost:11434/v1 \
+  --models phi4 \
+  --samples-per-category 10
+
+python mmlu_pro_vllm_eval.py \
+  --endpoint http://localhost:11435/v1 \
+  --models qwen3-0.6B \
   --samples-per-category 10
 
 # Evaluate with CoT (results saved under *_cot)
 python mmlu_pro_vllm_eval.py \
-  --endpoint http://localhost:8000/v1 \
-  --models gemma3:27b phi4 mistral-small3.1 \
+  --endpoint http://localhost:11435/v1 \
+  --models qwen3-0.6B \
   --samples-per-category 10
   --use-cot 
+
+# If you have set up Semantic Router properly, you can run in one go
+python mmlu_pro_vllm_eval.py \
+  --endpoint http://localhost:8801/v1 \
+  --models qwen3-0.6B, phi4 \
+  --samples-per-category
+  # --use-cot # Uncomment this line if use CoT
 ```
 
-### Key flags:
+### Key flags
 
 - **--endpoint**: vLLM OpenAI URL (default http://localhost:8000/v1)
 - **--models**: space-separated list OR a single comma-separated string; if omitted, the script queries /models from the endpoint
@@ -82,7 +106,7 @@ python mmlu_pro_vllm_eval.py \
 - **--output-dir**: where results are saved (default results)
 - **--max-tokens**, **--temperature**, **--seed**: generation and reproducibility knobs
 
-### What it outputs per model:
+### What it outputs per model
 
 - **results/Model_Name_(direct|cot)/**
   - **detailed_results.csv**: one row per question with is_correct and category
@@ -90,28 +114,29 @@ python mmlu_pro_vllm_eval.py \
   - **summary.json**: condensed metrics
 - **mmlu_pro_vllm_eval.txt**: prompts and answers log (debug/inspection)
 
-### Notes:
+**Note**
 
-- Model naming: slashes are replaced with underscores for folder names; e.g., gemma3:27b -> gemma3:27b_direct directory.
+- **Model naming**: slashes are replaced with underscores for folder names; e.g., gemma3:27b -> gemma3:27b_direct directory.
 - Category accuracy is computed on successful queries only; failed requests are excluded.
 
 ## 3.Evaluate on ARC Challenge (optional, overall sanity check)
 see script in [arc_challenge_vllm_eval.py](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/arc_challenge_vllm_eval.py)
 
-### Example usage patterns:
+### Example usage patterns
 
 ``` bash
 python arc_challenge_vllm_eval.py \
-  --endpoint http://localhost:8000/v1\
-  --models gemma3:27b,phi4:latest
+  --endpoint http://localhost:8801/v1\
+  --models qwen3-0.6B,phi4
+  --output-dir arc_results
 ```
 
-### Key flags:
+### Key flags
 
 - **--samples**: total questions to sample (default 20); ARC is not categorized in our script
-- Other flags mirror the MMLU-Pro script
+- Other flags mirror the **MMLU-Pro** script
 
-### What it outputs per model:
+### What it outputs per model
 
 - **results/Model_Name_(direct|cot)/**
   - **detailed_results.csv**: one row per question with is_correct and category
@@ -119,8 +144,9 @@ python arc_challenge_vllm_eval.py \
   - **summary.json**: condensed metrics
 - **arc_challenge_vllm_eval.txt**: prompts and answers log (debug/inspection)
 
-### Note:
-ARC results do not feed categories[].model_scores directly, but they can help spot regressions.
+**Note**
+
+- ARC results do not feed `categories[].model_scores` directly, but they can help spot regressions.
 
 ## 4.Visualize per-category performance
 see script in [plot_category_accuracies.py](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/plot_category_accuracies.py)
@@ -129,45 +155,45 @@ see script in [plot_category_accuracies.py](https://github.com/vllm-project/sema
 
 ```bash
 # Use results/ to generate bar plot
-python src/training/model_eval/plot_category_accuracies.py \
+python plot_category_accuracies.py \
   --results-dir results \
   --plot-type bar \
-  --output-file model_eval/category_accuracies.png
+  --output-file results/bar.png
 
 # Use results/ to generate heatmap plot
-python src/training/model_eval/plot_category_accuracies.py \
+python plot_category_accuracies.py \
   --results-dir results \
   --plot-type heatmap \
-  --output-file model_eval/category_accuracies.png
+  --output-file results/heatmap.png
 
 # Use sample-data to generate example plot
 python src/training/model_eval/plot_category_accuracies.py \
   --sample-data \
   --plot-type heatmap \
-  --output-file model_eval/category_accuracies.png
+  --output-file results/category_accuracies.png
 ```
 
-### Key flags:
+### Key flags
 
 - **--results-dir**: where analysis.json files are
 - **--plot-type**: bar or heatmap
 - **--output-file**: output image path (default model_eval/category_accuracies.png)
 - **--sample-data**: if no results exist, generates fake data to preview the plot
 
-### What it does:
+### What it does
 
-- Finds all results/**/analysis.json, aggregates analysis["category_accuracy"] per model
+- Finds all `results/**/analysis.json`, aggregates analysis["category_accuracy"] per model
 - Adds an Overall column representing the average across categories
 - Produces a figure to quickly compare model/category performance
 
-### Note:
+**Note**
 
-- It merges “direct” and “cot” as distinct model variants by appending :direct or :cot to the label; the legend hides “:direct” for brevity.
+- It merges `direct` and `cot` as distinct model variants by appending `:direct` or `:cot` to the label; the legend hides `:direct` for brevity.
 
 ## 5.Generate performance-based routing config
 see script in [result_to_config.py](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/result_to_config.py)
 
-### Example usage patterns:
+### Example usage patterns
 
 ```bash
 # Use results/ to generate a new config file (not overridded)
@@ -187,31 +213,111 @@ python src/training/model_eval/result_to_config.py \
   --output-file config/config.eval.yaml
 ```
 
-### Key flags:
+### Key flags
 
 - **--results-dir**: points to the folder where analysis.json files live
 - **--output-file**: target config path (default config/config.yaml)
 - **--similarity-threshold**: semantic cache threshold to set in the generated config
 
-### What it does:
+### What it does
 
-- Reads all analysis.json files, extracting analysis["category_accuracy"]
+- Reads all `analysis.json` files, extracting analysis["category_accuracy"]
 - Constructs a new config:
-  - default_model: the best average performer across categories
-  - categories: For each category present in results, ranks models by accuracy:
-    - category.model_scores = `[{ model: "Model_Name", score: 0.87 }, ...]`, highest first
-  - category reasoning settings: auto-filled from a built-in mapping (math, physics, chemistry, CS, engineering -> high reasoning; others default to low/medium; you can adjust after generation)
+  - **categories**: For each category present in results, ranks models by accuracy:
+    - **category.model_scores** = `[{ model: "Model_Name", score: 0.87 }, ...]`, highest first
+  - **default_model**: the best average performer across categories
+  - **category reasoning settings**: auto-filled from a built-in mapping (you can adjust after generation) 
+    - math, physics, chemistry, CS, engineering -> high reasoning 
+    - others default -> low/medium
   - Leaves out any special “auto” placeholder models if present
 
-### Schema alignment:
+### Schema alignment
 
 - **categories[].name**: the MMLU-Pro category string
 - **categories[].model_scores**: descending ranking by accuracy for that category
 - **default_model**: a top performer across categories (approach suffix removed, e.g., gemma3:27b from gemma3:27b:direct)
 - Keeps other config sections (semantic_cache, tools, classifier, prompt_guard) with reasonable defaults; you can edit them post-generation if your environment differs
 
-### Note:
+**Note**
 
+- This script only work with results from **MMLU_Pro** Evaluation.
 - Existing config.yaml can be overwritten. Consider writing to a temp file first and diffing:
-  - --output-file config/config.eval.yaml
-- If your production config.yaml carries environment-specific settings (endpoints, pricing, policies), port the evaluated categories[].model_scores and default_model back into your canonical config.
+  - `--output-file config/config.eval.yaml`
+- If your production config.yaml carries **environment-specific settings (endpoints, pricing, policies)**, port the evaluated `categories[].model_scores` and `default_model` back into your canonical config.
+
+### Example config.eval.yaml
+see more about config at [configuration](https://vllm-semantic-router.com/docs/getting-started/configuration)
+
+```yaml
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.85
+  max_entries: 1000
+  ttl_seconds: 3600
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: config/tools_db.json
+  fallback_to_empty: true
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: models/jailbreak_classifier_modernbert-base_model
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
+
+# Lack of endpoint config and model_config right here, modify here as needed
+
+classifier:
+  category_model:
+    model_id: models/category_classifier_modernbert-base_model
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+  pii_model:
+    model_id: models/pii_classifier_modernbert-base_presidio_token_model
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+categories:
+- name: business
+  use_reasoning: false
+  reasoning_description: Business content is typically conversational
+  reasoning_effort: low
+  model_scores:
+  - model: phi4
+    score: 0.2
+  - model: qwen3-0.6B
+    score: 0.0
+- name: law
+  use_reasoning: false
+  reasoning_description: Legal content is typically explanatory
+  reasoning_effort: medium
+  model_scores:
+  - model: phi4
+    score: 0.8
+  - model: qwen3-0.6B
+    score: 0.2
+
+# Ignore some categories here
+
+- name: engineering
+  use_reasoning: true
+  reasoning_description: Engineering problems require systematic problem-solving
+  reasoning_effort: high
+  model_scores:
+  - model: phi4
+    score: 0.6
+  - model: qwen3-0.6B
+    score: 0.2
+default_reasoning_effort: medium
+default_model: phi4
+```
