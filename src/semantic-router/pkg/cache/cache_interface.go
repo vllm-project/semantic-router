@@ -4,6 +4,7 @@ import "time"
 
 // CacheEntry represents a complete cached request-response pair with associated metadata
 type CacheEntry struct {
+	RequestID    string
 	RequestBody  []byte
 	ResponseBody []byte
 	Model        string
@@ -18,14 +19,13 @@ type CacheBackend interface {
 	IsEnabled() bool
 
 	// AddPendingRequest stores a request awaiting its response
-	// Returns the processed query string and any error
-	AddPendingRequest(model string, query string, requestBody []byte) (string, error)
+	AddPendingRequest(requestID string, model string, query string, requestBody []byte) error
 
 	// UpdateWithResponse completes a pending request with the received response
-	UpdateWithResponse(query string, responseBody []byte) error
+	UpdateWithResponse(requestID string, responseBody []byte) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(model string, query string, requestBody, responseBody []byte) error
+	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error
 
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error

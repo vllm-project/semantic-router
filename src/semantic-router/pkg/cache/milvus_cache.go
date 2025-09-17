@@ -264,6 +264,11 @@ func (c *MilvusCache) createCollection() error {
 				TypeParams: map[string]string{"max_length": "64"},
 			},
 			{
+				Name:       "request_id",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "64"},
+			},
+			{
 				Name:       "model",
 				DataType:   entity.FieldTypeVarChar,
 				TypeParams: map[string]string{"max_length": "256"},
@@ -328,15 +333,15 @@ func (c *MilvusCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *MilvusCache) AddPendingRequest(model string, query string, requestBody []byte) (string, error) {
+func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
-		return query, nil
+		return nil
 	}
 
 	// Store incomplete entry for later completion with response
-	result, err := c.addEntry(model, query, requestBody, nil)
+	err := c.addEntry("", requestID, model, query, requestBody, nil)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -344,34 +349,29 @@ func (c *MilvusCache) AddPendingRequest(model string, query string, requestBody 
 		metrics.RecordCacheOperation("milvus", "add_pending", "success", time.Since(start).Seconds())
 	}
 
-	return result, err
+	return err
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *MilvusCache) UpdateWithResponse(query string, responseBody []byte) error {
+func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-
-	observability.Debugf("MilvusCache.UpdateWithResponse: updating pending entry (query: %s, response_size: %d)",
-		queryPreview, len(responseBody))
+	observability.Debugf("MilvusCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d)",
+		requestID, len(responseBody))
 
 	// Find the pending entry and complete it with the response
 	// Query for the incomplete entry to retrieve its metadata
 	ctx := context.Background()
-	queryExpr := fmt.Sprintf("query == \"%s\" && response_body == \"\"", query)
+	queryExpr := fmt.Sprintf("request_id == \"%s\" && response_body == \"\"", requestID)
 
 	observability.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"model", "request_body"})
+		[]string{"id", "model", "query", "request_body"})
 
 	if err != nil {
 		observability.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
@@ -380,29 +380,27 @@ func (c *MilvusCache) UpdateWithResponse(query string, responseBody []byte) erro
 	}
 
 	if len(results) == 0 {
-		observability.Debugf("MilvusCache.UpdateWithResponse: no pending entry found, adding as new complete entry")
-		// Create new complete entry when no pending entry exists
-		_, err := c.addEntry("unknown", query, []byte(""), responseBody)
-		if err != nil {
-			metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
-		} else {
-			metrics.RecordCacheOperation("milvus", "update_response", "success", time.Since(start).Seconds())
-		}
-		return err
+		observability.Debugf("MilvusCache.UpdateWithResponse: no pending entry found")
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("no pending entry found")
 	}
 
 	// Get the model and request body from the pending entry
-	modelColumn := results[0].(*entity.ColumnVarChar)
-	requestColumn := results[1].(*entity.ColumnVarChar)
+	idColumn := results[0].(*entity.ColumnVarChar)
+	modelColumn := results[1].(*entity.ColumnVarChar)
+	queryColumn := results[2].(*entity.ColumnVarChar)
+	requestColumn := results[3].(*entity.ColumnVarChar)
 
-	if modelColumn.Len() > 0 {
+	if idColumn.Len() > 0 {
+		id := idColumn.Data()[0]
 		model := modelColumn.Data()[0]
+		query := queryColumn.Data()[0]
 		requestBody := requestColumn.Data()[0]
 
-		observability.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (model: %s)", model)
+		observability.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
 
 		// Create the complete entry with response data
-		_, err := c.addEntry(model, query, []byte(requestBody), responseBody)
+		err := c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
 		if err != nil {
 			metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 			return fmt.Errorf("failed to add complete entry: %w", err)
@@ -416,14 +414,14 @@ func (c *MilvusCache) UpdateWithResponse(query string, responseBody []byte) erro
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *MilvusCache) AddEntry(model string, query string, requestBody, responseBody []byte) error {
+func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	_, err := c.addEntry(model, query, requestBody, responseBody)
+	err := c.addEntry("", requestID, model, query, requestBody, responseBody)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_entry", "error", time.Since(start).Seconds())
@@ -435,20 +433,23 @@ func (c *MilvusCache) AddEntry(model string, query string, requestBody, response
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
-func (c *MilvusCache) addEntry(model string, query string, requestBody, responseBody []byte) (string, error) {
+func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte) error {
 	// Generate semantic embedding for the query
 	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
 	if err != nil {
-		return "", fmt.Errorf("failed to generate embedding: %w", err)
+		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	// Generate unique ID
-	id := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("%s_%s_%d", model, query, time.Now().UnixNano()))))
+	// Generate unique ID if not provided
+	if id == "" {
+		id = fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
+	}
 
 	ctx := context.Background()
 
-	// Prepare data for insertion
+	// Prepare data for upsert
 	ids := []string{id}
+	requestIDs := []string{requestID}
 	models := []string{model}
 	queries := []string{query}
 	requestBodies := []string{string(requestBody)}
@@ -458,6 +459,7 @@ func (c *MilvusCache) addEntry(model string, query string, requestBody, response
 
 	// Create columns
 	idColumn := entity.NewColumnVarChar("id", ids)
+	requestIDColumn := entity.NewColumnVarChar("request_id", requestIDs)
 	modelColumn := entity.NewColumnVarChar("model", models)
 	queryColumn := entity.NewColumnVarChar("query", queries)
 	requestColumn := entity.NewColumnVarChar("request_body", requestBodies)
@@ -465,13 +467,13 @@ func (c *MilvusCache) addEntry(model string, query string, requestBody, response
 	embeddingColumn := entity.NewColumnFloatVector(c.config.Collection.VectorField.Name, len(embedding), embeddings)
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 
-	// Insert the entry into the collection
-	observability.Debugf("MilvusCache.addEntry: inserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d)",
+	// Upsert the entry into the collection
+	observability.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d)",
 		c.collectionName, len(embedding), len(requestBody), len(responseBody))
-	_, err = c.client.Insert(ctx, c.collectionName, "", idColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
+	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
 	if err != nil {
-		observability.Debugf("MilvusCache.addEntry: insert failed: %v", err)
-		return "", fmt.Errorf("failed to insert cache entry: %w", err)
+		observability.Debugf("MilvusCache.addEntry: upsert failed: %v", err)
+		return fmt.Errorf("failed to upsert cache entry: %w", err)
 	}
 
 	// Ensure data is persisted to storage
@@ -483,11 +485,12 @@ func (c *MilvusCache) addEntry(model string, query string, requestBody, response
 	observability.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend":             "milvus",
 		"collection":          c.collectionName,
+		"request_id":          requestID,
 		"query":               query,
 		"model":               model,
 		"embedding_dimension": len(embedding),
 	})
-	return query, nil
+	return nil
 }
 
 // FindSimilar searches for semantically similar cached requests
