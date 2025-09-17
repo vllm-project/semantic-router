@@ -94,7 +94,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(category) (llm_category_classifications_total)",
+          "expr": "sum by(category) (llm_category_classifications_count)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,

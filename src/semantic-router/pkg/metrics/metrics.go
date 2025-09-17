@@ -147,6 +147,26 @@ var (
 		[]string{"model"},
 	)
 
+	// PromptTokensPerRequest tracks the distribution of prompt tokens per request by model
+	PromptTokensPerRequest = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_prompt_tokens_per_request",
+			Help:    "Distribution of prompt tokens per request by model",
+			Buckets: []float64{0, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384},
+		},
+		[]string{"model"},
+	)
+
+	// CompletionTokensPerRequest tracks the distribution of completion tokens per request by model
+	CompletionTokensPerRequest = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_completion_tokens_per_request",
+			Help:    "Distribution of completion tokens per request by model",
+			Buckets: []float64{0, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384},
+		},
+		[]string{"model"},
+	)
+
 	// ModelRoutingModifications tracks when a model is changed from one to another
 	ModelRoutingModifications = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -258,11 +278,12 @@ var (
 		[]string{"backend"},
 	)
 
-	// CategoryClassifications tracks the number of times each category is classified
-	CategoryClassifications = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "llm_category_classifications_total",
-			Help: "The total number of times each category is classified",
+	// CategoryClassificationsCount is an alias with a name preferred by the issue request.
+	// It mirrors CategoryClassifications and is incremented alongside it for compatibility.
+	CategoryClassificationsCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_category_classifications_count",
+			Help: "The total number of times each category is classified (alias metric)",
 		},
 		[]string{"category"},
 	)
@@ -429,6 +450,13 @@ func RecordModelTokensDetailed(model string, promptTokens, completionTokens floa
 	ModelTokens.WithLabelValues(model).Add(totalTokens)
 	ModelPromptTokens.WithLabelValues(model).Add(promptTokens)
 	ModelCompletionTokens.WithLabelValues(model).Add(completionTokens)
+
+	// Also record per-request histograms for visibility into distribution
+	if model == "" {
+		model = "unknown"
+	}
+	PromptTokensPerRequest.WithLabelValues(model).Observe(promptTokens)
+	CompletionTokensPerRequest.WithLabelValues(model).Observe(completionTokens)
 }
 
 // RecordModelCompletionLatency records the latency of a model completion
@@ -484,9 +512,12 @@ func UpdateCacheEntries(backend string, count int) {
 	CacheEntriesTotal.WithLabelValues(backend).Set(float64(count))
 }
 
-// RecordCategoryClassification increments the gauge for a specific category classification
+// RecordCategoryClassification increments the counter for a specific category classification
 func RecordCategoryClassification(category string) {
-	CategoryClassifications.WithLabelValues(category).Inc()
+	if category == "" {
+		category = "unknown"
+	}
+	CategoryClassificationsCount.WithLabelValues(category).Inc()
 }
 
 // RecordPIIViolation records a PII policy violation for a specific model and PII data type

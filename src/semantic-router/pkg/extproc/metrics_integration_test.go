@@ -81,7 +81,10 @@ var _ = Describe("Metrics recording", func() {
 			StartTime:    time.Now().Add(-1 * time.Second),
 		}
 
-		before := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		beforeTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+
+		beforePrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
+		beforeCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
 
 		openAIResponse := map[string]interface{}{
 			"id":      "chatcmpl-xyz",
@@ -111,7 +114,13 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response.GetResponseBody()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
-		Expect(after).To(BeNumerically(">", before))
+		afterTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		Expect(afterTPOT).To(BeNumerically(">", beforeTPOT))
+
+		// New per-request token histograms should also be recorded
+		afterPrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
+		afterCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
+		Expect(afterPrompt).To(BeNumerically(">", beforePrompt))
+		Expect(afterCompletion).To(BeNumerically(">", beforeCompletion))
 	})
 })
