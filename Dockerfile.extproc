@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy only essential files for Rust build
+COPY tools/make/ tools/make/
 COPY Makefile ./
 COPY candle-binding/Cargo.toml candle-binding/
 COPY candle-binding/src/ candle-binding/src/
@@ -54,4 +55,4 @@ ENV LD_LIBRARY_PATH=/app/lib
 
 EXPOSE 50051
 
-CMD ["/app/extproc-server", "--config", "/app/config/config.yaml"] 
+CMD ["/app/extproc-server", "--config", "/app/config/config.yaml"]
