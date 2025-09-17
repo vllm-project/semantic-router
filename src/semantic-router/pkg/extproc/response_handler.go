@@ -146,7 +146,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	}
 
 	// Update the cache
-	if ctx.RequestQuery != "" && responseBody != nil {
+	if ctx.RequestID != "" && responseBody != nil {
 		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody)
 		if err != nil {
 			observability.Errorf("Error updating cache: %v", err)
