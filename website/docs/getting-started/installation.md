@@ -8,7 +8,7 @@ This guide will help you set up and install the Semantic Router on your system. 
 
 ### Software Dependencies
 
-- **Go**: Version 1.19 or higher
+- **Go**: Version 1.24.1 or higher (matches the module requirements)
 - **Rust**: Version 1.70 or higher (for Candle bindings)
 - **Python**: Version 3.8 or higher (for model downloads)
 - **HuggingFace CLI**: For model downloads (`pip install huggingface_hub`)
@@ -89,6 +89,8 @@ This downloads the CPU-optimized BERT models for:
 - Category classification
 - PII detection
 - Jailbreak detection
+
+> **Tip:** `make test` invokes `make download-models` automatically, so you only need to run this step manually the first time or when refreshing the cache.
 
 ### 5. Configure Backend Endpoints
 

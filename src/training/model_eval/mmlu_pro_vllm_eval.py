@@ -9,7 +9,6 @@ import os
 import random
 import re
 import time
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -230,6 +229,7 @@ def process_question(
     correct_answer = question_data["answer"]
 
     prompt = format_cot_prompt(question, options, use_cot)
+
     # append the prompt, category and correct answer to a file
     with open("mmlu_pro_vllm_eval.txt", "a") as f:
         f.write(f"Category: {question_data['category']}\n")
@@ -240,7 +240,6 @@ def process_question(
     response_text, success = call_model_with_retry(
         client, model, prompt, max_tokens, temperature
     )
-    # print(f"Response: {response_text}")
     end_time = time.time()
 
     predicted_answer = extract_answer(response_text) if success else None
