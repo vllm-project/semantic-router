@@ -46,14 +46,14 @@ vllm_endpoints:
       - "phi4"
       - "gemma3:27b"
     weight: 1  # Load balancing weight
-    health_check_path: "/health"  # Optional health check endpoint
+    health_check_path: "/api/version"  # Optional health check endpoint
   - name: "endpoint2"
     address: "127.0.0.1"
     port: 11434
     models:
       - "mistral-small3.1"
     weight: 1
-    health_check_path: "/health"
+    health_check_path: "/api/version"
   - name: "endpoint3"
     address: "127.0.0.1"
     port: 11434

@@ -28,24 +28,21 @@ DEFAULT_MODEL = "gemma3:27b"  # Use configured model
 # Expected metric families that should be present
 EXPECTED_METRIC_FAMILIES = [
     # Core routing metrics
-    "llm_router_requests_total",
-    "llm_router_routing_decision",
-    "llm_router_model_selection_count",
-    
+    "llm_model_requests_total",
+    "llm_model_routing_latency_seconds",
+    "llm_routing_reason_codes_total",
+
     # Classification metrics
-    "llm_router_classification_duration_seconds",
-    "llm_router_category_classification_total",
-    
-    # Security metrics
-    "llm_router_jailbreak",
-    "llm_router_pii",
-    
+    "llm_classifier_latency_seconds",
+
     # Cache metrics (if enabled)
-    "llm_router_cache",
-    
+    "llm_cache_hits_total",
+    "llm_cache_misses_total",
+    "llm_cache_operations_total",
+
     # Performance metrics
-    "llm_router_request_duration_seconds",
-    "llm_router_response_size_bytes",
+    "llm_model_completion_latency_seconds",
+    "llm_model_tokens_total",
     
     # System metrics
     "go_",  # Go runtime metrics
@@ -118,7 +115,7 @@ class ComprehensiveMetricsTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             if response.status_code >= 500:
@@ -263,7 +260,7 @@ class ComprehensiveMetricsTest(SemanticRouterTestBase):
         baseline_response = requests.get(ROUTER_METRICS_URL, timeout=5)
         baseline_metrics = baseline_response.text
 
-        baseline_requests = extract_metric_value(baseline_metrics, "llm_router_requests_total") or 0
+        baseline_requests = extract_metric_value(baseline_metrics, "llm_model_requests_total") or 0
         
         self.print_subtest_header("Baseline Metrics")
         print(f"Baseline requests total: {baseline_requests}")
@@ -291,7 +288,7 @@ class ComprehensiveMetricsTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             self.print_response_info(
@@ -310,7 +307,7 @@ class ComprehensiveMetricsTest(SemanticRouterTestBase):
         updated_response = requests.get(ROUTER_METRICS_URL, timeout=5)
         updated_metrics = updated_response.text
 
-        updated_requests = extract_metric_value(updated_metrics, "llm_router_requests_total") or 0
+        updated_requests = extract_metric_value(updated_metrics, "llm_model_requests_total") or 0
 
         print(f"\nUpdated requests total: {updated_requests}")
         requests_increase = updated_requests - baseline_requests
@@ -337,9 +334,9 @@ class ComprehensiveMetricsTest(SemanticRouterTestBase):
         metrics_text = response.text
 
         performance_metrics = [
-            "llm_router_request_duration_seconds",
-            "llm_router_classification_duration_seconds",
-            "llm_router_routing_latency_ms",
+            "llm_model_completion_latency_seconds",
+            "llm_classifier_latency_seconds",
+            "llm_model_routing_latency_seconds",
         ]
 
         found_metrics = {}

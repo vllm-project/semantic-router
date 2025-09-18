@@ -92,7 +92,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             if response.status_code >= 500:
@@ -161,7 +161,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
                 # Benign requests should be processed (may get 503 due to missing vLLM backend)
@@ -212,16 +212,21 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
 
         # Look for specific jailbreak metrics
         jailbreak_metrics = [
-            "llm_router_jailbreak_detected_total",
-            "llm_router_jailbreak_blocked_total", 
-            "llm_router_jailbreak_classification_duration_seconds",
-            "llm_router_requests_total",
+            "llm_classifier_latency_seconds_count",  # Classification timing
+            "llm_request_errors_total",  # Blocked requests with reason="jailbreak_block"
+            "llm_model_requests_total",  # Total requests
         ]
 
         metrics_found = {}
         for metric in jailbreak_metrics:
             for line in metrics_text.split("\n"):
                 if metric in line and not line.startswith("#"):
+                    # For classifier metrics, ensure it's specifically for jailbreak
+                    if "classifier" in metric and "jailbreak" not in line:
+                        continue
+                    # For error metrics, ensure it's specifically jailbreak_block
+                    if "errors" in metric and "jailbreak_block" not in line:
+                        continue
                     # Extract metric value
                     try:
                         parts = line.strip().split()
@@ -287,7 +292,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             # Record the response status for consistency checking

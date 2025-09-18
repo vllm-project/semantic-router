@@ -126,7 +126,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             if response.status_code >= 500:
@@ -195,7 +195,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
                 # No PII requests should be processed (may get 503 due to missing vLLM backend)
@@ -267,7 +267,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
                 # Allowed PII requests should be processed (may get 503 due to missing vLLM backend)
@@ -337,7 +337,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             # Record the response status for consistency checking
@@ -378,16 +378,21 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
 
         # Look for specific PII metrics
         pii_metrics = [
-            "llm_router_pii_detected_total",
-            "llm_router_pii_blocked_total",
-            "llm_router_pii_classification_duration_seconds",
-            "llm_router_requests_total",
+            "llm_classifier_latency_seconds_count",  # Classification timing
+            "llm_request_errors_total",  # Blocked requests with reason="pii_block"
+            "llm_model_requests_total",  # Total requests
         ]
 
         metrics_found = {}
         for metric in pii_metrics:
             for line in metrics_text.split("\n"):
                 if metric in line and not line.startswith("#"):
+                    # For classifier metrics, ensure it's specifically for pii
+                    if "classifier" in metric and "pii" not in line:
+                        continue
+                    # For error metrics, ensure it's specifically pii_block
+                    if "errors" in metric and "pii_block" not in line:
+                        continue
                     # Extract metric value
                     try:
                         parts = line.strip().split()
@@ -459,7 +464,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             try:

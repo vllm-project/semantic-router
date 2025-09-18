@@ -68,7 +68,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             if response.status_code >= 500:
@@ -129,7 +129,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=10,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             passed = response.status_code < 400
@@ -185,7 +185,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             passed = response.status_code < 400
