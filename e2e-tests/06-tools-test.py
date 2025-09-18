@@ -187,8 +187,7 @@ class ToolsSelectionTest(SemanticRouterTestBase):
                 )
 
                 # Tool selection should work regardless of vLLM backend availability
-                # Tool selection should work successfully - no 503 accepted
-                # If tool selection is working, requests must succeed with 200
+                # Tool selection should work successfully
                 passed = response.status_code == 200
 
                 try:
@@ -264,8 +263,7 @@ class ToolsSelectionTest(SemanticRouterTestBase):
                     timeout=30,
                 )
 
-                # Tool selection should work successfully - no 503 accepted
-                # If tool selection is working, requests must succeed with 200
+                # Tool selection should work successfully
                 passed = response.status_code == 200
 
                 try:

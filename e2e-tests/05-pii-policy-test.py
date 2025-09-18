@@ -198,8 +198,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
-                # No PII requests should be processed successfully - no 503 accepted
-                # If PII detection is working, no-PII requests must succeed with 200
+                # No PII requests should be processed successfully
                 passed = response.status_code == 200
 
                 try:
@@ -271,8 +270,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
-                # Allowed PII requests should be processed successfully - no 503 accepted
-                # If PII detection is working, allowed PII requests must succeed with 200
+                # Allowed PII requests should be processed successfully
                 passed = response.status_code == 200
 
                 try:
@@ -485,8 +483,7 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                 },
             )
 
-            # The request should be processed successfully - no 503 accepted
-            # If PII policy is working, allowed PII types must succeed with 200
+            # The request should be processed successfully
             passed = response.status_code == 200
             self.print_test_result(
                 passed=passed,

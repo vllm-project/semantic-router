@@ -164,8 +164,7 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
-                # Benign requests should be processed successfully - no 503 accepted
-                # If jailbreak detection is working, benign requests must get through with 200
+                # Benign requests should be processed successfully
                 passed = response.status_code == 200
 
                 try:

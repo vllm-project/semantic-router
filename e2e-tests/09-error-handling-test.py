@@ -110,7 +110,7 @@ EDGE_CASE_TESTS = [
                 for i in range(100)  # 100 messages
             ],
         },
-        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
+        "expected_status": 200,
         "description": "Large number of messages should be handled",
     },
     {
@@ -121,7 +121,7 @@ EDGE_CASE_TESTS = [
                 {"role": "user", "content": "Hello 世界 🌍 Здравствуй мир"}
             ],
         },
-        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
+        "expected_status": 200,
         "description": "Unicode characters should be handled correctly",
     },
     {
@@ -131,7 +131,7 @@ EDGE_CASE_TESTS = [
             "messages": [{"role": "user", "content": "Hello"}],
             "temperature": 0,
         },
-        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
+        "expected_status": 200,
         "description": "Zero temperature should be valid",
     },
     {
@@ -141,7 +141,7 @@ EDGE_CASE_TESTS = [
             "messages": [{"role": "user", "content": "Hello"}],
             "temperature": 2.0,
         },
-        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
+        "expected_status": 200,
         "description": "Maximum valid temperature should work",
     },
     {
@@ -152,7 +152,7 @@ EDGE_CASE_TESTS = [
                 {"role": "user", "content": "Test with \"quotes\" and 'apostrophes' and \n newlines \t tabs"}
             ],
         },
-        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
+        "expected_status": 200,
         "description": "Special characters should be handled",
     },
 ]
@@ -247,8 +247,8 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     timeout=30,
                 )
 
-                min_status, max_status = test_case["expected_status_range"]
-                passed = min_status <= response.status_code <= max_status
+                expected_status = test_case["expected_status"]
+                passed = response.status_code == expected_status
 
                 try:
                     response_json = response.json()
@@ -260,7 +260,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     response,
                     {
                         "Payload": str(test_case["payload"])[:100] + "...",
-                        "Expected Range": f"{min_status}-{max_status}",
+                        "Expected Status": expected_status,
                         "Actual Status": response.status_code,
                         "Error Info": str(error_info)[:100] + "..." if len(str(error_info)) > 100 else str(error_info),
                         "Session ID": session_id,
@@ -273,14 +273,14 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     message=(
                         f"Malformed request properly rejected (status: {response.status_code})"
                         if passed
-                        else f"Unexpected status code: {response.status_code} (expected {min_status}-{max_status})"
+                        else f"Unexpected status code: {response.status_code} (expected {expected_status})"
                     ),
                 )
 
                 self.assertTrue(
                     passed,
                     f"Malformed request '{test_case['name']}' returned status {response.status_code}, "
-                    f"expected {min_status}-{max_status}",
+                    f"expected {expected_status}",
                 )
 
     def test_edge_cases(self):
@@ -302,7 +302,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
 
                 self.print_request_info(
                     payload={**test_case["payload"], "messages": [{"content": f"[{len(str(test_case['payload']['messages']))} chars]"}]},  # Show length instead of full content
-                    expectations=f"Expect: {test_case['expected_status_range'][0]}-{test_case['expected_status_range'][1]} status code",
+                    expectations=f"Expect: {test_case['expected_status']} status code",
                 )
 
                 response = requests.post(
@@ -312,8 +312,8 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     timeout=30,  # Longer timeout for edge cases
                 )
 
-                min_status, max_status = test_case["expected_status_range"]
-                passed = min_status <= response.status_code <= max_status
+                expected_status = test_case["expected_status"]
+                passed = response.status_code == expected_status
 
                 try:
                     response_json = response.json()
@@ -325,7 +325,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     response,
                     {
                         "Test Case": test_case["name"],
-                        "Expected Range": f"{min_status}-{max_status}",
+                        "Expected Status": expected_status,
                         "Actual Status": response.status_code,
                         "Selected Model": model,
                         "Session ID": session_id,
@@ -345,7 +345,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                 self.assertTrue(
                     passed,
                     f"Edge case '{test_case['name']}' returned status {response.status_code}, "
-                    f"expected {min_status}-{max_status}",
+                    f"expected {expected_status}",
                 )
 
     def test_timeout_handling(self):

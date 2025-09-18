@@ -217,8 +217,7 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     timeout=30,
                 )
 
-                # Model selection should work successfully - no 503 accepted
-                # If model selection is working, requests must succeed with 200
+                # Model selection should work successfully
                 passed = response.status_code == 200
 
                 try:
@@ -298,8 +297,7 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     timeout=30,
                 )
 
-                # Reasoning mode should work successfully - no 503 accepted
-                # If reasoning mode selection is working, requests must succeed with 200
+                # Reasoning mode should work successfully
                 passed = response.status_code == 200
 
                 try:
@@ -373,7 +371,6 @@ class ModelSelectionTest(SemanticRouterTestBase):
         )
 
         # Fallback should work - 400 is acceptable for invalid model request
-        # No 503 accepted - if fallback is working, it should handle gracefully
         passed = response.status_code in [200, 400]  # 400 is acceptable for invalid model
 
         try:
