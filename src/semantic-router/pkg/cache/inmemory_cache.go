@@ -55,18 +55,18 @@ func (c *InMemoryCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBody []byte) (string, error) {
+func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
-		return query, nil
+		return nil
 	}
 
 	// Generate semantic embedding for the query
 	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_pending", "error", time.Since(start).Seconds())
-		return "", fmt.Errorf("failed to generate embedding: %w", err)
+		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	c.mu.Lock()
@@ -77,6 +77,7 @@ func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBod
 
 	// Create cache entry for the pending request
 	entry := CacheEntry{
+		RequestID:   requestID,
 		RequestBody: requestBody,
 		Model:       model,
 		Query:       query,
@@ -110,11 +111,11 @@ func (c *InMemoryCache) AddPendingRequest(model string, query string, requestBod
 	metrics.RecordCacheOperation("memory", "add_pending", "success", time.Since(start).Seconds())
 	metrics.UpdateCacheEntries("memory", len(c.entries))
 
-	return query, nil
+	return nil
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *InMemoryCache) UpdateWithResponse(query string, responseBody []byte) error {
+func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -129,7 +130,7 @@ func (c *InMemoryCache) UpdateWithResponse(query string, responseBody []byte) er
 
 	// Locate the pending request and complete it
 	for i, entry := range c.entries {
-		if entry.Query == query && entry.ResponseBody == nil {
+		if entry.RequestID == requestID && entry.ResponseBody == nil {
 			// Complete the cache entry with the response
 			c.entries[i].ResponseBody = responseBody
 			c.entries[i].Timestamp = time.Now()
@@ -144,11 +145,11 @@ func (c *InMemoryCache) UpdateWithResponse(query string, responseBody []byte) er
 
 	// No matching pending request found
 	metrics.RecordCacheOperation("memory", "update_response", "error", time.Since(start).Seconds())
-	return fmt.Errorf("no pending request found for query: %s", query)
+	return fmt.Errorf("no pending request found for request ID: %s", requestID)
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *InMemoryCache) AddEntry(model string, query string, requestBody, responseBody []byte) error {
+func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -163,6 +164,7 @@ func (c *InMemoryCache) AddEntry(model string, query string, requestBody, respon
 	}
 
 	entry := CacheEntry{
+		RequestID:    requestID,
 		RequestBody:  requestBody,
 		ResponseBody: responseBody,
 		Model:        model,

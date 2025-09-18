@@ -246,8 +246,5 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 		ToolsDatabase:        toolsDatabase,
 	}
 
-	// Initialize internal fields for testing
-	router.InitializeForTesting()
-
 	return router, nil
 }
