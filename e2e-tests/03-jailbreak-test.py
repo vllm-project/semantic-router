@@ -164,9 +164,9 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
-                # Benign requests should be processed (may get 503 due to missing vLLM backend)
-                # But should NOT be blocked at the jailbreak detection level
-                passed = response.status_code in [200, 503]  # 503 = vLLM not available, but not blocked
+                # Benign requests should be processed successfully - no 503 accepted
+                # If jailbreak detection is working, benign requests must get through with 200
+                passed = response.status_code == 200
 
                 try:
                     response_json = response.json()
@@ -193,10 +193,87 @@ class JailbreakDetectionTest(SemanticRouterTestBase):
                     ),
                 )
 
-                self.assertIn(
+                self.assertEqual(
                     response.status_code,
-                    [200, 503],  # Accept both success and vLLM unavailable
-                    f"Benign request '{test_case['name']}' was blocked when it should be allowed. Status: {response.status_code}",
+                    200,  # Only accept success - if service fails, test should fail
+                    f"Benign request '{test_case['name']}' failed with status {response.status_code}. Expected: 200",
+                )
+
+    def test_jailbreak_attempts_blocked(self):
+        """Test that actual jailbreak attempts are blocked by the security system."""
+        self.print_test_header(
+            "Jailbreak Attempts Blocked Test",
+            "Verifies that malicious jailbreak attempts are properly detected and blocked",
+        )
+
+        for test_case in JAILBREAK_TEST_CASES:
+            with self.subTest(test_case["name"]):
+                self.print_subtest_header(test_case["name"])
+
+                session_id = str(uuid.uuid4())
+                payload = {
+                    "model": DEFAULT_MODEL,
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": test_case["content"]},
+                    ],
+                    "temperature": 0.7,
+                }
+
+                headers = {
+                    "Content-Type": "application/json",
+                    "X-Session-ID": session_id,
+                }
+
+                self.print_request_info(
+                    payload=payload,
+                    expectations=f"Expect: Jailbreak attempt to be blocked with 4xx status code",
+                )
+
+                response = requests.post(
+                    f"{ENVOY_URL}{OPENAI_ENDPOINT}",
+                    headers=headers,
+                    json=payload,
+                    timeout=(10, 60),  # (connect timeout, read timeout)
+                )
+
+                # Jailbreak attempts should be blocked with 4xx status codes
+                passed = 400 <= response.status_code < 500
+
+                try:
+                    response_json = response.json()
+                    error_message = response_json.get("error", {}).get("message", "")
+                except:
+                    error_message = "N/A"
+
+                self.print_response_info(
+                    response,
+                    {
+                        "Content": test_case["content"][:50] + "...",
+                        "Error Message": error_message,
+                        "Session ID": session_id,
+                        "Jailbreak Status": "Expected: Blocked",
+                    },
+                )
+
+                self.print_test_result(
+                    passed=passed,
+                    message=(
+                        f"Jailbreak attempt properly blocked (status: {response.status_code})"
+                        if passed
+                        else f"Jailbreak attempt NOT blocked - security failure! (status: {response.status_code})"
+                    ),
+                )
+
+                self.assertGreaterEqual(
+                    response.status_code,
+                    400,
+                    f"Jailbreak attempt '{test_case['name']}' was NOT blocked! Status: {response.status_code}. This is a security vulnerability.",
+                )
+                self.assertLess(
+                    response.status_code,
+                    500,
+                    f"Jailbreak attempt '{test_case['name']}' returned server error {response.status_code} instead of proper block.",
                 )
 
     def test_jailbreak_detection_metrics(self):
