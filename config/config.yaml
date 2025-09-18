@@ -8,6 +8,7 @@ semantic_cache:
   similarity_threshold: 0.8
   max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
+  eviction_policy: "fifo"  # "fifo", "lru", "lfu", currently only supports memory backend
 
   # For production environments, use Milvus for scalable caching:
   # backend_type: "milvus"

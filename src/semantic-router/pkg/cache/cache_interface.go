@@ -10,7 +10,9 @@ type CacheEntry struct {
 	Model        string
 	Query        string
 	Embedding    []float32
-	Timestamp    time.Time
+	Timestamp    time.Time // Creation time (when the entry was added or completed with a response)
+	LastAccessAt time.Time // Last access time
+	HitCount     int64     // Access count
 }
 
 // CacheBackend defines the interface for semantic cache implementations
@@ -74,6 +76,9 @@ type CacheConfig struct {
 
 	// TTLSeconds sets cache entry expiration time (0 disables expiration)
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+	// EvictionPolicy defines the eviction policy for in-memory cache ("fifo", "lru", "lfu")
+	EvictionPolicy string `yaml:"eviction_policy,omitempty"`
 
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
