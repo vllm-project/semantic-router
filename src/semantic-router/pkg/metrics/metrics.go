@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 // Minimal fallback bucket configurations - used only when configuration is completely missing
@@ -384,7 +385,7 @@ var (
 // RecordModelRequest increments the counter for requests to a specific model
 func RecordModelRequest(model string) {
 	if model == "" {
-		model = "unknown"
+		model = consts.UnknownLabel
 	}
 	ModelRequests.WithLabelValues(model).Inc()
 }
@@ -392,10 +393,10 @@ func RecordModelRequest(model string) {
 // RecordRequestError increments request error counters labeled by model and normalized reason
 func RecordRequestError(model, reason string) {
 	if model == "" {
-		model = "unknown"
+		model = consts.UnknownLabel
 	}
 	if reason == "" {
-		reason = "unknown"
+		reason = consts.UnknownLabel
 	}
 	// Normalize a few common variants to canonical reasons
 	switch reason {
@@ -435,10 +436,10 @@ func RecordModelCost(model string, currency string, amount float64) {
 // RecordRoutingReasonCode increments the counter for a routing decision reason code and model
 func RecordRoutingReasonCode(reasonCode, model string) {
 	if reasonCode == "" {
-		reasonCode = "unknown"
+		reasonCode = consts.UnknownLabel
 	}
 	if model == "" {
-		model = "unknown"
+		model = consts.UnknownLabel
 	}
 	RoutingReasonCodes.WithLabelValues(reasonCode, model).Inc()
 }
@@ -453,7 +454,7 @@ func RecordModelTokensDetailed(model string, promptTokens, completionTokens floa
 
 	// Also record per-request histograms for visibility into distribution
 	if model == "" {
-		model = "unknown"
+		model = consts.UnknownLabel
 	}
 	PromptTokensPerRequest.WithLabelValues(model).Observe(promptTokens)
 	CompletionTokensPerRequest.WithLabelValues(model).Observe(completionTokens)
@@ -470,7 +471,7 @@ func RecordModelTTFT(model string, seconds float64) {
 		return
 	}
 	if model == "" {
-		model = "unknown"
+		model = consts.UnknownLabel
 	}
 	ModelTTFT.WithLabelValues(model).Observe(seconds)
 }
@@ -481,7 +482,7 @@ func RecordModelTPOT(model string, secondsPerToken float64) {
 		return
 	}
 	if model == "" {
-		model = "unknown"
+		model = consts.UnknownLabel
 	}
 	ModelTPOT.WithLabelValues(model).Observe(secondsPerToken)
 }
@@ -515,7 +516,7 @@ func UpdateCacheEntries(backend string, count int) {
 // RecordCategoryClassification increments the counter for a specific category classification
 func RecordCategoryClassification(category string) {
 	if category == "" {
-		category = "unknown"
+		category = consts.UnknownLabel
 	}
 	CategoryClassificationsCount.WithLabelValues(category).Inc()
 }
@@ -575,7 +576,7 @@ func GetBatchSizeRange(size int) string {
 	}
 
 	// Fallback for unexpected cases
-	return "unknown"
+	return consts.UnknownLabel
 }
 
 // GetBatchSizeRangeFromBuckets generates range labels based on size buckets
@@ -756,7 +757,7 @@ func RecordReasoningDecision(category, model string, enabled bool, effort string
 // RecordReasoningTemplateUsage records usage of a model-family-specific template parameter
 func RecordReasoningTemplateUsage(family, param string) {
 	if family == "" {
-		family = "unknown"
+		family = consts.UnknownLabel
 	}
 	if param == "" {
 		param = "none"
@@ -767,7 +768,7 @@ func RecordReasoningTemplateUsage(family, param string) {
 // RecordReasoningEffortUsage records the effort usage by model family
 func RecordReasoningEffortUsage(family, effort string) {
 	if family == "" {
-		family = "unknown"
+		family = consts.UnknownLabel
 	}
 	if effort == "" {
 		effort = "unspecified"
@@ -778,7 +779,7 @@ func RecordReasoningEffortUsage(family, effort string) {
 // RecordEntropyClassificationDecision records an entropy-based classification decision
 func RecordEntropyClassificationDecision(uncertaintyLevel string, reasoningEnabled bool, decisionReason string, topCategory string) {
 	if uncertaintyLevel == "" {
-		uncertaintyLevel = "unknown"
+		uncertaintyLevel = consts.UnknownLabel
 	}
 	if decisionReason == "" {
 		decisionReason = "unspecified"
@@ -798,7 +799,7 @@ func RecordEntropyClassificationDecision(uncertaintyLevel string, reasoningEnabl
 // RecordEntropyValue records the entropy value for a classification
 func RecordEntropyValue(category string, classificationType string, entropyValue float64) {
 	if category == "" {
-		category = "unknown"
+		category = consts.UnknownLabel
 	}
 	if classificationType == "" {
 		classificationType = "standard"
@@ -810,7 +811,7 @@ func RecordEntropyValue(category string, classificationType string, entropyValue
 // RecordClassificationConfidence records the confidence score from classification
 func RecordClassificationConfidence(category string, classificationMethod string, confidence float64) {
 	if category == "" {
-		category = "unknown"
+		category = consts.UnknownLabel
 	}
 	if classificationMethod == "" {
 		classificationMethod = "traditional"
@@ -827,10 +828,10 @@ func RecordEntropyClassificationLatency(seconds float64) {
 // RecordProbabilityDistributionQuality records quality checks for probability distributions
 func RecordProbabilityDistributionQuality(qualityCheck string, status string) {
 	if qualityCheck == "" {
-		qualityCheck = "unknown"
+		qualityCheck = consts.UnknownLabel
 	}
 	if status == "" {
-		status = "unknown"
+		status = consts.UnknownLabel
 	}
 
 	ProbabilityDistributionQuality.WithLabelValues(qualityCheck, status).Inc()
@@ -839,7 +840,7 @@ func RecordProbabilityDistributionQuality(qualityCheck string, status string) {
 // RecordEntropyFallback records when entropy-based routing falls back to traditional methods
 func RecordEntropyFallback(fallbackReason string, fallbackStrategy string) {
 	if fallbackReason == "" {
-		fallbackReason = "unknown"
+		fallbackReason = consts.UnknownLabel
 	}
 	if fallbackStrategy == "" {
 		fallbackStrategy = "unspecified"
