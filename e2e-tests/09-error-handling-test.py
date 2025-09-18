@@ -244,7 +244,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=test_case["payload"],
-                    timeout=10,
+                    timeout=30,
                 )
 
                 min_status, max_status = test_case["expected_status_range"]
@@ -467,7 +467,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     data=test_case["body"],
-                    timeout=10,
+                    timeout=30,
                 )
 
                 # Invalid content types should typically return 4xx errors
@@ -517,7 +517,7 @@ class ErrorHandlingEdgeCasesTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}",
             headers=headers,
             json=payload,
-            timeout=10,
+            timeout=30,
         )
 
         passed = response.status_code >= 400

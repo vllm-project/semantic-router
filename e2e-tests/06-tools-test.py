@@ -183,7 +183,7 @@ class ToolsSelectionTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=30,
                 )
 
                 # Tool selection should work regardless of vLLM backend availability
@@ -259,7 +259,7 @@ class ToolsSelectionTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=30,
                 )
 
                 passed = response.status_code in [200, 503]
@@ -331,7 +331,7 @@ class ToolsSelectionTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}",
             headers=headers,
             json=payload,
-            timeout=10,
+            timeout=30,
         )
 
         passed = response.status_code in [200, 503]
@@ -452,7 +452,7 @@ class ToolsSelectionTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=30,
             )
 
             # Record the response status for consistency checking

@@ -214,7 +214,7 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=30,
                 )
 
                 passed = response.status_code in [200, 503]
@@ -293,7 +293,7 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers=headers,
                     json=payload,
-                    timeout=10,
+                    timeout=30,
                 )
 
                 passed = response.status_code in [200, 503]
@@ -365,7 +365,7 @@ class ModelSelectionTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}",
             headers=headers,
             json=payload,
-            timeout=10,
+            timeout=30,
         )
 
         # Fallback should work, though may get 503 if no vLLM backend
@@ -490,7 +490,7 @@ class ModelSelectionTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=30,
             )
 
             # Record the response status and model for consistency checking

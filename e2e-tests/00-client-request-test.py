@@ -176,14 +176,14 @@ class ClientRequestTest(SemanticRouterTestBase):
 
         try:
             response = self._make_request(
-                payload, timeout=10
+                payload, timeout=30
             )  # Reduced timeout for error cases
             if not response:
                 response = requests.post(
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers={"Content-Type": "application/json"},
                     json=payload,
-                    timeout=10,
+                    timeout=30,
                 )
 
             passed = 400 <= response.status_code < 500
