@@ -11,6 +11,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 )
 
 func getHistogramSampleCount(metricName, model string) uint64 {
@@ -44,9 +45,9 @@ var _ = Describe("Metrics recording", func() {
 
 	BeforeEach(func() {
 		// Use a minimal router that doesn't require external models
-		router = &OpenAIRouter{}
-		// Initialize internal maps used by handlers
-		router.InitializeForTesting()
+		router = &OpenAIRouter{
+			Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false}),
+		}
 	})
 
 	It("records TTFT on response headers", func() {

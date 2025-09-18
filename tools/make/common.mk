@@ -63,6 +63,8 @@ help:
 	@echo "    clean-milvus            - Stop container and clean data"
 	@echo "    test-milvus-cache       - Test cache with Milvus backend"
 	@echo "    test-semantic-router-milvus - Test router with Milvus cache"
+	@echo "    start-milvus-ui         - Start Milvus UI to browse data"
+	@echo "    stop-milvus-ui          - Stop and remove Milvus UI container"
 	@echo "    Example: CONTAINER_RUNTIME=podman make start-milvus"
 	@echo ""
 	@echo "  Demo targets:"
