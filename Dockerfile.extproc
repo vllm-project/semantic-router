@@ -14,6 +14,7 @@ WORKDIR /app
 COPY Makefile ./
 COPY candle-binding/Cargo.toml candle-binding/
 COPY candle-binding/src/ candle-binding/src/
+Copy tools ./tools
 
 # Use Makefile to build the Rust library
 RUN make rust
