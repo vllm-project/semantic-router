@@ -217,7 +217,9 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     timeout=30,
                 )
 
-                passed = response.status_code in [200, 503]
+                # Model selection should work successfully - no 503 accepted
+                # If model selection is working, requests must succeed with 200
+                passed = response.status_code == 200
 
                 try:
                     response_json = response.json()
@@ -249,10 +251,10 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     ),
                 )
 
-                self.assertIn(
+                self.assertEqual(
                     response.status_code,
-                    [200, 503],
-                    f"Model selection request '{test_case['name']}' failed. Status: {response.status_code}",
+                    200,
+                    f"Model selection request '{test_case['name']}' failed with status {response.status_code}. Expected: 200 (service must be working)",
                 )
 
     def test_reasoning_mode_selection(self):
@@ -296,7 +298,9 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     timeout=30,
                 )
 
-                passed = response.status_code in [200, 503]
+                # Reasoning mode should work successfully - no 503 accepted
+                # If reasoning mode selection is working, requests must succeed with 200
+                passed = response.status_code == 200
 
                 try:
                     response_json = response.json()
@@ -327,10 +331,10 @@ class ModelSelectionTest(SemanticRouterTestBase):
                     ),
                 )
 
-                self.assertIn(
+                self.assertEqual(
                     response.status_code,
-                    [200, 503],
-                    f"Reasoning mode test '{test_case['name']}' failed. Status: {response.status_code}",
+                    200,
+                    f"Reasoning mode test '{test_case['name']}' failed with status {response.status_code}. Expected: 200 (service must be working)",
                 )
 
     def test_model_fallback_behavior(self):
@@ -368,8 +372,9 @@ class ModelSelectionTest(SemanticRouterTestBase):
             timeout=30,
         )
 
-        # Fallback should work, though may get 503 if no vLLM backend
-        passed = response.status_code in [200, 400, 503]  # 400 is acceptable for invalid model
+        # Fallback should work - 400 is acceptable for invalid model request
+        # No 503 accepted - if fallback is working, it should handle gracefully
+        passed = response.status_code in [200, 400]  # 400 is acceptable for invalid model
 
         try:
             response_json = response.json()
@@ -394,8 +399,8 @@ class ModelSelectionTest(SemanticRouterTestBase):
 
         self.assertIn(
             response.status_code,
-            [200, 400, 503],
-            f"Model fallback test failed unexpectedly. Status: {response.status_code}",
+            [200, 400],
+            f"Model fallback test failed with status {response.status_code}. Expected: 200 (fallback) or 400 (invalid model)",
         )
 
     def test_model_selection_metrics(self):

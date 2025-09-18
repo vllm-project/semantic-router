@@ -198,8 +198,9 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
-                # No PII requests should be processed (may get 503 due to missing vLLM backend)
-                passed = response.status_code in [200, 503]
+                # No PII requests should be processed successfully - no 503 accepted
+                # If PII detection is working, no-PII requests must succeed with 200
+                passed = response.status_code == 200
 
                 try:
                     response_json = response.json()
@@ -226,10 +227,10 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     ),
                 )
 
-                self.assertIn(
+                self.assertEqual(
                     response.status_code,
-                    [200, 503],
-                    f"No PII request '{test_case['name']}' was blocked when it should be allowed. Status: {response.status_code}",
+                    200,
+                    f"No PII request '{test_case['name']}' failed with status {response.status_code}. Expected: 200 (service must be working)",
                 )
 
     def test_allowed_pii_requests(self):
@@ -270,8 +271,9 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     timeout=(10, 60),  # (connect timeout, read timeout)
                 )
 
-                # Allowed PII requests should be processed (may get 503 due to missing vLLM backend)
-                passed = response.status_code in [200, 503]
+                # Allowed PII requests should be processed successfully - no 503 accepted
+                # If PII detection is working, allowed PII requests must succeed with 200
+                passed = response.status_code == 200
 
                 try:
                     response_json = response.json()
@@ -299,10 +301,10 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                     ),
                 )
 
-                self.assertIn(
+                self.assertEqual(
                     response.status_code,
-                    [200, 503],
-                    f"Allowed PII request '{test_case['name']}' was blocked when it should be allowed. Status: {response.status_code}",
+                    200,
+                    f"Allowed PII request '{test_case['name']}' failed with status {response.status_code}. Expected: 200 (service must be working)",
                 )
 
     def test_pii_policy_consistency(self):
@@ -483,17 +485,18 @@ class PIIDetectionPolicyTest(SemanticRouterTestBase):
                 },
             )
 
-            # The request should be processed (allowed PII types for gemma3:27b)
-            passed = response.status_code in [200, 503]
+            # The request should be processed successfully - no 503 accepted
+            # If PII policy is working, allowed PII types must succeed with 200
+            passed = response.status_code == 200
             self.print_test_result(
                 passed=passed,
                 message=f"Model {model} PII policy applied correctly",
             )
 
-            self.assertIn(
+            self.assertEqual(
                 response.status_code,
-                [200, 503],
-                f"Model {model} did not handle PII policy correctly. Status: {response.status_code}",
+                200,
+                f"Model {model} PII policy failed with status {response.status_code}. Expected: 200 (service must be working)",
             )
 
 

@@ -98,7 +98,7 @@ EDGE_CASE_TESTS = [
                 {"role": "user", "content": "A" * 10000}  # 10KB message
             ],
         },
-        "expected_status_range": (200, 503),  # Should be processed or vLLM unavailable
+        "expected_status_range": (200, 200),  # Should be processed successfully - no 503 accepted
         "description": "Very long message should be handled gracefully",
     },
     {
@@ -110,7 +110,7 @@ EDGE_CASE_TESTS = [
                 for i in range(100)  # 100 messages
             ],
         },
-        "expected_status_range": (200, 503),
+        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
         "description": "Large number of messages should be handled",
     },
     {
@@ -121,7 +121,7 @@ EDGE_CASE_TESTS = [
                 {"role": "user", "content": "Hello 世界 🌍 Здравствуй мир"}
             ],
         },
-        "expected_status_range": (200, 503),
+        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
         "description": "Unicode characters should be handled correctly",
     },
     {
@@ -131,7 +131,7 @@ EDGE_CASE_TESTS = [
             "messages": [{"role": "user", "content": "Hello"}],
             "temperature": 0,
         },
-        "expected_status_range": (200, 503),
+        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
         "description": "Zero temperature should be valid",
     },
     {
@@ -141,7 +141,7 @@ EDGE_CASE_TESTS = [
             "messages": [{"role": "user", "content": "Hello"}],
             "temperature": 2.0,
         },
-        "expected_status_range": (200, 503),
+        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
         "description": "Maximum valid temperature should work",
     },
     {
@@ -152,7 +152,7 @@ EDGE_CASE_TESTS = [
                 {"role": "user", "content": "Test with \"quotes\" and 'apostrophes' and \n newlines \t tabs"}
             ],
         },
-        "expected_status_range": (200, 503),
+        "expected_status_range": (200, 200),  # Must be processed successfully - no 503 accepted
         "description": "Special characters should be handled",
     },
 ]
