@@ -161,7 +161,7 @@ func TestEvictionPolicySelection(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("Policy_%s", tc.policy), func(t *testing.T) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EvictionPolicy: tc.policy,
+				EvictionPolicy: EvictionPolicyType(tc.policy),
 			})
 
 			policyType := fmt.Sprintf("%T", cache.evictionPolicy)

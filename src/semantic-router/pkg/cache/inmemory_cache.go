@@ -35,7 +35,7 @@ type InMemoryCacheOptions struct {
 	MaxEntries          int
 	TTLSeconds          int
 	Enabled             bool
-	EvictionPolicy      string
+	EvictionPolicy      EvictionPolicyType
 }
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
@@ -45,11 +45,11 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 
 	var evictionPolicy EvictionPolicy
 	switch options.EvictionPolicy {
-	case "lru":
+	case LRUEvictionPolicyType:
 		evictionPolicy = &LRUPolicy{}
-	case "lfu":
+	case LFUEvictionPolicyType:
 		evictionPolicy = &LFUPolicy{}
-	default:
+	default: // FIFOEvictionPolicyType
 		evictionPolicy = &FIFOPolicy{}
 	}
 

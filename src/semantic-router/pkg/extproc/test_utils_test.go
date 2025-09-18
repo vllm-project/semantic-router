@@ -216,7 +216,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		EvictionPolicy:      cfg.SemanticCache.EvictionPolicy,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
 	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {
