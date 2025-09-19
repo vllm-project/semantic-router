@@ -173,6 +173,12 @@ semantic_router_cache_size 1247
 # Security metrics
 semantic_router_pii_detections_total{action="block"} 23
 semantic_router_jailbreak_attempts_total{action="block"} 5
+
+# Error metrics
+llm_request_errors_total{model="gpt-4",reason="timeout"} 12
+llm_request_errors_total{model="claude-3",reason="upstream_5xx"} 3
+llm_request_errors_total{model="phi4",reason="upstream_4xx"} 5
+llm_request_errors_total{model="phi4",reason="pii_policy_denied"} 8
 ```
 
 ### Reasoning Mode Metrics
@@ -245,6 +251,35 @@ sum by (model) (increase(llm_model_cost_total{currency="USD"}[1h]))
 
 # Routing decisions by reason code over the last 15 minutes
 sum by (reason_code) (increase(llm_routing_reason_codes_total[15m]))
+```
+
+### Request Error Metrics
+
+The router tracks request-level failures by model and reason so you can monitor both absolute error throughput and the share of requests that fail.
+
+- `llm_request_errors_total{model, reason}`
+  - Description: Total number of request errors categorized by failure reason
+  - Labels:
+    - model: target model name for the failed request
+    - reason: error category (timeout, upstream_4xx, upstream_5xx, pii_policy_denied, jailbreak_block, parse_error, serialization_error, cancellation, classification_failed, unknown)
+
+Example PromQL queries:
+
+```prometheus
+# Total errors by reason over the last hour
+sum by (reason) (increase(llm_request_errors_total[1h]))
+
+# Error throughput (errors/sec) by model over the last 15 minutes.
+# Helpful for incident response because it shows how many failing requests are impacting users.
+sum by (model) (rate(llm_request_errors_total[15m]))
+
+# Error ratio (% of requests failing) by model over the last 15 minutes.
+# Use increase() to align numerator and denominator with the same lookback window.
+100 * sum by (model) (increase(llm_request_errors_total[15m])) /
+    sum by (model) (increase(llm_model_requests_total[15m]))
+
+# PII policy blocks over the last 24 hours
+sum(increase(llm_request_errors_total{reason="pii_policy_denied"}[24h]))
 ```
 
 ### Pricing Configuration
