@@ -4,6 +4,8 @@
 
 This test validates the router's ability to classify different types of queries
 and select the appropriate model based on the content.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json

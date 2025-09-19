@@ -4,6 +4,8 @@
 
 This test validates the router's ability to automatically select appropriate tools
 based on request content using semantic similarity matching.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json

@@ -1,6 +1,8 @@
 # E2E Test Status Report
 *Generated: 2024-09-18*
 
+<!-- Signed-off-by: Yossi Ovadia <yovadia@redhat.com> -->
+
 ## ✅ **PASSING TESTS**
 
 **00-client-request-test.py** - Basic client connectivity and request/response validation

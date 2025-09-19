@@ -4,6 +4,8 @@
 
 This test validates the router's ability to select appropriate models based on
 content categories and configured scoring rules.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json
