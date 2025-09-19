@@ -66,6 +66,9 @@ type RouterConfig struct {
 		// Time-to-live for cache entries in seconds (0 means no expiration)
 		TTLSeconds int `yaml:"ttl_seconds,omitempty"`
 
+		// Eviction policy for in-memory cache ("fifo", "lru", "lfu")
+		EvictionPolicy string `yaml:"eviction_policy,omitempty"`
+
 		// Path to backend-specific configuration file
 		BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 	} `yaml:"semantic_cache"`

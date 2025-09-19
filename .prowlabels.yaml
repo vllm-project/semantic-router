@@ -1,0 +1,15 @@
+area:
+  - core
+  - research
+  - observability
+  - networking
+  - bench
+  - environment
+  - user-experience
+  - docs
+  - test-and-release
+
+priority:
+  - P0
+  - P1
+  - P2

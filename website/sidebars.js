@@ -35,18 +35,18 @@ const sidebars = {
     },
     {
       type: 'category',
-      label: 'Model Training',
+      label: 'Getting Started',
       items: [
-        'training/training-overview',
+        'getting-started/installation',
+        'getting-started/reasoning',
+        'getting-started/configuration',
       ],
     },
     {
       type: 'category',
-      label: 'Getting Started',
+      label: 'Model Training',
       items: [
-        'getting-started/installation',
-        'getting-started/configuration',
-        'getting-started/reasoning-routing-quickstart',
+        'training/training-overview',
       ],
     },
     {

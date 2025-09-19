@@ -145,17 +145,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
-	// Check if this request has a pending cache entry
-	r.pendingRequestsLock.Lock()
-	cacheID, exists := r.pendingRequests[ctx.RequestID]
-	if exists {
-		delete(r.pendingRequests, ctx.RequestID)
-	}
-	r.pendingRequestsLock.Unlock()
-
-	// If we have a pending request, update the cache
-	if exists && ctx.RequestQuery != "" && responseBody != nil {
-		err := r.Cache.UpdateWithResponse(string(cacheID), responseBody)
+	// Update the cache
+	if ctx.RequestID != "" && responseBody != nil {
+		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody)
 		if err != nil {
 			observability.Errorf("Error updating cache: %v", err)
 			// Continue even if cache update fails

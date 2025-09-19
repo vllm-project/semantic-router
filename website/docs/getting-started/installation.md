@@ -8,7 +8,7 @@ This guide will help you set up and install the Semantic Router on your system. 
 
 ### Software Dependencies
 
-- **Go**: Version 1.19 or higher
+- **Go**: Version 1.24.1 or higher (matches the module requirements)
 - **Rust**: Version 1.70 or higher (for Candle bindings)
 - **Python**: Version 3.8 or higher (for model downloads)
 - **HuggingFace CLI**: For model downloads (`pip install huggingface_hub`)
@@ -90,6 +90,8 @@ This downloads the CPU-optimized BERT models for:
 - PII detection
 - Jailbreak detection
 
+> **Tip:** `make test` invokes `make download-models` automatically, so you only need to run this step manually the first time or when refreshing the cache.
+
 ### 5. Configure Backend Endpoints
 
 Edit `config/config.yaml` to point to your LLM endpoints:
@@ -106,9 +108,6 @@ vllm_endpoints:
 
 model_config:
   "your-model-name":
-    param_count: 671000000000  # 671B parameters for DeepSeek-V3.1
-    batch_size: 512.0  # vLLM default batch size
-    context_size: 65536.0 # DeepSeek-V3.1 context length
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types

@@ -205,6 +205,7 @@ The test suite includes:
 - **Envoy logs:** Check the terminal running `make run-envoy` for detailed request/response logs
 - **Router logs:** Check the terminal running `make run-router` for classification and routing decisions
 - **Rust library:** Use `RUST_LOG=debug` environment variable for detailed Rust logs
+- **Go library:** Use `SR_LOG_LEVEL=debug` environment variable for detailed Go logs
 
 ## Code Style and Standards
 

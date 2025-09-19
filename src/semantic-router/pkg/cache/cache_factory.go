@@ -27,6 +27,7 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			SimilarityThreshold: config.SimilarityThreshold,
 			MaxEntries:          config.MaxEntries,
 			TTLSeconds:          config.TTLSeconds,
+			EvictionPolicy:      config.EvictionPolicy,
 		}
 		return NewInMemoryCache(options), nil
 

@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"fmt"
-	"sync"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -25,10 +24,6 @@ type OpenAIRouter struct {
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
-
-	// Map to track pending requests and their unique IDs
-	pendingRequests     map[string][]byte
-	pendingRequestsLock sync.Mutex
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -89,6 +84,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
 	}
 
@@ -161,7 +157,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
-		pendingRequests:      make(map[string][]byte),
 	}
 
 	// Log reasoning configuration after router is created

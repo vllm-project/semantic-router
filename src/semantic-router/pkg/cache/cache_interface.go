@@ -4,12 +4,15 @@ import "time"
 
 // CacheEntry represents a complete cached request-response pair with associated metadata
 type CacheEntry struct {
+	RequestID    string
 	RequestBody  []byte
 	ResponseBody []byte
 	Model        string
 	Query        string
 	Embedding    []float32
-	Timestamp    time.Time
+	Timestamp    time.Time // Creation time (when the entry was added or completed with a response)
+	LastAccessAt time.Time // Last access time
+	HitCount     int64     // Access count
 }
 
 // CacheBackend defines the interface for semantic cache implementations
@@ -18,14 +21,13 @@ type CacheBackend interface {
 	IsEnabled() bool
 
 	// AddPendingRequest stores a request awaiting its response
-	// Returns the processed query string and any error
-	AddPendingRequest(model string, query string, requestBody []byte) (string, error)
+	AddPendingRequest(requestID string, model string, query string, requestBody []byte) error
 
 	// UpdateWithResponse completes a pending request with the received response
-	UpdateWithResponse(query string, responseBody []byte) error
+	UpdateWithResponse(requestID string, responseBody []byte) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(model string, query string, requestBody, responseBody []byte) error
+	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error
 
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error
@@ -58,6 +60,20 @@ const (
 	MilvusCacheType CacheBackendType = "milvus"
 )
 
+// EvictionPolicyType defines the available eviction policies
+type EvictionPolicyType string
+
+const (
+	// FIFOEvictionPolicyType specifies the FIFO eviction policy
+	FIFOEvictionPolicyType EvictionPolicyType = "fifo"
+
+	// LRUEvictionPolicyType specifies the LRU eviction policy
+	LRUEvictionPolicyType EvictionPolicyType = "lru"
+
+	// LFUEvictionPolicyType specifies the LFU eviction policy
+	LFUEvictionPolicyType EvictionPolicyType = "lfu"
+)
+
 // CacheConfig contains configuration settings shared across all cache backends
 type CacheConfig struct {
 	// BackendType specifies which cache implementation to use
@@ -74,6 +90,9 @@ type CacheConfig struct {
 
 	// TTLSeconds sets cache entry expiration time (0 disables expiration)
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+	// EvictionPolicy defines the eviction policy for in-memory cache ("fifo", "lru", "lfu")
+	EvictionPolicy EvictionPolicyType `yaml:"eviction_policy,omitempty"`
 
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`

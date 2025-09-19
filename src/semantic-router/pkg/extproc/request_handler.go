@@ -276,13 +276,10 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		}
 
 		// Cache miss, store the request for later
-		cacheID, err := r.Cache.AddPendingRequest(requestModel, requestQuery, ctx.OriginalRequestBody)
+		err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
 		if err != nil {
 			observability.Errorf("Error adding pending request to cache: %v", err)
-		} else {
-			r.pendingRequestsLock.Lock()
-			r.pendingRequests[ctx.RequestID] = []byte(cacheID)
-			r.pendingRequestsLock.Unlock()
+			// Continue without caching
 		}
 	}
 

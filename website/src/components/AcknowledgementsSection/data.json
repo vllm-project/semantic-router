@@ -20,6 +20,12 @@
       "logo": "/img/acknowledgements/envoy-logo.png",
       "url": "https://github.com/envoyproxy/envoy",
       "description": "Cloud-native high-performance edge/middle/service proxy"
+    },{
+      "id": "kubernetes",
+      "name": "Kubernetes",
+      "logo": "/img/acknowledgements/k8s-logo.png",
+      "url": "https://github.com/kubernetes",
+      "description": "Production-Grade Container Scheduling and Management"
     }
   ]
 }

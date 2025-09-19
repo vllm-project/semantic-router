@@ -1,0 +1,16 @@
+.git
+.idea
+*.png
+*.woff
+*.woff2
+*.eot
+*.ttf
+*.jpg
+*.ico
+*.svg
+*.js
+
+./website/public/*
+./website/node_modules/*
+./website/package-lock.json
+./candle-binding/target
