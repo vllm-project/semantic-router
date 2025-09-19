@@ -1,0 +1,29 @@
+FROM golang:1.24
+
+# Install Base env
+RUN apt-get update && apt-get install -y \
+    make \
+    build-essential \
+    pkg-config \
+    python3 \
+    python3-pip
+
+# Install Node.js and npm
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-get install -y nodejs
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+    . $HOME/.cargo/env
+
+# Markdown
+RUN npm install -g markdownlint-cli
+
+# Install pre-commit and tools
+RUN pip install --break-system-packages pre-commit
+
+# Yamllint
+RUN pip install --break-system-packages yamllint
+
+# CodeSpell
+RUN pip install --break-system-packages codespell

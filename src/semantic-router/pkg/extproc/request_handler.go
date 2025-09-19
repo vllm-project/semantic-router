@@ -263,8 +263,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		if err != nil {
 			observability.Errorf("Error searching cache: %v", err)
 		} else if found {
-			// Record and log cache hit
-			metrics.RecordCacheHit()
+			// Log cache hit
 			observability.LogEvent("cache_hit", map[string]interface{}{
 				"request_id": ctx.RequestID,
 				"model":      requestModel,

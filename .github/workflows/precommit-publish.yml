@@ -1,0 +1,40 @@
+name: Create and publish Precommit Image
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    paths:
+      - 'Dockerfile.precommit'
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate date tag for nightly builds
+        id: date
+        if: inputs.is_nightly == true
+        run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.precommit
+          push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
+          tags: |
+            ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/precommit:latest', github.repository_owner) || '' }}

@@ -2,11 +2,11 @@
 # =  Everything For Project Linter, markdown, yaml, code spell etc.  =
 # =============================== linter.mk ==========================
 
-docs-lint:
+docs-lint: docs-install
 	@$(LOG_TARGET)
 	cd website && npm run lint
 
-docs-lint-fix:
+docs-lint-fix: docs-install
 	@$(LOG_TARGET)
 	cd website && npm run lint:fix
 

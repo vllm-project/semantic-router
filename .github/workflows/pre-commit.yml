@@ -45,7 +45,7 @@ jobs:
         sudo apt-get install -y \
           make \
           build-essential \
-          pkg-config 
+          pkg-config
         npm install -g markdownlint-cli
         pip install --user yamllint codespell
 
@@ -81,31 +81,13 @@ jobs:
         key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
     - name: Install pre-commit
-      run: pip install pre-commit
+      run: make precommit-install
 
     - name: Run Code Spell Check
       run: make codespell
 
-    - name: Run pre-commit on Go, Rust, JavaScript, Markdown, Yaml and Python files
-      run: |
-        # Find all Go, Rust, JavaScripts, Markdown and Python files (excluding vendored/generated code)
-        FILES=$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" \) \
-          ! -path "./target/*" \
-          ! -path "./candle-binding/target/*" \
-          ! -path "./.git/*" \
-          ! -path "./node_modules/*" \
-          ! -path "./vendor/*" \
-          ! -path "./__pycache__/*" \
-          ! -path "./site/*" \
-          ! -name "*.pb.go" \
-          | tr '\n' ' ')
-        
-        if [ -n "$FILES" ]; then
-          echo "Running pre-commit on files: $FILES"
-          pre-commit run --files $FILES
-        else
-          echo "No Go, Rust, JavaScript, Markdown, Yaml, or Python files found to check"
-        fi
+    - name: Run pre-commit check
+      run: make precommit-check
 
     - name: Show pre-commit results
       if: failure()

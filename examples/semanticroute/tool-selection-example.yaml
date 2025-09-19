@@ -1,0 +1,50 @@
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRoute
+metadata:
+  name: tool-selection-example
+  namespace: default
+  labels:
+    app: semantic-router
+    scenario: tool-selection
+spec:
+  rules:
+  - intents:
+    - category: "computer science"
+      description: "Programming, algorithms, data structures"
+      threshold: 0.7
+    - category: "math"
+      description: "Mathematics, calculus, algebra"
+      threshold: 0.7
+    modelRefs:
+    - modelName: gpt-oss
+      address: 127.0.0.1
+      port: 8080
+      weight: 100
+    filters:
+    - type: ToolSelection
+      enabled: true
+      config:
+        topK: 3
+        similarityThreshold: 0.8
+        toolsDBPath: "config/tools_db.json"
+        fallbackToEmpty: true
+        categories: ["weather", "calculation", "search"]
+        tags: ["utility", "api", "function"]
+    - type: SemanticCache
+      enabled: true
+      config:
+        similarityThreshold: 0.85
+        maxEntries: 1000
+        ttlSeconds: 3600
+        backend: "memory"
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: true
+        reasoningEffort: "medium"
+        maxReasoningSteps: 10
+    defaultModel:
+      modelName: deepseek-v31
+      address: 127.0.0.1
+      port: 8088

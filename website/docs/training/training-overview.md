@@ -998,3 +998,7 @@ lora_training_infrastructure:
     lora_training: "$5-20 per model (reduced compute)"
     savings: "80-90% cost reduction"
 ```
+
+## Next
+
+- See: [Model Performance Evaluation](/docs/training/model-performance-eval)

@@ -48,4 +48,4 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
         tags: |
           ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/extproc:nightly-{1}', github.repository_owner, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/extproc:{1}', github.repository_owner, github.sha) }}
-          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/extproc:latest', github.repository_owner) || '' }} 
+          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/extproc:latest', github.repository_owner) || '' }}

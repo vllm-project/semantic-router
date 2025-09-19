@@ -130,6 +130,16 @@
   margin-top: 0.25rem;
 }
 
+.stepNumberTips {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 0 1rem;
+}
+
+.stepNumberTips p {
+    line-height: 1.5;
+}
+
 .step h4 {
   margin: 0 0 0.5rem 0;
   color: var(--ifm-color-primary);
