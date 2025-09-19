@@ -108,9 +108,6 @@ vllm_endpoints:
 
 model_config:
   "your-model-name":
-    param_count: 671000000000  # 671B parameters for DeepSeek-V3.1
-    batch_size: 512.0  # vLLM default batch size
-    context_size: 65536.0 # DeepSeek-V3.1 context length
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types

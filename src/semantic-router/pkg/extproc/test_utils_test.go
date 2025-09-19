@@ -135,12 +135,14 @@ func CreateTestConfig() *config.RouterConfig {
 			SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
 			MaxEntries          int      `yaml:"max_entries,omitempty"`
 			TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
+			EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
 			BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
 		}{
 			BackendType:         "memory",
 			Enabled:             false, // Disable for most tests
 			SimilarityThreshold: &[]float32{0.9}[0],
 			MaxEntries:          100,
+			EvictionPolicy:      "lru",
 			TTLSeconds:          3600,
 		},
 		PromptGuard: config.PromptGuardConfig{
@@ -214,6 +216,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
 	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {

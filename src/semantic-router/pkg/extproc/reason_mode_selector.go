@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -132,7 +133,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	}
 
 	// Determine model for kwargs and logging
-	model := "unknown"
+	model := consts.UnknownLabel
 	if modelValue, ok := requestMap["model"]; ok {
 		if modelStr, ok := modelValue.(string); ok {
 			model = modelStr
@@ -191,7 +192,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	// Record metrics for template usage and effort when enabled
 	if enabled {
 		familyConfig := r.getModelReasoningFamily(model)
-		modelFamily := "unknown"
+		modelFamily := consts.UnknownLabel
 		templateParam := "reasoning_effort" // default fallback
 
 		if familyConfig != nil {
