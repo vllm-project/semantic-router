@@ -1,0 +1,49 @@
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRoute
+metadata:
+  name: weighted-routing
+  namespace: default
+  labels:
+    app: semantic-router
+    scenario: weighted-routing
+spec:
+  rules:
+  - intents:
+    - category: "computer science"
+      description: "Programming, algorithms, data structures"
+      threshold: 0.7
+    - category: "math"
+      description: "Mathematics, calculus, algebra"
+      threshold: 0.7
+    modelRefs:
+    # Primary model gets 80% of traffic
+    - modelName: gpt-oss
+      address: 127.0.0.1
+      port: 8080
+      weight: 80
+      priority: 100
+    # Secondary model gets 20% of traffic
+    - modelName: qwen3
+      address: 127.0.0.1
+      port: 8089
+      weight: 20
+      priority: 90
+    filters:
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: true
+        reasoningEffort: "medium"
+        maxReasoningSteps: 10
+    - type: SemanticCache
+      enabled: true
+      config:
+        similarityThreshold: 0.8
+        maxEntries: 1000
+        ttlSeconds: 3600
+        backend: "memory"
+    defaultModel:
+      modelName: deepseek-v31
+      address: 127.0.0.1
+      port: 8088

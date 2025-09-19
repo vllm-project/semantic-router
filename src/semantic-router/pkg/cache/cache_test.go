@@ -442,7 +442,7 @@ development:
 		})
 
 		It("should handle AddEntry operation with embeddings", func() {
-			err := inMemoryCache.AddEntry("test-model", "test query", []byte("request"), []byte("response"))
+			err := inMemoryCache.AddEntry("test-request-id", "test-model", "test query", []byte("request"), []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
 
 			stats := inMemoryCache.GetStats()
@@ -451,7 +451,7 @@ development:
 
 		It("should handle FindSimilar operation with embeddings", func() {
 			// First add an entry
-			err := inMemoryCache.AddEntry("test-model", "test query", []byte("request"), []byte("response"))
+			err := inMemoryCache.AddEntry("test-request-id", "test-model", "test query", []byte("request"), []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Search for similar query
@@ -468,12 +468,11 @@ development:
 		})
 
 		It("should handle AddPendingRequest and UpdateWithResponse", func() {
-			query, err := inMemoryCache.AddPendingRequest("test-model", "test query", []byte("request"))
+			err := inMemoryCache.AddPendingRequest("test-request-id", "test-model", "test query", []byte("request"))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(query).To(Equal("test query"))
 
 			// Update with response
-			err = inMemoryCache.UpdateWithResponse("test query", []byte("response"))
+			err = inMemoryCache.UpdateWithResponse("test-request-id", []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should now be able to find it
@@ -494,7 +493,7 @@ development:
 			highThresholdCache := cache.NewInMemoryCache(highThresholdOptions)
 			defer highThresholdCache.Close()
 
-			err := highThresholdCache.AddEntry("test-model", "machine learning", []byte("request"), []byte("ml response"))
+			err := highThresholdCache.AddEntry("test-request-id", "test-model", "machine learning", []byte("request"), []byte("ml response"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Exact match should work
@@ -512,7 +511,7 @@ development:
 
 		It("should track hit and miss statistics", func() {
 			// Add an entry with a specific query
-			err := inMemoryCache.AddEntry("test-model", "What is machine learning?", []byte("request"), []byte("ML is a subset of AI"))
+			err := inMemoryCache.AddEntry("test-request-id", "test-model", "What is machine learning?", []byte("request"), []byte("ML is a subset of AI"))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Search for the exact cached query (should be a hit)
@@ -561,14 +560,13 @@ development:
 
 			// Disabled cache operations should not error but should be no-ops
 			// They should NOT try to generate embeddings
-			query, err := disabledCache.AddPendingRequest("model", "query", []byte("request"))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(query).To(Equal("query"))
-
-			err = disabledCache.UpdateWithResponse("query", []byte("response"))
+			err := disabledCache.AddPendingRequest("test-request-id", "test-model", "test query", []byte("request"))
 			Expect(err).NotTo(HaveOccurred())
 
-			err = disabledCache.AddEntry("model", "query", []byte("request"), []byte("response"))
+			err = disabledCache.UpdateWithResponse("test-request-id", []byte("response"))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = disabledCache.AddEntry("test-request-id", "test-model", "test query", []byte("request"), []byte("response"))
 			Expect(err).NotTo(HaveOccurred())
 
 			response, found, err := disabledCache.FindSimilar("model", "query")

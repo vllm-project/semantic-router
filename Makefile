@@ -13,6 +13,7 @@ _run:
 		-f tools/make/linter.mk \
 		-f tools/make/milvus.mk \
 		-f tools/make/models.mk \
+		-f tools/make/pre-commit.mk \
 		$(MAKECMDGOALS)
 
 .PHONY: _run

@@ -1,0 +1,109 @@
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRoute
+metadata:
+  name: comprehensive-example
+  namespace: default
+  labels:
+    app: semantic-router
+    scenario: comprehensive
+    environment: production
+spec:
+  rules:
+  # Rule 1: High-performance reasoning route for technical queries
+  - intents:
+    - category: "computer science"
+      description: "Programming, algorithms, software engineering"
+      threshold: 0.75
+    - category: "math"
+      description: "Advanced mathematics, calculus, statistics"
+      threshold: 0.75
+    modelRefs:
+    - modelName: gpt-oss-premium
+      address: 127.0.0.1
+      port: 8080
+      weight: 70
+      priority: 100
+    - modelName: claude-reasoning
+      address: 127.0.0.1
+      port: 8082
+      weight: 30
+      priority: 95
+    filters:
+    - type: PIIDetection
+      enabled: true
+      config:
+        allowByDefault: false
+        pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE"]
+        threshold: 0.8
+        action: "block"
+    - type: PromptGuard
+      enabled: true
+      config:
+        threshold: 0.75
+        action: "block"
+        customRules:
+        - name: "code-injection-rule"
+          pattern: "(?i)(eval|exec|system|shell|cmd)"
+          action: "warn"
+          description: "Detect potential code injection attempts"
+    - type: SemanticCache
+      enabled: true
+      config:
+        similarityThreshold: 0.85
+        maxEntries: 2000
+        ttlSeconds: 7200
+        backend: "redis"
+        backendConfig:
+          host: "redis.cache.svc.cluster.local"
+          port: "6379"
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: true
+        reasoningEffort: "high"
+        maxReasoningSteps: 20
+        reasoningTimeout: 60
+    defaultModel:
+      modelName: deepseek-v31
+      address: 127.0.0.1
+      port: 8088
+  
+  # Rule 2: Creative and general purpose route
+  - intents:
+    - category: "creative"
+      description: "Creative writing, storytelling, art generation"
+      threshold: 0.6
+    - category: "other"
+      description: "General purpose conversations"
+      threshold: 0.5
+    modelRefs:
+    - modelName: creative-model
+      address: 127.0.0.1
+      port: 8081
+      weight: 100
+    filters:
+    - type: PIIDetection
+      enabled: true
+      config:
+        allowByDefault: true
+        pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
+        threshold: 0.7
+        action: "mask"
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: false
+        reasoningEffort: "low"
+    - type: SemanticCache
+      enabled: true
+      config:
+        similarityThreshold: 0.75
+        maxEntries: 1000
+        ttlSeconds: 3600
+        backend: "memory"
+    defaultModel:
+      modelName: general-model
+      address: 127.0.0.1
+      port: 8089

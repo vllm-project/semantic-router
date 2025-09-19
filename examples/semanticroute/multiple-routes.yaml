@@ -1,0 +1,72 @@
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRoute
+metadata:
+  name: multiple-routes
+  namespace: default
+  labels:
+    app: semantic-router
+    scenario: multiple-routes
+spec:
+  rules:
+  # Rule 1: Reasoning-enabled route for technical queries
+  - intents:
+    - category: "computer science"
+      description: "Programming, algorithms, data structures"
+      threshold: 0.7
+    - category: "math"
+      description: "Mathematics, calculus, algebra"
+      threshold: 0.7
+    modelRefs:
+    - modelName: gpt-oss
+      address: 127.0.0.1
+      port: 8080
+      weight: 100
+    filters:
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: true
+        reasoningEffort: "high"
+        maxReasoningSteps: 15
+    - type: SemanticCache
+      enabled: true
+      config:
+        similarityThreshold: 0.85
+        maxEntries: 500
+        ttlSeconds: 7200
+    defaultModel:
+      modelName: deepseek-v31
+      address: 127.0.0.1
+      port: 8088
+  
+  # Rule 2: Lightweight route for creative and general queries
+  - intents:
+    - category: "creative"
+      description: "Creative writing, storytelling, art"
+      threshold: 0.6
+    - category: "other"
+      description: "General purpose queries"
+      threshold: 0.5
+    modelRefs:
+    - modelName: lightweight-model
+      address: 127.0.0.1
+      port: 8081
+      weight: 100
+    filters:
+    - type: ReasoningControl
+      enabled: true
+      config:
+        reasonFamily: "gpt-oss"
+        enableReasoning: false
+        reasoningEffort: "low"
+    - type: PIIDetection
+      enabled: true
+      config:
+        allowByDefault: true
+        threshold: 0.8
+        action: "mask"
+    defaultModel:
+      modelName: general-model
+      address: 127.0.0.1
+      port: 8089
