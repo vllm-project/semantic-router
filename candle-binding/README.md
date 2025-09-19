@@ -5,7 +5,7 @@ This directory contains Go bindings and tests for the `candle_semantic_router` n
 ## Prerequisites
 
 - Go (>= 1.18)
-- Rust (for building the native library)
+- Rust ( >= 1.90.0, for building the native library)
 - `cargo` (Rust's build tool)
 
 ## Build the Native Library
