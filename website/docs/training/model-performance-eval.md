@@ -196,7 +196,7 @@ see script in [result_to_config.py](https://github.com/vllm-project/semantic-rou
 ### Example usage patterns
 
 ```bash
-# Use results/ to generate a new config file (not overridded)
+# Use results/ to generate a new config file (not overridden)
 python src/training/model_eval/result_to_config.py \
   --results-dir results \
   --output-file config/config.eval.yaml
