@@ -496,9 +496,15 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 	}
 
 	// Build category reasoning map from configuration
+	// Use the best model's reasoning capability for each category
 	categoryReasoningMap := make(map[string]bool)
 	for _, category := range c.Config.Categories {
-		categoryReasoningMap[strings.ToLower(category.Name)] = category.UseReasoning
+		useReasoning := false
+		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
+			// Use the first (best) model's reasoning capability
+			useReasoning = *category.ModelScores[0].UseReasoning
+		}
+		categoryReasoningMap[strings.ToLower(category.Name)] = useReasoning
 	}
 
 	// Make entropy-based reasoning decision

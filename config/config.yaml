@@ -2,34 +2,22 @@ bert_model:
   model_id: sentence-transformers/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory" or "milvus"
   similarity_threshold: 0.8
   max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
-  eviction_policy: "fifo"  # "fifo", "lru", "lfu", currently only supports memory backend
+  eviction_policy: "fifo"  
 
-  # For production environments, use Milvus for scalable caching:
-  # backend_type: "milvus"
-  # backend_config_path: "config/cache/milvus.yaml"
-
-  # Development/Testing: Use in-memory cache (current configuration)
-  # - Fast startup and no external dependencies
-  # - Limited to single instance scaling
-  # - Data lost on restart
-
-  # Production: Use Milvus vector database
-  # - Horizontally scalable and persistent
-  # - Supports distributed deployments
-  # - Requires Milvus cluster setup
-  # - To enable: uncomment the lines above and install Milvus dependencies
 tools:
-  enabled: true  # Set to true to enable automatic tool selection
-  top_k: 3        # Number of most relevant tools to select
-  similarity_threshold: 0.2  # Threshold for tool similarity
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
   tools_db_path: "config/tools_db.json"
-  fallback_to_empty: true  # If true, return no tools on failure; if false, return error
+  fallback_to_empty: true
+
 prompt_guard:
   enabled: true
   use_modernbert: true
@@ -38,258 +26,114 @@ prompt_guard:
   use_cpu: true
   jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
 
-# vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
+# vLLM Endpoints Configuration
 vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
-    port: 11434
+    port: 8000
     models:
-      - "phi4"
-      - "gemma3:27b"
-    weight: 1  # Load balancing weight
-    health_check_path: "/health"  # Optional health check endpoint
-  - name: "endpoint2"
-    address: "127.0.0.1"
-    port: 11434
-    models:
-      - "mistral-small3.1"
+      - "openai/gpt-oss-20b"
     weight: 1
     health_check_path: "/health"
-  - name: "endpoint3"
-    address: "127.0.0.1"
-    port: 11434
-    models:
-      - "phi4"  # Same model can be served by multiple endpoints for redundancy
-      - "mistral-small3.1"
-    weight: 2  # Higher weight for more powerful endpoint
 
 model_config:
-  phi4:
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.07
-      completion_per_1m: 0.35
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
-    preferred_endpoints: ["endpoint1", "endpoint3"]
-    # Reasoning family - phi4 doesn't support reasoning, so omit this field
-
-  # Example: DeepSeek model with custom name
-  "ds-v31-custom":
-    reasoning_family: "deepseek"  # This model uses DeepSeek reasoning syntax
+  "openai/gpt-oss-20b":
+    reasoning_family: "gpt-oss"  # This model uses GPT-OSS reasoning syntax
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true
 
-  # Example: Qwen3 model with custom name
-  "my-qwen3-model":
-    reasoning_family: "qwen3"     # This model uses Qwen3 reasoning syntax
-    preferred_endpoints: ["endpoint2"]
-    pii_policy:
-      allow_by_default: true
-
-  # Example: GPT-OSS model with custom name
-  "custom-gpt-oss":
-    reasoning_family: "gpt-oss"   # This model uses GPT-OSS reasoning syntax
-    preferred_endpoints: ["endpoint1"]
-    pii_policy:
-      allow_by_default: true
-  gemma3:27b:
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.067
-      completion_per_1m: 0.267
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    preferred_endpoints: ["endpoint1"]
-  "mistral-small3.1":
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.1
-      completion_per_1m: 0.3
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    preferred_endpoints: ["endpoint2", "endpoint3"]
-
-# Classifier configuration for text classification
+# Classifier configuration
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
+    model_id: "models/category_classifier_modernbert-base_model"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
   pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
     use_modernbert: true
     threshold: 0.7
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Categories with new use_reasoning field structure
 categories:
   - name: business
-    use_reasoning: false
-    reasoning_description: "Business content is typically conversational"
-    reasoning_effort: low  # Business conversations need low reasoning effort
     model_scores:
-      - model: phi4
-        score: 0.8
-      - model: gemma3:27b
-        score: 0.4
-      - model: mistral-small3.1
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false  # Business performs better without reasoning
   - name: law
-    use_reasoning: false
-    reasoning_description: "Legal content is typically explanatory"
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: phi4
-        score: 0.6
-      - model: mistral-small3.1
+      - model: openai/gpt-oss-20b
         score: 0.4
+        use_reasoning: false
   - name: psychology
-    use_reasoning: false
-    reasoning_description: "Psychology content is usually explanatory"
     model_scores:
-      - model: mistral-small3.1
+      - model: openai/gpt-oss-20b
         score: 0.6
-      - model: gemma3:27b
-        score: 0.4
-      - model: phi4
-        score: 0.4
+        use_reasoning: false
   - name: biology
-    use_reasoning: true
-    reasoning_description: "Biological processes benefit from structured analysis"
     model_scores:
-      - model: mistral-small3.1
-        score: 0.8
-      - model: gemma3:27b
-        score: 0.6
-      - model: phi4
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.9
+        use_reasoning: false
   - name: chemistry
-    use_reasoning: true
-    reasoning_description: "Chemical reactions and formulas require systematic thinking"
-    reasoning_effort: high  # Chemistry requires high reasoning effort
     model_scores:
-      - model: mistral-small3.1
-        score: 0.8
-      - model: gemma3:27b
+      - model: openai/gpt-oss-20b
         score: 0.6
-      - model: phi4
-        score: 0.6
+        use_reasoning: true  # Enable reasoning for complex chemistry
   - name: history
-    use_reasoning: false
-    reasoning_description: "Historical content is narrative-based"
     model_scores:
-      - model: mistral-small3.1
-        score: 0.8
-      - model: phi4
-        score: 0.6
-      - model: gemma3:27b
-        score: 0.4
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
   - name: other
-    use_reasoning: false
-    reasoning_description: "General content doesn't require reasoning"
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: phi4
-        score: 0.6
-      - model: mistral-small3.1
-        score: 0.6
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
   - name: health
-    use_reasoning: false
-    reasoning_description: "Health information is typically informational"
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: phi4
-        score: 0.8
-      - model: mistral-small3.1
-        score: 0.6
+      - model: openai/gpt-oss-20b
+        score: 0.5
+        use_reasoning: false
   - name: economics
-    use_reasoning: false
-    reasoning_description: "Economic discussions are usually explanatory"
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: mistral-small3.1
-        score: 0.8
-      - model: phi4
-        score: 0.0
-  - name: math
-    use_reasoning: true
-    reasoning_description: "Mathematical problems require step-by-step reasoning"
-    reasoning_effort: high  # Math problems need high reasoning effort
-    model_scores:
-      - model: phi4
+      - model: openai/gpt-oss-20b
         score: 1.0
-      - model: mistral-small3.1
-        score: 0.8
-      - model: gemma3:27b
-        score: 0.6
+        use_reasoning: false
+  - name: math
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 1.0
+        use_reasoning: true  # Enable reasoning for complex math
   - name: physics
-    use_reasoning: true
-    reasoning_description: "Physics concepts need logical analysis"
     model_scores:
-      - model: gemma3:27b
-        score: 0.4
-      - model: phi4
-        score: 0.4
-      - model: mistral-small3.1
-        score: 0.4
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: true  # Enable reasoning for physics
   - name: computer science
-    use_reasoning: true
-    reasoning_description: "Programming and algorithms need logical reasoning"
     model_scores:
-      - model: gemma3:27b
+      - model: openai/gpt-oss-20b
         score: 0.6
-      - model: mistral-small3.1
-        score: 0.6
-      - model: phi4
-        score: 0.0
+        use_reasoning: false
   - name: philosophy
-    use_reasoning: false
-    reasoning_description: "Philosophical discussions are conversational"
     model_scores:
-      - model: phi4
-        score: 0.6
-      - model: gemma3:27b
-        score: 0.2
-      - model: mistral-small3.1
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.5
+        use_reasoning: false
   - name: engineering
-    use_reasoning: true
-    reasoning_description: "Engineering problems require systematic problem-solving"
     model_scores:
-      - model: gemma3:27b
-        score: 0.6
-      - model: mistral-small3.1
-        score: 0.6
-      - model: phi4
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
 
-default_model: mistral-small3.1
+default_model: openai/gpt-oss-20b
 
-# API Configuration
-api:
-  batch_classification:
-    # Metrics configuration for monitoring batch classification performance
-    metrics:
-      enabled: true              # Enable comprehensive metrics collection
-      detailed_goroutine_tracking: true  # Track individual goroutine lifecycle
-      high_resolution_timing: false      # Use nanosecond precision timing
-      sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%, 0.5 = 50%)
-      # Histogram buckets for metrics (directly configure what you need)
-      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-# Reasoning family configurations - define how different model families handle reasoning syntax
+# Reasoning family configurations
 reasoning_families:
   deepseek:
     type: "chat_template_kwargs"
@@ -302,10 +146,23 @@ reasoning_families:
   gpt-oss:
     type: "reasoning_effort"
     parameter: "reasoning_effort"
-
   gpt:
     type: "reasoning_effort"
     parameter: "reasoning_effort"
 
 # Global default reasoning effort level
-default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high)
+default_reasoning_effort: high
+
+# API Configuration
+api:
+  batch_classification:
+    max_batch_size: 100
+    concurrency_threshold: 5
+    max_concurrency: 8
+    metrics:
+      enabled: true
+      detailed_goroutine_tracking: true
+      high_resolution_timing: false
+      sample_rate: 1.0
+      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]

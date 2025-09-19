@@ -73,20 +73,20 @@ classifier:
 # Categories and routing rules
 categories:
 - name: math
-  use_reasoning: true  # Enable reasoning for math
   model_scores:
   - model: your-model
     score: 1.0
+    use_reasoning: true  # Enable reasoning for math problems
 - name: computer science
-  use_reasoning: true  # Enable reasoning for code
   model_scores:
   - model: your-model
     score: 1.0
+    use_reasoning: true  # Enable reasoning for code
 - name: other
-  use_reasoning: false # No reasoning for general queries
   model_scores:
   - model: your-model
     score: 0.8
+    use_reasoning: false # No reasoning for general queries
 
 default_model: your-model
 
@@ -203,30 +203,48 @@ classifier:
 
 ### Categories and Routing
 
-Define how different query types are handled:
+Define how different query types are handled. Each category can have multiple models with individual reasoning settings:
 
 ```yaml
 categories:
 - name: math
-  use_reasoning: true              # Enable reasoning for math problems
-  reasoning_description: "Mathematical problems require step-by-step reasoning"
   model_scores:
   - model: your-model
     score: 1.0                     # Preference score for this model
+    use_reasoning: true            # Enable reasoning for this model on math problems
 
 - name: computer science
-  use_reasoning: true              # Enable reasoning for code
   model_scores:
   - model: your-model
     score: 1.0
+    use_reasoning: true            # Enable reasoning for code
 
 - name: other
-  use_reasoning: false             # No reasoning for general queries
   model_scores:
   - model: your-model
     score: 0.8
+    use_reasoning: false           # No reasoning for general queries
 
 default_model: your-model          # Fallback model
+```
+
+### Model-Specific Reasoning
+
+The `use_reasoning` field is configured per model within each category, allowing fine-grained control:
+
+```yaml
+categories:
+- name: math
+  model_scores:
+  - model: gpt-oss-120b
+    score: 1.0
+    use_reasoning: true            # GPT-OSS-120b supports reasoning for math
+  - model: phi4
+    score: 0.8
+    use_reasoning: false           # phi4 doesn't support reasoning mode
+  - model: deepseek-v31
+    score: 0.9
+    use_reasoning: true            # DeepSeek supports reasoning for math
 ```
 
 ### Model Reasoning Configuration
@@ -322,18 +340,18 @@ Override the default effort level per category:
 ```yaml
 categories:
 - name: math
-  use_reasoning: true
   reasoning_effort: "high"        # Use high effort for complex math
   model_scores:
   - model: your-model
     score: 1.0
+    use_reasoning: true           # Enable reasoning for this model
 
 - name: general
-  use_reasoning: true
   reasoning_effort: "low"         # Use low effort for general queries
   model_scores:
   - model: your-model
     score: 1.0
+    use_reasoning: true           # Enable reasoning for this model
 ```
 
 ### Security Features
@@ -610,10 +628,12 @@ categories:
   model_scores:
   - model: math-model
     score: 1.0
+    use_reasoning: true           # Enable reasoning for math
 - name: other
   model_scores:
   - model: general-model
     score: 1.0
+    use_reasoning: false          # No reasoning for general queries
 ```
 
 **Load Balancing:**
@@ -820,7 +840,6 @@ The generated configuration includes:
 - **Model Performance Rankings:** Models are ranked by performance for each category
 - **Reasoning Settings:** Automatically configures reasoning requirements per category:
   - `use_reasoning`: Whether to use step-by-step reasoning
-  - `reasoning_description`: Description of reasoning approach
   - `reasoning_effort`: Required effort level (low/medium/high)
 - **Default Model Selection:** Best overall performing model is set as default
 - **Security and Performance Settings:** Pre-configured optimal values for:

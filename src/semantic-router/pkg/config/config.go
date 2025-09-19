@@ -261,14 +261,14 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 
 // Category represents a category for routing queries
 type ModelScore struct {
-	Model string  `yaml:"model"`
-	Score float64 `yaml:"score"`
+	Model        string  `yaml:"model"`
+	Score        float64 `yaml:"score"`
+	UseReasoning *bool   `yaml:"use_reasoning"` // Pointer to detect missing field
 }
 
 type Category struct {
 	Name                 string       `yaml:"name"`
 	Description          string       `yaml:"description,omitempty"`
-	UseReasoning         bool         `yaml:"use_reasoning"`
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
@@ -336,6 +336,36 @@ func LoadConfig(configPath string) (*RouterConfig, error) {
 	return config, nil
 }
 
+// BoolPtr returns a pointer to a bool value (helper for tests and config)
+func BoolPtr(b bool) *bool {
+	return &b
+}
+
+// validateConfigStructure performs additional validation on the parsed config
+func validateConfigStructure(cfg *RouterConfig) error {
+	// Ensure all categories have at least one model with scores
+	for _, category := range cfg.Categories {
+		if len(category.ModelScores) == 0 {
+			return fmt.Errorf("category '%s' has no model_scores defined - each category must have at least one model", category.Name)
+		}
+
+		// Validate each model score has the required fields
+		for i, modelScore := range category.ModelScores {
+			if modelScore.Model == "" {
+				return fmt.Errorf("category '%s', model_scores[%d]: model name cannot be empty", category.Name, i)
+			}
+			if modelScore.Score <= 0 {
+				return fmt.Errorf("category '%s', model '%s': score must be greater than 0, got %f", category.Name, modelScore.Model, modelScore.Score)
+			}
+			if modelScore.UseReasoning == nil {
+				return fmt.Errorf("category '%s', model '%s': missing required field 'use_reasoning'", category.Name, modelScore.Model)
+			}
+		}
+	}
+
+	return nil
+}
+
 // ParseConfigFile parses the YAML config file without touching the global cache.
 func ParseConfigFile(configPath string) (*RouterConfig, error) {
 	// Resolve symlinks to handle Kubernetes ConfigMap mounts
@@ -347,10 +377,17 @@ func ParseConfigFile(configPath string) (*RouterConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
+
 	cfg := &RouterConfig{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
+
+	// Validation after parsing
+	if err := validateConfigStructure(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
@@ -571,6 +608,33 @@ func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (stri
 	}
 
 	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
+}
+
+// GetModelReasoningForCategory returns whether a specific model supports reasoning in a given category
+func (c *RouterConfig) GetModelReasoningForCategory(categoryName string, modelName string) bool {
+	for _, category := range c.Categories {
+		if category.Name == categoryName {
+			for _, modelScore := range category.ModelScores {
+				if modelScore.Model == modelName {
+					return modelScore.UseReasoning != nil && *modelScore.UseReasoning
+				}
+			}
+		}
+	}
+	return false // Default to false if category or model not found
+}
+
+// GetBestModelForCategory returns the best scoring model for a given category
+func (c *RouterConfig) GetBestModelForCategory(categoryName string) (string, bool) {
+	for _, category := range c.Categories {
+		if category.Name == categoryName {
+			if len(category.ModelScores) > 0 {
+				useReasoning := category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning
+				return category.ModelScores[0].Model, useReasoning
+			}
+		}
+	}
+	return "", false // Return empty string and false if category not found or has no models
 }
 
 // ValidateEndpoints validates that all configured models have at least one endpoint

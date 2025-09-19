@@ -212,9 +212,9 @@ var _ = Describe("category classification and model selection", func() {
 
 				// Add UseReasoning configuration for the categories
 				classifier.Config.Categories = []config.Category{
-					{Name: "technology", UseReasoning: false},
-					{Name: "sports", UseReasoning: false},
-					{Name: "politics", UseReasoning: true},
+					{Name: "technology", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
+					{Name: "sports", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
+					{Name: "politics", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
 				}
 
 				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
@@ -237,9 +237,9 @@ var _ = Describe("category classification and model selection", func() {
 				}
 
 				classifier.Config.Categories = []config.Category{
-					{Name: "technology", UseReasoning: false},
-					{Name: "sports", UseReasoning: true},
-					{Name: "politics", UseReasoning: true},
+					{Name: "technology", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
+					{Name: "sports", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
+					{Name: "politics", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
 				}
 
 				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
