@@ -17,10 +17,12 @@ bert_model:
 
 # Semantic caching
 semantic_cache:
+  backend_type: "memory"  # Options: "memory" or "milvus"
   enabled: false
   similarity_threshold: 0.8
   max_entries: 1000
   ttl_seconds: 3600
+  eviction_policy: "fifo"  # Options: "fifo", "lru", "lfu"
 
 # Tool auto-selection
 tools:
@@ -365,10 +367,12 @@ Configure additional features:
 ```yaml
 # Semantic Caching
 semantic_cache:
-  enabled: true                    # Enable semantic caching
-  similarity_threshold: 0.8        # Cache hit threshold
+  enabled: true                   # Enable semantic caching
+  backend_type: "memory"          # Options: "memory" or "milvus"
+  similarity_threshold: 0.8       # Cache hit threshold
   max_entries: 1000               # Maximum cache entries
   ttl_seconds: 3600               # Cache expiration time
+  eviction_policy: "fifo"         # Options: "fifo", "lru", "lfu"
 
 # Tool Auto-Selection
 tools:
@@ -539,9 +543,11 @@ model_config:
 # Enable caching
 semantic_cache:
   enabled: true
+  backend_type: "memory"
   similarity_threshold: 0.85    # Higher = more cache hits
   max_entries: 5000
-  ttl_seconds: 7200            # 2 hour cache
+  ttl_seconds: 7200             # 2 hour cache
+  eviction_policy: "fifo"       # Options: "fifo", "lru", "lfu"
 
 # Enable tool selection
 tools:
@@ -656,9 +662,11 @@ For high-traffic scenarios:
 # Enable caching
 semantic_cache:
   enabled: true
+  backend_type: "memory"
   similarity_threshold: 0.85    # Higher = more cache hits
   max_entries: 10000
   ttl_seconds: 3600
+  eviction_policy: "lru"        
 
 # Optimize classification
 classifier:

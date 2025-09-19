@@ -84,6 +84,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
 	}
 

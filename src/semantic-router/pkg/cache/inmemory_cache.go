@@ -26,6 +26,7 @@ type InMemoryCache struct {
 	hitCount            int64
 	missCount           int64
 	lastCleanupTime     *time.Time
+	evictionPolicy      EvictionPolicy
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -34,18 +35,31 @@ type InMemoryCacheOptions struct {
 	MaxEntries          int
 	TTLSeconds          int
 	Enabled             bool
+	EvictionPolicy      EvictionPolicyType
 }
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
 func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
-	observability.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f",
-		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold)
+	observability.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s",
+		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold, options.EvictionPolicy)
+
+	var evictionPolicy EvictionPolicy
+	switch options.EvictionPolicy {
+	case LRUEvictionPolicyType:
+		evictionPolicy = &LRUPolicy{}
+	case LFUEvictionPolicyType:
+		evictionPolicy = &LFUPolicy{}
+	default: // FIFOEvictionPolicyType
+		evictionPolicy = &FIFOPolicy{}
+	}
+
 	return &InMemoryCache{
 		entries:             []CacheEntry{},
 		similarityThreshold: options.SimilarityThreshold,
 		maxEntries:          options.MaxEntries,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
+		evictionPolicy:      evictionPolicy,
 	}
 }
 
@@ -75,37 +89,27 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 	// Remove expired entries to maintain cache hygiene
 	c.cleanupExpiredEntries()
 
+	// Check if eviction is needed before adding the new entry
+	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
+		c.evictOne()
+	}
+
 	// Create cache entry for the pending request
+	now := time.Now()
 	entry := CacheEntry{
-		RequestID:   requestID,
-		RequestBody: requestBody,
-		Model:       model,
-		Query:       query,
-		Embedding:   embedding,
-		Timestamp:   time.Now(),
+		RequestID:    requestID,
+		RequestBody:  requestBody,
+		Model:        model,
+		Query:        query,
+		Embedding:    embedding,
+		Timestamp:    now,
+		LastAccessAt: now,
+		HitCount:     0,
 	}
 
 	c.entries = append(c.entries, entry)
 	observability.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d)",
 		len(c.entries), len(embedding))
-
-	// Apply entry limit to prevent unbounded memory growth
-	if c.maxEntries > 0 && len(c.entries) > c.maxEntries {
-		// Sort entries by timestamp to identify oldest
-		sort.Slice(c.entries, func(i, j int) bool {
-			return c.entries[i].Timestamp.Before(c.entries[j].Timestamp)
-		})
-		// Keep only the most recent entries
-		removedCount := len(c.entries) - c.maxEntries
-		c.entries = c.entries[len(c.entries)-c.maxEntries:]
-		observability.Debugf("InMemoryCache: size limit exceeded, removed %d oldest entries (limit: %d)",
-			removedCount, c.maxEntries)
-		observability.LogEvent("cache_trimmed", map[string]interface{}{
-			"backend":       "memory",
-			"removed_count": removedCount,
-			"max_entries":   c.maxEntries,
-		})
-	}
 
 	// Record metrics
 	metrics.RecordCacheOperation("memory", "add_pending", "success", time.Since(start).Seconds())
@@ -134,6 +138,7 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 			// Complete the cache entry with the response
 			c.entries[i].ResponseBody = responseBody
 			c.entries[i].Timestamp = time.Now()
+			c.entries[i].LastAccessAt = time.Now()
 			observability.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
 				len(responseBody))
 
@@ -163,6 +168,18 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Clean up expired entries before adding new one
+	c.cleanupExpiredEntries()
+
+	// Check if eviction is needed before adding the new entry
+	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
+		c.evictOne()
+	}
+
+	now := time.Now()
 	entry := CacheEntry{
 		RequestID:    requestID,
 		RequestBody:  requestBody,
@@ -170,14 +187,10 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 		Model:        model,
 		Query:        query,
 		Embedding:    embedding,
-		Timestamp:    time.Now(),
+		Timestamp:    now,
+		LastAccessAt: now,
+		HitCount:     0,
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Clean up expired entries before adding new one
-	c.cleanupExpiredEntries()
 
 	c.entries = append(c.entries, entry)
 	observability.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d)",
@@ -187,16 +200,6 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 		"query":   query,
 		"model":   model,
 	})
-
-	// Apply entry limit if configured
-	if c.maxEntries > 0 && len(c.entries) > c.maxEntries {
-		// Sort by timestamp to identify oldest entries
-		sort.Slice(c.entries, func(i, j int) bool {
-			return c.entries[i].Timestamp.Before(c.entries[j].Timestamp)
-		})
-		// Keep only the most recent entries
-		c.entries = c.entries[len(c.entries)-c.maxEntries:]
-	}
 
 	// Record success metrics
 	metrics.RecordCacheOperation("memory", "add_entry", "success", time.Since(start).Seconds())
@@ -228,19 +231,19 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	}
 
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 
 	// Check for expired entries during search
 	c.cleanupExpiredEntriesReadOnly()
 
 	type SimilarityResult struct {
+		EntryIndex int
 		Entry      CacheEntry
 		Similarity float32
 	}
 
 	// Compare with completed entries for the same model
 	results := make([]SimilarityResult, 0, len(c.entries))
-	for _, entry := range c.entries {
+	for entryIndex, entry := range c.entries {
 		if entry.ResponseBody == nil {
 			continue // Skip incomplete entries
 		}
@@ -257,15 +260,19 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 		}
 
 		results = append(results, SimilarityResult{
+			EntryIndex: entryIndex,
 			Entry:      entry,
 			Similarity: dotProduct,
 		})
 	}
 
+	// unlock the read lock since we need the write lock to update the access info
+	c.mu.RUnlock()
+
 	// Handle case where no suitable entries exist
 	if len(results) == 0 {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("InMemoryCache.FindSimilar: no entries found with responses (total entries: %d)", len(c.entries))
+		observability.Debugf("InMemoryCache.FindSimilar: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
@@ -279,6 +286,11 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	// Check if the best match meets the similarity threshold
 	if results[0].Similarity >= c.similarityThreshold {
 		atomic.AddInt64(&c.hitCount, 1)
+
+		c.mu.Lock()
+		c.updateAccessInfo(results[0].EntryIndex, results[0].Entry)
+		c.mu.Unlock()
+
 		observability.Debugf("InMemoryCache.FindSimilar: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
 			results[0].Similarity, c.similarityThreshold, len(results[0].Entry.ResponseBody))
 		observability.LogEvent("cache_hit", map[string]interface{}{
@@ -356,8 +368,8 @@ func (c *InMemoryCache) cleanupExpiredEntries() {
 	validEntries := make([]CacheEntry, 0, len(c.entries))
 
 	for _, entry := range c.entries {
-		// Retain entries that are still within their TTL
-		if now.Sub(entry.Timestamp).Seconds() < float64(c.ttlSeconds) {
+		// Retain entries that are still within their TTL based on last access
+		if now.Sub(entry.LastAccessAt).Seconds() < float64(c.ttlSeconds) {
 			validEntries = append(validEntries, entry)
 		}
 	}
@@ -389,7 +401,7 @@ func (c *InMemoryCache) cleanupExpiredEntriesReadOnly() {
 	expiredCount := 0
 
 	for _, entry := range c.entries {
-		if now.Sub(entry.Timestamp).Seconds() >= float64(c.ttlSeconds) {
+		if now.Sub(entry.LastAccessAt).Seconds() >= float64(c.ttlSeconds) {
 			expiredCount++
 		}
 	}
@@ -403,4 +415,46 @@ func (c *InMemoryCache) cleanupExpiredEntriesReadOnly() {
 			"ttl_seconds":   c.ttlSeconds,
 		})
 	}
+}
+
+// updateAccessInfo updates the access information for the given entry index
+func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
+	// fast path
+	if entryIndex < len(c.entries) && c.entries[entryIndex].RequestID == target.RequestID {
+		c.entries[entryIndex].LastAccessAt = time.Now()
+		c.entries[entryIndex].HitCount++
+		return
+	}
+
+	// fallback to linear search
+	for i := range c.entries {
+		if c.entries[i].RequestID == target.RequestID {
+			c.entries[i].LastAccessAt = time.Now()
+			c.entries[i].HitCount++
+			break
+		}
+	}
+}
+
+// evictOne removes one entry based on the configured eviction policy
+func (c *InMemoryCache) evictOne() {
+	if len(c.entries) == 0 {
+		return
+	}
+
+	victimIdx := c.evictionPolicy.SelectVictim(c.entries)
+	if victimIdx < 0 || victimIdx >= len(c.entries) {
+		return
+	}
+
+	evictedRequestID := c.entries[victimIdx].RequestID
+
+	c.entries[victimIdx] = c.entries[len(c.entries)-1]
+	c.entries = c.entries[:len(c.entries)-1]
+
+	observability.LogEvent("cache_evicted", map[string]any{
+		"backend":     "memory",
+		"request_id":  evictedRequestID,
+		"max_entries": c.maxEntries,
+	})
 }

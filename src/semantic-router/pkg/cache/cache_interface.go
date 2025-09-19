@@ -10,7 +10,9 @@ type CacheEntry struct {
 	Model        string
 	Query        string
 	Embedding    []float32
-	Timestamp    time.Time
+	Timestamp    time.Time // Creation time (when the entry was added or completed with a response)
+	LastAccessAt time.Time // Last access time
+	HitCount     int64     // Access count
 }
 
 // CacheBackend defines the interface for semantic cache implementations
@@ -58,6 +60,20 @@ const (
 	MilvusCacheType CacheBackendType = "milvus"
 )
 
+// EvictionPolicyType defines the available eviction policies
+type EvictionPolicyType string
+
+const (
+	// FIFOEvictionPolicyType specifies the FIFO eviction policy
+	FIFOEvictionPolicyType EvictionPolicyType = "fifo"
+
+	// LRUEvictionPolicyType specifies the LRU eviction policy
+	LRUEvictionPolicyType EvictionPolicyType = "lru"
+
+	// LFUEvictionPolicyType specifies the LFU eviction policy
+	LFUEvictionPolicyType EvictionPolicyType = "lfu"
+)
+
 // CacheConfig contains configuration settings shared across all cache backends
 type CacheConfig struct {
 	// BackendType specifies which cache implementation to use
@@ -74,6 +90,9 @@ type CacheConfig struct {
 
 	// TTLSeconds sets cache entry expiration time (0 disables expiration)
 	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+	// EvictionPolicy defines the eviction policy for in-memory cache ("fifo", "lru", "lfu")
+	EvictionPolicy EvictionPolicyType `yaml:"eviction_policy,omitempty"`
 
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
