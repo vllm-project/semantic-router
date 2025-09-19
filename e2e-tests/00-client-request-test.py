@@ -4,6 +4,8 @@
 
 This test validates that the Envoy proxy is running and accepting requests,
 and that basic request formatting works correctly.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json

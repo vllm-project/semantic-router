@@ -4,6 +4,8 @@
 
 This test validates the semantic cache functionality by sending similar
 queries and checking if cache hits occur as expected.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json

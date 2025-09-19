@@ -4,6 +4,8 @@
 
 This test validates that all metrics endpoints are working correctly and
 that the router is properly recording performance and operational metrics.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json

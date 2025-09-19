@@ -5,6 +5,8 @@
 This test verifies that Envoy is correctly forwarding requests to the ExtProc,
 and that the ExtProc is responding with appropriate routing decisions.
 These tests use custom headers to trace request processing.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json
