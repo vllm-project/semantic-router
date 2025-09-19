@@ -25,8 +25,3 @@ func (r *OpenAIRouter) HandleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 func (r *OpenAIRouter) HandleResponseBody(v *ext_proc.ProcessingRequest_ResponseBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	return r.handleResponseBody(v, ctx)
 }
-
-// InitializeForTesting initializes the internal maps and mutexes for testing
-func (r *OpenAIRouter) InitializeForTesting() {
-	r.pendingRequests = make(map[string][]byte)
-}
