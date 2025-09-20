@@ -5,6 +5,29 @@ Run Semantic Router + Envoy locally using Docker Compose v2.
 ## Prerequisites
 
 - Docker Engine and Docker Compose v2 (use the `docker compose` command, not the legacy `docker-compose`)
+
+   ```bash
+   # Verify
+   docker compose version
+   ```
+
+   Install Docker Compose v2 for Ubuntu(if missing), see more in [Docker Compose Plugin Installation](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
+
+   ```bash
+   # Remove legacy v1 if present (optional)
+   sudo apt-get remove -y docker-compose || true
+
+   sudo apt-get update
+   sudo apt-get install -y ca-certificates curl gnupg
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   sudo apt-get update
+   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+   docker compose version
+   ```
+
 - Ensure ports 8801, 50051, 19000 are free
 
 ## Install and Run with Docker Compose v2
