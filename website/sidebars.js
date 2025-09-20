@@ -35,9 +35,20 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: 'Categories',
+      items: [
+        'categories/overview',
+        'categories/supported-categories',
+        'categories/configuration',
+        'categories/technical-details',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Getting Started',
       items: [
         'getting-started/installation',
+        'getting-started/docker-quickstart',
         'getting-started/reasoning',
         'getting-started/configuration',
       ],
