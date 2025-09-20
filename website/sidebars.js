@@ -38,9 +38,9 @@ const sidebars = {
       label: 'Getting Started',
       items: [
         'getting-started/installation',
+        'getting-started/docker-quickstart',
         'getting-started/reasoning',
         'getting-started/configuration',
-        'getting-started/docker-quickstart',
       ],
     },
     {
