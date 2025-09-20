@@ -1,4 +1,4 @@
-# Docker Compose (v2) Quick Start Guide
+# Docker Compose Quick Start
 
 Run Semantic Router + Envoy locally using Docker Compose v2.
 

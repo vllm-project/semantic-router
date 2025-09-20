@@ -40,6 +40,7 @@ const sidebars = {
         'getting-started/installation',
         'getting-started/reasoning',
         'getting-started/configuration',
+        'getting-started/docker-quickstart',
       ],
     },
     {
