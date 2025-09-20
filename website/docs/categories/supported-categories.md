@@ -30,12 +30,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Handles mathematical queries ranging from basic arithmetic to advanced calculus, statistics, and mathematical proofs. This category is ideal for computational problems that benefit from step-by-step reasoning.
 
 **Typical Queries**:
+
 - "Solve the quadratic equation x² + 5x + 6 = 0"
 - "Calculate the derivative of f(x) = x³ + 2x² - 5x + 1"
 - "What is the probability of getting two heads in three coin flips?"
 - "Prove that the square root of 2 is irrational"
 
 **Configuration Considerations**:
+
 - Often benefits from reasoning mode for complex problem-solving
 - May require models with strong mathematical capabilities
 - Consider higher reasoning effort for advanced mathematical proofs
@@ -47,12 +49,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers programming languages, software development, algorithms, system design, and technical computing concepts. Suitable for both theoretical computer science and practical programming tasks.
 
 **Typical Queries**:
+
 - "Implement a binary search algorithm in Python"
 - "Explain the time complexity of quicksort"
 - "How do I optimize this SQL query?"
 - "What's the difference between REST and GraphQL APIs?"
 
 **Configuration Considerations**:
+
 - Benefits from reasoning mode for algorithmic problem-solving
 - Requires models with strong coding and technical knowledge
 - May need specialized code generation capabilities
@@ -64,12 +68,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Encompasses all areas of physics from classical mechanics to quantum physics and relativity. Handles both theoretical concepts and practical calculations involving physical phenomena.
 
 **Typical Queries**:
+
 - "Calculate the force needed to accelerate a 10kg mass at 5m/s²"
 - "Explain Newton's laws of motion"
 - "What is the relationship between voltage, current, and resistance?"
 - "How does quantum entanglement work?"
 
 **Configuration Considerations**:
+
 - May benefit from reasoning mode for complex physics problems
 - Requires models with strong scientific and mathematical knowledge
 - Consider specialized physics-trained models for advanced topics
@@ -81,12 +87,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers chemical processes, molecular interactions, reaction mechanisms, and chemical analysis. Suitable for both theoretical chemistry concepts and practical laboratory applications.
 
 **Typical Queries**:
+
 - "Balance the equation: C₆H₁₂O₆ + O₂ → CO₂ + H₂O"
 - "Explain the mechanism of SN2 reactions"
 - "What is the molecular geometry of SF₆?"
 - "How do catalysts affect reaction rates?"
 
 **Configuration Considerations**:
+
 - Often benefits from reasoning mode for reaction mechanisms
 - Requires models with strong chemistry and scientific knowledge
 - May need specialized chemical notation and formula handling
@@ -98,12 +106,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Encompasses all biological sciences including molecular biology, genetics, ecology, evolution, and human biology. Handles both descriptive biological concepts and analytical processes.
 
 **Typical Queries**:
+
 - "Explain the process of photosynthesis"
 - "How does DNA replication work?"
 - "What are the stages of mitosis?"
 - "Describe the structure and function of ribosomes"
 
 **Configuration Considerations**:
+
 - May benefit from reasoning mode for complex biological processes
 - Requires models with comprehensive biological knowledge
 - Consider models trained on scientific literature for accuracy
@@ -115,12 +125,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers various engineering disciplines including mechanical, electrical, civil, and software engineering. Focuses on practical problem-solving and system design.
 
 **Typical Queries**:
+
 - "Design a load-bearing beam for a 20-foot span"
 - "How do I calculate the efficiency of this heat exchanger?"
 - "What are the trade-offs between different sorting algorithms?"
 - "Explain the principles of feedback control systems"
 
 **Configuration Considerations**:
+
 - Often benefits from reasoning mode for design problems
 - Requires models with technical and mathematical capabilities
 - May need specialized engineering knowledge and calculations
@@ -132,12 +144,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers business operations, strategic planning, management practices, marketing, finance, and entrepreneurship. Suitable for both theoretical business concepts and practical business advice.
 
 **Typical Queries**:
+
 - "What are the key components of a business plan?"
 - "How do I improve team productivity?"
 - "Explain different marketing strategies for startups"
 - "What is the difference between B2B and B2C sales?"
 
 **Configuration Considerations**:
+
 - Typically conversational, may not require reasoning mode
 - Benefits from models with business and management knowledge
 - Consider models trained on business literature and case studies
@@ -149,12 +163,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Encompasses legal principles, regulations, court procedures, and jurisprudence across various legal domains. Handles both general legal concepts and specific legal questions.
 
 **Typical Queries**:
+
 - "What are the elements of a valid contract?"
 - "Explain the difference between civil and criminal law"
 - "What is intellectual property protection?"
 - "How does the appeals process work?"
 
 **Configuration Considerations**:
+
 - Usually explanatory, may not require reasoning mode
 - Requires models with comprehensive legal knowledge
 - Important: Ensure disclaimers about not providing legal advice
@@ -166,12 +182,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers economic principles, market analysis, fiscal policy, and economic theory. Handles both theoretical economic concepts and practical economic analysis.
 
 **Typical Queries**:
+
 - "Explain supply and demand curves"
 - "What causes inflation and how is it measured?"
 - "How do interest rates affect the economy?"
 - "What is the difference between GDP and GNP?"
 
 **Configuration Considerations**:
+
 - Usually explanatory, may not require reasoning mode
 - Benefits from models with strong economic and mathematical knowledge
 - Consider models trained on economic literature and data
@@ -183,12 +201,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Encompasses medical knowledge, health information, anatomy, physiology, and wellness topics. Covers both general health information and specific medical concepts.
 
 **Typical Queries**:
+
 - "What are the symptoms of diabetes?"
 - "How does the immune system work?"
 - "What are the benefits of regular exercise?"
 - "Explain the structure of the human heart"
 
 **Configuration Considerations**:
+
 - Typically informational, may not require reasoning mode
 - Requires models with medical and health knowledge
 - Important: Ensure disclaimers about not providing medical advice
@@ -200,12 +220,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers psychological concepts, mental health topics, cognitive processes, and therapeutic approaches. Handles both theoretical psychology and practical mental health information.
 
 **Typical Queries**:
+
 - "What are the stages of grief?"
 - "Explain cognitive behavioral therapy techniques"
 - "How does memory formation work?"
 - "What is the difference between anxiety and depression?"
 
 **Configuration Considerations**:
+
 - Usually explanatory, may not require reasoning mode
 - Benefits from models with psychology and mental health knowledge
 - Important: Ensure disclaimers about not providing therapeutic advice
@@ -217,12 +239,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Encompasses philosophical inquiry, ethical discussions, logical reasoning, and metaphysical concepts. Covers both historical philosophical thought and contemporary philosophical issues.
 
 **Typical Queries**:
+
 - "What is the meaning of life according to different philosophers?"
 - "Explain the trolley problem in ethics"
 - "What are the main arguments for and against free will?"
 - "How do different cultures approach moral reasoning?"
 
 **Configuration Considerations**:
+
 - Typically conversational and exploratory
 - May benefit from reasoning mode for complex philosophical arguments
 - Requires models with broad philosophical knowledge
@@ -234,12 +258,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Covers historical events, civilizations, cultural developments, and historical analysis across all time periods and regions. Handles both factual historical information and historical interpretation.
 
 **Typical Queries**:
+
 - "What were the causes of World War I?"
 - "Explain the rise and fall of the Roman Empire"
 - "How did the Industrial Revolution change society?"
 - "What was the significance of the Renaissance?"
 
 **Configuration Considerations**:
+
 - Usually narrative-based, may not require reasoning mode
 - Benefits from models with comprehensive historical knowledge
 - Consider models trained on historical texts and sources
@@ -251,12 +277,14 @@ vLLM Semantic Router supports 14 predefined categories for automatic query class
 **Description**: Serves as a catch-all category for queries that don't fit into specific domains. Handles general knowledge questions, casual conversations, and miscellaneous topics.
 
 **Typical Queries**:
+
 - "What's the weather like today?"
 - "How do I cook pasta?"
 - "What are some good book recommendations?"
 - "Tell me a joke"
 
 **Configuration Considerations**:
+
 - Usually doesn't require reasoning mode
 - Benefits from models with broad general knowledge
 - Often used as fallback when classification confidence is low

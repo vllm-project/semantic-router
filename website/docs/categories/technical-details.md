@@ -32,6 +32,7 @@ graph TD
 The category classifier uses ModernBERT, a state-of-the-art transformer model optimized for classification tasks.
 
 **Model Specifications**:
+
 - **Architecture**: ModernBERT-base
 - **Parameters**: ~110M parameters
 - **Input Length**: Up to 512 tokens
@@ -93,6 +94,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 **Endpoint**: `POST /classify/intent`
 
 **Request Format**:
+
 ```json
 {
   "text": "Solve the quadratic equation x² + 5x + 6 = 0",
@@ -104,6 +106,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 ```
 
 **Response Format**:
+
 ```json
 {
   "classification": {
@@ -125,6 +128,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 **Endpoint**: `POST /classify/batch`
 
 **Request Format**:
+
 ```json
 {
   "texts": [
@@ -139,6 +143,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 ```
 
 **Response Format**:
+
 ```json
 {
   "results": [
@@ -176,6 +181,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 **Endpoint**: `GET /api/v1/models`
 
 **Response Format**:
+
 ```json
 {
   "models": [
@@ -398,6 +404,7 @@ func (c *Classifier) HealthCheck() error {
 ### Adding New Categories
 
 1. **Update Model Training Data**:
+
    ```python
    # Add training examples for new category
    training_data = [
@@ -407,6 +414,7 @@ func (c *Classifier) HealthCheck() error {
    ```
 
 2. **Update Category Mapping**:
+
    ```json
    {
      "category_to_idx": {
@@ -419,6 +427,7 @@ func (c *Classifier) HealthCheck() error {
    ```
 
 3. **Update Configuration**:
+
    ```yaml
    categories:
      - name: "new_category"
@@ -499,6 +508,7 @@ func (c *Classifier) ClassifyBatch(texts []string) ([]ClassResult, error) {
 **Symptoms**: Queries consistently misclassified
 
 **Diagnosis**:
+
 ```bash
 # Check model health
 curl -X GET http://localhost:8080/health
@@ -509,6 +519,7 @@ curl -X POST http://localhost:8080/classify/intent \
 ```
 
 **Solutions**:
+
 - Increase confidence threshold
 - Retrain model with more data
 - Update category mapping
@@ -518,12 +529,14 @@ curl -X POST http://localhost:8080/classify/intent \
 **Symptoms**: Slow classification responses
 
 **Diagnosis**:
+
 ```bash
 # Monitor classification metrics
 curl -X GET http://localhost:8080/metrics | grep classifier_latency
 ```
 
 **Solutions**:
+
 - Enable model quantization
 - Use batch processing
 - Optimize hardware (GPU acceleration)
@@ -533,6 +546,7 @@ curl -X GET http://localhost:8080/metrics | grep classifier_latency
 **Symptoms**: High memory usage or OOM errors
 
 **Solutions**:
+
 ```yaml
 # Reduce model size
 classifier:

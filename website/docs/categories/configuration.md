@@ -25,6 +25,7 @@ categories:
 ### Core Parameters
 
 #### `name` (Required)
+
 - **Type**: String
 - **Description**: Unique identifier for the category
 - **Valid Values**: Any string matching supported categories
@@ -36,6 +37,7 @@ categories:
 ```
 
 #### `description` (Optional)
+
 - **Type**: String
 - **Description**: Human-readable description of the category
 - **Purpose**: Documentation and debugging
@@ -50,6 +52,7 @@ categories:
 ### Reasoning Configuration
 
 #### `use_reasoning` (Required)
+
 - **Type**: Boolean
 - **Description**: Whether to enable reasoning mode for this category
 - **Default**: `false`
@@ -62,6 +65,7 @@ categories:
 ```
 
 #### `reasoning_description` (Optional)
+
 - **Type**: String
 - **Description**: Explanation of why reasoning is needed
 - **Purpose**: Documentation and model context
@@ -75,6 +79,7 @@ categories:
 ```
 
 #### `reasoning_effort` (Optional)
+
 - **Type**: String
 - **Valid Values**: `"low"`, `"medium"`, `"high"`
 - **Default**: `"medium"`
@@ -88,6 +93,7 @@ categories:
 ```
 
 **Reasoning Effort Levels**:
+
 - **Low**: Basic step-by-step thinking (1-3 steps)
 - **Medium**: Moderate analysis (3-7 steps)
 - **High**: Deep reasoning (7-15 steps)
@@ -95,6 +101,7 @@ categories:
 ### Model Scoring
 
 #### `model_scores` (Required)
+
 - **Type**: Array of model-score pairs
 - **Description**: Defines model preferences for this category
 - **Purpose**: Intelligent model selection based on domain expertise
@@ -112,6 +119,7 @@ categories:
 ```
 
 **Score Guidelines**:
+
 - **1.0**: Perfect match, primary choice
 - **0.8-0.9**: Excellent capability
 - **0.6-0.7**: Good capability
@@ -352,6 +360,7 @@ curl -X POST http://localhost:8080/classify/intent \
 **Symptoms**: Queries routed to wrong categories
 
 **Solutions**:
+
 ```yaml
 # Increase classification threshold
 classifier:
@@ -373,6 +382,7 @@ categories:
 **Symptoms**: Slow response times
 
 **Solutions**:
+
 ```yaml
 # Reduce reasoning effort
 categories:
@@ -394,6 +404,7 @@ categories:
 **Symptoms**: Suboptimal model choices
 
 **Solutions**:
+
 ```yaml
 # Review and adjust model scores based on benchmarks
 categories:
