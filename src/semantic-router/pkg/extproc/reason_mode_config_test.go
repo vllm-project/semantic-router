@@ -18,18 +18,24 @@ func TestReasoningModeConfiguration(t *testing.T) {
 		Categories: []config.Category{
 			{
 				Name:                 "math",
-				UseReasoning:         true,
 				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				ModelScores: []config.ModelScore{
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+				},
 			},
 			{
 				Name:                 "business",
-				UseReasoning:         false,
 				ReasoningDescription: "Business content is typically conversational",
+				ModelScores: []config.ModelScore{
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+				},
 			},
 			{
 				Name:                 "biology",
-				UseReasoning:         true,
 				ReasoningDescription: "Biological processes benefit from structured analysis",
+				ModelScores: []config.ModelScore{
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+				},
 			},
 		},
 	}
@@ -40,12 +46,16 @@ func TestReasoningModeConfiguration(t *testing.T) {
 	fmt.Println("--- Reasoning Mode Configuration ---")
 	for _, category := range cfg.Categories {
 		reasoningStatus := "DISABLED"
-		if category.UseReasoning {
-			reasoningStatus = "ENABLED"
+		bestModel := "no-model"
+		if len(category.ModelScores) > 0 {
+			bestModel = category.ModelScores[0].Model
+			if category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning {
+				reasoningStatus = "ENABLED"
+			}
 		}
 
-		fmt.Printf("Category: %-15s | Reasoning: %-8s | %s\n",
-			category.Name, reasoningStatus, category.ReasoningDescription)
+		fmt.Printf("Category: %-15s | Model: %-12s | Reasoning: %-8s | %s\n",
+			category.Name, bestModel, reasoningStatus, category.ReasoningDescription)
 	}
 
 	// Test queries with expected categories
@@ -72,7 +82,9 @@ func TestReasoningModeConfiguration(t *testing.T) {
 
 		for _, category := range cfg.Categories {
 			if strings.EqualFold(category.Name, test.category) {
-				useReasoning = category.UseReasoning
+				if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
+					useReasoning = *category.ModelScores[0].UseReasoning
+				}
 				reasoningDesc = category.ReasoningDescription
 				found = true
 				break
@@ -117,18 +129,21 @@ func TestReasoningModeConfiguration(t *testing.T) {
 	fmt.Print(`
 categories:
 - name: math
-  use_reasoning: true
   reasoning_description: "Mathematical problems require step-by-step reasoning"
   model_scores:
+  - model: deepseek-v31
+    score: 0.9
+    use_reasoning: true
   - model: phi4
-    score: 1.0
+    score: 0.7
+    use_reasoning: false
 
 - name: business
-  use_reasoning: false
   reasoning_description: "Business content is typically conversational"
   model_scores:
   - model: phi4
     score: 0.8
+    use_reasoning: false
 `)
 }
 
@@ -143,7 +158,12 @@ func GetReasoningConfigurationSummary(cfg *config.RouterConfig) map[string]inter
 	categoriesWithoutReasoning := []string{}
 
 	for _, category := range cfg.Categories {
-		if category.UseReasoning {
+		bestModelReasoning := false
+		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
+			bestModelReasoning = *category.ModelScores[0].UseReasoning
+		}
+
+		if bestModelReasoning {
 			reasoningEnabled++
 			categoriesWithReasoning = append(categoriesWithReasoning, category.Name)
 		} else {
@@ -170,12 +190,21 @@ func DemonstrateConfigurationUsage() {
 	fmt.Print(`
 categories:
 - name: math
-  use_reasoning: true
   reasoning_description: "Mathematical problems require step-by-step reasoning"
+  model_scores:
+  - model: deepseek-v31
+    score: 0.9
+    use_reasoning: true
+  - model: phi4
+    score: 0.7
+    use_reasoning: false
 
 - name: creative_writing
-  use_reasoning: false
   reasoning_description: "Creative content flows better without structured reasoning"
+  model_scores:
+  - model: phi4
+    score: 0.8
+    use_reasoning: false
 `)
 
 	fmt.Println("\n2. Use in Go code:")

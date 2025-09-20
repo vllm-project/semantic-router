@@ -15,13 +15,19 @@ func TestReasoningModeIntegration(t *testing.T) {
 		Categories: []config.Category{
 			{
 				Name:                 "math",
-				UseReasoning:         true,
 				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				ModelScores: []config.ModelScore{
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "phi4", Score: 0.7, UseReasoning: config.BoolPtr(false)},
+				},
 			},
 			{
 				Name:                 "business",
-				UseReasoning:         false,
 				ReasoningDescription: "Business content is typically conversational",
+				ModelScores: []config.ModelScore{
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+					{Model: "deepseek-v31", Score: 0.6, UseReasoning: config.BoolPtr(false)},
+				},
 			},
 		},
 		ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
@@ -75,8 +81,8 @@ func TestReasoningModeIntegration(t *testing.T) {
 
 		// Test the configuration logic directly
 		mathCategory := cfg.Categories[0] // math category
-		if !mathCategory.UseReasoning {
-			t.Error("Math category should have UseReasoning set to true in configuration")
+		if len(mathCategory.ModelScores) == 0 || mathCategory.ModelScores[0].UseReasoning == nil || !*mathCategory.ModelScores[0].UseReasoning {
+			t.Error("Math category's best model should have UseReasoning set to true in configuration")
 		}
 	})
 
@@ -281,8 +287,10 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 			name: "Math category with reasoning enabled",
 			category: config.Category{
 				Name:                 "math",
-				UseReasoning:         true,
 				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				ModelScores: []config.ModelScore{
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+				},
 			},
 			expected: true,
 		},
@@ -290,8 +298,10 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 			name: "Business category with reasoning disabled",
 			category: config.Category{
 				Name:                 "business",
-				UseReasoning:         false,
 				ReasoningDescription: "Business content is typically conversational",
+				ModelScores: []config.ModelScore{
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+				},
 			},
 			expected: false,
 		},
@@ -299,8 +309,10 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 			name: "Science category with reasoning enabled",
 			category: config.Category{
 				Name:                 "science",
-				UseReasoning:         true,
 				ReasoningDescription: "Scientific concepts benefit from structured analysis",
+				ModelScores: []config.ModelScore{
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+				},
 			},
 			expected: true,
 		},
@@ -308,9 +320,15 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.category.UseReasoning != tc.expected {
-				t.Errorf("Expected UseReasoning %v for %s, got %v",
-					tc.expected, tc.category.Name, tc.category.UseReasoning)
+			// Check the best model's reasoning capability
+			bestModelReasoning := false
+			if len(tc.category.ModelScores) > 0 && tc.category.ModelScores[0].UseReasoning != nil {
+				bestModelReasoning = *tc.category.ModelScores[0].UseReasoning
+			}
+
+			if bestModelReasoning != tc.expected {
+				t.Errorf("Expected best model UseReasoning %v for %s, got %v",
+					tc.expected, tc.category.Name, bestModelReasoning)
 			}
 
 			// Verify description is not empty
