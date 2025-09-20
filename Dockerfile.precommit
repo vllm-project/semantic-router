@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     python3 \
+    libssl-dev \
+    ca-certificates \
     python3-pip
 
 # Install Node.js and npm
@@ -13,8 +15,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
     apt-get install -y nodejs
 
 # Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
-    . $HOME/.cargo/env
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Markdown
 RUN npm install -g markdownlint-cli
