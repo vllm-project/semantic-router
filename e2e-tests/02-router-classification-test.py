@@ -4,25 +4,27 @@
 
 This test validates the router's ability to classify different types of queries
 and select the appropriate model based on the content.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json
 import os
 import sys
 import time
+import unittest
 from collections import defaultdict
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
 ROUTER_METRICS_URL = "http://localhost:9190/metrics"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed from gemma3:27b to match make test-prompt
+DEFAULT_MODEL = "gemma3:27b"  # Use configured model
 
 # Category test cases - each designed to trigger a specific classifier category
 CATEGORY_TEST_CASES = [
@@ -37,6 +39,20 @@ CATEGORY_TEST_CASES = [
         "content": "Write a short story about a space cat.",
     },
 ]  # Reduced to just 2 test cases to avoid timeouts
+
+# Auto routing test cases - should trigger different model selection
+AUTO_ROUTING_TEST_CASES = [
+    {
+        "name": "Math Problem (should route to phi4)",
+        "expected_model": "phi4",
+        "content": "Calculate the derivative of f(x) = x^3 + 2x^2 - 5x + 7",
+    },
+    {
+        "name": "Creative Writing (should route to another model)",
+        "expected_model_not": "phi4",  # Should NOT be phi4 since phi4 is optimized for math
+        "content": "Write a poem about the ocean at sunset",
+    },
+]
 
 
 class RouterClassificationTest(SemanticRouterTestBase):
@@ -68,7 +84,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             if response.status_code >= 500:
@@ -129,7 +145,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=10,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             passed = response.status_code < 400
@@ -185,7 +201,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=60,
+                timeout=(10, 60),  # (connect timeout, read timeout)
             )
 
             passed = response.status_code < 400
@@ -266,6 +282,105 @@ class RouterClassificationTest(SemanticRouterTestBase):
         )
 
         self.assertGreaterEqual(metrics_found, 0, "No classification metrics found")
+
+    def test_auto_routing_intelligence(self):
+        """Test that auto model selection actually routes different queries to different specialized models."""
+        self.print_test_header(
+            "Auto Routing Intelligence Test",
+            "Verifies that model='auto' actually routes different query types to different specialized models",
+        )
+
+        results = {}
+
+        for test_case in AUTO_ROUTING_TEST_CASES:
+            self.print_subtest_header(test_case["name"])
+
+            payload = {
+                "model": "auto",  # This should trigger intelligent routing
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": test_case["content"]},
+                ],
+                "temperature": 0.7,
+            }
+
+            self.print_request_info(
+                payload=payload,
+                expectations=f"Expect: Auto routing to select appropriate specialized model",
+            )
+
+            response = requests.post(
+                f"{ENVOY_URL}{OPENAI_ENDPOINT}",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=30,
+            )
+
+            passed = response.status_code == 200
+
+            try:
+                response_json = response.json()
+                selected_model = response_json.get("model", "unknown")
+            except:
+                selected_model = "unknown"
+
+            results[test_case["name"]] = selected_model
+
+            # Check if routing met expectations
+            if "expected_model" in test_case:
+                routing_correct = selected_model == test_case["expected_model"]
+                routing_message = f"Expected {test_case['expected_model']}, got {selected_model}"
+            elif "expected_model_not" in test_case:
+                routing_correct = selected_model != test_case["expected_model_not"]
+                routing_message = f"Should NOT be {test_case['expected_model_not']}, got {selected_model}"
+            else:
+                routing_correct = True
+                routing_message = f"Got {selected_model}"
+
+            self.print_response_info(
+                response,
+                {
+                    "Query Type": test_case["name"],
+                    "Selected Model": selected_model,
+                    "Routing Expectation": routing_message,
+                    "Routing Correct": routing_correct,
+                },
+            )
+
+            self.print_test_result(
+                passed=passed and routing_correct,
+                message=(
+                    f"Auto routing working: {selected_model} for {test_case['name']}"
+                    if passed and routing_correct
+                    else f"Auto routing failed: {routing_message}"
+                ),
+            )
+
+            self.assertEqual(response.status_code, 200, f"Auto routing request failed with status {response.status_code}")
+
+            # Check routing intelligence
+            if "expected_model" in test_case:
+                self.assertEqual(
+                    selected_model,
+                    test_case["expected_model"],
+                    f"Auto routing failed: expected {test_case['expected_model']}, got {selected_model}"
+                )
+            elif "expected_model_not" in test_case:
+                self.assertNotEqual(
+                    selected_model,
+                    test_case["expected_model_not"],
+                    f"Auto routing failed: got {selected_model}, should not be {test_case['expected_model_not']}"
+                )
+
+        # Print summary of routing decisions
+        print(f"\nAuto Routing Summary:")
+        for test_name, model in results.items():
+            print(f"  {test_name}: {model}")
+
+        # Ensure we got different models for different query types (intelligence test)
+        unique_models = set(results.values())
+        if len(unique_models) == 1:
+            self.fail(f"Auto routing not working - all queries routed to same model: {list(unique_models)[0]}")
 
 
 if __name__ == "__main__":

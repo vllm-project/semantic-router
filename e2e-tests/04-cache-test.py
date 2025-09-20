@@ -4,19 +4,21 @@
 
 This test validates the semantic cache functionality by sending similar
 queries and checking if cache hits occur as expected.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json
 import os
 import sys
 import time
+import unittest
 import uuid
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
@@ -136,7 +138,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # First request
         self.print_subtest_header("First Request (Expected Cache Miss)")
         response1 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=30
         )
 
         response1_json = response1.json()
@@ -157,7 +159,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Second identical request
         self.print_subtest_header("Second Request (Expected Cache Hit)")
         response2 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=30
         )
 
         response2_json = response2.json()
@@ -237,7 +239,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         headers = {"Content-Type": "application/json", "X-Session-ID": session_id}
 
         response1 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload1, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload1, timeout=30
         )
 
         response1_json = response1.json()
@@ -273,7 +275,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         )
 
         response2 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload2, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload2, timeout=30
         )
 
         response2_json = response2.json()

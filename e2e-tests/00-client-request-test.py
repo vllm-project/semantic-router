@@ -4,6 +4,8 @@
 
 This test validates that the Envoy proxy is running and accepting requests,
 and that basic request formatting works correctly.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import json
@@ -14,14 +16,13 @@ import unittest
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed to match other tests
+DEFAULT_MODEL = "gemma3:27b"  # Use configured model
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 
@@ -177,14 +178,14 @@ class ClientRequestTest(SemanticRouterTestBase):
 
         try:
             response = self._make_request(
-                payload, timeout=10
+                payload, timeout=30
             )  # Reduced timeout for error cases
             if not response:
                 response = requests.post(
                     f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                     headers={"Content-Type": "application/json"},
                     json=payload,
-                    timeout=10,
+                    timeout=30,
                 )
 
             passed = 400 <= response.status_code < 500
