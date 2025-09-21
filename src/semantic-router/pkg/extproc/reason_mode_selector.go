@@ -32,16 +32,24 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 	// Normalize category name for consistent lookup
 	normalizedCategory := strings.ToLower(strings.TrimSpace(categoryName))
 
-	// Look up the category in the configuration
+	// Look up the category in the configuration and get the best model for it
 	for _, category := range r.Config.Categories {
 		if strings.EqualFold(category.Name, normalizedCategory) {
-			reasoningStatus := "DISABLED"
-			if category.UseReasoning {
-				reasoningStatus = "ENABLED"
+			// Get the best model for this category (first in the list)
+			if len(category.ModelScores) > 0 {
+				bestModel := category.ModelScores[0]
+				useReasoning := bestModel.UseReasoning != nil && *bestModel.UseReasoning
+				reasoningStatus := "DISABLED"
+				if useReasoning {
+					reasoningStatus = "ENABLED"
+				}
+				observability.Infof("Reasoning mode decision: Category '%s', Model '%s' → %s",
+					categoryName, bestModel.Model, reasoningStatus)
+				return useReasoning, categoryName
+			} else {
+				observability.Infof("Category '%s' has no models configured, defaulting to no reasoning mode", categoryName)
+				return false, categoryName
 			}
-			observability.Infof("Reasoning mode decision: Category '%s' → %s",
-				categoryName, reasoningStatus)
-			return category.UseReasoning, categoryName
 		}
 	}
 
@@ -233,25 +241,30 @@ func (r *OpenAIRouter) logReasoningConfiguration() {
 		return
 	}
 
-	reasoningEnabled := []string{}
-	reasoningDisabled := []string{}
+	categoriesWithReasoning := []string{}
+	categoriesWithoutReasoning := []string{}
 
 	for _, category := range r.Config.Categories {
-		if category.UseReasoning {
-			reasoningEnabled = append(reasoningEnabled, category.Name)
+		// Check if the best model (first model) for this category supports reasoning
+		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning {
+			categoriesWithReasoning = append(categoriesWithReasoning, fmt.Sprintf("%s(%s)", category.Name, category.ModelScores[0].Model))
 		} else {
-			reasoningDisabled = append(reasoningDisabled, category.Name)
+			modelName := "no-models"
+			if len(category.ModelScores) > 0 {
+				modelName = category.ModelScores[0].Model
+			}
+			categoriesWithoutReasoning = append(categoriesWithoutReasoning, fmt.Sprintf("%s(%s)", category.Name, modelName))
 		}
 	}
 
 	observability.Infof("Reasoning configuration - Total categories: %d", len(r.Config.Categories))
 
-	if len(reasoningEnabled) > 0 {
-		observability.Infof("Reasoning ENABLED for categories (%d): %v", len(reasoningEnabled), reasoningEnabled)
+	if len(categoriesWithReasoning) > 0 {
+		observability.Infof("Reasoning ENABLED for categories (%d): %v", len(categoriesWithReasoning), categoriesWithReasoning)
 	}
 
-	if len(reasoningDisabled) > 0 {
-		observability.Infof("Reasoning DISABLED for categories (%d): %v", len(reasoningDisabled), reasoningDisabled)
+	if len(categoriesWithoutReasoning) > 0 {
+		observability.Infof("Reasoning DISABLED for categories (%d): %v", len(categoriesWithoutReasoning), categoriesWithoutReasoning)
 	}
 }
 
@@ -280,12 +293,13 @@ func (r *OpenAIRouter) LogReasoningConfigurationSummary() {
 
 	enabledCount := 0
 	for _, category := range r.Config.Categories {
-		if category.UseReasoning {
+		// Check if the best model (first model) for this category supports reasoning
+		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning {
 			enabledCount++
 		}
 	}
 
-	observability.Infof("Reasoning mode summary: %d/%d categories have reasoning enabled", enabledCount, len(r.Config.Categories))
+	observability.Infof("Reasoning mode summary: %d/%d categories have reasoning enabled (based on best model)", enabledCount, len(r.Config.Categories))
 }
 
 // getReasoningEffort returns the reasoning effort level for a given category

@@ -18,6 +18,24 @@ The Classification API server runs alongside the main Semantic Router ExtProc se
 - **ExtProc Server**: `http://localhost:50051` (gRPC for Envoy integration)
 - **Metrics Server**: `http://localhost:9190` (Prometheus metrics)
 
+### Endpoint-to-port mapping (quick reference)
+
+- Port 8080 (this API)
+  - `GET /v1/models` (OpenAI-compatible model list, includes `auto`)
+  - `GET /health`
+  - `GET /info/models`, `GET /info/classifier`
+  - `POST /api/v1/classify/intent|pii|security|batch`
+
+- Port 8801 (Envoy public entry)
+  - Typically proxies `POST /v1/chat/completions` to upstream LLMs while invoking ExtProc (50051).
+  - You can expose `GET /v1/models` at 8801 by adding an Envoy route that forwards to `router:8080`.
+
+- Port 50051 (ExtProc, gRPC)
+  - Used by Envoy for external processing of requests; not an HTTP endpoint.
+
+- Port 9190 (Prometheus)
+  - `GET /metrics`
+
 Start the server with:
 
 ```bash

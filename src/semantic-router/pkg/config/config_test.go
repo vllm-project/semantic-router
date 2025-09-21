@@ -67,8 +67,10 @@ categories:
     model_scores:
       - model: "model-a"
         score: 0.9
+        use_reasoning: true
       - model: "model-b"
         score: 0.8
+        use_reasoning: false
 
 default_model: "model-b"
 
@@ -339,12 +341,15 @@ categories:
     model_scores:
       - model: "model1"
         score: 0.9
+        use_reasoning: true
       - model: "model2"
         score: 0.8
+        use_reasoning: false
   - name: "category2"
     model_scores:
       - model: "model3"
         score: 0.95
+        use_reasoning: true
 default_model: "default-model"
 `
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -387,7 +392,10 @@ default_model: "default-model"
 				configContent := `
 categories:
   - name: "empty_category"
-    model_scores: []
+    model_scores:
+      - model: "fallback-model"
+        score: 0.5
+        use_reasoning: false
 default_model: "fallback-model"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -640,8 +648,16 @@ prompt_guard:
 categories:
   - name: "category1"
     description: "Description for category 1"
+    model_scores:
+      - model: "model1"
+        score: 0.9
+        use_reasoning: true
   - name: "category2"
     description: "Description for category 2"
+    model_scores:
+      - model: "model2"
+        score: 0.8
+        use_reasoning: false
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -666,8 +682,16 @@ categories:
 categories:
   - name: "category1"
     description: "Has description"
+    model_scores:
+      - model: "model1"
+        score: 0.9
+        use_reasoning: true
   - name: "category2"
     # No description field
+    model_scores:
+      - model: "model2"
+        score: 0.8
+        use_reasoning: false
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -743,6 +767,10 @@ default_model: "model-with-hyphens_and_underscores"
 categories:
   - name: "category with spaces"
     description: "Description with special chars: @#$%^&*()"
+    model_scores:
+      - model: "model-with-hyphens_and_underscores"
+        score: 0.9
+        use_reasoning: true
 `
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
@@ -794,8 +822,10 @@ categories:
     model_scores:
       - model: "model-a"
         score: 0.9
+        use_reasoning: true
       - model: "model-b"
         score: 0.8
+        use_reasoning: false
 
 default_model: "model-b"
 `
@@ -932,6 +962,7 @@ categories:
     model_scores:
       - model: "missing-model"
         score: 0.9
+        use_reasoning: true
 
 default_model: "existing-model"
 `
@@ -1210,6 +1241,7 @@ categories:
     model_scores:
       - model: "gpt-4"
         score: 0.95
+        use_reasoning: true
 
 default_model: "gpt-4"
 `
