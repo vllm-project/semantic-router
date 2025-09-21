@@ -6,6 +6,28 @@ The Semantic Router provides a gRPC-based API that integrates seamlessly with En
 
 The Semantic Router operates as an ExtProc server that processes HTTP requests through Envoy Proxy. It doesn't expose direct REST endpoints but rather processes OpenAI-compatible API requests routed through Envoy.
 
+> Note: In addition to the ExtProc path, this project also starts a lightweight HTTP Classification API on port 8080 for health/info and classification utilities. The OpenAI-compatible `/v1/models` endpoint is provided by this HTTP API (8080) and can be optionally exposed through Envoy (8801) via routing rules.
+
+### Ports and endpoint mapping
+
+- 8801 (HTTP, Envoy public entry)
+  - Typical client entry for OpenAI-compatible requests like `POST /v1/chat/completions`.
+  - Can proxy `GET /v1/models` to Router 8080 if you add an Envoy route; otherwise `/v1/models` at 8801 may return “no healthy upstream”.
+
+- 8080 (HTTP, Classification API)
+  - `GET /v1/models`  → OpenAI-compatible model list (includes synthetic `auto`)
+  - `GET /health`      → Classification API health
+  - `GET /info/models` → Loaded classifier models + system info
+  - `GET /info/classifier` → Classifier configuration details
+  - `POST /api/v1/classify/intent|pii|security|batch` → Direct classification utilities
+
+- 50051 (gRPC, ExtProc)
+  - Envoy External Processing (ExtProc) for in-path classification/routing of `/v1/chat/completions`.
+  - Not an HTTP port; not directly accessible via curl.
+
+- 9190 (HTTP, Prometheus metrics)
+  - `GET /metrics` → Prometheus scrape endpoint (global process metrics).
+
 ### Request Flow
 
 ```mermaid
