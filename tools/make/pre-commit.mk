@@ -1,3 +1,5 @@
+PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
+
 precommit-install:
 	pip install pre-commit
 
@@ -19,6 +21,32 @@ precommit-check:
 		echo "No Go, Rust, JavaScript, Markdown, Yaml, or Python files found to check"; \
 	fi
 
+# Run pre-commit hooks in a Docker container,
+# and you can exec container to run bash for debug.
+# export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
+# docker run --rm -it \
+#     -v $(pwd):/app \
+#     -w /app \
+#     --name precommit-container ${PRECOMMIT_CONTAINER} \
+#     bash
+# and then, run `pre-commit install && pre-commit run --all-files` command
 precommit-local:
-	docker pull ghcr.io/vllm/semantic-router/precommit:latest
-	docker run --rm -v $$(pwd):/data ghcr.io/vllm-project/semantic-router/precommit:latest pre-commit run --all-files
+	@if command -v docker > /dev/null 2>&1; then \
+		CONTAINER_CMD=docker; \
+	elif command -v podman > /dev/null 2>&1; then \
+		CONTAINER_CMD=podman; \
+	else \
+		echo "Error: Neither docker nor podman is installed. Please install one of them."; \
+		exit 1; \
+	fi; \
+	if ! $$CONTAINER_CMD image inspect ${PRECOMMIT_CONTAINER} > /dev/null 2>&1; then \
+		echo "Image not found locally. Pulling..."; \
+		$$CONTAINER_CMD pull ${PRECOMMIT_CONTAINER}; \
+	else \
+		echo "Image found locally. Skipping pull."; \
+	fi; \
+	$$CONTAINER_CMD run --rm \
+	    -v $(shell pwd):/app \
+	    -w /app \
+	    --name precommit-container ${PRECOMMIT_CONTAINER} \
+	    bash -c "source ~/.cargo/env && pre-commit install && pre-commit run --all-files"

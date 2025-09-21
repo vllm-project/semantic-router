@@ -9,7 +9,7 @@ This guide will help you set up and install the Semantic Router on your system. 
 ### Software Dependencies
 
 - **Go**: Version 1.24.1 or higher (matches the module requirements)
-- **Rust**: Version 1.70 or higher (for Candle bindings)
+- **Rust**: Version 1.90.0 or higher (for Candle bindings)
 - **Python**: Version 3.8 or higher (for model downloads)
 - **HuggingFace CLI**: For model downloads (`pip install huggingface_hub`)
 

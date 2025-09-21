@@ -6,6 +6,28 @@ The Semantic Router provides a gRPC-based API that integrates seamlessly with En
 
 The Semantic Router operates as an ExtProc server that processes HTTP requests through Envoy Proxy. It doesn't expose direct REST endpoints but rather processes OpenAI-compatible API requests routed through Envoy.
 
+> Note: In addition to the ExtProc path, this project also starts a lightweight HTTP Classification API on port 8080 for health/info and classification utilities. The OpenAI-compatible `/v1/models` endpoint is provided by this HTTP API (8080) and can be optionally exposed through Envoy (8801) via routing rules.
+
+### Ports and endpoint mapping
+
+- 8801 (HTTP, Envoy public entry)
+  - Typical client entry for OpenAI-compatible requests like `POST /v1/chat/completions`.
+  - Can proxy `GET /v1/models` to Router 8080 if you add an Envoy route; otherwise `/v1/models` at 8801 may return “no healthy upstream”.
+
+- 8080 (HTTP, Classification API)
+  - `GET /v1/models`  → OpenAI-compatible model list (includes synthetic `auto`)
+  - `GET /health`      → Classification API health
+  - `GET /info/models` → Loaded classifier models + system info
+  - `GET /info/classifier` → Classifier configuration details
+  - `POST /api/v1/classify/intent|pii|security|batch` → Direct classification utilities
+
+- 50051 (gRPC, ExtProc)
+  - Envoy External Processing (ExtProc) for in-path classification/routing of `/v1/chat/completions`.
+  - Not an HTTP port; not directly accessible via curl.
+
+- 9190 (HTTP, Prometheus metrics)
+  - `GET /metrics` → Prometheus scrape endpoint (global process metrics).
+
 ### Request Flow
 
 ```mermaid
@@ -29,6 +51,29 @@ sequenceDiagram
 ## OpenAI API Compatibility
 
 The router processes standard OpenAI API requests:
+
+### Models Endpoint
+
+Lists available models and includes a synthetic "auto" model that uses the router's intent classification to select the best underlying model per request.
+
+- Endpoint: `GET /v1/models`
+- Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "auto", "object": "model", "created": 1726890000, "owned_by": "semantic-router" },
+    { "id": "gpt-4o-mini", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" },
+    { "id": "llama-3.1-8b-instruct", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" }
+  ]
+}
+```
+
+Notes:
+
+- The concrete model list is sourced from your configured vLLM endpoints in `config.yaml` (see `vllm_endpoints[].models`).
+- The special `auto` model is always present and instructs the router to classify and route to the best backend model automatically.
 
 ### Chat Completions Endpoint
 
@@ -173,6 +218,12 @@ semantic_router_cache_size 1247
 # Security metrics
 semantic_router_pii_detections_total{action="block"} 23
 semantic_router_jailbreak_attempts_total{action="block"} 5
+
+# Error metrics
+llm_request_errors_total{model="gpt-4",reason="timeout"} 12
+llm_request_errors_total{model="claude-3",reason="upstream_5xx"} 3
+llm_request_errors_total{model="phi4",reason="upstream_4xx"} 5
+llm_request_errors_total{model="phi4",reason="pii_policy_denied"} 8
 ```
 
 ### Reasoning Mode Metrics
@@ -245,6 +296,35 @@ sum by (model) (increase(llm_model_cost_total{currency="USD"}[1h]))
 
 # Routing decisions by reason code over the last 15 minutes
 sum by (reason_code) (increase(llm_routing_reason_codes_total[15m]))
+```
+
+### Request Error Metrics
+
+The router tracks request-level failures by model and reason so you can monitor both absolute error throughput and the share of requests that fail.
+
+- `llm_request_errors_total{model, reason}`
+  - Description: Total number of request errors categorized by failure reason
+  - Labels:
+    - model: target model name for the failed request
+    - reason: error category (timeout, upstream_4xx, upstream_5xx, pii_policy_denied, jailbreak_block, parse_error, serialization_error, cancellation, classification_failed, unknown)
+
+Example PromQL queries:
+
+```prometheus
+# Total errors by reason over the last hour
+sum by (reason) (increase(llm_request_errors_total[1h]))
+
+# Error throughput (errors/sec) by model over the last 15 minutes.
+# Helpful for incident response because it shows how many failing requests are impacting users.
+sum by (model) (rate(llm_request_errors_total[15m]))
+
+# Error ratio (% of requests failing) by model over the last 15 minutes.
+# Use increase() to align numerator and denominator with the same lookback window.
+100 * sum by (model) (increase(llm_request_errors_total[15m])) /
+    sum by (model) (increase(llm_model_requests_total[15m]))
+
+# PII policy blocks over the last 24 hours
+sum(increase(llm_request_errors_total{reason="pii_policy_denied"}[24h]))
 ```
 
 ### Pricing Configuration
