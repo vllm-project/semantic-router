@@ -48,6 +48,21 @@ type SystemInfo struct {
 	GPUAvailable bool   `json:"gpu_available"`
 }
 
+// OpenAIModel represents a single model in the OpenAI /v1/models response
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+	// Keeping the structure minimal; additional fields like permissions can be added later
+}
+
+// OpenAIModelList is the container for the models list response
+type OpenAIModelList struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
+}
+
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {
 	Texts    []string               `json:"texts"`
@@ -177,6 +192,9 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Information endpoints
 	mux.HandleFunc("GET /info/models", s.handleModelsInfo)
 	mux.HandleFunc("GET /info/classifier", s.handleClassifierInfo)
+
+	// OpenAI-compatible endpoints
+	mux.HandleFunc("GET /v1/models", s.handleOpenAIModels)
 
 	// Metrics endpoints
 	mux.HandleFunc("GET /metrics/classification", s.handleClassificationMetrics)
@@ -353,6 +371,45 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, r 
 		"status": "config_loaded",
 		"config": s.config,
 	})
+}
+
+// handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
+// It returns all models discoverable from the router configuration plus a synthetic "auto" model.
+func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().Unix()
+
+	// Start with the special "auto" model always available from the router
+	models := []OpenAIModel{
+		{
+			ID:      "auto",
+			Object:  "model",
+			Created: now,
+			OwnedBy: "semantic-router",
+		},
+	}
+
+	// Append underlying models from config (if available)
+	if s.config != nil {
+		for _, m := range s.config.GetAllModels() {
+			// Skip if already added as "auto" (or avoid duplicates in general)
+			if m == "auto" {
+				continue
+			}
+			models = append(models, OpenAIModel{
+				ID:      m,
+				Object:  "model",
+				Created: now,
+				OwnedBy: "upstream-endpoint",
+			})
+		}
+	}
+
+	resp := OpenAIModelList{
+		Object: "list",
+		Data:   models,
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, resp)
 }
 
 func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, r *http.Request) {

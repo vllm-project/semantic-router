@@ -30,6 +30,29 @@ sequenceDiagram
 
 The router processes standard OpenAI API requests:
 
+### Models Endpoint
+
+Lists available models and includes a synthetic "auto" model that uses the router's intent classification to select the best underlying model per request.
+
+- Endpoint: `GET /v1/models`
+- Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "auto", "object": "model", "created": 1726890000, "owned_by": "semantic-router" },
+    { "id": "gpt-4o-mini", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" },
+    { "id": "llama-3.1-8b-instruct", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" }
+  ]
+}
+```
+
+Notes:
+
+- The concrete model list is sourced from your configured vLLM endpoints in `config.yaml` (see `vllm_endpoints[].models`).
+- The special `auto` model is always present and instructs the router to classify and route to the best backend model automatically.
+
 ### Chat Completions Endpoint
 
 **Endpoint:** `POST /v1/chat/completions`
