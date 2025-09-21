@@ -31,13 +31,21 @@ precommit-check:
 #     bash
 # and then, run `pre-commit install && pre-commit run --all-files` command
 precommit-local:
-	@if ! docker image inspect ${PRECOMMIT_CONTAINER} > /dev/null 2>&1; then \
+	@if command -v docker > /dev/null 2>&1; then \
+		CONTAINER_CMD=docker; \
+	elif command -v podman > /dev/null 2>&1; then \
+		CONTAINER_CMD=podman; \
+	else \
+		echo "Error: Neither docker nor podman is installed. Please install one of them."; \
+		exit 1; \
+	fi; \
+	if ! $$CONTAINER_CMD image inspect ${PRECOMMIT_CONTAINER} > /dev/null 2>&1; then \
 		echo "Image not found locally. Pulling..."; \
-		docker pull ${PRECOMMIT_CONTAINER}; \
+		$$CONTAINER_CMD pull ${PRECOMMIT_CONTAINER}; \
 	else \
 		echo "Image found locally. Skipping pull."; \
-	fi
-	docker run --rm \
+	fi; \
+	$$CONTAINER_CMD run --rm \
 	    -v $(shell pwd):/app \
 	    -w /app \
 	    --name precommit-container ${PRECOMMIT_CONTAINER} \
