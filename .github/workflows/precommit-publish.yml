@@ -2,7 +2,8 @@ name: Create and publish Precommit Image
 
 on:
   push:
-    branches: [ "main" ]
+    paths:
+      - 'Dockerfile.precommit'
   pull_request:
     paths:
       - 'Dockerfile.precommit'
