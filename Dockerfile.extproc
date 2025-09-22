@@ -24,10 +24,19 @@ FROM golang:1.24 as go-builder
 
 WORKDIR /app
 
+# Use China-friendly Go module mirrors to avoid proxy.golang.org timeouts
+ENV GOPROXY=https://goproxy.cn,direct
+# Prefer a reachable checksum database in CN (or set to 'off' if still blocked)
+ENV GOSUMDB=sum.golang.google.cn
+
 # Copy Go module files first for better layer caching
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+
+# Pre-download Go modules to leverage Docker layer caching and fail fast if mirrors are unreachable
+RUN cd src/semantic-router && go mod download && \
+    cd /app/candle-binding && go mod download
 
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
@@ -54,10 +63,6 @@ COPY config/config.yaml /app/config/
 ENV LD_LIBRARY_PATH=/app/lib
 
 EXPOSE 50051
-# Install curl for healthchecks and basic diagnostics
-RUN dnf -y update && \
-    dnf -y install curl && \
-    dnf clean all
 
 # Copy entrypoint to allow switching config via env var CONFIG_FILE
 COPY scripts/entrypoint.sh /app/entrypoint.sh
