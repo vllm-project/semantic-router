@@ -101,3 +101,17 @@ website/build
 .docusaurus
 spec/
 results/
+
+.github/copilot*.md
+
+# AI tooling regulation docs
+# Ignore Copilot/Claude/Cursor rule docs anywhere in the repo
+**/[Cc]opilot*.md
+**/[Cc]laude*.md
+**/[Cc]ursor*.md
+.github/[Cc]laude*.md
+.github/[Cc]ursor*.md
+
+# Cursor editor rules files
+.cursorrules
+.cursorrules.*
