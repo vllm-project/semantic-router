@@ -13,6 +13,7 @@ services:
       - ./models:/app/models:ro
     environment:
       - LD_LIBRARY_PATH=/app/lib
+      - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
     networks:
       - semantic-network
     healthcheck:
@@ -43,6 +44,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # Mock vLLM service for testing profile
+  mock-vllm:
+    build:
+      context: ./tools/mock-vllm
+      dockerfile: Dockerfile
+    container_name: mock-vllm
+    profiles: ["testing"]
+    ports:
+      - "8000:8000"
+    networks:
+      - semantic-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 networks:
   semantic-network:

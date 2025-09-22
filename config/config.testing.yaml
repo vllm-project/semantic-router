@@ -1,0 +1,84 @@
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+vllm_endpoints:
+  - name: "mock"
+    address: "mock-vllm"
+    port: 8000
+    models:
+      - "openai/gpt-oss-20b"
+    weight: 1
+    health_check_path: "/health"
+
+model_config:
+  "openai/gpt-oss-20b":
+    reasoning_family: "gpt-oss"
+    preferred_endpoints: ["mock"]
+    pii_policy:
+      allow_by_default: true
+
+categories:
+  - name: other
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
+
+default_model: openai/gpt-oss-20b
+
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+default_reasoning_effort: high
+
+api:
+  batch_classification:
+    max_batch_size: 100
+    concurrency_threshold: 5
+    max_concurrency: 8
+    metrics:
+      enabled: true
+      detailed_goroutine_tracking: true
+      high_resolution_timing: false
+      sample_rate: 1.0
+      duration_buckets:
+        [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
