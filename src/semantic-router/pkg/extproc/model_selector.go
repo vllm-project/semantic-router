@@ -9,7 +9,7 @@ import (
 
 // classifyAndSelectBestModel chooses best models based on hybrid routing (rules + ML)
 func (r *OpenAIRouter) classifyAndSelectBestModel(query string) string {
-	return r.classifyAndSelectBestModelWithContext(context.Background(), query, nil, nil)
+	return r.classifyAndSelectBestModelWithContext(context.Background(), query, nil, "")
 }
 
 // classifyAndSelectBestModelWithContext chooses best models using hybrid routing with full context

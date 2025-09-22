@@ -19,18 +19,18 @@ type HybridRouter struct {
 }
 
 // NewHybridRouter creates a new hybrid router instance
-func NewHybridRouter(config *config.RouterConfig, classifier *classification.Classifier) *HybridRouter {
+func NewHybridRouter(routerConfig *config.RouterConfig, classifier *classification.Classifier) *HybridRouter {
 	var ruleEngine *RuleEngine
 	
 	// Initialize rule engine if rules are configured
-	if len(config.RoutingRules) > 0 {
-		ruleEngine = NewRuleEngine(config.RoutingRules, classifier, config)
+	if len(routerConfig.RoutingRules) > 0 {
+		ruleEngine = NewRuleEngine(routerConfig.RoutingRules, classifier, routerConfig)
 	}
 
 	return &HybridRouter{
 		ruleEngine: ruleEngine,
 		classifier: classifier,
-		config:     config,
+		config:     routerConfig,
 	}
 }
 

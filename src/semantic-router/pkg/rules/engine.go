@@ -20,7 +20,7 @@ type RuleEngine struct {
 }
 
 // NewRuleEngine creates a new rule engine instance
-func NewRuleEngine(rules []config.RoutingRule, classifier *classification.Classifier, config *config.RouterConfig) *RuleEngine {
+func NewRuleEngine(rules []config.RoutingRule, classifier *classification.Classifier, routerConfig *config.RouterConfig) *RuleEngine {
 	// Sort rules by priority (higher priority first)
 	sortedRules := make([]config.RoutingRule, len(rules))
 	copy(sortedRules, rules)
@@ -31,7 +31,7 @@ func NewRuleEngine(rules []config.RoutingRule, classifier *classification.Classi
 	return &RuleEngine{
 		rules:      sortedRules,
 		classifier: classifier,
-		config:     config,
+		config:     routerConfig,
 	}
 }
 

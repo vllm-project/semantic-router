@@ -18,10 +18,10 @@ type RuleManagementAPI struct {
 }
 
 // NewRuleManagementAPI creates a new rule management API instance
-func NewRuleManagementAPI(hybridRouter *HybridRouter, config *config.RouterConfig) *RuleManagementAPI {
+func NewRuleManagementAPI(hybridRouter *HybridRouter, routerConfig *config.RouterConfig) *RuleManagementAPI {
 	return &RuleManagementAPI{
 		hybridRouter: hybridRouter,
-		config:       config,
+		config:       routerConfig,
 	}
 }
 
