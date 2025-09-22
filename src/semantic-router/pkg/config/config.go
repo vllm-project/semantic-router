@@ -85,6 +85,9 @@ type RouterConfig struct {
 	// vLLM endpoints configuration for multiple backend support
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
 
+	// Inter-cluster routing configuration
+	InterClusterRouting InterClusterConfig `yaml:"inter_cluster_routing,omitempty"`
+
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
 }
@@ -250,6 +253,272 @@ const (
 	PIITypeUSSSN           = "US_SSN"            // US Social Security Number
 	PIITypeZipCode         = "ZIP_CODE"          // ZIP/Postal codes
 )
+
+// InterClusterConfig represents the inter-cluster and multi-cloud routing configuration
+type InterClusterConfig struct {
+	// Enable inter-cluster routing
+	Enabled bool `yaml:"enabled"`
+
+	// Cluster discovery configuration
+	ClusterDiscovery ClusterDiscoveryConfig `yaml:"cluster_discovery,omitempty"`
+
+	// Provider configurations
+	Providers []ProviderConfig `yaml:"providers,omitempty"`
+
+	// Routing strategies
+	RoutingStrategies []RoutingStrategy `yaml:"routing_strategies,omitempty"`
+
+	// Fault tolerance configuration
+	FaultTolerance FaultToleranceConfig `yaml:"fault_tolerance,omitempty"`
+}
+
+// ClusterDiscoveryConfig represents cluster discovery and management settings
+type ClusterDiscoveryConfig struct {
+	// Discovery method: "static", "kubernetes", "consul", "etcd"
+	Method string `yaml:"method"`
+
+	// Refresh interval for dynamic discovery
+	RefreshInterval string `yaml:"refresh_interval,omitempty"`
+
+	// Health check interval
+	HealthCheckInterval string `yaml:"health_check_interval,omitempty"`
+
+	// Static cluster definitions (used when method is "static")
+	StaticClusters []ClusterConfig `yaml:"static_clusters,omitempty"`
+}
+
+// ClusterConfig represents a cluster configuration
+type ClusterConfig struct {
+	// Cluster name identifier
+	Name string `yaml:"name"`
+
+	// Cluster location/region
+	Location string `yaml:"location"`
+
+	// Cluster type: "vllm", "openai", "claude", "grok", "custom"
+	Type string `yaml:"type"`
+
+	// Endpoint address
+	Endpoint string `yaml:"endpoint"`
+
+	// Authentication configuration
+	Authentication AuthConfig `yaml:"authentication,omitempty"`
+
+	// Available models in this cluster
+	Models []string `yaml:"models"`
+
+	// Cluster capabilities
+	Capabilities ClusterCapabilities `yaml:"capabilities,omitempty"`
+
+	// Performance characteristics
+	Performance PerformanceMetrics `yaml:"performance,omitempty"`
+
+	// Compliance and data residency
+	Compliance []string `yaml:"compliance,omitempty"`
+
+	// Cost per token (for cost-based routing)
+	CostPerToken float64 `yaml:"cost_per_token,omitempty"`
+
+	// Health check configuration
+	HealthCheck HealthCheckConfig `yaml:"health_check,omitempty"`
+}
+
+// ProviderConfig represents a cloud provider configuration
+type ProviderConfig struct {
+	// Provider name
+	Name string `yaml:"name"`
+
+	// Provider type: "vllm", "openai", "claude", "grok", "custom"
+	Type string `yaml:"type"`
+
+	// Endpoint URL
+	Endpoint string `yaml:"endpoint"`
+
+	// Authentication configuration
+	Authentication AuthConfig `yaml:"authentication"`
+
+	// Available models
+	Models []string `yaml:"models"`
+
+	// Provider-specific capabilities
+	Capabilities ClusterCapabilities `yaml:"capabilities,omitempty"`
+
+	// Performance characteristics
+	Performance PerformanceMetrics `yaml:"performance,omitempty"`
+
+	// Rate limiting configuration
+	RateLimit RateLimitConfig `yaml:"rate_limit,omitempty"`
+}
+
+// AuthConfig represents authentication configuration for providers/clusters
+type AuthConfig struct {
+	// Authentication type: "bearer", "api_key", "oauth", "none"
+	Type string `yaml:"type"`
+
+	// Bearer token
+	Token string `yaml:"token,omitempty"`
+
+	// API key
+	Key string `yaml:"key,omitempty"`
+
+	// OAuth configuration
+	OAuth OAuthConfig `yaml:"oauth,omitempty"`
+}
+
+// OAuthConfig represents OAuth authentication configuration
+type OAuthConfig struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	TokenURL     string `yaml:"token_url"`
+	Scopes       []string `yaml:"scopes,omitempty"`
+}
+
+// ClusterCapabilities represents cluster/provider capabilities
+type ClusterCapabilities struct {
+	// Maximum context length
+	MaxContextLength int `yaml:"max_context_length,omitempty"`
+
+	// Maximum tokens per second
+	MaxTokensPerSecond int `yaml:"max_tokens_per_second,omitempty"`
+
+	// Supported features
+	Features []string `yaml:"features,omitempty"`
+}
+
+// PerformanceMetrics represents performance characteristics
+type PerformanceMetrics struct {
+	// Average latency in milliseconds
+	AvgLatencyMs int `yaml:"avg_latency_ms,omitempty"`
+
+	// Throughput in requests per second
+	ThroughputRPS int `yaml:"throughput_rps,omitempty"`
+
+	// Availability percentage
+	Availability float64 `yaml:"availability,omitempty"`
+}
+
+// RateLimitConfig represents rate limiting configuration
+type RateLimitConfig struct {
+	// Requests per minute
+	RequestsPerMinute int `yaml:"requests_per_minute,omitempty"`
+
+	// Tokens per minute
+	TokensPerMinute int `yaml:"tokens_per_minute,omitempty"`
+
+	// Burst allowance
+	BurstAllowance int `yaml:"burst_allowance,omitempty"`
+}
+
+// RoutingStrategy represents a routing strategy configuration
+type RoutingStrategy struct {
+	// Strategy name
+	Name string `yaml:"name"`
+
+	// Priority (higher number = higher priority)
+	Priority int `yaml:"priority"`
+
+	// Conditions for applying this strategy
+	Conditions []RoutingCondition `yaml:"conditions,omitempty"`
+
+	// Actions to take when conditions are met
+	Actions []RoutingAction `yaml:"actions"`
+}
+
+// RoutingCondition represents a condition for routing strategy
+type RoutingCondition struct {
+	// Condition type: "latency_requirement", "cost_sensitivity", "data_residency", "model_requirement", etc.
+	Type string `yaml:"type"`
+
+	// Maximum latency in milliseconds (for latency_requirement)
+	MaxLatencyMs int `yaml:"max_latency_ms,omitempty"`
+
+	// Maximum cost per 1k tokens (for cost_sensitivity)
+	MaxCostPer1kTokens float64 `yaml:"max_cost_per_1k_tokens,omitempty"`
+
+	// Required region (for data_residency)
+	RequiredRegion string `yaml:"required_region,omitempty"`
+
+	// Required model (for model_requirement)
+	RequiredModel string `yaml:"required_model,omitempty"`
+
+	// Required compliance (for compliance_requirement)
+	RequiredCompliance []string `yaml:"required_compliance,omitempty"`
+}
+
+// RoutingAction represents an action for routing strategy
+type RoutingAction struct {
+	// Action type: "route_to_cluster", "route_to_provider", "load_balance", "failover"
+	Type string `yaml:"type"`
+
+	// Target cluster/provider name
+	Target string `yaml:"target,omitempty"`
+
+	// Load balancing strategy: "round_robin", "least_connections", "weighted"
+	LoadBalanceStrategy string `yaml:"load_balance_strategy,omitempty"`
+
+	// Failover targets (ordered list)
+	FailoverTargets []string `yaml:"failover_targets,omitempty"`
+}
+
+// FaultToleranceConfig represents fault tolerance configuration
+type FaultToleranceConfig struct {
+	// Circuit breaker configuration
+	CircuitBreaker CircuitBreakerConfig `yaml:"circuit_breaker,omitempty"`
+
+	// Retry policy
+	RetryPolicy RetryPolicyConfig `yaml:"retry_policy,omitempty"`
+
+	// Fallback strategy: "next_best_cluster", "default_cluster", "error"
+	FallbackStrategy string `yaml:"fallback_strategy,omitempty"`
+
+	// Default fallback cluster
+	DefaultFallbackCluster string `yaml:"default_fallback_cluster,omitempty"`
+}
+
+// CircuitBreakerConfig represents circuit breaker configuration
+type CircuitBreakerConfig struct {
+	// Failure threshold to open circuit
+	FailureThreshold int `yaml:"failure_threshold,omitempty"`
+
+	// Timeout before attempting to close circuit
+	Timeout string `yaml:"timeout,omitempty"`
+
+	// Maximum number of requests in half-open state
+	MaxRequests int `yaml:"max_requests,omitempty"`
+}
+
+// RetryPolicyConfig represents retry policy configuration
+type RetryPolicyConfig struct {
+	// Maximum number of retries
+	MaxRetries int `yaml:"max_retries,omitempty"`
+
+	// Backoff multiplier
+	BackoffMultiplier float64 `yaml:"backoff_multiplier,omitempty"`
+
+	// Maximum backoff duration
+	MaxBackoff string `yaml:"max_backoff,omitempty"`
+
+	// Retry on specific error codes
+	RetryOnErrors []string `yaml:"retry_on_errors,omitempty"`
+}
+
+// HealthCheckConfig represents health check configuration
+type HealthCheckConfig struct {
+	// Health check path/endpoint
+	Path string `yaml:"path,omitempty"`
+
+	// Check interval
+	Interval string `yaml:"interval,omitempty"`
+
+	// Timeout for health check
+	Timeout string `yaml:"timeout,omitempty"`
+
+	// Unhealthy threshold
+	UnhealthyThreshold int `yaml:"unhealthy_threshold,omitempty"`
+
+	// Healthy threshold
+	HealthyThreshold int `yaml:"healthy_threshold,omitempty"`
+}
 
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
 func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
@@ -661,4 +930,101 @@ func (c *RouterConfig) ValidateEndpoints() error {
 	}
 
 	return nil
+}
+
+// IsInterClusterRoutingEnabled returns true if inter-cluster routing is enabled
+func (c *RouterConfig) IsInterClusterRoutingEnabled() bool {
+	return c.InterClusterRouting.Enabled
+}
+
+// GetClusterByName returns a cluster configuration by name
+func (c *RouterConfig) GetClusterByName(name string) (*ClusterConfig, bool) {
+	if !c.IsInterClusterRoutingEnabled() {
+		return nil, false
+	}
+
+	for _, cluster := range c.InterClusterRouting.ClusterDiscovery.StaticClusters {
+		if cluster.Name == name {
+			return &cluster, true
+		}
+	}
+	return nil, false
+}
+
+// GetProviderByName returns a provider configuration by name
+func (c *RouterConfig) GetProviderByName(name string) (*ProviderConfig, bool) {
+	if !c.IsInterClusterRoutingEnabled() {
+		return nil, false
+	}
+
+	for _, provider := range c.InterClusterRouting.Providers {
+		if provider.Name == name {
+			return &provider, true
+		}
+	}
+	return nil, false
+}
+
+// GetRoutingStrategiesByPriority returns routing strategies sorted by priority (descending)
+func (c *RouterConfig) GetRoutingStrategiesByPriority() []RoutingStrategy {
+	if !c.IsInterClusterRoutingEnabled() {
+		return nil
+	}
+
+	strategies := make([]RoutingStrategy, len(c.InterClusterRouting.RoutingStrategies))
+	copy(strategies, c.InterClusterRouting.RoutingStrategies)
+
+	// Sort by priority (descending - higher priority first)
+	slices.SortFunc(strategies, func(a, b RoutingStrategy) int {
+		return b.Priority - a.Priority
+	})
+
+	return strategies
+}
+
+// GetAllClustersAndProviders returns all available clusters and providers for routing
+func (c *RouterConfig) GetAllClustersAndProviders() ([]ClusterConfig, []ProviderConfig) {
+	if !c.IsInterClusterRoutingEnabled() {
+		return nil, nil
+	}
+
+	clusters := make([]ClusterConfig, len(c.InterClusterRouting.ClusterDiscovery.StaticClusters))
+	copy(clusters, c.InterClusterRouting.ClusterDiscovery.StaticClusters)
+
+	providers := make([]ProviderConfig, len(c.InterClusterRouting.Providers))
+	copy(providers, c.InterClusterRouting.Providers)
+
+	return clusters, providers
+}
+
+// FindClustersForModel returns all clusters/providers that can serve the specified model
+func (c *RouterConfig) FindClustersForModel(modelName string) ([]ClusterConfig, []ProviderConfig) {
+	if !c.IsInterClusterRoutingEnabled() {
+		return nil, nil
+	}
+
+	var matchingClusters []ClusterConfig
+	var matchingProviders []ProviderConfig
+
+	// Check clusters
+	for _, cluster := range c.InterClusterRouting.ClusterDiscovery.StaticClusters {
+		for _, model := range cluster.Models {
+			if model == modelName {
+				matchingClusters = append(matchingClusters, cluster)
+				break
+			}
+		}
+	}
+
+	// Check providers
+	for _, provider := range c.InterClusterRouting.Providers {
+		for _, model := range provider.Models {
+			if model == modelName {
+				matchingProviders = append(matchingProviders, provider)
+				break
+			}
+		}
+	}
+
+	return matchingClusters, matchingProviders
 }

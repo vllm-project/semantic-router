@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/intercluster"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
@@ -389,13 +390,48 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Update the actual model that will be used
 				actualModel = matchedModel
 
-				// Select the best endpoint for this model
-				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
-				if endpointFound {
-					selectedEndpoint = endpointAddress
-					observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
-				} else {
-					observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
+				// Try inter-cluster routing first if enabled
+				if r.Config.IsInterClusterRoutingEnabled() {
+					routingCtx := &intercluster.RoutingContext{
+						ModelName:   matchedModel,
+						Category:    categoryName,
+						UserContent: userContent,
+					}
+
+					// Try to route using inter-cluster router
+					if routingResult, err := r.InterClusterRouter.RouteRequest(routingCtx); err == nil {
+						selectedEndpoint = routingResult.TargetEndpoint
+						observability.Infof("Inter-cluster routing selected %s (%s) for model: %s (reason: %s)", 
+							routingResult.TargetName, routingResult.TargetType, matchedModel, routingResult.ReasonCode)
+						
+						// Log additional metrics for inter-cluster routing
+						observability.LogEvent("inter_cluster_routing", map[string]interface{}{
+							"target_type":         routingResult.TargetType,
+							"target_name":         routingResult.TargetName,
+							"target_endpoint":     routingResult.TargetEndpoint,
+							"reason_code":         routingResult.ReasonCode,
+							"confidence":          routingResult.Confidence,
+							"estimated_cost":      routingResult.EstimatedCost,
+							"estimated_latency":   routingResult.EstimatedLatency,
+							"model":               matchedModel,
+							"category":            categoryName,
+						})
+						metrics.RecordRoutingReasonCode(routingResult.ReasonCode, matchedModel)
+					} else {
+						observability.Warnf("Inter-cluster routing failed for model %s: %v, falling back to local routing", matchedModel, err)
+					}
+				}
+
+				// Fall back to local endpoint selection if inter-cluster routing didn't work
+				if selectedEndpoint == "" {
+					// Select the best endpoint for this model
+					endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
+					if endpointFound {
+						selectedEndpoint = endpointAddress
+						observability.Infof("Selected local endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
+					} else {
+						observability.Warnf("No local endpoint found for model %s, using fallback", matchedModel)
+					}
 				}
 
 				// Modify the model in the request
@@ -505,12 +541,47 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 
 		// Select the best endpoint for the specified model
-		endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(originalModel)
-		if endpointFound {
-			selectedEndpoint = endpointAddress
-			observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, originalModel)
-		} else {
-			observability.Warnf("No endpoint found for model %s, using fallback", originalModel)
+		// Try inter-cluster routing first if enabled
+		if r.Config.IsInterClusterRoutingEnabled() {
+			routingCtx := &intercluster.RoutingContext{
+				ModelName:   originalModel,
+				Category:    "", // No category for non-auto routing
+				UserContent: userContent,
+			}
+
+			// Try to route using inter-cluster router
+			if routingResult, err := r.InterClusterRouter.RouteRequest(routingCtx); err == nil {
+				selectedEndpoint = routingResult.TargetEndpoint
+				observability.Infof("Inter-cluster routing selected %s (%s) for specified model: %s (reason: %s)", 
+					routingResult.TargetName, routingResult.TargetType, originalModel, routingResult.ReasonCode)
+				
+				// Log additional metrics for inter-cluster routing
+				observability.LogEvent("inter_cluster_routing", map[string]interface{}{
+					"target_type":         routingResult.TargetType,
+					"target_name":         routingResult.TargetName,
+					"target_endpoint":     routingResult.TargetEndpoint,
+					"reason_code":         routingResult.ReasonCode,
+					"confidence":          routingResult.Confidence,
+					"estimated_cost":      routingResult.EstimatedCost,
+					"estimated_latency":   routingResult.EstimatedLatency,
+					"model":               originalModel,
+					"category":            "",
+				})
+				metrics.RecordRoutingReasonCode(routingResult.ReasonCode, originalModel)
+			} else {
+				observability.Warnf("Inter-cluster routing failed for model %s: %v, falling back to local routing", originalModel, err)
+			}
+		}
+
+		// Fall back to local endpoint selection if inter-cluster routing didn't work
+		if selectedEndpoint == "" {
+			endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(originalModel)
+			if endpointFound {
+				selectedEndpoint = endpointAddress
+				observability.Infof("Selected local endpoint address: %s for model: %s", selectedEndpoint, originalModel)
+			} else {
+				observability.Warnf("No local endpoint found for model %s, using fallback", originalModel)
+			}
 		}
 		setHeaders := []*core.HeaderValueOption{}
 		if selectedEndpoint != "" {

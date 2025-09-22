@@ -1,0 +1,351 @@
+# Multi-Cloud Semantic Router Configuration Example
+# This configuration demonstrates inter-cluster and hybrid cloud routing capabilities
+
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+# Local vLLM Endpoints (legacy single-cluster support)
+vllm_endpoints:
+  - name: "local-endpoint"
+    address: "127.0.0.1"
+    port: 8000
+    models:
+      - "llama-2-7b"
+    weight: 1
+    health_check_path: "/health"
+
+# Model Configuration
+model_config:
+  "llama-2-70b":
+    reasoning_family: "llama"
+    pii_policy:
+      allow_by_default: true
+  "gpt-4":
+    reasoning_family: "gpt"
+    pii_policy:
+      allow_by_default: false
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
+  "claude-3":
+    reasoning_family: "claude"
+    pii_policy:
+      allow_by_default: true
+
+# Inter-Cluster and Multi-Cloud Routing Configuration
+inter_cluster_routing:
+  enabled: true
+  
+  # Cluster Discovery Configuration
+  cluster_discovery:
+    method: "static"  # Options: "static", "kubernetes", "consul", "etcd"
+    refresh_interval: "30s"
+    health_check_interval: "10s"
+    
+    # Static cluster definitions
+    static_clusters:
+      - name: "on-prem-gpu-cluster"
+        location: "us-west-2"
+        type: "vllm"
+        endpoint: "https://on-prem.company.com:8000"
+        authentication:
+          type: "bearer"
+          token: "bearer-token-secret"
+        models:
+          - "llama-2-70b"
+          - "codellama-34b"
+          - "mistral-7b"
+        capabilities:
+          max_context_length: 4096
+          max_tokens_per_second: 100
+        performance:
+          avg_latency_ms: 150
+          throughput_rps: 50
+          availability: 99.5
+        compliance:
+          - "hipaa"
+          - "sox"
+        cost_per_token: 0.001
+        health_check:
+          path: "/health"
+          interval: "15s"
+          timeout: "5s"
+          unhealthy_threshold: 3
+          healthy_threshold: 2
+          
+      - name: "eu-west-cluster"
+        location: "eu-west-1"
+        type: "vllm"
+        endpoint: "https://eu-cluster.company.com:8000"
+        authentication:
+          type: "bearer"
+          token: "eu-bearer-token"
+        models:
+          - "llama-2-70b"
+          - "mistral-7b"
+        capabilities:
+          max_context_length: 4096
+          max_tokens_per_second: 80
+        performance:
+          avg_latency_ms: 200
+          throughput_rps: 40
+          availability: 99.9
+        compliance:
+          - "gdpr"
+          - "iso27001"
+        cost_per_token: 0.0015
+        health_check:
+          path: "/health"
+          interval: "15s"
+          timeout: "5s"
+          
+      - name: "code-specialized-cluster"
+        location: "us-east-1"
+        type: "vllm"
+        endpoint: "https://code-cluster.company.com:8000"
+        authentication:
+          type: "api_key"
+          key: "api-key-secret"
+        models:
+          - "codellama-34b"
+          - "gpt-4-code"
+        capabilities:
+          max_context_length: 8192
+          max_tokens_per_second: 120
+        performance:
+          avg_latency_ms: 100
+          throughput_rps: 60
+          availability: 99.8
+        cost_per_token: 0.002
+        
+  # Cloud Provider Configurations
+  providers:
+    - name: "openai-cloud"
+      type: "openai"
+      endpoint: "https://api.openai.com/v1"
+      authentication:
+        type: "api_key"
+        key: "sk-your-openai-api-key"
+      models:
+        - "gpt-4"
+        - "gpt-3.5-turbo"
+        - "gpt-4-turbo"
+      capabilities:
+        max_context_length: 8192
+        max_tokens_per_second: 200
+      performance:
+        avg_latency_ms: 300
+        throughput_rps: 100
+        availability: 99.9
+      rate_limit:
+        requests_per_minute: 500
+        tokens_per_minute: 90000
+        burst_allowance: 50
+        
+    - name: "anthropic-claude"
+      type: "claude"
+      endpoint: "https://api.anthropic.com/v1"
+      authentication:
+        type: "api_key"
+        key: "claude-api-key"
+      models:
+        - "claude-3"
+        - "claude-3-sonnet"
+        - "claude-3-haiku"
+      capabilities:
+        max_context_length: 200000
+        max_tokens_per_second: 150
+      performance:
+        avg_latency_ms: 400
+        throughput_rps: 80
+        availability: 99.8
+      rate_limit:
+        requests_per_minute: 300
+        tokens_per_minute: 50000
+        
+    - name: "grok-provider"
+      type: "grok"
+      endpoint: "https://api.x.ai/v1"
+      authentication:
+        type: "api_key"
+        key: "grok-api-key"
+      models:
+        - "grok-1"
+        - "grok-1.5"
+      capabilities:
+        max_context_length: 128000
+        max_tokens_per_second: 100
+      performance:
+        avg_latency_ms: 500
+        throughput_rps: 60
+        availability: 99.5
+      rate_limit:
+        requests_per_minute: 200
+        tokens_per_minute: 40000
+        
+  # Routing Strategies (applied in priority order - higher number = higher priority)
+  routing_strategies:
+    # Highest Priority: Compliance-based routing for GDPR requirements
+    - name: "gdpr-compliance-routing"
+      priority: 300
+      conditions:
+        - type: "compliance_requirement"
+          required_compliance: ["gdpr"]
+      actions:
+        - type: "route_to_cluster"
+          target: "eu-west-cluster"
+          
+    # High Priority: Code generation routing
+    - name: "code-generation-routing"
+      priority: 250
+      conditions:
+        - type: "model_requirement"
+          required_model: "codellama-34b"
+      actions:
+        - type: "route_to_cluster"
+          target: "code-specialized-cluster"
+          
+    # Medium Priority: Latency-optimized routing
+    - name: "latency-optimized-routing"
+      priority: 200
+      conditions:
+        - type: "latency_requirement"
+          max_latency_ms: 200
+      actions:
+        - type: "route_to_cluster"
+          target: "code-specialized-cluster"
+        - type: "failover"
+          failover_targets: ["on-prem-gpu-cluster", "eu-west-cluster"]
+          
+    # Medium Priority: Cost-sensitive routing
+    - name: "cost-optimized-routing"
+      priority: 150
+      conditions:
+        - type: "cost_sensitivity"
+          max_cost_per_1k_tokens: 0.0015
+      actions:
+        - type: "route_to_cluster"
+          target: "on-prem-gpu-cluster"
+        - type: "failover"
+          failover_targets: ["eu-west-cluster"]
+          
+    # Low Priority: Load balancing for general queries
+    - name: "load-balanced-routing"
+      priority: 100
+      conditions: []  # No specific conditions - applies to all requests
+      actions:
+        - type: "load_balance"
+          load_balance_strategy: "round_robin"
+          
+  # Fault Tolerance Configuration
+  fault_tolerance:
+    circuit_breaker:
+      failure_threshold: 5
+      timeout: "30s"
+      max_requests: 10
+    retry_policy:
+      max_retries: 3
+      backoff_multiplier: 2.0
+      max_backoff: "10s"
+      retry_on_errors: ["timeout", "connection_error", "server_error"]
+    fallback_strategy: "next_best_cluster"
+    default_fallback_cluster: "on-prem-gpu-cluster"
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_model"
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_model/pii_type_mapping.json"
+
+# Categories for routing queries
+categories:
+  - name: "math"
+    description: "Mathematical calculations and problem solving"
+    model_scores:
+      - model: "llama-2-70b"
+        score: 0.9
+        use_reasoning: true
+      - model: "gpt-4"
+        score: 0.85
+        use_reasoning: true
+        
+  - name: "creative"
+    description: "Creative writing, storytelling, and artistic content"
+    model_scores:
+      - model: "claude-3"
+        score: 0.95
+        use_reasoning: false
+      - model: "gpt-4"
+        score: 0.8
+        use_reasoning: false
+        
+  - name: "code_generation"
+    description: "Programming, code generation, and software development"
+    reasoning_description: "Code generation with step-by-step reasoning"
+    reasoning_effort: "high"
+    model_scores:
+      - model: "codellama-34b"
+        score: 0.95
+        use_reasoning: true
+      - model: "gpt-4-code"
+        score: 0.9
+        use_reasoning: true
+        
+  - name: "general"
+    description: "General purpose queries and conversations"
+    model_scores:
+      - model: "llama-2-70b"
+        score: 0.8
+        use_reasoning: false
+      - model: "gpt-3.5-turbo"
+        score: 0.75
+        use_reasoning: false
+
+# Default model to use if no match is found
+default_model: "llama-2-7b"
+
+# Default reasoning effort level
+default_reasoning_effort: "medium"
+
+# Reasoning family configurations
+reasoning_families:
+  llama:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  claude:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"

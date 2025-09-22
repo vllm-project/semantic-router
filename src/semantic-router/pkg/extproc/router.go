@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/intercluster"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -24,6 +25,7 @@ type OpenAIRouter struct {
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
+	InterClusterRouter   *intercluster.InterClusterRouter
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -138,6 +140,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
 
+	// Create inter-cluster router
+	interClusterRouter := intercluster.NewInterClusterRouter(cfg)
+	if cfg.IsInterClusterRoutingEnabled() {
+		observability.Infof("Inter-cluster routing enabled with %d clusters and %d providers",
+			len(cfg.InterClusterRouting.ClusterDiscovery.StaticClusters),
+			len(cfg.InterClusterRouting.Providers))
+	}
+
 	// Create global classification service for API access with auto-discovery
 	// This will prioritize LoRA models over legacy ModernBERT
 	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
@@ -157,6 +167,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
+		InterClusterRouter:   interClusterRouter,
 	}
 
 	// Log reasoning configuration after router is created
