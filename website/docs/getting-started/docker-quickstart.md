@@ -171,7 +171,7 @@ If you're in CN mainland and network access to Go/Hugging Face/PyPI is slow or b
 - Hugging Face models (router downloads BERT embeddings on first run):
 
   - Prefer using a local copy mounted via `./models` and point `bert_model.model_id` to `models/...`.
-  - Or mount your HF cache into the container and set cache env var (uncomment in `docker-compose.yml`):
+  - Or mount your HF cache into the container and set cache env var (in `docker-compose.yml`):
     - Volume: `~/.cache/huggingface:/root/.cache/huggingface`
     - Env: `HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface`
   - Optional mirrors:
@@ -180,7 +180,7 @@ If you're in CN mainland and network access to Go/Hugging Face/PyPI is slow or b
 
 - Go modules (used during image build):
 
-  - Already set in Dockerfile to `GOPROXY=https://goproxy.cn,direct` and `GOSUMDB=sum.golang.google.cn` for reliability.
+  - Set in `Dockerfile`: `GOPROXY=https://goproxy.cn,direct` and `GOSUMDB=sum.golang.google.cn`.
 
 - PyPI (for mock-vllm image):
   - You can configure pip to use a mirror (commented example in `tools/mock-vllm/Dockerfile`):

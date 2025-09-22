@@ -11,14 +11,9 @@ services:
     volumes:
       - ./config:/app/config:ro
       - ./models:/app/models:ro
-      # - ~/.cache/huggingface:/root/.cache/huggingface  # uncomment to persist Hugging Face cache on host (CN users)
     environment:
       - LD_LIBRARY_PATH=/app/lib
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
-      # The following environment variables help CN mainland users download Hugging Face models via mirrors
-      # - HF_HUB_ENABLE_HF_TRANSFER=1             # uncomment to enable fast transfer for HF downloads (CN users)
-      # - HF_ENDPOINT=https://hf-mirror.com       # uncomment to use HF mirror endpoint in China
-      # - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface  # uncomment to set HF cache directory (works with volume above)
     networks:
       - semantic-network
     healthcheck:
