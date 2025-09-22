@@ -209,6 +209,12 @@ type Classifier struct {
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
+
+	// Category name mapping layer to support generic categories in config
+	// Maps MMLU-Pro category names -> generic category names (as defined in config.Categories)
+	MMLUToGeneric map[string]string
+	// Maps generic category names -> MMLU-Pro category names
+	GenericToMMLU map[string][]string
 }
 
 type option func(*Classifier)
@@ -272,6 +278,9 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 		option(classifier)
 	}
 
+	// Build category name mappings to support generic categories in config
+	classifier.buildCategoryNameMappings()
+
 	return initModels(classifier)
 }
 
@@ -331,18 +340,21 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 		return "", float64(result.Confidence), nil
 	}
 
-	// Convert class index to category name
+	// Convert class index to category name (MMLU-Pro)
 	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
 	if !ok {
 		observability.Warnf("Class index %d not found in category mapping", result.Class)
 		return "", float64(result.Confidence), nil
 	}
 
-	// Record the category classification metric
-	metrics.RecordCategoryClassification(categoryName)
+	// Translate to generic category if mapping is configured
+	genericCategory := c.translateMMLUToGeneric(categoryName)
 
-	observability.Infof("Classified as category: %s", categoryName)
-	return categoryName, float64(result.Confidence), nil
+	// Record the category classification metric using generic name when available
+	metrics.RecordCategoryClassification(genericCategory)
+
+	observability.Infof("Classified as category: %s (mmlu=%s)", genericCategory, categoryName)
+	return genericCategory, float64(result.Confidence), nil
 }
 
 // IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured
@@ -485,11 +497,11 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 	observability.Infof("Classification result: class=%d, confidence=%.4f, entropy_available=%t",
 		result.Class, result.Confidence, len(result.Probabilities) > 0)
 
-	// Get category names for all classes
+	// Get category names for all classes and translate to generic names when configured
 	categoryNames := make([]string, len(result.Probabilities))
 	for i := range result.Probabilities {
 		if name, ok := c.CategoryMapping.GetCategoryFromIndex(i); ok {
-			categoryNames[i] = name
+			categoryNames[i] = c.translateMMLUToGeneric(name)
 		} else {
 			categoryNames[i] = fmt.Sprintf("unknown_%d", i)
 		}
@@ -580,20 +592,21 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 		return "", float64(result.Confidence), reasoningDecision, nil
 	}
 
-	// Convert class index to category name
+	// Convert class index to category name and translate to generic
 	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
 	if !ok {
 		observability.Warnf("Class index %d not found in category mapping", result.Class)
 		return "", float64(result.Confidence), reasoningDecision, nil
 	}
+	genericCategory := c.translateMMLUToGeneric(categoryName)
 
 	// Record the category classification metric
-	metrics.RecordCategoryClassification(categoryName)
+	metrics.RecordCategoryClassification(genericCategory)
 
-	observability.Infof("Classified as category: %s, reasoning_decision: use=%t, confidence=%.3f, reason=%s",
-		categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
+	observability.Infof("Classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
+		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 
-	return categoryName, float64(result.Confidence), reasoningDecision, nil
+	return genericCategory, float64(result.Confidence), reasoningDecision, nil
 }
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types
@@ -770,6 +783,51 @@ func (c *Classifier) findCategory(categoryName string) *config.Category {
 		}
 	}
 	return nil
+}
+
+// buildCategoryNameMappings builds translation maps between MMLU-Pro and generic categories
+func (c *Classifier) buildCategoryNameMappings() {
+	c.MMLUToGeneric = make(map[string]string)
+	c.GenericToMMLU = make(map[string][]string)
+
+	// Build set of known MMLU-Pro categories from the model mapping (if available)
+	knownMMLU := make(map[string]bool)
+	if c.CategoryMapping != nil {
+		for _, label := range c.CategoryMapping.IdxToCategory {
+			knownMMLU[strings.ToLower(label)] = true
+		}
+	}
+
+	for _, cat := range c.Config.Categories {
+		if len(cat.MMLUCategories) > 0 {
+			for _, mmlu := range cat.MMLUCategories {
+				key := strings.ToLower(mmlu)
+				c.MMLUToGeneric[key] = cat.Name
+				c.GenericToMMLU[cat.Name] = append(c.GenericToMMLU[cat.Name], mmlu)
+			}
+		} else {
+			// Fallback: identity mapping when the generic name matches an MMLU category
+			nameLower := strings.ToLower(cat.Name)
+			if knownMMLU[nameLower] {
+				c.MMLUToGeneric[nameLower] = cat.Name
+				c.GenericToMMLU[cat.Name] = append(c.GenericToMMLU[cat.Name], cat.Name)
+			}
+		}
+	}
+}
+
+// translateMMLUToGeneric translates an MMLU-Pro category to a generic category if mapping exists
+func (c *Classifier) translateMMLUToGeneric(mmluCategory string) string {
+	if mmluCategory == "" {
+		return ""
+	}
+	if c.MMLUToGeneric == nil {
+		return mmluCategory
+	}
+	if generic, ok := c.MMLUToGeneric[strings.ToLower(mmluCategory)]; ok {
+		return generic
+	}
+	return mmluCategory
 }
 
 // selectBestModelInternal performs the core model selection logic
