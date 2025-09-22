@@ -4,26 +4,19 @@ Run Semantic Router + Envoy locally using Docker Compose v2.
 
 ## Prerequisites
 
-- Docker Engine and Docker Compose v2 (use the `docker compose` command, not the legacy `docker-compose`)
+- Docker Engine, see more in [Docker Engine Installation](https://docs.docker.com/engine/install/) 
+- Docker Compose v2 (use the `docker compose` command, not the legacy `docker-compose`)
 
   ```bash
   # Verify
   docker compose version
   ```
 
-  Install Docker Compose v2 for Ubuntu(if missing), see more in [Docker Compose Plugin Installation](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
+  Docker Compose Installation for Ubuntu(if missing), see more in [Docker Compose Plugin Installation](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
 
   ```bash
-  # Remove legacy v1 if present (optional)
-  sudo apt-get remove -y docker-compose || true
-
   sudo apt-get update
-  sudo apt-get install -y ca-certificates curl gnupg
-  sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /etc/apt/keyrings/docker.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-  sudo apt-get update
-  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  sudo apt-get install -y docker-compose-plugin
 
   docker compose version
   ```
@@ -32,14 +25,14 @@ Run Semantic Router + Envoy locally using Docker Compose v2.
 
 ## Install and Run with Docker Compose v2
 
-1. Clone the repo and move into it (from your workspace root):
+**1. Clone the repo and move into it (from your workspace root)**
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
 ```
 
-2. Download required models (classification models):
+**2. Download required models (classification models)**
 
 ```bash
 make download-models
@@ -53,7 +46,7 @@ This downloads the classification models used by the router:
 
 Note: The BERT similarity model defaults to a remote Hugging Face model. See Troubleshooting for offline/local usage.
 
-3. Start the services with Docker Compose v2:
+**3. Start the services with Docker Compose v2**
 
 ```bash
 # Start core services (semantic-router + envoy)
@@ -67,7 +60,7 @@ docker compose up --build -d
 CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up --build
 ```
 
-4. Verify
+**4. Verify**
 
 - Semantic Router (gRPC): localhost:50051
 - Envoy Proxy: http://localhost:8801
@@ -91,7 +84,7 @@ docker compose down
 
 ## Troubleshooting
 
-** 1. Router exits immediately with a Hugging Face DNS/download error **
+**1. Router exits immediately with a Hugging Face DNS/download error**
 
 Symptoms (from `docker compose logs -f semantic-router`):
 
@@ -138,7 +131,7 @@ Extra tip: If you use the testing profile, also pass the testing config so the r
 CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up --build
 ```
 
-** 2. Envoy/Router up but requests fail **
+**2. Envoy/Router up but requests fail**
 
 - Ensure `mock-vllm` is healthy (testing profile only):
   - `docker compose ps` should show mock-vllm healthy; logs show 200 on `/health`.
@@ -147,7 +140,7 @@ CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up 
 - Basic smoke test via Envoy (OpenAI-compatible):
   - Send a POST to `http://localhost:8801/v1/chat/completions` with `{"model":"auto", "messages":[{"role":"user","content":"hi"}]}` and check that the mock responds with `[mock-openai/gpt-oss-20b]` content when testing profile is active.
 
-** 3. DNS problems inside containers **
+**3. DNS problems inside containers**
 
 If DNS is flaky in your Docker environment, add DNS servers to the `semantic-router` service in `docker-compose.yml`:
 
@@ -164,7 +157,7 @@ For corporate proxies, set `http_proxy`, `https_proxy`, and `no_proxy` in the se
 
 Make sure 8801, 50051, 19000 are not bound by other processes. Adjust ports in `docker-compose.yml` if needed.
 
-** 4. China Mainland tips (mirrors and offline caches) **
+**4. China Mainland tips (mirrors and offline caches)**
 
 If you're in CN mainland and network access to Go/Hugging Face/PyPI is slow or blocked:
 
