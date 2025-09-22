@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/rules"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
@@ -24,6 +25,7 @@ type OpenAIRouter struct {
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
+	HybridRouter         *rules.HybridRouter // New hybrid router for rule-based routing
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -150,6 +152,11 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		_ = autoSvc
 	}
 
+	// Create hybrid router for rule-based routing
+	hybridRouter := rules.NewHybridRouter(cfg, classifier)
+	observability.Infof("Hybrid router created with %d rules, strategy: %s", 
+		hybridRouter.GetRuleCount(), cfg.RoutingStrategy.Type)
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -157,6 +164,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
+		HybridRouter:         hybridRouter,
 	}
 
 	// Log reasoning configuration after router is created

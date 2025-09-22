@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/rules"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -19,6 +20,7 @@ import (
 type ClassificationAPIServer struct {
 	classificationSvc *services.ClassificationService
 	config            *config.RouterConfig
+	ruleAPI           *rules.RuleManagementAPI // Add rule management API
 }
 
 // ModelsInfoResponse represents the response for models info endpoint
@@ -102,6 +104,11 @@ type ClassificationOptions struct {
 
 // StartClassificationAPI starts the Classification API server
 func StartClassificationAPI(configPath string, port int) error {
+	return StartClassificationAPIWithHybridRouter(configPath, port, nil)
+}
+
+// StartClassificationAPIWithHybridRouter starts the Classification API server with rule management
+func StartClassificationAPIWithHybridRouter(configPath string, port int, hybridRouter *rules.HybridRouter) error {
 	// Load configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -137,10 +144,18 @@ func StartClassificationAPI(configPath string, port int) error {
 		metrics.SetBatchMetricsConfig(metricsConfig)
 	}
 
+	// Create rule management API if hybrid router is provided
+	var ruleAPI *rules.RuleManagementAPI
+	if hybridRouter != nil {
+		ruleAPI = rules.NewRuleManagementAPI(hybridRouter, cfg)
+		observability.Infof("Rule management API enabled")
+	}
+
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc: classificationSvc,
 		config:            cfg,
+		ruleAPI:           ruleAPI,
 	}
 
 	// Create HTTP server with routes
@@ -202,6 +217,12 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
+
+	// Rule management endpoints (if rule API is available)
+	if s.ruleAPI != nil {
+		s.ruleAPI.RegisterRoutes(mux)
+		observability.Infof("Rule management API routes registered")
+	}
 
 	return mux
 }

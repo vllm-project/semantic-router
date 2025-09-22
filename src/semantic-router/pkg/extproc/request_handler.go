@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -313,8 +314,37 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 
 		if classificationText != "" {
-			// Find the most similar task description or classify, then select best model
-			matchedModel := r.classifyAndSelectBestModel(classificationText)
+			// Use hybrid router for enhanced routing with rule support
+			routingDecision, err := r.getRoutingDecisionWithExplanation(context.Background(), classificationText, ctx.Headers, originalModel)
+			if err != nil {
+				observability.Errorf("Hybrid routing failed: %v", err)
+				metrics.RecordRequestError(ctx.RequestModel, "routing_failed")
+				return nil, status.Errorf(codes.Internal, "routing failed: %v", err)
+			}
+
+			matchedModel := routingDecision.SelectedModel
+			
+			// Log routing decision details
+			if routingDecision.RuleMatched {
+				observability.Infof("Rule-based routing: rule=%s, model=%s, reasoning=%v", 
+					routingDecision.MatchedRule.Name, matchedModel, routingDecision.UseReasoning)
+				metrics.RecordRoutingReasonCode("rule_based", matchedModel)
+			} else {
+				observability.Infof("Model-based routing: category=%s, confidence=%.2f, model=%s",
+					routingDecision.Explanation.CategoryClassification.Category,
+					routingDecision.Explanation.CategoryClassification.Confidence,
+					matchedModel)
+				metrics.RecordRoutingReasonCode("model_based", matchedModel)
+			}
+
+			// Check for request blocking
+			if routingDecision.BlockRequest {
+				observability.Warnf("Request blocked by routing rule: %s", routingDecision.BlockMessage)
+				metrics.RecordRequestError(ctx.RequestModel, "rule_block")
+				blockResponse := http.CreateJailbreakViolationResponse("rule_block", 1.0)
+				return blockResponse, nil
+			}
+
 			if matchedModel != originalModel && matchedModel != "" {
 				// Get detected PII for policy checking
 				allContent := pii.ExtractAllContent(userContent, nonUserMessages)

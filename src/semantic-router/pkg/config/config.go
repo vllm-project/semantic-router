@@ -87,6 +87,12 @@ type RouterConfig struct {
 
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
+
+	// Routing strategy configuration for hybrid approach
+	RoutingStrategy RoutingStrategyConfig `yaml:"routing_strategy,omitempty"`
+
+	// Custom routing rules for interpretable routing
+	RoutingRules []RoutingRule `yaml:"routing_rules,omitempty"`
 }
 
 // APIConfig represents configuration for API endpoints
@@ -250,6 +256,106 @@ const (
 	PIITypeUSSSN           = "US_SSN"            // US Social Security Number
 	PIITypeZipCode         = "ZIP_CODE"          // ZIP/Postal codes
 )
+
+// RoutingStrategyConfig represents configuration for routing strategy
+type RoutingStrategyConfig struct {
+	// Strategy type: "model", "rules", or "hybrid"
+	Type string `yaml:"type,omitempty"`
+
+	// Model-based routing configuration
+	ModelRouting ModelRoutingConfig `yaml:"model_routing,omitempty"`
+
+	// Rule-based routing configuration
+	RuleRouting RuleRoutingConfig `yaml:"rule_routing,omitempty"`
+}
+
+// ModelRoutingConfig represents configuration for model-based routing
+type ModelRoutingConfig struct {
+	// Enable model-based routing
+	Enabled bool `yaml:"enabled"`
+
+	// Fall back to rules if model confidence is low
+	FallbackToRules bool `yaml:"fallback_to_rules,omitempty"`
+
+	// Confidence threshold for model-based routing
+	ConfidenceThreshold float64 `yaml:"confidence_threshold,omitempty"`
+}
+
+// RuleRoutingConfig represents configuration for rule-based routing
+type RuleRoutingConfig struct {
+	// Enable rule-based routing
+	Enabled bool `yaml:"enabled"`
+
+	// Fall back to model if no rules match
+	FallbackToModel bool `yaml:"fallback_to_model,omitempty"`
+
+	// Timeout for rule evaluation in milliseconds
+	EvaluationTimeoutMs int `yaml:"evaluation_timeout_ms,omitempty"`
+}
+
+// RoutingRule represents a single routing rule
+type RoutingRule struct {
+	// Rule identification
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
+	Enabled     bool   `yaml:"enabled"`
+	Priority    int    `yaml:"priority,omitempty"`
+
+	// Rule conditions (all must be satisfied)
+	Conditions []RuleCondition `yaml:"conditions"`
+
+	// Actions to execute when rule matches
+	Actions []RuleAction `yaml:"actions"`
+
+	// Rule evaluation configuration
+	Evaluation RuleEvaluation `yaml:"evaluation,omitempty"`
+}
+
+// RuleCondition represents a condition in a routing rule
+type RuleCondition struct {
+	// Condition type
+	Type string `yaml:"type"`
+
+	// Condition parameters (varies by type)
+	Category         string  `yaml:"category,omitempty"`           // For category_classification
+	Threshold        float64 `yaml:"threshold,omitempty"`          // For threshold-based conditions
+	Operator         string  `yaml:"operator,omitempty"`           // Comparison operator (gte, gt, lt, lte, equals, contains)
+	Value            string  `yaml:"value,omitempty"`              // For string/boolean comparisons
+	Metric           string  `yaml:"metric,omitempty"`             // For content_complexity conditions
+	Permission       string  `yaml:"permission,omitempty"`         // For user_permission conditions
+	HeaderName       string  `yaml:"header_name,omitempty"`        // For request_header conditions
+	PatternMatch     string  `yaml:"pattern_match,omitempty"`      // For pattern matching conditions
+	TimeRange        string  `yaml:"time_range,omitempty"`         // For time-based conditions
+	ExternalEndpoint string  `yaml:"external_endpoint,omitempty"`  // For external API conditions
+}
+
+// RuleAction represents an action to execute when a rule matches
+type RuleAction struct {
+	// Action type
+	Type string `yaml:"type"`
+
+	// Action parameters (varies by type)
+	Model             string            `yaml:"model,omitempty"`              // For route_to_model
+	Weight            int               `yaml:"weight,omitempty"`             // For weighted routing
+	EnableReasoning   bool              `yaml:"enable_reasoning,omitempty"`   // For enable_reasoning
+	ReasoningEffort   string            `yaml:"reasoning_effort,omitempty"`   // For reasoning configuration
+	MaxSteps          int               `yaml:"max_steps,omitempty"`          // For reasoning configuration
+	Headers           map[string]string `yaml:"headers,omitempty"`            // For set_headers
+	BlockWithMessage  string            `yaml:"block_with_message,omitempty"` // For block_request
+	RedirectToModel   string            `yaml:"redirect_to_model,omitempty"`  // For redirect actions
+}
+
+// RuleEvaluation represents evaluation configuration for a rule
+type RuleEvaluation struct {
+	// Timeout for rule evaluation in milliseconds
+	TimeoutMs int `yaml:"timeout_ms,omitempty"`
+
+	// Action to take on evaluation timeout
+	FallbackAction string `yaml:"fallback_action,omitempty"`
+
+	// Whether to cache evaluation results
+	CacheResults bool `yaml:"cache_results,omitempty"`
+}
 
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
 func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {

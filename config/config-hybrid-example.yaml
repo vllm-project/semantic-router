@@ -1,0 +1,235 @@
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"  
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 8000
+    models:
+      - "openai/gpt-oss-20b"
+      - "math-specialized-model"
+    weight: 1
+    health_check_path: "/health"
+
+model_config:
+  "openai/gpt-oss-20b":
+    reasoning_family: "gpt-oss"
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
+  "math-specialized-model":
+    reasoning_family: "gpt-oss"
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Hybrid Routing Configuration
+routing_strategy:
+  type: "hybrid"  # Options: "model", "rules", "hybrid"
+  
+  model_routing:
+    enabled: true
+    fallback_to_rules: false
+    confidence_threshold: 0.7
+  
+  rule_routing:
+    enabled: true
+    fallback_to_model: true
+    evaluation_timeout_ms: 100
+
+# Custom Routing Rules
+routing_rules:
+  - name: "enterprise-math-routing"
+    description: "Route complex math problems to specialized model"
+    enabled: true
+    priority: 100
+    
+    conditions:
+      - type: "category_classification"
+        category: "math"
+        threshold: 0.8
+        operator: "gte"
+      - type: "content_complexity"
+        metric: "token_count"
+        threshold: 50
+        operator: "gt"
+    
+    actions:
+      - type: "route_to_model"
+        model: "math-specialized-model"
+      - type: "enable_reasoning"
+        enable_reasoning: true
+        reasoning_effort: "high"
+    
+    evaluation:
+      timeout_ms: 100
+      fallback_action: "use_model_classification"
+
+  - name: "premium-user-routing"
+    description: "Route premium users to best available models"
+    enabled: true
+    priority: 90
+    
+    conditions:
+      - type: "request_header"
+        header_name: "x-user-tier"
+        value: "premium"
+        operator: "equals"
+    
+    actions:
+      - type: "route_to_model"
+        model: "openai/gpt-oss-20b"
+      - type: "enable_reasoning"
+        enable_reasoning: true
+        reasoning_effort: "medium"
+
+  - name: "content-filter"
+    description: "Block inappropriate content"
+    enabled: true
+    priority: 150
+    
+    conditions:
+      - type: "pattern_match"
+        pattern_match: "inappropriate"
+        operator: "contains"
+    
+    actions:
+      - type: "block_request"
+        block_with_message: "Content violates usage policy"
+
+  - name: "simple-query-optimization"
+    description: "Route simple queries to efficient models"
+    enabled: true
+    priority: 50
+    
+    conditions:
+      - type: "content_complexity"
+        metric: "token_count"
+        threshold: 20
+        operator: "lt"
+    
+    actions:
+      - type: "route_to_model"
+        model: "openai/gpt-oss-20b"
+      - type: "enable_reasoning"
+        enable_reasoning: false
+
+# Categories with model scores (used by model-based routing)
+categories:
+  - name: business
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
+  - name: law
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.4
+        use_reasoning: false
+  - name: psychology
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.6
+        use_reasoning: false
+  - name: biology
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.9
+        use_reasoning: false
+  - name: chemistry
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.6
+        use_reasoning: true
+  - name: history
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
+  - name: other
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
+  - name: health
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.8
+        use_reasoning: false
+  - name: math
+    model_scores:
+      - model: math-specialized-model
+        score: 0.9
+        use_reasoning: true
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: true
+  - name: computer science
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.8
+        use_reasoning: true
+  - name: economics
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.6
+        use_reasoning: false
+  - name: engineering
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.8
+        use_reasoning: true
+  - name: physics
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.8
+        use_reasoning: true
+
+default_model: openai/gpt-oss-20b
+default_reasoning_effort: medium
+
+reasoning_families:
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
