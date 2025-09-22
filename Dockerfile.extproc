@@ -25,9 +25,9 @@ FROM golang:1.24 as go-builder
 WORKDIR /app
 
 # Use China-friendly Go module mirrors to avoid proxy.golang.org timeouts
-ENV GOPROXY=https://goproxy.cn,direct
+# ENV GOPROXY=https://goproxy.cn,direct
 # Prefer a reachable checksum database in CN (or set to 'off' if still blocked)
-ENV GOSUMDB=sum.golang.google.cn
+# ENV GOSUMDB=sum.golang.google.cn
 
 # Copy Go module files first for better layer caching
 RUN mkdir -p src/semantic-router
