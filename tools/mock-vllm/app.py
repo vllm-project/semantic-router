@@ -1,6 +1,7 @@
+from typing import List, Optional
+
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List, Optional
 
 app = FastAPI()
 
@@ -29,7 +30,9 @@ async def models():
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatRequest):
     # Very simple echo-like behavior
-    last_user = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
+    last_user = next(
+        (m.content for m in reversed(req.messages) if m.role == "user"), ""
+    )
     content = f"[mock-{req.model}] You said: {last_user}"
     return {
         "id": "cmpl-mock-123",
