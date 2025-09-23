@@ -100,7 +100,7 @@ Edit `config/config.yaml` to point to your LLM endpoints:
 # Example: Configure your vLLM or Ollama endpoints
 vllm_endpoints:
   - name: "your-endpoint"
-    address: "your-llm-server.com"  # Replace with your server
+    address: "127.0.0.1"        # MUST be IP address (IPv4 or IPv6)
     port: 11434                     # Replace with your port
     models:
       - "your-model-name"           # Replace with your model
@@ -113,6 +113,22 @@ model_config:
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
     preferred_endpoints: ["your-endpoint"]
 ```
+
+**⚠️ Important: Address Format Requirements**
+
+The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain names are not supported.
+
+**✅ Correct formats:**
+
+- `"127.0.0.1"` (IPv4)
+- `"192.168.1.100"` (IPv4)
+
+**❌ Incorrect formats:**
+
+- `"localhost"` → Use `"127.0.0.1"` instead
+- `"your-server.com"` → Use the server's IP address
+- `"http://127.0.0.1"` → Remove protocol prefix
+- `"127.0.0.1:8080"` → Use separate `port` field
 
 The default configuration includes example endpoints that you should update for your setup.
 

@@ -43,7 +43,7 @@ prompt_guard:
 # vLLM endpoints - your backend models
 vllm_endpoints:
   - name: "endpoint1"
-    address: "your-server.com"  # Replace with your server
+    address: "192.168.1.100"  # Replace with your server IP address
     port: 11434
     models:
       - "your-model"           # Replace with your model
@@ -138,11 +138,42 @@ Configure your LLM servers:
 ```yaml
 vllm_endpoints:
   - name: "my_endpoint"
-    address: "127.0.0.1"  # Your server IP
+    address: "127.0.0.1"  # Your server IP - MUST be IP address format
     port: 8000                # Your server port
     models:
       - "llama2-7b"          # Model name
     weight: 1                 # Load balancing weight
+```
+
+#### Address Format Requirements
+
+**IMPORTANT**: The `address` field must contain a valid IP address (IPv4 or IPv6). Domain names and other formats are not supported.
+
+**✅ Supported formats:**
+
+```yaml
+# IPv4 addresses
+address: "127.0.0.1"
+
+# IPv6 addresses
+address: "2001:db8::1"
+```
+
+**❌ NOT supported:**
+
+```yaml
+# Domain names
+address: "localhost"        # ❌ Use 127.0.0.1 instead
+address: "api.openai.com"   # ❌ Use IP address instead
+
+# Protocol prefixes
+address: "http://127.0.0.1"   # ❌ Remove protocol prefix
+
+# Paths
+address: "127.0.0.1/api"      # ❌ Remove path, use IP only
+
+# Ports in address
+address: "127.0.0.1:8080"     # ❌ Use separate 'port' field
 ```
 
 ### Model Settings
@@ -613,12 +644,12 @@ make run-router
 ```yaml
 vllm_endpoints:
   - name: "math_endpoint"
-    address: "math-server.com"
+    address: "192.168.1.10"  # Math server IP
     port: 8000
     models: ["math-model"]
     weight: 1
   - name: "general_endpoint"
-    address: "general-server.com"
+    address: "192.168.1.20"  # General server IP
     port: 8000
     models: ["general-model"]
     weight: 1
@@ -641,12 +672,12 @@ categories:
 ```yaml
 vllm_endpoints:
   - name: "endpoint1"
-    address: "server1.com"
+    address: "192.168.1.30"  # Primary server IP
     port: 8000
     models: ["my-model"]
     weight: 2              # Higher weight = more traffic
   - name: "endpoint2"
-    address: "server2.com"
+    address: "192.168.1.31"  # Secondary server IP
     port: 8000
     models: ["my-model"]
     weight: 1

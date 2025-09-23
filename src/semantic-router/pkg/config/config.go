@@ -363,6 +363,11 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		}
 	}
 
+	// Validate vLLM endpoints address formats
+	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
+		return err
+	}
+
 	return nil
 }
 

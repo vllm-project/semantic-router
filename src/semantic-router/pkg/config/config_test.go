@@ -1001,6 +1001,249 @@ default_model: "missing-default-model"
 				Expect(err.Error()).To(ContainSubstring("missing-default-model"))
 			})
 		})
+
+		Describe("vLLM Endpoint Address Validation", func() {
+			Context("with valid IP addresses", func() {
+				It("should accept IPv4 addresses", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := config.LoadConfig(configFile)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
+				})
+
+				It("should accept IPv6 addresses", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "::1"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := config.LoadConfig(configFile)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("::1"))
+				})
+			})
+
+			Context("with invalid address formats", func() {
+				It("should reject domain names", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "example.com"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = config.LoadConfig(configFile)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("endpoint1"))
+					Expect(err.Error()).To(ContainSubstring("address validation failed"))
+					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+				})
+
+				It("should reject protocol prefixes", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "http://127.0.0.1"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = config.LoadConfig(configFile)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("protocol prefixes"))
+					Expect(err.Error()).To(ContainSubstring("are not supported"))
+				})
+
+				It("should reject addresses with paths", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1/api"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = config.LoadConfig(configFile)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("paths are not supported"))
+				})
+
+				It("should reject addresses with port numbers", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1:8080"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = config.LoadConfig(configFile)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("port numbers in address are not supported"))
+					Expect(err.Error()).To(ContainSubstring("use 'port' field instead"))
+				})
+
+				It("should provide comprehensive error messages", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "test-endpoint"
+    address: "https://example.com"
+    port: 8000
+    models:
+      - "test-model"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = config.LoadConfig(configFile)
+					Expect(err).To(HaveOccurred())
+
+					errorMsg := err.Error()
+					Expect(errorMsg).To(ContainSubstring("test-endpoint"))
+					Expect(errorMsg).To(ContainSubstring("Supported formats"))
+					Expect(errorMsg).To(ContainSubstring("IPv4: 192.168.1.1"))
+					Expect(errorMsg).To(ContainSubstring("IPv6: ::1"))
+					Expect(errorMsg).To(ContainSubstring("Unsupported formats"))
+					Expect(errorMsg).To(ContainSubstring("Domain names: example.com"))
+					Expect(errorMsg).To(ContainSubstring("Protocol prefixes: http://"))
+				})
+			})
+
+			Context("with multiple endpoints", func() {
+				It("should validate all endpoints", func() {
+					configContent := `
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 8000
+    models:
+      - "test-model1"
+    weight: 1
+  - name: "endpoint2"
+    address: "example.com"
+    port: 8001
+    models:
+      - "test-model2"
+    weight: 1
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "test-model1"
+        score: 0.9
+        use_reasoning: true
+
+default_model: "test-model1"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = config.LoadConfig(configFile)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("endpoint2"))
+					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+				})
+			})
+		})
 	})
 
 	Describe("Semantic Cache Backend Configuration", func() {
