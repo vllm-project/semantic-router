@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -17,6 +18,9 @@ import (
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Detect upstream HTTP status and record non-2xx as errors
 	if v != nil && v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
+		// Determine if the response is streaming based on Content-Type
+		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers)
+
 		if statusCode := getStatusFromHeaders(v.ResponseHeaders.Headers); statusCode != 0 {
 			if statusCode >= 500 {
 				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_5xx")
@@ -26,8 +30,10 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		}
 	}
 
-	// Best-effort TTFT measurement: record on first response headers if we have a start time and model
-	if ctx != nil && !ctx.TTFTRecorded && !ctx.ProcessingStartTime.IsZero() && ctx.RequestModel != "" {
+	// Best-effort TTFT measurement:
+	// - For non-streaming responses, record on first response headers (approx TTFB ~= TTFT)
+	// - For streaming responses (SSE), defer TTFT until the first response body chunk arrives
+	if ctx != nil && !ctx.IsStreamingResponse && !ctx.TTFTRecorded && !ctx.ProcessingStartTime.IsZero() && ctx.RequestModel != "" {
 		ttft := time.Since(ctx.ProcessingStartTime).Seconds()
 		if ttft > 0 {
 			metrics.RecordModelTTFT(ctx.RequestModel, ttft)
@@ -79,12 +85,57 @@ func getModelFromCtx(ctx *RequestContext) string {
 	return ctx.RequestModel
 }
 
+// isStreamingContentType checks if the response content-type indicates streaming (SSE)
+func isStreamingContentType(headerMap *core.HeaderMap) bool {
+	if headerMap == nil {
+		return false
+	}
+	for _, hv := range headerMap.Headers {
+		if strings.ToLower(hv.Key) == "content-type" {
+			val := hv.Value
+			if val == "" && len(hv.RawValue) > 0 {
+				val = string(hv.RawValue)
+			}
+			if strings.Contains(strings.ToLower(val), "text/event-stream") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // handleResponseBody processes the response body
 func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_ResponseBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	completionLatency := time.Since(ctx.StartTime)
 
 	// Process the response for caching
 	responseBody := v.ResponseBody.Body
+
+	// If this is a streaming response (e.g., SSE), record TTFT on the first body chunk
+	// and skip JSON parsing/caching which are not applicable for SSE chunks.
+	if ctx.IsStreamingResponse {
+		if ctx != nil && !ctx.TTFTRecorded && !ctx.ProcessingStartTime.IsZero() && ctx.RequestModel != "" {
+			ttft := time.Since(ctx.ProcessingStartTime).Seconds()
+			if ttft > 0 {
+				metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+				ctx.TTFTSeconds = ttft
+				ctx.TTFTRecorded = true
+				observability.Infof("Recorded TTFT on first streamed body chunk: %.3fs", ttft)
+			}
+		}
+
+		// For streaming chunks, just continue (no token parsing or cache update)
+		response := &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_ResponseBody{
+				ResponseBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}
+		return response, nil
+	}
 
 	// Parse tokens from the response JSON using OpenAI SDK types
 	var parsed openai.ChatCompletion
