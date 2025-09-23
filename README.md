@@ -139,6 +139,17 @@ The documentation includes:
 
 For questions, feedback, or to contribute, please join `#semantic-router` channel in vLLM Slack.
 
+### Community Meetings 📅
+
+We host bi-weekly community meetings to sync up with contributors across different time zones:
+
+- **First Tuesday of the month**: 9:00-10:00 AM EST (accommodates US EST and Asia Pacific contributors)
+- **Third Tuesday of the month**: 1:00-2:00 PM EST (accommodates US EST and California contributors)
+
+**Zoom Link**: [https://columbiauniversity.zoom.us/j/5260331515](https://columbiauniversity.zoom.us/j/5260331515)
+
+Join us to discuss the latest developments, share ideas, and collaborate on the project!
+
 ## Citation
 
 If you find Semantic Router helpful in your research or projects, please consider citing it:
