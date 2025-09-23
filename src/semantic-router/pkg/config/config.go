@@ -272,6 +272,10 @@ type Category struct {
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
+	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
+	// used by the classifier model. When provided, classifier outputs will be translated
+	// from these MMLU categories to this generic category name.
+	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
 }
 
 // Legacy types - can be removed once migration is complete
