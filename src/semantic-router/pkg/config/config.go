@@ -190,9 +190,6 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
-
-	// Health check path for this endpoint
-	HealthCheckPath string `yaml:"health_check_path,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters
@@ -378,6 +375,10 @@ type Category struct {
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
+	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
+	// used by the classifier model. When provided, classifier outputs will be translated
+	// from these MMLU categories to this generic category name.
+	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
 }
 
 // Legacy types - can be removed once migration is complete
@@ -467,6 +468,11 @@ func validateConfigStructure(cfg *RouterConfig) error {
 				return fmt.Errorf("category '%s', model '%s': missing required field 'use_reasoning'", category.Name, modelScore.Model)
 			}
 		}
+	}
+
+	// Validate vLLM endpoints address formats
+	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
+		return err
 	}
 
 	return nil

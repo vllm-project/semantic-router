@@ -254,7 +254,7 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		VLLMEndpoints: []config.VLLMEndpoint{
 			{
 				Name:    "primary",
-				Address: "localhost",
+				Address: "127.0.0.1", // Changed from localhost to IP address
 				Port:    8000,
 				Models:  []string{"gpt-4o-mini", "llama-3.1-8b-instruct"},
 				Weight:  1,

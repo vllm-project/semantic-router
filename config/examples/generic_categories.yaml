@@ -1,0 +1,40 @@
+# Example: Using generic categories with MMLU-Pro mapping
+# This file demonstrates how to declare free-style categories and map them to
+# MMLU-Pro categories expected by the classifier model.
+
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+
+# Define your generic categories and map them to MMLU-Pro categories.
+# The classifier will translate predicted MMLU categories into these generic names.
+categories:
+  - name: tech
+    mmlu_categories: ["computer science", "engineering"]
+    model_scores:
+      - model: phi4
+        score: 0.9
+      - model: mistral-small3.1
+        score: 0.7
+  - name: finance
+    mmlu_categories: ["economics"]
+    model_scores:
+      - model: gemma3:27b
+        score: 0.8
+  - name: politics
+    # If omitted, identity mapping applies when this name matches MMLU
+    model_scores:
+      - model: gemma3:27b
+        score: 0.6
+
+# A default model is recommended for fallback
+default_model: mistral-small3.1

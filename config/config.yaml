@@ -27,14 +27,16 @@ prompt_guard:
   jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
 
 # vLLM Endpoints Configuration
+# IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
+# Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1
+# NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "127.0.0.1"
+    address: "127.0.0.1"  # IPv4 address - REQUIRED format
     port: 8000
     models:
       - "openai/gpt-oss-20b"
     weight: 1
-    health_check_path: "/health"
 
 model_config:
   "openai/gpt-oss-20b":
