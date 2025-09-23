@@ -184,9 +184,6 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
-
-	// Health check path for this endpoint
-	HealthCheckPath string `yaml:"health_check_path,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters

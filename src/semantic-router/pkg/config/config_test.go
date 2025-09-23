@@ -96,7 +96,6 @@ vllm_endpoints:
       - "model-a"
       - "model-b"
     weight: 1
-    health_check_path: "/health"
   - name: "endpoint2"
     address: "127.0.0.1"
     port: 8000
@@ -180,7 +179,6 @@ tools:
 				Expect(cfg.VLLMEndpoints[0].Port).To(Equal(8000))
 				Expect(cfg.VLLMEndpoints[0].Models).To(ContainElements("model-a", "model-b"))
 				Expect(cfg.VLLMEndpoints[0].Weight).To(Equal(1))
-				Expect(cfg.VLLMEndpoints[0].HealthCheckPath).To(Equal("/health"))
 
 				Expect(cfg.VLLMEndpoints[1].Name).To(Equal("endpoint2"))
 				Expect(cfg.VLLMEndpoints[1].Address).To(Equal("127.0.0.1"))
@@ -794,7 +792,6 @@ vllm_endpoints:
       - "model-a"
       - "model-b"
     weight: 1
-    health_check_path: "/health"
   - name: "endpoint2"
     address: "127.0.0.1"
     port: 8000

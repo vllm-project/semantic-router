@@ -34,7 +34,6 @@ vllm_endpoints:
     models:
       - "openai/gpt-oss-20b"
     weight: 1
-    health_check_path: "/health"
 
 model_config:
   "openai/gpt-oss-20b":
