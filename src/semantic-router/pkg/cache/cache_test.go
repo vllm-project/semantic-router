@@ -133,36 +133,6 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should return error when backend_config_path is missing", func() {
-					config := cache.CacheConfig{
-						BackendType:         cache.MilvusCacheType,
-						Enabled:             true,
-						SimilarityThreshold: 0.8,
-						TTLSeconds:          3600,
-						// BackendConfigPath is missing
-					}
-
-					backend, err := cache.NewCacheBackend(config)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("backend_config_path is required"))
-					Expect(backend).To(BeNil())
-				})
-
-				It("should return error when backend_config_path file doesn't exist", func() {
-					config := cache.CacheConfig{
-						BackendType:         cache.MilvusCacheType,
-						Enabled:             true,
-						SimilarityThreshold: 0.8,
-						TTLSeconds:          3600,
-						BackendConfigPath:   "/nonexistent/milvus.yaml",
-					}
-
-					backend, err := cache.NewCacheBackend(config)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("config file not found"))
-					Expect(backend).To(BeNil())
-				})
-
 				It("should create Milvus cache backend successfully with valid config", func() {
 					config := cache.CacheConfig{
 						BackendType:         cache.MilvusCacheType,
@@ -221,6 +191,25 @@ development:
 					Expect(backend).To(BeNil())
 				})
 			})
+
+			Context("with invalid config but valid backend type", func() {
+				It("should return error due to validation when config has invalid values", func() {
+					config := cache.CacheConfig{
+						BackendType:         cache.InMemoryCacheType, // valid backend type
+						Enabled:             true,
+						SimilarityThreshold: -0.8, // invalid
+						MaxEntries:          10,
+						TTLSeconds:          -1, // invalid
+					}
+
+					backend, err := cache.NewCacheBackend(config)
+
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("invalid cache config")) // ensure from config validation
+					Expect(backend).To(BeNil())
+				})
+			})
+
 		})
 
 		Describe("ValidateCacheConfig", func() {
@@ -317,6 +306,20 @@ development:
 				err := cache.ValidateCacheConfig(config)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("backend_config_path is required for Milvus"))
+			})
+
+			It("should return error when Milvus backend_config_path file doesn't exist", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.MilvusCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					TTLSeconds:          3600,
+					BackendConfigPath:   "/nonexistent/milvus.yaml",
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("config file not found"))
 			})
 
 			It("should validate edge case values", func() {

@@ -9,6 +9,10 @@ import (
 
 // NewCacheBackend creates a cache backend instance from the provided configuration
 func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
+	if err := ValidateCacheConfig(config); err != nil {
+		return nil, fmt.Errorf("invalid cache config: %w", err)
+	}
+
 	if !config.Enabled {
 		// Create a disabled cache backend
 		observability.Debugf("Cache disabled - creating disabled in-memory cache backend")
@@ -34,17 +38,6 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	case MilvusCacheType:
 		observability.Debugf("Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
 			config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
-		if config.BackendConfigPath == "" {
-			return nil, fmt.Errorf("backend_config_path is required for Milvus cache backend")
-		}
-
-		// Ensure the Milvus configuration file exists
-		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-			observability.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
-			return nil, fmt.Errorf("Milvus config file not found: %s", config.BackendConfigPath)
-		}
-		observability.Debugf("Milvus config file found: %s", config.BackendConfigPath)
-
 		options := MilvusCacheOptions{
 			Enabled:             config.Enabled,
 			SimilarityThreshold: config.SimilarityThreshold,
@@ -75,19 +68,22 @@ func ValidateCacheConfig(config CacheConfig) error {
 		return fmt.Errorf("ttl_seconds cannot be negative, got: %d", config.TTLSeconds)
 	}
 
-	// Check max entries for in-memory cache
-	if config.BackendType == InMemoryCacheType || config.BackendType == "" {
+	// Check backend-specific requirements
+	switch config.BackendType {
+	case InMemoryCacheType, "":
 		if config.MaxEntries < 0 {
 			return fmt.Errorf("max_entries cannot be negative for in-memory cache, got: %d", config.MaxEntries)
 		}
-	}
-
-	// Check backend-specific requirements
-	switch config.BackendType {
 	case MilvusCacheType:
 		if config.BackendConfigPath == "" {
 			return fmt.Errorf("backend_config_path is required for Milvus cache backend")
 		}
+		// Ensure the Milvus configuration file exists
+		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+			observability.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
+			return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
+		}
+		observability.Debugf("Milvus config file found: %s", config.BackendConfigPath)
 	}
 
 	return nil
