@@ -404,10 +404,10 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 ./models/
 ├── lora_intent_classifier_bert-base-uncased_model/     # BERT Intent
 ├── lora_intent_classifier_roberta-base_model/          # RoBERTa Intent
-├── lora_intent_classifier_modernbert-base_model/              # ModernBERT Intent
-├── lora_pii_detector_bert-base-uncased_model/    # BERT PII Detection
-├── lora_pii_detector_roberta-base_model/         # RoBERTa PII Detection
-├── lora_pii_detector_modernbert-base_model/      # ModernBERT PII Detection
+├── lora_intent_classifier_modernbert-base_model/       # ModernBERT Intent
+├── lora_pii_detector_bert-base-uncased_model/          # BERT PII Detection
+├── lora_pii_detector_roberta-base_model/               # RoBERTa PII Detection
+├── lora_pii_detector_modernbert-base_model/            # ModernBERT PII Detection
 ├── lora_jailbreak_classifier_bert-base-uncased_model/  # BERT Security Detection
 ├── lora_jailbreak_classifier_roberta-base_model/       # RoBERTa Security Detection
 └── lora_jailbreak_classifier_modernbert-base_model/    # ModernBERT Security Detection
@@ -417,10 +417,10 @@ Process multiple texts in a single request using **high-confidence LoRA models**
 
 ```
 ./models/
-├── modernbert-base/                                    # Shared encoder (auto-discovered)
-├── category_classifier_modernbert-base_model/         # Intent classification head
+├── modernbert-base/                                     # Shared encoder (auto-discovered)
+├── category_classifier_modernbert-base_model/           # Intent classification head
 ├── pii_classifier_modernbert-base_presidio_token_model/ # PII classification head
-└── jailbreak_classifier_modernbert-base_model/        # Security classification head
+└── jailbreak_classifier_modernbert-base_model/          # Security classification head
 ```
 
 > **Auto-Discovery**: The API automatically detects and prioritizes LoRA models for superior performance. BERT and RoBERTa LoRA models deliver 0.99+ confidence scores, significantly outperforming legacy ModernBERT models.
