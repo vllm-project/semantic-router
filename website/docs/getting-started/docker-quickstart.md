@@ -157,26 +157,3 @@ services:
 For corporate proxies, set `http_proxy`, `https_proxy`, and `no_proxy` in the service `environment`.
 
 Make sure 8801, 50051, 19000 are not bound by other processes. Adjust ports in `docker-compose.yml` if needed.
-
-**4. China Mainland tips (mirrors and offline caches)**
-
-If you're in CN mainland and network access to Go/Hugging Face/PyPI is slow or blocked:
-
-- Hugging Face models (router downloads BERT embeddings on first run):
-
-  - Prefer using a local copy mounted via `./models` and point `bert_model.model_id` to `models/...`.
-  - Or mount your HF cache into the container and set cache env var (in `docker-compose.yml`):
-    - Volume: `~/.cache/huggingface:/root/.cache/huggingface`
-    - Env: `HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface`
-  - Optional mirrors:
-    - `HF_ENDPOINT=https://hf-mirror.com`
-    - `HF_HUB_ENABLE_HF_TRANSFER=1`
-
-- Go modules (used during image build):
-
-  - Set in `Dockerfile`: `GOPROXY=https://goproxy.cn,direct` and `GOSUMDB=sum.golang.google.cn`.
-
-- PyPI (for mock-vllm image):
-  - You can configure pip to use a mirror (commented example in `tools/mock-vllm/Dockerfile`):
-    - `python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple`
-    - `python -m pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn`
