@@ -28,7 +28,7 @@ prompt_guard:
 
 vllm_endpoints:
   - name: "mock"
-    address: "mock-vllm"
+    address: "172.28.0.10"
     port: 8000
     models:
       - "openai/gpt-oss-20b"
