@@ -179,8 +179,29 @@ export default function Contributing() {
 
                 <hr />
 
-                <h3>Docker</h3>
-                <p>Coming soon!</p>
+                <h3>Docker/Podman</h3>
+                <p>From the above local running method, it can be seen that the process is very troublesome and complicated. Therefore, we have provided running methods based on Docker or Podman. There is no need to install various dependent software; all you need is a container runtime.</p>
+                <div className={styles.step}>
+                  <span className={styles.stepNumber}>1</span>
+                  <div>
+                    <h4>Make sure Docker/Podman is installed</h4>
+                    <p>docker --version</p>
+                  </div>
+                </div>
+                <div className={styles.step}>
+                  <span className={styles.stepNumber}>2</span>
+                  <div>
+                    <h4>Run precommit by Docker/Podman</h4>
+                    <p>make precommit-local</p>
+                  </div>
+                </div>
+                <p>
+                  You can also manually enter the container and perform the operation. Please refer to
+                  {' '}
+                  <a href="https://github.com/vllm-project/semantic-router/blob/ebba50d39d9ed075dc009d92490fcab95735da8f/tools/make/pre-commit.mk#L24">Run precommit by Docker</a>
+                  {' '}
+                  .
+                </p>
               </div>
             </div>
           </section>
