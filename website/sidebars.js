@@ -51,6 +51,7 @@ const sidebars = {
         'getting-started/docker-quickstart',
         'getting-started/reasoning',
         'getting-started/configuration',
+        'getting-started/observability',
       ],
     },
     {
