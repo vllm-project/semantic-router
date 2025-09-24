@@ -69,6 +69,13 @@ const sidebars = {
         'api/classification',
       ],
     },
+    {
+      type: 'category',
+      label: 'Troubleshooting',
+      items: [
+        'troubleshooting/network-tips',
+      ],
+    },
   ],
 }
 
