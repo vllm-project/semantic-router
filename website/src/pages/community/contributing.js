@@ -208,7 +208,7 @@ export default function Contributing() {
                     </div>
                     <div className={styles.codeContent}>
                       <pre className={styles.codeText}>
-{`# Set the container image
+                        {`# Set the container image
 export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
 
 # Run the container interactively
