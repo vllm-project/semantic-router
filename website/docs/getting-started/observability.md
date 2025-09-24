@@ -1,120 +1,52 @@
 # Observability
 
-This guide helps you set up Prometheus + Grafana for this project with local Docker Compose
+Set up Prometheus + Grafana locally with the existing Docker Compose in this repo. The router already exposes Prometheus metrics and ships a ready-to-use Grafana dashboard, so you mainly need to run the services and ensure Prometheus points at the metrics endpoint.
 
-Note: The project already exposes Prometheus metrics and ships a Grafana dashboard. You only need to run Prometheus/Grafana and point Prometheus at the router’s metrics endpoint.
+## What’s included
 
-## Endpoints and Ports
+- Router metrics server: `/metrics` on port `9190` (override with `--metrics-port`).
+- Classification API health check: `GET /health` on `8080` (`--api-port`).
+- Envoy (optional): admin on `19000`, Prometheus metrics at `/stats/prometheus`.
+- Docker Compose services: `semantic-router`, `envoy`, `prometheus`, `grafana` on the same `semantic-network`.
+- Grafana dashboard: `deploy/llm-router-dashboard.json` (auto-provisioned).
 
-- The router process starts a dedicated Prometheus metrics HTTP server:
-  - Path: `/metrics`
-  - Port: `9190` by default (override with `--metrics-port`)
-- The Classification API (optional) listens on `8080` (`--api-port`), with a health check at `GET /health` (health only, no metrics).
-- Envoy (optional) admin port defaults to `19000`; Prometheus metrics are typically at `/stats/prometheus`.
+Code reference: `src/semantic-router/cmd/main.go` uses `promhttp` to expose `/metrics` (default `:9190`).
 
-Code reference: `src/semantic-router/cmd/main.go` uses `promhttp` to expose `/metrics`; default port is 9190.
+## Files to know
 
-## Quickstart (Docker Compose)
+- Prometheus config: `config/prometheus.yaml`. Ensure the path matches the volume mount in `docker-compose.yml`.
+- Grafana provisioning:
+  - Datasource: `config/grafana/datasource.yaml`
+  - Dashboards: `config/grafana/dashboards.yaml`
+- Dashboard JSON: `deploy/llm-router-dashboard.json`
 
-The provided `docker-compose.yml` starts `semantic-router` and `envoy`. Add Prometheus and Grafana services on the same network to scrape the router’s metrics.
+These files are already referenced by `docker-compose.yml` so you typically don’t need to edit them unless you’re changing targets or credentials.
 
-1) Add Prometheus config at `config/prometheus.yml`:
+## How it works (local)
 
-```yaml
-global:
-  scrape_interval: 10s
-  evaluation_interval: 10s
+- Prometheus runs in the same Docker network and scrapes `semantic-router:9190/metrics`. No host port needs to be published for metrics.
+- Grafana connects to Prometheus via the internal URL `http://prometheus:9090` and auto-loads the bundled dashboard.
+- Envoy (if enabled) can also be scraped by Prometheus at `envoy-proxy:19000/stats/prometheus`.
 
-scrape_configs:
-  # Semantic Router
-  - job_name: semantic-router
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["semantic-router:9190"]
-        labels:
-          service: semantic-router
-          env: dev
+## Start and access
 
-  # Optional: Envoy
-  - job_name: envoy
-    metrics_path: /stats/prometheus
-    static_configs:
-      - targets: ["envoy-proxy:19000"]
-        labels:
-          service: envoy
-          env: dev
+1) From the project root, start Compose (Prometheus and Grafana are included in the provided file).
+
+```bash
+# try it out with mock-vllm
+CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up --build
 ```
 
-2) In the same folder as `docker-compose.yml`, add/merge the following services (ensure the same `semantic-network`):
+2) Open the UIs:
+   - Prometheus: http://localhost:9090
+   - Grafana: http://localhost:3000 (default admin/admin — change on first login)
+3) In Grafana, the “LLM Router” dashboard is pre-provisioned. If needed, import `deploy/llm-router-dashboard.json` manually.
 
-```yaml
-services:
-  prometheus:
-    image: prom/prometheus:v2.53.0
-    container_name: prometheus
-    volumes:
-      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
-    command:
-      - --config.file=/etc/prometheus/prometheus.yaml
-      - --storage.tsdb.retention.time=15d
-    ports:
-      - "9090:9090"
-    networks:
-      - semantic-network
+## Minimal expectations
 
-  grafana:
-    image: grafana/grafana:11.5.1
-    container_name: grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    ports:
-      - "3000:3000"
-    volumes:
-      # Auto-provision Prometheus datasource and dashboard (see below)
-      - ./config/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
-      - ./config/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
-      - ./deploy/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
-    networks:
-      - semantic-network
+- Prometheus should list targets for:
+  - `semantic-router:9190` (required)
+  - `envoy-proxy:19000` (optional)
+- Grafana’s datasource should point to `http://prometheus:9090` inside the Docker network.
 
-networks:
-  semantic-network:
-    driver: bridge
-```
-
-3) Grafana provisioning for datasource and dashboards (optional but recommended):
-
-`config/grafana/datasource.yml`
-
-```yaml
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: http://prometheus:9090
-    isDefault: true
-```
-
-`config/grafana/dashboards.yml`
-
-```yaml
-apiVersion: 1
-providers:
-  - name: LLM Router Dashboards
-    orgId: 1
-    folder: "LLM Router"
-    type: file
-    disableDeletion: false
-    allowUiUpdates: true
-    options:
-      path: /etc/grafana/provisioning/dashboards
-```
-
-After (re)starting Compose you can access:
-
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (default admin/admin; change on first login)
-
-Dashboard import: Grafana will auto-load the bundled `deploy/llm-router-dashboard.json`. You can also import it manually via the Grafana UI.
+That’s it—run the stack, and you’ll have Prometheus scraping the router plus a prebuilt Grafana dashboard out of the box.
