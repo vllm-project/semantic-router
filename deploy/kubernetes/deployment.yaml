@@ -17,6 +17,9 @@ spec:
       initContainers:
       - name: model-downloader
         image: python:3.11-slim
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         command: ["/bin/bash", "-c"]
         args:
         - |
@@ -70,6 +73,9 @@ spec:
       containers:
       - name: semantic-router
         image: ghcr.io/vllm-project/semantic-router/extproc:latest
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 50051
           name: grpc
