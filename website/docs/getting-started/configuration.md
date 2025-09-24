@@ -141,7 +141,7 @@ vllm_endpoints:
     address: "127.0.0.1"  # Your server IP - MUST be IP address format
     port: 8000                # Your server port
     models:
-      - "llama2-7b"          # Model name
+      - "llama2-7b"          # Model name - must match vLLM --served-model-name
     weight: 1                 # Load balancing weight
 ```
 
@@ -176,13 +176,30 @@ address: "127.0.0.1/api"      # ❌ Remove path, use IP only
 address: "127.0.0.1:8080"     # ❌ Use separate 'port' field
 ```
 
+#### Model Name Consistency
+
+The model names in the `models` array must **exactly match** the `--served-model-name` parameter used when starting your vLLM server:
+
+```bash
+# vLLM server command:
+vllm serve meta-llama/Llama-2-7b-hf --served-model-name llama2-7b
+
+# config.yaml must use the same name:
+vllm_endpoints:
+  - models: ["llama2-7b"]  # ✅ Matches --served-model-name
+
+model_config:
+  "llama2-7b":             # ✅ Matches --served-model-name
+    # ... configuration
+```
+
 ### Model Settings
 
 Configure model-specific settings:
 
 ```yaml
 model_config:
-  "llama2-7b":
+  "llama2-7b":              # Must match the model name in vllm_endpoints
     pii_policy:
       allow_by_default: true    # Allow PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
