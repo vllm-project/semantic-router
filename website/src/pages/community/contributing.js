@@ -195,13 +195,35 @@ export default function Contributing() {
                     <p>make precommit-local</p>
                   </div>
                 </div>
-                <p>
-                  You can also manually enter the container and perform the operation. Please refer to
-                  {' '}
-                  <a href="https://github.com/vllm-project/semantic-router/blob/ebba50d39d9ed075dc009d92490fcab95735da8f/tools/make/pre-commit.mk#L24">Run precommit by Docker</a>
-                  {' '}
-                  .
-                </p>
+                <div>
+                  <p>You can also manually enter the container and perform the operation:</p>
+                  <div className={styles.codeBlock}>
+                    <div className={styles.codeHeader}>
+                      <div className={styles.windowControls}>
+                        <span className={styles.controlButton}></span>
+                        <span className={styles.controlButton}></span>
+                        <span className={styles.controlButton}></span>
+                      </div>
+                      <div className={styles.title}>Manual Docker Setup</div>
+                    </div>
+                    <div className={styles.codeContent}>
+                      <pre className={styles.codeText}>
+{`# Set the container image
+export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
+
+# Run the container interactively
+docker run --rm -it \\
+     -v $(pwd):/app \\
+     -w /app \\
+     --name precommit-container \${PRECOMMIT_CONTAINER} \\
+     bash
+
+# Inside the container, run the precommit commands
+pre-commit install && pre-commit run --all-files`}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
