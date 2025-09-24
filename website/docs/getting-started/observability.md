@@ -1,6 +1,6 @@
 # Observability
 
-This guide helps you set up Prometheus + Grafana for this project, covering local Docker Compose and Kubernetes deployment, key metrics and PromQL, importing the bundled dashboard, alerting, security hardening, and troubleshooting.
+This guide helps you set up Prometheus + Grafana for this project with local Docker Compose
 
 Note: The project already exposes Prometheus metrics and ships a Grafana dashboard. You only need to run Prometheus/Grafana and point Prometheus at the router’s metrics endpoint.
 
