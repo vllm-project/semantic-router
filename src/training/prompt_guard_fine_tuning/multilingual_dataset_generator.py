@@ -245,10 +245,60 @@ class MultilingualDatasetGenerator:
         except Exception as e:
             logger.warning(f"Translation failed for '{text[:50]}...': {e}")
             return text  # Return original text if translation fails
+
+    def translate_texts_batch(self, texts: List[str], target_language: str, source_language: str = "en", batch_size: int = 32) -> List[str]:
+        """Translate multiple texts in batches for better performance."""
+        self._init_translator()
+        
+        # NLLB language codes
+        lang_mapping = {
+            'en': 'eng_Latn', 'fr': 'fra_Latn', 'es': 'spa_Latn', 'de': 'deu_Latn',
+            'it': 'ita_Latn', 'pt': 'por_Latn', 'zh': 'zho_Hans', 'ja': 'jpn_Jpan',
+            'ko': 'kor_Hang', 'ru': 'rus_Cyrl', 'ar': 'arb_Arab', 'nl': 'nld_Latn'
+        }
+        
+        src_lang = lang_mapping.get(source_language, 'eng_Latn')
+        tgt_lang = lang_mapping.get(target_language, 'eng_Latn')
+        
+        if src_lang == tgt_lang:
+            return texts
+        
+        translated_texts = []
+        total_batches = (len(texts) + batch_size - 1) // batch_size
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            batch_num = i // batch_size + 1
             
-    def load_existing_datasets(self, dataset_names: List[str]) -> Tuple[List[str], List[str]]:
-        """Load existing English datasets."""
+            try:
+                logger.info(f"Translating batch {batch_num}/{total_batches} ({len(batch)} texts)")
+                # Process batch
+                results = self.translator(batch, src_lang=src_lang, tgt_lang=tgt_lang)
+                
+                # Extract translations
+                if isinstance(results, list):
+                    batch_translations = [r['translation_text'] for r in results]
+                else:
+                    batch_translations = [results['translation_text']]
+                    
+                translated_texts.extend(batch_translations)
+                
+            except Exception as e:
+                logger.warning(f"Batch translation failed for batch {batch_num}: {e}")
+                # Fallback to individual translation
+                for text in batch:
+                    translated_texts.append(self.translate_text(text, target_language, source_language))
+        
+        return translated_texts
+            
+    def load_existing_datasets(self, dataset_names: List[str], max_samples_per_source: Optional[int] = None) -> Tuple[List[str], List[str]]:
+        """Load existing English datasets with optional sample limiting."""
         logger.info(f"Loading existing datasets: {dataset_names}")
+        
+        if max_samples_per_source:
+            logger.info(f"Limiting to {max_samples_per_source} samples per source dataset")
+        else:
+            logger.info("Loading full datasets (no sample limit)")
         
         # Import the existing dataset loader
         import sys
@@ -257,7 +307,7 @@ class MultilingualDatasetGenerator:
         
         dataset_loader = Jailbreak_Dataset(
             dataset_sources=dataset_names,
-            max_samples_per_source=5000  # Limit to avoid memory issues during translation
+            max_samples_per_source=max_samples_per_source
         )
         
         texts, labels = dataset_loader.load_datasets()
@@ -265,39 +315,54 @@ class MultilingualDatasetGenerator:
         
         return texts, labels
         
-    def translate_datasets(self, texts: List[str], labels: List[str], target_languages: List[str]) -> Dict[str, Tuple[List[str], List[str]]]:
-        """Translate existing datasets to target languages."""
+    def translate_datasets(self, texts: List[str], labels: List[str], target_languages: List[str], use_batch: bool = True) -> Dict[str, Tuple[List[str], List[str]]]:
+        """Translate existing datasets to target languages with improved performance for large datasets."""
         multilingual_data = {}
         
         for lang in target_languages:
             logger.info(f"Translating dataset to {self.language_codes.get(lang, lang)}...")
+            logger.info(f"Processing {len(texts)} samples...")
             
-            cache_file = self.cache_dir / f"translated_dataset_{lang}.json"
+            cache_file = self.cache_dir / f"translated_dataset_{lang}_full.json"
             
             # Check cache first
             if cache_file.exists():
                 logger.info(f"Loading cached translation for {lang}")
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    cached_data = json.load(f)
-                    multilingual_data[lang] = (cached_data['texts'], cached_data['labels'])
-                    continue
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        cached_data = json.load(f)
+                        if len(cached_data['texts']) == len(texts):
+                            multilingual_data[lang] = (cached_data['texts'], cached_data['labels'])
+                            continue
+                        else:
+                            logger.info(f"Cache size mismatch ({len(cached_data['texts'])} vs {len(texts)}), re-translating...")
+                except Exception as e:
+                    logger.warning(f"Failed to load cached translation: {e}")
             
-            translated_texts = []
-            for i, text in enumerate(texts):
-                if i % 100 == 0:
-                    logger.info(f"Translating {lang}: {i}/{len(texts)}")
+            # Translate texts
+            if use_batch and len(texts) > 100:
+                logger.info("Using batch translation for better performance...")
+                translated_texts = self.translate_texts_batch(texts, lang)
+            else:
+                logger.info("Using individual translation...")
+                translated_texts = []
+                for i, text in enumerate(texts):
+                    if i % 100 == 0:
+                        logger.info(f"Translating {lang}: {i}/{len(texts)} ({i/len(texts)*100:.1f}%)")
                     
-                translated = self.translate_text(text, lang)
-                translated_texts.append(translated)
+                    translated = self.translate_text(text, lang)
+                    translated_texts.append(translated)
             
             multilingual_data[lang] = (translated_texts, labels.copy())
             
             # Cache the results
+            logger.info(f"Caching translation results for {lang}...")
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     'texts': translated_texts,
                     'labels': labels,
-                    'language': lang
+                    'language': lang,
+                    'total_samples': len(translated_texts)
                 }, f, ensure_ascii=False, indent=2)
             
             logger.info(f"Completed translation to {self.language_codes.get(lang, lang)}")
@@ -446,20 +511,24 @@ class MultilingualDatasetGenerator:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate multilingual prompt guard datasets")
+    parser = argparse.ArgumentParser(description="Generate multilingual prompt guard datasets from existing training data")
     parser.add_argument("--mode", choices=["translate", "generate", "combined"], required=True,
-                       help="Generation mode")
-    parser.add_argument("--source-datasets", nargs="+", default=["salad-data", "toxic-chat"],
-                       help="Source English datasets to translate")
+                       help="Generation mode: 'translate' creates multilingual versions of existing datasets")
+    parser.add_argument("--source-datasets", nargs="+", default=["default"],
+                       help="Source English datasets to translate (use 'default' for standard training datasets)")
     parser.add_argument("--target-languages", "--languages", nargs="+", 
                        default=["fr", "es", "de", "it", "pt"],
                        help="Target languages for generation")
     parser.add_argument("--output-size", type=int, default=1000,
-                       help="Number of synthetic samples per language")
+                       help="Number of synthetic samples per language (only used in 'generate' mode)")
     parser.add_argument("--output-dir", default="./multilingual_datasets",
                        help="Output directory for generated datasets")
     parser.add_argument("--cache-dir", default="./multilingual_cache",
                        help="Cache directory for translations")
+    parser.add_argument("--max-samples-per-source", type=int, default=None,
+                       help="Maximum samples per source dataset (None = no limit, recommended for full translation)")
+    parser.add_argument("--batch-translate", action="store_true",
+                       help="Enable batch translation for better performance with large datasets")
     
     args = parser.parse_args()
     
@@ -470,8 +539,16 @@ def main():
     
     if args.mode in ["translate", "combined"]:
         logger.info("Loading and translating existing datasets...")
-        texts, labels = generator.load_existing_datasets(args.source_datasets)
-        translated_data = generator.translate_datasets(texts, labels, args.target_languages)
+        logger.info(f"Translation mode: {'Full dataset' if args.max_samples_per_source is None else f'Limited to {args.max_samples_per_source} samples per source'}")
+        
+        texts, labels = generator.load_existing_datasets(args.source_datasets, args.max_samples_per_source)
+        
+        # Show source dataset statistics
+        jailbreak_count = sum(1 for label in labels if label == "jailbreak")
+        benign_count = sum(1 for label in labels if label == "benign")
+        logger.info(f"Source dataset loaded: {len(texts)} total samples ({jailbreak_count} jailbreak, {benign_count} benign)")
+        
+        translated_data = generator.translate_datasets(texts, labels, args.target_languages, use_batch=args.batch_translate)
     
     if args.mode in ["generate", "combined"]:
         logger.info("Generating synthetic multilingual prompts...")
