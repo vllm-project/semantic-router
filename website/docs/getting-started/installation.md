@@ -130,6 +130,25 @@ The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain n
 - `"http://127.0.0.1"` → Remove protocol prefix
 - `"127.0.0.1:8080"` → Use separate `port` field
 
+**⚠️ Important: Model Name Consistency**
+
+The model name in your configuration **must exactly match** the `--served-model-name` parameter used when starting your vLLM server:
+
+```bash
+# When starting vLLM server:
+vllm serve microsoft/phi-4 --port 11434 --served-model-name your-model-name
+
+# The config.yaml must use the same name:
+vllm_endpoints:
+  - models: ["your-model-name"]  # ✅ Must match --served-model-name
+
+model_config:
+  "your-model-name":             # ✅ Must match --served-model-name
+    # ... configuration
+```
+
+If these names don't match, the router won't be able to route requests to your model.
+
 The default configuration includes example endpoints that you should update for your setup.
 
 ## Running the Router
