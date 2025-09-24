@@ -179,8 +179,51 @@ export default function Contributing() {
 
                 <hr />
 
-                <h3>Docker</h3>
-                <p>Coming soon!</p>
+                <h3>Docker/Podman</h3>
+                <p>From the above local running method, it can be seen that the process is very troublesome and complicated. Therefore, we have provided running methods based on Docker or Podman. There is no need to install various dependent software; all you need is a container runtime.</p>
+                <div className={styles.step}>
+                  <span className={styles.stepNumber}>1</span>
+                  <div>
+                    <h4>Make sure Docker/Podman is installed</h4>
+                    <p>docker --version</p>
+                  </div>
+                </div>
+                <div className={styles.step}>
+                  <span className={styles.stepNumber}>2</span>
+                  <div>
+                    <h4>Run precommit by Docker/Podman</h4>
+                    <p>make precommit-local</p>
+                  </div>
+                </div>
+                <div>
+                  <p>You can also manually enter the container and perform the operation:</p>
+                  <div className={styles.codeBlock}>
+                    <div className={styles.codeHeader}>
+                      <div className={styles.windowControls}>
+                        <span className={styles.controlButton}></span>
+                        <span className={styles.controlButton}></span>
+                        <span className={styles.controlButton}></span>
+                      </div>
+                      <div className={styles.title}>Manual Docker Setup</div>
+                    </div>
+                    <div className={styles.codeContent}>
+                      <pre className={styles.codeText}>
+                        {`# Set the container image
+export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
+
+# Run the container interactively
+docker run --rm -it \\
+     -v $(pwd):/app \\
+     -w /app \\
+     --name precommit-container \${PRECOMMIT_CONTAINER} \\
+     bash
+
+# Inside the container, run the precommit commands
+pre-commit install && pre-commit run --all-files`}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
