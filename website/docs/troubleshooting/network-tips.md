@@ -1,9 +1,9 @@
 ---
-title: China Mainland Network Tips
-sidebar_label: China Network Tips
+title: Network Tips
+sidebar_label: Network Tips
 ---
 
-This guide shows exactly how to build and run in Mainland China without modifying repo files. You’ll use small local override files and a compose override so the codebase stays clean.
+This guide shows how to build and run in restricted or slow network environments without modifying repo files. You’ll use small local override files and a compose override so the codebase stays clean.
 
 What you’ll solve:
 
@@ -15,8 +15,8 @@ What you’ll solve:
 
 - Fastest and most reliable: use local models in `./models` and skip HF network entirely.
 - Otherwise: mount an HF cache + set mirror env vars via a compose override.
-- For building: use a CN-override Dockerfile to set Go mirrors.
-- For mock-vllm: use a CN-override Dockerfile to set pip mirror.
+- For building: use an override Dockerfile to set Go mirrors (examples provided).
+- For mock-vllm: use an override Dockerfile to set pip mirror (examples provided).
 
 You can mix these based on your situation.
 
@@ -43,7 +43,7 @@ The router will download embedding models on first run unless you provide them l
 
 ### Option B — Use HF cache + mirror
 
-Create a compose override to persist cache and use a China mirror. Save as `docker-compose.override.yml` in the repo root:
+Create a compose override to persist cache and use a regional mirror (example below uses a China mirror). Save as `docker-compose.override.yml` in the repo root:
 
 ```yaml
 services:
@@ -53,7 +53,7 @@ services:
     environment:
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
-      - HF_ENDPOINT=https://hf-mirror.com
+      - HF_ENDPOINT=https://hf-mirror.com  # example mirror endpoint (China)
 ```
 
 Optional: pre-warm cache on the host (only if you have `huggingface_hub` installed):
@@ -68,7 +68,7 @@ PY
 
 ## 2. Build with Go mirrors (Dockerfile override)
 
-When building `Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`. Create a China override Dockerfile that enables mirrors without touching the original.
+When building `Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`. Create an override Dockerfile that enables mirrors without touching the original.
 
 1) Create `Dockerfile.extproc.cn` at repo root with this content:
 
@@ -87,7 +87,7 @@ RUN make rust
 FROM golang:1.24 AS go-builder
 WORKDIR /app
 
-# China-friendly Go mirrors
+# Go module mirrors (example: goproxy.cn)
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GOSUMDB=sum.golang.google.cn
 
@@ -118,7 +118,7 @@ RUN chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 ```
 
-2) Point compose to the CN Dockerfile by extending `docker-compose.override.yml`:
+2) Point compose to the override Dockerfile by extending `docker-compose.override.yml`:
 
 ```yaml
 services:
@@ -129,7 +129,7 @@ services:
 
 ## 3. Mock vLLM (PyPI mirror via Dockerfile override)
 
-For the optional testing profile, create a CN Dockerfile to configure pip mirrors.
+For the optional testing profile, create an override Dockerfile to configure pip mirrors.
 
 1) Create `tools/mock-vllm/Dockerfile.cn`:
 
@@ -138,7 +138,7 @@ FROM python:3.11-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Pip mirror (TUNA)
+# Pip mirror (example: TUNA mirror in China)
 RUN python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
     python -m pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
@@ -150,7 +150,7 @@ EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-2) Extend `docker-compose.override.yml` to use the CN Dockerfile for `mock-vllm`:
+2) Extend `docker-compose.override.yml` to use the override Dockerfile for `mock-vllm`:
 
 ```yaml
 services:

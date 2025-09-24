@@ -51,7 +51,6 @@ const sidebars = {
         'getting-started/docker-quickstart',
         'getting-started/reasoning',
         'getting-started/configuration',
-        'getting-started/cn-network-tips',
       ],
     },
     {
@@ -68,6 +67,13 @@ const sidebars = {
       items: [
         'api/router',
         'api/classification',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Troubleshooting',
+      items: [
+        'troubleshooting/network-tips',
       ],
     },
   ],
