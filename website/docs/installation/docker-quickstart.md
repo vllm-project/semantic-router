@@ -2,133 +2,269 @@
 sidebar_position: 3
 ---
 
-# Install with Docker Compose
+# Deployment Quickstart
 
-Run Semantic Router + Envoy locally using Docker Compose v2.
+This unified guide helps you quickly run Semantic Router locally (Docker Compose) or in a cluster (Kubernetes) and explains when to choose each path. Both share the same configuration concepts: Docker is ideal for rapid iteration and demos, while Kubernetes is suited for long‑running workloads, elasticity, and upcoming Operator / CRD scenarios.
 
-## Prerequisites
+---
 
-- Docker Engine, see more in [Docker Engine Installation](https://docs.docker.com/engine/install/) 
-- Docker Compose v2 (use the `docker compose` command, not the legacy `docker-compose`)
+## 1. Choosing a Path (When to Use Which)
 
-  Docker Compose Plugin Installation(if missing), see more in [Docker Compose Plugin Installation](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
+| Scenario / Goal                             | Recommended Path                 | Why                                                                              |
+| ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| Local dev, quickest iteration, hacking code | Docker Compose                   | One command starts router + Envoy + (optionally) mock vLLM + observability stack |
+| Demo with dashboard quickly                 | Docker Compose (testing profile) | Bundled Prometheus + Grafana + mock responses                                    |
+| Team shared staging / pre‑prod              | Kubernetes                       | Declarative config, rolling upgrades, persistent model volume                    |
+| Performance, scalability, autoscaling       | Kubernetes                       | HPA, scheduling, resource isolation                                              |
+| Future Operator / CRD driven config         | Kubernetes                       | Native controller pattern                                                        |
 
-  ```bash
-  # For Ubuntu and Debian, run:
-  sudo apt-get update
-  sudo apt-get install -y docker-compose-plugin
+You can seamlessly reuse the same configuration concepts in both paths.
 
-  # For RPM-based distributions, run:
-  sudo yum update
-  sudo yum install docker-compose-plugin
+---
 
-  # Verify
-  docker compose version
-  ```
+## 2. Common Prerequisites (Both Paths)
 
-- Ensure ports 8801, 50051, 19000 are free
-
-## Install and Run with Docker Compose v2
-
-**1. Clone the repo and move into it (from your workspace root)**
+Clone repo：
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
 ```
 
-**2. Download required models (classification models)**
+Download classification models (≈1.5GB, first run only):
 
 ```bash
 make download-models
 ```
 
-This downloads the classification models used by the router:
+Includes: Category / PII / Jailbreak (ModernBERT). The similarity BERT model is pulled remotely by default; you can switch to a local path in `config/config.yaml`.
 
-- Category classifier (ModernBERT-base)
-- PII classifier (ModernBERT-base)
-- Jailbreak classifier (ModernBERT-base)
+---
 
-Note: The BERT similarity model defaults to a remote Hugging Face model. See Troubleshooting for offline/local usage.
+## 3. Path A: Docker Compose Quick Start
 
-**3. Start the services with Docker Compose v2**
+### 3.1 Requirements
+
+- Docker Engine
+- Docker Compose v2 (`docker compose version` should work)
+- Ensure ports 8801, 50051, 19000 (and 3000/9090 if using full observability) are free
+
+Install Compose plugin (if missing):
 
 ```bash
-# Start core services (semantic-router + envoy)
-docker compose up --build
+# Debian / Ubuntu
+sudo apt-get update && sudo apt-get install -y docker-compose-plugin
 
-# Or run in background (recommended)
-docker compose up --build -d
+# RHEL / CentOS / Fedora
+sudo yum update -y && sudo yum install -y docker-compose-plugin
 
-# With testing profile (includes mock vLLM). Use testing config to point router at the mock endpoint:
-# (CONFIG_FILE is read by the router entrypoint; the file is mounted from ./config)
-CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up --build
+# Verify
+docker compose version
 ```
 
-**4. Verify**
-
-- Semantic Router (gRPC): localhost:50051
-- Envoy Proxy: http://localhost:8801
-- Envoy Admin: http://localhost:19000
-
-## Common Operations
+### 3.2 Start Services
 
 ```bash
-# View service status
+# Core (router + envoy)
+docker compose up --build
+
+# Detached (recommended once OK)
+docker compose up -d --build
+
+# Include mock vLLM + testing profile (points router to mock endpoint)
+CONFIG_FILE=/app/config/config.testing.yaml \
+  docker compose --profile testing up --build
+```
+
+### 3.3 Verify
+
+- gRPC: `localhost:50051`
+- Envoy HTTP: `http://localhost:8801`
+- Envoy Admin: `http://localhost:19000`
+
+Optional (if observability stack enabled):
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000` (admin / admin)
+
+### 3.4 Common Operations
+
+```bash
+# Status
 docker compose ps
 
-# Follow logs for the router service
+# Logs
 docker compose logs -f semantic-router
 
-# Exec into the router container
+# Exec
 docker compose exec semantic-router bash
 
-# Stop and clean up containers
+# Recreate after config change
+docker compose up -d --build
+
+# Stop / clean
 docker compose down
 ```
 
-## Troubleshooting
+### 3.5 Config Overrides
 
-**1. Router exits immediately with a Hugging Face DNS/download error**
+Switch to the testing config:
 
-Symptoms (from `docker compose logs -f semantic-router`):
-
-```
-Failed to initialize BERT: request error: https://huggingface.co/... Dns Failed: resolve dns name 'huggingface.co:443'
+```bash
+CONFIG_FILE=/app/config/config.testing.yaml docker compose up --build
 ```
 
-Why: `bert_model.model_id` in `config/config.yaml` points to a remote model (`sentence-transformers/all-MiniLM-L12-v2`). If the container cannot resolve or reach the internet, startup fails.
+If Hugging Face access fails, add the following to the `semantic-router` service in `docker-compose.yml`:
 
-Fix options:
+```yaml
+services:
+  semantic-router:
+    dns: ["1.1.1.1", "8.8.8.8"]
+    environment:
+      http_proxy: "http://YOUR_PROXY"
+      https_proxy: "http://YOUR_PROXY"
+      no_proxy: "localhost,127.0.0.1"
+```
 
-- Allow network access in the container (online):
+---
 
-  - Ensure your host can resolve DNS, or add DNS servers to the `semantic-router` service in `docker-compose.yml`:
+## 4. Path B: Kubernetes Quick Start
 
-    ```yaml
-    services:
-      semantic-router:
-        # ...
-        dns:
-          - 1.1.1.1
-          - 8.8.8.8
-    ```
+### 4.1 Requirements
 
-  - If behind a proxy, set `http_proxy/https_proxy/no_proxy` env vars for the service.
+- Kubernetes cluster (kind / k3d / minikube / real)
+- `kubectl` access
+- Optional: Prometheus (Operator) for metrics scraping
 
-- Use a local copy of the model (offline):
+### 4.2 Deploy (Kustomize)
 
-  1. Download `sentence-transformers/all-MiniLM-L12-v2` to `./models/sentence-transformers/all-MiniLM-L12-v2/` on the host.
-  2. Update `config/config.yaml` to use the local path (mounted into the container at `/app/models`):
+```bash
+kubectl apply -k deploy/kubernetes/
 
-      ```yaml
-      bert_model:
-        model_id: "models/sentence-transformers/all-MiniLM-L12-v2"
-        threshold: 0.6
-        use_cpu: true
-      ```
+# Wait for pod
+kubectl -n semantic-router get pods
+```
 
-  3. Recreate services: `docker compose up -d --build`
+Manifests create:
+
+- Deployment (main container + init model downloader)
+- Service `semantic-router` (gRPC 50051)
+- Service `semantic-router-metrics` (metrics 9190)
+- ConfigMap (base config)
+- PVC (model cache)
+
+### 4.3 Port Forward (Ad-hoc)
+
+```bash
+kubectl -n semantic-router port-forward svc/semantic-router 50051:50051 &
+kubectl -n semantic-router port-forward svc/semantic-router-metrics 9190:9190 &
+```
+
+### 4.4 Observability (Summary)
+
+- Add a `ServiceMonitor` or a static scrape rule
+- Import `deploy/llm-router-dashboard.json` (see `observability.md`)
+
+### 4.5 Updating Config
+
+修改 `deploy/kubernetes/config.yaml` 后：
+
+```bash
+kubectl apply -k deploy/kubernetes/
+kubectl -n semantic-router rollout restart deploy/semantic-router
+```
+
+未来：Operator 根据 CR 自动生成 / 热更新配置。
+
+### 4.6 Typical Customizations
+
+| Goal               | Change                                              |
+| ------------------ | --------------------------------------------------- |
+| Scale horizontally | `kubectl scale deploy/semantic-router --replicas=N` |
+| Resource tuning    | Edit `resources:` in `deployment.yaml`              |
+| Add HTTP readiness | Switch TCP probe -> HTTP `/health` (port 8080)      |
+| PVC size           | Adjust storage request in PVC manifest              |
+| Metrics scraping   | Add ServiceMonitor / scrape rule                    |
+
+---
+
+## 5. Feature Comparison
+
+| Capability               | Docker Compose      | Kubernetes                                     |
+| ------------------------ | ------------------- | ---------------------------------------------- |
+| Startup speed            | Fast (seconds)      | Depends on cluster/image pull                  |
+| Config reload            | Manual recreate     | Rolling restart / future Operator / hot reload |
+| Model caching            | Host volume/bind    | PVC persistent across pods                     |
+| Observability            | Bundled stack       | Integrate existing stack                       |
+| Autoscaling              | Manual              | HPA / custom metrics                           |
+| Isolation / multi-tenant | Single host network | Namespaces / RBAC                              |
+| Rapid hacking            | Minimal friction    | YAML overhead                                  |
+| Production lifecycle     | Basic               | Full (probes, rollout, scaling)                |
+
+---
+
+## 6. Troubleshooting (Unified)
+
+### 6.1 HF model download failure / DNS errors
+
+Log example: `Dns Failed: resolve huggingface.co`.
+
+Fix:
+
+```yaml
+services:
+  semantic-router:
+    dns: ["1.1.1.1", "8.8.8.8"]
+    environment:
+      http_proxy: http://YOUR_PROXY
+      https_proxy: http://YOUR_PROXY
+      no_proxy: localhost,127.0.0.1
+```
+
+Or use a local model:
+
+```yaml
+bert_model:
+  model_id: "models/sentence-transformers/all-MiniLM-L12-v2"
+  threshold: 0.6
+  use_cpu: true
+```
+
+然后 `docker compose up -d --build`。
+
+### 6.2 Envoy / Router request failures
+
+- Ensure the correct config is used: the testing profile requires passing `CONFIG_FILE=...config.testing.yaml`
+- Check if mock vLLM is healthy: `docker compose ps` / view logs
+- Send a smoke test:
+
+```bash
+curl -X POST http://localhost:8801/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"auto","messages":[{"role":"user","content":"hi"}]}'
+```
+
+### 6.3 (Docker) No metrics data
+
+- Ensure service names match those in `config/prometheus.yaml`
+- Generate traffic to trigger classifications / inference
+
+### 6.4 (K8s) Init container repeatedly failing
+
+```bash
+kubectl -n semantic-router logs pod/<pod> -c model-downloader
+```
+
+Check network / DNS / proxy environment variables.
+
+### 6.5 (K8s) Metrics not scraped
+
+- `kubectl get ep semantic-router-metrics -n semantic-router`
+- ServiceMonitor 选择器是否匹配 `service: metrics` 标签
+
+### 6.6 Port conflicts
+
+Adjust external port mappings in `docker-compose.yml`, or free local ports 8801 / 50051 / 19000.
 
 Extra tip: If you use the testing profile, also pass the testing config so the router targets the mock service:
 
@@ -161,3 +297,28 @@ services:
 For corporate proxies, set `http_proxy`, `https_proxy`, and `no_proxy` in the service `environment`.
 
 Make sure 8801, 50051, 19000 are not bound by other processes. Adjust ports in `docker-compose.yml` if needed.
+
+**4. (K8s) Init container repeatedly failing**
+
+Check logs:
+
+```bash
+kubectl -n semantic-router logs pod/<pod-name> -c model-downloader
+```
+
+Add network/DNS env vars or mirror settings; ensure Hugging Face reachable.
+
+**5. (K8s) No metrics scraped**
+
+- Confirm `Service/semantic-router-metrics` has endpoints: `kubectl -n semantic-router get ep semantic-router-metrics`
+- Verify ServiceMonitor label selector or static scrape rule regex.
+
+---
+
+## 7. Next Steps
+
+- Configure endpoints: see `installation.md` & `configuration.md`.
+- Add observability details: see `observability.md`.
+- Track roadmap & Operator work: project README / issues.
+
+Happy routing! Choose Compose for speed or Kubernetes for scale — both share the same core binary & config schema.
