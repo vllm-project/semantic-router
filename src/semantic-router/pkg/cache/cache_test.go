@@ -220,6 +220,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
+					EvictionPolicy:      "lru",
 				}
 
 				err := cache.ValidateCacheConfig(config)
@@ -292,6 +293,21 @@ development:
 				err := cache.ValidateCacheConfig(config)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("max_entries cannot be negative"))
+			})
+
+			It("should return error for unsupported eviction_policy value in memory backend", func() {
+				config := cache.CacheConfig{
+					BackendType:         cache.InMemoryCacheType,
+					Enabled:             true,
+					SimilarityThreshold: 0.8,
+					MaxEntries:          1000,
+					TTLSeconds:          3600,
+					EvictionPolicy:      "random", // unsupported
+				}
+
+				err := cache.ValidateCacheConfig(config)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unsupported eviction_policy"))
 			})
 
 			It("should return error for Milvus backend without config path", func() {
