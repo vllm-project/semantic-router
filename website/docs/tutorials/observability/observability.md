@@ -1,4 +1,4 @@
-# Observability (Metrics & Dashboard)
+# Observability
 
 This page focuses solely on collecting and visualizing metrics for Semantic Router using Prometheus and Grafana—deployment method (Docker Compose vs Kubernetes) is covered in `docker-quickstart.md`.
 
@@ -148,13 +148,3 @@ histogram_quantile(0.95, sum by (le) (rate(llm_model_completion_latency_seconds_
 | Large 5xx spikes      | Backend model unreachable | Router logs                              | Verify vLLM endpoints configuration                              |
 
 ---
-
-## 6. Next Enhancements (Planned)
-
-- HTTP readiness probe to replace TCP probe for richer status
-- Additional metrics: cache hit ratio, model failover counts
-- Operator-driven dynamic config & automatic dashboard label enrichment
-
----
-
-For deployment & lifecycle (scaling, config edits), see `docker-quickstart.md`. This page stays focused on measuring and visualizing the system once it’s running.
