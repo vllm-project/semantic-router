@@ -8,7 +8,7 @@ This unified guide helps you quickly run Semantic Router locally (Docker Compose
 
 ---
 
-## 1. Choosing a Path (When to Use Which)
+## Choosing a Path
 
 | Scenario / Goal                             | Recommended Path                 | Why                                                                              |
 | ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
@@ -22,45 +22,53 @@ You can seamlessly reuse the same configuration concepts in both paths.
 
 ---
 
-## 2. Common Prerequisites (Both Paths)
+## Common Prerequisites
 
-Clone repo：
+- **Docker Engine:** see more in [Docker Engine Installation](https://docs.docker.com/engine/install/)
 
-```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-router
-```
+- **Clone repo：**
 
-Download classification models (≈1.5GB, first run only):
+  ```bash
+  git clone https://github.com/vllm-project/semantic-router.git
+  cd semantic-router
+  ```
 
-```bash
-make download-models
-```
+- **Download classification models (≈1.5GB, first run only):**
 
-Includes: Category / PII / Jailbreak (ModernBERT). The similarity BERT model is pulled remotely by default; you can switch to a local path in `config/config.yaml`.
+  ```bash
+  make download-models
+  ```
+
+  This downloads the classification models used by the router:
+
+  - Category classifier (ModernBERT-base)
+  - PII classifier (ModernBERT-base)
+  - Jailbreak classifier (ModernBERT-base)
 
 ---
 
-## 3. Path A: Docker Compose Quick Start
+## Path A: Docker Compose Quick Start
 
 ### Requirements
 
-- Docker Engine
-- Docker Compose v2 (`docker compose version` should work)
-- Ensure ports 8801, 50051, 19000 (and 3000/9090 if using full observability) are free
+- Docker Compose v2 (`docker compose` command, not the legacy `docker-compose`)
 
-Install Compose plugin (if missing):
+  Install Docker Compose Plugin (if missing), see more in [Docker Compose Plugin Installation](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
 
-```bash
-# Debian / Ubuntu
-sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+  ```bash
+  # For Debian / Ubuntu
+  sudo apt-get update 
+  sudo apt-get install -y docker-compose-plugin
 
-# RHEL / CentOS / Fedora
-sudo yum update -y && sudo yum install -y docker-compose-plugin
+  # For RHEL / CentOS / Fedora
+  sudo yum update -y 
+  sudo yum install -y docker-compose-plugin
+  
+  # Verify
+  docker compose version
+  ```
 
-# Verify
-docker compose version
-```
+- Ensure ports 8801, 50051, 19000, 3000 and 9090 are free
 
 ### Start Services
 
@@ -81,54 +89,31 @@ CONFIG_FILE=/app/config/config.testing.yaml \
 - gRPC: `localhost:50051`
 - Envoy HTTP: `http://localhost:8801`
 - Envoy Admin: `http://localhost:19000`
-
-Optional (if observability stack enabled):
-
 - Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000` (admin / admin)
+- Grafana: `http://localhost:3000` (`admin` / `admin` for first login)
 
 ### Common Operations
 
 ```bash
-# Status
+# View service status
 docker compose ps
 
-# Logs
+# Follow logs for the router service
 docker compose logs -f semantic-router
 
-# Exec
+# Exec into the router container
 docker compose exec semantic-router bash
 
 # Recreate after config change
 docker compose up -d --build
 
-# Stop / clean
+# Stop and clean up containers
 docker compose down
-```
-
-### Config Overrides
-
-Switch to the testing config:
-
-```bash
-CONFIG_FILE=/app/config/config.testing.yaml docker compose up --build
-```
-
-If Hugging Face access fails, add the following to the `semantic-router` service in `docker-compose.yml`:
-
-```yaml
-services:
-  semantic-router:
-    dns: ["1.1.1.1", "8.8.8.8"]
-    environment:
-      http_proxy: "http://YOUR_PROXY"
-      https_proxy: "http://YOUR_PROXY"
-      no_proxy: "localhost,127.0.0.1"
 ```
 
 ---
 
-## 4. Path B: Kubernetes Quick Start
+## Path B: Kubernetes Quick Start
 
 ### Requirements
 
@@ -186,7 +171,7 @@ kubectl -n semantic-router rollout restart deploy/semantic-router
 
 ---
 
-## 5. Feature Comparison
+## Feature Comparison
 
 | Capability               | Docker Compose      | Kubernetes                                     |
 | ------------------------ | ------------------- | ---------------------------------------------- |
@@ -201,64 +186,10 @@ kubectl -n semantic-router rollout restart deploy/semantic-router
 
 ---
 
-## 6. Troubleshooting (Unified)
+## Troubleshooting (Unified)
 
 ### HF model download failure / DNS errors
-
-Log example: `Dns Failed: resolve huggingface.co`.
-
-Fix:
-
-```yaml
-services:
-  semantic-router:
-    dns: ["1.1.1.1", "8.8.8.8"]
-    environment:
-      http_proxy: http://YOUR_PROXY
-      https_proxy: http://YOUR_PROXY
-      no_proxy: localhost,127.0.0.1
-```
-
-Or use a local model:
-
-```yaml
-bert_model:
-  model_id: "models/sentence-transformers/all-MiniLM-L12-v2"
-  threshold: 0.6
-  use_cpu: true
-```
-
-Then `docker compose up -d --build`。
-
-### Envoy / Router request failures
-
-- Ensure the correct config is used: the testing profile requires passing `CONFIG_FILE=...config.testing.yaml`
-- Check if mock vLLM is healthy: `docker compose ps` / view logs
-- Send a smoke test:
-
-```bash
-curl -X POST http://localhost:8801/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"hi"}]}'
-```
-
-### (Docker) No metrics data
-
-- Ensure service names match those in `config/prometheus.yaml`
-- Generate traffic to trigger classifications / inference
-
-### (K8s) Init container repeatedly failing
-
-```bash
-kubectl -n semantic-router logs pod/<pod> -c model-downloader
-```
-
-Check network / DNS / proxy environment variables.
-
-### (K8s) Metrics not scraped
-
-- `kubectl get ep semantic-router-metrics -n semantic-router`
-- ServiceMonitor 选择器是否匹配 `service: metrics` 标签
+Log example: `Dns Failed: resolve huggingface.co`. See solutions in [Network Tips](https://vllm-semantic-router.com/docs/troubleshooting/network-tips/)
 
 ### Port conflicts
 
@@ -270,7 +201,7 @@ Extra tip: If you use the testing profile, also pass the testing config so the r
 CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up --build
 ```
 
-**2. Envoy/Router up but requests fail**
+### Envoy/Router up but requests fail
 
 - Ensure `mock-vllm` is healthy (testing profile only):
   - `docker compose ps` should show mock-vllm healthy; logs show 200 on `/health`.
@@ -279,7 +210,7 @@ CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up 
 - Basic smoke test via Envoy (OpenAI-compatible):
   - Send a POST to `http://localhost:8801/v1/chat/completions` with `{"model":"auto", "messages":[{"role":"user","content":"hi"}]}` and check that the mock responds with `[mock-openai/gpt-oss-20b]` content when testing profile is active.
 
-**3. DNS problems inside containers**
+### DNS problems inside containers
 
 If DNS is flaky in your Docker environment, add DNS servers to the `semantic-router` service in `docker-compose.yml`:
 
@@ -295,28 +226,3 @@ services:
 For corporate proxies, set `http_proxy`, `https_proxy`, and `no_proxy` in the service `environment`.
 
 Make sure 8801, 50051, 19000 are not bound by other processes. Adjust ports in `docker-compose.yml` if needed.
-
-**4. (K8s) Init container repeatedly failing**
-
-Check logs:
-
-```bash
-kubectl -n semantic-router logs pod/<pod-name> -c model-downloader
-```
-
-Add network/DNS env vars or mirror settings; ensure Hugging Face reachable.
-
-**5. (K8s) No metrics scraped**
-
-- Confirm `Service/semantic-router-metrics` has endpoints: `kubectl -n semantic-router get ep semantic-router-metrics`
-- Verify ServiceMonitor label selector or static scrape rule regex.
-
----
-
-## 7. Next Steps
-
-- Configure endpoints: see `installation.md` & `configuration.md`.
-- Add observability details: see `observability.md`.
-- Track roadmap & Operator work: project README / issues.
-
-Happy routing! Choose Compose for speed or Kubernetes for scale — both share the same core binary & config schema.
