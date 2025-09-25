@@ -20,12 +20,23 @@ pub struct PIILoRAClassifier {
     model_path: String,
 }
 
-/// PII detection result
+/// Individual PII occurrence with its own confidence
+#[derive(Debug, Clone)]
+pub struct PIIOccurrence {
+    pub pii_type: String,
+    pub confidence: f32,
+    pub token: String,
+    pub start_pos: usize,
+    pub end_pos: usize,
+}
+
+/// PII detection result with individual occurrence confidences
 #[derive(Debug, Clone)]
 pub struct PIIResult {
     pub has_pii: bool,
-    pub pii_types: Vec<String>,
-    pub confidence: f32,
+    pub pii_types: Vec<String>,          // Keep for backward compatibility
+    pub confidence: f32,                 // Overall confidence (average or max)
+    pub occurrences: Vec<PIIOccurrence>, // Individual occurrences with their own confidence
     pub processing_time_ms: u64,
 }
 
@@ -86,12 +97,13 @@ impl PIILoRAClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
-        // Analyze token results to determine PII presence
+        // Create individual occurrences with their own confidence scores
+        let mut occurrences = Vec::new();
         let mut detected_types = Vec::new();
-        let mut max_confidence = 0.0f32;
+        let mut confidence_scores = Vec::new();
         let mut has_pii = false;
 
-        // Calculate confidence for "O" class before processing
+        // Calculate confidence for "O" class for non-PII tokens
         let o_confidences: Vec<f32> = token_results
             .iter()
             .filter(|(_, class_idx, _)| *class_idx == 0) // "O" class
@@ -103,25 +115,35 @@ impl PIILoRAClassifier {
             o_confidences.iter().sum::<f32>() / o_confidences.len() as f32
         };
 
-        for (_token, class_idx, confidence) in token_results {
+        // Process each token with its individual confidence
+        for (i, (token, class_idx, confidence)) in token_results.iter().enumerate() {
             // Skip "O" (Outside) labels - class 0 typically means no PII
-            if class_idx > 0 && class_idx < self.pii_types.len() {
+            if *class_idx > 0 && *class_idx < self.pii_types.len() {
                 has_pii = true;
-                max_confidence = max_confidence.max(confidence);
+                confidence_scores.push(*confidence);
 
-                let pii_type = &self.pii_types[class_idx];
+                let pii_type = &self.pii_types[*class_idx];
                 if !detected_types.contains(pii_type) {
                     detected_types.push(pii_type.clone());
                 }
+
+                // Create individual occurrence with its own confidence
+                occurrences.push(PIIOccurrence {
+                    pii_type: pii_type.clone(),
+                    confidence: *confidence, // Each occurrence keeps its individual confidence
+                    token: token.clone(),
+                    start_pos: i, // Token position in sequence
+                    end_pos: i + 1,
+                });
             }
         }
 
-        // Use real confidence from model inference - no hardcoded values
+        // Calculate overall confidence without inflating individual confidences
         let final_confidence = if has_pii {
-            max_confidence
+            // Use average confidence instead of max to avoid inflating significance
+            confidence_scores.iter().sum::<f32>() / confidence_scores.len() as f32
         } else {
             // For no PII detected, use the confidence of the "O" (Outside) class
-            // This comes from the actual model's softmax output for class 0
             avg_o_confidence
         };
 
@@ -131,6 +153,7 @@ impl PIILoRAClassifier {
             has_pii,
             pii_types: detected_types,
             confidence: final_confidence,
+            occurrences, // Include individual occurrences with their own confidences
             processing_time_ms: processing_time,
         })
     }

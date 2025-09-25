@@ -358,7 +358,8 @@ impl PathSpecialization for TraditionalBertClassifier {
     }
 
     fn get_confidence_threshold(&self) -> f32 {
-        0.95 // Traditional models provide high confidence
+        use crate::core::config_loader::GlobalConfigLoader;
+        GlobalConfigLoader::load_router_config_safe().traditional_bert_confidence_threshold
     }
 
     fn optimal_batch_size(&self) -> usize {
@@ -575,8 +576,13 @@ impl TraditionalBertTokenClassifier {
                     .map(|(idx, &conf)| (idx, conf))
                     .unwrap_or((0, 0.0));
 
-                // Only include tokens with reasonable confidence
-                if confidence > 0.5 {
+                // Only include tokens with reasonable confidence (configurable threshold)
+                let pii_threshold = {
+                    use crate::core::config_loader::GlobalConfigLoader;
+                    GlobalConfigLoader::load_router_config_safe()
+                        .traditional_pii_detection_threshold
+                };
+                if confidence > pii_threshold {
                     results.push((token.clone(), predicted_class, confidence));
                 }
             }

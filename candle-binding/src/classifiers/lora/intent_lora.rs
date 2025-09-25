@@ -47,9 +47,15 @@ impl IntentLoRAClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
+        // Load threshold from global config instead of hardcoding
+        let confidence_threshold = {
+            use crate::core::config_loader::GlobalConfigLoader;
+            GlobalConfigLoader::load_intent_threshold().unwrap_or(0.6) // Default from config.yaml classifier.category_model.threshold
+        };
+
         Ok(Self {
             bert_classifier: classifier,
-            confidence_threshold: 0.7,
+            confidence_threshold,
             intent_labels,
             model_path: model_path.to_string(),
         })
@@ -81,11 +87,21 @@ impl IntentLoRAClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
-        // Map class index to intent label
+        // Map class index to intent label - fail if class not found
         let intent = if predicted_class < self.intent_labels.len() {
             self.intent_labels[predicted_class].clone()
         } else {
-            format!("UNKNOWN_{}", predicted_class)
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "intent classification",
+                format!(
+                    "Invalid class index {} not found in labels (max: {})",
+                    predicted_class,
+                    self.intent_labels.len()
+                ),
+                text
+            );
+            return Err(candle_core::Error::from(unified_err));
         };
 
         let processing_time = start_time.elapsed().as_millis() as u64;
@@ -119,16 +135,23 @@ impl IntentLoRAClassifier {
         let processing_time = start_time.elapsed().as_millis() as u64;
 
         let mut results = Vec::new();
-        for (predicted_class, confidence) in batch_results {
-            let intent = if predicted_class < self.intent_labels.len() {
-                self.intent_labels[predicted_class].clone()
+        for (i, (predicted_class, confidence)) in batch_results.iter().enumerate() {
+            let intent = if *predicted_class < self.intent_labels.len() {
+                self.intent_labels[*predicted_class].clone()
             } else {
-                format!("UNKNOWN_{}", predicted_class)
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "batch intent classification",
+                    format!("Invalid class index {} not found in labels (max: {}) for text at position {}",
+                           predicted_class, self.intent_labels.len(), i),
+                    &format!("batch[{}]", i)
+                );
+                return Err(candle_core::Error::from(unified_err));
             };
 
             results.push(IntentResult {
                 intent,
-                confidence,
+                confidence: *confidence,
                 processing_time_ms: processing_time,
             });
         }

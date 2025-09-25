@@ -119,7 +119,12 @@ impl CoreModel for TraditionalModernBertClassifier {
         _attention_mask: &Tensor,
     ) -> Result<Self::Output, Self::Error> {
         // Placeholder implementation (match original ModelBackbone logic)
-        Ok((0, 0.5))
+        let default_confidence = {
+            use crate::core::config_loader::GlobalConfigLoader;
+            GlobalConfigLoader::load_router_config_safe()
+                .traditional_modernbert_confidence_threshold
+        };
+        Ok((0, default_confidence))
     }
 
     fn get_config(&self) -> &Self::Config {
@@ -138,7 +143,8 @@ impl PathSpecialization for TraditionalModernBertClassifier {
     }
 
     fn get_confidence_threshold(&self) -> f32 {
-        0.8 // Match original ModelBackbone value
+        use crate::core::config_loader::GlobalConfigLoader;
+        GlobalConfigLoader::load_router_config_safe().traditional_modernbert_confidence_threshold
     }
 
     fn optimal_batch_size(&self) -> usize {
@@ -179,7 +185,11 @@ impl CoreModel for TraditionalModernBertTokenClassifier {
         _attention_mask: &Tensor,
     ) -> Result<Self::Output, Self::Error> {
         // Placeholder implementation (match original ModelBackbone logic)
-        Ok(vec![("O".to_string(), 0, 0.9)])
+        let token_threshold = {
+            use crate::core::config_loader::GlobalConfigLoader;
+            GlobalConfigLoader::load_router_config_safe().traditional_token_classification_threshold
+        };
+        Ok(vec![("O".to_string(), 0, token_threshold)])
     }
 
     fn get_config(&self) -> &Self::Config {
@@ -198,7 +208,8 @@ impl PathSpecialization for TraditionalModernBertTokenClassifier {
     }
 
     fn get_confidence_threshold(&self) -> f32 {
-        0.8 // Match original ModelBackbone value
+        use crate::core::config_loader::GlobalConfigLoader;
+        GlobalConfigLoader::load_router_config_safe().traditional_modernbert_confidence_threshold
     }
 
     fn optimal_batch_size(&self) -> usize {

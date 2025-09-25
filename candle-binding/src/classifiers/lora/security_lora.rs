@@ -49,9 +49,15 @@ impl SecurityLoRAClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
+        // Load threshold from global config instead of hardcoding
+        let confidence_threshold = {
+            use crate::core::config_loader::GlobalConfigLoader;
+            GlobalConfigLoader::load_security_threshold().unwrap_or(0.7) // Default from config.yaml prompt_guard.threshold
+        };
+
         Ok(Self {
             bert_classifier,
-            confidence_threshold: 0.5,
+            confidence_threshold,
             threat_types,
             model_path: model_path.to_string(),
         })
@@ -83,21 +89,37 @@ impl SecurityLoRAClassifier {
                 candle_core::Error::from(unified_err)
             })?;
 
-        // Determine if threat is detected based on predicted class
-        let is_threat = predicted_class > 0; // Assuming class 0 is "benign" or "safe"
+        // Map class index to threat type label - fail if class not found
+        let threat_type = if predicted_class < self.threat_types.len() {
+            self.threat_types[predicted_class].clone()
+        } else {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "security classification",
+                format!(
+                    "Invalid class index {} not found in labels (max: {})",
+                    predicted_class,
+                    self.threat_types.len()
+                ),
+                text
+            );
+            return Err(candle_core::Error::from(unified_err));
+        };
+
+        // Determine if threat is detected based on class label (instead of hardcoded index)
+        let is_threat = !threat_type.to_lowercase().contains("safe")
+            && !threat_type.to_lowercase().contains("benign")
+            && !threat_type.to_lowercase().contains("no_threat");
 
         // Get detected threat types
-        let mut detected_threats = Vec::new();
-        if is_threat && predicted_class < self.threat_types.len() {
-            detected_threats.push(self.threat_types[predicted_class].clone());
-        }
-
-        // Calculate severity score based on confidence and threat type
-        let severity_score = if is_threat {
-            confidence * 0.9 // High severity for detected threats
+        let detected_threats = if is_threat {
+            vec![threat_type]
         } else {
-            0.0 // No severity for safe content
+            Vec::new()
         };
+
+        // Use confidence as severity score (no artificial scaling)
+        let severity_score = if is_threat { confidence } else { 0.0 };
 
         let processing_time = start_time.elapsed().as_millis() as u64;
 
@@ -129,24 +151,41 @@ impl SecurityLoRAClassifier {
         let processing_time = start_time.elapsed().as_millis() as u64;
 
         let mut results = Vec::new();
-        for (predicted_class, confidence) in batch_results {
-            // Determine if threat is detected
-            let is_threat = predicted_class > 0; // Assuming class 0 is "benign"
+        for (i, (predicted_class, confidence)) in batch_results.iter().enumerate() {
+            // Map class index to threat type label - fail if class not found
+            let threat_type = if *predicted_class < self.threat_types.len() {
+                self.threat_types[*predicted_class].clone()
+            } else {
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "batch security classification",
+                    format!("Invalid class index {} not found in labels (max: {}) for text at position {}",
+                           predicted_class, self.threat_types.len(), i),
+                    &format!("batch[{}]", i)
+                );
+                return Err(candle_core::Error::from(unified_err));
+            };
+
+            // Determine if threat is detected based on class label
+            let is_threat = !threat_type.to_lowercase().contains("safe")
+                && !threat_type.to_lowercase().contains("benign")
+                && !threat_type.to_lowercase().contains("no_threat");
 
             // Get detected threat types
-            let mut detected_threats = Vec::new();
-            if is_threat && predicted_class < self.threat_types.len() {
-                detected_threats.push(self.threat_types[predicted_class].clone());
-            }
+            let detected_threats = if is_threat {
+                vec![threat_type]
+            } else {
+                Vec::new()
+            };
 
-            // Calculate severity score
-            let severity_score = if is_threat { confidence * 0.9 } else { 0.0 };
+            // Use confidence as severity score (no artificial scaling)
+            let severity_score = if is_threat { *confidence } else { 0.0 };
 
             results.push(SecurityResult {
                 is_threat,
                 threat_types: detected_threats,
                 severity_score,
-                confidence,
+                confidence: *confidence,
                 processing_time_ms: processing_time,
             });
         }

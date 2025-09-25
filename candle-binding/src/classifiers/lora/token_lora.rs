@@ -1,13 +1,18 @@
 //! LoRA Token Classification
 
 use crate::core::config_errors;
+use crate::core::unified_error::{ErrorUnification, ModelErrorType};
 use crate::model_architectures::lora::lora_adapter::{LoRAAdapter, LoRAConfig};
-use candle_core::{DType, Device, Result, Tensor};
+use candle_core::{DType, Device, IndexOp, Result, Tensor};
 use candle_nn::{linear, Module, VarBuilder};
-use std::cmp::min;
+use candle_transformers::models::bert::{BertModel, Config};
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
+use tokenizers::Tokenizer;
+
+// Import unified tokenization system
+use crate::core::tokenization::{create_lora_compatibility_tokenizer, DualPathTokenizer};
 
 /// LoRA Token Classification Result
 #[derive(Debug, Clone)]
@@ -22,10 +27,14 @@ pub struct LoRATokenResult {
 
 /// LoRA Token Classifier for token-level classification tasks
 pub struct LoRATokenClassifier {
+    /// BERT model for generating embeddings
+    bert: BertModel,
     /// LoRA adapters for different token classification tasks
     adapters: HashMap<String, LoRAAdapter>,
     /// Base token classifier
     base_classifier: candle_nn::Linear,
+    /// Unified tokenizer compatible with dual-path architecture
+    tokenizer: Box<dyn DualPathTokenizer>,
     /// Computing device
     device: Device,
     /// Label mappings (id -> label_name)
@@ -36,6 +45,8 @@ pub struct LoRATokenClassifier {
     confidence_threshold: f32,
     /// Hidden size of the model
     hidden_size: usize,
+    /// BERT configuration
+    config: Config,
 }
 
 impl LoRATokenClassifier {
@@ -53,6 +64,34 @@ impl LoRATokenClassifier {
         let label2id = token_config.label2id;
         let num_labels = token_config.num_labels;
         let hidden_size = token_config.hidden_size;
+
+        // Load BERT configuration
+        let config_path = Path::new(model_path).join("config.json");
+        let config_str = std::fs::read_to_string(&config_path).map_err(|_e| {
+            let unified_err = config_errors::file_not_found(&config_path.to_string_lossy());
+            candle_core::Error::from(unified_err)
+        })?;
+        let config: Config = serde_json::from_str(&config_str).map_err(|e| {
+            let unified_err =
+                config_errors::invalid_json(&config_path.to_string_lossy(), &e.to_string());
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // Load tokenizer
+        let tokenizer_path = Path::new(model_path).join("tokenizer.json");
+        let base_tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|_e| {
+            let unified_err = config_errors::file_not_found(&tokenizer_path.to_string_lossy());
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // Create LoRA-compatible tokenizer
+        let tokenizer = create_lora_compatibility_tokenizer(base_tokenizer, device.clone())
+            .with_model_context(
+                ModelErrorType::Tokenizer,
+                "create_lora_compatibility_tokenizer",
+                None,
+            )
+            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
 
         // Load LoRA configuration
         let lora_config_path = Path::new(model_path).join("lora_config.json");
@@ -101,6 +140,9 @@ impl LoRATokenClassifier {
         let vb =
             unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device)? };
 
+        // Load BERT model
+        let bert = BertModel::load(vb.pp("bert"), &config)?;
+
         // Create base classifier
         let base_classifier = linear(hidden_size, num_labels, vb.pp("classifier"))?;
 
@@ -111,13 +153,16 @@ impl LoRATokenClassifier {
         println!("  Using merged LoRA model (no separate adapters needed)");
 
         Ok(Self {
+            bert,
             adapters,
             base_classifier,
+            tokenizer,
             device,
             id2label,
             label2id,
             confidence_threshold: 0.5,
             hidden_size,
+            config,
         })
     }
 
@@ -196,70 +241,92 @@ impl LoRATokenClassifier {
 
     /// BERT-compatible tokenization with embeddings
     fn tokenize_with_bert_compatible(&self, text: &str) -> Result<Vec<(String, Tensor)>> {
-        // Real BERT-compatible tokenization implementation
-        // This uses word-level tokenization with proper embedding generation
-        let words: Vec<String> = text.split_whitespace().map(|s| s.to_string()).collect();
+        // Use real BERT tokenization through unified tokenizer
+        let tokenization_result = self
+            .tokenizer
+            .tokenize_for_lora(text)
+            .with_model_context(ModelErrorType::Tokenizer, "tokenize_for_lora", Some(text))
+            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
 
-        let mut token_embeddings = Vec::new();
+        // Clone tokens before creating tensors to avoid borrow checker issues
+        let token_strings = tokenization_result.tokens.clone();
+        let (token_ids_tensor, attention_mask_tensor) = self
+            .tokenizer
+            .create_tensors(&tokenization_result)
+            .with_processing_context("create_tensors", Some("token_lora"))
+            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
 
-        for word in &words {
-            // Generate contextual embedding for each word
-            // This simulates BERT's contextualized embeddings based on word content
-            let embedding = self.generate_contextual_embedding(word)?;
-            token_embeddings.push((word.clone(), embedding));
+        // Create token type IDs (all zeros for single sentence)
+        let token_type_ids = token_ids_tensor.zeros_like()?;
+
+        // Forward pass through BERT to get token-level embeddings
+        let hidden_states = self.bert.forward(
+            &token_ids_tensor,
+            &token_type_ids,
+            Some(&attention_mask_tensor),
+        )?;
+
+        // Extract token-level embeddings (shape: [batch_size, seq_len, hidden_size])
+        // Remove batch dimension since we're processing single text
+        let token_embeddings = hidden_states.squeeze(0)?; // Shape: [seq_len, hidden_size]
+
+        // Create result vector with token strings and their embeddings
+        let mut results = Vec::new();
+        let seq_len = token_strings.len();
+
+        for (i, token) in token_strings.iter().enumerate() {
+            if i < seq_len {
+                // Extract embedding for this token
+                let token_embedding = token_embeddings.i(i)?; // Shape: [hidden_size]
+                results.push((token.clone(), token_embedding));
+            }
         }
 
-        Ok(token_embeddings)
+        Ok(results)
     }
 
     /// Generate contextual embedding based on word content
     fn generate_contextual_embedding(&self, word: &str) -> Result<Tensor> {
-        // Generate embedding based on word characteristics for better classification
-        let mut embedding_data = vec![0.0f32; self.hidden_size];
+        // Use real BERT model to generate contextual embeddings
 
-        // Use word characteristics to generate meaningful embeddings
-        let word_lower = word.to_lowercase();
-        let word_bytes = word_lower.as_bytes();
+        // Tokenize the word using our unified tokenizer
+        let tokenization_result = self
+            .tokenizer
+            .tokenize_for_lora(word)
+            .with_model_context(ModelErrorType::Tokenizer, "tokenize_for_lora", Some(word))
+            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
+        let (token_ids_tensor, attention_mask_tensor) = self
+            .tokenizer
+            .create_tensors(&tokenization_result)
+            .with_processing_context("create_tensors", Some("generate_contextual_embedding"))
+            .map_err(|unified_err| candle_core::Error::from(unified_err))?;
 
-        // Generate embedding based on word patterns for PII detection
-        for (i, &byte) in word_bytes.iter().enumerate() {
-            if i < self.hidden_size {
-                embedding_data[i] = (byte as f32) / 255.0;
-            }
+        // Create token type IDs (all zeros for single sentence)
+        let token_type_ids = token_ids_tensor.zeros_like()?;
+
+        // Forward pass through BERT
+        let hidden_states = self.bert.forward(
+            &token_ids_tensor,
+            &token_type_ids,
+            Some(&attention_mask_tensor),
+        )?;
+
+        // For single word, we can use mean pooling over all tokens
+        // or just take the CLS token embedding, or the first non-special token
+
+        // Option 1: Mean pooling (excluding special tokens)
+        let seq_len = hidden_states.dim(1)?;
+        if seq_len <= 2 {
+            // Only CLS and SEP tokens, use CLS token
+            let cls_embedding = hidden_states.i((.., 0))?; // CLS token
+            return Ok(cls_embedding.squeeze(0)?);
         }
 
-        // Add pattern-based features for PII detection
-        if word_lower.contains('@') {
-            // Email pattern
-            for i in 0..min(32, self.hidden_size) {
-                embedding_data[i] += 0.5;
-            }
-        }
+        // Mean pooling over actual word tokens (excluding CLS and SEP)
+        let word_embeddings = hidden_states.i((.., 1..seq_len - 1))?; // Exclude CLS and SEP
+        let mean_embedding = word_embeddings.mean(1)?; // Mean over sequence dimension
 
-        if word_lower.chars().all(|c| c.is_ascii_digit() || c == '-') && word_lower.len() >= 9 {
-            // Phone/SSN pattern
-            for i in 32..min(64, self.hidden_size) {
-                embedding_data[i] += 0.5;
-            }
-        }
-
-        if word_lower.chars().all(|c| c.is_ascii_digit()) && word_lower.len() >= 13 {
-            // Credit card pattern
-            for i in 64..min(96, self.hidden_size) {
-                embedding_data[i] += 0.5;
-            }
-        }
-
-        // Normalize the embedding
-        let sum_squares: f32 = embedding_data.iter().map(|x| x * x).sum();
-        let norm = sum_squares.sqrt();
-        if norm > 0.0 {
-            for val in &mut embedding_data {
-                *val /= norm;
-            }
-        }
-
-        Tensor::from_vec(embedding_data, (1, self.hidden_size), &self.device)
+        Ok(mean_embedding.squeeze(0)?) // Remove batch dimension
     }
 
     /// Get label name from ID

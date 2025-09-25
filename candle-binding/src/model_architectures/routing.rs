@@ -3,6 +3,7 @@
 //! This module implements smart routing logic that automatically selects
 //! the optimal path (Traditional vs LoRA) based on requirements and performance.
 
+use crate::core::config_loader::{GlobalConfigLoader, RouterConfig};
 use crate::model_architectures::config::{PathSelectionStrategy, ProcessingPriority};
 use crate::model_architectures::traits::{ModelType, TaskType};
 use std::collections::HashMap;
@@ -17,6 +18,8 @@ pub struct DualPathRouter {
     performance_history: PerformanceHistory,
     /// Current performance metrics
     current_metrics: HashMap<ModelType, PathMetrics>,
+    /// Router configuration (loaded from config.yaml)
+    router_config: RouterConfig,
 }
 
 /// Performance history for intelligent learning
@@ -93,6 +96,7 @@ impl DualPathRouter {
             strategy,
             performance_history: PerformanceHistory::new(1000),
             current_metrics: HashMap::new(),
+            router_config: GlobalConfigLoader::load_router_config_safe(),
         }
     }
 
@@ -121,11 +125,14 @@ impl DualPathRouter {
     /// Automatic path selection based on requirements
     fn automatic_selection(&self, requirements: &ProcessingRequirements) -> PathSelection {
         // High confidence requirement -> LoRA path
-        if requirements.confidence_threshold >= 0.99 {
+        if requirements.confidence_threshold >= self.router_config.high_confidence_threshold {
             return PathSelection {
                 selected_path: ModelType::LoRA,
                 confidence: 0.95,
-                reasoning: "High confidence requirement (≥0.99) -> LoRA path".to_string(),
+                reasoning: format!(
+                    "High confidence requirement (≥{}) -> LoRA path",
+                    self.router_config.high_confidence_threshold
+                ),
                 expected_performance: self.get_expected_performance(ModelType::LoRA),
             };
         }
@@ -141,11 +148,16 @@ impl DualPathRouter {
         }
 
         // Low latency requirement -> LoRA path
-        if requirements.max_latency < Duration::from_millis(2000) {
+        if requirements.max_latency
+            < Duration::from_millis(self.router_config.low_latency_threshold_ms)
+        {
             return PathSelection {
                 selected_path: ModelType::LoRA,
                 confidence: 0.85,
-                reasoning: "Low latency requirement -> LoRA path".to_string(),
+                reasoning: format!(
+                    "Low latency requirement (<{}ms) -> LoRA path",
+                    self.router_config.low_latency_threshold_ms
+                ),
                 expected_performance: self.get_expected_performance(ModelType::LoRA),
             };
         }
@@ -204,8 +216,8 @@ impl DualPathRouter {
         requirements: &ProcessingRequirements,
     ) -> f32 {
         let base_score = match model_type {
-            ModelType::LoRA => 0.8,        // LoRA baseline: high performance
-            ModelType::Traditional => 0.7, // Traditional baseline: high reliability
+            ModelType::LoRA => self.router_config.lora_baseline_score, // LoRA baseline: high performance
+            ModelType::Traditional => self.router_config.traditional_baseline_score, // Traditional baseline: high reliability
         };
 
         let mut score = base_score;
@@ -238,7 +250,8 @@ impl DualPathRouter {
                     score += 0.3;
                 }
                 // LoRA excels at high confidence requirements
-                if requirements.confidence_threshold >= 0.99 {
+                if requirements.confidence_threshold >= self.router_config.high_confidence_threshold
+                {
                     score += 0.2;
                 }
             }
@@ -262,21 +275,23 @@ impl DualPathRouter {
         self.current_metrics
             .get(&model_type)
             .cloned()
-            .unwrap_or_else(|| {
-                match model_type {
-                    ModelType::LoRA => PathMetrics {
-                        avg_execution_time: Duration::from_millis(1345), // 70.5% faster
-                        avg_confidence: 0.99,
-                        success_rate: 0.98,
-                        total_executions: 0,
-                    },
-                    ModelType::Traditional => PathMetrics {
-                        avg_execution_time: Duration::from_millis(4567), // Stable baseline
-                        avg_confidence: 0.95,
-                        success_rate: 0.99,
-                        total_executions: 0,
-                    },
-                }
+            .unwrap_or_else(|| match model_type {
+                ModelType::LoRA => PathMetrics {
+                    avg_execution_time: Duration::from_millis(
+                        self.router_config.lora_default_execution_time_ms,
+                    ),
+                    avg_confidence: self.router_config.lora_default_confidence,
+                    success_rate: self.router_config.lora_default_success_rate,
+                    total_executions: 0,
+                },
+                ModelType::Traditional => PathMetrics {
+                    avg_execution_time: Duration::from_millis(
+                        self.router_config.traditional_default_execution_time_ms,
+                    ),
+                    avg_confidence: self.router_config.traditional_default_confidence,
+                    success_rate: self.router_config.traditional_default_success_rate,
+                    total_executions: 0,
+                },
             })
     }
 
@@ -344,8 +359,8 @@ impl DualPathRouter {
         metrics.avg_confidence =
             (metrics.avg_confidence * old_count as f32 + confidence) / new_count as f32;
 
-        // Update success rate (assuming confidence > 0.8 is success)
-        let success_count = if confidence > 0.8 {
+        // Update success rate (using configurable threshold)
+        let success_count = if confidence > self.router_config.success_confidence_threshold {
             old_count + 1
         } else {
             old_count
@@ -372,64 +387,98 @@ impl DualPathRouter {
         let mut lora_score = 0.0f32;
         let mut traditional_score = 0.0f32;
 
-        // Factor 1: Multi-task parallel benefit
+        // Factor 1: Multi-task vs Single-task (mutually exclusive)
         if requirements.tasks.len() > 1 {
-            lora_score += 0.4; // LoRA excels at Intent||PII||Security parallel processing
+            lora_score += self.router_config.multi_task_lora_weight; // LoRA excels at parallel processing
         } else {
-            traditional_score += 0.2; // Traditional is stable for single tasks
+            traditional_score += self.router_config.single_task_traditional_weight;
+            // Traditional stable for single tasks
         }
 
-        // Factor 2: Batch size efficiency
-        if requirements.batch_size >= 4 {
-            lora_score += 0.3; // LoRA parallel processing benefits
-        } else if requirements.batch_size == 1 {
-            traditional_score += 0.3; // Traditional efficient for single items
+        // Factor 2: Batch size efficiency (improved logic covering all cases)
+        match requirements.batch_size {
+            1 => {
+                // Single item - Traditional advantage
+                traditional_score += self.router_config.small_batch_traditional_weight;
+            }
+            2..=3 => {
+                // Medium batch - slight advantage to both (neutral)
+                lora_score += self.router_config.medium_batch_weight;
+                traditional_score += self.router_config.medium_batch_weight;
+            }
+            _ if requirements.batch_size >= self.router_config.large_batch_threshold => {
+                // Large batch - LoRA advantage
+                lora_score += self.router_config.large_batch_lora_weight;
+            }
+            _ => {
+                // Default case for other sizes - neutral
+                lora_score += self.router_config.medium_batch_weight;
+                traditional_score += self.router_config.medium_batch_weight;
+            }
         }
 
-        // Factor 3: Confidence requirements
-        if requirements.confidence_threshold >= 0.99 {
-            lora_score += 0.3; // LoRA provides ultra-high confidence
+        // Factor 3: Confidence requirements (mutually exclusive)
+        if requirements.confidence_threshold >= self.router_config.high_confidence_threshold {
+            lora_score += self.router_config.high_confidence_lora_weight; // LoRA provides ultra-high confidence
         } else if requirements.confidence_threshold <= 0.9 {
-            traditional_score += 0.2; // Traditional sufficient for lower requirements
+            traditional_score += self.router_config.low_confidence_traditional_weight;
+            // Traditional sufficient for lower requirements
         }
+        // Note: Medium confidence (0.9 < threshold < high_threshold) gets no bonus - neutral
 
-        // Factor 4: Latency requirements
-        if requirements.max_latency <= Duration::from_millis(2000) {
-            lora_score += 0.4; // LoRA is 70.5% faster
+        // Factor 4: Latency requirements (mutually exclusive)
+        if requirements.max_latency
+            <= Duration::from_millis(self.router_config.low_latency_threshold_ms)
+        {
+            lora_score += self.router_config.low_latency_lora_weight; // LoRA is faster
         } else {
-            traditional_score += 0.1; // Traditional acceptable for relaxed timing
+            traditional_score += self.router_config.high_latency_traditional_weight;
+            // Traditional acceptable for relaxed timing
         }
 
-        // Factor 5: Historical performance
+        // Factor 5: Historical performance (conditional, not always present)
         if let Some(lora_metrics) = self.current_metrics.get(&ModelType::LoRA) {
             if let Some(traditional_metrics) = self.current_metrics.get(&ModelType::Traditional) {
                 if lora_metrics.avg_execution_time < traditional_metrics.avg_execution_time {
-                    lora_score += 0.2;
+                    lora_score += self.router_config.performance_history_weight;
                 } else {
-                    traditional_score += 0.2;
+                    traditional_score += self.router_config.performance_history_weight;
                 }
             }
         }
 
-        // Make intelligent decision
+        // Make intelligent decision with detailed scoring info
+        let total_score = lora_score + traditional_score;
         let (selected_path, confidence, reasoning) = if lora_score > traditional_score {
             (
                 ModelType::LoRA,
-                (lora_score / (lora_score + traditional_score)).min(1.0),
-                format!("LoRA selected: multi-task={}, batch_size={}, confidence_req={:.2}, latency_req={}ms",
-                    requirements.tasks.len() > 1,
+                if total_score > 0.0 { (lora_score / total_score).min(1.0) } else { 0.5 },
+                format!("LoRA selected (score: {:.3} vs {:.3}): tasks={}, batch={}, confidence≥{:.2}, latency≤{}ms",
+                    lora_score, traditional_score,
+                    requirements.tasks.len(),
+                    requirements.batch_size,
+                    requirements.confidence_threshold,
+                    requirements.max_latency.as_millis())
+            )
+        } else if traditional_score > lora_score {
+            (
+                ModelType::Traditional,
+                if total_score > 0.0 { (traditional_score / total_score).min(1.0) } else { 0.5 },
+                format!("Traditional selected (score: {:.3} vs {:.3}): tasks={}, batch={}, confidence≥{:.2}, latency≤{}ms",
+                    traditional_score, lora_score,
+                    requirements.tasks.len(),
                     requirements.batch_size,
                     requirements.confidence_threshold,
                     requirements.max_latency.as_millis())
             )
         } else {
+            // Tie case - default to LoRA for performance, use configurable confidence
             (
-                ModelType::Traditional,
-                (traditional_score / (lora_score + traditional_score)).min(1.0),
+                ModelType::LoRA,
+                self.router_config.tie_break_confidence,
                 format!(
-                    "Traditional selected: single_task={}, simple_batch={}, standard_confidence",
-                    requirements.tasks.len() == 1,
-                    requirements.batch_size <= 3
+                    "Tie (both score {:.3}) - defaulting to LoRA for performance",
+                    lora_score
                 ),
             )
         };
@@ -441,19 +490,19 @@ impl DualPathRouter {
             .cloned()
             .unwrap_or_else(|| PathMetrics {
                 avg_execution_time: if selected_path == ModelType::LoRA {
-                    Duration::from_millis(1345) // LoRA baseline: 1.345s
+                    Duration::from_millis(self.router_config.lora_default_execution_time_ms)
                 } else {
-                    Duration::from_millis(4567) // Traditional baseline: 4.567s
+                    Duration::from_millis(self.router_config.traditional_default_execution_time_ms)
                 },
                 avg_confidence: if selected_path == ModelType::LoRA {
-                    0.99
+                    self.router_config.lora_default_confidence
                 } else {
-                    0.95
+                    self.router_config.traditional_default_confidence
                 },
                 success_rate: if selected_path == ModelType::LoRA {
-                    0.98
+                    self.router_config.lora_default_success_rate
                 } else {
-                    0.95
+                    self.router_config.traditional_default_success_rate
                 },
                 total_executions: 0,
             });
@@ -521,7 +570,11 @@ impl PerformanceHistory {
     }
 
     /// Calculate average performance for model type
-    fn calculate_average_performance(&self, model_type: ModelType) -> Option<PathMetrics> {
+    fn calculate_average_performance(
+        &self,
+        model_type: ModelType,
+        success_threshold: f32,
+    ) -> Option<PathMetrics> {
         let records: Vec<_> = self
             .history
             .iter()
@@ -534,7 +587,10 @@ impl PerformanceHistory {
 
         let total_time: u128 = records.iter().map(|r| r.execution_time.as_millis()).sum();
         let total_confidence: f32 = records.iter().map(|r| r.confidence).sum();
-        let success_count = records.iter().filter(|r| r.confidence > 0.8).count();
+        let success_count = records
+            .iter()
+            .filter(|r| r.confidence > success_threshold)
+            .count();
 
         Some(PathMetrics {
             avg_execution_time: Duration::from_millis((total_time / records.len() as u128) as u64),
@@ -562,10 +618,11 @@ pub struct RouterStatistics {
 
 impl Default for ProcessingRequirements {
     fn default() -> Self {
+        let router_config = RouterConfig::default();
         Self {
-            confidence_threshold: 0.95,
-            max_latency: Duration::from_millis(5000),
-            batch_size: 4,
+            confidence_threshold: router_config.default_confidence_threshold,
+            max_latency: Duration::from_millis(router_config.default_max_latency_ms),
+            batch_size: router_config.default_batch_size,
             tasks: vec![TaskType::Intent],
             priority: ProcessingPriority::Balanced,
         }
@@ -574,10 +631,11 @@ impl Default for ProcessingRequirements {
 
 impl Default for PathMetrics {
     fn default() -> Self {
+        let router_config = RouterConfig::default();
         Self {
-            avg_execution_time: Duration::from_millis(3000),
-            avg_confidence: 0.95,
-            success_rate: 0.95,
+            avg_execution_time: Duration::from_millis(router_config.default_avg_execution_time_ms),
+            avg_confidence: router_config.default_confidence_threshold,
+            success_rate: router_config.traditional_default_success_rate, // Use traditional as default
             total_executions: 0,
         }
     }

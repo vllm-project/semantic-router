@@ -423,3 +423,284 @@ pub fn load_modernbert_num_classes(model_path: &str) -> Result<usize, UnifiedErr
     let config_json = UnifiedConfigLoader::load_json_config(model_path)?;
     Ok(UnifiedConfigLoader::extract_num_classes(&config_json))
 }
+
+/// Global configuration loader for main config.yaml
+pub struct GlobalConfigLoader;
+
+impl GlobalConfigLoader {
+    /// Load threshold for intent classifier from config/config.yaml
+    pub fn load_intent_threshold() -> Result<f32, UnifiedError> {
+        let config_path = "config/config.yaml";
+        let config_str = std::fs::read_to_string(config_path)
+            .map_err(|_| config_errors::file_not_found(config_path))?;
+
+        // Parse YAML to find classifier.category_model.threshold
+        Self::extract_yaml_threshold(&config_str, &["classifier", "category_model", "threshold"])
+            .or_else(|| Self::extract_yaml_threshold(&config_str, &["bert_model", "threshold"]))
+            .ok_or_else(|| {
+                config_errors::missing_field("classifier.category_model.threshold", config_path)
+            })
+    }
+
+    /// Load threshold for security classifier from config/config.yaml
+    pub fn load_security_threshold() -> Result<f32, UnifiedError> {
+        let config_path = "config/config.yaml";
+        let config_str = std::fs::read_to_string(config_path)
+            .map_err(|_| config_errors::file_not_found(config_path))?;
+
+        // Parse YAML to find prompt_guard.threshold
+        Self::extract_yaml_threshold(&config_str, &["prompt_guard", "threshold"])
+            .ok_or_else(|| config_errors::missing_field("prompt_guard.threshold", config_path))
+    }
+
+    /// Load threshold for PII classifier from config/config.yaml
+    pub fn load_pii_threshold() -> Result<f32, UnifiedError> {
+        let config_path = "config/config.yaml";
+        let config_str = std::fs::read_to_string(config_path)
+            .map_err(|_| config_errors::file_not_found(config_path))?;
+
+        // Parse YAML to find classifier.pii_model.threshold
+        Self::extract_yaml_threshold(&config_str, &["classifier", "pii_model", "threshold"])
+            .ok_or_else(|| {
+                config_errors::missing_field("classifier.pii_model.threshold", config_path)
+            })
+    }
+
+    /// Extract threshold value from YAML content using hierarchical path
+    fn extract_yaml_threshold(yaml_content: &str, path: &[&str]) -> Option<f32> {
+        let lines: Vec<&str> = yaml_content.lines().collect();
+        let mut current_level = 0;
+        let mut found_sections = vec![false; path.len()];
+
+        for line in lines {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            let indent_level = (line.len() - line.trim_start().len()) / 2;
+
+            // Reset found sections if we're at a higher level
+            if indent_level <= current_level {
+                for i in (indent_level / 2 + 1)..found_sections.len() {
+                    found_sections[i] = false;
+                }
+            }
+
+            current_level = indent_level;
+
+            // Check if this line matches our current section
+            if let Some(section_end) = trimmed.find(':') {
+                let section_name = trimmed[..section_end].trim();
+                let section_level = indent_level / 2;
+
+                if section_level < path.len() && section_name == path[section_level] {
+                    found_sections[section_level] = true;
+
+                    // If this is the threshold line and all parent sections are found
+                    if section_level == path.len() - 1
+                        && found_sections[..path.len() - 1].iter().all(|&x| x)
+                    {
+                        if let Some(value_str) = trimmed.split(':').nth(1) {
+                            if let Ok(threshold) = value_str.trim().parse::<f32>() {
+                                if threshold > 0.0 && threshold <= 1.0 {
+                                    return Some(threshold);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
+/// Router configuration structure
+#[derive(Debug, Clone)]
+pub struct RouterConfig {
+    pub high_confidence_threshold: f32, // For high confidence requirement detection
+    pub low_latency_threshold_ms: u64,  // For low latency requirement detection
+    pub lora_baseline_score: f32,       // LoRA path baseline score
+    pub traditional_baseline_score: f32, // Traditional path baseline score
+    pub success_confidence_threshold: f32, // Success rate calculation threshold
+    pub large_batch_threshold: usize,   // Large batch size threshold
+    pub lora_default_execution_time_ms: u64, // LoRA default execution time
+    pub traditional_default_execution_time_ms: u64, // Traditional default execution time
+    pub default_confidence_threshold: f32, // Default confidence requirement
+    pub default_max_latency_ms: u64,    // Default max latency
+    pub default_batch_size: usize,      // Default batch size
+    pub default_avg_execution_time_ms: u64, // Default average execution time
+    pub lora_default_confidence: f32,   // LoRA default confidence
+    pub traditional_default_confidence: f32, // Traditional default confidence
+    pub lora_default_success_rate: f32, // LoRA default success rate
+    pub traditional_default_success_rate: f32, // Traditional default success rate
+    // Scoring weights for intelligent path selection
+    pub multi_task_lora_weight: f32, // LoRA advantage for multi-task
+    pub single_task_traditional_weight: f32, // Traditional advantage for single task
+    pub large_batch_lora_weight: f32, // LoRA advantage for large batch
+    pub small_batch_traditional_weight: f32, // Traditional advantage for small batch
+    pub medium_batch_weight: f32,    // Weight for medium batch (neutral)
+    pub high_confidence_lora_weight: f32, // LoRA advantage for high confidence
+    pub low_confidence_traditional_weight: f32, // Traditional advantage for low confidence
+    pub low_latency_lora_weight: f32, // LoRA advantage for low latency
+    pub high_latency_traditional_weight: f32, // Traditional advantage for relaxed latency
+    pub performance_history_weight: f32, // Weight for historical performance factor
+    // Traditional model specific configurations
+    pub traditional_bert_confidence_threshold: f32, // Traditional BERT confidence threshold
+    pub traditional_modernbert_confidence_threshold: f32, // Traditional ModernBERT confidence threshold
+    pub traditional_pii_detection_threshold: f32,         // Traditional PII detection threshold
+    pub traditional_token_classification_threshold: f32, // Traditional token classification threshold
+    pub traditional_dropout_prob: f32,                   // Traditional model dropout probability
+    pub traditional_attention_dropout_prob: f32, // Traditional model attention dropout probability
+    pub tie_break_confidence: f32,               // Confidence value for tie-breaking situations
+}
+
+impl Default for RouterConfig {
+    fn default() -> Self {
+        Self {
+            high_confidence_threshold: 0.99,
+            low_latency_threshold_ms: 2000,
+            lora_baseline_score: 0.8,
+            traditional_baseline_score: 0.7,
+            success_confidence_threshold: 0.8,
+            large_batch_threshold: 4,
+            lora_default_execution_time_ms: 1345,
+            traditional_default_execution_time_ms: 4567,
+            default_confidence_threshold: 0.95,
+            default_max_latency_ms: 5000,
+            default_batch_size: 4,
+            default_avg_execution_time_ms: 3000,
+            lora_default_confidence: 0.99,
+            traditional_default_confidence: 0.95,
+            lora_default_success_rate: 0.98,
+            traditional_default_success_rate: 0.95,
+            // Balanced scoring weights (total weight per factor should be similar)
+            multi_task_lora_weight: 0.3, // LoRA excels at parallel processing
+            single_task_traditional_weight: 0.3, // Traditional stable for single tasks
+            large_batch_lora_weight: 0.25, // LoRA good for large batches
+            small_batch_traditional_weight: 0.25, // Traditional good for small batches
+            medium_batch_weight: 0.1,    // Neutral weight for medium batches
+            high_confidence_lora_weight: 0.25, // LoRA provides high confidence
+            low_confidence_traditional_weight: 0.25, // Traditional sufficient for low confidence
+            low_latency_lora_weight: 0.3, // LoRA is faster
+            high_latency_traditional_weight: 0.1, // Traditional acceptable for relaxed timing
+            performance_history_weight: 0.2, // Historical performance factor
+            // Traditional model configurations
+            traditional_bert_confidence_threshold: 0.95, // BERT confidence threshold
+            traditional_modernbert_confidence_threshold: 0.8, // ModernBERT confidence threshold
+            traditional_pii_detection_threshold: 0.5,    // PII detection threshold
+            traditional_token_classification_threshold: 0.9, // Token classification threshold
+            traditional_dropout_prob: 0.1,               // Dropout probability
+            traditional_attention_dropout_prob: 0.1,     // Attention dropout probability
+            tie_break_confidence: 0.5,                   // Neutral confidence for tie situations
+        }
+    }
+}
+
+impl GlobalConfigLoader {
+    /// Load router configuration from config/config.yaml
+    pub fn load_router_config() -> Result<RouterConfig, UnifiedError> {
+        let config_path = "config/config.yaml";
+        let config_str = std::fs::read_to_string(config_path)
+            .map_err(|_| config_errors::file_not_found(config_path))?;
+
+        let mut router_config = RouterConfig::default();
+
+        // Load router-specific configurations from YAML
+        if let Some(value) =
+            Self::extract_yaml_value(&config_str, &["router", "high_confidence_threshold"])
+        {
+            if let Ok(threshold) = value.parse::<f32>() {
+                router_config.high_confidence_threshold = threshold;
+            }
+        }
+
+        if let Some(value) =
+            Self::extract_yaml_value(&config_str, &["router", "low_latency_threshold_ms"])
+        {
+            if let Ok(threshold) = value.parse::<u64>() {
+                router_config.low_latency_threshold_ms = threshold;
+            }
+        }
+
+        if let Some(value) =
+            Self::extract_yaml_value(&config_str, &["router", "lora_baseline_score"])
+        {
+            if let Ok(score) = value.parse::<f32>() {
+                router_config.lora_baseline_score = score;
+            }
+        }
+
+        if let Some(value) =
+            Self::extract_yaml_value(&config_str, &["router", "traditional_baseline_score"])
+        {
+            if let Ok(score) = value.parse::<f32>() {
+                router_config.traditional_baseline_score = score;
+            }
+        }
+
+        // Load success threshold
+        if let Some(value) =
+            Self::extract_yaml_value(&config_str, &["router", "success_confidence_threshold"])
+        {
+            if let Ok(threshold) = value.parse::<f32>() {
+                router_config.success_confidence_threshold = threshold;
+            }
+        }
+
+        Ok(router_config)
+    }
+
+    /// Load router configuration with fallback to defaults
+    pub fn load_router_config_safe() -> RouterConfig {
+        Self::load_router_config().unwrap_or_default()
+    }
+
+    /// Extract YAML value as string from hierarchical path
+    fn extract_yaml_value(yaml_content: &str, path: &[&str]) -> Option<String> {
+        let lines: Vec<&str> = yaml_content.lines().collect();
+        let mut current_level = 0;
+        let mut found_sections = vec![false; path.len()];
+
+        for line in lines {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            let indent_level = (line.len() - line.trim_start().len()) / 2;
+
+            // Reset found sections if we're at a higher level
+            if indent_level <= current_level {
+                for i in (indent_level / 2 + 1)..found_sections.len() {
+                    found_sections[i] = false;
+                }
+            }
+
+            current_level = indent_level;
+
+            // Check if this line matches our current section
+            if let Some(section_end) = trimmed.find(':') {
+                let section_name = trimmed[..section_end].trim();
+                let section_level = indent_level / 2;
+
+                if section_level < path.len() && section_name == path[section_level] {
+                    found_sections[section_level] = true;
+
+                    // If this is the target line and all parent sections are found
+                    if section_level == path.len() - 1
+                        && found_sections[..path.len() - 1].iter().all(|&x| x)
+                    {
+                        if let Some(value_str) = trimmed.split(':').nth(1) {
+                            return Some(value_str.trim().to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
