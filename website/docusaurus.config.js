@@ -107,6 +107,10 @@ const config = {
                 to: '/community/work-groups',
               },
               {
+                label: 'Promotion',
+                to: '/community/promotion',
+              },
+              {
                 label: 'Contributing Guide',
                 to: '/community/contributing',
               },
