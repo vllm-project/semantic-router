@@ -49,6 +49,7 @@ const sidebars = {
       items: [
         'getting-started/installation',
         'getting-started/docker-quickstart',
+        'getting-started/semantic-cache',
         'getting-started/reasoning',
         'getting-started/configuration',
         'getting-started/observability',
