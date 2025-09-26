@@ -51,6 +51,16 @@ jobs:
           ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
+    - name: Cache Models
+      uses: actions/cache@v4
+      with:
+        path: |
+          models/
+          ~/.cache/huggingface/
+        key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
+        restore-keys: |
+          ${{ runner.os }}-models-v1-
+
     - name: Check go mod tidy
       run: make check-go-mod-tidy
 
