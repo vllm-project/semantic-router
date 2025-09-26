@@ -29,9 +29,8 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
     Raises:
         ValueError: If model architecture is not supported
     """
-    model_name_lower = model_name.lower()
 
-    if "modernbert" in model_name_lower:
+    if model_name == "modernbert-base" or model_name == "answerdotai/ModernBERT-base":
         # ModernBERT architecture
         return [
             "attn.Wqkv",  # Combined query, key, value projection
@@ -39,48 +38,38 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
             "mlp.Wi",  # MLP input projection (feed-forward)
             "mlp.Wo",  # MLP output projection
         ]
-    elif "bert" in model_name_lower and "modernbert" not in model_name_lower:
-        # Standard BERT architecture
+    elif model_name == "bert-base-uncased":
+        # Standard BERT architecture - Enhanced for better performance
         return [
             "attention.self.query",
+            "attention.self.key",  # Added key projection for better attention learning
             "attention.self.value",
             "attention.output.dense",
             "intermediate.dense",
             "output.dense",
         ]
-    elif "roberta" in model_name_lower:
-        # RoBERTa architecture (similar to BERT)
+    elif model_name == "roberta-base":
+        # RoBERTa architecture - Enhanced for better performance
         return [
             "attention.self.query",
+            "attention.self.key",  # Added key projection for better attention learning
             "attention.self.value",
             "attention.output.dense",
             "intermediate.dense",
             "output.dense",
-        ]
-    elif "deberta" in model_name_lower:
-        # DeBERTa v3 architecture
-        return [
-            "attention.self.query_proj",
-            "attention.self.value_proj",
-            "attention.output.dense",
-            "intermediate.dense",
-            "output.dense",
-        ]
-    elif "distilbert" in model_name_lower:
-        # DistilBERT architecture
-        return [
-            "attention.q_lin",
-            "attention.v_lin",
-            "attention.out_lin",
-            "ffn.lin1",
-            "ffn.lin2",
         ]
     else:
-        # Fallback: try common patterns
-        logger.warning(
-            f"Unknown model architecture: {model_name}. Using fallback target_modules."
+        # Only these 3 models are supported for LoRA training
+        supported_models = [
+            "bert-base-uncased",
+            "roberta-base",
+            "modernbert-base",
+            "answerdotai/ModernBERT-base",
+        ]
+        raise ValueError(
+            f"Unsupported model: {model_name}. "
+            f"Only these models are supported: {supported_models}"
         )
-        return ["query", "value", "dense"]  # Common patterns across architectures
 
 
 def validate_lora_config(lora_config: Dict) -> Dict:
@@ -301,6 +290,47 @@ def resolve_model_path(model_name: str) -> str:
         logger.info(f"Resolved model: {model_name} -> {resolved_path}")
 
     return resolved_path
+
+
+def verify_target_modules(model, target_modules: List[str]) -> bool:
+    """
+    Verify that target_modules exist in the model architecture.
+
+    Args:
+        model: The model to check
+        target_modules: List of target module names
+
+    Returns:
+        True if all target modules are found, False otherwise
+    """
+    model_module_names = set()
+    for name, _ in model.named_modules():
+        # Extract module pattern (remove layer numbers)
+        if "encoder.layer" in name:
+            # Convert encoder.layer.0.attention.self.query -> attention.self.query
+            parts = name.split(".")
+            if len(parts) >= 4 and parts[2].isdigit():
+                pattern = ".".join(parts[3:])
+                model_module_names.add(pattern)
+        elif "layers." in name:  # ModernBERT style
+            # Convert layers.0.attn.Wqkv -> attn.Wqkv
+            parts = name.split(".")
+            if len(parts) >= 3 and parts[1].isdigit():
+                pattern = ".".join(parts[2:])
+                model_module_names.add(pattern)
+
+    missing_modules = []
+    for target in target_modules:
+        if target not in model_module_names:
+            missing_modules.append(target)
+
+    if missing_modules:
+        logger.warning(f"Missing target modules in model: {missing_modules}")
+        logger.warning(f"Available modules: {sorted(model_module_names)}")
+        return False
+
+    logger.info(f"All target modules verified: {target_modules}")
+    return True
 
 
 def setup_logging(level: str = "INFO") -> logging.Logger:

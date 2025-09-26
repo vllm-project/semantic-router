@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 )
@@ -110,32 +109,39 @@ func loadCategoryMapping(modelPath string) error {
 	return nil
 }
 
-// initializeIntentClassifier initializes the intent classifier based on architecture
+// initializeIntentClassifier initializes the LoRA intent classifier
 func initializeIntentClassifier(config IntentLoRAConfig) error {
-	fmt.Printf("Initializing LoRA Intent classifier (%s): %s\n", config.ModelArchitecture, config.ModelPath)
+	fmt.Printf("Initializing LoRA Intent classifier: %s\n", config.ModelPath)
 
-	var err error
+	// Use different initialization methods based on architecture (following PII LoRA pattern)
+	switch config.ModelArchitecture {
+	case "BertForSequenceClassification", "RobertaForSequenceClassification":
+		fmt.Printf("Using Candle BERT Classifier for %s architecture\n", config.ModelArchitecture)
 
-	// Choose initialization function based on model architecture
-	switch {
-	case strings.Contains(config.ModelArchitecture, "ModernBert"):
-		err = candle.InitModernBertClassifier(config.ModelPath, config.UseCPU)
-	case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
-		// For BERT and RoBERTa, use new official Candle implementation
-		numClasses, countErr := countLabelsFromConfig(config.ModelPath)
-		if countErr != nil {
-			return fmt.Errorf("failed to count labels: %v", countErr)
+		// Count the number of labels from config.json
+		numClasses, err := countLabelsFromConfig(config.ModelPath)
+		if err != nil {
+			return fmt.Errorf("failed to count labels: %v", err)
 		}
+
+		fmt.Printf("Detected %d classes from config.json\n", numClasses)
+
+		// Use Candle BERT classifier which supports LoRA models
 		success := candle.InitCandleBertClassifier(config.ModelPath, numClasses, config.UseCPU)
 		if !success {
-			err = fmt.Errorf("failed to initialize Candle BERT classifier")
+			return fmt.Errorf("failed to initialize LoRA BERT/RoBERTa classifier")
 		}
+
+	case "ModernBertForSequenceClassification":
+		fmt.Printf("Using ModernBERT Classifier for ModernBERT architecture\n")
+		// Use dedicated ModernBERT classifier for ModernBERT models
+		err := candle.InitModernBertClassifier(config.ModelPath, config.UseCPU)
+		if err != nil {
+			return fmt.Errorf("failed to initialize ModernBERT classifier: %v", err)
+		}
+
 	default:
 		return fmt.Errorf("unsupported model architecture: %s", config.ModelArchitecture)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize LoRA intent classifier: %v", err)
 	}
 
 	fmt.Printf("LoRA Intent Classifier initialized successfully!\n")
@@ -144,14 +150,25 @@ func initializeIntentClassifier(config IntentLoRAConfig) error {
 
 // classifyIntentText performs intent classification using the appropriate classifier
 func classifyIntentText(text string, config IntentLoRAConfig) (candle.ClassResult, error) {
-	// Choose classification function based on model architecture
-	switch {
-	case strings.Contains(config.ModelArchitecture, "ModernBert"):
-		return candle.ClassifyModernBertText(text)
-	case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
-		return candle.ClassifyCandleBertText(text)
+	switch config.ModelArchitecture {
+	case "BertForSequenceClassification", "RobertaForSequenceClassification":
+		// Use Candle BERT classifier for BERT and RoBERTa LoRA models
+		result, err := candle.ClassifyCandleBertText(text)
+		if err != nil {
+			return candle.ClassResult{}, err
+		}
+		return result, nil
+
+	case "ModernBertForSequenceClassification":
+		// Use dedicated ModernBERT classifier
+		result, err := candle.ClassifyModernBertText(text)
+		if err != nil {
+			return candle.ClassResult{}, err
+		}
+		return result, nil
+
 	default:
-		return candle.ClassResult{}, fmt.Errorf("unsupported model architecture: %s", config.ModelArchitecture)
+		return candle.ClassResult{}, fmt.Errorf("unsupported architecture: %s", config.ModelArchitecture)
 	}
 }
 
@@ -159,7 +176,7 @@ func main() {
 	// Parse command line flags
 	var (
 		useModernBERT = flag.Bool("modernbert", true, "Use ModernBERT models (default for LoRA)")
-		modelPath     = flag.String("model", "lora_intent_classifier_modernbert-base_r8", "Path to LoRA classifier model")
+		modelPath     = flag.String("model", "../../../../models/lora_intent_classifier_bert-base-uncased_model", "Path to LoRA classifier model")
 		useCPU        = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)
 	flag.Parse()

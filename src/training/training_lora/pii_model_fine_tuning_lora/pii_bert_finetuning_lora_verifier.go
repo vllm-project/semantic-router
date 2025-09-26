@@ -61,16 +61,19 @@ func initializeModels(config LoRAModelConfig) error {
 		// Choose initialization function based on model architecture
 		switch {
 		case strings.Contains(config.ModelArchitecture, "ModernBert"):
+			// Use ModernBERT PII token classifier for ModernBERT models
 			err = candle.InitModernBertPIITokenClassifier(config.PIITokenModelPath, config.UseCPU)
 		case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
-			// For BERT and RoBERTa, use new official Candle token classifier
+			// Count the number of labels from config.json for BERT/RoBERTa
 			numClasses, countErr := countLabelsFromConfig(config.PIITokenModelPath)
 			if countErr != nil {
 				return fmt.Errorf("failed to count labels: %v", countErr)
 			}
+
+			// Use Candle BERT token classifier which supports LoRA models
 			success := candle.InitCandleBertTokenClassifier(config.PIITokenModelPath, numClasses, config.UseCPU)
 			if !success {
-				err = fmt.Errorf("failed to initialize Candle BERT token classifier")
+				return fmt.Errorf("failed to initialize LoRA PII token classifier")
 			}
 		default:
 			return fmt.Errorf("unsupported model architecture: %s", config.ModelArchitecture)
@@ -79,6 +82,7 @@ func initializeModels(config LoRAModelConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize LoRA PII token classifier: %v", err)
 		}
+
 		fmt.Printf("LoRA PII token classifier initialized successfully!\n")
 		fmt.Println("   Note: Token-level entity detection enabled with LoRA fine-tuning")
 	}
@@ -108,44 +112,57 @@ func countLabelsFromConfig(modelPath string) (int, error) {
 	return 0, fmt.Errorf("id2label not found in config.json")
 }
 
-// classifyPIITokens performs PII token classification using the appropriate classifier
+// classifyPIITokens performs PII token classification using LoRA classifier
 func classifyPIITokens(text string, config LoRAModelConfig) (candle.TokenClassificationResult, error) {
 	// Choose classification function based on model architecture
 	switch {
 	case strings.Contains(config.ModelArchitecture, "ModernBert"):
-		configPath := fmt.Sprintf("%s/config.json", config.PIITokenModelPath)
-		return candle.ClassifyModernBertPIITokens(text, configPath)
-	case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
-		// For BERT and RoBERTa, use new official Candle token classifier with proper label mapping
-		labelMappingPath := fmt.Sprintf("%s/label_mapping.json", config.PIITokenModelPath)
-		labelMappingData, err := os.ReadFile(labelMappingPath)
+		// Use ModernBERT PII token classifier
+		configPath := filepath.Join(config.PIITokenModelPath, "config.json")
+		result, err := candle.ClassifyModernBertPIITokens(text, configPath)
 		if err != nil {
-			fmt.Printf("Warning: Could not read label mapping from %s, using generic labels: %v\n", labelMappingPath, err)
-			return candle.ClassifyCandleBertTokens(text)
+			return candle.TokenClassificationResult{}, fmt.Errorf("failed to classify tokens with ModernBERT: %v", err)
 		}
 
-		// Parse label mapping to get id2label
-		var labelMapping map[string]interface{}
-		err = json.Unmarshal(labelMappingData, &labelMapping)
+		// Return the result directly as it's already in the correct format
+		return result, nil
+
+	case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
+		// Load id2label mapping from config.json for BERT/RoBERTa
+		configPath := filepath.Join(config.PIITokenModelPath, "config.json")
+		configData, err := os.ReadFile(configPath)
 		if err != nil {
-			fmt.Printf("Warning: Could not parse label mapping, using generic labels: %v\n", err)
-			return candle.ClassifyCandleBertTokens(text)
+			return candle.TokenClassificationResult{}, fmt.Errorf("failed to read config.json: %v", err)
+		}
+
+		// Parse config.json to extract id2label mapping
+		var configMap map[string]interface{}
+		err = json.Unmarshal(configData, &configMap)
+		if err != nil {
+			return candle.TokenClassificationResult{}, fmt.Errorf("failed to parse config.json: %v", err)
 		}
 
 		// Extract id2label mapping
-		id2labelInterface, exists := labelMapping["id_to_label"]
+		id2label, exists := configMap["id2label"]
 		if !exists {
-			fmt.Printf("Warning: No id_to_label found in mapping, using generic labels\n")
-			return candle.ClassifyCandleBertTokens(text)
+			return candle.TokenClassificationResult{}, fmt.Errorf("id2label not found in config.json")
 		}
 
-		id2labelJSON, err := json.Marshal(id2labelInterface)
+		// Convert id2label to JSON string
+		id2labelJSON, err := json.Marshal(id2label)
 		if err != nil {
-			fmt.Printf("Warning: Could not serialize id2label mapping, using generic labels: %v\n", err)
-			return candle.ClassifyCandleBertTokens(text)
+			return candle.TokenClassificationResult{}, fmt.Errorf("failed to marshal id2label: %v", err)
 		}
 
-		return candle.ClassifyCandleBertTokensWithLabels(text, string(id2labelJSON))
+		// Use Candle BERT token classifier with id2label mapping
+		result, err := candle.ClassifyCandleBertTokensWithLabels(text, string(id2labelJSON))
+		if err != nil {
+			return candle.TokenClassificationResult{}, fmt.Errorf("failed to classify tokens: %v", err)
+		}
+
+		// Return the result directly as it's already in the correct format
+		return result, nil
+
 	default:
 		return candle.TokenClassificationResult{}, fmt.Errorf("unsupported model architecture: %s", config.ModelArchitecture)
 	}
@@ -154,7 +171,7 @@ func classifyPIITokens(text string, config LoRAModelConfig) (candle.TokenClassif
 func main() {
 	// Parse command line flags
 	var (
-		piiTokenPath              = flag.String("pii-token-model", "lora_pii_detector_modernbert-base_r8_token_model", "Path to LoRA PII token classifier model")
+		piiTokenPath              = flag.String("pii-token-model", "../../../../models/lora_pii_detector_bert-base-uncased_model", "Path to LoRA PII token classifier model")
 		enableTokenClassification = flag.Bool("token-classification", true, "Enable token-level PII classification")
 		useCPU                    = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)

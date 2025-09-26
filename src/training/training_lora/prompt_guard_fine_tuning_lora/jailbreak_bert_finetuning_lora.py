@@ -149,7 +149,7 @@ class Jailbreak_Dataset:
                 "name": "OpenSafetyLab/Salad-Data",
                 "config": "attack_enhanced_set",
                 "text_column": "attack",
-                "label_column": None,  # Will be set as "jailbreak"
+                "label_column": None,
                 "type": "jailbreak",
                 "description": "Salad-Data jailbreak attacks",
             },
@@ -227,7 +227,7 @@ class Jailbreak_Dataset:
 
         logger.info(f"Total loaded samples: {len(all_texts)}")
 
-        # Balance the dataset
+        # Enhanced balanced dataset strategy
         jailbreak_samples = [
             (t, l) for t, l in zip(all_texts, all_labels) if l == "jailbreak"
         ]
@@ -235,16 +235,70 @@ class Jailbreak_Dataset:
             (t, l) for t, l in zip(all_texts, all_labels) if l == "benign"
         ]
 
-        # Balance to have equal numbers
-        min_samples = min(len(jailbreak_samples), len(benign_samples))
-        if min_samples > 0:
+        logger.info(
+            f"Raw dataset: {len(jailbreak_samples)} jailbreak samples, {len(benign_samples)} benign samples"
+        )
+
+        # Enhanced balancing with minimum sample validation
+        min_required_per_class = max(50, max_samples // 4) if max_samples else 50
+
+        if len(jailbreak_samples) < min_required_per_class:
+            logger.warning(
+                f"Insufficient jailbreak samples: {len(jailbreak_samples)} < {min_required_per_class}"
+            )
+
+        if len(benign_samples) < min_required_per_class:
+            logger.warning(
+                f"Insufficient benign samples: {len(benign_samples)} < {min_required_per_class}"
+            )
+
+        # Balance to have equal numbers, ensuring minimum quality
+        target_samples_per_class = (
+            max_samples // 2
+            if max_samples
+            else min(len(jailbreak_samples), len(benign_samples))
+        )
+        target_samples_per_class = min(
+            target_samples_per_class, min(len(jailbreak_samples), len(benign_samples))
+        )
+
+        if target_samples_per_class > 0:
+            # Shuffle for better diversity
+            import random
+
+            random.shuffle(jailbreak_samples)
+            random.shuffle(benign_samples)
+
             balanced_samples = (
-                jailbreak_samples[:min_samples] + benign_samples[:min_samples]
+                jailbreak_samples[:target_samples_per_class]
+                + benign_samples[:target_samples_per_class]
             )
             all_texts = [s[0] for s in balanced_samples]
             all_labels = [s[1] for s in balanced_samples]
 
-        logger.info(f"Balanced dataset: {len(all_texts)} samples")
+            # Final shuffle for training
+            combined = list(zip(all_texts, all_labels))
+            random.shuffle(combined)
+            all_texts, all_labels = zip(*combined)
+            all_texts, all_labels = list(all_texts), list(all_labels)
+
+        logger.info(
+            f"Final balanced dataset: {len(all_texts)} samples ({target_samples_per_class} per class)"
+        )
+
+        # Validation check
+        final_jailbreak_count = sum(1 for label in all_labels if label == "jailbreak")
+        final_benign_count = sum(1 for label in all_labels if label == "benign")
+        logger.info(
+            f"Final distribution: {final_jailbreak_count} jailbreak, {final_benign_count} benign"
+        )
+
+        if abs(final_jailbreak_count - final_benign_count) > 10:
+            logger.warning(
+                f"Dataset imbalance detected: {final_jailbreak_count} vs {final_benign_count}"
+            )
+        else:
+            logger.info("✅ Dataset is well balanced")
         return all_texts, all_labels
 
     def prepare_datasets(self, max_samples=1000):
@@ -401,7 +455,7 @@ def compute_security_metrics(eval_pred):
 
 
 def main(
-    model_name: str = "modernbert-base",
+    model_name: str = "bert-base-uncased",  # Changed from modernbert-base due to training issues
     lora_rank: int = 8,
     lora_alpha: int = 16,
     lora_dropout: float = 0.1,
@@ -506,7 +560,7 @@ def main(
     # This should have the same content as label_mapping.json for security detection
     with open(os.path.join(output_dir, "jailbreak_type_mapping.json"), "w") as f:
         json.dump(label_mapping_data, f)
-    logger.info("✅ Created jailbreak_type_mapping.json for Go testing compatibility")
+    logger.info("Created jailbreak_type_mapping.json for Go testing compatibility")
 
     # Save LoRA config
     with open(os.path.join(output_dir, "lora_config.json"), "w") as f:
@@ -522,7 +576,7 @@ def main(
     logger.info(f"LoRA Security model saved to: {output_dir}")
 
     # Auto-merge LoRA adapter with base model for Rust compatibility
-    logger.info("🔄 Auto-merging LoRA adapter with base model for Rust inference...")
+    logger.info("Auto-merging LoRA adapter with base model for Rust inference...")
     try:
         # Option 1: Keep both LoRA adapter and Rust-compatible model (default)
         merged_output_dir = f"{output_dir}_rust"
@@ -531,11 +585,11 @@ def main(
         # merged_output_dir = output_dir
 
         merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-        logger.info(f"✅ Rust-compatible model saved to: {merged_output_dir}")
-        logger.info(f"   This model can be used with Rust candle-binding!")
+        logger.info(f"Rust-compatible model saved to: {merged_output_dir}")
+        logger.info(f"This model can be used with Rust candle-binding!")
     except Exception as e:
-        logger.warning(f"⚠️  Auto-merge failed: {e}")
-        logger.info(f"   You can manually merge using a merge script")
+        logger.warning(f"Auto-merge failed: {e}")
+        logger.info(f"You can manually merge using a merge script")
 
 
 def merge_lora_adapter_to_full_model(
@@ -546,7 +600,7 @@ def merge_lora_adapter_to_full_model(
     This function is automatically called after training to generate Rust-compatible models.
     """
 
-    logger.info(f"🔄 Loading base model: {base_model_path}")
+    logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
     with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
@@ -567,17 +621,17 @@ def merge_lora_adapter_to_full_model(
     # Load tokenizer with model-specific configuration
     tokenizer = create_tokenizer_for_model(base_model_path, base_model_path)
 
-    logger.info(f"🔄 Loading LoRA adapter from: {lora_adapter_path}")
+    logger.info(f"Loading LoRA adapter from: {lora_adapter_path}")
 
     # Load LoRA model
     lora_model = PeftModel.from_pretrained(base_model, lora_adapter_path)
 
-    logger.info("🔄 Merging LoRA adapter with base model...")
+    logger.info("Merging LoRA adapter with base model...")
 
     # Merge and unload LoRA
     merged_model = lora_model.merge_and_unload()
 
-    logger.info(f"💾 Saving merged model to: {output_path}")
+    logger.info(f"Saving merged model to: {output_path}")
 
     # Create output directory
     os.makedirs(output_path, exist_ok=True)
@@ -602,7 +656,7 @@ def merge_lora_adapter_to_full_model(
             json.dump(config, f, indent=2)
 
         logger.info(
-            "✅ Updated config.json with correct security detection label mappings"
+            "Updated config.json with correct security detection label mappings"
         )
 
     # Copy important files from LoRA adapter
@@ -620,13 +674,13 @@ def merge_lora_adapter_to_full_model(
         )
         with open(jailbreak_mapping_path, "w") as f:
             json.dump(mapping_data, f, indent=2)
-        logger.info("✅ Created jailbreak_type_mapping.json")
+        logger.info("Created jailbreak_type_mapping.json")
 
-    logger.info("✅ LoRA adapter merged successfully!")
+    logger.info("LoRA adapter merged successfully!")
 
 
 def demo_inference(
-    model_path: str = "lora_jailbreak_classifier_modernbert-base_r8_model",
+    model_path: str = "lora_jailbreak_classifier_bert-base-uncased_r8_model",
 ):
     """Demonstrate inference with trained LoRA security model."""
     logger.info(f"Loading LoRA security model from: {model_path}")
@@ -706,16 +760,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
-            "modernbert-base",
-            "modernbert-large",
-            "bert-base-uncased",
-            "bert-large-uncased",
-            "roberta-base",
-            "roberta-large",
-            "deberta-v3-base",
-            "deberta-v3-large",
+            "modernbert-base",  # ModernBERT base model - latest architecture
+            "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
+            "roberta-base",  # RoBERTa base model - best performance
         ],
-        default="modernbert-base",
+        default="bert-base-uncased",
         help="Model to use for fine-tuning",
     )
     parser.add_argument("--lora-rank", type=int, default=8)
@@ -739,7 +788,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-path",
         type=str,
-        default="lora_jailbreak_classifier_modernbert-base_r8_model",
+        default="lora_jailbreak_classifier_bert-base-uncased_r8_model",  # Changed from modernbert-base
         help="Path to saved model for inference (default: ../../../models/lora_security_detector_r8)",
     )
 
@@ -754,7 +803,7 @@ if __name__ == "__main__":
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
-            max_samples=args.max_samples,  # Added max_samples to args
+            max_samples=args.max_samples,
             output_dir=args.output_dir,
         )
     elif args.mode == "test":
