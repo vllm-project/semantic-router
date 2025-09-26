@@ -2,13 +2,15 @@
 sidebar_position: 3
 ---
 
-# Deployment Quickstart
+# Containerized Deployment
 
-This unified guide helps you quickly run Semantic Router locally (Docker Compose) or in a cluster (Kubernetes) and explains when to choose each path. Both share the same configuration concepts: Docker is ideal for rapid iteration and demos, while Kubernetes is suited for long‑running workloads, elasticity, and upcoming Operator / CRD scenarios.
-
----
+This unified guide helps you quickly run Semantic Router locally (Docker Compose) or in a cluster (Kubernetes) and explains when to choose each path.Both share the same configuration concepts: **Docker Compose** is ideal for rapid iteration and demos, while **Kubernetes** is suited for long‑running workloads, elasticity, and upcoming Operator / CRD scenarios.
 
 ## Choosing a Path
+
+**Docker Compose path** = semantic-router + Envoy proxy + optional mock vLLM (testing profile) + Prometheus + Grafana. It gives you an end-to-end local playground with minimal friction.
+
+**Kubernetes path** (current manifests) = ONLY the semantic-router Deployment (gRPC + metrics), a PVC for model cache, its ConfigMap, and two Services (gRPC + metrics). It does NOT yet bundle Envoy, a real LLM inference backend, Istio, or any CRDs/Operator.
 
 | Scenario / Goal                             | Recommended Path                 | Why                                                                              |
 | ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
@@ -120,6 +122,7 @@ docker compose down
 - Kubernetes cluster (kind / k3d / minikube / real)
 - `kubectl` access
 - Optional: Prometheus (Operator) for metrics scraping
+- Separate deployment of Envoy (or another gateway) + real LLM endpoints (follow Installation guide). Replace placeholder IPs in `deploy/kubernetes/config.yaml` once services exist.
 
 ### Deploy (Kustomize)
 
