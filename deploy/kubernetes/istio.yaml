@@ -1,0 +1,47 @@
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  #host: semantic-router.default.svc.cluster.local
+  host: semantic-router.semantic-router.svc.cluster.local
+  trafficPolicy:
+      tls:
+        mode: DISABLE    # TODO Change this once semantic-router supports TLS 
+        insecureSkipVerify: true
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      # context omitted so that this applies to both sidecars and gateways
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_FIRST      # TODO Change to per route filter in future
+      value:
+        name: envoy.filters.http.ext_proc
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          failure_mode_allow: true
+          allow_mode_override: true
+          message_timeout: 300s
+          processing_mode:
+            request_header_mode: "SEND"
+            response_header_mode: "SKIP"
+            request_body_mode: "BUFFERED"
+            response_body_mode: "NONE"
+            request_trailer_mode: "SKIP"
+            response_trailer_mode: "SKIP"
+          grpc_service:
+            envoy_grpc:
+                cluster_name: outbound|50051||semantic-router.semantic-router.svc.cluster.local
