@@ -647,8 +647,8 @@ logger.info(f"Request routed to {routing_info.get('selected_model')} "
 ## Next Steps
 
 - **[Classification API](classification.md)**: Detailed classification endpoints
-- **[System Architecture](../architecture/system-architecture.md)**: System monitoring and observability
-- **[Quick Start Guide](../getting-started/installation.md)**: Real-world integration examples
-- **[Configuration Guide](../getting-started/configuration.md)**: Production configuration
+- **[System Architecture](../overview/architecture/system-architecture.md)**: System monitoring and observability
+- **[Quick Start Guide](../installation/installation.md)**: Real-world integration examples
+- **[Configuration Guide](../installation/configuration.md)**: Production configuration
 
 For more advanced API usage and custom integrations, refer to the examples directory or join our community discussions.

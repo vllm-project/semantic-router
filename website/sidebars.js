@@ -22,37 +22,74 @@ const sidebars = {
       items: [
         'overview/semantic-router-overview',
         'overview/mixture-of-models',
+        {
+          type: 'category',
+          label: 'Architecture',
+          items: [
+            'overview/architecture/system-architecture',
+            'overview/architecture/envoy-extproc',
+            'overview/architecture/router-implementation',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Categories',
+          items: [
+            'overview/categories/overview',
+            'overview/categories/supported-categories',
+            'overview/categories/configuration',
+            'overview/categories/technical-details',
+          ],
+        },
       ],
     },
     {
       type: 'category',
-      label: 'Architecture',
+      label: 'Installation',
       items: [
-        'architecture/system-architecture',
-        'architecture/envoy-extproc',
-        'architecture/router-implementation',
+        'installation/installation',
+        'installation/docker-quickstart',
+        'installation/configuration',
       ],
     },
     {
       type: 'category',
-      label: 'Categories',
+      label: 'Tutorials',
       items: [
-        'categories/overview',
-        'categories/supported-categories',
-        'categories/configuration',
-        'categories/technical-details',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Getting Started',
-      items: [
-        'getting-started/installation',
-        'getting-started/docker-quickstart',
-        'getting-started/semantic-cache',
-        'getting-started/reasoning',
-        'getting-started/configuration',
-        'getting-started/observability',
+        {
+          type: 'category',
+          label: 'Intelligent Route',
+          items: [
+            'tutorials/intelligent-route/overview',
+            'tutorials/intelligent-route/reasoning',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Semantic Cache',
+          items: [
+            'tutorials/semantic-cache/overview',
+            'tutorials/semantic-cache/in-memory-cache',
+            'tutorials/semantic-cache/milvus-cache',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Content Safety',
+          items: [
+            'tutorials/content-safety/overview',
+            'tutorials/content-safety/pii-detection',
+            'tutorials/content-safety/jailbreak-protection',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Observability',
+          items: [
+            'tutorials/observability/overview',
+            'tutorials/observability/observability',
+          ],
+        },
       ],
     },
     {

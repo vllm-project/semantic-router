@@ -115,3 +115,6 @@ results/
 # Cursor editor rules files
 .cursorrules
 .cursorrules.*
+
+# augment editor rules
+.augment

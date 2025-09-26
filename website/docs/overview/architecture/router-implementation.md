@@ -473,4 +473,4 @@ func (pt *PerformanceTracker) RecordClassification(
 }
 ```
 
-This implementation provides the foundation for intelligent, secure, and performant LLM routing. The next section covers [Model Training](../training/training-overview.md), detailing how the classification models are developed and optimized.
+This implementation provides the foundation for intelligent, secure, and performant LLM routing. The next section covers [Model Training](../../training/training-overview.md), detailing how the classification models are developed and optimized.

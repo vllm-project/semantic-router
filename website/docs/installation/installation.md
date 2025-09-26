@@ -1,3 +1,7 @@
+---
+sidebar_position: 2
+---
+
 # Install in Local
 
 This guide will help you set up and install the Semantic Router on your system. The router runs entirely on CPU and does not require GPU for inference.

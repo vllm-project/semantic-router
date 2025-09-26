@@ -162,12 +162,12 @@ const config = {
             title: 'Documentation',
             items: [
               {
-                label: 'Getting Started',
-                to: '/docs/getting-started/installation',
+                label: 'Installation',
+                to: '/docs/installation',
               },
               {
                 label: 'Architecture',
-                to: '/docs/architecture/system-architecture',
+                to: '/docs/overview/architecture/system-architecture',
               },
               {
                 label: 'API Reference',
