@@ -92,6 +92,9 @@ test-tools:
 		-d '{"model": "auto", "tool_choice": "auto", "messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "What is the weather today?"}], "temperature": 0.7}'
 
 test-vllm:
+	@echo "Fetching available models from vLLM endpoint..."
+	@MODEL_NAME=$$(curl -s $(VLLM_ENDPOINT)/v1/models | jq -r '.data[0].id // "auto"'); \
+	echo "Using model: $$MODEL_NAME"; \
 	curl -X POST $(VLLM_ENDPOINT)/v1/chat/completions \
 		-H "Content-Type: application/json" \
-		-d '{"model": "qwen2.5:32b", "messages": [{"role": "assistant", "content": "You are a professional math teacher. Explain math concepts clearly and show step-by-step solutions to problems."}, {"role": "user", "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}], "temperature": 0.7}' | jq
+		-d "{\"model\": \"$$MODEL_NAME\", \"messages\": [{\"role\": \"assistant\", \"content\": \"You are a professional math teacher. Explain math concepts clearly and show step-by-step solutions to problems.\"}, {\"role\": \"user\", \"content\": \"What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?\"}], \"temperature\": 0.7}" | jq
