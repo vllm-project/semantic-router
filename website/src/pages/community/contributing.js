@@ -108,7 +108,7 @@ export default function Contributing() {
                       <p>
                         2. You can refer to
                         {' '}
-                        <a href="/docs/getting-started/installation">Install the local</a>
+                        <a href="/docs/installation">Install the local</a>
                         {' '}
                         to start semantic-router locally.
                       </p>

@@ -1,3 +1,7 @@
+---
+sidebar_position: 4
+---
+
 # Global Configuration
 
 This guide covers the configuration options for the Semantic Router. The system uses a single YAML configuration file that controls all aspects of routing, classification, and security.

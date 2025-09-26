@@ -1,3 +1,7 @@
+---
+sidebar_position: 3
+---
+
 # Install with Docker Compose
 
 Run Semantic Router + Envoy locally using Docker Compose v2.
