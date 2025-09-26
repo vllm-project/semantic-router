@@ -6,11 +6,26 @@ sidebar_position: 3
 
 This unified guide helps you quickly run Semantic Router locally (Docker Compose) or in a cluster (Kubernetes) and explains when to choose each path.Both share the same configuration concepts: **Docker Compose** is ideal for rapid iteration and demos, while **Kubernetes** is suited for long‑running workloads, elasticity, and upcoming Operator / CRD scenarios.
 
+## Feature Comparison
+
+| Capability               | Docker Compose      | Kubernetes                                     |
+| ------------------------ | ------------------- | ---------------------------------------------- |
+| Startup speed            | Fast (seconds)      | Depends on cluster/image pull                  |
+| Config reload            | Manual recreate     | Rolling restart / future Operator / hot reload |
+| Model caching            | Host volume/bind    | PVC persistent across pods                     |
+| Observability            | Bundled stack       | Integrate existing stack                       |
+| Autoscaling              | Manual              | HPA / custom metrics                           |
+| Isolation / multi-tenant | Single host network | Namespaces / RBAC                              |
+| Rapid hacking            | Minimal friction    | YAML overhead                                  |
+| Production lifecycle     | Basic               | Full (probes, rollout, scaling)                |
+
+---
+
 ## Choosing a Path
 
 **Docker Compose path** = semantic-router + Envoy proxy + optional mock vLLM (testing profile) + Prometheus + Grafana. It gives you an end-to-end local playground with minimal friction.
 
-**Kubernetes path** (current manifests, MVP) = semantic-router Deployment (gRPC + metrics), a PVC for model cache, its ConfigMap, two Services (gRPC + metrics), **an Envoy gateway Deployment + Service (NodePort by default)**. It still does **NOT** bundle: real LLM inference backends, Prometheus/Grafana stack, Istio / Gateway API / Operator / CRDs.
+**Kubernetes path** = semantic-router Deployment (gRPC + metrics) + a PVC for model cache + its ConfigMap + two Services (gRPC + metrics) + an Envoy gateway Deployment + Service (NodePort by default). It still does **NOT** bundle: real LLM inference backends, Prometheus/Grafana stack, Istio / Gateway API / Operator / CRDs.
 
 | Scenario / Goal                             | Recommended Path                 | Why                                                                                     |
 | ------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------- |
@@ -132,33 +147,6 @@ docker compose down
 - Separate deployment of **Envoy** (or another gateway) + real **LLM endpoints** (follow [Installation guide](https://vllm-semantic-router.com/docs/getting-started/installation)).
   - Replace placeholder IPs in `deploy/kubernetes/config.yaml` once services exist.
 
-### What the Kubernetes manifests now include (MVP)
-
-After the Envoy MVP addition the base kustomize set provides:
-
-| Component                            | Purpose                                             |
-| ------------------------------------ | --------------------------------------------------- |
-| `semantic-router` Deployment         | gRPC ExtProc intelligence layer                     |
-| Init container (Python)              | One‑time model download into PVC                    |
-| PVC + mount                          | Persistent model cache across pod restarts          |
-| ConfigMap (`semantic-router-config`) | Router configuration + tools DB                     |
-| Service `semantic-router`            | ClusterIP gRPC (50051)                              |
-| Service `semantic-router-metrics`    | ClusterIP metrics (9190)                            |
-| **Envoy Deployment**                 | HTTP ingress + ExtProc bridge (8801, 19000 admin)   |
-| **Envoy Service (NodePort)**         | External access (defaults: 30801→8801, 30900→19000) |
-
-### Still NOT included
-
-| Missing Piece                                      | Add Later For                                                   |
-| -------------------------------------------------- | --------------------------------------------------------------- |
-| Real LLM backends (vLLM / Ollama / custom)         | Actual completions (currently you must deploy separately)       |
-| Prometheus / Grafana stack                         | Metrics scraping & dashboards (import existing JSON once added) |
-| Service Mesh / Gateway API / Istio                 | Advanced traffic policies, mTLS, canary, auth                   |
-| TLS termination / Ingress                          | Production-grade external exposure                              |
-| External / persistent semantic cache (Redis, etc.) | Cross‑pod cache sharing & warm retention                        |
-| Health checks for downstream LLM clusters          | Automatic endpoint eviction, circuit breaking                   |
-| HorizontalPodAutoscaler                            | Elastic scaling based on QPS / CPU / custom metrics             |
-
 ### Deploy (Kustomize)
 
 ```bash
@@ -168,7 +156,7 @@ kubectl apply -k deploy/kubernetes/
 kubectl -n semantic-router get pods
 ```
 
-Manifests create (recap):
+Manifests create:
 
 - Deployment (semantic-router + init model downloader)
 - Envoy Deployment (gateway)
@@ -188,7 +176,7 @@ kubectl -n semantic-router port-forward svc/semantic-router-metrics 9190:9190 &
 ### Observability (Summary)
 
 - Add a `ServiceMonitor` or a static scrape rule
-- Import `deploy/llm-router-dashboard.json` (see `observability.md`)
+- Import `deploy/llm-router-dashboard.json` (see [Observability](https://vllm-semantic-router.com/docs/tutorials/observability/))
 
 ### Updating Config
 
@@ -212,9 +200,7 @@ kubectl -n semantic-router rollout restart deploy/semantic-router
 | Use Ingress + TLS       | Set Envoy Service to ClusterIP + create Ingress     |
 | Change Envoy log level  | Edit args in `envoy-deployment.yaml`                |
 
----
-
-## Envoy Configuration Tuning (Kubernetes Path)
+### Envoy Configuration Tuning
 
 The Envoy MVP lives under `deploy/kubernetes/envoy/` and uses a minimal ORIGINAL_DST pattern to route to dynamic LLM endpoints whose IP:Port is injected by the router through the `x-semantic-destination-endpoint` header. Key knobs:
 
@@ -228,82 +214,13 @@ The Envoy MVP lives under `deploy/kubernetes/envoy/` and uses a minimal ORIGINAL
 | Health checks (future) | Add `health_checks` per cluster when you move from ORIGINAL_DST to static clusters.            | None                                                                                         |
 | Static model clusters  | Replace ORIGINAL_DST cluster with per‑model STRICT_DNS and route on header `x-selected-model`. | None                                                                                         |
 
-### When to move beyond ORIGINAL_DST
-
-Move to explicit static (or STRICT_DNS) clusters if you need: per‑model circuit breaking, health checking, weighted load balancing, or to hide raw IPs. The router would then emit logical model headers instead of raw endpoint IP:Port.
-
 ---
 
-## Connecting Real LLM Backends
+### Connecting Real LLM Backends
 
 The Kubernetes manifests **do not** deploy any LLM inference servers. You must bring (or reference) your own. Three common patterns:
 
-### 1. In‑Cluster vLLM Deployment (recommended for testing)
-
-Create a simple vLLM Deployment & Service:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: vllm-phi4
-  namespace: semantic-router
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: vllm-phi4 }
-  template:
-    metadata:
-      labels: { app: vllm-phi4 }
-    spec:
-      containers:
-        - name: vllm
-          image: your-registry/vllm:latest
-          args:
-            [
-              "serve",
-              "microsoft/phi-4",
-              "--port",
-              "8000",
-              "--served-model-name",
-              "phi4",
-            ]
-          ports:
-            - containerPort: 8000
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vllm-phi4
-  namespace: semantic-router
-spec:
-  selector:
-    app: vllm-phi4
-  ports:
-    - port: 8000
-      targetPort: 8000
-```
-
-Get its ClusterIP:
-
-```bash
-kubectl -n semantic-router get svc vllm-phi4 -o jsonpath='{.spec.clusterIP}'
-```
-
-Use that IP in `deploy/kubernetes/config.yaml` under `vllm_endpoints.address` (the router currently requires an IP literal). Apply & restart:
-
-```bash
-kubectl apply -k deploy/kubernetes/
-kubectl -n semantic-router rollout restart deploy/semantic-router
-```
-
-### 2. External (Managed) Endpoint
+#### External (Managed) Endpoint
 
 If your LLM runs outside the cluster (e.g. on another VM or managed service):
 
@@ -312,13 +229,11 @@ If your LLM runs outside the cluster (e.g. on another VM or managed service):
 3. If egress is restricted, add NetworkPolicy exceptions.
 4. Consider latency: add higher route timeout in Envoy if needed.
 
-### 3. Transition to Static Envoy Clusters (Optional Advanced)
+#### Transition to Static Envoy Clusters (Optional Advanced)
 
 Instead of passing raw endpoint IP:Port through `x-semantic-destination-endpoint`, you can define per‑model clusters in Envoy and have the router set a logical header (e.g. `x-selected-model`). Route config then chooses clusters by header match. Benefits: health checks, circuit breaking, weighted load balancing.
 
----
-
-## Quick Routing Verification (Kubernetes)
+### Quick Routing Verification
 
 Once a backend is wired:
 
@@ -329,53 +244,6 @@ curl -X POST http://<NodeIP or LB>/v1/chat/completions \
 ```
 
 Check Envoy logs for `selected_model` & `selected_endpoint` fields and semantic-router logs for the classification decision.
-
----
-
-## Updating LLM Endpoints
-
-1. Edit `deploy/kubernetes/config.yaml` (add/remove endpoint blocks).
-2. Re-apply kustomize.
-3. Restart only the router (Envoy usually does not need a restart with ORIGINAL_DST):
-
-```bash
-kubectl apply -k deploy/kubernetes/
-kubectl -n semantic-router rollout restart deploy/semantic-router
-```
-
-If you migrate to static clusters, Envoy must also be reloaded (Deployment restart) when clusters change.
-
----
-
-## Hardening & Next Steps
-
-| Step                            | Rationale                               |
-| ------------------------------- | --------------------------------------- |
-| Add HPA for router & Envoy      | Scale under load                        |
-| Introduce Prometheus Operator   | Automated metrics scraping              |
-| Import dashboard JSON           | Visualize routing & latency             |
-| Add NetworkPolicies             | Limit lateral movement / egress         |
-| Enable TLS (Ingress / Gateway)  | Secure external traffic                 |
-| External semantic cache (Redis) | Cross-pod cache hit ratio improvement   |
-| Circuit breaking & retries      | Graceful handling of flaky LLM backends |
-| Move to logical clusters        | Health checks & traffic shaping         |
-
----
-
----
-
-## Feature Comparison
-
-| Capability               | Docker Compose      | Kubernetes                                     |
-| ------------------------ | ------------------- | ---------------------------------------------- |
-| Startup speed            | Fast (seconds)      | Depends on cluster/image pull                  |
-| Config reload            | Manual recreate     | Rolling restart / future Operator / hot reload |
-| Model caching            | Host volume/bind    | PVC persistent across pods                     |
-| Observability            | Bundled stack       | Integrate existing stack                       |
-| Autoscaling              | Manual              | HPA / custom metrics                           |
-| Isolation / multi-tenant | Single host network | Namespaces / RBAC                              |
-| Rapid hacking            | Minimal friction    | YAML overhead                                  |
-| Production lifecycle     | Basic               | Full (probes, rollout, scaling)                |
 
 ---
 
