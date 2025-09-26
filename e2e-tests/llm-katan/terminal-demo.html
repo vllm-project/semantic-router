@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Katan Multi-Instance Demo</title>
+    <script src="https://unpkg.com/typeit@8.8.0/dist/index.umd.js"></script>
+    <style>
+        body {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .terminal-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .terminal {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 220px;
+            max-height: 250px;
+            position: relative;
+            overflow-y: auto;
+        }
+
+        .terminal-header {
+            color: #569cd6;
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #333;
+        }
+
+        .prompt {
+            color: #4ec9b0;
+        }
+
+        .command {
+            color: #ce9178;
+        }
+
+        .output {
+            color: #d4d4d4;
+        }
+
+        .success {
+            color: #4fc1e9;
+        }
+
+        .title {
+            text-align: center;
+            color: #569cd6;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+
+        .description {
+            text-align: center;
+            color: #9cdcfe;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .terminal-full {
+            grid-column: 1 / -1;
+            margin-top: 20px;
+            min-height: 300px;
+            max-height: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">🚀 LLM Katan Multi-Instance Demo</div>
+    <div class="description">Run the same tiny model as different AI providers for testing</div>
+
+    <div class="terminal-container">
+        <div class="terminal">
+            <div class="terminal-header">Terminal 1: GPT-3.5-Turbo Instance</div>
+            <div id="terminal1"></div>
+        </div>
+
+        <div class="terminal">
+            <div class="terminal-header">Terminal 2: Claude-3-Haiku Instance</div>
+            <div id="terminal2"></div>
+        </div>
+
+        <div class="terminal terminal-full">
+            <div class="terminal-header">Terminal 3: Testing Both Endpoints</div>
+            <div id="terminal3"></div>
+        </div>
+    </div>
+
+    <script>
+        // Terminal 1: GPT-3.5-Turbo setup
+        new TypeIt("#terminal1", {
+            speed: 50,
+            waitUntilVisible: true
+        })
+        .type('<span class="prompt">$</span> <span class="command">pip install llm-katan</span>')
+        .break()
+        .type('<span class="output">Successfully installed llm-katan-0.1.8</span>')
+        .break()
+        .break()
+        .pause(1000)
+        .type('<span class="prompt">$</span> <span class="command">llm-katan --model Qwen/Qwen3-0.6B --port 8000 \\</span>')
+        .break()
+        .type('<span class="command">  --served-model-name "gpt-3.5-turbo"</span>')
+        .break()
+        .pause(500)
+        .type('<span class="success">🚀 Starting LLM Katan server with model: Qwen/Qwen3-0.6B</span>')
+        .break()
+        .type('<span class="success">📛 Served model name: gpt-3.5-turbo</span>')
+        .break()
+        .type('<span class="success">✅ Server running on http://0.0.0.0:8000</span>')
+        .go();
+
+        // Terminal 2: Claude-3-Haiku setup (delayed start)
+        setTimeout(() => {
+            new TypeIt("#terminal2", {
+                speed: 50,
+                waitUntilVisible: true
+            })
+            .type('<span class="prompt">$</span> <span class="command">llm-katan --model Qwen/Qwen3-0.6B --port 8001 \\</span>')
+            .break()
+            .type('<span class="command">  --served-model-name "claude-3-haiku"</span>')
+            .break()
+            .pause(500)
+            .type('<span class="success">🚀 Starting LLM Katan server with model: Qwen/Qwen3-0.6B</span>')
+            .break()
+            .type('<span class="success">📛 Served model name: claude-3-haiku</span>')
+            .break()
+            .type('<span class="success">✅ Server running on http://0.0.0.0:8001</span>')
+            .go();
+        }, 3000);
+
+        // Terminal 3: Testing both endpoints (starts after both servers finish)
+        setTimeout(() => {
+            new TypeIt("#terminal3", {
+                speed: 50,
+                waitUntilVisible: true
+            })
+            .type('<span class="success"># Both servers are now running! Let\'s test them...</span>')
+            .break()
+            .break()
+            .pause(1000)
+            .type('<span class="prompt">$</span> <span class="command">curl http://localhost:8000/v1/models | jq \'.data[0].id\'</span>')
+            .break()
+            .type('<span class="output">"gpt-3.5-turbo"</span>')
+            .break()
+            .break()
+            .pause(1500)
+            .type('<span class="prompt">$</span> <span class="command">curl http://localhost:8001/v1/models | jq \'.data[0].id\'</span>')
+            .break()
+            .type('<span class="output">"claude-3-haiku"</span>')
+            .break()
+            .break()
+            .pause(1500)
+            .type('<span class="success"># Same Qwen3-0.6B model, different API names!</span>')
+            .break()
+            .type('<span class="success"># Perfect for testing multi-provider scenarios 🎯</span>')
+            .break()
+            .break()
+            .pause(1000)
+            .type('<span class="prompt">$</span> <span class="command"># Try a chat completion with "GPT"</span>')
+            .break()
+            .type('<span class="prompt">$</span> <span class="command">curl -X POST http://localhost:8000/v1/chat/completions \\</span>')
+            .break()
+            .type('<span class="command">  -H "Content-Type: application/json" \\</span>')
+            .break()
+            .type('<span class="command">  -d \'{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi!"}]}\'</span>')
+            .break()
+            .type('<span class="output">{"choices": [{"message": {"content": "Hello! How can I help you today?"}}]}</span>')
+            .go();
+        }, 10000); // Start after both terminals complete (~10 seconds)
+    </script>
+</body>
+</html>
