@@ -19,7 +19,7 @@ download-models:
 		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model; \
 	fi
 
-	@if [ ! -d "lora_intent_classifier_bert-base-uncased_model" ]; then \
+	@if [ ! -d "models/lora_intent_classifier_bert-base-uncased_model" ]; then \
 		hf download LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model --local-dir models/lora_intent_classifier_bert-base-uncased_model; \
 	fi
 

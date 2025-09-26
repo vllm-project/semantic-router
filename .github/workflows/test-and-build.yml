@@ -56,7 +56,6 @@ jobs:
       with:
         path: |
           models/
-          ~/.cache/huggingface/
         key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
         restore-keys: |
           ${{ runner.os }}-models-v1-
