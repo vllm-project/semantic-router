@@ -119,10 +119,17 @@ docker compose down
 
 ### Requirements
 
-- Kubernetes cluster (kind / k3d / minikube / real)
-- `kubectl` access
-- Optional: Prometheus (Operator) for metrics scraping
-- Separate deployment of Envoy (or another gateway) + real LLM endpoints (follow Installation guide). Replace placeholder IPs in `deploy/kubernetes/config.yaml` once services exist.
+- Kubernetes cluster
+  - [Kubernetes Official docs](https://kubernetes.io/docs/home/)
+  - [kind (local clusters)](https://kind.sigs.k8s.io/)
+  - [k3d (k3s in Docker)](https://k3d.io/)
+  - [minikube](https://minikube.sigs.k8s.io/docs/)
+- [`kubectl`](https://kubernetes.io/docs/tasks/tools/)access (CLI)
+- *Optional: Prometheus metrics stack (e.g. [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator))*
+- *(Planned / not yet merged) Service Mesh or advanced gateway:*
+  - *[Istio](https://istio.io/latest/docs/setup/getting-started/) / [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/)*
+- Separate deployment of **Envoy** (or another gateway) + real **LLM endpoints** (follow [Installation guide](https://vllm-semantic-router.com/docs/getting-started/installation)).
+  - Replace placeholder IPs in `deploy/kubernetes/config.yaml` once services exist.
 
 ### Deploy (Kustomize)
 
