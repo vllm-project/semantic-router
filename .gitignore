@@ -13,6 +13,13 @@ __pycache__/
 .venv/
 pii_env/
 
+# Python build artifacts
+dist/
+build/
+*.egg-info/
+*.whl
+*.tar.gz
+
 # Go
 *.exe
 *.exe~
@@ -118,3 +125,6 @@ results/
 
 # augment editor rules
 .augment
+
+# Claude Code configuration (should not be committed)
+CLAUDE.md

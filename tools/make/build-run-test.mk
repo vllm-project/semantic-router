@@ -18,6 +18,12 @@ run-router: build-router download-models
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE}
 
+# Run the router with e2e config for testing
+run-router-e2e: build-router download-models
+	@echo "Running router with e2e config: config/config.e2e.yaml"
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		./bin/router -config=config/config.e2e.yaml
+
 # Unit test semantic-router
 # By default, Milvus tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false
 # Example: make test-semantic-router SKIP_MILVUS_TESTS=false
@@ -98,3 +104,59 @@ test-vllm:
 	curl -X POST $(VLLM_ENDPOINT)/v1/chat/completions \
 		-H "Content-Type: application/json" \
 		-d "{\"model\": \"$$MODEL_NAME\", \"messages\": [{\"role\": \"assistant\", \"content\": \"You are a professional math teacher. Explain math concepts clearly and show step-by-step solutions to problems.\"}, {\"role\": \"user\", \"content\": \"What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?\"}], \"temperature\": 0.7}" | jq
+
+# ============== E2E Tests ==============
+
+# Start LLM Katan servers for e2e testing (foreground mode for development)
+start-llm-katan:
+	@echo "Starting LLM Katan servers in foreground mode..."
+	@echo "Press Ctrl+C to stop servers"
+	@./e2e-tests/start-llm-katan.sh
+
+# Legacy: Start mock vLLM servers for testing (foreground mode for development)
+start-mock-vllm:
+	@echo "Starting mock vLLM servers in foreground mode..."
+	@echo "Press Ctrl+C to stop servers"
+	@./e2e-tests/start-mock-servers.sh
+
+# Start real vLLM servers for testing
+start-vllm:
+	@echo "Starting real vLLM servers..."
+	@./e2e-tests/start-vllm-servers.sh
+
+# Stop real vLLM servers
+stop-vllm:
+	@echo "Stopping real vLLM servers..."
+	@./e2e-tests/stop-vllm-servers.sh
+
+# Run e2e tests with LLM Katan (lightweight real models)
+test-e2e-vllm:
+	@echo "Running e2e tests with LLM Katan servers..."
+	@echo "⚠️  Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
+	@python3 e2e-tests/run_all_tests.py
+
+# Legacy: Run e2e tests with mock vLLM (assumes mock servers already running)
+test-e2e-mock:
+	@echo "Running e2e tests with mock vLLM servers..."
+	@echo "⚠️  Note: Make sure mock servers are running with 'make start-mock-vllm'"
+	@python3 e2e-tests/run_all_tests.py --mock
+
+# Run e2e tests with real vLLM (assumes real servers already running)
+test-e2e-real:
+	@echo "Running e2e tests with real vLLM servers..."
+	@echo "⚠️  Note: Make sure real vLLM servers are running with 'make start-vllm'"
+	@python3 e2e-tests/run_all_tests.py --real
+
+
+# Note: Automated tests not supported with foreground-only mock servers
+# Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
+
+# Full automated test with cleanup (for CI/CD)
+test-e2e-real-automated: start-vllm
+	@echo "Running automated e2e tests with real vLLM servers..."
+	@sleep 5
+	@python3 e2e-tests/run_all_tests.py --real || ($(MAKE) stop-vllm && exit 1)
+	@$(MAKE) stop-vllm
+
+# Run all e2e tests (LLM Katan, mock and real)
+test-e2e-all: test-e2e-vllm test-e2e-mock test-e2e-real
