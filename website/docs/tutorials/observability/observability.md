@@ -1,52 +1,150 @@
 # Observability
 
-Set up Prometheus + Grafana locally with the existing Docker Compose in this repo. The router already exposes Prometheus metrics and ships a ready-to-use Grafana dashboard, so you mainly need to run the services and ensure Prometheus points at the metrics endpoint.
+This page focuses solely on collecting and visualizing metrics for Semantic Router using Prometheus and Grafana—deployment method (Docker Compose vs Kubernetes) is covered in `docker-quickstart.md`.
 
-## What’s included
+---
 
-- Router metrics server: `/metrics` on port `9190` (override with `--metrics-port`).
-- Classification API health check: `GET /health` on `8080` (`--api-port`).
-- Envoy (optional): admin on `19000`, Prometheus metrics at `/stats/prometheus`.
-- Docker Compose services: `semantic-router`, `envoy`, `prometheus`, `grafana` on the same `semantic-network`.
-- Grafana dashboard: `deploy/llm-router-dashboard.json` (auto-provisioned).
+## 1. Metrics & Endpoints Summary
 
-Code reference: `src/semantic-router/cmd/main.go` uses `promhttp` to expose `/metrics` (default `:9190`).
+| Component                    | Endpoint                  | Notes                                      |
+| ---------------------------- | ------------------------- | ------------------------------------------ |
+| Router metrics               | `:9190/metrics`           | Prometheus format (flag: `--metrics-port`) |
+| Router health (future probe) | `:8080/health`            | HTTP readiness/liveness candidate          |
+| Envoy metrics (optional)     | `:19000/stats/prometheus` | If you enable Envoy                        |
 
-## Files to know
+Dashboard JSON: `deploy/llm-router-dashboard.json`.
 
-- Prometheus config: `config/prometheus.yaml`. Ensure the path matches the volume mount in `docker-compose.yml`.
-- Grafana provisioning:
-  - Datasource: `config/grafana/datasource.yaml`
-  - Dashboards: `config/grafana/dashboards.yaml`
-- Dashboard JSON: `deploy/llm-router-dashboard.json`
+Primary source file exposing metrics: `src/semantic-router/cmd/main.go` (uses `promhttp`).
 
-These files are already referenced by `docker-compose.yml` so you typically don’t need to edit them unless you’re changing targets or credentials.
+---
 
-## How it works (local)
+## 2. Docker Compose Observability
 
-- Prometheus runs in the same Docker network and scrapes `semantic-router:9190/metrics`. No host port needs to be published for metrics.
-- Grafana connects to Prometheus via the internal URL `http://prometheus:9090` and auto-loads the bundled dashboard.
-- Envoy (if enabled) can also be scraped by Prometheus at `envoy-proxy:19000/stats/prometheus`.
+Compose bundles: `prometheus`, `grafana`, `semantic-router`, (optional) `envoy`, `mock-vllm`.
 
-## Start and access
+Key files:
 
-1) From the project root, start Compose (Prometheus and Grafana are included in the provided file).
+- `config/prometheus.yaml`
+- `config/grafana/datasource.yaml`
+- `config/grafana/dashboards.yaml`
+- `deploy/llm-router-dashboard.json`
+
+Start (with testing profile example):
 
 ```bash
-# try it out with mock-vllm
 CONFIG_FILE=/app/config/config.testing.yaml docker compose --profile testing up --build
 ```
 
-2) Open the UIs:
-   - Prometheus: http://localhost:9090
-   - Grafana: http://localhost:3000 (default admin/admin — change on first login)
-3) In Grafana, the “LLM Router” dashboard is pre-provisioned. If needed, import `deploy/llm-router-dashboard.json` manually.
+Access:
 
-## Minimal expectations
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/admin)
 
-- Prometheus should list targets for:
-  - `semantic-router:9190` (required)
-  - `envoy-proxy:19000` (optional)
-- Grafana’s datasource should point to `http://prometheus:9090` inside the Docker network.
+Expected Prometheus targets:
 
-That’s it—run the stack, and you’ll have Prometheus scraping the router plus a prebuilt Grafana dashboard out of the box.
+- `semantic-router:9190`
+- `envoy-proxy:19000` (optional)
+
+---
+
+## 3. Kubernetes Observability
+
+After applying `deploy/kubernetes/`, you get services:
+
+- `semantic-router` (gRPC)
+- `semantic-router-metrics` (metrics 9190)
+
+### 3.1 Prometheus Operator (ServiceMonitor)
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: semantic-router
+  namespace: semantic-router
+spec:
+  selector:
+    matchLabels:
+      app: semantic-router
+      service: metrics
+  namespaceSelector:
+    matchNames: ["semantic-router"]
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+```
+
+Ensure the metrics Service carries a label like `service: metrics`. (It does in the provided manifests.)
+
+### 3.2 Plain Prometheus Static Scrape
+
+```yaml
+scrape_configs:
+  - job_name: semantic-router
+    kubernetes_sd_configs:
+      - role: endpoints
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        regex: semantic-router-metrics
+        action: keep
+```
+
+### 3.3 Port Forward for Spot Checks
+
+```bash
+kubectl -n semantic-router port-forward svc/semantic-router-metrics 9190:9190
+curl -s localhost:9190/metrics | head
+```
+
+### 3.4 Grafana Dashboard Provision
+
+If using kube-prometheus-stack or a Grafana sidecar:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-dashboard
+  namespace: semantic-router
+  labels:
+    grafana_dashboard: "1"
+data:
+  llm-router-dashboard.json: |
+    # Paste JSON from deploy/llm-router-dashboard.json
+```
+
+Otherwise import the JSON manually in Grafana UI.
+
+---
+
+## 4. Key Metrics (Sample)
+
+| Metric                                                        | Type      | Description                                  |
+| ------------------------------------------------------------- | --------- | -------------------------------------------- |
+| `llm_category_classifications_count`                          | counter   | Number of category classification operations |
+| `llm_model_completion_tokens_total`                           | counter   | Tokens emitted per model                     |
+| `llm_model_routing_modifications_total`                       | counter   | Model switch / routing adjustments           |
+| `llm_model_completion_latency_seconds`                        | histogram | Completion latency distribution              |
+| `process_cpu_seconds_total` / `process_resident_memory_bytes` | standard  | Runtime resource usage                       |
+
+Use typical PromQL patterns:
+
+```promql
+rate(llm_model_completion_tokens_total[5m])
+histogram_quantile(0.95, sum by (le) (rate(llm_model_completion_latency_seconds_bucket[5m])))
+```
+
+---
+
+## 5. Troubleshooting
+
+| Symptom               | Likely Cause              | Check                                    | Fix                                                              |
+| --------------------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| Target DOWN (Docker)  | Service name mismatch     | Prometheus /targets                      | Ensure `semantic-router` container running                       |
+| Target DOWN (K8s)     | Label/selectors mismatch  | `kubectl get ep semantic-router-metrics` | Align labels or ServiceMonitor selector                          |
+| No new tokens metrics | No traffic                | Generate chat/completions via Envoy      | Send test requests                                               |
+| Dashboard empty       | Datasource URL wrong      | Grafana datasource settings              | Point to `http://prometheus:9090` (Docker) or cluster Prometheus |
+| Large 5xx spikes      | Backend model unreachable | Router logs                              | Verify vLLM endpoints configuration                              |
+
+---

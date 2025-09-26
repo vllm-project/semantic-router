@@ -48,7 +48,7 @@ const sidebars = {
       label: 'Installation',
       items: [
         'installation/installation',
-        'installation/docker-quickstart',
+        'installation/deploy-quickstart',
         'installation/configuration',
       ],
     },

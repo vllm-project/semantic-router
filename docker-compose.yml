@@ -69,9 +69,9 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
     command:
-      - --config.file=/etc/prometheus/prometheus.yml
+      - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.retention.time=15d
     ports:
       - "9090:9090"
@@ -87,8 +87,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./config/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
-      - ./config/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./config/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./config/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
       - ./deploy/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
     networks:
       - semantic-network
