@@ -5,21 +5,24 @@ metadata:
   name: semantic-router
 
 resources:
-- namespace.yaml
-- pvc.yaml
-- deployment.yaml
-- service.yaml
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - envoy/envoy-config.yaml
+  - envoy/envoy-deployment.yaml
+  - envoy/envoy-service.yaml
 
 # Generate ConfigMap
 configMapGenerator:
-- name: semantic-router-config
-  files:
-  - config.yaml
-  - tools_db.json
+  - name: semantic-router-config
+    files:
+      - config.yaml
+      - tools_db.json
 
 # Namespace for all resources
 namespace: semantic-router
 
 images:
-- name: ghcr.io/vllm-project/semantic-router/extproc
-  newTag: latest
+  - name: ghcr.io/vllm-project/semantic-router/extproc
+    newTag: latest

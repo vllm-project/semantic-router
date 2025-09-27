@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy
+  labels:
+    app: envoy
+    component: gateway
+    part-of: semantic-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: envoy
+  template:
+    metadata:
+      labels:
+        app: envoy
+        component: gateway
+    spec:
+      containers:
+      - name: envoy
+        image: envoyproxy/envoy:v1.31.7
+        imagePullPolicy: IfNotPresent
+        args:
+          - "-c"
+          - "/etc/envoy/envoy.yaml"
+          - "--component-log-level"
+          - "ext_proc:trace,router:trace,http:trace"
+        ports:
+        - containerPort: 8801
+          name: http
+        - containerPort: 19000
+          name: admin
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: admin
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: admin
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: envoy-config
+          mountPath: /etc/envoy
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: envoy-config
+          items:
+          - key: envoy.yaml
+            path: envoy.yaml
