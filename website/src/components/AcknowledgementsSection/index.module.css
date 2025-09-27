@@ -4,6 +4,12 @@
   background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 50%, #F0F3F6 100%);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme acknowledgements section */
+[data-theme='dark'] .acknowledgementsSection {
+  background: linear-gradient(135deg, #161B22 0%, #21262D 50%, #161B22 100%);
 }
 
 .acknowledgementsSection::before {
@@ -19,6 +25,15 @@
     radial-gradient(circle at 50% 50%, rgba(130, 80, 223, 0.03) 0%, transparent 50%);
   pointer-events: none;
   animation: acknowledgementsBackgroundFlow 15s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme acknowledgements background */
+[data-theme='dark'] .acknowledgementsSection::before {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
 }
 
 .acknowledgementsContainer {
@@ -39,6 +54,15 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
   animation: acknowledgementsTitleGlow 4s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme title */
+[data-theme='dark'] .acknowledgementsTitle {
+  background: linear-gradient(135deg, #58A6FF, #FDB516, #A855F7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .acknowledgementsSubtitle {
@@ -49,6 +73,12 @@
   max-width: 800px;
   margin-left: auto;
   margin-right: auto;
+  transition: color 0.3s ease;
+}
+
+/* Dark theme subtitle */
+[data-theme='dark'] .acknowledgementsSubtitle {
+  color: #8B949E;
 }
 
 .projectsGrid {
@@ -73,6 +103,13 @@
   color: inherit;
 }
 
+/* Dark theme project card */
+[data-theme='dark'] .projectCard {
+  background: rgba(33, 38, 45, 0.8);
+  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
 .projectCard:hover {
   background: rgba(255, 255, 255, 0.95);
   border-color: rgba(88, 166, 255, 0.4);
@@ -80,6 +117,13 @@
   box-shadow: 0 8px 32px rgba(9, 105, 218, 0.15);
   text-decoration: none;
   color: inherit;
+}
+
+/* Dark theme project card hover */
+[data-theme='dark'] .projectCard:hover {
+  background: rgba(33, 38, 45, 0.95);
+  border-color: rgba(88, 166, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(88, 166, 255, 0.2);
 }
 
 .projectLogoWrapper {
@@ -92,6 +136,13 @@
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 2px 8px rgba(9, 105, 218, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* Dark theme logo wrapper */
+[data-theme='dark'] .projectLogoWrapper {
+  background: rgba(48, 54, 61, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .projectLogo {
@@ -113,6 +164,12 @@
   color: #1F2328;
   text-align: center;
   line-height: 1.4;
+  transition: color 0.3s ease;
+}
+
+/* Dark theme project name */
+[data-theme='dark'] .projectName {
+  color: #F0F6FC;
 }
 
 /* Animations */
