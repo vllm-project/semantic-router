@@ -143,14 +143,17 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 			dotProduct += queryEmbedding[i] * entry.Embedding[i]
 		}
 
-		results = append(results, SimilarityResult{
-			Entry:      entry,
-			Similarity: dotProduct,
-		})
-
 		// Debug logging to see similarity scores
 		observability.Debugf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
 			entry.Tool.Function.Name, dotProduct, db.similarityThreshold)
+
+		// Only consider if above threshold
+		if dotProduct >= db.similarityThreshold {
+			results = append(results, SimilarityResult{
+				Entry:      entry,
+				Similarity: dotProduct,
+			})
+		}
 	}
 
 	// No results found
@@ -164,13 +167,12 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 	})
 
 	// Select top-k tools that meet the threshold
-	var selectedTools []openai.ChatCompletionToolParam
-	for i := 0; i < len(results) && i < topK; i++ {
-		if results[i].Similarity >= db.similarityThreshold {
-			selectedTools = append(selectedTools, results[i].Entry.Tool)
-			observability.Infof("Selected tool: %s (similarity=%.4f)",
-				results[i].Entry.Tool.Function.Name, results[i].Similarity)
-		}
+	limit := min(topK, len(results))
+	selectedTools := make([]openai.ChatCompletionToolParam, 0, limit)
+	for i := range limit {
+		selectedTools = append(selectedTools, results[i].Entry.Tool)
+		observability.Infof("Selected tool: %s (similarity=%.4f)",
+			results[i].Entry.Tool.Function.Name, results[i].Similarity)
 	}
 
 	observability.Infof("Found %d similar tools for query: %s", len(selectedTools), query)
