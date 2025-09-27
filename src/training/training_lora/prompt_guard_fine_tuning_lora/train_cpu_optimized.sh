@@ -12,18 +12,18 @@ echo "🖥️  CPU-Optimized Security Detection LoRA Training"
 echo "================================================="
 
 # CPU-optimized configuration
-EPOCHS=8                    # Reduced epochs for faster training
-LORA_RANK=16               # Smaller rank to reduce memory usage
-LORA_ALPHA=32              # Proportionally adjusted alpha
-MAX_SAMPLES=2000           # Reduced samples for faster training
-BATCH_SIZE=2               # Small batch size for CPU
-LEARNING_RATE=3e-4         # Slightly higher LR for fewer epochs
+EPOCHS=8                     # Reduced epochs for faster training
+LORA_RANK=8                  # Optimal rank for stability and performance
+LORA_ALPHA=16                # Standard alpha (2x rank) for best results
+MAX_SAMPLES=7000             # Increased samples for better security detection coverage
+BATCH_SIZE=2                 # Small batch size for CPU
+LEARNING_RATE=3e-5           # Optimized learning rate based on  PEFT best practices
 
-# CPU-friendly model set (smaller models only)
-# Note: modernbert-base was tested and has label confusion issues
+
 CPU_MODELS=(
-    "bert-base-uncased"     # 110M params - most CPU-friendly, proven stable
-    "roberta-base"          # 125M params - better context understanding
+    "bert-base-uncased"     # 110M params - most CPU-friendly, needs retraining with fixed config
+    "roberta-base"          # 125M params - better security detection performance, proven stable
+    "modernbert-base"
 )
 
 # Parse command line arguments
@@ -130,13 +130,15 @@ train_cpu_model() {
     local log_file="$RESULTS_DIR/${model_name}_cpu_training.log"
     
     # CPU-optimized training command
-    local cmd="https_proxy=http://10.1.204.246:8080  python jailbreak_bert_finetuning_lora.py \
+    local cmd="python jailbreak_bert_finetuning_lora.py \
+        --mode train \
         --model $model_name \
         --epochs $EPOCHS \
-        --max-samples $MAX_SAMPLES \
         --lora-rank $LORA_RANK \
+        --lora-alpha $LORA_ALPHA \
+        --max-samples $MAX_SAMPLES \
         --batch-size $BATCH_SIZE \
-        --output-dir lora_jailbreak_classifier_${model_name}_r${LORA_RANK}_model"
+        --learning-rate $LEARNING_RATE"
     
     echo "📝 Command: $cmd"
     echo "📋 Log file: $log_file"
