@@ -444,7 +444,7 @@ def main(
     lora_dropout: float = 0.1,
     num_epochs: int = 3,
     batch_size: int = 8,
-    learning_rate: float = 1e-4,
+    learning_rate: float = 3e-5,  # Reduced from 1e-4 to prevent gradient explosion
     max_samples: int = 1000,
     output_dir: str = None,
     enable_feature_alignment: bool = False,
@@ -493,13 +493,12 @@ def main(
 
     logger.info(f"Model will be saved to: {output_dir}")
 
-    # Training arguments
+    # Training arguments optimized for LoRA sequence classification based on PEFT best practices
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        warmup_steps=100,
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
@@ -509,6 +508,13 @@ def main(
         metric_for_best_model="eval_f1",
         greater_is_better=True,
         learning_rate=learning_rate,
+        # PEFT optimization: Enhanced stability measures
+        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
+        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
+        warmup_ratio=0.06,  # PEFT recommended warmup ratio for sequence classification
+        # Additional stability measures for intent classification
+        dataloader_drop_last=False,
+        eval_accumulation_steps=1,
     )
 
     # Create trainer
@@ -728,7 +734,7 @@ if __name__ == "__main__":
     parser.add_argument("--alignment-weight", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument(
         "--max-samples",
         type=int,

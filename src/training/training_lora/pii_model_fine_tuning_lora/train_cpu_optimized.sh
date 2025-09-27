@@ -17,7 +17,7 @@ LORA_RANK=8                  # Optimal rank for stability and performance
 LORA_ALPHA=16                # Standard alpha (2x rank) for best results
 MAX_SAMPLES=7000             # Increased samples for better PII coverage
 BATCH_SIZE=2                 # Small batch size for CPU
-LEARNING_RATE=1e-4           # Lower learning rate for more stable training
+LEARNING_RATE=3e-5           # Lower learning rate for more stable training
 
 
 CPU_MODELS=(

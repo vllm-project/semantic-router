@@ -17,7 +17,7 @@ LORA_RANK=8                  # Optimal rank for stability and performance
 LORA_ALPHA=16                # Standard alpha (2x rank) for best results
 MAX_SAMPLES=7000             # Increased samples for better security detection coverage
 BATCH_SIZE=2                 # Small batch size for CPU
-LEARNING_RATE=1e-4           # Lower learning rate for more stable training
+LEARNING_RATE=3e-5           # Optimized learning rate based on  PEFT best practices
 
 
 CPU_MODELS=(
@@ -131,12 +131,14 @@ train_cpu_model() {
     
     # CPU-optimized training command
     local cmd="python jailbreak_bert_finetuning_lora.py \
+        --mode train \
         --model $model_name \
         --epochs $EPOCHS \
-        --max-samples $MAX_SAMPLES \
         --lora-rank $LORA_RANK \
+        --lora-alpha $LORA_ALPHA \
+        --max-samples $MAX_SAMPLES \
         --batch-size $BATCH_SIZE \
-        --output-dir lora_jailbreak_classifier_${model_name}_r${LORA_RANK}_model"
+        --learning-rate $LEARNING_RATE"
     
     echo "📝 Command: $cmd"
     echo "📋 Log file: $log_file"

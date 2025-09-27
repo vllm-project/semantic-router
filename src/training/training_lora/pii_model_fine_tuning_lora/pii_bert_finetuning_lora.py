@@ -423,7 +423,7 @@ def validate_bio_labels(texts, token_labels):
 
     # Show entity statistics
     if entity_stats:
-        logger.info(f"📈 Entity Statistics:")
+        logger.info(f"Entity Statistics:")
         for entity_type, stats in sorted(
             entity_stats.items(), key=lambda x: x[1]["count"], reverse=True
         )[:5]:
@@ -432,9 +432,9 @@ def validate_bio_labels(texts, token_labels):
             )
 
     if bio_violations > 0:
-        logger.warning(f"⚠️  Found {bio_violations} BIO labeling violations!")
+        logger.warning(f"Found {bio_violations} BIO labeling violations!")
     else:
-        logger.info("✅ All BIO labels are consistent!")
+        logger.info("All BIO labels are consistent!")
 
     return {
         "total_samples": total_samples,
@@ -447,16 +447,16 @@ def validate_bio_labels(texts, token_labels):
 
 def analyze_data_quality(texts, token_labels, sample_size=5):
     """Analyze and display data quality with sample examples."""
-    logger.info(f"🔍 Data Quality Analysis:")
+    logger.info(f"Data Quality Analysis:")
 
     # Show sample examples with their labels
-    logger.info(f"📝 Sample Examples (showing first {sample_size}):")
+    logger.info(f"Sample Examples (showing first {sample_size}):")
     for i in range(min(sample_size, len(texts))):
         tokens = texts[i]
         labels = token_labels[i]
 
-        logger.info(f"  Sample {i+1}:")
-        logger.info(f"    Text: {' '.join(tokens)}")
+        logger.info(f"Sample {i+1}:")
+        logger.info(f"Text: {' '.join(tokens)}")
 
         # Show only non-O labels for clarity
         entities = []
@@ -633,7 +633,7 @@ def main(
     lora_dropout: float = 0.1,
     num_epochs: int = 3,
     batch_size: int = 8,
-    learning_rate: float = 1e-4,
+    learning_rate: float = 3e-5,  # Optimized for LoRA based on PEFT best practices
     max_samples: int = 1000,
 ):
     """Main training function for LoRA PII detection."""
@@ -682,13 +682,17 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
 
     # Training arguments
+    # Training arguments optimized for LoRA token classification based on PEFT best practices
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
-        warmup_steps=50,
+        # PEFT optimization: Enhanced stability measures
+        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
+        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
+        warmup_ratio=0.06,  # PEFT recommended warmup ratio for token classification
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
@@ -697,6 +701,9 @@ def main(
         load_best_model_at_end=True,
         metric_for_best_model="f1",
         save_total_limit=2,
+        # Additional stability measures
+        dataloader_drop_last=False,
+        eval_accumulation_steps=1,
         report_to=[],
         fp16=torch.cuda.is_available(),
     )
@@ -968,7 +975,7 @@ if __name__ == "__main__":
             lora_dropout=args.lora_dropout,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
-            learning_rate=args.learning_rate,
+            learning_rate=3e-5,  # Default optimized learning rate for LoRA token classification
             max_samples=args.max_samples,
         )
     elif args.mode == "test":

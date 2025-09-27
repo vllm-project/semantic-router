@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 )
@@ -209,34 +210,192 @@ func main() {
 		log.Fatalf("Failed to initialize LoRA classifier: %v", err)
 	}
 
-	// Test samples for intent classification (matching Python demo_inference)
-	testSamples := []string{
-		"What is the best strategy for corporate mergers and acquisitions?",
-		"How do antitrust laws affect business competition?",
-		"What are the psychological factors that influence consumer behavior?",
-		"Explain the legal requirements for contract formation",
-		"What is the difference between civil and criminal law?",
-		"How does cognitive bias affect decision making?",
+	// Test samples with expected intent categories for validation
+	testSamples := []struct {
+		text        string
+		description string
+		expected    string
+	}{
+		{
+			"What is the best strategy for corporate mergers and acquisitions?",
+			"Business strategy question",
+			"business",
+		},
+		{
+			"How do antitrust laws affect business competition?",
+			"Business law question",
+			"business",
+		},
+		{
+			"What are the psychological factors that influence consumer behavior?",
+			"Psychology and behavior question",
+			"psychology",
+		},
+		{
+			"Explain the legal requirements for contract formation",
+			"Legal concepts question",
+			"jurisprudence",
+		},
+		{
+			"What is the difference between civil and criminal law?",
+			"Legal system question",
+			"jurisprudence",
+		},
+		{
+			"How does cognitive bias affect decision making?",
+			"Psychology and cognition question",
+			"psychology",
+		},
+		{
+			"What is the derivative of e^x?",
+			"Mathematical calculus question",
+			"mathematics",
+		},
+		{
+			"Explain the concept of supply and demand in economics.",
+			"Economic principles question",
+			"economics",
+		},
+		{
+			"How does DNA replication work in eukaryotic cells?",
+			"Biology and genetics question",
+			"biology",
+		},
+		{
+			"What is the difference between a civil law and common law system?",
+			"Legal systems comparison",
+			"jurisprudence",
+		},
+		{
+			"Explain how transistors work in computer processors.",
+			"Computer engineering question",
+			"computer_science",
+		},
+		{
+			"Why do stars twinkle?",
+			"Astronomical physics question",
+			"physics",
+		},
+		{
+			"How do I create a balanced portfolio for retirement?",
+			"Financial planning question",
+			"economics",
+		},
+		{
+			"What causes mental illnesses?",
+			"Mental health and psychology question",
+			"psychology",
+		},
+		{
+			"How do computer algorithms work?",
+			"Computer science fundamentals",
+			"computer_science",
+		},
+		{
+			"Explain the historical significance of the Roman Empire.",
+			"Historical analysis question",
+			"history",
+		},
+		{
+			"What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?",
+			"Calculus problem",
+			"mathematics",
+		},
+		{
+			"Describe the process of photosynthesis in plants.",
+			"Biological processes question",
+			"biology",
+		},
+		{
+			"What are the principles of macroeconomic policy?",
+			"Economic policy question",
+			"economics",
+		},
+		{
+			"How does machine learning classification work?",
+			"Machine learning concepts",
+			"computer_science",
+		},
+		{
+			"What is the capital of France?",
+			"General knowledge question",
+			"other",
+		},
 	}
 
 	fmt.Println("\nTesting LoRA Intent Classification:")
 	fmt.Println("===================================")
 
-	for i, sample := range testSamples {
-		fmt.Printf("\nTest %d: %s\n", i+1, sample)
+	// Statistics tracking
+	var (
+		totalTests     = len(testSamples)
+		correctTests   = 0
+		highConfidence = 0
+		lowConfidence  = 0
+	)
 
-		result, err := classifyIntentText(sample, config)
+	for i, test := range testSamples {
+		fmt.Printf("\nTest %d: %s\n", i+1, test.description)
+		fmt.Printf("   Text: \"%s\"\n", test.text)
+
+		result, err := classifyIntentText(test.text, config)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			fmt.Printf("   Classification failed: %v\n", err)
 			continue
 		}
 
+		// Get the predicted label name
+		labelName := "unknown"
 		if label, exists := categoryLabels[result.Class]; exists {
-			fmt.Printf("Classification: %s (Class ID: %d, Confidence: %.4f)\n", label, result.Class, result.Confidence)
+			labelName = label
+		}
+
+		// Print the result
+		fmt.Printf("   Classified as: %s (Class ID: %d, Confidence: %.4f)\n",
+			labelName, result.Class, result.Confidence)
+
+		// Check correctness
+		isCorrect := labelName == test.expected
+		if isCorrect {
+			fmt.Printf("   ✓ CORRECT")
+			correctTests++
 		} else {
-			fmt.Printf("Unknown category index: %d (Confidence: %.4f)\n", result.Class, result.Confidence)
+			fmt.Printf("   ✗ INCORRECT (Expected: %s)", test.expected)
+		}
+
+		// Add confidence assessment
+		if result.Confidence > 0.7 {
+			fmt.Printf(" - HIGH CONFIDENCE\n")
+			highConfidence++
+		} else if result.Confidence > 0.5 {
+			fmt.Printf(" - MEDIUM CONFIDENCE\n")
+		} else {
+			fmt.Printf(" - LOW CONFIDENCE\n")
+			lowConfidence++
 		}
 	}
 
-	fmt.Println("\nLoRA Intent Classification test completed!")
+	// Print comprehensive summary
+	fmt.Println("\n" + strings.Repeat("=", 50))
+	fmt.Println("INTENT CLASSIFICATION TEST SUMMARY")
+	fmt.Println(strings.Repeat("=", 50))
+	fmt.Printf("Total Tests: %d\n", totalTests)
+	fmt.Printf("Correct Predictions: %d/%d (%.1f%%)\n", correctTests, totalTests, float64(correctTests)/float64(totalTests)*100)
+	fmt.Printf("High Confidence (>0.7): %d/%d (%.1f%%)\n", highConfidence, totalTests, float64(highConfidence)/float64(totalTests)*100)
+	fmt.Printf("Low Confidence (<0.5): %d/%d (%.1f%%)\n", lowConfidence, totalTests, float64(lowConfidence)/float64(totalTests)*100)
+
+	// Overall assessment
+	accuracy := float64(correctTests) / float64(totalTests) * 100
+	fmt.Printf("\nOVERALL ASSESSMENT: ")
+	if accuracy >= 85.0 {
+		fmt.Printf("EXCELLENT (%.1f%% accuracy)\n", accuracy)
+	} else if accuracy >= 70.0 {
+		fmt.Printf("GOOD (%.1f%% accuracy)\n", accuracy)
+	} else if accuracy >= 50.0 {
+		fmt.Printf("FAIR (%.1f%% accuracy) - Consider retraining\n", accuracy)
+	} else {
+		fmt.Printf("POOR (%.1f%% accuracy) - Requires retraining\n", accuracy)
+	}
+
+	fmt.Println("\nLoRA Intent Classification verification completed!")
 }
