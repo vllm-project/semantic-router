@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openai/openai-go"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -83,18 +84,18 @@ var _ = Describe("Caching Functionality", func() {
 		}
 
 		// Simulate response processing
-		openAIResponse := map[string]interface{}{
-			"choices": []map[string]interface{}{
+		openAIResponse := openai.ChatCompletion{
+			Choices: []openai.ChatCompletionChoice{
 				{
-					"message": map[string]interface{}{
-						"content": "Cached response",
+					Message: openai.ChatCompletionMessage{
+						Content: "Cached response.",
 					},
 				},
 			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     10,
-				"completion_tokens": 5,
-				"total_tokens":      15,
+			Usage: openai.CompletionUsage{
+				PromptTokens:     10,
+				CompletionTokens: 5,
+				TotalTokens:      15,
 			},
 		}
 
@@ -142,18 +143,18 @@ var _ = Describe("Caching Functionality", func() {
 			Expect(err).To(Or(BeNil(), HaveOccurred()))
 
 			// Process response
-			openAIResponse := map[string]interface{}{
-				"choices": []map[string]interface{}{
+			openAIResponse := openai.ChatCompletion{
+				Choices: []openai.ChatCompletionChoice{
 					{
-						"message": map[string]interface{}{
-							"content": "Machine learning is a subset of artificial intelligence...",
+						Message: openai.ChatCompletionMessage{
+							Content: "Machine learning is a subset of artificial intelligence...",
 						},
 					},
 				},
-				"usage": map[string]interface{}{
-					"prompt_tokens":     20,
-					"completion_tokens": 30,
-					"total_tokens":      50,
+				Usage: openai.CompletionUsage{
+					PromptTokens:     20,
+					CompletionTokens: 30,
+					TotalTokens:      50,
 				},
 			}
 
