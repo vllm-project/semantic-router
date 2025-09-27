@@ -101,7 +101,6 @@ type UnifiedClassifierStats struct {
 	Initialized       bool      `json:"initialized"`
 }
 
-// UnifiedClassifier provides true batch inference with shared ModernBERT backbone
 // LoRAModelPaths holds paths to LoRA model files
 type LoRAModelPaths struct {
 	IntentPath   string
@@ -110,6 +109,7 @@ type LoRAModelPaths struct {
 	Architecture string
 }
 
+// UnifiedClassifier provides true batch inference with shared ModernBERT backbone
 type UnifiedClassifier struct {
 	initialized     bool
 	mu              sync.Mutex
