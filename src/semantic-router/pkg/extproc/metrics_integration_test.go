@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openai/openai-go"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -86,23 +87,24 @@ var _ = Describe("Metrics recording", func() {
 		beforePrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
 		beforeCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
 
-		openAIResponse := map[string]interface{}{
-			"id":      "chatcmpl-xyz",
-			"object":  "chat.completion",
-			"created": time.Now().Unix(),
-			"model":   ctx.RequestModel,
-			"usage": map[string]interface{}{
-				"prompt_tokens":     10,
-				"completion_tokens": 5,
-				"total_tokens":      15,
+		openAIResponse := openai.ChatCompletion{
+			ID:      "chatcmpl-xyz",
+			Object:  "chat.completion",
+			Created: time.Now().Unix(),
+			Model:   ctx.RequestModel,
+			Usage: openai.CompletionUsage{
+				PromptTokens:     10,
+				CompletionTokens: 5,
+				TotalTokens:      15,
 			},
-			"choices": []map[string]interface{}{
+			Choices: []openai.ChatCompletionChoice{
 				{
-					"message":       map[string]interface{}{"role": "assistant", "content": "Hello"},
-					"finish_reason": "stop",
+					Message:      openai.ChatCompletionMessage{Role: "assistant", Content: "Hello"},
+					FinishReason: "stop",
 				},
 			},
 		}
+
 		respBodyJSON, err := json.Marshal(openAIResponse)
 		Expect(err).NotTo(HaveOccurred())
 
