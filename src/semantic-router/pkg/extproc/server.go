@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
@@ -14,7 +15,9 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/fsnotify/fsnotify"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
@@ -23,10 +26,12 @@ type Server struct {
 	service    *RouterService
 	server     *grpc.Server
 	port       int
+	secure     bool
+	certPath   string
 }
 
 // NewServer creates a new ExtProc gRPC server
-func NewServer(configPath string, port int) (*Server, error) {
+func NewServer(configPath string, port int, secure bool, certPath string) (*Server, error) {
 	router, err := NewOpenAIRouter(configPath)
 	if err != nil {
 		return nil, err
@@ -37,6 +42,8 @@ func NewServer(configPath string, port int) (*Server, error) {
 		configPath: configPath,
 		service:    service,
 		port:       port,
+		secure:     secure,
+		certPath:   certPath,
 	}, nil
 }
 
@@ -47,10 +54,42 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to listen on port %d: %w", s.port, err)
 	}
 
-	s.server = grpc.NewServer()
-	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
+	// Configure server options based on secure mode
+	var serverOpts []grpc.ServerOption
 
-	observability.Infof("Starting LLM Router ExtProc server on port %d...", s.port)
+	if s.secure {
+		var cert tls.Certificate
+		var err error
+
+		if s.certPath != "" {
+			// Load certificate from provided path
+			certFile := filepath.Join(s.certPath, "tls.crt")
+			keyFile := filepath.Join(s.certPath, "tls.key")
+			cert, err = tls.LoadX509KeyPair(certFile, keyFile)
+			if err != nil {
+				return fmt.Errorf("failed to load TLS certificate from %s: %w", s.certPath, err)
+			}
+			observability.Infof("Loaded TLS certificate from %s", s.certPath)
+		} else {
+			// Create self-signed certificate
+			cert, err = tlsutil.CreateSelfSignedTLSCertificate()
+			if err != nil {
+				return fmt.Errorf("failed to create self-signed certificate: %w", err)
+			}
+			observability.Infof("Created self-signed TLS certificate")
+		}
+
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{cert},
+		})
+		serverOpts = append(serverOpts, grpc.Creds(creds))
+		observability.Infof("Starting secure LLM Router ExtProc server on port %d...", s.port)
+	} else {
+		observability.Infof("Starting insecure LLM Router ExtProc server on port %d...", s.port)
+	}
+
+	s.server = grpc.NewServer(serverOpts...)
+	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
 
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
