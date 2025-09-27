@@ -59,6 +59,8 @@ jobs:
           ~/.cargo/git/db/
           candle-binding/target/
         key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-precommit-
 
     - name: Cache Go dependencies
       uses: actions/cache@v4
@@ -66,6 +68,8 @@ jobs:
         path: |
           ~/go/pkg/mod
         key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-precommit-
 
     - name: Cache Node dependencies
       uses: actions/cache@v4
@@ -73,12 +77,16 @@ jobs:
         path: |
           ~/.npm
         key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-precommit-
 
     - name: Cache pre-commit environments
       uses: actions/cache@v4
       with:
         path: ~/.cache/pre-commit
         key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-precommit-
 
     - name: Install pre-commit
       run: make precommit-install
