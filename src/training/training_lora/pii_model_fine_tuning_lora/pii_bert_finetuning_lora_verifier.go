@@ -25,6 +25,14 @@ type LoRAModelConfig struct {
 	ModelArchitecture         string // Added to track model architecture
 }
 
+// ExpectedEntity represents an expected PII entity for testing
+type ExpectedEntity struct {
+	EntityType string
+	Text       string
+	Start      int
+	End        int
+}
+
 // detectModelArchitecture reads config.json and determines the model architecture
 func detectModelArchitecture(modelPath string) (string, error) {
 	configPath := filepath.Join(modelPath, "config.json")
@@ -50,42 +58,6 @@ func detectModelArchitecture(modelPath string) (string, error) {
 	return architecture, nil
 }
 
-// initializeModels initializes the LoRA PII token classifier based on architecture
-func initializeModels(config LoRAModelConfig) error {
-	// Initialize LoRA PII token classifier
-	if config.EnableTokenClassification {
-		fmt.Printf("\nInitializing LoRA PII token classifier (%s): %s\n", config.ModelArchitecture, config.PIITokenModelPath)
-
-		var err error
-
-		// Choose initialization function based on model architecture
-		switch {
-		case strings.Contains(config.ModelArchitecture, "ModernBert"):
-			err = candle.InitModernBertPIITokenClassifier(config.PIITokenModelPath, config.UseCPU)
-		case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
-			// For BERT and RoBERTa, use new official Candle token classifier
-			numClasses, countErr := countLabelsFromConfig(config.PIITokenModelPath)
-			if countErr != nil {
-				return fmt.Errorf("failed to count labels: %v", countErr)
-			}
-			success := candle.InitCandleBertTokenClassifier(config.PIITokenModelPath, numClasses, config.UseCPU)
-			if !success {
-				err = fmt.Errorf("failed to initialize Candle BERT token classifier")
-			}
-		default:
-			return fmt.Errorf("unsupported model architecture: %s", config.ModelArchitecture)
-		}
-
-		if err != nil {
-			return fmt.Errorf("failed to initialize LoRA PII token classifier: %v", err)
-		}
-		fmt.Printf("LoRA PII token classifier initialized successfully!\n")
-		fmt.Println("   Note: Token-level entity detection enabled with LoRA fine-tuning")
-	}
-
-	return nil
-}
-
 // countLabelsFromConfig counts the number of labels in config.json
 func countLabelsFromConfig(modelPath string) (int, error) {
 	configPath := filepath.Join(modelPath, "config.json")
@@ -108,126 +80,344 @@ func countLabelsFromConfig(modelPath string) (int, error) {
 	return 0, fmt.Errorf("id2label not found in config.json")
 }
 
-// classifyPIITokens performs PII token classification using the appropriate classifier
-func classifyPIITokens(text string, config LoRAModelConfig) (candle.TokenClassificationResult, error) {
-	// Choose classification function based on model architecture
-	switch {
-	case strings.Contains(config.ModelArchitecture, "ModernBert"):
-		configPath := fmt.Sprintf("%s/config.json", config.PIITokenModelPath)
-		return candle.ClassifyModernBertPIITokens(text, configPath)
-	case strings.Contains(config.ModelArchitecture, "Bert") || strings.Contains(config.ModelArchitecture, "Roberta"):
-		// For BERT and RoBERTa, use new official Candle token classifier with proper label mapping
-		labelMappingPath := fmt.Sprintf("%s/label_mapping.json", config.PIITokenModelPath)
-		labelMappingData, err := os.ReadFile(labelMappingPath)
-		if err != nil {
-			fmt.Printf("Warning: Could not read label mapping from %s, using generic labels: %v\n", labelMappingPath, err)
-			return candle.ClassifyCandleBertTokens(text)
-		}
-
-		// Parse label mapping to get id2label
-		var labelMapping map[string]interface{}
-		err = json.Unmarshal(labelMappingData, &labelMapping)
-		if err != nil {
-			fmt.Printf("Warning: Could not parse label mapping, using generic labels: %v\n", err)
-			return candle.ClassifyCandleBertTokens(text)
-		}
-
-		// Extract id2label mapping
-		id2labelInterface, exists := labelMapping["id_to_label"]
-		if !exists {
-			fmt.Printf("Warning: No id_to_label found in mapping, using generic labels\n")
-			return candle.ClassifyCandleBertTokens(text)
-		}
-
-		id2labelJSON, err := json.Marshal(id2labelInterface)
-		if err != nil {
-			fmt.Printf("Warning: Could not serialize id2label mapping, using generic labels: %v\n", err)
-			return candle.ClassifyCandleBertTokens(text)
-		}
-
-		return candle.ClassifyCandleBertTokensWithLabels(text, string(id2labelJSON))
-	default:
-		return candle.TokenClassificationResult{}, fmt.Errorf("unsupported model architecture: %s", config.ModelArchitecture)
+// normalizeBIOLabel converts BIO format labels to simple format for comparison
+func normalizeBIOLabel(label string) string {
+	// Remove BIO prefixes (B-, I-, O-)
+	if strings.HasPrefix(label, "B-") || strings.HasPrefix(label, "I-") {
+		return label[2:]
 	}
+	if label == "O" {
+		return ""
+	}
+	return label
+}
+
+// normalizeEntityType maps various entity type formats to standard format
+func normalizeEntityType(entityType string) string {
+	// First normalize BIO format
+	normalized := normalizeBIOLabel(entityType)
+
+	// Map common variations to expected format
+	switch strings.ToUpper(normalized) {
+	case "EMAIL_ADDRESS", "EMAIL":
+		return "EMAIL"
+	case "PHONE_NUMBER", "PHONE":
+		return "PHONE_NUMBER"
+	case "STREET_ADDRESS", "ADDRESS", "LOCATION", "GPE":
+		return "LOCATION"
+	case "US_SSN", "SSN":
+		return "SSN"
+	case "CREDIT_CARD", "CREDITCARD":
+		return "CREDIT_CARD"
+	case "PERSON", "PER":
+		return "PERSON"
+	case "ORGANIZATION", "ORG":
+		return "ORGANIZATION"
+	case "DOMAIN_NAME", "DOMAIN":
+		return "DOMAIN_NAME"
+	case "TITLE":
+		return "TITLE"
+	default:
+		return strings.ToUpper(normalized)
+	}
+}
+
+// combineBIOEntities combines individual BIO-tagged tokens into complete entities
+func combineBIOEntities(rawEntities []candle.TokenEntity, originalText string) []candle.TokenEntity {
+	if len(rawEntities) == 0 {
+		return rawEntities
+	}
+
+	var combinedEntities []candle.TokenEntity
+	var currentEntity *candle.TokenEntity
+
+	for _, entity := range rawEntities {
+		entityType := entity.EntityType
+
+		if strings.HasPrefix(entityType, "B-") {
+			// Beginning of new entity - save previous if exists
+			if currentEntity != nil {
+				combinedEntities = append(combinedEntities, *currentEntity)
+			}
+
+			// Start new entity
+			baseType := entityType[2:] // Remove "B-" prefix
+			currentEntity = &candle.TokenEntity{
+				EntityType: baseType,
+				Start:      entity.Start,
+				End:        entity.End,
+				Text:       entity.Text,
+				Confidence: entity.Confidence,
+			}
+		} else if strings.HasPrefix(entityType, "I-") {
+			// Inside current entity - extend if same type
+			baseType := entityType[2:] // Remove "I-" prefix
+			if currentEntity != nil && currentEntity.EntityType == baseType {
+				// Extend current entity
+				currentEntity.End = entity.End
+				// Recalculate text from original text using character positions
+				if currentEntity.Start >= 0 && currentEntity.End <= len(originalText) && currentEntity.Start < currentEntity.End {
+					currentEntity.Text = originalText[currentEntity.Start:currentEntity.End]
+				}
+				// Update confidence (use minimum to be conservative)
+				if entity.Confidence < currentEntity.Confidence {
+					currentEntity.Confidence = entity.Confidence
+				}
+			} else {
+				// Different entity type or no current entity - treat as standalone
+				if currentEntity != nil {
+					combinedEntities = append(combinedEntities, *currentEntity)
+				}
+				currentEntity = nil
+			}
+		} else {
+			// "O" tag or other - finish current entity if exists
+			if currentEntity != nil {
+				combinedEntities = append(combinedEntities, *currentEntity)
+				currentEntity = nil
+			}
+
+			// If it's not an "O" tag, treat as standalone entity
+			if entityType != "O" && entityType != "" {
+				combinedEntities = append(combinedEntities, entity)
+			}
+		}
+	}
+
+	// Don't forget the last entity
+	if currentEntity != nil {
+		combinedEntities = append(combinedEntities, *currentEntity)
+	}
+
+	return combinedEntities
 }
 
 func main() {
 	// Parse command line flags
 	var (
-		piiTokenPath              = flag.String("pii-token-model", "lora_pii_detector_modernbert-base_r8_token_model", "Path to LoRA PII token classifier model")
-		enableTokenClassification = flag.Bool("token-classification", true, "Enable token-level PII classification")
-		useCPU                    = flag.Bool("cpu", false, "Use CPU instead of GPU")
+		piiModelPath = flag.String("pii-token-model", "../../../../models/lora_pii_detector_bert-base-uncased_model", "Path to LoRA PII classifier model")
+		architecture = flag.String("architecture", "bert", "Model architecture (bert, roberta, modernbert)")
+		useCPU       = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)
 	flag.Parse()
 
-	config := LoRAModelConfig{
-		PIITokenModelPath:         *piiTokenPath,
-		EnableTokenClassification: *enableTokenClassification,
-		UseCPU:                    *useCPU,
+	if *piiModelPath == "" {
+		log.Fatal("PII model path is required")
 	}
 
-	// Detect model architecture
-	modelArchitecture, err := detectModelArchitecture(*piiTokenPath)
+	fmt.Println("LoRA PII Token Classifier Verifier")
+	fmt.Printf("PII Model: %s\n", *piiModelPath)
+	fmt.Printf("Architecture: %s\n", *architecture)
+
+	// Detect model architecture from config.json
+	modelArchitecture, err := detectModelArchitecture(*piiModelPath)
 	if err != nil {
 		log.Fatalf("Failed to detect model architecture: %v", err)
 	}
-	config.ModelArchitecture = modelArchitecture
 
-	fmt.Println("LoRA PII Token Classifier Verifier")
-	fmt.Println("===================================")
+	// Initialize PII token classifier based on architecture
+	fmt.Printf("Detected model architecture: %s\n", modelArchitecture)
 
-	// Initialize models
-	err = initializeModels(config)
-	if err != nil {
-		log.Fatalf("Failed to initialize models: %v", err)
+	var initSuccess bool
+	switch {
+	case strings.Contains(modelArchitecture, "ModernBert"):
+		err = candle.InitModernBertPIITokenClassifier(*piiModelPath, *useCPU)
+		initSuccess = (err == nil)
+	case strings.Contains(modelArchitecture, "Bert") || strings.Contains(modelArchitecture, "Roberta"):
+		numClasses, countErr := countLabelsFromConfig(*piiModelPath)
+		if countErr != nil {
+			log.Fatalf("Failed to count labels: %v", countErr)
+		}
+		initSuccess = candle.InitCandleBertTokenClassifier(*piiModelPath, numClasses, *useCPU)
+	default:
+		log.Fatalf("Unsupported model architecture: %s", modelArchitecture)
 	}
 
-	if config.EnableTokenClassification {
-		fmt.Println("\nTesting LoRA PII Token Classification:")
-		fmt.Println("======================================")
+	if !initSuccess {
+		log.Fatalf("Failed to initialize PII token classifier")
+	}
 
-		// Test samples with various PII entities
-		testSamples := []string{
-			"My name is John Smith and my email is john.smith@example.com",
-			"Please call me at 555-123-4567 or visit my address at 123 Main Street, New York, NY 10001",
-			"The patient's social security number is 123-45-6789 and credit card is 4111-1111-1111-1111",
-			"Contact Dr. Sarah Johnson at sarah.johnson@hospital.org for medical records",
-			"My personal information: Phone: +1-800-555-0199, Address: 456 Oak Avenue, Los Angeles, CA 90210",
-		}
+	fmt.Println("PII token classifier initialized successfully!")
 
-		for i, sample := range testSamples {
-			fmt.Printf("\nTest %d: %s\n", i+1, sample)
+	// Test cases for PII detection
+	testCases := []struct {
+		text          string
+		description   string
+		expectedPII   bool
+		expectedTypes []string
+	}{
+		{
+			text:          "My name is John Smith and my email is john.smith@example.com",
+			description:   "Name and email detection",
+			expectedPII:   true,
+			expectedTypes: []string{"PERSON", "EMAIL"},
+		},
+		{
+			text:          "Please call me at 555-123-4567 or visit my address at 123 Main Street, New York, NY 10001",
+			description:   "Phone number and address detection",
+			expectedPII:   true,
+			expectedTypes: []string{"PHONE_NUMBER", "LOCATION"},
+		},
+		{
+			text:          "The patient's social security number is 123-45-6789 and credit card is 4111-1111-1111-1111",
+			description:   "SSN and credit card detection",
+			expectedPII:   true,
+			expectedTypes: []string{"SSN", "CREDIT_CARD"},
+		},
+		{
+			text:          "Contact Dr. Sarah Johnson at sarah.johnson@hospital.org for medical records",
+			description:   "Person name and email in medical context",
+			expectedPII:   true,
+			expectedTypes: []string{"PERSON", "EMAIL"},
+		},
+		{
+			text:          "This is a normal sentence without any personal information.",
+			description:   "No PII content",
+			expectedPII:   false,
+			expectedTypes: []string{},
+		},
+	}
 
-			result, err := classifyPIITokens(sample, config)
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
+	// Run tests using unified LoRA classifier
+	fmt.Println("\nTesting PII Detection with Unified LoRA Classifier:")
+	fmt.Println(strings.Repeat("=", 60))
+
+	var (
+		totalTests         = len(testCases)
+		correctPredictions = 0
+		totalTypesFound    = 0
+		totalExpectedTypes = 0
+	)
+
+	for i, testCase := range testCases {
+		fmt.Printf("\nTest %d: %s\n", i+1, testCase.description)
+		fmt.Printf("Text: \"%s\"\n", testCase.text)
+
+		// Use direct PII token classification
+		var tokenResult candle.TokenClassificationResult
+		var err error
+
+		switch {
+		case strings.Contains(modelArchitecture, "ModernBert"):
+			configPath := filepath.Join(*piiModelPath, "config.json")
+			tokenResult, err = candle.ClassifyModernBertPIITokens(testCase.text, configPath)
+		case strings.Contains(modelArchitecture, "Bert") || strings.Contains(modelArchitecture, "Roberta"):
+			configPath := filepath.Join(*piiModelPath, "config.json")
+			configData, readErr := os.ReadFile(configPath)
+			if readErr != nil {
+				fmt.Printf("Failed to read config.json: %v\n", readErr)
 				continue
 			}
 
-			if len(result.Entities) == 0 {
-				fmt.Printf("PII Entities: No entities detected\n")
-			} else {
-				fmt.Printf("PII Entities: %d entities detected:\n", len(result.Entities))
+			var configMap map[string]interface{}
+			if json.Unmarshal(configData, &configMap) != nil {
+				fmt.Printf("Failed to parse config.json\n")
+				continue
+			}
 
-				for j, entity := range result.Entities {
-					fmt.Printf("   %d. %s: \"%s\" [%d-%d] (confidence: %.3f)\n",
-						j+1, entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
+			id2label, exists := configMap["id2label"]
+			if !exists {
+				fmt.Printf("id2label not found in config.json\n")
+				continue
+			}
 
-					// Verify span extraction
-					if entity.Start >= 0 && entity.End <= len(sample) && entity.Start < entity.End {
-						extractedText := sample[entity.Start:entity.End]
-						if extractedText != entity.Text {
-							fmt.Printf("      WARNING: Span mismatch: expected '%s', extracted '%s'\n",
-								entity.Text, extractedText)
-						}
-					} else {
-						fmt.Printf("      WARNING: Invalid span: %d-%d for text length %d\n",
-							entity.Start, entity.End, len(sample))
+			id2labelJSON, _ := json.Marshal(id2label)
+			tokenResult, err = candle.ClassifyCandleBertTokensWithLabels(testCase.text, string(id2labelJSON))
+		}
+
+		if err != nil {
+			fmt.Printf("Classification failed: %v\n", err)
+			continue
+		}
+
+		// Combine BIO-tagged tokens into complete entities
+		tokenResult.Entities = combineBIOEntities(tokenResult.Entities, testCase.text)
+
+		// Extract unique PII types from detected entities
+		piiTypes := make(map[string]bool)
+		hasPII := false
+
+		for _, entity := range tokenResult.Entities {
+			if entity.Confidence >= 0.5 { // Use threshold
+				normalizedType := normalizeEntityType(entity.EntityType)
+				piiTypes[normalizedType] = true
+				hasPII = true
+			}
+		}
+
+		// Convert to slice
+		var detectedTypes []string
+		for piiType := range piiTypes {
+			detectedTypes = append(detectedTypes, piiType)
+		}
+
+		fmt.Printf("Has PII: %v\n", hasPII)
+		if len(detectedTypes) > 0 {
+			fmt.Printf("Detected PII Types: %v\n", detectedTypes)
+		}
+
+		// Check if prediction matches expectation
+		predictionCorrect := hasPII == testCase.expectedPII
+		if predictionCorrect {
+			fmt.Printf("✓ CORRECT: PII detection matches expectation\n")
+			correctPredictions++
+		} else {
+			fmt.Printf("✗ INCORRECT: Expected HasPII=%v, got HasPII=%v\n",
+				testCase.expectedPII, hasPII)
+		}
+
+		// Check detected types if PII was found
+		if hasPII && len(testCase.expectedTypes) > 0 {
+			fmt.Printf("Expected types: %v\n", testCase.expectedTypes)
+			totalExpectedTypes += len(testCase.expectedTypes)
+
+			// Check type matching with flexible comparison
+			typesFound := 0
+			for _, expectedType := range testCase.expectedTypes {
+				for _, detectedType := range detectedTypes {
+					expectedNorm := normalizeEntityType(expectedType)
+					detectedNorm := normalizeEntityType(detectedType)
+
+					if strings.EqualFold(expectedNorm, detectedNorm) {
+						typesFound++
+						break
 					}
 				}
+			}
+
+			totalTypesFound += typesFound
+			if typesFound > 0 {
+				fmt.Printf("✓ Found %d/%d expected PII types\n", typesFound, len(testCase.expectedTypes))
+			} else {
+				fmt.Printf("✗ No expected PII types found\n")
 			}
 		}
 	}
 
-	fmt.Println("\nLoRA PII classification test completed!")
+	// Print comprehensive summary
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Println("UNIFIED LORA PII DETECTION TEST SUMMARY")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Printf("Total Tests: %d\n", totalTests)
+	fmt.Printf("Correct PII Predictions: %d/%d (%.1f%%)\n",
+		correctPredictions, totalTests, float64(correctPredictions)/float64(totalTests)*100)
+
+	if totalExpectedTypes > 0 {
+		fmt.Printf("Expected PII Types Found: %d/%d (%.1f%%)\n",
+			totalTypesFound, totalExpectedTypes, float64(totalTypesFound)/float64(totalExpectedTypes)*100)
+	}
+
+	// Overall assessment
+	fmt.Printf("\nOVERALL ASSESSMENT: ")
+	accuracy := float64(correctPredictions) / float64(totalTests) * 100
+	if accuracy >= 90.0 {
+		fmt.Printf("EXCELLENT (%.1f%% accuracy)\n", accuracy)
+	} else if accuracy >= 80.0 {
+		fmt.Printf("GOOD (%.1f%% accuracy)\n", accuracy)
+	} else if accuracy >= 60.0 {
+		fmt.Printf("FAIR (%.1f%% accuracy) - Consider retraining\n", accuracy)
+	} else {
+		fmt.Printf("POOR (%.1f%% accuracy) - Requires retraining\n", accuracy)
+	}
+
 }

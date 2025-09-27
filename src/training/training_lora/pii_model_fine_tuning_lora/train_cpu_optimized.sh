@@ -12,19 +12,18 @@ echo "🖥️  CPU-Optimized PII LoRA Training"
 echo "=================================="
 
 # CPU-optimized configuration
-EPOCHS=8                    # Reduced epochs for faster training
-LORA_RANK=16               # Smaller rank to reduce memory usage
-LORA_ALPHA=32              # Proportionally adjusted alpha
-MAX_SAMPLES=2000           # Reduced samples for faster training
-BATCH_SIZE=2               # Small batch size for CPU
-LEARNING_RATE=3e-4         # Slightly higher LR for fewer epochs
+EPOCHS=8                     # Reduced epochs for faster training
+LORA_RANK=8                  # Optimal rank for stability and performance
+LORA_ALPHA=16                # Standard alpha (2x rank) for best results
+MAX_SAMPLES=7000             # Increased samples for better PII coverage
+BATCH_SIZE=2                 # Small batch size for CPU
+LEARNING_RATE=3e-5           # Lower learning rate for more stable training
 
-# CPU-friendly model set (smaller models only)
-# Note: All models now use FIXED BIO labeling logic (2025-09-12)
+
 CPU_MODELS=(
-    "bert-base-uncased"     # 110M params - most CPU-friendly, proven stable
-    "roberta-base"          # 125M params - better context understanding
-    "modernbert-base"       # 149M params - latest architecture, now with fixed training
+    "bert-base-uncased"     # 110M params - most CPU-friendly, needs retraining with fixed config
+    "roberta-base"          # 125M params - better PII detection performance, proven stable
+    "modernbert-base"
 )
 
 # Parse command line arguments
@@ -131,7 +130,7 @@ train_cpu_model() {
     local log_file="$RESULTS_DIR/${model_name}_cpu_training.log"
     
     # CPU-optimized training command
-    local cmd="https_proxy=http://10.1.204.246:8080  python pii_bert_finetuning_lora.py \
+    local cmd="python pii_bert_finetuning_lora.py \
         --mode train \
         --model $model_name \
         --epochs $EPOCHS \

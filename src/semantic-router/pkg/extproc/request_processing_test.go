@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openai/openai-go"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -360,23 +361,24 @@ var _ = Describe("Request Processing", func() {
 
 	Describe("handleResponseBody", func() {
 		It("should process response body with token parsing", func() {
-			openAIResponse := map[string]interface{}{
-				"id":      "chatcmpl-123",
-				"object":  "chat.completion",
-				"created": time.Now().Unix(),
-				"model":   "model-a",
-				"usage": map[string]interface{}{
-					"prompt_tokens":     150,
-					"completion_tokens": 50,
-					"total_tokens":      200,
+
+			openAIResponse := openai.ChatCompletion{
+				ID:      "chatcmpl-123",
+				Object:  "chat.completion",
+				Created: time.Now().Unix(),
+				Model:   "model-a",
+				Usage: openai.CompletionUsage{
+					PromptTokens:     150,
+					CompletionTokens: 50,
+					TotalTokens:      200,
 				},
-				"choices": []map[string]interface{}{
+				Choices: []openai.ChatCompletionChoice{
 					{
-						"message": map[string]interface{}{
-							"role":    "assistant",
-							"content": "This is a test response",
+						Message: openai.ChatCompletionMessage{
+							Role:    "assistant",
+							Content: "This is a test response",
 						},
-						"finish_reason": "stop",
+						FinishReason: "stop",
 					},
 				},
 			}
