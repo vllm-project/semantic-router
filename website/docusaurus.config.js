@@ -94,6 +94,11 @@ const config = {
             position: 'left',
           },
           {
+            to: '/publications',
+            label: 'Publications',
+            position: 'left',
+          },
+          {
             type: 'dropdown',
             label: 'Community',
             position: 'left',
