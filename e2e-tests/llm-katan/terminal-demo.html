@@ -20,8 +20,11 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
+            grid-template-areas:
+                "terminal1 terminal3"
+                "terminal2 terminal3";
         }
 
         .terminal {
@@ -29,10 +32,8 @@
             border: 1px solid #333;
             border-radius: 8px;
             padding: 15px;
-            min-height: 220px;
-            max-height: 250px;
+            min-height: 300px;
             position: relative;
-            overflow-y: auto;
         }
 
         .terminal-header {
@@ -73,31 +74,40 @@
             font-size: 16px;
         }
 
-        .terminal-full {
-            grid-column: 1 / -1;
-            margin-top: 20px;
-            min-height: 300px;
-            max-height: none;
+        .terminal1 {
+            grid-area: terminal1;
+        }
+
+        .terminal2 {
+            grid-area: terminal2;
+        }
+
+        .terminal3 {
+            grid-area: terminal3;
+            min-height: 500px;
+            max-height: 600px;
+            font-size: 12px;
+            line-height: 1.2;
         }
     </style>
 </head>
 <body>
     <div class="title">🚀 LLM Katan Multi-Instance Demo</div>
-    <div class="description">Run the same tiny model as different AI providers for testing</div>
+    <div class="description">Multi-instance setup + Enhanced OpenAI API compatibility showcase</div>
 
     <div class="terminal-container">
-        <div class="terminal">
+        <div class="terminal terminal1">
             <div class="terminal-header">Terminal 1: GPT-3.5-Turbo Instance</div>
             <div id="terminal1"></div>
         </div>
 
-        <div class="terminal">
+        <div class="terminal terminal2">
             <div class="terminal-header">Terminal 2: Claude-3-Haiku Instance</div>
             <div id="terminal2"></div>
         </div>
 
-        <div class="terminal terminal-full">
-            <div class="terminal-header">Terminal 3: Testing Both Endpoints</div>
+        <div class="terminal terminal3">
+            <div class="terminal-header">Terminal 3: Testing Enhanced OpenAI Compatibility</div>
             <div id="terminal3"></div>
         </div>
     </div>
@@ -148,10 +158,10 @@
         // Terminal 3: Testing both endpoints (starts after both servers finish)
         setTimeout(() => {
             new TypeIt("#terminal3", {
-                speed: 50,
+                speed: 17,
                 waitUntilVisible: true
             })
-            .type('<span class="success"># Both servers are now running! Let\'s test them...</span>')
+            .type('<span class="success"># Both servers are now running! Let\'s test enhanced OpenAI compatibility...</span>')
             .break()
             .break()
             .pause(1000)
@@ -160,20 +170,14 @@
             .type('<span class="output">"gpt-3.5-turbo"</span>')
             .break()
             .break()
-            .pause(1500)
+            .pause(1000)
             .type('<span class="prompt">$</span> <span class="command">curl http://localhost:8001/v1/models | jq \'.data[0].id\'</span>')
             .break()
             .type('<span class="output">"claude-3-haiku"</span>')
             .break()
             .break()
-            .pause(1500)
-            .type('<span class="success"># Same Qwen3-0.6B model, different API names!</span>')
-            .break()
-            .type('<span class="success"># Perfect for testing multi-provider scenarios 🎯</span>')
-            .break()
-            .break()
             .pause(1000)
-            .type('<span class="prompt">$</span> <span class="command"># Try a chat completion with "GPT"</span>')
+            .type('<span class="success"># Testing full OpenAI-compatible response</span>')
             .break()
             .type('<span class="prompt">$</span> <span class="command">curl -X POST http://localhost:8000/v1/chat/completions \\</span>')
             .break()
@@ -181,9 +185,59 @@
             .break()
             .type('<span class="command">  -d \'{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi!"}]}\'</span>')
             .break()
-            .type('<span class="output">{"choices": [{"message": {"content": "Hello! How can I help you today?"}}]}</span>')
+            .pause(1000)
+            .type('<span class="output">{</span>')
+            .break()
+            .type('<span class="output">  "id": "cmpl-mock-1734567890",</span>')
+            .break()
+            .type('<span class="output">  "object": "chat.completion",</span>')
+            .break()
+            .type('<span class="output">  "created": 1734567890,</span>')
+            .break()
+            .type('<span class="output">  "model": "gpt-3.5-turbo",</span>')
+            .break()
+            .type('<span class="output">  "system_fingerprint": "llm-katan-v0.1.8",</span>')
+            .break()
+            .type('<span class="output">  "choices": [{</span>')
+            .break()
+            .type('<span class="output">    "index": 0,</span>')
+            .break()
+            .type('<span class="output">    "message": {"role": "assistant", "content": "Hello! How can I help?"},</span>')
+            .break()
+            .type('<span class="output">    "finish_reason": "stop",</span>')
+            .break()
+            .type('<span class="output">    "logprobs": null</span>')
+            .break()
+            .type('<span class="output">  }],</span>')
+            .break()
+            .type('<span class="output">  "usage": {</span>')
+            .break()
+            .type('<span class="output">    "prompt_tokens": 12,</span>')
+            .break()
+            .type('<span class="output">    "completion_tokens": 8,</span>')
+            .break()
+            .type('<span class="output">    "total_tokens": 20,</span>')
+            .break()
+            .type('<span class="output">    "prompt_tokens_details": {"cached_tokens": 0},</span>')
+            .break()
+            .type('<span class="output">    "completion_tokens_details": {"reasoning_tokens": 0}</span>')
+            .break()
+            .type('<span class="output">  },</span>')
+            .break()
+            .type('<span class="output">  "token_usage": {</span>')
+            .break()
+            .type('<span class="output">    "prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20</span>')
+            .break()
+            .type('<span class="output">  }</span>')
+            .break()
+            .type('<span class="output">}</span>')
+            .break()
+            .pause(1000)
+            .type('<span class="success"># ✨ Enhanced compatibility with all OpenAI SDK fields!</span>')
+            .break()
+            .type('<span class="success"># 🎯 Same tiny model, multiple providers, full API support</span>')
             .go();
-        }, 10000); // Start after both terminals complete (~10 seconds)
+        }, 8500); // Start after both terminals complete (~8.5 seconds)
     </script>
 </body>
 </html>
