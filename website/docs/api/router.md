@@ -327,6 +327,30 @@ sum by (model) (rate(llm_request_errors_total[15m]))
 sum(increase(llm_request_errors_total{reason="pii_policy_denied"}[24h]))
 ```
 
+### TTFT and TPOT Metrics
+
+Time-to-first-token (TTFT) and time-per-output-token (TPOT) are exported as Prometheus histograms and can be visualized at p95 with histogram_quantile.
+
+- `llm_model_ttft_seconds{model}`
+  - Histogram: Exposes `_bucket`, `_sum`, `_count`
+  - Description: Time to first token since the router started processing the request
+  - Example p95 (last 5m) by model:
+
+```prometheus
+histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le, model))
+```
+
+- `llm_model_tpot_seconds{model}`
+  - Histogram: Exposes `_bucket`, `_sum`, `_count`
+  - Description: Seconds per output token (completion latency / completion tokens)
+  - Example p95 (last 5m) by model:
+
+```prometheus
+histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le, model))
+```
+
+These are included in the provided Grafana dashboard at deploy/llm-router-dashboard.json as “TTFT (p95) by Model” and “TPOT (p95) by Model (sec/token)”.
+
 ### Pricing Configuration
 
 Provide per-1M pricing for your models so the router can compute request cost and emit metrics/logs.
