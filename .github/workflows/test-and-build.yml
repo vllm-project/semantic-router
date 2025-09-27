@@ -3,100 +3,105 @@ name: Test And Build
 on:
   schedule:
     # Run nightly at 2:00 AM UTC
-    - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual triggering
-  pull_request:  # Run on all pull requests
+    - cron: "0 2 * * *"
+  workflow_dispatch: # Allow manual triggering
+  pull_request: # Run on all pull requests
 
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Check out the repo
-      uses: actions/checkout@v4
+      - name: Check out the repo
+        uses: actions/checkout@v4
 
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: 1.85
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          make \
-          build-essential \
-          pkg-config
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            build-essential \
+            pkg-config
 
-    - name: Cache Rust dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          candle-binding/target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-    - name: Cache Go dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Cache Models
-      uses: actions/cache@v4
-      with:
-        path: |
-          models/
-        key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
-        restore-keys: |
-          ${{ runner.os }}-models-v1-
+      - name: Cache Models
+        uses: actions/cache@v4
+        with:
+          path: |
+            models/
+          key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
+          restore-keys: |
+            ${{ runner.os }}-models-v1-
 
-    - name: Check go mod tidy
-      run: make check-go-mod-tidy
+      - name: Check go mod tidy
+        run: make check-go-mod-tidy
 
-    - name: Build Rust library
-      run: make rust
+      - name: Build Rust library
+        run: make rust
 
-    - name: Install HuggingFace CLI
-      run: |
-        pip install -U "huggingface_hub[cli]"
+      - name: Install HuggingFace CLI
+        run: |
+          pip install -U "huggingface_hub[cli]"
 
-    - name: Download models
-      run: make download-models
 
-    - name: Run semantic router tests
-      run: make test
-      env:
-        CGO_ENABLED: 1
-        LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+      - name: Download models (minimal on PRs)
+        env:
+          CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
+          HF_HUB_ENABLE_HF_TRANSFER: 1
+          HF_HUB_DISABLE_TELEMETRY: 1
+        run: make download-models
 
-    - name: Upload test artifacts on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-logs
-        path: |
-          **/*.log
-          **/test-output.*
-        retention-days: 7
+      - name: Run semantic router tests
+        run: make test
+        env:
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
 
-    - name: Notify on failure
-      if: failure()
-      run: |
-        echo "::error::Test and build failed. Check the workflow run for details."
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            **/*.log
+            **/test-output.*
+          retention-days: 7
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Test and build failed. Check the workflow run for details."
 
   # Trigger Docker publishing on successful nightly runs
   publish-docker:
