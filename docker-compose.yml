@@ -93,6 +93,21 @@ services:
     networks:
       - semantic-network
 
+  # LLM Katan service for testing
+  llm-katan:
+    build:
+      context: ./e2e-tests/llm-katan
+      dockerfile: Dockerfile
+    container_name: llm-katan
+    profiles: ["testing", "llm-katan"]
+    ports:
+      - "8002:8000"
+    environment:
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
+    networks:
+      - semantic-network
+    command: ["llm-katan", "--model", "Qwen/Qwen3-0.6B", "--host", "0.0.0.0", "--port", "8000"]
+
 networks:
   semantic-network:
     driver: bridge
