@@ -32,6 +32,62 @@ func serializeOpenAIRequest(req *openai.ChatCompletionNewParams) ([]byte, error)
 	return json.Marshal(req)
 }
 
+// addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
+func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]byte, error) {
+	if systemPrompt == "" {
+		return requestBody, nil
+	}
+
+	// Parse the JSON request body
+	var requestMap map[string]interface{}
+	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
+		return nil, err
+	}
+
+	// Get the messages array
+	messagesInterface, ok := requestMap["messages"]
+	if !ok {
+		return requestBody, nil // No messages array, return original
+	}
+
+	messages, ok := messagesInterface.([]interface{})
+	if !ok {
+		return requestBody, nil // Messages is not an array, return original
+	}
+
+	// Create a new system message
+	systemMessage := map[string]interface{}{
+		"role":    "system",
+		"content": systemPrompt,
+	}
+
+	// Check if there's already a system message at the beginning
+	hasSystemMessage := false
+	if len(messages) > 0 {
+		if firstMsg, ok := messages[0].(map[string]interface{}); ok {
+			if role, ok := firstMsg["role"].(string); ok && role == "system" {
+				hasSystemMessage = true
+			}
+		}
+	}
+
+	if hasSystemMessage {
+		// Replace the existing system message
+		messages[0] = systemMessage
+		observability.Infof("Replaced existing system message with category-specific system prompt")
+	} else {
+		// Prepend the system message to the beginning of the messages array
+		messages = append([]interface{}{systemMessage}, messages...)
+		observability.Infof("Added category-specific system prompt to the beginning of messages")
+	}
+
+	// Update the messages in the request map
+	requestMap["messages"] = messages
+
+	// Marshal back to JSON
+	return json.Marshal(requestMap)
+}
+
 // extractUserAndNonUserContent extracts content from request messages
 func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
 	var userContent string
@@ -414,6 +470,20 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					observability.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
 					metrics.RecordRequestError(actualModel, "serialization_error")
 					return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
+				}
+
+				// Add category-specific system prompt if configured
+				if categoryName != "" {
+					category := r.Classifier.GetCategoryByName(categoryName)
+					if category != nil && category.SystemPrompt != "" {
+						modifiedBody, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt)
+						if err != nil {
+							observability.Errorf("Error adding system prompt to request: %v", err)
+							metrics.RecordRequestError(actualModel, "serialization_error")
+							return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
+						}
+						observability.Infof("Added category-specific system prompt for category: %s", categoryName)
+					}
 				}
 
 				// Create body mutation with the modified body

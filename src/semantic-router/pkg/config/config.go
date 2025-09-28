@@ -273,6 +273,8 @@ type Category struct {
 	// used by the classifier model. When provided, classifier outputs will be translated
 	// from these MMLU categories to this generic category name.
 	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
+	// SystemPrompt is an optional category-specific system prompt automatically injected into requests
+	SystemPrompt string `yaml:"system_prompt,omitempty"`
 }
 
 // Legacy types - can be removed once migration is complete

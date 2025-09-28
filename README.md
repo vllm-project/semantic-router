@@ -44,6 +44,10 @@ Benchmarking will be conducted to determine the best implementation.
 
 Select the tools to use based on the prompt, avoiding the use of tools that are not relevant to the prompt so as to reduce the number of prompt tokens and improve tool selection accuracy by the LLM.
 
+#### Category-Specific System Prompts
+
+Automatically inject specialized system prompts based on query classification, ensuring optimal model behavior for different domains (math, coding, business, etc.) without manual prompt engineering.
+
 ### Enterprise Security 🔒
 
 #### PII detection
