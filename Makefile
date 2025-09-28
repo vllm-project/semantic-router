@@ -15,6 +15,7 @@ _run:
 		-f tools/make/models.mk \
 		-f tools/make/pre-commit.mk \
 		-f tools/make/docker.mk \
+		-f tools/make/kube.mk \
 		$(MAKECMDGOALS)
 
 .PHONY: _run

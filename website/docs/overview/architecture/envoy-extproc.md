@@ -227,7 +227,7 @@ func (r *OpenAIRouter) handleRequestBody(
     headerMutations := []*core.HeaderValueOption{
         {
             Header: &core.HeaderValue{
-                Key:   "x-semantic-destination-endpoint", 
+                Key:   "x-gateway-destination-endpoint", 
                 Value: selectedEndpoint,
             },
             Append: &wrapperspb.BoolValue{Value: false},
@@ -361,7 +361,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-semantic-destination-endpoint"
+                  - name: "x-gateway-destination-endpoint"
                     string_match:
                       exact: "endpoint1"
                 route:
@@ -370,7 +370,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-semantic-destination-endpoint"  
+                  - name: "x-gateway-destination-endpoint"  
                     string_match:
                       exact: "endpoint2"
                 route:
@@ -379,7 +379,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-semantic-destination-endpoint"
+                  - name: "x-gateway-destination-endpoint"
                     string_match:
                       exact: "endpoint3"
                 route:
@@ -410,7 +410,7 @@ static_resources:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"     # Required for content analysis
-                response_body_mode: "BUFFERED"    # Required for caching
+                response_body_mode: "BUFFERED"    # Default: router flips to STREAMED at runtime for SSE
                 request_trailer_mode: "SKIP"
                 response_trailer_mode: "SKIP"
               
@@ -419,6 +419,13 @@ static_resources:
               allow_mode_override: true           # Allow ExtProc to change modes
               message_timeout: 300s               # Timeout for ExtProc responses
               max_message_timeout: 600s           # Maximum allowed timeout
+
+> Note on SSE (streaming):
+>
+> When the upstream responds with `Content-Type: text/event-stream`, the router sets a per-message
+> `ModeOverride` with `response_body_mode: STREAMED` so the first chunk reaches ExtProc immediately.
+> This enables accurate TTFT measurement on the first token. No manual change to the static
+> `processing_mode` is required as long as `allow_mode_override: true` is set (it is in the default configs).
               
               # Advanced configuration
               mutation_rules:

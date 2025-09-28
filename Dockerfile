@@ -23,15 +23,27 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install Envoy
 ENV ENVOY_VERSION=1.31.7
-RUN curl -OL https://github.com/envoyproxy/envoy/releases/download/${ENVOY_VERSION}/envoy-${ENVOY_VERSION}-linux-x86_64 
-RUN chmod +x envoy-${ENVOY_VERSION}-linux-x86_64
-RUN mv envoy-${ENVOY_VERSION}-linux-x86_64 /usr/local/bin/envoy
-
+RUN ARCH=$(uname -m) && \
+    case ${ARCH} in \
+        x86_64) ENVOY_ARCH="x86_64" ;; \
+        aarch64|arm64) ENVOY_ARCH="aarch64" ;; \
+        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+    esac && \
+    curl -OL https://github.com/envoyproxy/envoy/releases/download/v${ENVOY_VERSION}/envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} && \
+    chmod +x envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} && \
+    mv envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} /usr/local/bin/envoy
+    
 # Install Golang
 ENV GOLANG_VERSION=1.24.1
-RUN curl -OL https://golang.org/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go${GOLANG_VERSION}.linux-amd64.tar.gz && \
-    rm go${GOLANG_VERSION}.linux-amd64.tar.gz
+RUN ARCH=$(uname -m) && \
+    case ${ARCH} in \
+        x86_64) GO_ARCH="amd64" ;; \
+        aarch64|arm64) GO_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+    esac && \
+    curl -OL https://golang.org/dl/go${GOLANG_VERSION}.linux-${GO_ARCH}.tar.gz && \
+    tar -C /usr/local -xzf go${GOLANG_VERSION}.linux-${GO_ARCH}.tar.gz && \
+    rm go${GOLANG_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOPATH="/go"
 ENV PATH="/go/bin:${PATH}"

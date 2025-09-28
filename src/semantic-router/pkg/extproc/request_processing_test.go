@@ -445,5 +445,127 @@ var _ = Describe("Request Processing", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(response.GetResponseBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
 		})
+
+		Context("with category-specific system prompt", func() {
+			BeforeEach(func() {
+				// Add a category with system prompt to the config
+				cfg.Categories = append(cfg.Categories, config.Category{
+					Name:         "math",
+					Description:  "Mathematical queries and calculations",
+					SystemPrompt: "You are a helpful assistant specialized in mathematics. Please provide step-by-step solutions.",
+					ModelScores: []config.ModelScore{
+						{Model: "model-a", Score: 0.9, UseReasoning: config.BoolPtr(false)},
+					},
+				})
+
+				// Recreate router with updated config
+				var err error
+				router, err = CreateTestRouter(cfg)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should add category-specific system prompt to auto model requests", func() {
+				request := cache.OpenAIRequest{
+					Model: "auto",
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: "What is the derivative of x^2 + 3x + 1?"},
+					},
+				}
+
+				requestBody, err := json.Marshal(request)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyRequest := &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{
+						Body: requestBody,
+					},
+				}
+
+				ctx := &extproc.RequestContext{
+					Headers:   make(map[string]string),
+					RequestID: "system-prompt-test-request",
+					StartTime: time.Now(),
+				}
+
+				response, err := router.HandleRequestBody(bodyRequest, ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyResp := response.GetRequestBody()
+				Expect(bodyResp.Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+
+				// Check if the request body was modified with system prompt
+				if bodyResp.Response.BodyMutation != nil {
+					modifiedBody := bodyResp.Response.BodyMutation.GetBody()
+					Expect(modifiedBody).NotTo(BeNil())
+
+					var modifiedRequest map[string]interface{}
+					err = json.Unmarshal(modifiedBody, &modifiedRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					messages, ok := modifiedRequest["messages"].([]interface{})
+					Expect(ok).To(BeTrue())
+					Expect(len(messages)).To(BeNumerically(">=", 2))
+
+					// Check that system message was added
+					firstMessage, ok := messages[0].(map[string]interface{})
+					Expect(ok).To(BeTrue())
+					Expect(firstMessage["role"]).To(Equal("system"))
+					Expect(firstMessage["content"]).To(ContainSubstring("mathematics"))
+					Expect(firstMessage["content"]).To(ContainSubstring("step-by-step"))
+				}
+			})
+
+			It("should replace existing system prompt with category-specific one", func() {
+				request := cache.OpenAIRequest{
+					Model: "auto",
+					Messages: []cache.ChatMessage{
+						{Role: "system", Content: "You are a general assistant."},
+						{Role: "user", Content: "Solve the equation 2x + 5 = 15"},
+					},
+				}
+
+				requestBody, err := json.Marshal(request)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyRequest := &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{
+						Body: requestBody,
+					},
+				}
+
+				ctx := &extproc.RequestContext{
+					Headers:   make(map[string]string),
+					RequestID: "system-prompt-replace-test-request",
+					StartTime: time.Now(),
+				}
+
+				response, err := router.HandleRequestBody(bodyRequest, ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyResp := response.GetRequestBody()
+				Expect(bodyResp.Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+
+				// Check if the request body was modified with system prompt
+				if bodyResp.Response.BodyMutation != nil {
+					modifiedBody := bodyResp.Response.BodyMutation.GetBody()
+					Expect(modifiedBody).NotTo(BeNil())
+
+					var modifiedRequest map[string]interface{}
+					err = json.Unmarshal(modifiedBody, &modifiedRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					messages, ok := modifiedRequest["messages"].([]interface{})
+					Expect(ok).To(BeTrue())
+					Expect(len(messages)).To(Equal(2))
+
+					// Check that system message was replaced
+					firstMessage, ok := messages[0].(map[string]interface{})
+					Expect(ok).To(BeTrue())
+					Expect(firstMessage["role"]).To(Equal("system"))
+					Expect(firstMessage["content"]).To(ContainSubstring("mathematics"))
+					Expect(firstMessage["content"]).NotTo(ContainSubstring("general assistant"))
+				}
+			})
+		})
 	})
 })
