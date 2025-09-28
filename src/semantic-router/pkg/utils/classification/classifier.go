@@ -785,6 +785,12 @@ func (c *Classifier) findCategory(categoryName string) *config.Category {
 	return nil
 }
 
+// GetCategoryByName returns the category configuration by name (case-insensitive)
+// This is a public method that can be used by other packages to get category information
+func (c *Classifier) GetCategoryByName(categoryName string) *config.Category {
+	return c.findCategory(categoryName)
+}
+
 // buildCategoryNameMappings builds translation maps between MMLU-Pro and generic categories
 func (c *Classifier) buildCategoryNameMappings() {
 	c.MMLUToGeneric = make(map[string]string)

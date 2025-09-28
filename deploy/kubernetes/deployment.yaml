@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: semantic-router
+  namespace: vllm-semantic-router-system
   labels:
     app: semantic-router
 spec:
@@ -18,7 +19,7 @@ spec:
       - name: model-downloader
         image: python:3.11-slim
         securityContext:
-          runAsNonRoot: true
+          runAsNonRoot: false
           allowPrivilegeEscalation: false
         command: ["/bin/bash", "-c"]
         args:
@@ -67,14 +68,23 @@ spec:
         env:
         - name: HF_HUB_CACHE
           value: /tmp/hf_cache
+        # Reduced resource requirements for init container
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
         volumeMounts:
         - name: models-volume
           mountPath: /app/models
       containers:
       - name: semantic-router
         image: ghcr.io/vllm-project/semantic-router/extproc:latest
+        args: ["--secure=true"]
         securityContext:
-          runAsNonRoot: true
+          runAsNonRoot: false
           allowPrivilegeEscalation: false
         ports:
         - containerPort: 50051
@@ -82,6 +92,9 @@ spec:
           protocol: TCP
         - containerPort: 9190
           name: metrics
+          protocol: TCP
+        - containerPort: 8080
+          name: classify-api
           protocol: TCP
         env:
         - name: LD_LIBRARY_PATH
@@ -95,24 +108,25 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 50051
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 10
           failureThreshold: 3
         readinessProbe:
           tcpSocket:
             port: 50051
-          initialDelaySeconds: 45
+          initialDelaySeconds: 90
           periodSeconds: 30
-          timeoutSeconds: 5
+          timeoutSeconds: 10
           failureThreshold: 3
+        # Significantly reduced resource requirements for kind cluster
         resources:
           requests:
-            memory: "8Gi"
-            cpu: "2"
+            memory: "3Gi"    # Reduced from 8Gi
+            cpu: "1"         # Reduced from 2
           limits:
-            memory: "12Gi"
-            cpu: "4"
+            memory: "6Gi"    # Reduced from 12Gi
+            cpu: "2"         # Reduced from 4
       volumes:
       - name: config-volume
         configMap:

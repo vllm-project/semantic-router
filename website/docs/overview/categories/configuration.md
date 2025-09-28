@@ -4,7 +4,7 @@ This guide covers how to configure categories in vLLM Semantic Router, including
 
 ## Configuration Overview
 
-Categories are configured in the main `config.yaml` file under the `categories` section. Each category defines how queries of that type should be handled, including model preferences, reasoning settings, and routing behavior.
+Categories are configured in the main `config.yaml` file under the `categories` section. Each category defines how queries of that type should be handled, including model preferences, system prompts, reasoning settings, and routing behavior.
 
 ## Basic Configuration Structure
 
@@ -12,6 +12,7 @@ Categories are configured in the main `config.yaml` file under the `categories` 
 categories:
   - name: "category_name"
     description: "Optional description"
+    system_prompt: "Category-specific system prompt"
     use_reasoning: true|false
     reasoning_description: "Why reasoning is needed"
     reasoning_effort: "low|medium|high"
@@ -47,6 +48,19 @@ categories:
 categories:
   - name: "math"
     description: "Mathematical problems requiring step-by-step solutions"
+```
+
+#### `system_prompt` (Optional)
+
+- **Type**: String
+- **Description**: Category-specific system prompt automatically injected into requests
+- **Behavior**: Replaces existing system messages or adds new one at the beginning
+- **Example**: `"You are a mathematics expert. Provide step-by-step solutions."`
+
+```yaml
+categories:
+  - name: "math"
+    system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
 ```
 
 ### Reasoning Configuration
@@ -430,11 +444,46 @@ routing_rules:
 # New format (current)
 categories:
   - name: "math"
+    system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
     use_reasoning: true
     reasoning_effort: "high"
     model_scores:
       - model: "phi4"
         score: 1.0
+```
+
+## Complete Configuration Example
+
+```yaml
+categories:
+  - name: "math"
+    description: "Mathematical problems and calculations"
+    system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+    use_reasoning: true
+    reasoning_effort: "high"
+    model_scores:
+      - model: "openai/gpt-oss-20b"
+        score: 0.9
+        use_reasoning: true
+
+  - name: "computer science"
+    description: "Programming and software engineering"
+    system_prompt: "You are a computer science expert. Provide clear, practical solutions with code examples when helpful."
+    use_reasoning: true
+    reasoning_effort: "medium"
+    model_scores:
+      - model: "openai/gpt-oss-20b"
+        score: 0.8
+        use_reasoning: true
+
+  - name: "business"
+    description: "Business strategy and management"
+    system_prompt: "You are a professional business consultant. Provide practical, actionable advice."
+    use_reasoning: false
+    model_scores:
+      - model: "openai/gpt-oss-20b"
+        score: 0.7
+        use_reasoning: false
 ```
 
 ## Next Steps
