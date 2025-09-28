@@ -164,6 +164,10 @@ type RequestContext struct {
 	StartTime           time.Time
 	ProcessingStartTime time.Time
 
+	// Streaming detection
+	ExpectStreamingResponse bool // set from request Accept header
+	IsStreamingResponse     bool // set from response Content-Type
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
@@ -177,13 +181,13 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 	// Store headers for later use
 	headers := v.RequestHeaders.Headers
-	observability.Infof("Processing %d request headers", len(headers.Headers))
 	for _, h := range headers.Headers {
 		// Prefer Value when available; fall back to RawValue
 		headerValue := h.Value
 		if headerValue == "" && len(h.RawValue) > 0 {
 			headerValue = string(h.RawValue)
 		}
+		observability.Debugf("Processing header: %s=%s", h.Key, headerValue)
 
 		ctx.Headers[h.Key] = headerValue
 		// Store request ID if present (case-insensitive)
@@ -192,7 +196,14 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		}
 	}
 
-	// Allow the request to continue
+	// Detect if the client expects a streaming response (SSE)
+	if accept, ok := ctx.Headers["accept"]; ok {
+		if strings.Contains(strings.ToLower(accept), "text/event-stream") {
+			ctx.ExpectStreamingResponse = true
+		}
+	}
+
+	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &ext_proc.HeadersResponse{
@@ -204,16 +215,20 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		},
 	}
 
+	// If streaming is expected, we rely on Envoy config to set response_body_mode: STREAMED for SSE.
+	// Some Envoy/control-plane versions may not support per-message ModeOverride; avoid compile-time coupling here.
+	// The Accept header is still recorded on context for downstream logic.
+
 	return response, nil
 }
 
 // handleRequestBody processes the request body
 func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	observability.Infof("Received request body")
+	observability.Infof("Received request body %s", string(v.RequestBody.GetBody()))
 	// Record start time for model routing
 	ctx.ProcessingStartTime = time.Now()
 	// Save the original request body
-	ctx.OriginalRequestBody = v.RequestBody.Body
+	ctx.OriginalRequestBody = v.RequestBody.GetBody()
 
 	// Parse the OpenAI request using SDK types
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
@@ -499,7 +514,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				if selectedEndpoint != "" {
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:      "x-semantic-destination-endpoint",
+							Key:      "x-gateway-destination-endpoint",
 							RawValue: []byte(selectedEndpoint),
 						},
 					})
@@ -585,7 +600,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		if selectedEndpoint != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{
 				Header: &core.HeaderValue{
-					Key:      "x-semantic-destination-endpoint",
+					Key:      "x-gateway-destination-endpoint",
 					RawValue: []byte(selectedEndpoint),
 				},
 			})
@@ -738,7 +753,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		(*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() != nil {
 		for _, header := range (*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
 			switch header.Header.Key {
-			case "x-semantic-destination-endpoint":
+			case "x-gateway-destination-endpoint":
 				selectedEndpoint = header.Header.Value
 			case "x-selected-model":
 				actualModel = header.Header.Value
@@ -750,7 +765,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	if selectedEndpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "x-semantic-destination-endpoint",
+				Key:      "x-gateway-destination-endpoint",
 				RawValue: []byte(selectedEndpoint),
 			},
 		})

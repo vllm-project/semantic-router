@@ -148,7 +148,7 @@ The router adds metadata headers to both requests and responses:
 
 | Header | Description | Example |
 |--------|-------------|---------|
-| `x-semantic-destination-endpoint` | Backend endpoint selected | `endpoint1` |
+| `x-gateway-destination-endpoint` | Backend endpoint selected | `endpoint1` |
 | `x-selected-model` | Model category determined | `mathematics` |
 | `x-routing-confidence` | Classification confidence | `0.956` |
 | `x-request-id` | Unique request identifier | `req-abc123` |
@@ -350,6 +350,12 @@ histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le, mo
 ```
 
 These are included in the provided Grafana dashboard at deploy/llm-router-dashboard.json as “TTFT (p95) by Model” and “TPOT (p95) by Model (sec/token)”.
+
+#### Streaming (SSE) notes
+
+- For Server-Sent Events (SSE) responses, the router measures TTFT on the first streamed body chunk (i.e., the first token), not on response headers.
+- No manual change to your Envoy config is required: the ExtProc handler automatically sets a ModeOverride with `response_body_mode: STREAMED` for SSE responses so the first chunk reaches ExtProc immediately.
+- Prerequisite: Envoy’s ext_proc filter must have `allow_mode_override: true` (the default configs in `config/envoy.yaml` and `config/envoy-docker.yaml` already include this). Keeping `response_body_mode: BUFFERED` in the static processing mode is fine; the router will flip it to STREAMED at runtime for SSE.
 
 ### Pricing Configuration
 
