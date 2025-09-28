@@ -438,7 +438,6 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
 							Key:      "x-selected-model",
-							Value:    actualModel,
 							RawValue: []byte(actualModel),
 						},
 					})
