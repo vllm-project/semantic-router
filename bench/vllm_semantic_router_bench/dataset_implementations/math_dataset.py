@@ -115,10 +115,11 @@ class MATHDataset(DatasetInterface):
             # The solution contains the final answer in \boxed{} format
             question_text = row["problem"]
             solution = row["solution"]
-            
+
             # Extract boxed answer as the correct answer
             import re
-            boxed_match = re.search(r'\\boxed\{([^}]+)\}', solution)
+
+            boxed_match = re.search(r"\\boxed\{([^}]+)\}", solution)
             correct_answer = boxed_match.group(1) if boxed_match else "Unknown"
 
             question = Question(
@@ -132,7 +133,7 @@ class MATHDataset(DatasetInterface):
                     "level": row.get("level", "Unknown"),
                     "subject": row["type"],
                     "solution": solution,
-                }
+                },
             )
             questions.append(question)
 
@@ -151,7 +152,7 @@ class MATHDataset(DatasetInterface):
         """Format prompt for MATH questions."""
         if prompt_style == "plain":
             return f"Solve this mathematics problem step by step:\n\n{question.question}\n\nProvide your final answer in the format: Answer: [your answer]"
-        
+
         elif prompt_style == "explicit_cot":
             return f"""Solve this mathematics problem step by step, showing all your work:
 
@@ -165,6 +166,6 @@ Please work through this step-by-step:
 5. Verify your answer
 
 Provide your final answer in the format: Answer: [your answer]"""
-        
+
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")

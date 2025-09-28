@@ -84,7 +84,7 @@ class AquaRatDataset(DatasetInterface):
         if samples_per_category:
             np.random.seed(seed)
             random.seed(seed)
-            
+
             sample_size = min(samples_per_category, len(df))
             df = df.sample(n=sample_size, random_state=seed)
 
@@ -101,7 +101,8 @@ class AquaRatDataset(DatasetInterface):
             for option in raw_options:
                 # Remove letter prefix like "A)", "B)", etc.
                 import re
-                cleaned = re.sub(r'^[A-E]\)', '', option).strip()
+
+                cleaned = re.sub(r"^[A-E]\)", "", option).strip()
                 options.append(cleaned)
 
             question = Question(
@@ -115,7 +116,7 @@ class AquaRatDataset(DatasetInterface):
                     "difficulty": "Moderate",
                     "type": "algebraic_word_problem",
                     "rationale": rationale,
-                }
+                },
             )
             questions.append(question)
 
@@ -132,8 +133,10 @@ class AquaRatDataset(DatasetInterface):
 
     def format_prompt(self, question: Question, prompt_style: str = "plain") -> str:
         """Format prompt for AQUA-RAT questions."""
-        options_text = "\n".join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(question.options)])
-        
+        options_text = "\n".join(
+            [f"{chr(65+i)}) {opt}" for i, opt in enumerate(question.options)]
+        )
+
         if prompt_style == "plain":
             return f"""Solve this algebraic word problem:
 
@@ -145,7 +148,7 @@ Please provide your answer in the following structured format:
 ANSWER: [letter]
 
 For example: ANSWER: A"""
-        
+
         elif prompt_style == "explicit_cot":
             return f"""Solve this algebraic word problem step by step:
 
@@ -165,6 +168,6 @@ Please provide your final answer in the following structured format:
 ANSWER: [letter]
 
 For example: ANSWER: A"""
-        
+
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")

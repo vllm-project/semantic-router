@@ -32,10 +32,15 @@ from .dataset_factory import DatasetFactory, list_available_datasets
 from .dataset_interface import DatasetInfo, Question, questions_to_dataframe
 
 # Robust answer extraction patterns for structured response parsing
-ANSWER_PATTERN_PRIMARY = re.compile(r"(?:answer\s*:?\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE)
-ANSWER_PATTERN_FINAL = re.compile(r"(?:final\s*answer\s*:?\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE)
+ANSWER_PATTERN_PRIMARY = re.compile(
+    r"(?:answer\s*:?\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE
+)
+ANSWER_PATTERN_FINAL = re.compile(
+    r"(?:final\s*answer\s*:?\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE
+)
 ANSWER_PATTERN_CONCLUSION = re.compile(
-    r"(?:therefore|thus|so).*?(?:answer\s+is\s+|is\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE
+    r"(?:therefore|thus|so).*?(?:answer\s+is\s+|is\s+)([A-Z])(?:\s|[.!?)]|$)",
+    re.IGNORECASE,
 )
 
 
@@ -221,20 +226,16 @@ def get_dataset_optimal_tokens(dataset_info, model_name=None):
         "gpqa": 4000,  # Graduate-level scientific reasoning (proven optimal from results)
         "mmlu": 4000,  # Academic knowledge (proven optimal from results)
         "truthfulqa": 2500,  # Misconception analysis (proven adequate from results)
-        
         # Mathematical reasoning datasets
         # "math": 6000,  # Competition mathematics - DISABLED: dataset not available
         "gsm8k": 2500,  # Elementary math word problems - simpler than competition math
         "aqua-rat": 3000,  # Algebraic word problems with rationales
-        
         # Multi-step reasoning datasets
         "drop": 4000,  # Reading comprehension with discrete reasoning - complex passages
         "strategyqa": 3500,  # Multi-step implicit reasoning - requires detailed thinking
-        
         # Scientific reasoning datasets
         "sciq": 2000,  # Science questions - moderate complexity
         "openbookqa": 2500,  # Elementary science with fact reasoning
-        
         # Other datasets
         "hellaswag": 2000,  # Natural continuation reasoning
         "arc": 2000,  # Elementary/middle school science
@@ -259,7 +260,9 @@ def get_dataset_optimal_tokens(dataset_info, model_name=None):
         if "mmlu" in dataset_name or "gpqa" in dataset_name:
             final_tokens = 10240
             dataset_type = "MMLU" if "mmlu" in dataset_name else "GPQA"
-            print(f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)")
+            print(
+                f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)"
+            )
             return final_tokens
         # elif "math" in dataset_name:  # DISABLED: dataset not available
         #     final_tokens = 8000  # Competition math needs extensive proofs
@@ -332,7 +335,7 @@ def extract_answer(response: Any, question: Optional[Question] = None) -> Option
         return structured_answer
 
     # Determine answer format based on question type
-    if question and hasattr(question, 'options') and question.options:
+    if question and hasattr(question, "options") and question.options:
         if len(question.options) == 2 and set(question.options) == {"Yes", "No"}:
             # Binary Yes/No questions (StrategyQA)
             return extract_binary_answer(response)
@@ -347,12 +350,12 @@ def extract_answer(response: Any, question: Optional[Question] = None) -> Option
 def extract_structured_answer(response: str) -> Optional[str]:
     """Extract answer from structured 'ANSWER: [value]' format."""
     # Look for "ANSWER: [value]" pattern (case insensitive)
-    pattern = re.compile(r'ANSWER:\s*(.+?)(?:\n|$)', re.IGNORECASE)
+    pattern = re.compile(r"ANSWER:\s*(.+?)(?:\n|$)", re.IGNORECASE)
     match = pattern.search(response)
     if match:
         answer = match.group(1).strip()
         # Clean up common trailing punctuation
-        answer = re.sub(r'[.!?]+$', '', answer)
+        answer = re.sub(r"[.!?]+$", "", answer)
         return answer
     return None
 
@@ -369,13 +372,13 @@ def extract_multiple_choice_answer(response: str) -> Optional[str]:
 
     # Additional patterns for common answer formats
     additional_patterns = [
-        r'(?:correct\s+answer\s+is\s+)([A-Z])',  # "correct answer is E"
-        r'(?:option\s+)([A-Z])',  # "option E"
-        r'(?:choice\s+)([A-Z])',  # "choice E"
-        r'([A-Z])\)',  # "E)" format
-        r'([A-Z])\s*[.!]?\s*$',  # Letter at end of line
+        r"(?:correct\s+answer\s+is\s+)([A-Z])",  # "correct answer is E"
+        r"(?:option\s+)([A-Z])",  # "option E"
+        r"(?:choice\s+)([A-Z])",  # "choice E"
+        r"([A-Z])\)",  # "E)" format
+        r"([A-Z])\s*[.!]?\s*$",  # Letter at end of line
     ]
-    
+
     for pattern in additional_patterns:
         match = re.search(pattern, response, re.IGNORECASE)
         if match:
@@ -393,13 +396,15 @@ def extract_multiple_choice_answer(response: str) -> Optional[str]:
     for line in reversed(lines[-3:]):
         line = line.strip()
         # Look for letter after common words
-        context_match = re.search(r'(?:is|answer|option|choice)\s+([A-Z])(?:\s|[.!?]|$)', line, re.IGNORECASE)
+        context_match = re.search(
+            r"(?:is|answer|option|choice)\s+([A-Z])(?:\s|[.!?]|$)", line, re.IGNORECASE
+        )
         if context_match:
             return context_match.group(1).upper()
-    
+
     # Final fallback: Find last letter that appears to be an answer (not in middle of words)
     # Only consider letters that are standalone or followed by punctuation
-    for match in re.finditer(r'\b([A-Z])(?:\s|[.!?)]|$)', response):
+    for match in re.finditer(r"\b([A-Z])(?:\s|[.!?)]|$)", response):
         letter = match.group(1).upper()
         if letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
             return letter  # Return the last match found
@@ -410,37 +415,33 @@ def extract_multiple_choice_answer(response: str) -> Optional[str]:
 def extract_binary_answer(response: str) -> Optional[str]:
     """Extract Yes/No answer from response."""
     response_lower = response.lower()
-    
+
     # Look for explicit yes/no patterns
-    yes_patterns = [
-        r'\byes\b', r'\btrue\b', r'\bcorrect\b', r'\baffirmative\b'
-    ]
-    no_patterns = [
-        r'\bno\b', r'\bfalse\b', r'\bincorrect\b', r'\bnegative\b'
-    ]
-    
+    yes_patterns = [r"\byes\b", r"\btrue\b", r"\bcorrect\b", r"\baffirmative\b"]
+    no_patterns = [r"\bno\b", r"\bfalse\b", r"\bincorrect\b", r"\bnegative\b"]
+
     # Check last few lines first (most likely to contain final answer)
-    lines = response.strip().split('\n')
+    lines = response.strip().split("\n")
     for line in reversed(lines[-3:]):
         line_lower = line.lower().strip()
-        
+
         for pattern in yes_patterns:
             if re.search(pattern, line_lower):
                 return "Yes"
-        
+
         for pattern in no_patterns:
             if re.search(pattern, line_lower):
                 return "No"
-    
+
     # Fallback: check entire response
     for pattern in yes_patterns:
         if re.search(pattern, response_lower):
             return "Yes"
-    
+
     for pattern in no_patterns:
         if re.search(pattern, response_lower):
             return "No"
-    
+
     return None
 
 
@@ -448,74 +449,88 @@ def extract_free_form_answer(response: str) -> Optional[str]:
     """Extract free-form answer (numbers, text, etc.)."""
     # For numerical answers, look for numbers with improved patterns
     number_patterns = [
-        r'(?:answer\s*:?\s*)([0-9,.-]+)',  # "Answer: 42" or "Answer 42"
-        r'####\s*([0-9,.-]+)',  # GSM8K format "#### 42"
-        r'\$([0-9,.-]+)',  # Money format "$42"
-        r'([0-9,.-]+)\s*(?:dollars?|cents?|%|percent)',  # "42 dollars"
-        r'(?:is\s+)([0-9,.-]+)',  # "is 42" or "is 68.5"
-        r'(?:was\s+)([0-9,.-]+)',  # "was 42"
-        r'(?:were\s+)([0-9,.-]+)',  # "were 42"
-        r'([0-9,.-]+)(?:\s+(?:people|units|items|years|days|months|miles|kilometers|percent|%|dollars?|cents?))',  # "68.5 people"
+        r"(?:answer\s*:?\s*)([0-9,.-]+)",  # "Answer: 42" or "Answer 42"
+        r"####\s*([0-9,.-]+)",  # GSM8K format "#### 42"
+        r"\$([0-9,.-]+)",  # Money format "$42"
+        r"([0-9,.-]+)\s*(?:dollars?|cents?|%|percent)",  # "42 dollars"
+        r"(?:is\s+)([0-9,.-]+)",  # "is 42" or "is 68.5"
+        r"(?:was\s+)([0-9,.-]+)",  # "was 42"
+        r"(?:were\s+)([0-9,.-]+)",  # "were 42"
+        r"([0-9,.-]+)(?:\s+(?:people|units|items|years|days|months|miles|kilometers|percent|%|dollars?|cents?))",  # "68.5 people"
     ]
-    
+
     # Check last few lines first (most likely to contain final answer)
-    lines = response.strip().split('\n')
+    lines = response.strip().split("\n")
     for line in reversed(lines[-3:]):
         line = line.strip()
-        
+
         for pattern in number_patterns:
             match = re.search(pattern, line, re.IGNORECASE)
             if match:
-                return match.group(1).replace(',', '')  # Remove commas from numbers
-    
+                return match.group(1).replace(",", "")  # Remove commas from numbers
+
     # Fallback: check entire response for numbers
     for pattern in number_patterns:
         match = re.search(pattern, response, re.IGNORECASE)
         if match:
-            return match.group(1).replace(',', '')
-    
+            return match.group(1).replace(",", "")
+
     # For non-numerical free-form answers (like "germans", "Centenary Medal")
     # Look for explicit answer patterns first
     text_patterns = [
-        r'(?:answer\s*:?\s*)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "Answer: germans" or "Answer: Centenary Medal"
-        r'(?:is\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "is germans"
-        r'(?:was\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "was Centenary Medal"
-        r'(?:were\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "were germans"
-        r'(?:awarded\s+(?:him\s+)?(?:the\s+)?)([A-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "awarded the Centenary Medal"
-        r'(?:received\s+(?:the\s+)?)([A-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "received the Centenary Medal"
-        r'(?:called\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "called germans"
-        r'(?:named\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)',  # "named Centenary Medal"
+        r"(?:answer\s*:?\s*)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "Answer: germans" or "Answer: Centenary Medal"
+        r"(?:is\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "is germans"
+        r"(?:was\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "was Centenary Medal"
+        r"(?:were\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "were germans"
+        r"(?:awarded\s+(?:him\s+)?(?:the\s+)?)([A-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "awarded the Centenary Medal"
+        r"(?:received\s+(?:the\s+)?)([A-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "received the Centenary Medal"
+        r"(?:called\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "called germans"
+        r"(?:named\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "named Centenary Medal"
     ]
-    
+
     # Check last few lines for text answers
     for line in reversed(lines[-3:]):
         line = line.strip()
-        
+
         for pattern in text_patterns:
             match = re.search(pattern, line, re.IGNORECASE)
             if match:
                 answer = match.group(1).strip()
                 # Clean up common suffixes but preserve important words
-                answer = re.sub(r'\s+(?:in\s+\d+|for\s+service).*$', '', answer, flags=re.IGNORECASE)
+                answer = re.sub(
+                    r"\s+(?:in\s+\d+|for\s+service).*$", "", answer, flags=re.IGNORECASE
+                )
                 # Limit to reasonable length (1-4 words for most DROP answers)
                 words = answer.split()
                 if len(words) <= 4:
                     return answer
                 else:
-                    return ' '.join(words[:2])  # Take first 2 words for long matches
-    
+                    return " ".join(words[:2])  # Take first 2 words for long matches
+
     # Final fallback: extract last meaningful line
     for line in reversed(lines[-3:]):
         line = line.strip()
-        if line and not line.startswith(('Question:', 'Answer:', 'Therefore', 'So', 'Thus', 'Based on', 'Looking at')):
+        if line and not line.startswith(
+            (
+                "Question:",
+                "Answer:",
+                "Therefore",
+                "So",
+                "Thus",
+                "Based on",
+                "Looking at",
+            )
+        ):
             # Remove common prefixes and return clean answer
-            line = re.sub(r'^(?:the\s+)?(?:answer\s+is\s+)?', '', line, flags=re.IGNORECASE)
+            line = re.sub(
+                r"^(?:the\s+)?(?:answer\s+is\s+)?", "", line, flags=re.IGNORECASE
+            )
             # Take first few words if it's a long sentence
             words = line.split()
             if len(words) > 5:
-                return ' '.join(words[:3])  # Take first 3 words
+                return " ".join(words[:3])  # Take first 3 words
             return line.strip()
-    
+
     return None
 
 
@@ -523,28 +538,28 @@ def compare_free_form_answers(predicted: str, correct: str) -> bool:
     """Compare free-form answers with normalization."""
     if not predicted or not correct:
         return False
-    
+
     # Normalize both answers
     predicted_norm = normalize_answer(predicted)
     correct_norm = normalize_answer(correct)
-    
+
     # Direct match
     if predicted_norm == correct_norm:
         return True
-    
+
     # For numerical answers, try parsing as numbers
     try:
-        pred_num = float(predicted_norm.replace(',', ''))
-        correct_num = float(correct_norm.replace(',', ''))
+        pred_num = float(predicted_norm.replace(",", ""))
+        correct_num = float(correct_norm.replace(",", ""))
         # Allow small floating point differences
         return abs(pred_num - correct_num) < 1e-6
     except (ValueError, AttributeError):
         pass
-    
+
     # For text answers, check if predicted contains correct or vice versa
     if len(predicted_norm) > 3 and len(correct_norm) > 3:
         return predicted_norm in correct_norm or correct_norm in predicted_norm
-    
+
     return False
 
 
@@ -552,20 +567,27 @@ def normalize_answer(answer: str) -> str:
     """Normalize answer for comparison."""
     if not isinstance(answer, str):
         answer = str(answer)
-    
+
     # Convert to lowercase and strip
     answer = answer.lower().strip()
-    
+
     # Remove common punctuation and extra spaces
-    answer = re.sub(r'[^\w\s.-]', '', answer)
-    answer = re.sub(r'\s+', ' ', answer).strip()
-    
+    answer = re.sub(r"[^\w\s.-]", "", answer)
+    answer = re.sub(r"\s+", " ", answer).strip()
+
     # Remove common prefixes
-    prefixes = ['the answer is', 'answer:', 'the answer:', 'answer is', 'final answer:', 'therefore']
+    prefixes = [
+        "the answer is",
+        "answer:",
+        "the answer:",
+        "answer is",
+        "final answer:",
+        "therefore",
+    ]
     for prefix in prefixes:
         if answer.startswith(prefix):
-            answer = answer[len(prefix):].strip()
-    
+            answer = answer[len(prefix) :].strip()
+
     return answer
 
 
@@ -603,7 +625,7 @@ def build_extra_body_for_model(
     model_name: str, reasoning: Optional[bool]
 ) -> Optional[Dict[str, Any]]:
     """Return an extra_body dict to toggle reasoning for a given model.
-    
+
     This function matches the exact pattern from reasoning_eval_consolidated.py
     to ensure compatibility and consistent behavior.
 
@@ -616,7 +638,7 @@ def build_extra_body_for_model(
         return None
 
     lower = model_name.lower()
-    
+
     # DeepSeek v3.1 family (matches reasoning_eval_consolidated.py pattern)
     if (("ds" in lower) or ("deepseek" in lower)) and (
         "v31" in lower or "v3.1" in lower or "v3" in lower
@@ -657,7 +679,9 @@ def process_question_single(
     # Format prompt based on mode
     if prompt_mode == "XC":
         prompt = dataset.format_prompt(question, "explicit_cot")
-        extra_body = None  # XC mode never uses reasoning parameters (CoT prompt instead)
+        extra_body = (
+            None  # XC mode never uses reasoning parameters (CoT prompt instead)
+        )
     elif prompt_mode == "AR":
         prompt = dataset.format_prompt(question, "plain")
         extra_body = ar_extra_body
@@ -678,7 +702,7 @@ def process_question_single(
     # Compare predicted answer with correct answer (handle multiple formats)
     is_correct = False
     if predicted_answer:
-        if hasattr(question, 'options') and question.options:
+        if hasattr(question, "options") and question.options:
             if len(question.options) == 2 and set(question.options) == {"Yes", "No"}:
                 # Binary Yes/No questions (StrategyQA)
                 is_correct = predicted_answer == question.correct_answer
@@ -693,7 +717,9 @@ def process_question_single(
                     is_correct = predicted_idx == question.correct_answer
         else:
             # Free-form questions (GSM8K, DROP, etc.)
-            is_correct = compare_free_form_answers(predicted_answer, question.correct_answer)
+            is_correct = compare_free_form_answers(
+                predicted_answer, question.correct_answer
+            )
 
     return {
         "mode": prompt_mode,

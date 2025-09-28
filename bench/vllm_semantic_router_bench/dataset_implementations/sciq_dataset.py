@@ -84,7 +84,7 @@ class SciQDataset(DatasetInterface):
         if samples_per_category:
             np.random.seed(seed)
             random.seed(seed)
-            
+
             sample_size = min(samples_per_category, len(df))
             df = df.sample(n=sample_size, random_state=seed)
 
@@ -93,13 +93,13 @@ class SciQDataset(DatasetInterface):
         for _, row in df.iterrows():
             question_text = row["question"]
             correct_answer = row["correct_answer"]
-            
+
             # Build options list
             options = [
                 row["correct_answer"],
-                row["distractor1"], 
+                row["distractor1"],
                 row["distractor2"],
-                row["distractor3"]
+                row["distractor3"],
             ]
             # Shuffle options and find correct index
             random.seed(42)  # Fixed seed for reproducible option order
@@ -118,8 +118,10 @@ class SciQDataset(DatasetInterface):
                 metadata={
                     "difficulty": "Moderate",
                     "type": "science_multiple_choice",
-                    "support": row.get("support", ""),  # Background passage if available
-                }
+                    "support": row.get(
+                        "support", ""
+                    ),  # Background passage if available
+                },
             )
             questions.append(question)
 
@@ -136,20 +138,22 @@ class SciQDataset(DatasetInterface):
 
     def format_prompt(self, question: Question, prompt_style: str = "plain") -> str:
         """Format prompt for SciQ questions."""
-        options_text = "\n".join([f"{chr(65+i)}) {opt}" for i, opt in enumerate(question.options)])
-        
+        options_text = "\n".join(
+            [f"{chr(65+i)}) {opt}" for i, opt in enumerate(question.options)]
+        )
+
         # Add support passage if available
         support_text = ""
         if question.metadata and question.metadata.get("support"):
             support_text = f"Background: {question.metadata['support']}\n\n"
-        
+
         if prompt_style == "plain":
             return f"""{support_text}Question: {question.question}
 
 {options_text}
 
 Provide your answer in the format 'Answer: [letter]'."""
-        
+
         elif prompt_style == "explicit_cot":
             return f"""{support_text}Question: {question.question}
 
@@ -164,6 +168,6 @@ Please work through this step-by-step:
 5. Select the best answer
 
 Show your scientific reasoning step by step, then provide your answer in the format 'Answer: [letter]'."""
-        
+
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")

@@ -84,7 +84,7 @@ class DROPDataset(DatasetInterface):
         if samples_per_category:
             np.random.seed(seed)
             random.seed(seed)
-            
+
             sample_size = min(samples_per_category, len(df))
             df = df.sample(n=sample_size, random_state=seed)
 
@@ -115,7 +115,7 @@ class DROPDataset(DatasetInterface):
                     "type": "discrete_reasoning",
                     "passage": passage,
                     "question_only": question_text,
-                }
+                },
             )
             questions.append(question)
 
@@ -141,7 +141,7 @@ Please provide your answer in the following structured format:
 ANSWER: [your answer]
 
 For example: ANSWER: 68.5 or ANSWER: germans or ANSWER: Centenary Medal"""
-        
+
         elif prompt_style == "explicit_cot":
             return f"""{question.question}
 
@@ -156,6 +156,6 @@ Work through your reasoning step by step, then provide your final answer in the 
 ANSWER: [your answer]
 
 For example: ANSWER: 68.5 or ANSWER: germans or ANSWER: Centenary Medal"""
-        
+
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")

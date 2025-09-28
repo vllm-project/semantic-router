@@ -84,7 +84,7 @@ class GSM8KDataset(DatasetInterface):
         if samples_per_category:
             np.random.seed(seed)
             random.seed(seed)
-            
+
             sample_size = min(samples_per_category, len(df))
             df = df.sample(n=sample_size, random_state=seed)
 
@@ -93,11 +93,12 @@ class GSM8KDataset(DatasetInterface):
         for _, row in df.iterrows():
             question_text = row["question"]
             answer_text = row["answer"]
-            
+
             # Extract the final numerical answer from the solution
             import re
+
             # GSM8K answers end with "#### [number]"
-            answer_match = re.search(r'####\s*([0-9,.-]+)', answer_text)
+            answer_match = re.search(r"####\s*([0-9,.-]+)", answer_text)
             correct_answer = answer_match.group(1) if answer_match else "Unknown"
 
             question = Question(
@@ -111,7 +112,7 @@ class GSM8KDataset(DatasetInterface):
                     "difficulty": "Elementary",
                     "type": "word_problem",
                     "solution": answer_text,
-                }
+                },
             )
             questions.append(question)
 
@@ -137,7 +138,7 @@ Please provide your final answer in the following structured format:
 ANSWER: [number]
 
 For example: ANSWER: 42"""
-        
+
         elif prompt_style == "explicit_cot":
             return f"""Solve this math word problem step by step, showing all your work:
 
@@ -154,6 +155,6 @@ Please provide your final answer in the following structured format:
 ANSWER: [number]
 
 For example: ANSWER: 42"""
-        
+
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")

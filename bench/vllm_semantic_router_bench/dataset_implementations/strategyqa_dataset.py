@@ -84,7 +84,7 @@ class StrategyQADataset(DatasetInterface):
         if samples_per_category:
             np.random.seed(seed)
             random.seed(seed)
-            
+
             sample_size = min(samples_per_category, len(df))
             df = df.sample(n=sample_size, random_state=seed)
 
@@ -94,13 +94,15 @@ class StrategyQADataset(DatasetInterface):
             question_text = row["question"]
             answer = row["answer"]  # Boolean
             correct_answer = "Yes" if answer else "No"
-            
+
             # Build CoT from decomposition and evidence if available
             cot_content = None
             if "decomposition" in row and row["decomposition"]:
                 decomp = row["decomposition"]
                 if isinstance(decomp, list):
-                    cot_content = "Reasoning steps:\n" + "\n".join([f"{i+1}. {step}" for i, step in enumerate(decomp)])
+                    cot_content = "Reasoning steps:\n" + "\n".join(
+                        [f"{i+1}. {step}" for i, step in enumerate(decomp)]
+                    )
                 else:
                     cot_content = f"Reasoning: {decomp}"
 
@@ -115,7 +117,7 @@ class StrategyQADataset(DatasetInterface):
                     "difficulty": "Hard",
                     "type": "multi_step_reasoning",
                     "requires_implicit_steps": True,
-                }
+                },
             )
             questions.append(question)
 
@@ -140,7 +142,7 @@ class StrategyQADataset(DatasetInterface):
 Think carefully about what information and reasoning steps are needed to answer this question.
 
 Answer: """
-        
+
         elif prompt_style == "explicit_cot":
             return f"""Answer this question with Yes or No, showing your reasoning:
 
@@ -154,6 +156,6 @@ Please work through this step-by-step:
 5. Reach your conclusion
 
 Show your reasoning step by step, then provide your final answer (Yes or No)."""
-        
+
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")

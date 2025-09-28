@@ -40,7 +40,15 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     test_parser.add_argument(
         "--dataset",
         required=True,
-        choices=["mmlu", "arc", "arc-challenge", "gpqa", "truthfulqa", "commonsenseqa", "hellaswag"],
+        choices=[
+            "mmlu",
+            "arc",
+            "arc-challenge",
+            "gpqa",
+            "truthfulqa",
+            "commonsenseqa",
+            "hellaswag",
+        ],
         help="Dataset to test",
     )
     test_parser.add_argument(
@@ -68,7 +76,15 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     compare_parser.add_argument(
         "--dataset",
         required=True,
-        choices=["mmlu", "arc", "arc-challenge", "gpqa", "truthfulqa", "commonsenseqa", "hellaswag"],
+        choices=[
+            "mmlu",
+            "arc",
+            "arc-challenge",
+            "gpqa",
+            "truthfulqa",
+            "commonsenseqa",
+            "hellaswag",
+        ],
         help="Dataset to benchmark",
     )
     compare_parser.add_argument(
@@ -119,7 +135,14 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     comprehensive_parser.add_argument(
         "--datasets",
         nargs="+",
-        default=["mmlu", "arc-challenge", "gpqa", "truthfulqa", "commonsenseqa", "hellaswag"],
+        default=[
+            "mmlu",
+            "arc-challenge",
+            "gpqa",
+            "truthfulqa",
+            "commonsenseqa",
+            "hellaswag",
+        ],
         help="Datasets to benchmark",
     )
     comprehensive_parser.add_argument(
