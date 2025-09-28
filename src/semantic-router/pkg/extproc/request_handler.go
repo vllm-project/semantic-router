@@ -164,6 +164,10 @@ type RequestContext struct {
 	StartTime           time.Time
 	ProcessingStartTime time.Time
 
+	// Streaming detection
+	ExpectStreamingResponse bool // set from request Accept header
+	IsStreamingResponse     bool // set from response Content-Type
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
@@ -192,7 +196,14 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		}
 	}
 
-	// Allow the request to continue
+	// Detect if the client expects a streaming response (SSE)
+	if accept, ok := ctx.Headers["accept"]; ok {
+		if strings.Contains(strings.ToLower(accept), "text/event-stream") {
+			ctx.ExpectStreamingResponse = true
+		}
+	}
+
+	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &ext_proc.HeadersResponse{
@@ -203,6 +214,10 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			},
 		},
 	}
+
+	// If streaming is expected, we rely on Envoy config to set response_body_mode: STREAMED for SSE.
+	// Some Envoy/control-plane versions may not support per-message ModeOverride; avoid compile-time coupling here.
+	// The Accept header is still recorded on context for downstream logic.
 
 	return response, nil
 }
