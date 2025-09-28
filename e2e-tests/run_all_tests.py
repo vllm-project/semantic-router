@@ -4,6 +4,8 @@ Run all tests in sequence.
 
 This script runs all the test files in the tests directory in order,
 providing a complete test of the Semantic Router system.
+
+Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import argparse
@@ -57,7 +59,7 @@ def check_envoy_running():
     try:
         # Simple request with minimal content
         payload = {
-            "model": "gemma3:27b",
+            "model": "Qwen/Qwen2-0.5B-Instruct",
             "messages": [{"role": "user", "content": "test"}],
         }
         response = requests.post(
@@ -87,6 +89,12 @@ def main():
     )
     parser.add_argument("--pattern", default="*.py", help="Test file pattern to run")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--mock", action="store_true", help="Running with mock vLLM servers"
+    )
+    parser.add_argument(
+        "--real", action="store_true", help="Running with real vLLM servers"
+    )
     args = parser.parse_args()
 
     # Get the directory where this script is located
@@ -118,6 +126,18 @@ def main():
     if not test_files:
         print(f"No test files found matching pattern '{args.pattern}'")
         return 1
+
+    # Print test mode information
+    if args.mock:
+        print("\n🤖 Running in MOCK mode - using mock vLLM servers")
+        print("   ✅ Fast execution, no GPU required")
+        print("   ⚠️  Mock responses, not real model inference")
+    elif args.real:
+        print("\n🧠 Running in REAL mode - using actual vLLM servers")
+        print("   🚀 Real model inference and responses")
+        print("   ⚠️  Requires GPU and longer execution time")
+    else:
+        print("\n🔍 Running in STANDARD mode - checking whatever is available")
 
     print(f"\nRunning {len(test_files)} test files:")
     for file in test_files:

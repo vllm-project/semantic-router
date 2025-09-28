@@ -1,0 +1,61 @@
+<!-- Embeddable Terminal Demo Widget -->
+<div id="llm-katan-demo" style="
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    max-width: 800px;
+    margin: 20px auto;
+    font-size: 13px;
+    line-height: 1.4;
+">
+    <div style="color: #569cd6; font-weight: bold; margin-bottom: 15px; text-align: center;">
+        🚀 LLM Katan Multi-Instance Demo
+    </div>
+    <div id="demo-content"></div>
+</div>
+
+<script src="https://unpkg.com/typeit@8.8.0/dist/index.umd.js"></script>
+<script>
+new TypeIt("#demo-content", {
+    speed: 40,
+    waitUntilVisible: true
+})
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;">pip install llm-katan</span>')
+.break()
+.type('Successfully installed llm-katan-0.1.8')
+.break()
+.break()
+.pause(800)
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;"># Start mock GPT-3.5-Turbo on port 8000</span>')
+.break()
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;">llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "gpt-3.5-turbo"</span>')
+.break()
+.type('<span style="color: #4fc1e9;">✅ Server running on http://0.0.0.0:8000</span>')
+.break()
+.break()
+.pause(800)
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;"># Start mock Claude-3-Haiku on port 8001</span>')
+.break()
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;">llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "claude-3-haiku"</span>')
+.break()
+.type('<span style="color: #4fc1e9;">✅ Server running on http://0.0.0.0:8001</span>')
+.break()
+.break()
+.pause(800)
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;">curl localhost:8000/v1/models | jq \'.data[0].id\'</span>')
+.break()
+.type('"gpt-3.5-turbo"')
+.break()
+.break()
+.type('<span style="color: #4ec9b0;">$</span> <span style="color: #ce9178;">curl localhost:8001/v1/models | jq \'.data[0].id\'</span>')
+.break()
+.type('"claude-3-haiku"')
+.break()
+.break()
+.pause(800)
+.type('<span style="color: #4fc1e9;"># Same tiny model, different API names! 🎯</span>')
+.go();
+</script>

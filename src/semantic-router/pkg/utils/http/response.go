@@ -8,6 +8,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/openai/openai-go"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
@@ -18,26 +19,26 @@ func CreatePIIViolationResponse(model string, deniedPII []string) *ext_proc.Proc
 	metrics.RecordPIIViolations(model, deniedPII)
 
 	// Create OpenAI-compatible response format for PII violations
-	openAIResponse := map[string]interface{}{
-		"id":                 fmt.Sprintf("chatcmpl-pii-violation-%d", time.Now().Unix()),
-		"object":             "chat.completion",
-		"created":            time.Now().Unix(),
-		"model":              model,
-		"system_fingerprint": "router_pii_policy",
-		"choices": []map[string]interface{}{
+	unixTimeStep := time.Now().Unix()
+	openAIResponse := openai.ChatCompletion{
+		ID:      fmt.Sprintf("chatcmpl-pii-violation-%d", unixTimeStep),
+		Object:  "chat.completion",
+		Created: unixTimeStep,
+		Model:   model,
+		Choices: []openai.ChatCompletionChoice{
 			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": fmt.Sprintf("I cannot process this request as it contains personally identifiable information (%v) that is not allowed for the '%s' model according to the configured privacy policy. Please remove any sensitive information and try again.", deniedPII, model),
+				Index: 0,
+				Message: openai.ChatCompletionMessage{
+					Role:    "assistant",
+					Content: fmt.Sprintf("I cannot process this request as it contains personally identifiable information (%v) that is not allowed for the '%s' model according to the configured privacy policy. Please remove any sensitive information and try again.", deniedPII, model),
 				},
-				"finish_reason": "content_filter",
+				FinishReason: "content_filter",
 			},
 		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     0,
-			"completion_tokens": 0,
-			"total_tokens":      0,
+		Usage: openai.CompletionUsage{
+			PromptTokens:     0,
+			CompletionTokens: 0,
+			TotalTokens:      0,
 		},
 	}
 
@@ -81,26 +82,25 @@ func CreatePIIViolationResponse(model string, deniedPII []string) *ext_proc.Proc
 // CreateJailbreakViolationResponse creates an HTTP response for jailbreak detection violations
 func CreateJailbreakViolationResponse(jailbreakType string, confidence float32) *ext_proc.ProcessingResponse {
 	// Create OpenAI-compatible response format for jailbreak violations
-	openAIResponse := map[string]interface{}{
-		"id":                 fmt.Sprintf("chatcmpl-jailbreak-blocked-%d", time.Now().Unix()),
-		"object":             "chat.completion",
-		"created":            time.Now().Unix(),
-		"model":              "security-filter",
-		"system_fingerprint": "router_prompt_guard",
-		"choices": []map[string]interface{}{
+	openAIResponse := openai.ChatCompletion{
+		ID:      fmt.Sprintf("chatcmpl-jailbreak-blocked-%d", time.Now().Unix()),
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   "security-filter",
+		Choices: []openai.ChatCompletionChoice{
 			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": fmt.Sprintf("I cannot process this request as it appears to contain a potential jailbreak attempt (type: %s, confidence: %.3f). Please rephrase your request in a way that complies with our usage policies.", jailbreakType, confidence),
+				Index: 0,
+				Message: openai.ChatCompletionMessage{
+					Role:    "assistant",
+					Content: fmt.Sprintf("I cannot process this request as it appears to contain a potential jailbreak attempt (type: %s, confidence: %.3f). Please rephrase your request in a way that complies with our usage policies.", jailbreakType, confidence),
 				},
-				"finish_reason": "content_filter",
+				FinishReason: "content_filter",
 			},
 		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     0,
-			"completion_tokens": 0,
-			"total_tokens":      0,
+		Usage: openai.CompletionUsage{
+			PromptTokens:     0,
+			CompletionTokens: 0,
+			TotalTokens:      0,
 		},
 	}
 

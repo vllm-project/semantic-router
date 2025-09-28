@@ -96,9 +96,9 @@ The router provides comprehensive monitoring through:
 
 ## 🔗 Quick Links
 
-- [**Getting Started**](getting-started/installation.md) - Setup and installation guide
+- [**Installation**](installation/installation.md) - Setup and installation guide
 - [**Overview**](overview/semantic-router-overview.md) - Deep dive into semantic routing concepts  
-- [**Architecture**](architecture/system-architecture.md) - Technical architecture and design
+- [**Architecture**](overview/architecture/system-architecture.md) - Technical architecture and design
 - [**Model Training**](training/training-overview.md) - How classification models are trained
 
 ## 📚 Documentation Structure
@@ -108,7 +108,7 @@ This documentation is organized into the following sections:
 ### 🎯 [Overview](overview/semantic-router-overview.md)
 Learn about semantic routing concepts, mixture of models, and how this compares to other routing approaches like RouteLLM and GPT-5's router architecture.
 
-### 🏗️ [Architecture](architecture/system-architecture.md) 
+### 🏗️ [Architecture](overview/architecture/system-architecture.md)
 Understand the system design, Envoy ExtProc integration, and how the router communicates with backend models.
 
 ### 🤖 [Model Training](training/training-overview.md)

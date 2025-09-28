@@ -205,10 +205,64 @@ def load_presidio_dataset(max_samples=1000):
     with open(dataset_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # Limit samples for faster training
+    # Improve data balancing: ensure diverse PII entity types
     if max_samples and len(data) > max_samples:
-        data = data[:max_samples]
-        logger.info(f"Limited dataset to {max_samples} samples")
+        # First pass: categorize samples by PII entity types
+        entity_samples = {}
+        samples_without_entities = []
+
+        for sample in data:
+            entities = sample.get("spans", [])
+            if not entities:
+                samples_without_entities.append(sample)
+                continue
+
+            # Group by entity types in this sample
+            sample_entity_types = set()
+            for entity in entities:
+                entity_type = entity.get("label", "UNKNOWN")
+                sample_entity_types.add(entity_type)
+
+            # Add sample to each entity type category
+            for entity_type in sample_entity_types:
+                if entity_type not in entity_samples:
+                    entity_samples[entity_type] = []
+                entity_samples[entity_type].append(sample)
+
+        # Balanced sampling strategy
+        entity_types_available = list(entity_samples.keys())
+        if entity_types_available:
+            samples_per_entity_type = max_samples // (
+                len(entity_types_available) + 1
+            )  # +1 for non-entity samples
+
+            balanced_data = []
+            for entity_type in entity_types_available:
+                type_samples = entity_samples[entity_type][:samples_per_entity_type]
+                balanced_data.extend(type_samples)
+                logger.info(
+                    f"Selected {len(type_samples)} samples for entity type: {entity_type}"
+                )
+
+            # Add some samples without entities for negative examples
+            remaining_slots = max_samples - len(balanced_data)
+            if remaining_slots > 0 and samples_without_entities:
+                non_entity_samples = samples_without_entities[:remaining_slots]
+                balanced_data.extend(non_entity_samples)
+                logger.info(
+                    f"Added {len(non_entity_samples)} samples without entities as negative examples"
+                )
+
+            data = balanced_data
+            logger.info(
+                f"Balanced dataset to {len(data)} samples across {len(entity_types_available)} entity types"
+            )
+        else:
+            # Fallback to simple truncation if no entities found
+            data = data[:max_samples]
+            logger.warning(
+                f"No entity types found, using simple truncation to {max_samples} samples"
+            )
 
     texts = []
     token_labels = []
@@ -369,7 +423,7 @@ def validate_bio_labels(texts, token_labels):
 
     # Show entity statistics
     if entity_stats:
-        logger.info(f"📈 Entity Statistics:")
+        logger.info(f"Entity Statistics:")
         for entity_type, stats in sorted(
             entity_stats.items(), key=lambda x: x[1]["count"], reverse=True
         )[:5]:
@@ -378,9 +432,9 @@ def validate_bio_labels(texts, token_labels):
             )
 
     if bio_violations > 0:
-        logger.warning(f"⚠️  Found {bio_violations} BIO labeling violations!")
+        logger.warning(f"Found {bio_violations} BIO labeling violations!")
     else:
-        logger.info("✅ All BIO labels are consistent!")
+        logger.info("All BIO labels are consistent!")
 
     return {
         "total_samples": total_samples,
@@ -393,16 +447,16 @@ def validate_bio_labels(texts, token_labels):
 
 def analyze_data_quality(texts, token_labels, sample_size=5):
     """Analyze and display data quality with sample examples."""
-    logger.info(f"🔍 Data Quality Analysis:")
+    logger.info(f"Data Quality Analysis:")
 
     # Show sample examples with their labels
-    logger.info(f"📝 Sample Examples (showing first {sample_size}):")
+    logger.info(f"Sample Examples (showing first {sample_size}):")
     for i in range(min(sample_size, len(texts))):
         tokens = texts[i]
         labels = token_labels[i]
 
-        logger.info(f"  Sample {i+1}:")
-        logger.info(f"    Text: {' '.join(tokens)}")
+        logger.info(f"Sample {i+1}:")
+        logger.info(f"Text: {' '.join(tokens)}")
 
         # Show only non-O labels for clarity
         entities = []
@@ -573,13 +627,13 @@ def compute_token_metrics(eval_pred):
 
 
 def main(
-    model_name: str = "modernbert-base",
+    model_name: str = "bert-base-uncased",  # Changed from modernbert-base due to training issues
     lora_rank: int = 8,
     lora_alpha: int = 16,
     lora_dropout: float = 0.1,
     num_epochs: int = 3,
     batch_size: int = 8,
-    learning_rate: float = 1e-4,
+    learning_rate: float = 3e-5,  # Optimized for LoRA based on PEFT best practices
     max_samples: int = 1000,
 ):
     """Main training function for LoRA PII detection."""
@@ -628,13 +682,17 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
 
     # Training arguments
+    # Training arguments optimized for LoRA token classification based on PEFT best practices
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
-        warmup_steps=50,
+        # PEFT optimization: Enhanced stability measures
+        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
+        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
+        warmup_ratio=0.06,  # PEFT recommended warmup ratio for token classification
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
@@ -643,6 +701,9 @@ def main(
         load_best_model_at_end=True,
         metric_for_best_model="f1",
         save_total_limit=2,
+        # Additional stability measures
+        dataloader_drop_last=False,
+        eval_accumulation_steps=1,
         report_to=[],
         fp16=torch.cuda.is_available(),
     )
@@ -687,7 +748,7 @@ def main(
     logger.info(f"LoRA PII model saved to: {output_dir}")
 
     # Auto-merge LoRA adapter with base model for Rust compatibility
-    logger.info("🔄 Auto-merging LoRA adapter with base model for Rust inference...")
+    logger.info("Auto-merging LoRA adapter with base model for Rust inference...")
     try:
         # Option 1: Keep both LoRA adapter and Rust-compatible model (default)
         merged_output_dir = f"{output_dir}_rust"
@@ -696,11 +757,11 @@ def main(
         # merged_output_dir = output_dir
 
         merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-        logger.info(f"✅ Rust-compatible model saved to: {merged_output_dir}")
-        logger.info(f"   This model can be used with Rust candle-binding!")
+        logger.info(f"Rust-compatible model saved to: {merged_output_dir}")
+        logger.info(f"This model can be used with Rust candle-binding!")
     except Exception as e:
-        logger.warning(f"⚠️  Auto-merge failed: {e}")
-        logger.info(f"   You can manually merge using: python merge_lora_pii_model.py")
+        logger.warning(f"Auto-merge failed: {e}")
+        logger.info(f"You can manually merge using: python merge_lora_pii_model.py")
 
 
 def merge_lora_adapter_to_full_model(
@@ -711,7 +772,7 @@ def merge_lora_adapter_to_full_model(
     This function is automatically called after training to generate Rust-compatible models.
     """
 
-    logger.info(f"🔄 Loading base model: {base_model_path}")
+    logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
     with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
@@ -726,17 +787,17 @@ def merge_lora_adapter_to_full_model(
     # Load tokenizer with model-specific configuration
     tokenizer = create_tokenizer_for_model(base_model_path, base_model_path)
 
-    logger.info(f"🔄 Loading LoRA adapter from: {lora_adapter_path}")
+    logger.info(f"Loading LoRA adapter from: {lora_adapter_path}")
 
     # Load LoRA model
     lora_model = PeftModel.from_pretrained(base_model, lora_adapter_path)
 
-    logger.info("🔄 Merging LoRA adapter with base model...")
+    logger.info("Merging LoRA adapter with base model...")
 
     # Merge and unload LoRA
     merged_model = lora_model.merge_and_unload()
 
-    logger.info(f"💾 Saving merged model to: {output_path}")
+    logger.info(f"Saving merged model to: {output_path}")
 
     # Create output directory
     os.makedirs(output_path, exist_ok=True)
@@ -758,7 +819,7 @@ def merge_lora_adapter_to_full_model(
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
 
-        logger.info("✅ Updated config.json with correct PII label mappings")
+        logger.info("Updated config.json with correct PII label mappings")
 
     # Copy important files from LoRA adapter
     for file_name in ["label_mapping.json", "lora_config.json"]:
@@ -766,11 +827,11 @@ def merge_lora_adapter_to_full_model(
         if src_file.exists():
             shutil.copy(src_file, Path(output_path) / file_name)
 
-    logger.info("✅ LoRA adapter merged successfully!")
+    logger.info("LoRA adapter merged successfully!")
 
 
 def demo_inference(
-    model_path: str = "lora_pii_detector_modernbert-base_r8_token_model",
+    model_path: str = "lora_pii_detector_bert-base-uncased_r8_token_model",  # Changed from modernbert-base
 ):
     """Demonstrate inference with trained LoRA PII model."""
     logger.info(f"Loading LoRA PII model from: {model_path}")
@@ -878,16 +939,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
-            "modernbert-base",
-            "modernbert-large",
-            "bert-base-uncased",
-            "bert-large-uncased",
-            "roberta-base",
-            "roberta-large",
-            "deberta-v3-base",
-            "deberta-v3-large",
+            "modernbert-base",  # ModernBERT base model - latest architecture
+            "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
+            "roberta-base",  # RoBERTa base model - best PII detection performance
         ],
-        default="modernbert-base",
+        default="bert-base-uncased",
         help="Model to use for fine-tuning",
     )
     parser.add_argument("--lora-rank", type=int, default=8)
@@ -905,7 +961,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-path",
         type=str,
-        default="lora_pii_detector_modernbert-base_r8_token_model",
+        default="lora_pii_detector_bert-base-uncased_r8_token_model",  # Changed from modernbert-base
         help="Path to saved model for inference (default: ../../../models/lora_pii_detector_r8)",
     )
 
@@ -919,7 +975,7 @@ if __name__ == "__main__":
             lora_dropout=args.lora_dropout,
             num_epochs=args.epochs,
             batch_size=args.batch_size,
-            learning_rate=args.learning_rate,
+            learning_rate=3e-5,  # Default optimized learning rate for LoRA token classification
             max_samples=args.max_samples,
         )
     elif args.mode == "test":

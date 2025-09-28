@@ -74,6 +74,13 @@ func ValidateCacheConfig(config CacheConfig) error {
 		if config.MaxEntries < 0 {
 			return fmt.Errorf("max_entries cannot be negative for in-memory cache, got: %d", config.MaxEntries)
 		}
+		// Validate eviction policy
+		switch config.EvictionPolicy {
+		case "", FIFOEvictionPolicyType, LRUEvictionPolicyType, LFUEvictionPolicyType:
+			// "" is allowed, treated as FIFO by default
+		default:
+			return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
+		}
 	case MilvusCacheType:
 		if config.BackendConfigPath == "" {
 			return fmt.Errorf("backend_config_path is required for Milvus cache backend")
