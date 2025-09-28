@@ -8,7 +8,6 @@ import TypewriterCode from '@site/src/components/TypewriterCode'
 import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground'
 import AIChipAnimation from '@site/src/components/AIChipAnimation'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
-import ThemeToggle from '@site/src/components/ThemeToggle'
 
 import styles from './index.module.css'
 
@@ -59,9 +58,6 @@ function HomepageHeader() {
           >
             🚀 Get Started - 5min ⏱️
           </Link>
-        </div>
-        <div className={styles.themeToggleContainer}>
-          <ThemeToggle />
         </div>
       </div>
     </header>
