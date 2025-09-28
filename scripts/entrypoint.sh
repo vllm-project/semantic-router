@@ -9,4 +9,5 @@ if [[ ! -f "$CONFIG_FILE_PATH" ]]; then
 fi
 
 echo "[entrypoint] Starting semantic-router with config: $CONFIG_FILE_PATH"
-exec /app/extproc-server --config "$CONFIG_FILE_PATH"
+echo "[entrypoint] Additional args: $*"
+exec /app/extproc-server --config "$CONFIG_FILE_PATH" "$@"
