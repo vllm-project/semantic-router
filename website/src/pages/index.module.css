@@ -172,8 +172,6 @@
   box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
 }
 
-
-
 /* Flow Diagram Section */
 .flowSection {
   padding: 2.5rem 0;
@@ -398,16 +396,6 @@
 [data-theme='dark'] .aiFeature span:last-child {
   color: #F0F6FC;
 }
-
-
-
-
-
-
-
-
-
-
 
 /* Responsive Design */
 @media screen and (max-width: 996px) {
@@ -644,34 +632,3 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
-/* Theme toggle container */
-.themeToggleContainer {
-  display: flex;
-  justify-content: center;
-  margin-top: 2rem;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--tech-border);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(9, 105, 218, 0.1);
-  transition: all 0.3s ease;
-}
-
-[data-theme='dark'] .themeToggleContainer {
-  background: rgba(33, 38, 45, 0.8);
-  border-color: var(--tech-border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-@media (max-width: 768px) {
-  .themeToggleContainer {
-    margin: 1rem;
-    padding: 0.75rem;
-  }
-}
-
-
-
-
