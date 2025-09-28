@@ -48,6 +48,7 @@ jobs:
           pkg-config
         npm install -g markdownlint-cli
         pip install --user yamllint codespell
+        go install github.com/apache/skywalking-eyes/cmd/license-eye@latest
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4
@@ -93,6 +94,9 @@ jobs:
 
     - name: Run Code Spell Check
       run: make codespell
+
+    - name: Run License Header Check
+      run: make license-check
 
     - name: Run pre-commit check
       run: make precommit-check
