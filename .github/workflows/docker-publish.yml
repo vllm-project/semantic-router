@@ -40,6 +40,9 @@ jobs:
       if: inputs.is_nightly == true
       run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
+    - name: Set lowercase repository owner
+      run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
@@ -47,5 +50,5 @@ jobs:
         file: ./Dockerfile.extproc
         push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
         tags: |
-          ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/extproc:nightly-{1}', github.repository_owner, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/extproc:{1}', github.repository_owner, github.sha) }}
-          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/extproc:latest', github.repository_owner) || '' }}
+          ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/extproc:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/extproc:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}
+          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/extproc:latest', env.REPOSITORY_OWNER_LOWER) || '' }}

@@ -19,6 +19,9 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      - name: Set lowercase repository owner
+        run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -38,4 +41,4 @@ jobs:
           file: ./Dockerfile.precommit
           push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
           tags: |
-            ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/precommit:latest', github.repository_owner) || '' }}
+            ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/precommit:latest', env.REPOSITORY_OWNER_LOWER) || '' }}

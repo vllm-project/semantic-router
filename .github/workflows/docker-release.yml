@@ -20,6 +20,9 @@ jobs:
       id: extract_tag
       run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+    - name: Set lowercase repository owner
+      run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
       with:
@@ -34,5 +37,5 @@ jobs:
         file: ./Dockerfile.extproc
         push: true
         tags: |
-          ghcr.io/${{ github.repository_owner }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
-          ghcr.io/${{ github.repository_owner }}/semantic-router/extproc:latest
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:latest
