@@ -1,4 +1,4 @@
-name: Create and publish Docker image for extproc
+name: Create and publish Docker images
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build_and_push:
+  build_and_push_extproc:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +43,7 @@ jobs:
     - name: Set lowercase repository owner
       run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-    - name: Build and push Docker image
+    - name: Build and push extproc Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -52,3 +52,45 @@ jobs:
         tags: |
           ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/extproc:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/extproc:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}
           ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/extproc:latest', env.REPOSITORY_OWNER_LOWER) || '' }}
+
+  build_and_push_llm_katan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v4
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate date tag for nightly builds
+      id: date
+      if: inputs.is_nightly == true
+      run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+    - name: Set lowercase repository owner
+      run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+    - name: Extract version from pyproject.toml
+      id: version
+      run: |
+        VERSION=$(grep '^version = ' e2e-tests/llm-katan/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Build and push llm-katan Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./e2e-tests/llm-katan
+        file: ./e2e-tests/llm-katan/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
+        tags: |
+          ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/llm-katan:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/llm-katan:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}
+          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/llm-katan:latest', env.REPOSITORY_OWNER_LOWER) || '' }}
+          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/llm-katan:v{1}', env.REPOSITORY_OWNER_LOWER, steps.version.outputs.version) || '' }}

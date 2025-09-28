@@ -20,8 +20,22 @@ designed for testing and development with real tiny models.
 
 ### Installation
 
+#### Option 1: PyPI
+
 ```bash
 pip install llm-katan
+```
+
+#### Option 2: Docker
+
+```bash
+# Pull and run the latest Docker image
+docker pull ghcr.io/vllm-project/semantic-router/llm-katan:latest
+docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:latest
+
+# Or with custom model
+docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:latest \
+  llm-katan --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 ```
 
 ### Setup
