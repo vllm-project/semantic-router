@@ -43,10 +43,10 @@ class MATHDataset(DatasetInterface):
         # Load the test split - try different possible dataset names
         try:
             dataset = load_dataset("hendrycks/math", split="test")
-        except:
+        except Exception:
             try:
                 dataset = load_dataset("lighteval/MATH", split="test")
-            except:
+            except Exception:
                 dataset = load_dataset("competition_math", split="test")
         self._dataset_cache = pd.DataFrame(dataset)
         return self._dataset_cache
