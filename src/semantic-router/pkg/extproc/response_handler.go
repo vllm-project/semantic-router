@@ -7,6 +7,7 @@ import (
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/openai/openai-go"
@@ -51,6 +52,14 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				},
 			},
 		},
+	}
+
+	// If this is a streaming (SSE) response, instruct Envoy to stream the response body to ExtProc
+	// so we can capture TTFT on the first body chunk. Requires allow_mode_override: true in Envoy config.
+	if ctx != nil && ctx.IsStreamingResponse {
+		response.ModeOverride = &http_ext.ProcessingMode{
+			ResponseBodyMode: http_ext.ProcessingMode_STREAMED,
+		}
 	}
 
 	return response, nil
