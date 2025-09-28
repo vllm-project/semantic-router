@@ -255,16 +255,16 @@ def get_dataset_optimal_tokens(dataset_info, model_name=None):
         base_tokens = difficulty_tokens.get(difficulty, 200)
 
     # Special case: Qwen3 models need higher tokens for complex reasoning datasets
-        if model_name and "qwen" in model_name.lower():
-            if "mmlu" in dataset_name or "gpqa" in dataset_name:
-                final_tokens = 10240
-                dataset_type = "MMLU" if "mmlu" in dataset_name else "GPQA"
-                print(f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)")
-                return final_tokens
-            # elif "math" in dataset_name:  # DISABLED: dataset not available
-            #     final_tokens = 8000  # Competition math needs extensive proofs
-            #     print(f"  🎯 Special case: Qwen3 + MATH = {final_tokens} tokens (competition math requirement)")
-            #     return final_tokens
+    if model_name and "qwen" in model_name.lower():
+        if "mmlu" in dataset_name or "gpqa" in dataset_name:
+            final_tokens = 10240
+            dataset_type = "MMLU" if "mmlu" in dataset_name else "GPQA"
+            print(f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)")
+            return final_tokens
+        # elif "math" in dataset_name:  # DISABLED: dataset not available
+        #     final_tokens = 8000  # Competition math needs extensive proofs
+        #     print(f"  🎯 Special case: Qwen3 + MATH = {final_tokens} tokens (competition math requirement)")
+        #     return final_tokens
 
     # Apply model-specific multiplier and round to nearest 50
     final_tokens = int(base_tokens * model_multiplier)
