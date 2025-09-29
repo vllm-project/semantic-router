@@ -266,7 +266,7 @@ pip install -e ".[dev]"
 
 ## License
 
-MIT License
+Apache-2.0 License
 
 ## Contributing
 
