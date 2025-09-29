@@ -8,14 +8,16 @@ This guide will help you set up and install the Semantic Router on your system. 
 
 ## System Requirements
 
-**Note**: No GPU required - the router runs efficiently on CPU using optimized BERT models.
+:::note
+No GPU required - the router runs efficiently on CPU using optimized BERT models.
+:::
 
-### Software Dependencies
+Semantic Router depends on the following software:
 
-- **Go**: Version 1.24.1 or higher (matches the module requirements)
-- **Rust**: Version 1.90.0 or higher (for Candle bindings)
-- **Python**: Version 3.8 or higher (for model downloads)
-- **HuggingFace CLI**: For model downloads (`pip install huggingface_hub`)
+- **Go**: V1.24.1 or higher (matches the module requirements)
+- **Rust**: V1.90.0 or higher (for Candle bindings)
+- **Python**: V3.8 or higher (for model downloads)
+- **HuggingFace CLI**: Required for fetching models (`pip install huggingface_hub`)
 
 ## Local Installation
 
@@ -94,7 +96,9 @@ This downloads the CPU-optimized BERT models for:
 - PII detection
 - Jailbreak detection
 
-> **Tip:** `make test` invokes `make download-models` automatically, so you only need to run this step manually the first time or when refreshing the cache.
+:::tip
+`make test` invokes `make download-models` automatically, so you only need to run this step manually the first time or when refreshing the cache.
+:::
 
 ### 5. Configure Backend Endpoints
 
@@ -118,8 +122,7 @@ model_config:
     preferred_endpoints: ["your-endpoint"]
 ```
 
-**⚠️ Important: Address Format Requirements**
-
+:::note[**Important: Address Format Requirements**]
 The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain names are not supported.
 
 **✅ Correct formats:**
@@ -134,8 +137,9 @@ The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain n
 - `"http://127.0.0.1"` → Remove protocol prefix
 - `"127.0.0.1:8080"` → Use separate `port` field
 
-**⚠️ Important: Model Name Consistency**
+:::
 
+:::note[**Important: Model Name Consistency**]
 The model name in your configuration **must exactly match** the `--served-model-name` parameter used when starting your vLLM server:
 
 ```bash
@@ -154,6 +158,7 @@ model_config:
 If these names don't match, the router won't be able to route requests to your model.
 
 The default configuration includes example endpoints that you should update for your setup.
+:::
 
 ## Running the Router
 
