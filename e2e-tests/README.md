@@ -55,7 +55,7 @@ llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "TinyLlama/Tin
 make run-envoy
 
 # Terminal 3: Start semantic router
-make run-router
+make run-router-e2e
 
 # Terminal 4: Run tests
 python e2e-tests/00-client-request-test.py    # Individual test
