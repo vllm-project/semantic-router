@@ -127,7 +127,7 @@ type OpenAIRouter struct {
 
 **Processing Pipeline**:
 
-<ZoomableMermaid title="Processing Pipeline">
+<ZoomableMermaid title="Processing Pipeline" defaultZoom={3.5}>
 {`sequenceDiagram
     participant E as Envoy
     participant R as Router
@@ -163,7 +163,7 @@ The classification system uses ModernBERT models for multiple classification tas
 
 #### Category Classification
 
-<ZoomableMermaid title="Category Classification System">
+<ZoomableMermaid title="Category Classification System" defaultZoom={4.5}>
 {`graph LR
     Query[User Query] --> Tokenizer[ModernBERT Tokenizer]
     Tokenizer --> Encoder[ModernBERT Encoder<br/>768-dim embeddings]
@@ -216,8 +216,8 @@ class SemanticRouter:
 
 ### Request Processing Flow
 
-<ZoomableMermaid title="Request Processing Flow" defaultZoom={1.3}>
-{`graph TB
+```mermaid
+graph TB
     Start([Client Request]) --> EnvoyReceive[Envoy Receives Request]
     
     EnvoyReceive --> ExtProcSend[Send to ExtProc<br/>Headers + Body]
@@ -259,12 +259,12 @@ class SemanticRouter:
     style JailbreakCheck fill:#f44336
     style CategoryClassification fill:#4caf50
     style CacheCheck fill:#2196f3
-    style RoutingDecision fill:#9c27b0`}
-</ZoomableMermaid>
+    style RoutingDecision fill:#9c27b0
+```
 
 ### Response Processing Flow
 
-<ZoomableMermaid title="Response Processing Flow">
+<ZoomableMermaid title="Response Processing Flow" defaultZoom={4.5}>
 {`sequenceDiagram
     participant C as Client
     participant E as Envoy
@@ -516,7 +516,7 @@ func (cb *CircuitBreaker) Call(operation func() error) error {
 
 ### Fallback Strategies
 
-<ZoomableMermaid title="Fallback Strategies" defaultZoom={1.5}>
+<ZoomableMermaid title="Fallback Strategies" defaultZoom={2.5}>
 {`graph TB
     Request[Incoming Request] --> PrimaryRoute[Primary Routing Decision]
     

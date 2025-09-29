@@ -26,7 +26,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
   }, [])
 
   const zoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.2, 3.0)) // Max 300%
+    setZoomLevel(prev => Math.min(prev + 0.2, 5.0)) // Max 500%
   }, [])
 
   const zoomOut = useCallback(() => {
@@ -155,7 +155,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
             <button
               className={styles.zoomButton}
               onClick={zoomIn}
-              disabled={zoomLevel >= 3.0}
+              disabled={zoomLevel >= 5.0}
               aria-label="Enlarge the chart"
               type="button"
               title="Enlarge (Shortcut key: +)"
