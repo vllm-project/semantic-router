@@ -129,9 +129,9 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
               className={styles.zoomButton}
               onClick={zoomOut}
               disabled={zoomLevel <= 0.5}
-              aria-label="缩小图表"
+              aria-label="Reduce the size of the chart"
               type="button"
-              title="缩小 (快捷键: -)"
+              title="Reduce (Shortcut key: -)"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />
@@ -142,9 +142,9 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
             <button
               className={styles.resetButton}
               onClick={resetZoom}
-              aria-label={`重置到默认缩放 ${Math.round(defaultZoom * 100)}%`}
+              aria-label={`Reset to default zoom level ${Math.round(defaultZoom * 100)}%`}
               type="button"
-              title={`重置到默认缩放 ${Math.round(defaultZoom * 100)}% (快捷键: 0)`}
+              title={`Reset to default zoom level ${Math.round(defaultZoom * 100)}% (Shortcut key: 0)`}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 3l18 18" />
@@ -156,9 +156,9 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
               className={styles.zoomButton}
               onClick={zoomIn}
               disabled={zoomLevel >= 3.0}
-              aria-label="放大图表"
+              aria-label="Enlarge the chart"
               type="button"
-              title="放大 (快捷键: +)"
+              title="Enlarge (Shortcut key: +)"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />
@@ -170,7 +170,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
             <button
               className={styles.closeButton}
               onClick={closeModal}
-              aria-label="关闭放大视图"
+              aria-label="Close the zoomed view"
               type="button"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -183,7 +183,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
         <div
           className={styles.modalBody}
           id="modal-description"
-          aria-label="放大的 Mermaid 图表"
+          aria-label="Enlarged Mermaid diagram"
         >
           <div
             className={styles.diagramContainer}
@@ -207,7 +207,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
         role="button"
         tabIndex={0}
         onKeyDown={handleKeyDown}
-        aria-label={`点击放大查看 ${title || 'Mermaid 图表'}`}
+        aria-label={`Click to enlarge ${title || 'Mermaid diagram'}`}
         aria-expanded={isModalOpen}
       >
         <div className={styles.zoomHint} aria-hidden="true">
@@ -217,7 +217,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
             <path d="M11 8v6" />
             <path d="M8 11h6" />
           </svg>
-          <span>点击放大</span>
+          <span>Click to enlarge</span>
         </div>
         <Mermaid value={children} />
       </div>
