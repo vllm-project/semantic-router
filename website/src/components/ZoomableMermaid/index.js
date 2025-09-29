@@ -1,113 +1,115 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import Mermaid from '@theme/Mermaid';
-import styles from './styles.module.css';
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import Mermaid from '@theme/Mermaid'
+import styles from './styles.module.css'
 
 const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(defaultZoom); // Use defaultZoom prop
-  const modalRef = useRef(null);
-  const containerRef = useRef(null);
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(defaultZoom) // Use defaultZoom prop
+  const modalRef = useRef(null)
+  const containerRef = useRef(null)
 
   const openModal = useCallback(() => {
-    setIsModalOpen(true);
-    setZoomLevel(defaultZoom); // Reset to default zoom when opening
-    document.body.style.overflow = 'hidden';
-  }, [defaultZoom]);
+    setIsModalOpen(true)
+    setZoomLevel(defaultZoom) // Reset to default zoom when opening
+    document.body.style.overflow = 'hidden'
+  }, [defaultZoom])
 
   const closeModal = useCallback(() => {
-    setIsModalOpen(false);
-    document.body.style.overflow = 'unset';
+    setIsModalOpen(false)
+    document.body.style.overflow = 'unset'
     // Return focus to the original container
     if (containerRef.current) {
-      containerRef.current.focus();
+      containerRef.current.focus()
     }
-  }, []);
+  }, [])
 
   const zoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.2, 3.0)); // Max 300%
-  }, []);
+    setZoomLevel(prev => Math.min(prev + 0.2, 3.0)) // Max 300%
+  }, [])
 
   const zoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - 0.2, 0.5)); // Min 50%
-  }, []);
+    setZoomLevel(prev => Math.max(prev - 0.2, 0.5)) // Min 50%
+  }, [])
 
   const resetZoom = useCallback(() => {
-    setZoomLevel(defaultZoom); // Reset to custom default instead of hardcoded 1.2
-  }, [defaultZoom]);
+    setZoomLevel(defaultZoom) // Reset to custom default instead of hardcoded 1.2
+  }, [defaultZoom])
 
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isModalOpen) {
-        closeModal();
+        closeModal()
       }
-    };
+    }
 
     const handleClickOutside = (e) => {
       if (modalRef.current && !modalRef.current.contains(e.target)) {
-        closeModal();
+        closeModal()
       }
-    };
+    }
 
     const handleKeydown = (e) => {
-      if (!isModalOpen) return;
-      
+      if (!isModalOpen) return
+
       if (e.key === '=' || e.key === '+') {
-        e.preventDefault();
-        zoomIn();
-      } else if (e.key === '-') {
-        e.preventDefault();
-        zoomOut();
-      } else if (e.key === '0') {
-        e.preventDefault();
-        resetZoom();
+        e.preventDefault()
+        zoomIn()
       }
-    };
+      else if (e.key === '-') {
+        e.preventDefault()
+        zoomOut()
+      }
+      else if (e.key === '0') {
+        e.preventDefault()
+        resetZoom()
+      }
+    }
 
     if (isModalOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleKeydown);
-      
+      document.addEventListener('keydown', handleEscape)
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleKeydown)
+
       // Focus the modal content when opened
       setTimeout(() => {
         if (modalRef.current) {
-          modalRef.current.focus();
+          modalRef.current.focus()
         }
-      }, 100);
+      }, 100)
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeydown);
-    };
-  }, [isModalOpen, closeModal, zoomIn, zoomOut, resetZoom]);
+      document.removeEventListener('keydown', handleEscape)
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeydown)
+    }
+  }, [isModalOpen, closeModal, zoomIn, zoomOut, resetZoom])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
+      document.body.style.overflow = 'unset'
+    }
+  }, [])
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      openModal();
+      e.preventDefault()
+      openModal()
     }
-  };
+  }
 
   const modalContent = (
-    <div 
+    <div
       className={styles.modal}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? "modal-title" : undefined}
+      aria-labelledby={title ? 'modal-title' : undefined}
       aria-describedby="modal-description"
     >
-      <div 
+      <div
         className={styles.modalContent}
         ref={modalRef}
         tabIndex={-1}
@@ -120,9 +122,10 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
           )}
           <div className={styles.modalControls}>
             <span className={styles.zoomIndicator}>
-              {Math.round(zoomLevel * 100)}%
+              {Math.round(zoomLevel * 100)}
+              %
             </span>
-            <button 
+            <button
               className={styles.zoomButton}
               onClick={zoomOut}
               disabled={zoomLevel <= 0.5}
@@ -131,12 +134,12 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
               title="缩小 (快捷键: -)"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M8 11h6"/>
-                <path d="m21 21-4.35-4.35"/>
+                <circle cx="11" cy="11" r="8" />
+                <path d="M8 11h6" />
+                <path d="m21 21-4.35-4.35" />
               </svg>
             </button>
-            <button 
+            <button
               className={styles.resetButton}
               onClick={resetZoom}
               aria-label={`重置到默认缩放 ${Math.round(defaultZoom * 100)}%`}
@@ -144,12 +147,12 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
               title={`重置到默认缩放 ${Math.round(defaultZoom * 100)}% (快捷键: 0)`}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 3l18 18"/>
-                <path d="m19 4-7 7-7-7"/>
-                <path d="m5 20 7-7 7 7"/>
+                <path d="M3 3l18 18" />
+                <path d="m19 4-7 7-7-7" />
+                <path d="m5 20 7-7 7 7" />
               </svg>
             </button>
-            <button 
+            <button
               className={styles.zoomButton}
               onClick={zoomIn}
               disabled={zoomLevel >= 3.0}
@@ -158,31 +161,31 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
               title="放大 (快捷键: +)"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M8 11h6"/>
-                <path d="M11 8v6"/>
-                <path d="m21 21-4.35-4.35"/>
+                <circle cx="11" cy="11" r="8" />
+                <path d="M8 11h6" />
+                <path d="M11 8v6" />
+                <path d="m21 21-4.35-4.35" />
               </svg>
             </button>
-            <button 
+            <button
               className={styles.closeButton}
               onClick={closeModal}
               aria-label="关闭放大视图"
               type="button"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
         </div>
-        <div 
+        <div
           className={styles.modalBody}
           id="modal-description"
           aria-label="放大的 Mermaid 图表"
         >
-          <div 
+          <div
             className={styles.diagramContainer}
             style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center' }}
           >
@@ -191,11 +194,11 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
         </div>
       </div>
     </div>
-  );
+  )
 
   return (
     <>
-      <div 
+      <div
         ref={containerRef}
         className={`${styles.mermaidContainer} ${isHovered ? styles.hovered : ''}`}
         onClick={openModal}
@@ -209,10 +212,10 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
       >
         <div className={styles.zoomHint} aria-hidden="true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="m21 21-4.35-4.35"/>
-            <path d="M11 8v6"/>
-            <path d="M8 11h6"/>
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+            <path d="M11 8v6" />
+            <path d="M8 11h6" />
           </svg>
           <span>点击放大</span>
         </div>
@@ -221,7 +224,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
 
       {isModalOpen && createPortal(modalContent, document.body)}
     </>
-  );
-};
+  )
+}
 
-export default ZoomableMermaid;
+export default ZoomableMermaid

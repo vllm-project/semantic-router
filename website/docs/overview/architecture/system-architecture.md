@@ -6,7 +6,7 @@ The Semantic Router implements a sophisticated Mixture-of-Models (MoM) architect
 
 import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
 
-<ZoomableMermaid title="System Architecture Overview" defaultZoom={5}>
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={5.5}>
 {`graph TB
     subgraph "Client Layer"
         Client1[Web Application]
