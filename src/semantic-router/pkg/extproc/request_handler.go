@@ -171,6 +171,12 @@ type RequestContext struct {
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
+
+	// VSR decision tracking
+	VSRSelectedCategory string // The category selected by VSR
+	VSRReasoningMode    string // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel    string // The model selected by VSR
+	VSRCacheHit         bool   // Whether this request hit the cache
 }
 
 // handleRequestHeaders processes the request headers
@@ -334,6 +340,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		if err != nil {
 			observability.Errorf("Error searching cache: %v", err)
 		} else if found {
+			// Mark this request as a cache hit
+			ctx.VSRCacheHit = true
 			// Log cache hit
 			observability.LogEvent("cache_hit", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -344,13 +352,13 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 			response := http.CreateCacheHitResponse(cachedResponse)
 			return response, true
 		}
+	}
 
-		// Cache miss, store the request for later
-		err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
-		if err != nil {
-			observability.Errorf("Error adding pending request to cache: %v", err)
-			// Continue without caching
-		}
+	// Cache miss, store the request for later
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
+	if err != nil {
+		observability.Errorf("Error adding pending request to cache: %v", err)
+		// Continue without caching
 	}
 
 	return nil, false
@@ -453,6 +461,15 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Record reasoning decision metric with the effort that will be applied if enabled
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
+
+				// Track VSR decision information
+				ctx.VSRSelectedCategory = categoryName
+				ctx.VSRSelectedModel = matchedModel
+				if useReasoning {
+					ctx.VSRReasoningMode = "on"
+				} else {
+					ctx.VSRReasoningMode = "off"
+				}
 
 				// Track the model routing change
 				metrics.RecordModelRouting(originalModel, matchedModel)
@@ -567,6 +584,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 	} else if originalModel != "auto" {
 		observability.Infof("Using specified model: %s", originalModel)
+		// Track VSR decision information for non-auto models
+		ctx.VSRSelectedModel = originalModel
+		ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 		// For non-auto models, check PII policy compliance
 		allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 		detectedPII := r.Classifier.DetectPIIInContent(allContent)

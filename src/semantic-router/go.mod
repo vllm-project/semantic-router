@@ -20,6 +20,7 @@ require (
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/prometheus/client_model v0.6.2
+	github.com/stretchr/testify v1.10.0
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.71.1
@@ -34,6 +35,7 @@ require (
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
@@ -54,6 +56,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
