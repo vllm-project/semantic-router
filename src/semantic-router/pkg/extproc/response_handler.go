@@ -17,12 +17,18 @@ import (
 
 // handleResponseHeaders processes the response headers
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	var statusCode int
+	var isSuccessful bool
+
 	// Detect upstream HTTP status and record non-2xx as errors
 	if v != nil && v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
 		// Determine if the response is streaming based on Content-Type
 		ctx.IsStreamingResponse = isStreamingContentType(v.ResponseHeaders.Headers)
 
-		if statusCode := getStatusFromHeaders(v.ResponseHeaders.Headers); statusCode != 0 {
+		statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
+		isSuccessful = statusCode >= 200 && statusCode < 300
+
+		if statusCode != 0 {
 			if statusCode >= 500 {
 				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_5xx")
 			} else if statusCode >= 400 {
@@ -43,12 +49,58 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		}
 	}
 
-	// Allow the response to continue without modification
+	// Prepare response headers with VSR decision tracking headers if applicable
+	var headerMutation *ext_proc.HeaderMutation
+
+	// Add VSR decision headers if request was successful and didn't hit cache
+	if isSuccessful && !ctx.VSRCacheHit && ctx != nil {
+		var setHeaders []*core.HeaderValueOption
+
+		// Add x-vsr-selected-category header
+		if ctx.VSRSelectedCategory != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      "x-vsr-selected-category",
+					RawValue: []byte(ctx.VSRSelectedCategory),
+				},
+			})
+		}
+
+		// Add x-vsr-selected-reasoning header
+		if ctx.VSRReasoningMode != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      "x-vsr-selected-reasoning",
+					RawValue: []byte(ctx.VSRReasoningMode),
+				},
+			})
+		}
+
+		// Add x-vsr-selected-model header
+		if ctx.VSRSelectedModel != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      "x-vsr-selected-model",
+					RawValue: []byte(ctx.VSRSelectedModel),
+				},
+			})
+		}
+
+		// Create header mutation if we have headers to add
+		if len(setHeaders) > 0 {
+			headerMutation = &ext_proc.HeaderMutation{
+				SetHeaders: setHeaders,
+			}
+		}
+	}
+
+	// Allow the response to continue with VSR headers if applicable
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HeadersResponse{
 				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
+					Status:         ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: headerMutation,
 				},
 			},
 		},
