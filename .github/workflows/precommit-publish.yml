@@ -3,10 +3,10 @@ name: Create and publish Precommit Image
 on:
   push:
     paths:
-      - 'Dockerfile.precommit'
+      - 'tools/docker/Dockerfile.precommit'
   pull_request:
     paths:
-      - 'Dockerfile.precommit'
+      - 'tools/docker/Dockerfile.precommit'
 
 jobs:
   build_and_push:
@@ -38,7 +38,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.precommit
+          file: ./tools/docker/Dockerfile.precommit
           push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
           tags: |
             ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/precommit:latest', env.REPOSITORY_OWNER_LOWER) || '' }}

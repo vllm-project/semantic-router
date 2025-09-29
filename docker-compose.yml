@@ -4,7 +4,7 @@ services:
   semantic-router:
     build:
       context: .
-      dockerfile: Dockerfile.extproc
+      dockerfile: tools/docker/Dockerfile.extproc
     container_name: semantic-router
     ports:
       - "50051:50051"
@@ -48,8 +48,8 @@ services:
   # Mock vLLM service for testing profile
   mock-vllm:
     build:
-      context: ./tools/mock-vllm
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: tools/docker/Dockerfile.mock-vllm
     container_name: mock-vllm
     profiles: ["testing"]
     ports:
@@ -96,8 +96,8 @@ services:
   # LLM Katan service for testing
   llm-katan:
     build:
-      context: ./e2e-tests/llm-katan
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: tools/docker/Dockerfile.llm-katan
     container_name: llm-katan
     profiles: ["testing", "llm-katan"]
     ports:

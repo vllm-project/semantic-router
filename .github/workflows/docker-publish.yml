@@ -47,7 +47,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.extproc
+        file: ./tools/docker/Dockerfile.extproc
         push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
         tags: |
           ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/extproc:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/extproc:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}
@@ -87,8 +87,8 @@ jobs:
     - name: Build and push llm-katan Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./e2e-tests/llm-katan
-        file: ./e2e-tests/llm-katan/Dockerfile
+        context: .
+        file: ./tools/docker/Dockerfile.llm-katan
         push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
         tags: |
           ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/llm-katan:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/llm-katan:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}

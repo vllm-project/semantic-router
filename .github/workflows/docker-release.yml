@@ -34,7 +34,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.extproc
+        file: ./tools/docker/Dockerfile.extproc
         push: true
         tags: |
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
@@ -73,8 +73,8 @@ jobs:
     - name: Build and push llm-katan Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./e2e-tests/llm-katan
-        file: ./e2e-tests/llm-katan/Dockerfile
+        context: .
+        file: ./tools/docker/Dockerfile.llm-katan
         push: true
         tags: |
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/llm-katan:${{ steps.extract_tag.outputs.tag }}

@@ -16,13 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better layer caching
-COPY requirements.txt ./
+COPY e2e-tests/llm-katan/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the llm_katan package
-COPY llm_katan/ ./llm_katan/
-COPY pyproject.toml ./
-COPY README.md ./
+COPY e2e-tests/llm-katan/llm_katan/ ./llm_katan/
+COPY e2e-tests/llm-katan/pyproject.toml ./
+COPY e2e-tests/llm-katan/README.md ./
 
 # Install the package in development mode
 RUN pip install -e .
