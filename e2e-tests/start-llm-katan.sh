@@ -16,8 +16,8 @@ PIDS_FILE="$E2E_DIR/llm_katan_pids.txt"
 # Model configurations for LLM Katan servers
 # Format: "port:real_model::served_model_name"
 LLM_KATAN_MODELS=(
-    "8000:Qwen/Qwen3-0.6B::Qwen/Qwen2-0.5B-Instruct"
-    "8001:Qwen/Qwen3-0.6B::TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    "8000:Qwen/Qwen3-0.6B::Model-A"
+    "8001:Qwen/Qwen3-0.6B::Model-B"
 )
 
 # Function to check if LLM Katan is available
