@@ -18,7 +18,7 @@ configMapGenerator:
   - tools_db.json
 
 # Namespace for all resources
-namespace: semantic-router
+namespace: vllm-semantic-router-system
 
 images:
 - name: ghcr.io/vllm-project/semantic-router/extproc

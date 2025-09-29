@@ -207,12 +207,12 @@ const config = {
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
-        additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust'],
+        additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
       },
       colorMode: {
         defaultMode: 'light',
-        disableSwitch: true,
-        respectPrefersColorScheme: false,
+        disableSwitch: false,
+        respectPrefersColorScheme: true,
       },
     }),
 }

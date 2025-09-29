@@ -2,17 +2,22 @@ bert_model:
   model_id: sentence-transformers/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
+
 semantic_cache:
   enabled: true
+  backend_type: "memory"  # Options: "memory" or "milvus"
   similarity_threshold: 0.8
-  max_entries: 1000
+  max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
+  eviction_policy: "fifo"  
+
 tools:
-  enabled: true  # Set to true to enable automatic tool selection
-  top_k: 3        # Number of most relevant tools to select
-  similarity_threshold: 0.2  # Threshold for tool similarity
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
   tools_db_path: "config/tools_db.json"
-  fallback_to_empty: true  # If true, return no tools on failure; if false, return error
+  fallback_to_empty: true
+
 prompt_guard:
   enabled: true
   use_modernbert: true
@@ -21,54 +26,29 @@ prompt_guard:
   use_cpu: true
   jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
 
-# vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
+# vLLM Endpoints Configuration
 # IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
 # Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"  # IPv4 address - REQUIRED format
-    port: 11434
+    port: 8000
     models:
-      - "phi4"
-      - "gemma3:27b"
-    weight: 1  # Load balancing weight
-  - name: "endpoint2"
-    address: "127.0.0.1"  # IPv4 address - REQUIRED format
-    port: 11434
-    models:
-      - "mistral-small3.1"
+      - "openai/gpt-oss-20b"
     weight: 1
-  - name: "endpoint3"
-    address: "127.0.0.1"  # IPv4 address - REQUIRED format
-    port: 11434
-    models:
-      - "phi4"  # Same model can be served by multiple endpoints for redundancy
-      - "mistral-small3.1"
-    weight: 2  # Higher weight for more powerful endpoint
 
 model_config:
-  phi4:
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
-    preferred_endpoints: ["endpoint1", "endpoint3"]
-  gemma3:27b:
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
+  "openai/gpt-oss-20b":
+    reasoning_family: "gpt-oss"  # This model uses GPT-OSS reasoning syntax
     preferred_endpoints: ["endpoint1"]
-  "mistral-small3.1":
     pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    preferred_endpoints: ["endpoint2", "endpoint3"]
+      allow_by_default: true
 
-# Classifier configuration for text classification
+# Classifier configuration
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
+    model_id: "models/category_classifier_modernbert-base_model"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
@@ -79,118 +59,112 @@ classifier:
     threshold: 0.7
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Categories with new use_reasoning field structure
 categories:
   - name: business
     model_scores:
-      - model: phi4
-        score: 0.8
-      - model: gemma3:27b
-        score: 0.4
-      - model: mistral-small3.1
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false  # Business performs better without reasoning
   - name: law
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: phi4
-        score: 0.6
-      - model: mistral-small3.1
+      - model: openai/gpt-oss-20b
         score: 0.4
+        use_reasoning: false
   - name: psychology
     model_scores:
-      - model: mistral-small3.1
+      - model: openai/gpt-oss-20b
         score: 0.6
-      - model: gemma3:27b
-        score: 0.4
-      - model: phi4
-        score: 0.4
+        use_reasoning: false
   - name: biology
     model_scores:
-      - model: mistral-small3.1
-        score: 0.8
-      - model: gemma3:27b
-        score: 0.6
-      - model: phi4
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.9
+        use_reasoning: false
   - name: chemistry
     model_scores:
-      - model: mistral-small3.1
-        score: 0.8
-      - model: gemma3:27b
+      - model: openai/gpt-oss-20b
         score: 0.6
-      - model: phi4
-        score: 0.6
+        use_reasoning: true  # Enable reasoning for complex chemistry
   - name: history
     model_scores:
-      - model: mistral-small3.1
-        score: 0.8
-      - model: phi4
-        score: 0.6
-      - model: gemma3:27b
-        score: 0.4
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
   - name: other
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: phi4
-        score: 0.6
-      - model: mistral-small3.1
-        score: 0.6
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
   - name: health
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: phi4
-        score: 0.8
-      - model: mistral-small3.1
-        score: 0.6
+      - model: openai/gpt-oss-20b
+        score: 0.5
+        use_reasoning: false
   - name: economics
     model_scores:
-      - model: gemma3:27b
-        score: 0.8
-      - model: mistral-small3.1
-        score: 0.8
-      - model: phi4
-        score: 0.0
+      - model: openai/gpt-oss-20b
+        score: 1.0
+        use_reasoning: false
   - name: math
     model_scores:
-      - model: phi4
+      - model: openai/gpt-oss-20b
         score: 1.0
-      - model: mistral-small3.1
-        score: 0.8
-      - model: gemma3:27b
-        score: 0.6
+        use_reasoning: true  # Enable reasoning for complex math
   - name: physics
     model_scores:
-      - model: gemma3:27b
-        score: 0.4
-      - model: phi4
-        score: 0.4
-      - model: mistral-small3.1
-        score: 0.4
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: true  # Enable reasoning for physics
   - name: computer science
     model_scores:
-      - model: gemma3:27b
+      - model: openai/gpt-oss-20b
         score: 0.6
-      - model: mistral-small3.1
-        score: 0.6
-      - model: phi4
-        score: 0.0
+        use_reasoning: false
   - name: philosophy
     model_scores:
-      - model: phi4
-        score: 0.6
-      - model: gemma3:27b
-        score: 0.2
-      - model: mistral-small3.1
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.5
+        use_reasoning: false
   - name: engineering
     model_scores:
-      - model: gemma3:27b
-        score: 0.6
-      - model: mistral-small3.1
-        score: 0.6
-      - model: phi4
-        score: 0.2
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
 
-default_model: mistral-small3.1
+default_model: openai/gpt-oss-20b
+
+# Reasoning family configurations
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+# Global default reasoning effort level
+default_reasoning_effort: high
+
+# API Configuration
+api:
+  batch_classification:
+    max_batch_size: 100
+    concurrency_threshold: 5
+    max_concurrency: 8
+    metrics:
+      enabled: true
+      detailed_goroutine_tracking: true
+      high_resolution_timing: false
+      sample_rate: 1.0
+      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]

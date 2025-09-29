@@ -1,4 +1,4 @@
-name: Create and publish Docker release image
+name: Create and publish Docker release images
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
 
 jobs:
-  build_and_push:
+  build_and_push_extproc:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,7 +30,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push Docker image
+    - name: Build and push extproc Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -39,3 +39,44 @@ jobs:
         tags: |
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:latest
+
+  build_and_push_llm_katan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v4
+
+    - name: Extract tag name
+      id: extract_tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Set lowercase repository owner
+      run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract version from pyproject.toml
+      id: version
+      run: |
+        VERSION=$(grep '^version = ' e2e-tests/llm-katan/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Build and push llm-katan Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./e2e-tests/llm-katan
+        file: ./e2e-tests/llm-katan/Dockerfile
+        push: true
+        tags: |
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/llm-katan:${{ steps.extract_tag.outputs.tag }}
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/llm-katan:v${{ steps.version.outputs.version }}
+          ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/llm-katan:latest

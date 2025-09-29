@@ -20,6 +20,8 @@ func main() {
 		apiPort     = flag.Int("api-port", 8080, "Port to listen on for Classification API")
 		metricsPort = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
 		enableAPI   = flag.Bool("enable-api", true, "Enable Classification API server")
+		secure      = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
+		certPath    = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 	)
 	flag.Parse()
 
@@ -45,7 +47,7 @@ func main() {
 	}()
 
 	// Create and start the ExtProc server
-	server, err := extproc.NewServer(*configPath, *port)
+	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
 	if err != nil {
 		observability.Fatalf("Failed to create ExtProc server: %v", err)
 	}
