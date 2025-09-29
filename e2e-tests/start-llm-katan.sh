@@ -14,10 +14,10 @@ LOGS_DIR="$E2E_DIR/logs"
 PIDS_FILE="$E2E_DIR/llm_katan_pids.txt"
 
 # Model configurations for LLM Katan servers
-# Format: port => "real_model::served_model_name"
-declare -A LLM_KATAN_MODELS=(
-    ["8000"]="Qwen/Qwen3-0.6B::Qwen/Qwen2-0.5B-Instruct"
-    ["8001"]="Qwen/Qwen3-0.6B::TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+# Format: "port:real_model::served_model_name"
+LLM_KATAN_MODELS=(
+    "8000:Qwen/Qwen3-0.6B::Model-A"
+    "8001:Qwen/Qwen3-0.6B::Model-B"
 )
 
 # Function to check if LLM Katan is available
@@ -57,7 +57,8 @@ start_servers_foreground() {
     mkdir -p "$LOGS_DIR"
 
     # Check if ports are available
-    for port in "${!LLM_KATAN_MODELS[@]}"; do
+    for model_config in "${LLM_KATAN_MODELS[@]}"; do
+        port="${model_config%%:*}"
         if ! check_port "$port"; then
             echo "Error: Port $port is already in use. Please stop existing services."
             exit 1
@@ -68,8 +69,9 @@ start_servers_foreground() {
     declare -a PIDS=()
 
     # Start servers in background but show output
-    for port in "${!LLM_KATAN_MODELS[@]}"; do
-        model_spec="${LLM_KATAN_MODELS[$port]}"
+    for model_config in "${LLM_KATAN_MODELS[@]}"; do
+        port="${model_config%%:*}"
+        model_spec="${model_config#*:}"
         real_model="${model_spec%%::*}"
         served_name="${model_spec##*::}"
 
@@ -96,8 +98,9 @@ start_servers_foreground() {
     echo ""
     echo "🤖 LLM Katan servers are running!"
     echo "Server endpoints:"
-    for port in "${!LLM_KATAN_MODELS[@]}"; do
-        model_spec="${LLM_KATAN_MODELS[$port]}"
+    for model_config in "${LLM_KATAN_MODELS[@]}"; do
+        port="${model_config%%:*}"
+        model_spec="${model_config#*:}"
         served_name="${model_spec##*::}"
         echo "  📡 http://127.0.0.1:$port (served as: $served_name)"
     done

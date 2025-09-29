@@ -8,7 +8,7 @@ This test suite provides a progressive approach to testing the Semantic Router, 
    - Tests sending requests to the Envoy proxy
    - Verifies basic request formatting and endpoint availability
    - Tests malformed request validation
-   - Tests content-based smart routing (math → TinyLlama, creative → Qwen)
+   - Tests content-based smart routing (math → Model-B, creative → Model-A)
 
 2. **01-envoy-extproc-test.py** - TBD (To Be Developed)
    - Tests that Envoy correctly forwards requests to the ExtProc
@@ -48,14 +48,14 @@ For fast development and testing with real tiny models (no GPU required):
 ./e2e-tests/start-llm-katan.sh
 
 # Or manually start individual servers:
-llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "Qwen/Qwen2-0.5B-Instruct"
-llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "Model-A"
+llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "Model-B"
 
 # Terminal 2: Start Envoy proxy
 make run-envoy
 
 # Terminal 3: Start semantic router
-make run-router
+make run-router-e2e
 
 # Terminal 4: Run tests
 python e2e-tests/00-client-request-test.py    # Individual test
