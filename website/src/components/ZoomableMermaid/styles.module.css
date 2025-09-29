@@ -203,7 +203,8 @@
   overflow: auto;
   flex: 1;
   display: flex;
-  align-items: center;
+  /* must be flex-start. */
+  align-items: flex-start;
   justify-content: center;
   min-height: 0;
   background: var(--tech-surface-bg);
