@@ -6,7 +6,7 @@ The Semantic Router implements a sophisticated Mixture-of-Models (MoM) architect
 
 import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
 
-<ZoomableMermaid title="System Architecture Overview">
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={5}>
 {`graph TB
     subgraph "Client Layer"
         Client1[Web Application]
@@ -216,7 +216,7 @@ class SemanticRouter:
 
 ### Request Processing Flow
 
-<ZoomableMermaid title="Request Processing Flow">
+<ZoomableMermaid title="Request Processing Flow" defaultZoom={1.3}>
 {`graph TB
     Start([Client Request]) --> EnvoyReceive[Envoy Receives Request]
     
@@ -516,7 +516,7 @@ func (cb *CircuitBreaker) Call(operation func() error) error {
 
 ### Fallback Strategies
 
-<ZoomableMermaid title="Fallback Strategies">
+<ZoomableMermaid title="Fallback Strategies" defaultZoom={1.5}>
 {`graph TB
     Request[Incoming Request] --> PrimaryRoute[Primary Routing Decision]
     

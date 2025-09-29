@@ -3,16 +3,18 @@ import { createPortal } from 'react-dom';
 import Mermaid from '@theme/Mermaid';
 import styles from './styles.module.css';
 
-const ZoomableMermaid = ({ children, title }) => {
+const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(defaultZoom); // Use defaultZoom prop
   const modalRef = useRef(null);
   const containerRef = useRef(null);
 
   const openModal = useCallback(() => {
     setIsModalOpen(true);
+    setZoomLevel(defaultZoom); // Reset to default zoom when opening
     document.body.style.overflow = 'hidden';
-  }, []);
+  }, [defaultZoom]);
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
@@ -22,6 +24,18 @@ const ZoomableMermaid = ({ children, title }) => {
       containerRef.current.focus();
     }
   }, []);
+
+  const zoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 0.2, 3.0)); // Max 300%
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 0.2, 0.5)); // Min 50%
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setZoomLevel(defaultZoom); // Reset to custom default instead of hardcoded 1.2
+  }, [defaultZoom]);
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -36,9 +50,25 @@ const ZoomableMermaid = ({ children, title }) => {
       }
     };
 
+    const handleKeydown = (e) => {
+      if (!isModalOpen) return;
+      
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === '-') {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      }
+    };
+
     if (isModalOpen) {
       document.addEventListener('keydown', handleEscape);
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeydown);
       
       // Focus the modal content when opened
       setTimeout(() => {
@@ -51,8 +81,9 @@ const ZoomableMermaid = ({ children, title }) => {
     return () => {
       document.removeEventListener('keydown', handleEscape);
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeydown);
     };
-  }, [isModalOpen, closeModal]);
+  }, [isModalOpen, closeModal, zoomIn, zoomOut, resetZoom]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -77,7 +108,7 @@ const ZoomableMermaid = ({ children, title }) => {
       aria-describedby="modal-description"
     >
       <div 
-        className={styles.modalContent} 
+        className={styles.modalContent}
         ref={modalRef}
         tabIndex={-1}
       >
@@ -87,24 +118,76 @@ const ZoomableMermaid = ({ children, title }) => {
               {title}
             </h3>
           )}
-          <button 
-            className={styles.closeButton}
-            onClick={closeModal}
-            aria-label="关闭放大视图"
-            type="button"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <div className={styles.modalControls}>
+            <span className={styles.zoomIndicator}>
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button 
+              className={styles.zoomButton}
+              onClick={zoomOut}
+              disabled={zoomLevel <= 0.5}
+              aria-label="缩小图表"
+              type="button"
+              title="缩小 (快捷键: -)"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M8 11h6"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+            </button>
+            <button 
+              className={styles.resetButton}
+              onClick={resetZoom}
+              aria-label={`重置到默认缩放 ${Math.round(defaultZoom * 100)}%`}
+              type="button"
+              title={`重置到默认缩放 ${Math.round(defaultZoom * 100)}% (快捷键: 0)`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 3l18 18"/>
+                <path d="m19 4-7 7-7-7"/>
+                <path d="m5 20 7-7 7 7"/>
+              </svg>
+            </button>
+            <button 
+              className={styles.zoomButton}
+              onClick={zoomIn}
+              disabled={zoomLevel >= 3.0}
+              aria-label="放大图表"
+              type="button"
+              title="放大 (快捷键: +)"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M8 11h6"/>
+                <path d="M11 8v6"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+            </button>
+            <button 
+              className={styles.closeButton}
+              onClick={closeModal}
+              aria-label="关闭放大视图"
+              type="button"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div 
           className={styles.modalBody}
           id="modal-description"
           aria-label="放大的 Mermaid 图表"
         >
-          <Mermaid value={children} />
+          <div 
+            className={styles.diagramContainer}
+            style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center' }}
+          >
+            <Mermaid value={children} />
+          </div>
         </div>
       </div>
     </div>
