@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Mermaid from '@theme/Mermaid';
 import styles from './styles.module.css';
 
@@ -67,6 +68,48 @@ const ZoomableMermaid = ({ children, title }) => {
     }
   };
 
+  const modalContent = (
+    <div 
+      className={styles.modal}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={title ? "modal-title" : undefined}
+      aria-describedby="modal-description"
+    >
+      <div 
+        className={styles.modalContent} 
+        ref={modalRef}
+        tabIndex={-1}
+      >
+        <div className={styles.modalHeader}>
+          {title && (
+            <h3 id="modal-title" className={styles.modalTitle}>
+              {title}
+            </h3>
+          )}
+          <button 
+            className={styles.closeButton}
+            onClick={closeModal}
+            aria-label="关闭放大视图"
+            type="button"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div 
+          className={styles.modalBody}
+          id="modal-description"
+          aria-label="放大的 Mermaid 图表"
+        >
+          <Mermaid value={children} />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div 
@@ -93,47 +136,7 @@ const ZoomableMermaid = ({ children, title }) => {
         <Mermaid value={children} />
       </div>
 
-      {isModalOpen && (
-        <div 
-          className={styles.modal}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={title ? "modal-title" : undefined}
-          aria-describedby="modal-description"
-        >
-          <div 
-            className={styles.modalContent} 
-            ref={modalRef}
-            tabIndex={-1}
-          >
-            <div className={styles.modalHeader}>
-              {title && (
-                <h3 id="modal-title" className={styles.modalTitle}>
-                  {title}
-                </h3>
-              )}
-              <button 
-                className={styles.closeButton}
-                onClick={closeModal}
-                aria-label="关闭放大视图"
-                type="button"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-            <div 
-              className={styles.modalBody}
-              id="modal-description"
-              aria-label="放大的 Mermaid 图表"
-            >
-              <Mermaid value={children} />
-            </div>
-          </div>
-        </div>
-      )}
+      {isModalOpen && createPortal(modalContent, document.body)}
     </>
   );
 };

@@ -53,24 +53,27 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
-  padding: 20px;
+  z-index: 99999;
+  padding: 0;
   animation: fadeIn 0.3s ease;
 }
 
 .modalContent {
   background: var(--tech-card-bg);
   border-radius: 16px;
-  max-width: 95vw;
-  max-height: 95vh;
-  width: 100%;
+  width: 95vw;
+  height: 95vh;
+  max-width: none;
+  max-height: none;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
   border: 1px solid var(--tech-border);
   display: flex;
   flex-direction: column;
@@ -128,22 +131,27 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
+  background: var(--tech-surface-bg);
 }
 
 .modalBody .mermaid {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  max-width: 100%;
-  max-height: 100%;
+  max-width: none !important;
+  max-height: none !important;
   margin: 0 !important;
   padding: 0 !important;
+  transform: scale(1.5);
+  transform-origin: center;
 }
 
 /* Ensure Mermaid diagrams in modal are properly sized */
 .modalBody .mermaid svg {
-  max-width: 100% !important;
+  max-width: none !important;
+  width: auto !important;
   height: auto !important;
+  display: block !important;
 }
 
 @keyframes fadeIn {
@@ -173,23 +181,47 @@
 }
 
 [data-theme='dark'] .modal {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.95);
+}
+
+/* Override any potential Docusaurus container constraints */
+.modal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 99999 !important;
+}
+
+.modalContent {
+  position: relative !important;
+  margin: auto !important;
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
   .modal {
-    padding: 10px;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
   }
   
   .modalContent {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: 12px;
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
   }
   
   .modalHeader {
     padding: 16px 20px 12px;
+    flex-shrink: 0;
   }
   
   .modalTitle {
@@ -198,6 +230,11 @@
   
   .modalBody {
     padding: 16px;
+    flex: 1;
+  }
+  
+  .modalBody .mermaid {
+    transform: scale(1.2);
   }
   
   .zoomHint {
