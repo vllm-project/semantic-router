@@ -17,7 +17,8 @@ from .config import ServerConfig
 from .server import run_server
 
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
+
     __version__ = version("llm-katan")
 except PackageNotFoundError:
     __version__ = "unknown"

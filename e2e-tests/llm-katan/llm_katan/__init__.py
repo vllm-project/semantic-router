@@ -9,7 +9,8 @@ Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
+
     __version__ = version("llm-katan")
 except PackageNotFoundError:
     __version__ = "unknown"

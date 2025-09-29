@@ -20,7 +20,8 @@ from pydantic import BaseModel
 from .config import ServerConfig
 
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
+
     __version__ = version("llm-katan")
 except PackageNotFoundError:
     __version__ = "unknown"
