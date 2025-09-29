@@ -187,11 +187,11 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
         >
           <div
             className={styles.diagramContainer}
-            style={{ 
-              transform: `scale(${zoomLevel})`, 
+            style={{
+              transform: `scale(${zoomLevel})`,
               // Ensure scaling is from the center of the diagram.
               // Fix the issue where the top scroll bar is not visible when the chart is enlarged.
-              transformOrigin: 'center top'
+              transformOrigin: 'center top',
             }}
           >
             <Mermaid value={children} />
