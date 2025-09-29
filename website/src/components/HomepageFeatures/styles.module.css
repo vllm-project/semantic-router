@@ -8,6 +8,12 @@
   backdrop-filter: blur(10px);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme features section */
+[data-theme='dark'] .features {
+  background: linear-gradient(135deg, #161B22 0%, #21262D 50%, #161B22 100%);
 }
 
 .features::before {
@@ -22,6 +28,14 @@
     radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.05) 0%, transparent 50%);
   pointer-events: none;
   animation: featuresBackgroundFlow 10s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme features background */
+[data-theme='dark'] .features::before {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.08) 0%, transparent 50%);
 }
 
 .featuresHeader {
@@ -48,6 +62,12 @@
   max-width: 600px;
   margin: 0 auto;
   line-height: 1.6;
+  transition: color 0.3s ease;
+}
+
+/* Dark theme subtitle */
+[data-theme='dark'] .featuresSubtitle {
+  color: #8B949E;
 }
 
 .featureCard {
@@ -64,6 +84,15 @@
   height: 100%;
   position: relative;
   overflow: hidden;
+}
+
+/* Dark theme feature card */
+[data-theme='dark'] .featureCard {
+  background: rgba(33, 38, 45, 0.9);
+  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(88, 166, 255, 0.2);
 }
 
 .featureCard::before {
@@ -92,6 +121,15 @@
   border-color: rgba(88, 166, 255, 0.4);
 }
 
+/* Dark theme feature card hover */
+[data-theme='dark'] .featureCard:hover {
+  box-shadow:
+    0 20px 60px rgba(88, 166, 255, 0.25),
+    0 0 0 1px rgba(88, 166, 255, 0.4),
+    0 0 40px rgba(88, 166, 255, 0.3);
+  border-color: rgba(88, 166, 255, 0.5);
+}
+
 .featureTitle {
   color: #1F2328;
   font-weight: 800;
@@ -104,6 +142,16 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme feature title */
+[data-theme='dark'] .featureTitle {
+  color: #F0F6FC;
+  background: linear-gradient(45deg, #58A6FF, #FDB516);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .featureDescription {
@@ -113,12 +161,25 @@
   font-size: 1rem;
   position: relative;
   z-index: 1;
+  transition: color 0.3s ease;
+}
+
+/* Dark theme feature description */
+[data-theme='dark'] .featureDescription {
+  color: #8B949E;
 }
 
 .featureDescription strong {
   color: #0969DA;
   font-weight: 700;
   text-shadow: 0 0 8px rgba(9, 105, 218, 0.2);
+  transition: color 0.3s ease;
+}
+
+/* Dark theme strong text */
+[data-theme='dark'] .featureDescription strong {
+  color: #58A6FF;
+  text-shadow: 0 0 8px rgba(88, 166, 255, 0.3);
 }
 
 /* Animations */
