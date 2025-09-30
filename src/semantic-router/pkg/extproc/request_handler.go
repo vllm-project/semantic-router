@@ -7,6 +7,7 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -207,6 +208,15 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		if strings.Contains(strings.ToLower(accept), "text/event-stream") {
 			ctx.ExpectStreamingResponse = true
 		}
+	}
+
+	// Check if this is a GET request to /v1/models
+	method := ctx.Headers[":method"]
+	path := ctx.Headers[":path"]
+
+	if method == "GET" && strings.HasPrefix(path, "/v1/models") {
+		observability.Infof("Handling /v1/models request with path: %s", path)
+		return r.handleModelsRequest(path)
 	}
 
 	// Prepare base response
@@ -820,4 +830,128 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	}
 
 	return nil
+}
+
+// OpenAIModel represents a single model in the OpenAI /v1/models response
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// OpenAIModelList is the container for the models list response
+type OpenAIModelList struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
+}
+
+// handleModelsRequest handles GET /v1/models requests and returns a direct response
+func (r *OpenAIRouter) handleModelsRequest(path string) (*ext_proc.ProcessingResponse, error) {
+	now := time.Now().Unix()
+
+	// Start with the special "auto" model always available from the router
+	models := []OpenAIModel{
+		{
+			ID:      "auto",
+			Object:  "model",
+			Created: now,
+			OwnedBy: "vllm-semantic-router",
+		},
+	}
+
+	// Append underlying models from config (if available)
+	if r.Config != nil {
+		for _, m := range r.Config.GetAllModels() {
+			// Skip if already added as "auto" (or avoid duplicates in general)
+			if m == "auto" {
+				continue
+			}
+			models = append(models, OpenAIModel{
+				ID:      m,
+				Object:  "model",
+				Created: now,
+				OwnedBy: "vllm-semantic-router",
+			})
+		}
+	}
+
+	resp := OpenAIModelList{
+		Object: "list",
+		Data:   models,
+	}
+
+	return r.createJSONResponse(200, resp), nil
+}
+
+// statusCodeToEnum converts HTTP status code to typev3.StatusCode enum
+func statusCodeToEnum(statusCode int) typev3.StatusCode {
+	switch statusCode {
+	case 200:
+		return typev3.StatusCode_OK
+	case 400:
+		return typev3.StatusCode_BadRequest
+	case 404:
+		return typev3.StatusCode_NotFound
+	case 500:
+		return typev3.StatusCode_InternalServerError
+	default:
+		return typev3.StatusCode_OK
+	}
+}
+
+// createJSONResponseWithBody creates a direct response with pre-marshaled JSON body
+func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte) *ext_proc.ProcessingResponse {
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &ext_proc.ImmediateResponse{
+				Status: &typev3.HttpStatus{
+					Code: statusCodeToEnum(statusCode),
+				},
+				Headers: &ext_proc.HeaderMutation{
+					SetHeaders: []*core.HeaderValueOption{
+						{
+							Header: &core.HeaderValue{
+								Key:      "content-type",
+								RawValue: []byte("application/json"),
+							},
+						},
+					},
+				},
+				Body: jsonBody,
+			},
+		},
+	}
+}
+
+// createJSONResponse creates a direct response with JSON content
+func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		observability.Errorf("Failed to marshal JSON response: %v", err)
+		return r.createErrorResponse(500, "Internal server error")
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
+}
+
+// createErrorResponse creates a direct error response
+func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	errorResp := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    "invalid_request_error",
+			"code":    statusCode,
+		},
+	}
+
+	jsonData, err := json.Marshal(errorResp)
+	if err != nil {
+		observability.Errorf("Failed to marshal error response: %v", err)
+		jsonData = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
+		// Use 500 status code for fallback error
+		statusCode = 500
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
 }
