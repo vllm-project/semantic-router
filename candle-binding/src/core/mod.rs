@@ -30,3 +30,9 @@ pub use tokenization::{
     ModelType as TokenizerModelType, TokenDataType, TokenizationConfig, TokenizationResult,
     UnifiedTokenizer,
 };
+
+// Test modules (only compiled in test builds)
+#[cfg(test)]
+pub mod config_loader_test;
+#[cfg(test)]
+pub mod unified_error_test;

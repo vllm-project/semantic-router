@@ -14,3 +14,7 @@ pub use bert_lora::{LoRABertClassifier, LoRAMultiTaskResult};
 
 // Re-export LoRA adapter functionality
 pub use lora_adapter::*;
+
+// Test modules (only compiled in test builds)
+#[cfg(test)]
+pub mod bert_lora_test;
