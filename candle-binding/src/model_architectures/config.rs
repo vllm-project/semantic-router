@@ -79,7 +79,7 @@ pub struct GlobalConfig {
 }
 
 /// Device preference for model execution
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DevicePreference {
     /// Prefer GPU if available
     GPU,
@@ -90,7 +90,7 @@ pub enum DevicePreference {
 }
 
 /// Path selection strategy
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PathSelectionStrategy {
     /// Always use LoRA path
     AlwaysLoRA,
@@ -103,7 +103,7 @@ pub enum PathSelectionStrategy {
 }
 
 /// Optimization level
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OptimizationLevel {
     /// Conservative optimization
     Conservative,
