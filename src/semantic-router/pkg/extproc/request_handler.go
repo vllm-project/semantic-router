@@ -71,26 +71,27 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 }
 
 // addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
-func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]byte, error) {
+// Returns the modified body, whether the system prompt was actually injected, and any error
+func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]byte, bool, error) {
 	if systemPrompt == "" {
-		return requestBody, nil
+		return requestBody, false, nil
 	}
 
 	// Parse the JSON request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Get the messages array
 	messagesInterface, ok := requestMap["messages"]
 	if !ok {
-		return requestBody, nil // No messages array, return original
+		return requestBody, false, nil // No messages array, return original
 	}
 
 	messages, ok := messagesInterface.([]interface{})
 	if !ok {
-		return requestBody, nil // Messages is not an array, return original
+		return requestBody, false, nil // Messages is not an array, return original
 	}
 
 	// Create a new system message
@@ -123,7 +124,8 @@ func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]by
 	requestMap["messages"] = messages
 
 	// Marshal back to JSON
-	return json.Marshal(requestMap)
+	modifiedBody, err := json.Marshal(requestMap)
+	return modifiedBody, true, err
 }
 
 // extractUserAndNonUserContent extracts content from request messages
@@ -211,10 +213,11 @@ type RequestContext struct {
 	TTFTSeconds  float64
 
 	// VSR decision tracking
-	VSRSelectedCategory string // The category selected by VSR
-	VSRReasoningMode    string // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel    string // The model selected by VSR
-	VSRCacheHit         bool   // Whether this request hit the cache
+	VSRSelectedCategory     string // The category selected by VSR
+	VSRReasoningMode        string // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel        string // The model selected by VSR
+	VSRCacheHit             bool   // Whether this request hit the cache
+	VSRInjectedSystemPrompt bool   // Whether a system prompt was injected into the request
 }
 
 // handleRequestHeaders processes the request headers
@@ -563,13 +566,17 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				if categoryName != "" {
 					category := r.Classifier.GetCategoryByName(categoryName)
 					if category != nil && category.SystemPrompt != "" {
-						modifiedBody, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt)
+						var injected bool
+						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt)
 						if err != nil {
 							observability.Errorf("Error adding system prompt to request: %v", err)
 							metrics.RecordRequestError(actualModel, "serialization_error")
 							return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
 						}
-						observability.Infof("Added category-specific system prompt for category: %s", categoryName)
+						if injected {
+							ctx.VSRInjectedSystemPrompt = true
+							observability.Infof("Added category-specific system prompt for category: %s", categoryName)
+						}
 					}
 				}
 
