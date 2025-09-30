@@ -13,3 +13,11 @@ pub use bert::TraditionalBertClassifier;
 
 // Re-export traditional models
 pub use base_model::*;
+
+// Test modules (only compiled in test builds)
+#[cfg(test)]
+pub mod base_model_test;
+#[cfg(test)]
+pub mod bert_test;
+#[cfg(test)]
+pub mod modernbert_test;
