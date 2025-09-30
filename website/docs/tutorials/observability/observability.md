@@ -233,24 +233,6 @@ You should see `prometheus-...` and `grafana-...` pods in `Running` state.
 - Roll upgrades separately: update Prometheus and Grafana images via `kustomization.yaml` patches.
 - Consider adopting the Prometheus Operator (`ServiceMonitor` + `PodMonitor`) if you already run kube-prometheus-stack. A sample `ServiceMonitor` is in `website/docs/tutorials/observability/observability.md`.
 
-### 9. Troubleshooting
-
-| Symptom | Checks | Fix |
-|---------|--------|-----|
-| Prometheus target **DOWN** | `kubectl get endpoints semantic-router-metrics -n vllm-semantic-router-system` | Ensure the Semantic Router deployment is running and the service labels match `app=semantic-router`, `service=metrics` |
-| Grafana dashboard empty | **Configuration → Data Sources** | Confirm Prometheus datasource URL resolves and the Prometheus service is reachable |
-| Login fails | `kubectl get secret grafana-admin -o yaml` | Update the secret to match the credentials you expect |
-| PVC Pending | `kubectl describe pvc prometheus-data` | Provide a storage class via `storageClassName`, or provision storage manually |
-| Ingress 404 | `kubectl describe ingress grafana` | Update hostnames, TLS secrets, and ensure ingress controller is installed |
-
-### 10. Next Steps
-
-- Configure alerts for critical metrics (Prometheus alerting rules + Alertmanager)
-- Add log aggregation (Loki, Elasticsearch, or Cloud-native logging)
-- Automate stack deployment through CI/CD pipelines using `kubectl apply -k`
-
-With this observability stack in place, you can track Semantic Router health, routing accuracy, latency distributions, and usage trends across any Kubernetes environment.
-
 ## 4. Key Metrics (Sample)
 
 | Metric                                                        | Type      | Description                                  |
