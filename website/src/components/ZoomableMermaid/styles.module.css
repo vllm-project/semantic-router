@@ -1,0 +1,375 @@
+.mermaidContainer {
+  position: relative;
+  cursor: pointer;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  background: var(--tech-card-bg);
+  border: 1px solid var(--tech-border);
+  box-shadow: var(--tech-shadow);
+}
+
+.mermaidContainer:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(9, 105, 218, 0.15);
+  border-color: var(--tech-border-accent);
+}
+
+.mermaidContainer:focus {
+  outline: 2px solid var(--tech-primary-blue);
+  outline-offset: 2px;
+}
+
+.zoomHint {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(9, 105, 218, 0.9);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.3s ease;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(9, 105, 218, 0.3);
+}
+
+.mermaidContainer:hover .zoomHint,
+.mermaidContainer:focus .zoomHint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.modal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  animation: fadeIn 0.3s ease;
+}
+
+.modalContent {
+  background: var(--tech-card-bg);
+  border-radius: 16px;
+  width: 70vw;
+  height: 70vh;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--tech-border);
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.3s ease;
+  position: relative !important;
+  margin: auto !important;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--tech-border);
+  background: var(--tech-surface-bg);
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  margin: 0;
+  color: var(--tech-text-primary);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modalControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoomIndicator {
+  font-size: 12px;
+  color: var(--tech-text-secondary);
+  font-weight: 500;
+  min-width: 35px;
+  text-align: center;
+}
+
+.zoomButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--tech-text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+}
+
+.zoomButton:hover:not(:disabled) {
+  background: rgba(9, 105, 218, 0.1);
+  color: var(--tech-primary-blue);
+  transform: scale(1.05);
+}
+
+.zoomButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.zoomButton:focus:not(:disabled) {
+  outline: 2px solid var(--tech-primary-blue);
+  outline-offset: 2px;
+}
+
+.resetButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--tech-text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+}
+
+.resetButton:hover {
+  background: rgba(156, 39, 176, 0.1);
+  color: var(--tech-accent-purple);
+  transform: scale(1.05);
+}
+
+.resetButton:focus {
+  outline: 2px solid var(--tech-primary-blue);
+  outline-offset: 2px;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--tech-text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+}
+
+.closeButton:hover {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+  transform: scale(1.1);
+}
+
+.closeButton:focus {
+  outline: 2px solid var(--tech-primary-blue);
+  outline-offset: 2px;
+}
+
+.modalBody {
+  padding: 24px;
+  overflow: auto;
+  flex: 1;
+  display: flex;
+  /* must be flex-start. */
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 0;
+  background: var(--tech-surface-bg);
+}
+
+.diagramContainer {
+  transition: transform 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diagramContainer .mermaid {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Ensure Mermaid diagrams in modal are properly sized */
+.diagramContainer .mermaid svg {
+  max-width: none !important;
+  width: auto !important;
+  height: auto !important;
+  display: block !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Dark theme support */
+[data-theme='dark'] .zoomHint {
+  background: rgba(88, 166, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+}
+
+[data-theme='dark'] .modal {
+  background: rgba(0, 0, 0, 0.95);
+}
+
+/* Override any potential Docusaurus container constraints */
+.modal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 99999 !important;
+}
+
+.modalContent {
+  position: relative !important;
+  margin: auto !important;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .modal {
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  .modalContent {
+    width: 95vw !important;
+    height: 90vh !important;
+    border-radius: 12px;
+  }
+  
+  .modalHeader {
+    padding: 16px 20px 12px;
+    flex-shrink: 0;
+  }
+  
+  .modalTitle {
+    font-size: 16px;
+  }
+  
+  .modalBody {
+    padding: 16px;
+    flex: 1;
+  }
+  
+  .zoomHint {
+    font-size: 11px;
+    padding: 4px 8px;
+    top: 8px;
+    right: 8px;
+  }
+  
+  .closeButton,
+  .zoomButton,
+  .resetButton {
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+  }
+  
+  .modalControls {
+    gap: 6px;
+  }
+  
+  .zoomIndicator {
+    font-size: 11px;
+    min-width: 30px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .mermaidContainer {
+    border-width: 2px;
+  }
+  
+  .zoomHint {
+    background: #000;
+    color: #fff;
+  }
+  
+  [data-theme='dark'] .zoomHint {
+    background: #fff;
+    color: #000;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .mermaidContainer,
+  .zoomHint,
+  .modal,
+  .modalContent,
+  .closeButton {
+    transition: none;
+    animation: none;
+  }
+  
+  .modal {
+    animation: none;
+  }
+  
+  .modalContent {
+    animation: none;
+  }
+}

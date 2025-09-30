@@ -18,6 +18,13 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .config import ServerConfig
+
+try:
+    from importlib.metadata import PackageNotFoundError, version
+
+    __version__ = version("llm-katan")
+except PackageNotFoundError:
+    __version__ = "unknown"
 from .model import ModelBackend, create_backend
 
 logger = logging.getLogger(__name__)
@@ -108,7 +115,7 @@ def create_app(config: ServerConfig) -> FastAPI:
     app = FastAPI(
         title="LLM Katan - Lightweight LLM Server",
         description="A lightweight LLM serving package for testing and development",
-        version="0.1.4",
+        version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan,
@@ -249,7 +256,7 @@ llm_katan_uptime_seconds{{model="{config.served_model_name}",backend="{config.ba
         """Root endpoint"""
         return {
             "message": "LLM Katan - Lightweight LLM Server",
-            "version": "0.1.4",
+            "version": __version__,
             "model": config.served_model_name,
             "backend": config.backend,
             "docs": "/docs",

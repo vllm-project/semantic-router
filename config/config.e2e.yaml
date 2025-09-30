@@ -39,101 +39,32 @@ prompt_guard:
 
 # vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
 vllm_endpoints:
-  - name: "endpoint1"
-    address: "127.0.0.1"
-    port: 11434
-    models:
-      - "phi4"
-      - "gemma3:27b"
-    weight: 1  # Load balancing weight
-    health_check_path: "/health"  # Optional health check endpoint
-  - name: "endpoint2"
-    address: "127.0.0.1"
-    port: 11434
-    models:
-      - "mistral-small3.1"
-    weight: 1
-    health_check_path: "/health"
-  - name: "endpoint3"
-    address: "127.0.0.1"
-    port: 11434
-    models:
-      - "phi4"  # Same model can be served by multiple endpoints for redundancy
-      - "mistral-small3.1"
-    weight: 2  # Higher weight for more powerful endpoint
   - name: "qwen-endpoint"
     address: "127.0.0.1"
     port: 8000
     models:
-      - "Qwen/Qwen2-0.5B-Instruct"
+      - "Model-A"
     weight: 1
     health_check_path: "/health"
   - name: "tinyllama-endpoint"
     address: "127.0.0.1"
     port: 8001
     models:
-      - "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      - "Model-B"
     weight: 1
     health_check_path: "/health"
 
 model_config:
-  phi4:
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.07
-      completion_per_1m: 0.35
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    # Specify which endpoints can serve this model (optional - if not specified, uses all endpoints that list this model)
-    preferred_endpoints: ["endpoint1", "endpoint3"]
-    # Reasoning family - phi4 doesn't support reasoning, so omit this field
 
-  # Example: DeepSeek model with custom name
-  "ds-v31-custom":
-    reasoning_family: "deepseek"  # This model uses DeepSeek reasoning syntax
-    preferred_endpoints: ["endpoint1"]
-    pii_policy:
-      allow_by_default: true
-
-  # Example: Qwen3 model with custom name
-  "my-qwen3-model":
-    reasoning_family: "qwen3"     # This model uses Qwen3 reasoning syntax
-    preferred_endpoints: ["endpoint2"]
-    pii_policy:
-      allow_by_default: true
-
-  # Example: GPT-OSS model with custom name
-  "custom-gpt-oss":
-    reasoning_family: "gpt-oss"   # This model uses GPT-OSS reasoning syntax
-    preferred_endpoints: ["endpoint1"]
-    pii_policy:
-      allow_by_default: true
-  gemma3:27b:
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.067
-      completion_per_1m: 0.267
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    preferred_endpoints: ["endpoint1"]
-  "mistral-small3.1":
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.1
-      completion_per_1m: 0.3
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    preferred_endpoints: ["endpoint2", "endpoint3"]
-  "Qwen/Qwen2-0.5B-Instruct":
+  "Model-A":
+    use_reasoning: false
     reasoning_family: "qwen3"  # This model uses Qwen reasoning syntax
     preferred_endpoints: ["qwen-endpoint"]
     pii_policy:
       allow_by_default: true
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
-  "TinyLlama/TinyLlama-1.1B-Chat-v1.0":
+  "Model-B":
+    use_reasoning: false
     preferred_endpoints: ["tinyllama-endpoint"]
     pii_policy:
       allow_by_default: true
@@ -159,148 +90,191 @@ categories:
     reasoning_description: "Business content is typically conversational"
     reasoning_effort: low  # Business conversations need low reasoning effort
     model_scores:
-      - model: phi4
+      - model: "Model-A"
         score: 0.8
-      - model: gemma3:27b
+        use_reasoning: false
+      - model: "Model-B"
         score: 0.4
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.2
+        use_reasoning: false
   - name: law
     use_reasoning: false
     reasoning_description: "Legal content is typically explanatory"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.8
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.4
+        use_reasoning: false
   - name: psychology
     use_reasoning: false
     reasoning_description: "Psychology content is usually explanatory"
     model_scores:
-      - model: mistral-small3.1
+      - model: "Model-A"
         score: 0.6
-      - model: gemma3:27b
+        use_reasoning: false
+      - model: "Model-B"
         score: 0.4
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.4
+        use_reasoning: false
   - name: biology
     use_reasoning: true
     reasoning_description: "Biological processes benefit from structured analysis"
     model_scores:
-      - model: mistral-small3.1
+      - model: "Model-A"
         score: 0.8
-      - model: gemma3:27b
+        use_reasoning: false
+      - model: "Model-B"
         score: 0.6
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.2
+        use_reasoning: false
   - name: chemistry
     use_reasoning: true
     reasoning_description: "Chemical reactions and formulas require systematic thinking"
     reasoning_effort: high  # Chemistry requires high reasoning effort
     model_scores:
-      - model: mistral-small3.1
+      - model: "Model-A"
         score: 0.8
-      - model: gemma3:27b
+        use_reasoning: true
+      - model: "Model-B"
         score: 0.6
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
+        use_reasoning: false
   - name: history
     use_reasoning: false
     reasoning_description: "Historical content is narrative-based"
     model_scores:
-      - model: mistral-small3.1
+      - model: "Model-A"
         score: 0.8
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
-      - model: gemma3:27b
+        use_reasoning: false
+      - model: "Model-B"
         score: 0.4
+        use_reasoning: false
   - name: other
     use_reasoning: false
     reasoning_description: "General content doesn't require reasoning"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.8
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
+        use_reasoning: false
   - name: health
     use_reasoning: false
     reasoning_description: "Health information is typically informational"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.8
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.8
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
+        use_reasoning: false
   - name: economics
     use_reasoning: false
     reasoning_description: "Economic discussions are usually explanatory"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.8
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.8
-      - model: phi4
-        score: 0.0
+        use_reasoning: false
+      - model: "Model-A"
+        score: 0.1
+        use_reasoning: false
   - name: math
     use_reasoning: true
     reasoning_description: "Mathematical problems require step-by-step reasoning"
     reasoning_effort: high  # Math problems need high reasoning effort
     model_scores:
-      - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      - model: "Model-B"
         score: 1.0
-      - model: phi4
+        use_reasoning: true
+      - model: "Model-A"
         score: 0.9
-      - model: mistral-small3.1
+        use_reasoning: true
+      - model: "Model-A"
         score: 0.8
-      - model: gemma3:27b
+        use_reasoning: false
+      - model: "Model-B"
         score: 0.6
+        use_reasoning: false
   - name: physics
     use_reasoning: true
     reasoning_description: "Physics concepts need logical analysis"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.4
-      - model: phi4
+        use_reasoning: true
+      - model: "Model-A"
         score: 0.4
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.4
+        use_reasoning: false
   - name: computer science
     use_reasoning: true
     reasoning_description: "Programming and algorithms need logical reasoning"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.6
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
-      - model: phi4
-        score: 0.0
+        use_reasoning: false
+      - model: "Model-A"
+        score: 0.1
+        use_reasoning: false
   - name: philosophy
     use_reasoning: false
     reasoning_description: "Philosophical discussions are conversational"
     model_scores:
-      - model: phi4
+      - model: "Model-A"
         score: 0.6
-      - model: gemma3:27b
+        use_reasoning: false
+      - model: "Model-B"
         score: 0.2
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.2
+        use_reasoning: false
   - name: engineering
     use_reasoning: true
     reasoning_description: "Engineering problems require systematic problem-solving"
     model_scores:
-      - model: gemma3:27b
+      - model: "Model-B"
         score: 0.6
-      - model: mistral-small3.1
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.6
-      - model: phi4
+        use_reasoning: false
+      - model: "Model-A"
         score: 0.2
+        use_reasoning: false
 
-default_model: mistral-small3.1
+default_model: "Model-A"
 
 # API Configuration
 api:
