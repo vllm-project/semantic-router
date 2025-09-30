@@ -40,8 +40,7 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-test: ## Run all tests (Go, Rust, binding)
-test: vet go-lint check-go-mod-tidy download-models-minimal test-binding test-semantic-router
+test: vet check-go-mod-tidy download-models test-rust test-binding test-semantic-router
 
 # Clean built artifacts
 clean: ## Clean built artifacts

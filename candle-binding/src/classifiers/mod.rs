@@ -7,6 +7,10 @@ pub mod traditional;
 
 pub mod unified;
 
+// Test modules (only compiled in test builds)
+#[cfg(test)]
+pub mod unified_test;
+
 /// Classification task types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassificationTask {
