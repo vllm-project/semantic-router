@@ -86,6 +86,18 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-injected-system-prompt header
+		injectedValue := "false"
+		if ctx.VSRInjectedSystemPrompt {
+			injectedValue = "true"
+		}
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "x-vsr-injected-system-prompt",
+				RawValue: []byte(injectedValue),
+			},
+		})
+
 		// Create header mutation if we have headers to add
 		if len(setHeaders) > 0 {
 			headerMutation = &ext_proc.HeaderMutation{
