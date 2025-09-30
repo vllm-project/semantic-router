@@ -28,3 +28,12 @@ pub use config::PathSelectionStrategy;
 
 // Re-export model factory functionality
 pub use model_factory::{DualPathModel, ModelFactory, ModelFactoryConfig, ModelOutput};
+
+// Test modules (only compiled in test builds)
+#[cfg(test)]
+pub mod model_factory_test;
+#[cfg(test)]
+pub mod routing_test;
+#[cfg(test)]
+#[cfg(test)]
+pub mod unified_interface_test;

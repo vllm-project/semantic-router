@@ -26,4 +26,12 @@ serde_json = "1.0.93"
 tracing = "0.1.37"
 libc = "0.2.147"
 lazy_static = "1.4.0"
-rand = "0.8.5" 
+rand = "0.8.5"
+
+[dev-dependencies]
+rstest = "0.18"
+tokio = { version = "1.0", features = ["full"] }
+tempfile = "3.8"
+serial_test = "3.0"
+criterion = "0.5"
+async-std = { version = "1.12", features = ["attributes"] } 

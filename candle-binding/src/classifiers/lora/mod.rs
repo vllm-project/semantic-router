@@ -14,3 +14,13 @@ pub use intent_lora::*;
 pub use parallel_engine::*;
 pub use pii_lora::*;
 pub use security_lora::*;
+
+// Test modules (only compiled in test builds)
+#[cfg(test)]
+pub mod intent_lora_test;
+#[cfg(test)]
+pub mod pii_lora_test;
+#[cfg(test)]
+pub mod security_lora_test;
+#[cfg(test)]
+pub mod token_lora_test;

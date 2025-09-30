@@ -13,6 +13,10 @@ pub mod utils;
 // C FFI interface
 pub mod ffi;
 
+// Test fixtures and utilities (only available in test builds)
+#[cfg(test)]
+pub mod test_fixtures;
+
 // Public re-exports for backward compatibility
 pub use core::similarity::BertSimilarity;
 pub use model_architectures::traditional::bert::TraditionalBertClassifier as BertClassifier;
