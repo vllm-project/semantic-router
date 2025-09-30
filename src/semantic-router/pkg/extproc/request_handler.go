@@ -7,6 +7,7 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -208,6 +209,12 @@ type RequestContext struct {
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
+
+	// VSR decision tracking
+	VSRSelectedCategory string // The category selected by VSR
+	VSRReasoningMode    string // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel    string // The model selected by VSR
+	VSRCacheHit         bool   // Whether this request hit the cache
 }
 
 // handleRequestHeaders processes the request headers
@@ -239,6 +246,15 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			ctx.ExpectStreamingResponse = true
 			observability.Infof("Client expects streaming response based on Accept header")
 		}
+	}
+
+	// Check if this is a GET request to /v1/models
+	method := ctx.Headers[":method"]
+	path := ctx.Headers[":path"]
+
+	if method == "GET" && strings.HasPrefix(path, "/v1/models") {
+		observability.Infof("Handling /v1/models request with path: %s", path)
+		return r.handleModelsRequest(path)
 	}
 
 	// Prepare base response
@@ -379,6 +395,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		if err != nil {
 			observability.Errorf("Error searching cache: %v", err)
 		} else if found {
+			// Mark this request as a cache hit
+			ctx.VSRCacheHit = true
 			// Log cache hit
 			observability.LogEvent("cache_hit", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -389,13 +407,13 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 			response := http.CreateCacheHitResponse(cachedResponse)
 			return response, true
 		}
+	}
 
-		// Cache miss, store the request for later
-		err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
-		if err != nil {
-			observability.Errorf("Error adding pending request to cache: %v", err)
-			// Continue without caching
-		}
+	// Cache miss, store the request for later
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
+	if err != nil {
+		observability.Errorf("Error adding pending request to cache: %v", err)
+		// Continue without caching
 	}
 
 	return nil, false
@@ -498,6 +516,15 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Record reasoning decision metric with the effort that will be applied if enabled
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
+
+				// Track VSR decision information
+				ctx.VSRSelectedCategory = categoryName
+				ctx.VSRSelectedModel = matchedModel
+				if useReasoning {
+					ctx.VSRReasoningMode = "on"
+				} else {
+					ctx.VSRReasoningMode = "off"
+				}
 
 				// Track the model routing change
 				metrics.RecordModelRouting(originalModel, matchedModel)
@@ -612,6 +639,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 	} else if originalModel != "auto" {
 		observability.Infof("Using specified model: %s", originalModel)
+		// Track VSR decision information for non-auto models
+		ctx.VSRSelectedModel = originalModel
+		ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 		// For non-auto models, check PII policy compliance
 		allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 		detectedPII := r.Classifier.DetectPIIInContent(allContent)
@@ -845,4 +875,128 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	}
 
 	return nil
+}
+
+// OpenAIModel represents a single model in the OpenAI /v1/models response
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// OpenAIModelList is the container for the models list response
+type OpenAIModelList struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
+}
+
+// handleModelsRequest handles GET /v1/models requests and returns a direct response
+func (r *OpenAIRouter) handleModelsRequest(path string) (*ext_proc.ProcessingResponse, error) {
+	now := time.Now().Unix()
+
+	// Start with the special "auto" model always available from the router
+	models := []OpenAIModel{
+		{
+			ID:      "auto",
+			Object:  "model",
+			Created: now,
+			OwnedBy: "vllm-semantic-router",
+		},
+	}
+
+	// Append underlying models from config (if available)
+	if r.Config != nil {
+		for _, m := range r.Config.GetAllModels() {
+			// Skip if already added as "auto" (or avoid duplicates in general)
+			if m == "auto" {
+				continue
+			}
+			models = append(models, OpenAIModel{
+				ID:      m,
+				Object:  "model",
+				Created: now,
+				OwnedBy: "vllm-semantic-router",
+			})
+		}
+	}
+
+	resp := OpenAIModelList{
+		Object: "list",
+		Data:   models,
+	}
+
+	return r.createJSONResponse(200, resp), nil
+}
+
+// statusCodeToEnum converts HTTP status code to typev3.StatusCode enum
+func statusCodeToEnum(statusCode int) typev3.StatusCode {
+	switch statusCode {
+	case 200:
+		return typev3.StatusCode_OK
+	case 400:
+		return typev3.StatusCode_BadRequest
+	case 404:
+		return typev3.StatusCode_NotFound
+	case 500:
+		return typev3.StatusCode_InternalServerError
+	default:
+		return typev3.StatusCode_OK
+	}
+}
+
+// createJSONResponseWithBody creates a direct response with pre-marshaled JSON body
+func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte) *ext_proc.ProcessingResponse {
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &ext_proc.ImmediateResponse{
+				Status: &typev3.HttpStatus{
+					Code: statusCodeToEnum(statusCode),
+				},
+				Headers: &ext_proc.HeaderMutation{
+					SetHeaders: []*core.HeaderValueOption{
+						{
+							Header: &core.HeaderValue{
+								Key:      "content-type",
+								RawValue: []byte("application/json"),
+							},
+						},
+					},
+				},
+				Body: jsonBody,
+			},
+		},
+	}
+}
+
+// createJSONResponse creates a direct response with JSON content
+func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		observability.Errorf("Failed to marshal JSON response: %v", err)
+		return r.createErrorResponse(500, "Internal server error")
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
+}
+
+// createErrorResponse creates a direct error response
+func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	errorResp := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    "invalid_request_error",
+			"code":    statusCode,
+		},
+	}
+
+	jsonData, err := json.Marshal(errorResp)
+	if err != nil {
+		observability.Errorf("Failed to marshal error response: %v", err)
+		jsonData = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
+		// Use 500 status code for fallback error
+		statusCode = 500
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
 }

@@ -4,8 +4,10 @@ The Semantic Router implements a sophisticated Mixture-of-Models (MoM) architect
 
 ## High-Level Architecture Overview
 
-```mermaid
-graph TB
+import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
+
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={5.5}>
+{`graph TB
     subgraph "Client Layer"
         Client1[Web Application]
         Client2[Mobile App]
@@ -62,8 +64,8 @@ graph TB
     
     ExtProc --> Prometheus
     Prometheus --> Grafana
-    ExtProc --> Logs
-```
+    ExtProc --> Logs`}
+</ZoomableMermaid>
 
 ## Core Components
 
@@ -113,7 +115,7 @@ http_filters:
 type OpenAIRouter struct {
     Config               *config.RouterConfig
     CategoryDescriptions []string
-    Classifier           *classification.Classifier    // ModernBERT-based
+    Classifier           *classification.Classifier   // ModernBERT-based
     PIIChecker           *pii.PolicyChecker           // Privacy protection
     Cache                *cache.SemanticCache         // Performance optimization
     ToolsDatabase        *tools.ToolsDatabase         // Tool selection
@@ -125,8 +127,8 @@ type OpenAIRouter struct {
 
 **Processing Pipeline**:
 
-```mermaid
-sequenceDiagram
+<ZoomableMermaid title="Processing Pipeline" defaultZoom={3.5}>
+{`sequenceDiagram
     participant E as Envoy
     participant R as Router
     participant C as Classifier
@@ -152,8 +154,8 @@ sequenceDiagram
         E->>R: Response from model
         R->>Ca: Cache semantic representation
         R->>E: Final response
-    end
-```
+    end`}
+</ZoomableMermaid>
 
 ### 3. Classification System - Decision Engine
 
@@ -161,8 +163,8 @@ The classification system uses ModernBERT models for multiple classification tas
 
 #### Category Classification
 
-```mermaid
-graph LR
+<ZoomableMermaid title="Category Classification System" defaultZoom={4.5}>
+{`graph LR
     Query[User Query] --> Tokenizer[ModernBERT Tokenizer]
     Tokenizer --> Encoder[ModernBERT Encoder<br/>768-dim embeddings]
     Encoder --> ClassifierHead[Classification Head<br/>Category Prediction]
@@ -182,8 +184,8 @@ graph LR
     Decision --> Code
     Decision --> General
     Decision --> Science
-    Decision --> Business
-```
+    Decision --> Business`}
+</ZoomableMermaid>
 
 #### Multi-Task Architecture
 
@@ -262,8 +264,8 @@ graph TB
 
 ### Response Processing Flow
 
-```mermaid
-sequenceDiagram
+<ZoomableMermaid title="Response Processing Flow" defaultZoom={4.5}>
+{`sequenceDiagram
     participant C as Client
     participant E as Envoy
     participant R as Router
@@ -285,8 +287,8 @@ sequenceDiagram
     R->>Me: Record routing metrics
     
     R->>E: Processed Response
-    E->>C: Final Response to Client
-```
+    E->>C: Final Response to Client`}
+</ZoomableMermaid>
 
 ## Threading and Concurrency Model
 
@@ -514,8 +516,8 @@ func (cb *CircuitBreaker) Call(operation func() error) error {
 
 ### Fallback Strategies
 
-```mermaid
-graph TB
+<ZoomableMermaid title="Fallback Strategies" defaultZoom={2.5}>
+{`graph TB
     Request[Incoming Request] --> PrimaryRoute[Primary Routing Decision]
     
     PrimaryRoute --> ModelA{Model A<br/>Available?}
@@ -534,8 +536,8 @@ graph TB
     ProcessA --> Success[Successful Response]
     ProcessB --> Success
     ProcessGeneral --> Success
-    ReturnCached --> Success
-```
+    ReturnCached --> Success`}
+</ZoomableMermaid>
 
 ## Monitoring and Observability
 

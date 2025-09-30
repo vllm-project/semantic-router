@@ -72,7 +72,7 @@ jobs:
 
       - name: Install HuggingFace CLI
         run: |
-          pip install -U "huggingface_hub[cli]"
+          pip install -U "huggingface_hub[cli]" hf_transfer
 
 
       - name: Download models (minimal on PRs)
