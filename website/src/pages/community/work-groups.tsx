@@ -219,15 +219,15 @@ const WorkGroups: React.FC = () => {
             <ul>
               <li>
                 Open an issue on
-                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer"> GitHub</a>
               </li>
               <li>
                 Join the discussion on
-                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">Issue #15</a>
+                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer"> Issue #15</a>
               </li>
               <li>
                 Check out our
-                <a href="/docs/intro">documentation</a>
+                <a href="/docs/intro"> documentation</a>
                 {' '}
                 to get started
               </li>

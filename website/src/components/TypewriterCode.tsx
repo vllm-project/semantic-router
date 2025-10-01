@@ -25,7 +25,7 @@ const TypewriterCode: React.FC = () => {
       const timer = setTimeout(() => {
         setDisplayedText(prev => prev + codeText[currentIndex])
         setCurrentIndex(prev => prev + 1)
-      }, 50) // 打字速度，可以调整
+      }, 50) // Typing speed, adjustable
 
       return () => clearTimeout(timer)
     }
@@ -34,9 +34,9 @@ const TypewriterCode: React.FC = () => {
     }
   }, [currentIndex, codeText])
 
-  // 渲染带颜色的文本
+  // Render colored text
   const renderColoredText = (text: string): React.ReactElement[] => {
-    // 定义特殊单词的样式
+    // Define styles for special words
     const specialWords: Record<string, string> = {
       'vllm-semantic-router': styles.vllmSemanticRouterColor,
       'auto': styles.autoColor,
@@ -54,18 +54,18 @@ const TypewriterCode: React.FC = () => {
     const result: React.ReactElement[] = []
     let currentIndex = 0
 
-    // 遍历文本，查找特殊单词
+    // Traverse text to find special words
     while (currentIndex < text.length) {
       let foundSpecialWord = false
 
-      // 检查是否匹配特殊单词
+      // Check if it matches special words
       for (const [word, className] of Object.entries(specialWords)) {
         const wordStart = currentIndex
         const wordEnd = wordStart + word.length
 
         if (wordEnd <= text.length
           && text.substring(wordStart, wordEnd).toLowerCase() === word.toLowerCase()) {
-          // 找到特殊单词，应用特殊样式
+          // Found special word, apply special style
           const wordText = text.substring(wordStart, wordEnd)
           result.push(
             <span key={currentIndex} className={className}>
@@ -79,7 +79,7 @@ const TypewriterCode: React.FC = () => {
       }
 
       if (!foundSpecialWord) {
-        // 普通字符，使用默认白色
+        // Regular character, use default white color
         result.push(
           <span key={currentIndex} className={styles.defaultColor}>
             {text[currentIndex]}
