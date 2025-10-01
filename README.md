@@ -70,8 +70,8 @@ For comprehensive documentation including detailed setup instructions, architect
 
 The documentation includes:
 
-- **[Installation Guide](https://vllm-semantic-router.com/docs/getting-started/installation/)** - Complete setup instructions
-- **[System Architecture](https://vllm-semantic-router.com/docs/architecture/system-architecture/)** - Technical deep dive
+- **[Installation Guide](https://vllm-semantic-router.com/docs/installation/)** - Complete setup instructions
+- **[System Architecture](https://vllm-semantic-router.com/docs/overview/architecture/system-architecture/)** - Technical deep dive
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
 
