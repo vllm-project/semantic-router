@@ -17,6 +17,7 @@ spec:
       serviceAccountName: prometheus
       securityContext:
         runAsNonRoot: true
+        # Run as user 'nobody' and group 'nobody' for enhanced security
         runAsUser: 65534
         fsGroup: 65534
       containers:

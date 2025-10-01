@@ -15,7 +15,7 @@ spec:
         app: grafana
     spec:
       securityContext:
-        runAsNonRoot: true
+        # Run as non-root user 472 (grafana) and set fsGroup for volume permissions.
         runAsUser: 472
         fsGroup: 472
       containers:
