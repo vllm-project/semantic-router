@@ -596,12 +596,17 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Add category-specific system prompt if configured
 				if categoryName != "" {
-					// Use global config to get the most up-to-date category configuration
+					// Try to get the most up-to-date category configuration from global config first
 					// This ensures API updates are reflected immediately
 					globalConfig := config.GetConfig()
 					var category *config.Category
 					if globalConfig != nil {
 						category = globalConfig.GetCategoryByName(categoryName)
+					}
+					
+					// If not found in global config, fall back to router's config (for tests and initial setup)
+					if category == nil {
+						category = r.Classifier.GetCategoryByName(categoryName)
 					}
 
 					if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
