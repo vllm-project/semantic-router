@@ -15,13 +15,14 @@ import (
 func main() {
 	// Parse command-line flags
 	var (
-		configPath  = flag.String("config", "config/config.yaml", "Path to the configuration file")
-		port        = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
-		apiPort     = flag.Int("api-port", 8080, "Port to listen on for Classification API")
-		metricsPort = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
-		enableAPI   = flag.Bool("enable-api", true, "Enable Classification API server")
-		secure      = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
-		certPath    = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
+		configPath            = flag.String("config", "config/config.yaml", "Path to the configuration file")
+		port                  = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
+		apiPort               = flag.Int("api-port", 8080, "Port to listen on for Classification API")
+		metricsPort           = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
+		enableAPI             = flag.Bool("enable-api", true, "Enable Classification API server")
+		enableSystemPromptAPI = flag.Bool("enable-system-prompt-api", false, "Enable system prompt configuration endpoints (SECURITY: only enable in trusted environments)")
+		secure                = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
+		certPath              = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 	)
 	flag.Parse()
 
@@ -58,7 +59,7 @@ func main() {
 	if *enableAPI {
 		go func() {
 			observability.Infof("Starting Classification API server on port %d", *apiPort)
-			if err := api.StartClassificationAPI(*configPath, *apiPort); err != nil {
+			if err := api.StartClassificationAPI(*configPath, *apiPort, *enableSystemPromptAPI); err != nil {
 				observability.Errorf("Classification API server error: %v", err)
 			}
 		}()

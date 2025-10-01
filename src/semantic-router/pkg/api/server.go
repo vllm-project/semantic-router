@@ -17,8 +17,9 @@ import (
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
-	classificationSvc *services.ClassificationService
-	config            *config.RouterConfig
+	classificationSvc     *services.ClassificationService
+	config                *config.RouterConfig
+	enableSystemPromptAPI bool
 }
 
 // ModelsInfoResponse represents the response for models info endpoint
@@ -101,7 +102,7 @@ type ClassificationOptions struct {
 }
 
 // StartClassificationAPI starts the Classification API server
-func StartClassificationAPI(configPath string, port int) error {
+func StartClassificationAPI(configPath string, port int, enableSystemPromptAPI bool) error {
 	// Load configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -139,8 +140,9 @@ func StartClassificationAPI(configPath string, port int) error {
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc: classificationSvc,
-		config:            cfg,
+		classificationSvc:     classificationSvc,
+		config:                cfg,
+		enableSystemPromptAPI: enableSystemPromptAPI,
 	}
 
 	// Create HTTP server with routes
@@ -203,9 +205,14 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
 
-	// System prompt configuration endpoints
-	mux.HandleFunc("GET /config/system-prompts", s.handleGetSystemPrompts)
-	mux.HandleFunc("PUT /config/system-prompts", s.handleUpdateSystemPrompts)
+	// System prompt configuration endpoints (only if explicitly enabled)
+	if s.enableSystemPromptAPI {
+		observability.Infof("System prompt configuration endpoints enabled")
+		mux.HandleFunc("GET /config/system-prompts", s.handleGetSystemPrompts)
+		mux.HandleFunc("PUT /config/system-prompts", s.handleUpdateSystemPrompts)
+	} else {
+		observability.Infof("System prompt configuration endpoints disabled for security")
+	}
 
 	return mux
 }
