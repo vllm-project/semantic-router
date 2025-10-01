@@ -2,7 +2,12 @@ import React from 'react'
 import clsx from 'clsx'
 import styles from './styles.module.css'
 
-const FeatureList = [
+interface Feature {
+  title: string
+  description: React.ReactNode
+}
+
+const FeatureList: Feature[] = [
   {
     title: '🧠 Intelligent Routing',
     description: (
@@ -85,7 +90,7 @@ const FeatureList = [
   },
 ]
 
-function Feature({ title, description }) {
+const Feature: React.FC<Feature> = ({ title, description }) => {
   return (
     <div className={clsx('col col--4')}>
       <div className={clsx('card', styles.featureCard)}>
@@ -98,7 +103,7 @@ function Feature({ title, description }) {
   )
 }
 
-export default function HomepageFeatures() {
+const HomepageFeatures: React.FC = () => {
   return (
     <section className={styles.features}>
       <div className="container">
@@ -119,3 +124,5 @@ export default function HomepageFeatures() {
     </section>
   )
 }
+
+export default HomepageFeatures

@@ -2,8 +2,23 @@ import React from 'react'
 import styles from './index.module.css'
 import acknowledgementsData from './data.json'
 
-function AcknowledgementsSection() {
-  const { title, subtitle, projects } = acknowledgementsData
+interface Project {
+  id: string
+  name: string
+  logo: string
+  url: string
+}
+
+interface AcknowledgementsData {
+  title: string
+  subtitle: string
+  projects: Project[]
+}
+
+const typedData: AcknowledgementsData = acknowledgementsData as AcknowledgementsData
+
+const AcknowledgementsSection: React.FC = () => {
+  const { title, subtitle, projects } = typedData
 
   return (
     <section className={styles.acknowledgementsSection}>
