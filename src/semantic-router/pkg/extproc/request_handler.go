@@ -603,7 +603,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					if globalConfig != nil {
 						category = globalConfig.GetCategoryByName(categoryName)
 					}
-					
+
 					// If not found in global config, fall back to router's config (for tests and initial setup)
 					if category == nil {
 						category = r.Classifier.GetCategoryByName(categoryName)
