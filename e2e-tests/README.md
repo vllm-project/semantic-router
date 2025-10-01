@@ -10,14 +10,16 @@ This test suite provides a progressive approach to testing the Semantic Router, 
    - Tests malformed request validation
    - Tests content-based smart routing (math → Model-B, creative → Model-A)
 
-2. **01-envoy-extproc-test.py** - TBD (To Be Developed)
+2. **01-envoy-extproc-test.py** - Envoy ExtProc interaction tests ✅
    - Tests that Envoy correctly forwards requests to the ExtProc
-   - Checks header propagation
+   - Checks header propagation and body modification
+   - Tests ExtProc error handling and performance impact
 
-3. **02-router-classification-test.py** - TBD (To Be Developed)
-   - Tests BERT embeddings
-   - Tests category classification
-   - Verifies model selection based on content
+3. **02-router-classification-test.py** - Router classification tests ✅
+   - Tests category-based classification with auto model selection
+   - Verifies queries route to appropriate specialized models
+   - Tests classification consistency across identical requests
+   - Validates metrics collection for classification operations
 
 4. **03-model-routing-test.py** - TBD (To Be Developed)
    - Tests that requests are routed to the correct backend model
@@ -73,11 +75,15 @@ Will be added in future PRs for testing with actual model inference.
 Currently implemented:
 
 - **00-client-request-test.py** ✅ - Complete client request validation and smart routing
+- **01-envoy-extproc-test.py** ✅ - Envoy ExtProc interaction and processing tests
+- **02-router-classification-test.py** ✅ - Router classification and model selection tests
 
 Individual tests can be run with:
 
 ```bash
 python e2e-tests/00-client-request-test.py
+python e2e-tests/01-envoy-extproc-test.py
+python e2e-tests/02-router-classification-test.py
 ```
 
 Or run all available tests with:
