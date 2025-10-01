@@ -2,7 +2,7 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './community-page.module.css'
 
-export default function Contributing() {
+const Contributing: React.FC = () => {
   return (
     <Layout
       title="Contributing Guide"
@@ -276,3 +276,5 @@ pre-commit install && pre-commit run --all-files`}
     </Layout>
   )
 }
+
+export default Contributing

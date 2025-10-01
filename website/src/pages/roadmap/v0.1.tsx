@@ -2,13 +2,19 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './roadmap.module.css'
 
-const priorityColors = {
+type Priority = 'P0' | 'P1' | 'P2'
+
+const priorityColors: Record<Priority, string> = {
   P0: '#dc3545', // Red for critical
   P1: '#fd7e14', // Orange for important
   P2: '#6c757d', // Gray for nice-to-have
 }
 
-const PriorityBadge = ({ priority }) => (
+interface PriorityBadgeProps {
+  priority: Priority
+}
+
+const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => (
   <span
     className={styles.priorityBadge}
     style={{ backgroundColor: priorityColors[priority] }}
@@ -20,7 +26,15 @@ const PriorityBadge = ({ priority }) => (
 // Counter for generating unique task numbers
 let taskCounter = 0
 
-const RoadmapItem = ({ title, priority, acceptance, children, id }) => {
+interface RoadmapItemProps {
+  title: string
+  priority: Priority
+  acceptance?: string
+  children?: React.ReactNode
+  id?: string
+}
+
+const RoadmapItem: React.FC<RoadmapItemProps> = ({ title, priority, acceptance, children, id }) => {
   taskCounter++
   const taskId = id || `task-${taskCounter}`
   const taskNumber = taskCounter
@@ -50,7 +64,12 @@ const RoadmapItem = ({ title, priority, acceptance, children, id }) => {
   )
 }
 
-const AreaSection = ({ title, children }) => (
+interface AreaSectionProps {
+  title: string
+  children: React.ReactNode
+}
+
+const AreaSection: React.FC<AreaSectionProps> = ({ title, children }) => (
   <div className={styles.areaSection}>
     <h3 className={styles.areaTitle}>{title}</h3>
     <div className={styles.areaContent}>
@@ -59,7 +78,7 @@ const AreaSection = ({ title, children }) => (
   </div>
 )
 
-export default function RoadmapV01() {
+const RoadmapV01: React.FC = () => {
   // Reset task counter for consistent numbering on re-renders
   taskCounter = 0
 
@@ -290,3 +309,5 @@ export default function RoadmapV01() {
     </Layout>
   )
 }
+
+export default RoadmapV01

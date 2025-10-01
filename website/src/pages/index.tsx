@@ -11,8 +11,7 @@ import AcknowledgementsSection from '@site/src/components/AcknowledgementsSectio
 
 import styles from './index.module.css'
 
-function HomepageHeader() {
-  const { siteConfig } = useDocusaurusContext()
+const HomepageHeader: React.FC = () => {
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
       <NeuralNetworkBackground />
@@ -64,7 +63,7 @@ function HomepageHeader() {
   )
 }
 
-function AITechShowcase() {
+const AITechShowcase: React.FC = () => {
   return (
     <section className={styles.aiTechSection}>
       <div className="container">
@@ -106,7 +105,7 @@ function AITechShowcase() {
   )
 }
 
-function FlowDiagram() {
+const FlowDiagram: React.FC = () => {
   return (
     <section className={styles.flowSection}>
       <div className="container">
@@ -127,7 +126,7 @@ function FlowDiagram() {
   )
 }
 
-export default function Home() {
+const Home: React.FC = () => {
   const { siteConfig } = useDocusaurusContext()
   return (
     <Layout
@@ -163,3 +162,5 @@ export default function Home() {
     </Layout>
   )
 }
+
+export default Home

@@ -2,7 +2,23 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './team.module.css'
 
-const coreTeam = [
+interface TeamMember {
+  name: string
+  role: string
+  company?: string
+  avatar: string
+  github?: string
+  linkedin?: string
+  bio: string
+  expertise: string[]
+}
+
+interface TeamMemberProps {
+  member: TeamMember
+  isContributor?: boolean
+}
+
+const coreTeam: TeamMember[] = [
   {
     name: 'Huamin Chen',
     role: 'Distinguished Engineer',
@@ -45,7 +61,7 @@ const coreTeam = [
   },
 ]
 
-const contributors = [
+const contributors: TeamMember[] = [
   {
     name: 'You?',
     role: 'Future Contributor',
@@ -56,7 +72,7 @@ const contributors = [
   },
 ]
 
-function TeamMember({ member, isContributor = false }) {
+const TeamMemberCard: React.FC<TeamMemberProps> = ({ member, isContributor = false }) => {
   return (
     <div className={`${styles.memberCard} ${isContributor ? styles.contributorCard : ''}`}>
       <div className={styles.memberHeader}>
@@ -111,7 +127,7 @@ function TeamMember({ member, isContributor = false }) {
           </a>
         )}
 
-        {isContributor && (
+        {isContributor && member.github && (
           <a
             href={member.github}
             target="_self"
@@ -125,7 +141,7 @@ function TeamMember({ member, isContributor = false }) {
   )
 }
 
-export default function Team() {
+const Team: React.FC = () => {
   return (
     <Layout
       title="Team"
@@ -147,7 +163,7 @@ export default function Team() {
             </p>
             <div className={styles.teamGrid}>
               {coreTeam.map((member, index) => (
-                <TeamMember key={index} member={member} />
+                <TeamMemberCard key={index} member={member} />
               ))}
             </div>
           </section>
@@ -159,7 +175,7 @@ export default function Team() {
             </p>
             <div className={styles.joinTeamGrid}>
               {contributors.map((member, index) => (
-                <TeamMember key={index} member={member} isContributor={true} />
+                <TeamMemberCard key={index} member={member} isContributor={true} />
               ))}
             </div>
           </section>
@@ -249,3 +265,5 @@ export default function Team() {
     </Layout>
   )
 }
+
+export default Team

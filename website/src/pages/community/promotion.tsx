@@ -2,7 +2,19 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './promotion.module.css'
 
-const promotionRules = [
+interface PromotionRule {
+  role: string
+  icon: string
+  level: number
+  requirements: string
+  details: string[]
+  permissions: string
+  timeline: string
+  application: string
+  color: string
+}
+
+const promotionRules: PromotionRule[] = [
   {
     role: 'Reviewer',
     icon: '👀',
@@ -56,7 +68,11 @@ const promotionRules = [
   },
 ]
 
-function PromotionCard({ rule }) {
+interface PromotionCardProps {
+  rule: PromotionRule
+}
+
+const PromotionCard: React.FC<PromotionCardProps> = ({ rule }) => {
   return (
     <div className={styles.promotionCard} style={{ borderColor: rule.color }}>
       <div className={styles.cardHeader}>
@@ -92,7 +108,7 @@ function PromotionCard({ rule }) {
   )
 }
 
-export default function Promotion() {
+const Promotion: React.FC = () => {
   return (
     <Layout
       title="Promotion"
@@ -209,3 +225,5 @@ export default function Promotion() {
     </Layout>
   )
 }
+
+export default Promotion

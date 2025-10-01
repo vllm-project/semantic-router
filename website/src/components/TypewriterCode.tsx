@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import styles from './TypewriterCode.module.css'
 
-const TypewriterCode = () => {
+const TypewriterCode: React.FC = () => {
   const codeText = `curl -X POST http://vllm-semantic-router/v1/chat/completions \\
      -H "Content-Type: application/json" \\
      -d '{
@@ -35,9 +35,9 @@ const TypewriterCode = () => {
   }, [currentIndex, codeText])
 
   // 渲染带颜色的文本
-  const renderColoredText = (text) => {
+  const renderColoredText = (text: string): React.ReactElement[] => {
     // 定义特殊单词的样式
-    const specialWords = {
+    const specialWords: Record<string, string> = {
       'vllm-semantic-router': styles.vllmSemanticRouterColor,
       'auto': styles.autoColor,
       'Number Theory': styles.claudeColor,
@@ -51,7 +51,7 @@ const TypewriterCode = () => {
       'Riemann Hypothesis': styles.modernBertColor,
     }
 
-    let result = []
+    const result: React.ReactElement[] = []
     let currentIndex = 0
 
     // 遍历文本，查找特殊单词
