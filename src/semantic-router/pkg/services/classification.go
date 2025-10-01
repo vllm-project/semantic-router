@@ -485,3 +485,15 @@ func (s *ClassificationService) GetUnifiedClassifierStats() map[string]interface
 	stats["available"] = true
 	return stats
 }
+
+// GetConfig returns the current configuration
+func (s *ClassificationService) GetConfig() *config.RouterConfig {
+	return s.config
+}
+
+// UpdateConfig updates the configuration
+func (s *ClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
+	s.config = newConfig
+	// Update the global config as well
+	config.ReplaceGlobalConfig(newConfig)
+}
