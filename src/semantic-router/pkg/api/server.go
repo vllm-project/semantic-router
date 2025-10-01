@@ -739,7 +739,7 @@ type SystemPromptUpdateRequest struct {
 
 // handleGetSystemPrompts handles GET /config/system-prompts
 func (s *ClassificationAPIServer) handleGetSystemPrompts(w http.ResponseWriter, r *http.Request) {
-	cfg := s.classificationSvc.GetConfig()
+	cfg := s.config
 	if cfg == nil {
 		http.Error(w, "Configuration not available", http.StatusInternalServerError)
 		return
@@ -785,7 +785,7 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 		return
 	}
 
-	cfg := s.classificationSvc.GetConfig()
+	cfg := s.config
 	if cfg == nil {
 		http.Error(w, "Configuration not available", http.StatusInternalServerError)
 		return
@@ -841,6 +841,7 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 	}
 
 	// Update the configuration
+	s.config = &newCfg
 	s.classificationSvc.UpdateConfig(&newCfg)
 
 	// Return the updated system prompts
