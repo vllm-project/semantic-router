@@ -21,21 +21,27 @@ This test suite provides a progressive approach to testing the Semantic Router, 
    - Tests classification consistency across identical requests
    - Validates metrics collection for classification operations
 
-4. **03-model-routing-test.py** - TBD (To Be Developed)
+4. **03-classification-api-test.py** - Classification API tests ✅
+   - Tests standalone Classification API service (port 8080)
+   - Validates intent classification for different query types
+   - Tests batch classification endpoint
+   - Verifies classification accuracy without LLM routing
+
+5. **04-model-routing-test.py** - TBD (To Be Developed)
    - Tests that requests are routed to the correct backend model
    - Verifies model header modifications
 
-5. **04-cache-test.py** - TBD (To Be Developed)
+6. **04-cache-test.py** - TBD (To Be Developed)
    - Tests cache hit/miss behavior
    - Verifies similarity thresholds
    - Tests cache TTL
 
-6. **05-e2e-category-test.py** - TBD (To Be Developed)
+7. **05-e2e-category-test.py** - TBD (To Be Developed)
    - Tests math queries route to the math-specialized model
    - Tests creative queries route to the creative-specialized model
    - Tests other domain-specific routing
 
-7. **06-metrics-test.py** - TBD (To Be Developed)
+8. **06-metrics-test.py** - TBD (To Be Developed)
    - Tests Prometheus metrics endpoints
    - Verifies correct metrics are being recorded
 
@@ -77,6 +83,7 @@ Currently implemented:
 - **00-client-request-test.py** ✅ - Complete client request validation and smart routing
 - **01-envoy-extproc-test.py** ✅ - Envoy ExtProc interaction and processing tests
 - **02-router-classification-test.py** ✅ - Router classification and model selection tests
+- **03-classification-api-test.py** ✅ - Standalone Classification API service tests
 
 Individual tests can be run with:
 
@@ -84,6 +91,7 @@ Individual tests can be run with:
 python e2e-tests/00-client-request-test.py
 python e2e-tests/01-envoy-extproc-test.py
 python e2e-tests/02-router-classification-test.py
+python e2e-tests/03-classification-api-test.py
 ```
 
 Or run all available tests with:
