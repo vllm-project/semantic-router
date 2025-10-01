@@ -256,13 +256,14 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	return c.BertModel.Threshold
 }
 
-// Category represents a category for routing queries
+// ModelScore associates an LLM with its selection weight and reasoning flag within a category.
 type ModelScore struct {
 	Model        string  `yaml:"model"`
 	Score        float64 `yaml:"score"`
 	UseReasoning *bool   `yaml:"use_reasoning"` // Pointer to detect missing field
 }
 
+// Category represents a category for routing queries
 type Category struct {
 	Name                 string       `yaml:"name"`
 	Description          string       `yaml:"description,omitempty"`
