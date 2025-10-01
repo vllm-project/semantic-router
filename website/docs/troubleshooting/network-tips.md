@@ -68,9 +68,9 @@ PY
 
 ## 2. Build with Go mirrors (Dockerfile override)
 
-When building `Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`. Create an override Dockerfile that enables mirrors without touching the original.
+When building `tools/docker/Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`. Create an override Dockerfile that enables mirrors without touching the original.
 
-1) Create `Dockerfile.extproc.cn` at repo root with this content:
+1) Create `tools/docker/Dockerfile.extproc.cn` with this content:
 
 ```Dockerfile
 # syntax=docker/dockerfile:1
@@ -124,14 +124,14 @@ ENTRYPOINT ["/app/entrypoint.sh"]
 services:
   semantic-router:
     build:
-      dockerfile: Dockerfile.extproc.cn
+      dockerfile: tools/docker/Dockerfile.extproc.cn
 ```
 
 ## 3. Mock vLLM (PyPI mirror via Dockerfile override)
 
 For the optional testing profile, create an override Dockerfile to configure pip mirrors.
 
-1) Create `tools/mock-vllm/Dockerfile.cn`:
+1) Create `tools/docker/Dockerfile.mock-vllm.cn`:
 
 ```Dockerfile
 FROM python:3.11-slim
@@ -156,7 +156,7 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 services:
   mock-vllm:
     build:
-      dockerfile: Dockerfile.cn
+      dockerfile: tools/docker/Dockerfile.mock-vllm.cn
 ```
 
 ## 4. Build and run
