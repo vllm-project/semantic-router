@@ -14,10 +14,11 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 
 	// Create request context with VSR decision information
 	ctx := &RequestContext{
-		VSRSelectedCategory: "math",
-		VSRReasoningMode:    "on",
-		VSRSelectedModel:    "deepseek-v31",
-		VSRCacheHit:         false, // Not a cache hit
+		VSRSelectedCategory:     "math",
+		VSRReasoningMode:        "on",
+		VSRSelectedModel:        "deepseek-v31",
+		VSRCacheHit:             false, // Not a cache hit
+		VSRInjectedSystemPrompt: true,  // System prompt was injected
 	}
 
 	// Create response headers with successful status (200)
@@ -48,7 +49,7 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.NotNil(t, headerMutation, "HeaderMutation should not be nil for successful non-cached response")
 
 	setHeaders := headerMutation.GetSetHeaders()
-	assert.Len(t, setHeaders, 3, "Should have 3 VSR headers")
+	assert.Len(t, setHeaders, 4, "Should have 4 VSR headers")
 
 	// Verify each header
 	headerMap := make(map[string]string)
@@ -59,6 +60,7 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
 	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
+	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
 }
 
 func TestVSRHeadersNotAddedOnCacheHit(t *testing.T) {
@@ -139,10 +141,11 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 
 	// Create request context with partial VSR information
 	ctx := &RequestContext{
-		VSRSelectedCategory: "math",
-		VSRReasoningMode:    "", // Empty reasoning mode
-		VSRSelectedModel:    "deepseek-v31",
-		VSRCacheHit:         false,
+		VSRSelectedCategory:     "math",
+		VSRReasoningMode:        "", // Empty reasoning mode
+		VSRSelectedModel:        "deepseek-v31",
+		VSRCacheHit:             false,
+		VSRInjectedSystemPrompt: false, // No system prompt injected
 	}
 
 	// Create response headers with successful status (200)
@@ -169,7 +172,7 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 	assert.NotNil(t, headerMutation)
 
 	setHeaders := headerMutation.GetSetHeaders()
-	assert.Len(t, setHeaders, 2, "Should have 2 VSR headers (excluding empty reasoning mode)")
+	assert.Len(t, setHeaders, 3, "Should have 3 VSR headers (excluding empty reasoning mode, but including injected-system-prompt)")
 
 	// Verify each header
 	headerMap := make(map[string]string)
@@ -179,5 +182,80 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 
 	assert.Equal(t, "math", headerMap["x-vsr-selected-category"])
 	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
+	assert.Equal(t, "false", headerMap["x-vsr-injected-system-prompt"])
 	assert.NotContains(t, headerMap, "x-vsr-selected-reasoning", "Empty reasoning mode should not be added")
+}
+
+func TestVSRInjectedSystemPromptHeader(t *testing.T) {
+	router := &OpenAIRouter{}
+
+	// Test case 1: System prompt was injected
+	t.Run("SystemPromptInjected", func(t *testing.T) {
+		ctx := &RequestContext{
+			VSRSelectedCategory:     "coding",
+			VSRReasoningMode:        "on",
+			VSRSelectedModel:        "gpt-4",
+			VSRCacheHit:             false,
+			VSRInjectedSystemPrompt: true,
+		}
+
+		responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{
+				Headers: &core.HeaderMap{
+					Headers: []*core.HeaderValue{
+						{Key: ":status", Value: "200"},
+					},
+				},
+			},
+		}
+
+		response, err := router.handleResponseHeaders(responseHeaders, ctx)
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+
+		headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
+		assert.NotNil(t, headerMutation)
+
+		headerMap := make(map[string]string)
+		for _, header := range headerMutation.GetSetHeaders() {
+			headerMap[header.Header.Key] = string(header.Header.RawValue)
+		}
+
+		assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
+	})
+
+	// Test case 2: System prompt was not injected
+	t.Run("SystemPromptNotInjected", func(t *testing.T) {
+		ctx := &RequestContext{
+			VSRSelectedCategory:     "coding",
+			VSRReasoningMode:        "on",
+			VSRSelectedModel:        "gpt-4",
+			VSRCacheHit:             false,
+			VSRInjectedSystemPrompt: false,
+		}
+
+		responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{
+				Headers: &core.HeaderMap{
+					Headers: []*core.HeaderValue{
+						{Key: ":status", Value: "200"},
+					},
+				},
+			},
+		}
+
+		response, err := router.handleResponseHeaders(responseHeaders, ctx)
+		assert.NoError(t, err)
+		assert.NotNil(t, response)
+
+		headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
+		assert.NotNil(t, headerMutation)
+
+		headerMap := make(map[string]string)
+		for _, header := range headerMutation.GetSetHeaders() {
+			headerMap[header.Header.Key] = string(header.Header.RawValue)
+		}
+
+		assert.Equal(t, "false", headerMap["x-vsr-injected-system-prompt"])
+	})
 }
