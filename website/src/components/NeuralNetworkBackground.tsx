@@ -1,21 +1,43 @@
 import React, { useEffect, useRef } from 'react'
 import styles from './NeuralNetworkBackground.module.css'
 
-const NeuralNetworkBackground = () => {
-  const canvasRef = useRef(null)
-  const animationRef = useRef(null)
-  const nodesRef = useRef([])
-  const connectionsRef = useRef([])
+interface Node {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  radius: number
+  opacity: number
+  pulsePhase: number
+  isAI: boolean
+}
+
+interface Connection {
+  nodeA: Node
+  nodeB: Node
+  distance: number
+  opacity: number
+  isActive: boolean
+}
+
+const NeuralNetworkBackground: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animationRef = useRef<number | null>(null)
+  const nodesRef = useRef<Node[]>([])
+  const connectionsRef = useRef<Connection[]>([])
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const ctx = canvas.getContext('2d')
-    let width, height
+    if (!ctx) return
+
+    let width: number, height: number
 
     const resizeCanvas = () => {
-      const rect = canvas.parentElement.getBoundingClientRect()
+      const rect = canvas.parentElement?.getBoundingClientRect()
+      if (!rect) return
       width = rect.width
       height = rect.height
       canvas.width = width
@@ -68,7 +90,7 @@ const NeuralNetworkBackground = () => {
     }
 
     // Animation loop
-    const animate = (timestamp) => {
+    const animate = () => {
       ctx.clearRect(0, 0, width, height)
 
       // Update and draw connections
@@ -177,7 +199,7 @@ const NeuralNetworkBackground = () => {
     const connectionInterval = setInterval(updateConnections, 2000)
 
     return () => {
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current)
       }
       window.removeEventListener('resize', handleResize)

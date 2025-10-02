@@ -3,12 +3,18 @@ import { createPortal } from 'react-dom'
 import Mermaid from '@theme/Mermaid'
 import styles from './styles.module.css'
 
-const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
+interface ZoomableMermaidProps {
+  children: string
+  title?: string
+  defaultZoom?: number
+}
+
+const ZoomableMermaid: React.FC<ZoomableMermaidProps> = ({ children, title, defaultZoom = 1.2 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [zoomLevel, setZoomLevel] = useState(defaultZoom) // Use defaultZoom prop
-  const modalRef = useRef(null)
-  const containerRef = useRef(null)
+  const [zoomLevel, setZoomLevel] = useState(defaultZoom)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const openModal = useCallback(() => {
     setIsModalOpen(true)
@@ -38,19 +44,19 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
   }, [defaultZoom])
 
   useEffect(() => {
-    const handleEscape = (e) => {
+    const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isModalOpen) {
         closeModal()
       }
     }
 
-    const handleClickOutside = (e) => {
-      if (modalRef.current && !modalRef.current.contains(e.target)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
         closeModal()
       }
     }
 
-    const handleKeydown = (e) => {
+    const handleKeydown = (e: KeyboardEvent) => {
       if (!isModalOpen) return
 
       if (e.key === '=' || e.key === '+') {
@@ -94,7 +100,7 @@ const ZoomableMermaid = ({ children, title, defaultZoom = 1.2 }) => {
     }
   }, [])
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       openModal()
