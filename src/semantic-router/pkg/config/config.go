@@ -276,6 +276,13 @@ type Category struct {
 	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
 	// SystemPrompt is an optional category-specific system prompt automatically injected into requests
 	SystemPrompt string `yaml:"system_prompt,omitempty"`
+	// SystemPromptEnabled controls whether the system prompt should be injected for this category
+	// Defaults to true when SystemPrompt is not empty
+	SystemPromptEnabled *bool `yaml:"system_prompt_enabled,omitempty"`
+	// SystemPromptMode controls how the system prompt is injected: "replace" (default) or "insert"
+	// "replace": Replace any existing system message with the category-specific prompt
+	// "insert": Prepend the category-specific prompt to the existing system message content
+	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
 }
 
 // Legacy types - can be removed once migration is complete
@@ -411,6 +418,8 @@ func ReplaceGlobalConfig(newCfg *RouterConfig) {
 
 // GetConfig returns the current configuration
 func GetConfig() *RouterConfig {
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config
 }
 
@@ -669,5 +678,33 @@ func (c *RouterConfig) ValidateEndpoints() error {
 		}
 	}
 
+	return nil
+}
+
+// IsSystemPromptEnabled returns whether system prompt injection is enabled for a category
+func (c *Category) IsSystemPromptEnabled() bool {
+	// If SystemPromptEnabled is explicitly set, use that value
+	if c.SystemPromptEnabled != nil {
+		return *c.SystemPromptEnabled
+	}
+	// Default to true if SystemPrompt is not empty
+	return c.SystemPrompt != ""
+}
+
+// GetSystemPromptMode returns the system prompt injection mode, defaulting to "replace"
+func (c *Category) GetSystemPromptMode() string {
+	if c.SystemPromptMode == "" {
+		return "replace" // Default mode
+	}
+	return c.SystemPromptMode
+}
+
+// GetCategoryByName returns a category by name
+func (c *RouterConfig) GetCategoryByName(name string) *Category {
+	for i := range c.Categories {
+		if c.Categories[i].Name == name {
+			return &c.Categories[i]
+		}
+	}
 	return nil
 }

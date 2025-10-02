@@ -16,7 +16,7 @@ build-router: rust
 run-router: build-router download-models
 	@echo "Running router with config: ${CONFIG_FILE}"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		./bin/router -config=${CONFIG_FILE}
+		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
 
 # Run the router with e2e config for testing
 run-router-e2e: build-router download-models

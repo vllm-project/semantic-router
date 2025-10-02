@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
@@ -72,7 +73,7 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 
 // addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
 // Returns the modified body, whether the system prompt was actually injected, and any error
-func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]byte, bool, error) {
+func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode string) ([]byte, bool, error) {
 	if systemPrompt == "" {
 		return requestBody, false, nil
 	}
@@ -94,31 +95,62 @@ func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]by
 		return requestBody, false, nil // Messages is not an array, return original
 	}
 
-	// Create a new system message
-	systemMessage := map[string]interface{}{
-		"role":    "system",
-		"content": systemPrompt,
-	}
-
 	// Check if there's already a system message at the beginning
 	hasSystemMessage := false
+	var existingSystemContent string
 	if len(messages) > 0 {
 		if firstMsg, ok := messages[0].(map[string]interface{}); ok {
 			if role, ok := firstMsg["role"].(string); ok && role == "system" {
 				hasSystemMessage = true
+				if content, ok := firstMsg["content"].(string); ok {
+					existingSystemContent = content
+				}
 			}
 		}
 	}
 
+	// Handle different injection modes
+	var finalSystemContent string
+	var logMessage string
+
+	switch mode {
+	case "insert":
+		if hasSystemMessage {
+			// Insert mode: prepend category prompt to existing system message
+			finalSystemContent = systemPrompt + "\n\n" + existingSystemContent
+			logMessage = "Inserted category-specific system prompt before existing system message"
+		} else {
+			// No existing system message, just use the category prompt
+			finalSystemContent = systemPrompt
+			logMessage = "Added category-specific system prompt (insert mode, no existing system message)"
+		}
+	case "replace":
+		fallthrough
+	default:
+		// Replace mode: use only the category prompt
+		finalSystemContent = systemPrompt
+		if hasSystemMessage {
+			logMessage = "Replaced existing system message with category-specific system prompt"
+		} else {
+			logMessage = "Added category-specific system prompt to the beginning of messages"
+		}
+	}
+
+	// Create the final system message
+	systemMessage := map[string]interface{}{
+		"role":    "system",
+		"content": finalSystemContent,
+	}
+
 	if hasSystemMessage {
-		// Replace the existing system message
+		// Update the existing system message
 		messages[0] = systemMessage
-		observability.Infof("Replaced existing system message with category-specific system prompt")
 	} else {
 		// Prepend the system message to the beginning of the messages array
 		messages = append([]interface{}{systemMessage}, messages...)
-		observability.Infof("Added category-specific system prompt to the beginning of messages")
 	}
+
+	observability.Infof("%s (mode: %s)", logMessage, mode)
 
 	// Update the messages in the request map
 	requestMap["messages"] = messages
@@ -564,10 +596,23 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Add category-specific system prompt if configured
 				if categoryName != "" {
-					category := r.Classifier.GetCategoryByName(categoryName)
-					if category != nil && category.SystemPrompt != "" {
+					// Try to get the most up-to-date category configuration from global config first
+					// This ensures API updates are reflected immediately
+					globalConfig := config.GetConfig()
+					var category *config.Category
+					if globalConfig != nil {
+						category = globalConfig.GetCategoryByName(categoryName)
+					}
+
+					// If not found in global config, fall back to router's config (for tests and initial setup)
+					if category == nil {
+						category = r.Classifier.GetCategoryByName(categoryName)
+					}
+
+					if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
+						mode := category.GetSystemPromptMode()
 						var injected bool
-						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt)
+						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
 						if err != nil {
 							observability.Errorf("Error adding system prompt to request: %v", err)
 							metrics.RecordRequestError(actualModel, "serialization_error")
@@ -575,8 +620,13 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 						}
 						if injected {
 							ctx.VSRInjectedSystemPrompt = true
-							observability.Infof("Added category-specific system prompt for category: %s", categoryName)
+							observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
 						}
+
+						// Log metadata about system prompt injection (avoid logging sensitive user data)
+						observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
+					} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {
+						observability.Infof("System prompt disabled for category: %s", categoryName)
 					}
 				}
 

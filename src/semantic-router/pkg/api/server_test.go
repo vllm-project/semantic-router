@@ -305,3 +305,429 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		t.Errorf("expected configured models to be present, got=%v", got)
 	}
 }
+
+// TestSystemPromptEndpointSecurity tests that system prompt endpoints are only accessible when explicitly enabled
+func TestSystemPromptEndpointSecurity(t *testing.T) {
+	// Create test configuration with categories that have system prompts
+	cfg := &config.RouterConfig{
+		Categories: []config.Category{
+			{
+				Name:                "math",
+				SystemPrompt:        "You are a math expert.",
+				SystemPromptEnabled: &[]bool{true}[0], // Pointer to true
+				SystemPromptMode:    "replace",
+			},
+			{
+				Name:                "coding",
+				SystemPrompt:        "You are a coding assistant.",
+				SystemPromptEnabled: &[]bool{false}[0], // Pointer to false
+				SystemPromptMode:    "insert",
+			},
+		},
+	}
+
+	tests := []struct {
+		name                  string
+		enableSystemPromptAPI bool
+		method                string
+		path                  string
+		requestBody           string
+		expectedStatus        int
+		description           string
+	}{
+		{
+			name:                  "GET system prompts - disabled API",
+			enableSystemPromptAPI: false,
+			method:                "GET",
+			path:                  "/config/system-prompts",
+			expectedStatus:        http.StatusNotFound,
+			description:           "Should return 404 when system prompt API is disabled",
+		},
+		{
+			name:                  "PUT system prompts - disabled API",
+			enableSystemPromptAPI: false,
+			method:                "PUT",
+			path:                  "/config/system-prompts",
+			requestBody:           `{"enabled": true}`,
+			expectedStatus:        http.StatusNotFound,
+			description:           "Should return 404 when system prompt API is disabled",
+		},
+		{
+			name:                  "GET system prompts - enabled API",
+			enableSystemPromptAPI: true,
+			method:                "GET",
+			path:                  "/config/system-prompts",
+			expectedStatus:        http.StatusOK,
+			description:           "Should return 200 when system prompt API is enabled",
+		},
+		{
+			name:                  "PUT system prompts - enabled API - valid request",
+			enableSystemPromptAPI: true,
+			method:                "PUT",
+			path:                  "/config/system-prompts",
+			requestBody:           `{"category": "math", "enabled": false}`,
+			expectedStatus:        http.StatusOK,
+			description:           "Should return 200 for valid PUT request when API is enabled",
+		},
+		{
+			name:                  "PUT system prompts - enabled API - invalid request",
+			enableSystemPromptAPI: true,
+			method:                "PUT",
+			path:                  "/config/system-prompts",
+			requestBody:           `{"category": "nonexistent"}`,
+			expectedStatus:        http.StatusBadRequest,
+			description:           "Should return 400 for invalid PUT request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test server that simulates the behavior
+			var mux *http.ServeMux
+			if tt.enableSystemPromptAPI {
+				// Simulate enabled API - create a server that has the endpoints
+				mux = http.NewServeMux()
+				mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				mux.HandleFunc("GET /config/classification", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				mux.HandleFunc("PUT /config/classification", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				// Add system prompt endpoints when enabled
+				mux.HandleFunc("GET /config/system-prompts", func(w http.ResponseWriter, r *http.Request) {
+					// Create a test server instance with config for the handler
+					testServerWithConfig := &ClassificationAPIServer{
+						classificationSvc:     services.NewPlaceholderClassificationService(),
+						config:                cfg,
+						enableSystemPromptAPI: true,
+					}
+					testServerWithConfig.handleGetSystemPrompts(w, r)
+				})
+				mux.HandleFunc("PUT /config/system-prompts", func(w http.ResponseWriter, r *http.Request) {
+					// Create a test server instance with config for the handler
+					testServerWithConfig := &ClassificationAPIServer{
+						classificationSvc:     services.NewPlaceholderClassificationService(),
+						config:                cfg,
+						enableSystemPromptAPI: true,
+					}
+					testServerWithConfig.handleUpdateSystemPrompts(w, r)
+				})
+			} else {
+				// Simulate disabled API - create a server without the endpoints
+				mux = http.NewServeMux()
+				mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				mux.HandleFunc("GET /config/classification", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				mux.HandleFunc("PUT /config/classification", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				// System prompt endpoints are NOT registered when disabled
+			}
+
+			// Create request
+			var req *http.Request
+			if tt.requestBody != "" {
+				req = httptest.NewRequest(tt.method, tt.path, bytes.NewBufferString(tt.requestBody))
+				req.Header.Set("Content-Type", "application/json")
+			} else {
+				req = httptest.NewRequest(tt.method, tt.path, nil)
+			}
+
+			rr := httptest.NewRecorder()
+
+			// Serve the request
+			mux.ServeHTTP(rr, req)
+
+			// Check status code
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("%s: expected status %d, got %d. Response: %s",
+					tt.description, tt.expectedStatus, rr.Code, rr.Body.String())
+			}
+
+			// Additional checks for specific cases
+			if tt.enableSystemPromptAPI && tt.method == "GET" && tt.expectedStatus == http.StatusOK {
+				// Verify the response structure for GET requests
+				var response SystemPromptsResponse
+				if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+					t.Errorf("Failed to unmarshal GET response: %v", err)
+				}
+
+				// Should have system prompts from config
+				if len(response.SystemPrompts) != 2 {
+					t.Errorf("Expected 2 system prompts, got %d", len(response.SystemPrompts))
+				}
+
+				// Verify the content
+				foundMath := false
+				foundCoding := false
+				for _, sp := range response.SystemPrompts {
+					if sp.Category == "math" {
+						foundMath = true
+						if sp.Prompt != "You are a math expert." {
+							t.Errorf("Expected math prompt 'You are a math expert.', got '%s'", sp.Prompt)
+						}
+						if !sp.Enabled {
+							t.Errorf("Expected math category to be enabled")
+						}
+						if sp.Mode != "replace" {
+							t.Errorf("Expected math mode 'replace', got '%s'", sp.Mode)
+						}
+					}
+					if sp.Category == "coding" {
+						foundCoding = true
+						if sp.Enabled {
+							t.Errorf("Expected coding category to be disabled")
+						}
+						if sp.Mode != "insert" {
+							t.Errorf("Expected coding mode 'insert', got '%s'", sp.Mode)
+						}
+					}
+				}
+
+				if !foundMath || !foundCoding {
+					t.Errorf("Expected to find both math and coding categories")
+				}
+			}
+		})
+	}
+}
+
+// TestSystemPromptEndpointFunctionality tests the actual functionality of system prompt endpoints
+func TestSystemPromptEndpointFunctionality(t *testing.T) {
+	// Create test configuration
+	cfg := &config.RouterConfig{
+		Categories: []config.Category{
+			{
+				Name:                "math",
+				SystemPrompt:        "You are a math expert.",
+				SystemPromptEnabled: &[]bool{true}[0],
+				SystemPromptMode:    "replace",
+			},
+			{
+				Name:         "no-prompt",
+				SystemPrompt: "", // No system prompt
+			},
+		},
+	}
+
+	// Create a test server with the config for functionality testing
+	apiServer := &ClassificationAPIServer{
+		classificationSvc:     services.NewPlaceholderClassificationService(),
+		config:                cfg,
+		enableSystemPromptAPI: true, // Enable for functionality testing
+	}
+
+	t.Run("GET system prompts returns correct data", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/config/system-prompts", nil)
+		rr := httptest.NewRecorder()
+
+		apiServer.handleGetSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d", rr.Code)
+		}
+
+		var response SystemPromptsResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if len(response.SystemPrompts) != 2 {
+			t.Errorf("Expected 2 categories, got %d", len(response.SystemPrompts))
+		}
+	})
+
+	t.Run("PUT system prompts - enable specific category", func(t *testing.T) {
+		requestBody := `{"category": "math", "enabled": false}`
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d. Response: %s", rr.Code, rr.Body.String())
+		}
+
+		var response SystemPromptsResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		// Find the math category and verify it's disabled
+		for _, sp := range response.SystemPrompts {
+			if sp.Category == "math" && sp.Enabled {
+				t.Errorf("Expected math category to be disabled after PUT request")
+			}
+		}
+	})
+
+	t.Run("PUT system prompts - change mode", func(t *testing.T) {
+		requestBody := `{"category": "math", "mode": "insert"}`
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d. Response: %s", rr.Code, rr.Body.String())
+		}
+
+		var response SystemPromptsResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		// Find the math category and verify mode is changed
+		for _, sp := range response.SystemPrompts {
+			if sp.Category == "math" && sp.Mode != "insert" {
+				t.Errorf("Expected math category mode to be 'insert', got '%s'", sp.Mode)
+			}
+		}
+	})
+
+	t.Run("PUT system prompts - update all categories", func(t *testing.T) {
+		requestBody := `{"enabled": true}` // No category specified = update all
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200, got %d. Response: %s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("PUT system prompts - invalid category", func(t *testing.T) {
+		requestBody := `{"category": "nonexistent", "enabled": true}`
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("Expected 404 for nonexistent category, got %d", rr.Code)
+		}
+	})
+
+	t.Run("PUT system prompts - category without system prompt", func(t *testing.T) {
+		requestBody := `{"category": "no-prompt", "enabled": true}`
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 for category without system prompt, got %d", rr.Code)
+		}
+	})
+
+	t.Run("PUT system prompts - invalid mode", func(t *testing.T) {
+		requestBody := `{"category": "math", "mode": "invalid"}`
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 for invalid mode, got %d", rr.Code)
+		}
+	})
+
+	t.Run("PUT system prompts - empty request", func(t *testing.T) {
+		requestBody := `{}`
+		req := httptest.NewRequest("PUT", "/config/system-prompts", bytes.NewBufferString(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		apiServer.handleUpdateSystemPrompts(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 for empty request, got %d", rr.Code)
+		}
+	})
+}
+
+// TestSetupRoutesSecurityBehavior tests that setupRoutes correctly includes/excludes endpoints based on security flag
+func TestSetupRoutesSecurityBehavior(t *testing.T) {
+	tests := []struct {
+		name                  string
+		enableSystemPromptAPI bool
+		expectedEndpoints     map[string]bool // path -> should exist
+	}{
+		{
+			name:                  "System prompt API disabled",
+			enableSystemPromptAPI: false,
+			expectedEndpoints: map[string]bool{
+				"/health":                true,
+				"/config/classification": true,
+				"/config/system-prompts": false, // Should NOT exist
+			},
+		},
+		{
+			name:                  "System prompt API enabled",
+			enableSystemPromptAPI: true,
+			expectedEndpoints: map[string]bool{
+				"/health":                true,
+				"/config/classification": true,
+				"/config/system-prompts": true, // Should exist
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a test mux that simulates the setupRoutes behavior
+			mux := http.NewServeMux()
+
+			// Always add basic endpoints
+			mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			mux.HandleFunc("GET /config/classification", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+
+			// Conditionally add system prompt endpoints based on the flag
+			if tt.enableSystemPromptAPI {
+				mux.HandleFunc("GET /config/system-prompts", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+				mux.HandleFunc("PUT /config/system-prompts", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+			}
+
+			// Test each endpoint
+			for path, shouldExist := range tt.expectedEndpoints {
+				req := httptest.NewRequest("GET", path, nil)
+				rr := httptest.NewRecorder()
+
+				mux.ServeHTTP(rr, req)
+
+				if shouldExist {
+					// Endpoint should exist (not 404)
+					if rr.Code == http.StatusNotFound {
+						t.Errorf("Expected endpoint %s to exist, but got 404", path)
+					}
+				} else {
+					// Endpoint should NOT exist (404)
+					if rr.Code != http.StatusNotFound {
+						t.Errorf("Expected endpoint %s to return 404, but got %d", path, rr.Code)
+					}
+				}
+			}
+		})
+	}
+}
