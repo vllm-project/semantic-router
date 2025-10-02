@@ -623,8 +623,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 							observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
 						}
 
-						// Log the complete message structure after system prompt injection
-						observability.Infof("Complete request body after system prompt injection: %s", string(modifiedBody))
+						// Log metadata about system prompt injection (avoid logging sensitive user data)
+						observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
 					} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {
 						observability.Infof("System prompt disabled for category: %s", categoryName)
 					}

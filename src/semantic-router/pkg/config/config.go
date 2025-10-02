@@ -418,6 +418,8 @@ func ReplaceGlobalConfig(newCfg *RouterConfig) {
 
 // GetConfig returns the current configuration
 func GetConfig() *RouterConfig {
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config
 }
 

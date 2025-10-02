@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,6 +19,7 @@ type ClassificationService struct {
 	classifier        *classification.Classifier
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
+	configMutex       sync.RWMutex // Protects config access
 }
 
 // NewClassificationService creates a new classification service
@@ -488,11 +490,15 @@ func (s *ClassificationService) GetUnifiedClassifierStats() map[string]interface
 
 // GetConfig returns the current configuration
 func (s *ClassificationService) GetConfig() *config.RouterConfig {
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
 	return s.config
 }
 
 // UpdateConfig updates the configuration
 func (s *ClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
+	s.configMutex.Lock()
+	defer s.configMutex.Unlock()
 	s.config = newConfig
 	// Update the global config as well
 	config.ReplaceGlobalConfig(newConfig)
