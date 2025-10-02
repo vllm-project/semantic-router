@@ -111,13 +111,12 @@ jobs:
 
       - name: Setup local Docker registry
         run: |
-          # Create a local registry container
-          docker run -d -p 5001:5000 --name kind-registry --network kind registry:2
+          # Create a local registry container on kind network
+          docker run -d --restart=always -p 5001:5000 \
+            --network kind --name kind-registry \
+            registry:2
 
-          # Connect the registry to the kind network if not already connected
-          docker network connect kind kind-registry || true
-
-          # Document the local registry
+          # Document the local registry for kind cluster
           kubectl apply -f - <<EOF
           apiVersion: v1
           kind: ConfigMap
@@ -126,21 +125,29 @@ jobs:
             namespace: kube-public
           data:
             localRegistryHosting.v1: |
-              host: "localhost:5001"
+              host: "kind-registry:5000"
               help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
           EOF
+          
+          echo "Waiting for registry to be ready..."
+          sleep 5
+          
+          # Test registry is accessible
+          curl -v http://localhost:5001/v2/ || echo "Registry not ready yet"
+          docker exec kind-registry registry --version
 
       - name: Tag and push image to local registry
         run: |
           # Generate unique tag using PR number or run ID
           IMAGE_TAG="test-${{ github.run_id }}-${{ github.run_attempt }}"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-
-          # Tag and push to local registry
+          
+          # Tag for pushing to localhost:5001 (from host)
           docker tag ghcr.io/vllm-project/semantic-router/extproc:test localhost:5001/semantic-router/extproc:${IMAGE_TAG}
           docker push localhost:5001/semantic-router/extproc:${IMAGE_TAG}
-
+          
           echo "Image pushed to local registry with tag: ${IMAGE_TAG}"
+          echo "Registry will be accessible from kind cluster as: kind-registry:5000/semantic-router/extproc:${IMAGE_TAG}"
 
       - name: Verify cluster
         run: |
@@ -188,7 +195,7 @@ jobs:
 
           images:
           - name: ghcr.io/vllm-project/semantic-router/extproc
-            newName: localhost:5001/semantic-router/extproc
+            newName: kind-registry:5000/semantic-router/extproc
             newTag: ${IMAGE_TAG}
 
           # Reduce resource requirements for CI testing
