@@ -101,74 +101,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Setup local Docker registry (before kind cluster)
+      - name: Create kind cluster with local registry
+        uses: helm/kind-action@v1.8.0
+        with:
+          version: ${{ env.KIND_VERSION }}
+          config: tools/kind/kind-config.yaml
+          cluster_name: semantic-router-test
+          wait: 120s
+
+      - name: Setup local Docker registry
         run: |
           # Create a local registry container
-          docker run -d --restart=always -p 5001:5000 \
-            --name kind-registry \
-            registry:2
-          
-          echo "Waiting for registry to be ready..."
-          sleep 5
-          
-          # Test registry is accessible
-          curl -v http://localhost:5001/v2/
-          docker exec kind-registry registry --version
+          docker run -d -p 5001:5000 --name kind-registry --network kind registry:2
 
-      - name: Create kind cluster with local registry
-        run: |
-          # Create kind config with insecure registry
-          cat <<EOF > /tmp/kind-config-with-registry.yaml
-          kind: Cluster
-          apiVersion: kind.x-k8s.io/v1alpha4
-          name: semantic-router-cluster
-          containerdConfigPatches:
-          - |-
-            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."kind-registry:5000"]
-              endpoint = ["http://kind-registry:5000"]
-            [plugins."io.containerd.grpc.v1.cri".registry.configs."kind-registry:5000".tls]
-              insecure_skip_verify = true
-          nodes:
-          - role: control-plane
-            extraMounts:
-            - hostPath: /tmp/kind-semantic-router
-              containerPath: /tmp/hostpath-provisioner
-            kubeadmConfigPatches:
-            - |
-              kind: InitConfiguration
-              nodeRegistration:
-                kubeletExtraArgs:
-                  system-reserved: memory=1Gi,cpu=500m
-                  kube-reserved: memory=1Gi,cpu=500m
-                  eviction-hard: memory.available<1Gi,nodefs.available<10%
-            - |
-              kind: ClusterConfiguration
-              apiServer:
-                extraArgs:
-                  max-requests-inflight: "400"
-                  max-mutating-requests-inflight: "200"
-              etcd:
-                local:
-                  extraArgs:
-                    quota-backend-bytes: "8589934592"
-          - role: worker
-            kubeadmConfigPatches:
-            - |
-              kind: JoinConfiguration
-              nodeRegistration:
-                kubeletExtraArgs:
-                  system-reserved: memory=500Mi,cpu=250m
-                  kube-reserved: memory=500Mi,cpu=250m
-                  eviction-hard: memory.available<500Mi,nodefs.available<10%
-          EOF
-          
-          # Create kind cluster
-          kind create cluster --config /tmp/kind-config-with-registry.yaml --name semantic-router-test --wait 120s
-          
-          # Connect registry to kind network
+          # Connect the registry to the kind network if not already connected
           docker network connect kind kind-registry || true
-          
-          # Document the local registry for kind cluster
+
+          # Document the local registry
           kubectl apply -f - <<EOF
           apiVersion: v1
           kind: ConfigMap
@@ -177,7 +126,7 @@ jobs:
             namespace: kube-public
           data:
             localRegistryHosting.v1: |
-              host: "kind-registry:5000"
+              host: "localhost:5001"
               help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
           EOF
 
@@ -186,13 +135,12 @@ jobs:
           # Generate unique tag using PR number or run ID
           IMAGE_TAG="test-${{ github.run_id }}-${{ github.run_attempt }}"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-          
-          # Tag for pushing to localhost:5001 (from host)
+
+          # Tag and push to local registry
           docker tag ghcr.io/vllm-project/semantic-router/extproc:test localhost:5001/semantic-router/extproc:${IMAGE_TAG}
           docker push localhost:5001/semantic-router/extproc:${IMAGE_TAG}
-          
+
           echo "Image pushed to local registry with tag: ${IMAGE_TAG}"
-          echo "Registry will be accessible from kind cluster as: kind-registry:5000/semantic-router/extproc:${IMAGE_TAG}"
 
       - name: Verify cluster
         run: |
@@ -213,22 +161,27 @@ jobs:
 
           # Copy all base resources to overlay directory
           cp ../namespace.yaml ./
-          cp ../pvc.yaml ./
-          cp ../deployment.yaml ./
           cp ../service.yaml ./
+          cp ../config.yaml ./
           cp ../tools_db.json ./
-          
-          # Copy and fix config.yaml to use absolute paths
-          cp ../config.yaml ./config.yaml
-          
-          # Fix model paths from relative to absolute
-          sed -i 's|model_id: "models/|model_id: "/app/models/|g' config.yaml
-          sed -i 's|_path: "models/|_path: "/app/models/|g' config.yaml
-          
-          echo "=== Modified config.yaml paths ==="
-          grep -E "(model_id|_path):" config.yaml || true
 
-          # Create kustomization with local resources
+          # Copy resources for CI testing
+          cp ../deployment.yaml ./deployment.yaml
+          cp ../pvc.yaml ./pvc.yaml
+
+          # Fix init container to use 'hf' command (not 'huggingface-cli')
+          # This matches the working approach in test-and-build.yml
+          perl -i -pe 's/huggingface-cli download/hf download/g' deployment.yaml
+
+          # Update pip install to include hf_transfer for faster downloads
+          perl -i -pe 's/pip install --no-cache-dir huggingface_hub\[cli\]/pip install --no-cache-dir "huggingface_hub[cli]" hf_transfer/g' deployment.yaml
+
+          # Remove the directory existence checks - CI always starts fresh
+          perl -i -0pe 's/if \[ ! -d "[^"]*" \]; then\n[^\n]*\n[^\n]*\n[^\n]*else\n[^\n]*\n[^\n]*fi\n\n//g' deployment.yaml
+
+          echo "✓ Updated init container to use 'hf' command with optimized settings"
+
+          # Create kustomization with local resources (no PVC for CI)
           cat > kustomization.yaml << EOF
           apiVersion: kustomize.config.k8s.io/v1beta1
           kind: Kustomization
@@ -249,36 +202,24 @@ jobs:
 
           images:
           - name: ghcr.io/vllm-project/semantic-router/extproc
-            newName: kind-registry:5000/semantic-router/extproc
+            newName: localhost:5001/semantic-router/extproc
             newTag: ${IMAGE_TAG}
 
-          # Reduce resource requirements for CI testing
+          # Reduce resource requirements for CI testing (main container only)
           patches:
           - patch: |-
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/memory
-                value: "1Gi"
-              - op: replace
-                path: /spec/template/spec/containers/0/resources/requests/cpu
-                value: "500m"
-              - op: replace
-                path: /spec/template/spec/containers/0/resources/limits/memory
                 value: "2Gi"
               - op: replace
-                path: /spec/template/spec/containers/0/resources/limits/cpu
+                path: /spec/template/spec/containers/0/resources/requests/cpu
                 value: "1"
               - op: replace
-                path: /spec/template/spec/initContainers/0/resources/requests/memory
-                value: "256Mi"
+                path: /spec/template/spec/containers/0/resources/limits/memory
+                value: "4Gi"
               - op: replace
-                path: /spec/template/spec/initContainers/0/resources/requests/cpu
-                value: "100m"
-              - op: replace
-                path: /spec/template/spec/initContainers/0/resources/limits/memory
-                value: "512Mi"
-              - op: replace
-                path: /spec/template/spec/initContainers/0/resources/limits/cpu
-                value: "250m"
+                path: /spec/template/spec/containers/0/resources/limits/cpu
+                value: "2"
             target:
               kind: Deployment
               name: semantic-router
@@ -303,13 +244,15 @@ jobs:
       - name: Wait for deployment readiness
         run: |
           echo "Waiting for deployment to be ready (this may take a few minutes)..."
+          echo "Note: Using PVC for model storage, init container will download models"
 
           # Wait for PVC to be bound
-          echo "Checking PVC status..."
-          kubectl get pvc -n vllm-semantic-router-system
-
-          # Note: In kind, we might need to wait for local-path-provisioner
-          timeout 300 bash -c 'until kubectl get pvc -n vllm-semantic-router-system semantic-router-models -o jsonpath="{.status.phase}" | grep -q "Bound"; do echo "Waiting for PVC to be bound..."; sleep 5; done' || true
+          echo "Waiting for PVC to be bound..."
+          kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/semantic-router-models -n vllm-semantic-router-system --timeout=120s || {
+            echo "PVC binding timeout. Checking PVC status..."
+            kubectl describe pvc -n vllm-semantic-router-system
+            exit 1
+          }
 
           # Wait for pods to be created
           echo "Waiting for pods to be created..."
@@ -325,6 +268,10 @@ jobs:
             kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=100 || true
             exit 1
           }
+
+          # Show init container logs to see downloaded file structure
+          echo "=== Init Container Logs (showing file structure) ==="
+          kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=100 || true
 
           # Wait for main container to be ready
           echo "Waiting for main container to be ready..."
