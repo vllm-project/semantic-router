@@ -560,14 +560,50 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 
 		if classificationText != "" {
+			// Start classification span
+			classifyCtx, classifySpan := observability.StartSpan(ctx.TraceContext, observability.SpanClassification)
+			classifyStart := time.Now()
+			
 			// Find the most similar task description or classify, then select best model
 			matchedModel := r.classifyAndSelectBestModel(classificationText)
+			classifyTime := time.Since(classifyStart).Milliseconds()
+			
+			// Get category information for the span
+			categoryName := r.findCategoryForClassification(classificationText)
+			
+			observability.SetSpanAttributes(classifySpan,
+				attribute.String(observability.AttrCategoryName, categoryName),
+				attribute.String(observability.AttrClassifierType, "bert"),
+				attribute.Int64(observability.AttrClassificationTimeMs, classifyTime))
+			classifySpan.End()
+			ctx.TraceContext = classifyCtx
+			
 			if matchedModel != originalModel && matchedModel != "" {
-				// Get detected PII for policy checking
+				// Start PII detection span if enabled
 				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 				if r.PIIChecker.IsPIIEnabled(matchedModel) {
+					piiCtx, piiSpan := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
+					piiStart := time.Now()
+					
 					observability.Infof("PII policy enabled for model %s", matchedModel)
 					detectedPII := r.Classifier.DetectPIIInContent(allContent)
+					
+					piiTime := time.Since(piiStart).Milliseconds()
+					piiDetected := len(detectedPII) > 0
+					
+					observability.SetSpanAttributes(piiSpan,
+						attribute.Bool(observability.AttrPIIDetected, piiDetected),
+						attribute.Int64(observability.AttrPIIDetectionTimeMs, piiTime))
+					
+					if piiDetected {
+						// Convert detected PII to comma-separated string
+						piiTypesStr := strings.Join(detectedPII, ",")
+						observability.SetSpanAttributes(piiSpan,
+							attribute.String(observability.AttrPIITypes, piiTypesStr))
+					}
+					
+					piiSpan.End()
+					ctx.TraceContext = piiCtx
 
 					// Check if the initially selected model passes PII policy
 					allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
@@ -622,6 +658,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				observability.Infof("Routing to model: %s", matchedModel)
 
+				// Start routing decision span
+				routingCtx, routingSpan := observability.StartSpan(ctx.TraceContext, observability.SpanRoutingDecision)
+				
 				// Check reasoning mode for this category using entropy-based approach
 				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
 				observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
@@ -629,6 +668,18 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Record reasoning decision metric with the effort that will be applied if enabled
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
+
+				// Set routing attributes on span
+				observability.SetSpanAttributes(routingSpan,
+					attribute.String(observability.AttrRoutingStrategy, "auto"),
+					attribute.String(observability.AttrRoutingReason, reasoningDecision.DecisionReason),
+					attribute.String(observability.AttrOriginalModel, originalModel),
+					attribute.String(observability.AttrSelectedModel, matchedModel),
+					attribute.Bool(observability.AttrReasoningEnabled, useReasoning),
+					attribute.String(observability.AttrReasoningEffort, effortForMetrics))
+				
+				routingSpan.End()
+				ctx.TraceContext = routingCtx
 
 				// Track VSR decision information
 				ctx.VSRSelectedCategory = categoryName
@@ -645,14 +696,28 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				// Update the actual model that will be used
 				actualModel = matchedModel
 
+				// Start backend selection span
+				backendCtx, backendSpan := observability.StartSpan(ctx.TraceContext, observability.SpanBackendSelection)
+				
 				// Select the best endpoint for this model
 				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
 				if endpointFound {
 					selectedEndpoint = endpointAddress
 					observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
+					
+					// Extract endpoint name from config
+					endpoints := r.Config.GetEndpointsForModel(matchedModel)
+					if len(endpoints) > 0 {
+						observability.SetSpanAttributes(backendSpan,
+							attribute.String(observability.AttrEndpointName, endpoints[0].Name),
+							attribute.String(observability.AttrEndpointAddress, selectedEndpoint))
+					}
 				} else {
 					observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
 				}
+				
+				backendSpan.End()
+				ctx.TraceContext = backendCtx
 
 				// Modify the model in the request
 				openAIRequest.Model = openai.ChatModel(matchedModel)
@@ -688,14 +753,25 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					}
 
 					if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
+						// Start system prompt injection span
+						promptCtx, promptSpan := observability.StartSpan(ctx.TraceContext, observability.SpanSystemPromptInjection)
+						
 						mode := category.GetSystemPromptMode()
 						var injected bool
 						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
 						if err != nil {
 							observability.Errorf("Error adding system prompt to request: %v", err)
+							observability.RecordError(promptSpan, err)
 							metrics.RecordRequestError(actualModel, "serialization_error")
+							promptSpan.End()
 							return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
 						}
+						
+						observability.SetSpanAttributes(promptSpan,
+							attribute.Bool("system_prompt.injected", injected),
+							attribute.String("system_prompt.mode", mode),
+							attribute.String(observability.AttrCategoryName, categoryName))
+						
 						if injected {
 							ctx.VSRInjectedSystemPrompt = true
 							observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
@@ -703,6 +779,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 						// Log metadata about system prompt injection (avoid logging sensitive user data)
 						observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
+						
+						promptSpan.End()
+						ctx.TraceContext = promptCtx
 					} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {
 						observability.Infof("System prompt disabled for category: %s", categoryName)
 					}
