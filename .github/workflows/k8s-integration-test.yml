@@ -101,7 +101,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Create kind cluster
+      - name: Create kind cluster with local registry
         uses: helm/kind-action@v1.8.0
         with:
           version: ${{ env.KIND_VERSION }}
@@ -109,16 +109,44 @@ jobs:
           cluster_name: semantic-router-test
           wait: 120s
 
+      - name: Setup local Docker registry
+        run: |
+          # Create a local registry container
+          docker run -d -p 5001:5000 --name kind-registry --network kind registry:2
+
+          # Connect the registry to the kind network if not already connected
+          docker network connect kind kind-registry || true
+
+          # Document the local registry
+          kubectl apply -f - <<EOF
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: local-registry-hosting
+            namespace: kube-public
+          data:
+            localRegistryHosting.v1: |
+              host: "localhost:5001"
+              help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
+          EOF
+
+      - name: Tag and push image to local registry
+        run: |
+          # Generate unique tag using PR number or run ID
+          IMAGE_TAG="test-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+
+          # Tag and push to local registry
+          docker tag ghcr.io/vllm-project/semantic-router/extproc:test localhost:5001/semantic-router/extproc:${IMAGE_TAG}
+          docker push localhost:5001/semantic-router/extproc:${IMAGE_TAG}
+
+          echo "Image pushed to local registry with tag: ${IMAGE_TAG}"
+
       - name: Verify cluster
         run: |
           kubectl cluster-info
           kubectl get nodes
           kubectl version
-
-      - name: Load image to kind cluster
-        run: |
-          kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name semantic-router-test
-          echo "Image loaded successfully!"
 
       - name: Setup Kustomize
         run: |
@@ -129,36 +157,39 @@ jobs:
         run: |
           # Create a test overlay directory
           mkdir -p deploy/kubernetes/test-overlay
-
-          # Copy base files
-          cp deploy/kubernetes/kustomization.yaml deploy/kubernetes/test-overlay/
-
-          # Update image tag for testing
           cd deploy/kubernetes/test-overlay
-          kustomize edit set image ghcr.io/vllm-project/semantic-router/extproc=ghcr.io/vllm-project/semantic-router/extproc:test
 
-          # Create resource list pointing to parent directory
-          cat > kustomization.yaml << 'EOF'
+          # Copy all base resources to overlay directory
+          cp ../namespace.yaml ./
+          cp ../pvc.yaml ./
+          cp ../deployment.yaml ./
+          cp ../service.yaml ./
+          cp ../config.yaml ./
+          cp ../tools_db.json ./
+
+          # Create kustomization with local resources
+          cat > kustomization.yaml << EOF
           apiVersion: kustomize.config.k8s.io/v1beta1
           kind: Kustomization
 
           resources:
-          - ../namespace.yaml
-          - ../pvc.yaml
-          - ../deployment.yaml
-          - ../service.yaml
+          - namespace.yaml
+          - pvc.yaml
+          - deployment.yaml
+          - service.yaml
 
           configMapGenerator:
           - name: semantic-router-config
             files:
-            - ../config.yaml
-            - ../tools_db.json
+            - config.yaml
+            - tools_db.json
 
           namespace: vllm-semantic-router-system
 
           images:
           - name: ghcr.io/vllm-project/semantic-router/extproc
-            newTag: test
+            newName: localhost:5001/semantic-router/extproc
+            newTag: ${IMAGE_TAG}
 
           # Reduce resource requirements for CI testing
           patches:
@@ -192,7 +223,10 @@ jobs:
               name: semantic-router
           EOF
 
+          echo "=== Generated kustomization.yaml ==="
           cat kustomization.yaml
+          echo "=== Files in overlay directory ==="
+          ls -la
 
       - name: Deploy to kind cluster
         run: |
@@ -363,6 +397,10 @@ jobs:
         run: |
           echo "Cleaning up resources..."
           kubectl delete namespace vllm-semantic-router-system --timeout=60s || true
+
+          # Stop and remove local registry
+          docker stop kind-registry || true
+          docker rm kind-registry || true
 
   test-with-custom-config:
     name: Test with Custom Configuration
