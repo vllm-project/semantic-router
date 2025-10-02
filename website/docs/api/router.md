@@ -140,6 +140,228 @@ Notes:
 }
 ```
 
+### Responses API Endpoint
+
+The Semantic Router fully supports the OpenAI Responses API (`/v1/responses`), which provides a more powerful, stateful API experience. This enables advanced features like conversation chaining, reasoning models, and built-in tool support.
+
+**Endpoints:** 
+- `POST /v1/responses` - Create a new response
+- `GET /v1/responses/{response_id}` - Retrieve an existing response (pass-through, no routing)
+
+#### Key Features
+
+The Responses API brings several advantages over Chat Completions:
+
+- **Stateful conversations**: Built-in conversation state management with `previous_response_id`
+- **Advanced tool support**: Native support for code interpreter, function calling, image generation, and MCP servers
+- **Background tasks**: Asynchronous processing for long-running tasks
+- **Enhanced streaming**: Better streaming with resumable streams and sequence tracking
+- **File handling**: Direct support for file inputs (PDFs, images)
+- **Reasoning models**: First-class support for reasoning models (o1, o3, o4-mini)
+
+#### Request Format
+
+The Responses API uses an `input` field instead of `messages`, which can be:
+- A simple string
+- An array of messages (similar to Chat Completions)
+- An array of InputItem objects (for advanced use cases)
+
+**Example: Simple text input**
+
+```json
+{
+  "model": "auto",
+  "input": "Solve the equation 3x + 11 = 14 using code",
+  "tools": [
+    {
+      "type": "code_interpreter",
+      "container": {"type": "auto"}
+    }
+  ]
+}
+```
+
+**Example: Message array input**
+
+```json
+{
+  "model": "auto",
+  "input": [
+    {
+      "role": "user",
+      "content": "What is the derivative of x^3?"
+    }
+  ],
+  "max_output_tokens": 1000
+}
+```
+
+**Example: Conversation chaining**
+
+```json
+{
+  "model": "auto",
+  "previous_response_id": "resp_abc123",
+  "input": "Now explain the solution step by step"
+}
+```
+
+#### Response Format
+
+```json
+{
+  "id": "resp_abc123",
+  "object": "response",
+  "created": 1677858242,
+  "model": "deepseek-v3",
+  "output": [
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "The solution to 3x + 11 = 14 is x = 1"
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 15,
+    "completion_tokens": 12,
+    "total_tokens": 27
+  }
+}
+```
+
+#### Semantic Router Integration
+
+When using the Responses API through the Semantic Router:
+
+1. **Automatic Model Selection**: Set `"model": "auto"` to enable intelligent routing based on the input content
+2. **Content Extraction**: The router extracts text from the `input` field for classification, regardless of format
+3. **Security Checks**: PII detection and jailbreak detection are applied to all inputs
+4. **Semantic Caching**: Cache lookups work with Responses API just like Chat Completions
+5. **VSR Headers**: Routing metadata is added to response headers (see Response Headers section below)
+
+#### VSR Response Headers
+
+The router adds custom headers to Responses API responses (when model routing occurs):
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `x-vsr-selected-category` | Category detected by classification | `mathematics` |
+| `x-vsr-selected-reasoning` | Reasoning mode used | `on` or `off` |
+| `x-vsr-selected-model` | Model selected by router | `deepseek-v3` |
+| `x-vsr-injected-system-prompt` | Whether system prompt was injected | `true` or `false` |
+
+These headers are only added for successful, non-cached responses where routing occurred.
+
+#### Usage Examples
+
+**Using Python OpenAI SDK:**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://semantic-router:8801/v1",
+    api_key="your-key"
+)
+
+# Router will classify and select best model
+response = client.responses.create(
+    model="auto",
+    input="Calculate the area of a circle with radius 5",
+    tools=[{"type": "code_interpreter"}]
+)
+
+print(f"Response ID: {response.id}")
+print(f"Selected model (from header): {response.headers.get('x-vsr-selected-model')}")
+print(f"Output: {response.output[0].content[0].text}")
+
+# Continue the conversation with context
+follow_up = client.responses.create(
+    model="auto",
+    previous_response_id=response.id,
+    input="Now calculate the volume of a sphere with the same radius"
+)
+```
+
+**Using curl:**
+
+```bash
+# Create a new response
+curl -X POST http://localhost:8801/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "auto",
+    "input": "What is 2^10?",
+    "temperature": 0.7
+  }'
+
+# Retrieve an existing response
+curl -X GET http://localhost:8801/v1/responses/resp_abc123 \
+  -H "Content-Type: application/json"
+```
+
+**Using JavaScript/TypeScript:**
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  baseURL: 'http://semantic-router:8801/v1',
+  apiKey: 'your-key'
+});
+
+const response = await client.responses.create({
+  model: 'auto',
+  input: 'Explain quantum entanglement',
+  maxOutputTokens: 500
+});
+
+console.log(`Selected model: ${response.model}`);
+console.log(`Output: ${response.output[0].content[0].text}`);
+```
+
+#### Streaming with Responses API
+
+The Responses API supports streaming responses with enhanced sequence tracking:
+
+```python
+stream = client.responses.create_streaming(
+    model="auto",
+    input="Write a poem about AI"
+)
+
+for event in stream:
+    if event.type == 'output.item.delta':
+        print(event.content, end='', flush=True)
+```
+
+#### Background Processing
+
+For long-running tasks, the Responses API supports background mode:
+
+```json
+{
+  "model": "auto",
+  "input": "Analyze this large dataset and provide insights",
+  "background": true,
+  "store": true
+}
+```
+
+The router will still perform classification and routing, but the actual execution happens asynchronously.
+
+#### Notes
+
+- GET `/v1/responses/{id}` requests pass through without modification (no routing or classification)
+- POST `/v1/responses` requests go through the full routing pipeline
+- The `previous_response_id` parameter is preserved during routing for conversation continuity
+- All Responses API features (tools, reasoning, streaming, background) work transparently through the router
+
 ## Routing Headers
 
 The router adds metadata headers to both requests and responses:
