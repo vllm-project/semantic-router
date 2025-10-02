@@ -82,7 +82,7 @@ jobs:
     name: kind Cluster Integration Test
     runs-on: ubuntu-latest
     needs: validate-manifests
-    timeout-minutes: 30
+    timeout-minutes: 45 # Increased to account for model downloads
 
     steps:
       - name: Checkout code
@@ -90,6 +90,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          version: ${{ env.KIND_VERSION }}
+          config: tools/kind/kind-config.yaml
+          cluster_name: semantic-router-test
+          wait: 120s
 
       - name: Build semantic-router image
         uses: docker/build-push-action@v5
@@ -101,46 +109,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Create kind cluster with local registry
-        uses: helm/kind-action@v1.8.0
-        with:
-          version: ${{ env.KIND_VERSION }}
-          config: tools/kind/kind-config.yaml
-          cluster_name: semantic-router-test
-          wait: 120s
-
-      - name: Setup local Docker registry
+      - name: Load image into kind cluster
         run: |
-          # Create a local registry container
-          docker run -d -p 5001:5000 --name kind-registry --network kind registry:2
-
-          # Connect the registry to the kind network if not already connected
-          docker network connect kind kind-registry || true
-
-          # Document the local registry
-          kubectl apply -f - <<EOF
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: local-registry-hosting
-            namespace: kube-public
-          data:
-            localRegistryHosting.v1: |
-              host: "localhost:5001"
-              help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
-          EOF
-
-      - name: Tag and push image to local registry
-        run: |
-          # Generate unique tag using PR number or run ID
-          IMAGE_TAG="test-${{ github.run_id }}-${{ github.run_attempt }}"
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
-
-          # Tag and push to local registry
-          docker tag ghcr.io/vllm-project/semantic-router/extproc:test localhost:5001/semantic-router/extproc:${IMAGE_TAG}
-          docker push localhost:5001/semantic-router/extproc:${IMAGE_TAG}
-
-          echo "Image pushed to local registry with tag: ${IMAGE_TAG}"
+          echo "Loading image into kind cluster..."
+          kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name semantic-router-test
+          echo "Image loaded successfully!"
 
       - name: Verify cluster
         run: |
@@ -169,19 +142,20 @@ jobs:
           cp ../deployment.yaml ./deployment.yaml
           cp ../pvc.yaml ./pvc.yaml
 
-          # Fix init container to use 'hf' command (not 'huggingface-cli')
-          # This matches the working approach in test-and-build.yml
-          perl -i -pe 's/huggingface-cli download/hf download/g' deployment.yaml
-
-          # Update pip install to include hf_transfer for faster downloads
+          # Optimize init container for CI testing
+          # 1. Update pip install to include hf_transfer for faster downloads
           perl -i -pe 's/pip install --no-cache-dir huggingface_hub\[cli\]/pip install --no-cache-dir "huggingface_hub[cli]" hf_transfer/g' deployment.yaml
 
-          # Remove the directory existence checks - CI always starts fresh
-          perl -i -0pe 's/if \[ ! -d "[^"]*" \]; then\n[^\n]*\n[^\n]*\n[^\n]*else\n[^\n]*\n[^\n]*fi\n\n//g' deployment.yaml
+          # 2. Enable HF_HUB_ENABLE_HF_TRANSFER for faster downloads
+          perl -i -pe 's/(env:)/\1\n        - name: HF_HUB_ENABLE_HF_TRANSFER\n          value: "1"/g' deployment.yaml
 
-          echo "✓ Updated init container to use 'hf' command with optimized settings"
+          # 3. Simplify the download logic - remove directory checks since CI always starts fresh
+          # Replace the entire args section with a simpler version
+          perl -i -0pe 's/args:\s*\n\s*-\s*\|\s*\n\s*set -e.*?ls -la \/app\/models\//args:\n        - |\n          set -e\n          echo "Installing Hugging Face CLI..."\n          pip install --no-cache-dir "huggingface_hub[cli]" hf_transfer\n          \n          echo "Downloading models to persistent volume..."\n          cd \/app\/models\n          \n          echo "Downloading category classifier model..."\n          hf download LLM-Semantic-Router\/category_classifier_modernbert-base_model --local-dir category_classifier_modernbert-base_model\n          \n          echo "Downloading PII classifier model..."\n          hf download LLM-Semantic-Router\/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model\n          \n          echo "Downloading jailbreak classifier model..."\n          hf download LLM-Semantic-Router\/jailbreak_classifier_modernbert-base_model --local-dir jailbreak_classifier_modernbert-base_model\n          \n          echo "Downloading PII token classifier model..."\n          hf download LLM-Semantic-Router\/pii_classifier_modernbert-base_presidio_token_model --local-dir pii_classifier_modernbert-base_presidio_token_model\n          \n          echo "All models downloaded successfully!"\n          ls -la \/app\/models\//gs' deployment.yaml
 
-          # Create kustomization with local resources (no PVC for CI)
+          echo "✓ Updated init container with optimized model download for CI"
+
+          # Create kustomization with local resources
           cat > kustomization.yaml << EOF
           apiVersion: kustomize.config.k8s.io/v1beta1
           kind: Kustomization
@@ -200,13 +174,14 @@ jobs:
 
           namespace: vllm-semantic-router-system
 
+          # Use the same image that was loaded into kind cluster
           images:
           - name: ghcr.io/vllm-project/semantic-router/extproc
-            newName: localhost:5001/semantic-router/extproc
-            newTag: ${IMAGE_TAG}
+            newTag: test
 
-          # Reduce resource requirements for CI testing (main container only)
+          # Reduce resource requirements for CI testing and set imagePullPolicy
           patches:
+          # Patch for main container
           - patch: |-
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/memory
@@ -220,6 +195,26 @@ jobs:
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/cpu
                 value: "2"
+              - op: add
+                path: /spec/template/spec/containers/0/imagePullPolicy
+                value: "IfNotPresent"
+            target:
+              kind: Deployment
+              name: semantic-router
+          # Patch for init container - increase resources for faster downloads
+          - patch: |-
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/requests/memory
+                value: "1Gi"
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/requests/cpu
+                value: "500m"
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/limits/memory
+                value: "2Gi"
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/limits/cpu
+                value: "1"
             target:
               kind: Deployment
               name: semantic-router
@@ -229,6 +224,20 @@ jobs:
           cat kustomization.yaml
           echo "=== Files in overlay directory ==="
           ls -la
+
+      - name: Pre-flight check for Hugging Face connectivity
+        run: |
+          echo "Testing Hugging Face Hub connectivity..."
+          curl -I https://huggingface.co || {
+            echo "⚠️  Warning: Cannot reach huggingface.co"
+          }
+
+          # Test one of the model repos
+          curl -I https://huggingface.co/LLM-Semantic-Router/category_classifier_modernbert-base_model || {
+            echo "⚠️  Warning: Cannot reach model repository"
+          }
+
+          echo "✓ Connectivity check completed"
 
       - name: Deploy to kind cluster
         run: |
@@ -262,27 +271,55 @@ jobs:
           kubectl get pods -n vllm-semantic-router-system
 
           # Wait for init container to complete (model download)
-          echo "Waiting for init container to complete (downloading models)..."
-          kubectl wait --for=condition=Initialized pods -l app=semantic-router -n vllm-semantic-router-system --timeout=600s || {
-            echo "Init container did not complete in time. Showing logs..."
-            kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=100 || true
+          # Increased timeout to 15 minutes for model downloads
+          echo "Waiting for init container to complete (downloading models, this may take 10-15 minutes)..."
+          kubectl wait --for=condition=Initialized pods -l app=semantic-router -n vllm-semantic-router-system --timeout=900s || {
+            echo "❌ Init container did not complete in time. Showing logs..."
+            kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=200 || true
+            echo ""
+            echo "Checking pod status..."
+            kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
             exit 1
           }
 
-          # Show init container logs to see downloaded file structure
-          echo "=== Init Container Logs (showing file structure) ==="
+          # Show init container logs and verify models were downloaded
+          echo "=== Init Container Logs ==="
           kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=100 || true
 
+          # Verify models were actually downloaded
+          echo ""
+          echo "=== Verifying Model Downloads ==="
+          POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].metadata.name}')
+
+          # Check if models directory has content
+          echo "Checking models directory content..."
+          kubectl exec -n vllm-semantic-router-system $POD_NAME -- ls -la /app/models/ || {
+            echo "⚠️  Warning: Could not list models directory"
+          }
+
+          # Count model directories (should be 4)
+          MODEL_COUNT=$(kubectl exec -n vllm-semantic-router-system $POD_NAME -- sh -c 'ls -1 /app/models/ | grep -c "model" || echo 0')
+          echo "Found $MODEL_COUNT model directories"
+
+          if [ "$MODEL_COUNT" -lt 4 ]; then
+            echo "❌ Error: Expected 4 model directories, found $MODEL_COUNT"
+            echo "Init container may have failed to download all models"
+            exit 1
+          fi
+
+          echo "✓ All models verified successfully"
+
           # Wait for main container to be ready
+          echo ""
           echo "Waiting for main container to be ready..."
           kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=300s || {
-            echo "Pod did not become ready in time. Showing status and logs..."
+            echo "❌ Pod did not become ready in time. Showing status and logs..."
             kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
-            kubectl logs -n vllm-semantic-router-system -l app=semantic-router --tail=100 || true
+            kubectl logs -n vllm-semantic-router-system -l app=semantic-router --tail=200 || true
             exit 1
           }
 
-          echo "Deployment is ready!"
+          echo "✅ Deployment is ready!"
 
       - name: Verify deployment
         run: |
@@ -405,10 +442,6 @@ jobs:
         run: |
           echo "Cleaning up resources..."
           kubectl delete namespace vllm-semantic-router-system --timeout=60s || true
-
-          # Stop and remove local registry
-          docker stop kind-registry || true
-          docker rm kind-registry || true
 
   test-with-custom-config:
     name: Test with Custom Configuration
