@@ -8,10 +8,11 @@ description: A pipe for proxying requests to vLLM Semantic Router and displaying
 requirements: requests, pydantic
 """
 
-from typing import List, Union, Generator, Iterator
-from pydantic import BaseModel
-import requests
 import json
+from typing import Generator, Iterator, List, Union
+
+import requests
+from pydantic import BaseModel
 
 
 class Pipeline:
@@ -170,34 +171,49 @@ class Pipeline:
         vsr_message_parts = []
 
         if vsr_headers.get("x-vsr-selected-category"):
-            vsr_message_parts.append(f"📂 **User Intent Category**: {vsr_headers['x-vsr-selected-category']}")
+            vsr_message_parts.append(
+                f"📂 **User Intent Category**: {vsr_headers['x-vsr-selected-category']}"
+            )
 
         if vsr_headers.get("x-vsr-selected-reasoning"):
-            reasoning = vsr_headers['x-vsr-selected-reasoning']
+            reasoning = vsr_headers["x-vsr-selected-reasoning"]
             reasoning_emoji = "🧠" if reasoning == "on" else "⚡"
-            vsr_message_parts.append(f"{reasoning_emoji} **Chain-of-Thought**: {reasoning}")
+            vsr_message_parts.append(
+                f"{reasoning_emoji} **Chain-of-Thought**: {reasoning}"
+            )
 
         if vsr_headers.get("x-vsr-selected-model"):
-            vsr_message_parts.append(f"🥷 **Hidden Model**: {vsr_headers['x-vsr-selected-model']}")
+            vsr_message_parts.append(
+                f"🥷 **Hidden Model**: {vsr_headers['x-vsr-selected-model']}"
+            )
 
         if vsr_headers.get("x-vsr-injected-system-prompt"):
-            injection = vsr_headers['x-vsr-injected-system-prompt']
+            injection = vsr_headers["x-vsr-injected-system-prompt"]
             injection_emoji = "🎯" if injection == "true" else "🚫"
-            vsr_message_parts.append(f"{injection_emoji} **System Prompt Optimized**: {injection}")
+            vsr_message_parts.append(
+                f"{injection_emoji} **System Prompt Optimized**: {injection}"
+            )
 
         # Add cache hit information
         if vsr_headers.get("x-vsr-cache-hit"):
-            cache_hit = vsr_headers['x-vsr-cache-hit'].lower()
+            cache_hit = vsr_headers["x-vsr-cache-hit"].lower()
             if cache_hit == "true":
                 vsr_message_parts.append(f"🔥 **Semantic Cache**: Hit (Fast Response)")
 
         if vsr_message_parts:
             if position == "prefix":
                 # Before response: VSR info + separator + response content
-                return "**🔀 vLLM Semantic Router Decision 🔀**\n\n" + "\n\n".join(vsr_message_parts) + "\n\n---\n\n"
+                return (
+                    "**🔀 vLLM Semantic Router Decision 🔀**\n\n"
+                    + "\n\n".join(vsr_message_parts)
+                    + "\n\n---\n\n"
+                )
             else:
                 # After response: response content + separator + VSR info
-                return "\n\n---\n\n**🔀 vLLM Semantic Router Decision 🔀**\n\n" + "\n\n".join(vsr_message_parts)
+                return (
+                    "\n\n---\n\n**🔀 vLLM Semantic Router Decision 🔀**\n\n"
+                    + "\n\n".join(vsr_message_parts)
+                )
 
         return ""
 
@@ -222,10 +238,12 @@ class Pipeline:
             print(f"  Selected Model: {vsr_headers['x-vsr-selected-model']}")
 
         if vsr_headers.get("x-vsr-injected-system-prompt"):
-            print(f"  System Prompt Injected: {vsr_headers['x-vsr-injected-system-prompt']}")
+            print(
+                f"  System Prompt Injected: {vsr_headers['x-vsr-injected-system-prompt']}"
+            )
 
         if vsr_headers.get("x-vsr-cache-hit"):
-            cache_hit = vsr_headers['x-vsr-cache-hit'].lower()
+            cache_hit = vsr_headers["x-vsr-cache-hit"].lower()
             print(f"  Cache Hit: {cache_hit}")
 
         print("=" * 60)
@@ -247,7 +265,11 @@ class Pipeline:
             print("\n" + "=" * 80)
             print("🔄 pipe() method called - Processing request")
             print("=" * 80)
-            print(f"  User message: {user_message[:100]}..." if len(user_message) > 100 else f"  User message: {user_message}")
+            print(
+                f"  User message: {user_message[:100]}..."
+                if len(user_message) > 100
+                else f"  User message: {user_message}"
+            )
             print(f"  Model ID: {model_id}")
             print(f"  Model requested: {body.get('model', 'N/A')}")
             print(f"  Stream mode: {body.get('stream', False)}")
@@ -324,7 +346,7 @@ class Pipeline:
                 # Print all response headers for debugging
                 print(f"\n  All response headers:")
                 for key, value in response.headers.items():
-                    if key.lower().startswith('x-vsr'):
+                    if key.lower().startswith("x-vsr"):
                         print(f"    {key}: {value}")
 
             # Log VSR information
@@ -340,7 +362,9 @@ class Pipeline:
                     print(f"\n📄 Handling non-streaming response...")
                     print(f"  Response status: {response.status_code}")
                     print(f"  Response content length: {len(response.content)}")
-                    print(f"  Response content type: {response.headers.get('content-type', 'unknown')}")
+                    print(
+                        f"  Response content type: {response.headers.get('content-type', 'unknown')}"
+                    )
 
                 # Check if response is empty
                 if not response.content:
@@ -354,11 +378,15 @@ class Pipeline:
                 try:
                     response_data = response.json()
                 except json.JSONDecodeError as e:
-                    error_msg = f"Error: Invalid JSON response from vLLM Semantic Router"
+                    error_msg = (
+                        f"Error: Invalid JSON response from vLLM Semantic Router"
+                    )
                     if self.valves.debug:
                         print(f"\n❌ {error_msg}")
                         print(f"  JSON error: {str(e)}")
-                        print(f"  Response text (first 500 chars): {response.text[:500]}")
+                        print(
+                            f"  Response text (first 500 chars): {response.text[:500]}"
+                        )
                         print("=" * 80 + "\n")
                     return f"{error_msg}: {str(e)}"
 
@@ -372,13 +400,17 @@ class Pipeline:
                     vsr_info = self._format_vsr_info(vsr_headers, position="prefix")
 
                     if self.valves.debug:
-                        print(f"  Adding VSR info to response (length: {len(vsr_info)})")
+                        print(
+                            f"  Adding VSR info to response (length: {len(vsr_info)})"
+                        )
 
                     # Prepend to the assistant's message
                     if "choices" in response_data and len(response_data["choices"]) > 0:
                         for choice in response_data["choices"]:
                             if "message" in choice and "content" in choice["message"]:
-                                choice["message"]["content"] = vsr_info + choice["message"]["content"]
+                                choice["message"]["content"] = (
+                                    vsr_info + choice["message"]["content"]
+                                )
                                 if self.valves.debug:
                                     print(f"  ✅ VSR info prepended to response")
 
@@ -395,7 +427,9 @@ class Pipeline:
                 print("=" * 80 + "\n")
             return error_msg
         except Exception as e:
-            error_msg = f"Error: Failed to communicate with vLLM Semantic Router: {str(e)}"
+            error_msg = (
+                f"Error: Failed to communicate with vLLM Semantic Router: {str(e)}"
+            )
             if self.valves.debug:
                 print(f"\n❌ {error_msg}")
                 print(f"  Exception type: {type(e).__name__}")
@@ -438,7 +472,9 @@ class Pipeline:
                     yield f"data: [DONE]\n\n"
 
                     if self.valves.debug:
-                        print(f"✅ Streaming completed, VSR info added: {vsr_info_added}")
+                        print(
+                            f"✅ Streaming completed, VSR info added: {vsr_info_added}"
+                        )
                 else:
                     try:
                         chunk_data = json.loads(data_str)
@@ -449,28 +485,45 @@ class Pipeline:
                             if self.valves.debug:
                                 print(f"🔄 VSR headers updated in stream:")
                             for key, value in chunk_data["vsr_headers"].items():
-                                full_key = f"x-vsr-{key}" if not key.startswith("x-vsr-") else key
+                                full_key = (
+                                    f"x-vsr-{key}"
+                                    if not key.startswith("x-vsr-")
+                                    else key
+                                )
                                 if current_vsr_headers.get(full_key) != value:
                                     if self.valves.debug:
-                                        print(f"    {full_key}: {current_vsr_headers.get(full_key)} → {value}")
+                                        print(
+                                            f"    {full_key}: {current_vsr_headers.get(full_key)} → {value}"
+                                        )
                                     current_vsr_headers[full_key] = value
 
                         # Add VSR info before the first content chunk
-                        if first_content_chunk and self.valves.show_vsr_info and not vsr_info_added:
-                            if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
+                        if (
+                            first_content_chunk
+                            and self.valves.show_vsr_info
+                            and not vsr_info_added
+                        ):
+                            if (
+                                "choices" in chunk_data
+                                and len(chunk_data["choices"]) > 0
+                            ):
                                 choice = chunk_data["choices"][0]
                                 delta = choice.get("delta", {})
 
                                 # Check if there is content (role or content)
                                 if "role" in delta or "content" in delta:
                                     if self.valves.debug:
-                                        print(f"✅ Adding VSR info at first content chunk")
+                                        print(
+                                            f"✅ Adding VSR info at first content chunk"
+                                        )
                                         print(f"    VSR headers:")
                                         for key, value in current_vsr_headers.items():
                                             print(f"      {key}: {value}")
 
                                     # Format VSR info (using prefix mode)
-                                    vsr_info = self._format_vsr_info(current_vsr_headers, position="prefix")
+                                    vsr_info = self._format_vsr_info(
+                                        current_vsr_headers, position="prefix"
+                                    )
 
                                     # Add VSR info before the first content
                                     current_content = delta.get("content", "")
