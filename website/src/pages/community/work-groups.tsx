@@ -2,7 +2,16 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './work-groups.module.css'
 
-const workingGroups = [
+interface WorkGroup {
+  name: string
+  description: string
+  label: string
+  icon: string
+  skills: string[]
+  needs: string[]
+}
+
+const workingGroups: WorkGroup[] = [
   // First column - Core areas
   {
     name: 'RouterCore',
@@ -80,7 +89,11 @@ const workingGroups = [
   },
 ]
 
-function WorkGroupCard({ group }) {
+interface WorkGroupCardProps {
+  group: WorkGroup
+}
+
+const WorkGroupCard: React.FC<WorkGroupCardProps> = ({ group }) => {
   return (
     <div className={styles.workGroupCard}>
       <div className={styles.cardHeader}>
@@ -111,7 +124,7 @@ function WorkGroupCard({ group }) {
   )
 }
 
-export default function WorkGroups() {
+const WorkGroups: React.FC = () => {
   return (
     <Layout
       title="Work Groups"
@@ -206,15 +219,15 @@ export default function WorkGroups() {
             <ul>
               <li>
                 Open an issue on
-                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer"> GitHub</a>
               </li>
               <li>
                 Join the discussion on
-                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">Issue #15</a>
+                <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer"> Issue #15</a>
               </li>
               <li>
                 Check out our
-                <a href="/docs/intro">documentation</a>
+                <a href="/docs/intro"> documentation</a>
                 {' '}
                 to get started
               </li>
@@ -225,3 +238,5 @@ export default function WorkGroups() {
     </Layout>
   )
 }
+
+export default WorkGroups

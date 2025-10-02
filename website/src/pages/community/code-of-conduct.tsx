@@ -2,7 +2,7 @@ import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './community-page.module.css'
 
-export default function CodeOfConduct() {
+const CodeOfConduct: React.FC = () => {
   return (
     <Layout
       title="Code of Conduct"
@@ -205,3 +205,5 @@ export default function CodeOfConduct() {
     </Layout>
   )
 }
+
+export default CodeOfConduct
