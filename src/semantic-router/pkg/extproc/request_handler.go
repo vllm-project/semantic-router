@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -9,6 +10,8 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -250,6 +253,9 @@ type RequestContext struct {
 	VSRSelectedModel        string // The model selected by VSR
 	VSRCacheHit             bool   // Whether this request hit the cache
 	VSRInjectedSystemPrompt bool   // Whether a system prompt was injected into the request
+
+	// Tracing context
+	TraceContext context.Context // OpenTelemetry trace context for span propagation
 }
 
 // handleRequestHeaders processes the request headers
@@ -257,6 +263,26 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// Record start time for overall request processing
 	ctx.StartTime = time.Now()
 	observability.Infof("Received request headers")
+
+	// Initialize trace context from incoming headers
+	baseCtx := context.Background()
+	headerMap := make(map[string]string)
+	for _, h := range v.RequestHeaders.Headers.Headers {
+		headerValue := h.Value
+		if headerValue == "" && len(h.RawValue) > 0 {
+			headerValue = string(h.RawValue)
+		}
+		headerMap[h.Key] = headerValue
+	}
+	
+	// Extract trace context from headers (if present)
+	ctx.TraceContext = observability.ExtractTraceContext(baseCtx, headerMap)
+	
+	// Start root span for the request
+	spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanRequestReceived,
+		trace.WithSpanKind(trace.SpanKindServer))
+	ctx.TraceContext = spanCtx
+	defer span.End()
 
 	// Store headers for later use
 	headers := v.RequestHeaders.Headers
@@ -275,6 +301,18 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		}
 	}
 
+	// Set request metadata on span
+	if ctx.RequestID != "" {
+		observability.SetSpanAttributes(span,
+			attribute.String(observability.AttrRequestID, ctx.RequestID))
+	}
+	
+	method := ctx.Headers[":method"]
+	path := ctx.Headers[":path"]
+	observability.SetSpanAttributes(span,
+		attribute.String(observability.AttrHTTPMethod, method),
+		attribute.String(observability.AttrHTTPPath, path))
+
 	// Detect if the client expects a streaming response (SSE)
 	if accept, ok := ctx.Headers["accept"]; ok {
 		if strings.Contains(strings.ToLower(accept), "text/event-stream") {
@@ -284,9 +322,6 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	}
 
 	// Check if this is a GET request to /v1/models
-	method := ctx.Headers[":method"]
-	path := ctx.Headers[":path"]
-
 	if method == "GET" && strings.HasPrefix(path, "/v1/models") {
 		observability.Infof("Handling /v1/models request with path: %s", path)
 		return r.handleModelsRequest(path)
@@ -341,6 +376,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	originalModel := string(openAIRequest.Model)
 	observability.Infof("Original model: %s", originalModel)
 
+	// Set model on span
+	if ctx.TraceContext != nil {
+		_, span := observability.StartSpan(ctx.TraceContext, "parse_request")
+		observability.SetSpanAttributes(span,
+			attribute.String(observability.AttrOriginalModel, originalModel))
+		span.End()
+	}
+
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(originalModel)
 	// Also set the model on context early so error metrics can label it
@@ -372,9 +415,20 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 
 	// Perform jailbreak detection on all message content
 	if r.Classifier.IsJailbreakEnabled() {
+		// Start jailbreak detection span
+		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanJailbreakDetection)
+		defer span.End()
+		
+		startTime := time.Now()
 		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
+		detectionTime := time.Since(startTime).Milliseconds()
+		
+		observability.SetSpanAttributes(span,
+			attribute.Int64(observability.AttrJailbreakDetectionTimeMs, detectionTime))
+		
 		if err != nil {
 			observability.Errorf("Error performing jailbreak analysis: %v", err)
+			observability.RecordError(span, err)
 			// Continue processing despite jailbreak analysis error
 			metrics.RecordRequestError(ctx.RequestModel, "classification_failed")
 		} else if hasJailbreak {
@@ -389,6 +443,11 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 				}
 			}
 
+			observability.SetSpanAttributes(span,
+				attribute.Bool(observability.AttrJailbreakDetected, true),
+				attribute.String(observability.AttrJailbreakType, jailbreakType),
+				attribute.String(observability.AttrSecurityAction, "blocked"))
+
 			observability.Warnf("JAILBREAK ATTEMPT BLOCKED: %s (confidence: %.3f)", jailbreakType, confidence)
 
 			// Return immediate jailbreak violation response
@@ -402,9 +461,13 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 			// Count this as a blocked request
 			metrics.RecordRequestError(ctx.RequestModel, "jailbreak_block")
 			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence)
+			ctx.TraceContext = spanCtx
 			return jailbreakResponse, true
 		} else {
+			observability.SetSpanAttributes(span,
+				attribute.Bool(observability.AttrJailbreakDetected, false))
 			observability.Infof("No jailbreak detected in request content")
+			ctx.TraceContext = spanCtx
 		}
 	}
 
@@ -425,10 +488,23 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 	ctx.RequestQuery = requestQuery
 
 	if requestQuery != "" && r.Cache.IsEnabled() {
+		// Start cache lookup span
+		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanCacheLookup)
+		defer span.End()
+		
+		startTime := time.Now()
 		// Try to find a similar cached response
 		cachedResponse, found, err := r.Cache.FindSimilar(requestModel, requestQuery)
+		lookupTime := time.Since(startTime).Milliseconds()
+		
+		observability.SetSpanAttributes(span,
+			attribute.String(observability.AttrCacheKey, requestQuery),
+			attribute.Bool(observability.AttrCacheHit, found),
+			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime))
+		
 		if err != nil {
 			observability.Errorf("Error searching cache: %v", err)
+			observability.RecordError(span, err)
 		} else if found {
 			// Mark this request as a cache hit
 			ctx.VSRCacheHit = true
@@ -440,8 +516,10 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 			})
 			// Return immediate response from cache
 			response := http.CreateCacheHitResponse(cachedResponse)
+			ctx.TraceContext = spanCtx
 			return response, true
 		}
+		ctx.TraceContext = spanCtx
 	}
 
 	// Cache miss, store the request for later
