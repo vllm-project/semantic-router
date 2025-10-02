@@ -244,12 +244,16 @@ func TestHandleResponsesAPIRequest_AutoModelSelection(t *testing.T) {
 			{
 				Name:        "math",
 				Description: "Mathematical calculations and equations",
-				Models:      []string{"deepseek-v3"},
+				ModelScores: []config.ModelScore{
+					{Model: "deepseek-v3", Score: 0.95},
+				},
 			},
 			{
 				Name:        "general",
 				Description: "General conversation and questions",
-				Models:      []string{"gpt-4o-mini"},
+				ModelScores: []config.ModelScore{
+					{Model: "gpt-4o-mini", Score: 0.90},
+				},
 			},
 		},
 	}
@@ -257,9 +261,13 @@ func TestHandleResponsesAPIRequest_AutoModelSelection(t *testing.T) {
 	// Create a mock classifier
 	classifier := &classification.Classifier{
 		CategoryMapping: &classification.CategoryMapping{
-			ID2Label: map[int]string{
-				0: "math",
-				1: "general",
+			IdxToCategory: map[string]string{
+				"0": "math",
+				"1": "general",
+			},
+			CategoryToIdx: map[string]int{
+				"math":    0,
+				"general": 1,
 			},
 		},
 	}
