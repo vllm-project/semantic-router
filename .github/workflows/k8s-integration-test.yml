@@ -216,8 +216,17 @@ jobs:
           cp ../pvc.yaml ./
           cp ../deployment.yaml ./
           cp ../service.yaml ./
-          cp ../config.yaml ./
           cp ../tools_db.json ./
+          
+          # Copy and fix config.yaml to use absolute paths
+          cp ../config.yaml ./config.yaml
+          
+          # Fix model paths from relative to absolute
+          sed -i 's|model_id: "models/|model_id: "/app/models/|g' config.yaml
+          sed -i 's|_path: "models/|_path: "/app/models/|g' config.yaml
+          
+          echo "=== Modified config.yaml paths ==="
+          grep -E "(model_id|_path):" config.yaml || true
 
           # Create kustomization with local resources
           cat > kustomization.yaml << EOF
