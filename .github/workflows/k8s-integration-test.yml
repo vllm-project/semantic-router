@@ -101,21 +101,73 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Create kind cluster with local registry
-        uses: helm/kind-action@v1.8.0
-        with:
-          version: ${{ env.KIND_VERSION }}
-          config: tools/kind/kind-config.yaml
-          cluster_name: semantic-router-test
-          wait: 120s
-
-      - name: Setup local Docker registry
+      - name: Setup local Docker registry (before kind cluster)
         run: |
-          # Create a local registry container on kind network
+          # Create a local registry container
           docker run -d --restart=always -p 5001:5000 \
-            --network kind --name kind-registry \
+            --name kind-registry \
             registry:2
+          
+          echo "Waiting for registry to be ready..."
+          sleep 5
+          
+          # Test registry is accessible
+          curl -v http://localhost:5001/v2/
+          docker exec kind-registry registry --version
 
+      - name: Create kind cluster with local registry
+        run: |
+          # Create kind config with insecure registry
+          cat <<EOF > /tmp/kind-config-with-registry.yaml
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          name: semantic-router-cluster
+          containerdConfigPatches:
+          - |-
+            [plugins."io.containerd.grpc.v1.cri".registry.mirrors."kind-registry:5000"]
+              endpoint = ["http://kind-registry:5000"]
+            [plugins."io.containerd.grpc.v1.cri".registry.configs."kind-registry:5000".tls]
+              insecure_skip_verify = true
+          nodes:
+          - role: control-plane
+            extraMounts:
+            - hostPath: /tmp/kind-semantic-router
+              containerPath: /tmp/hostpath-provisioner
+            kubeadmConfigPatches:
+            - |
+              kind: InitConfiguration
+              nodeRegistration:
+                kubeletExtraArgs:
+                  system-reserved: memory=1Gi,cpu=500m
+                  kube-reserved: memory=1Gi,cpu=500m
+                  eviction-hard: memory.available<1Gi,nodefs.available<10%
+            - |
+              kind: ClusterConfiguration
+              apiServer:
+                extraArgs:
+                  max-requests-inflight: "400"
+                  max-mutating-requests-inflight: "200"
+              etcd:
+                local:
+                  extraArgs:
+                    quota-backend-bytes: "8589934592"
+          - role: worker
+            kubeadmConfigPatches:
+            - |
+              kind: JoinConfiguration
+              nodeRegistration:
+                kubeletExtraArgs:
+                  system-reserved: memory=500Mi,cpu=250m
+                  kube-reserved: memory=500Mi,cpu=250m
+                  eviction-hard: memory.available<500Mi,nodefs.available<10%
+          EOF
+          
+          # Create kind cluster
+          kind create cluster --config /tmp/kind-config-with-registry.yaml --name semantic-router-test --wait 120s
+          
+          # Connect registry to kind network
+          docker network connect kind kind-registry || true
+          
           # Document the local registry for kind cluster
           kubectl apply -f - <<EOF
           apiVersion: v1
@@ -128,13 +180,6 @@ jobs:
               host: "kind-registry:5000"
               help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
           EOF
-          
-          echo "Waiting for registry to be ready..."
-          sleep 5
-          
-          # Test registry is accessible
-          curl -v http://localhost:5001/v2/ || echo "Registry not ready yet"
-          docker exec kind-registry registry --version
 
       - name: Tag and push image to local registry
         run: |
