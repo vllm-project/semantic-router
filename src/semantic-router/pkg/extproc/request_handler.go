@@ -521,6 +521,23 @@ func (r *OpenAIRouter) handleResponsesAPIRequest(v *ext_proc.ProcessingRequest_R
 		ctx.RequestModel = originalModel
 	}
 
+	// Check if this is a chained conversation (has previous_response_id)
+	// If so, we cannot change the model as the conversation state is tied to a specific backend instance
+	hasPreviousResponseID := responsesRequest.PreviousResponseID.Valid() && responsesRequest.PreviousResponseID.Value != ""
+	if hasPreviousResponseID {
+		observability.Infof("Responses API - Request has previous_response_id, skipping model routing to maintain conversation continuity")
+		// Return a pass-through response without model changes
+		return &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestBody{
+				RequestBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}, nil
+	}
+
 	// Get content from input field
 	userContent, nonUserMessages := extractContentFromResponsesInput(responsesRequest)
 	observability.Infof("Responses API - Extracted user content length: %d, non-user messages count: %d", len(userContent), len(nonUserMessages))

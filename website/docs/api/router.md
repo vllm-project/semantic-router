@@ -359,7 +359,7 @@ The router will still perform classification and routing, but the actual executi
 
 - GET `/v1/responses/{id}` requests pass through without modification (no routing or classification)
 - POST `/v1/responses` requests go through the full routing pipeline
-- The `previous_response_id` parameter is preserved during routing for conversation continuity
+- **Conversation Chaining Limitation**: When using `previous_response_id` to chain conversations, the router will **not** change the model to ensure conversation continuity. This is because response state is stored on specific backend instances. For multi-turn conversations, specify a fixed model instead of using "auto", or ensure all backend instances share response storage.
 - All Responses API features (tools, reasoning, streaming, background) work transparently through the router
 
 ## Routing Headers

@@ -429,3 +429,62 @@ func TestHandleRequestHeaders_ResponsesAPI_ExcludeInputItems(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleResponsesAPIRequest_WithPreviousResponseID(t *testing.T) {
+	// Create a test router
+	cfg := &config.RouterConfig{
+		VLLMEndpoints: []config.VLLMEndpoint{
+			{
+				Name:    "primary",
+				Address: "127.0.0.1",
+				Port:    8000,
+				Models:  []string{"gpt-4o", "deepseek-v3"},
+				Weight:  1,
+			},
+		},
+		DefaultModel: "gpt-4o",
+	}
+
+	// Create a minimal cache backend
+	cacheBackend, _ := cache.NewCacheBackend(cache.CacheConfig{
+		BackendType: cache.InMemoryCacheType,
+		Enabled:     false,
+	})
+
+	router := &OpenAIRouter{
+		Config: cfg,
+		Cache:  cacheBackend,
+	}
+
+	// Test with previous_response_id - should NOT change model even with "auto"
+	requestBody := []byte(`{
+		"model": "auto",
+		"input": "Continue from where we left off",
+		"previous_response_id": "resp_abc123"
+	}`)
+
+	ctx := &RequestContext{
+		Headers:             make(map[string]string),
+		IsResponsesAPI:      true,
+		OriginalRequestBody: requestBody,
+		RequestID:           "test-request-456",
+	}
+
+	requestBodyMsg := &ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{
+			Body: requestBody,
+		},
+	}
+
+	response, err := router.handleResponsesAPIRequest(requestBodyMsg, ctx, false)
+
+	// Should succeed and return CONTINUE without modifying the request
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
+	assert.NotNil(t, response.GetRequestBody())
+	assert.Equal(t, ext_proc.CommonResponse_CONTINUE, response.GetRequestBody().Response.Status)
+	
+	// Should NOT have body mutation (no model change)
+	assert.Nil(t, response.GetRequestBody().Response.BodyMutation, "Should not modify body when previous_response_id is present")
+}
+
