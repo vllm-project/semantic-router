@@ -35,34 +35,40 @@ semantic_router.request.received [root span]
 Each span includes rich attributes following OpenInference conventions for LLM observability:
 
 **Request Metadata:**
+
 - `request.id` - Unique request identifier
 - `user.id` - User identifier (if available)
 - `http.method` - HTTP method
 - `http.path` - Request path
 
 **Model Information:**
+
 - `model.name` - Selected model name
 - `routing.original_model` - Original requested model
 - `routing.selected_model` - Model selected by router
 
 **Classification:**
+
 - `category.name` - Classified category
 - `classifier.type` - Classifier implementation
 - `classification.time_ms` - Classification duration
 
 **Security:**
+
 - `pii.detected` - Whether PII was found
 - `pii.types` - Types of PII detected
 - `jailbreak.detected` - Whether jailbreak attempt detected
 - `security.action` - Action taken (blocked, allowed)
 
 **Routing:**
+
 - `routing.strategy` - Routing strategy (auto, specified)
 - `routing.reason` - Reason for routing decision
 - `reasoning.enabled` - Whether reasoning mode enabled
 - `reasoning.effort` - Reasoning effort level
 
 **Performance:**
+
 - `cache.hit` - Cache hit/miss status
 - `cache.lookup_time_ms` - Cache lookup duration
 - `processing.time_ms` - Total processing time
@@ -96,12 +102,14 @@ observability:
 #### Exporter Types
 
 **stdout** - Print traces to console (development)
+
 ```yaml
 exporter:
   type: "stdout"
 ```
 
 **otlp** - Export to OTLP-compatible backend (production)
+
 ```yaml
 exporter:
   type: "otlp"
@@ -112,18 +120,21 @@ exporter:
 #### Sampling Strategies
 
 **always_on** - Sample all requests (development/debugging)
+
 ```yaml
 sampling:
   type: "always_on"
 ```
 
 **always_off** - Disable sampling (emergency performance)
+
 ```yaml
 sampling:
   type: "always_off"
 ```
 
 **probabilistic** - Sample a percentage of requests (production)
+
 ```yaml
 sampling:
   type: "probabilistic"
@@ -133,6 +144,7 @@ sampling:
 ### Environment-Specific Configurations
 
 #### Development
+
 ```yaml
 observability:
   tracing:
@@ -148,6 +160,7 @@ observability:
 ```
 
 #### Production
+
 ```yaml
 observability:
   tracing:
@@ -171,6 +184,7 @@ observability:
 ### With Jaeger
 
 1. **Start Jaeger** (all-in-one for testing):
+
 ```bash
 docker run -d --name jaeger \
   -p 4317:4317 \
@@ -179,6 +193,7 @@ docker run -d --name jaeger \
 ```
 
 2. **Configure Router**:
+
 ```yaml
 observability:
   tracing:
@@ -197,6 +212,7 @@ observability:
 ### With Grafana Tempo
 
 1. **Configure Tempo** (tempo.yaml):
+
 ```yaml
 server:
   http_listen_port: 3200
@@ -216,6 +232,7 @@ storage:
 ```
 
 2. **Start Tempo**:
+
 ```bash
 docker run -d --name tempo \
   -p 4317:4317 \
@@ -226,6 +243,7 @@ docker run -d --name tempo \
 ```
 
 3. **Configure Router**:
+
 ```yaml
 observability:
   tracing:
@@ -286,6 +304,7 @@ spec:
 ### Viewing Traces
 
 #### Console Output (stdout exporter)
+
 ```json
 {
   "Name": "semantic_router.classification",
@@ -308,6 +327,7 @@ spec:
 ```
 
 #### Jaeger UI
+
 1. Navigate to http://localhost:16686
 2. Select service: `vllm-semantic-router`
 3. Click "Find Traces"
@@ -316,6 +336,7 @@ spec:
 ### Analyzing Performance
 
 **Find slow requests:**
+
 ```
 Service: vllm-semantic-router
 Min Duration: 1s
@@ -346,12 +367,14 @@ Filter by tag: `security.action = blocked`
 The router automatically propagates trace context using W3C Trace Context headers:
 
 **Request headers** (extracted by router):
+
 ```
 traceparent: 00-abc123-def456-01
 tracestate: vendor=value
 ```
 
 **Upstream headers** (injected by router):
+
 ```
 traceparent: 00-abc123-ghi789-01
 x-gateway-destination-endpoint: endpoint1
@@ -373,6 +396,7 @@ Tracing adds minimal overhead when properly configured:
 ### Optimization Tips
 
 1. **Use probabilistic sampling in production**
+
    ```yaml
    sampling:
      type: "probabilistic"
@@ -397,6 +421,7 @@ Tracing adds minimal overhead when properly configured:
 ### Traces Not Appearing
 
 1. **Check tracing is enabled**:
+
 ```yaml
 observability:
   tracing:
@@ -404,12 +429,14 @@ observability:
 ```
 
 2. **Verify exporter endpoint**:
+
 ```bash
 # Test OTLP endpoint connectivity
 telnet jaeger 4317
 ```
 
 3. **Check logs for errors**:
+
 ```
 Failed to export spans: connection refused
 ```
@@ -417,6 +444,7 @@ Failed to export spans: connection refused
 ### Missing Spans
 
 1. **Check sampling rate**:
+
 ```yaml
 sampling:
   type: "probabilistic"
@@ -424,18 +452,21 @@ sampling:
 ```
 
 2. **Verify span creation in code**:
+
 - Spans are created at key processing points
 - Check for nil context
 
 ### High Memory Usage
 
 1. **Reduce sampling rate**:
+
 ```yaml
 sampling:
   rate: 0.01  # 1% sampling
 ```
 
 2. **Verify batch exporter is working**:
+
 - Check export interval
 - Monitor queue length
 

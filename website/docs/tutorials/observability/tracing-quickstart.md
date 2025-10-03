@@ -89,17 +89,20 @@ Check your console output for JSON trace spans:
 ### Common Use Cases
 
 **Find slow requests:**
+
 ```
 Min Duration: 1s
 Service: vllm-semantic-router
 ```
 
 **Debug specific request:**
+
 ```
 Tags: request.id = req-abc-123
 ```
 
 **Analyze classification performance:**
+
 ```
 Operation: semantic_router.classification
 Sort by: Duration (desc)

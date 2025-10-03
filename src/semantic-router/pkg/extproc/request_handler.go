@@ -274,10 +274,10 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		}
 		headerMap[h.Key] = headerValue
 	}
-	
+
 	// Extract trace context from headers (if present)
 	ctx.TraceContext = observability.ExtractTraceContext(baseCtx, headerMap)
-	
+
 	// Start root span for the request
 	spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanRequestReceived,
 		trace.WithSpanKind(trace.SpanKindServer))
@@ -306,7 +306,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		observability.SetSpanAttributes(span,
 			attribute.String(observability.AttrRequestID, ctx.RequestID))
 	}
-	
+
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
 	observability.SetSpanAttributes(span,
@@ -418,14 +418,14 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 		// Start jailbreak detection span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanJailbreakDetection)
 		defer span.End()
-		
+
 		startTime := time.Now()
 		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
 		detectionTime := time.Since(startTime).Milliseconds()
-		
+
 		observability.SetSpanAttributes(span,
 			attribute.Int64(observability.AttrJailbreakDetectionTimeMs, detectionTime))
-		
+
 		if err != nil {
 			observability.Errorf("Error performing jailbreak analysis: %v", err)
 			observability.RecordError(span, err)
@@ -491,17 +491,17 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 		// Start cache lookup span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanCacheLookup)
 		defer span.End()
-		
+
 		startTime := time.Now()
 		// Try to find a similar cached response
 		cachedResponse, found, err := r.Cache.FindSimilar(requestModel, requestQuery)
 		lookupTime := time.Since(startTime).Milliseconds()
-		
+
 		observability.SetSpanAttributes(span,
 			attribute.String(observability.AttrCacheKey, requestQuery),
 			attribute.Bool(observability.AttrCacheHit, found),
 			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime))
-		
+
 		if err != nil {
 			observability.Errorf("Error searching cache: %v", err)
 			observability.RecordError(span, err)
@@ -563,45 +563,45 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			// Start classification span
 			classifyCtx, classifySpan := observability.StartSpan(ctx.TraceContext, observability.SpanClassification)
 			classifyStart := time.Now()
-			
+
 			// Find the most similar task description or classify, then select best model
 			matchedModel := r.classifyAndSelectBestModel(classificationText)
 			classifyTime := time.Since(classifyStart).Milliseconds()
-			
+
 			// Get category information for the span
 			categoryName := r.findCategoryForClassification(classificationText)
-			
+
 			observability.SetSpanAttributes(classifySpan,
 				attribute.String(observability.AttrCategoryName, categoryName),
 				attribute.String(observability.AttrClassifierType, "bert"),
 				attribute.Int64(observability.AttrClassificationTimeMs, classifyTime))
 			classifySpan.End()
 			ctx.TraceContext = classifyCtx
-			
+
 			if matchedModel != originalModel && matchedModel != "" {
 				// Start PII detection span if enabled
 				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 				if r.PIIChecker.IsPIIEnabled(matchedModel) {
 					piiCtx, piiSpan := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
 					piiStart := time.Now()
-					
+
 					observability.Infof("PII policy enabled for model %s", matchedModel)
 					detectedPII := r.Classifier.DetectPIIInContent(allContent)
-					
+
 					piiTime := time.Since(piiStart).Milliseconds()
 					piiDetected := len(detectedPII) > 0
-					
+
 					observability.SetSpanAttributes(piiSpan,
 						attribute.Bool(observability.AttrPIIDetected, piiDetected),
 						attribute.Int64(observability.AttrPIIDetectionTimeMs, piiTime))
-					
+
 					if piiDetected {
 						// Convert detected PII to comma-separated string
 						piiTypesStr := strings.Join(detectedPII, ",")
 						observability.SetSpanAttributes(piiSpan,
 							attribute.String(observability.AttrPIITypes, piiTypesStr))
 					}
-					
+
 					piiSpan.End()
 					ctx.TraceContext = piiCtx
 
@@ -660,7 +660,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Start routing decision span
 				routingCtx, routingSpan := observability.StartSpan(ctx.TraceContext, observability.SpanRoutingDecision)
-				
+
 				// Check reasoning mode for this category using entropy-based approach
 				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
 				observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
@@ -677,7 +677,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					attribute.String(observability.AttrSelectedModel, matchedModel),
 					attribute.Bool(observability.AttrReasoningEnabled, useReasoning),
 					attribute.String(observability.AttrReasoningEffort, effortForMetrics))
-				
+
 				routingSpan.End()
 				ctx.TraceContext = routingCtx
 
@@ -698,13 +698,13 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Start backend selection span
 				backendCtx, backendSpan := observability.StartSpan(ctx.TraceContext, observability.SpanBackendSelection)
-				
+
 				// Select the best endpoint for this model
 				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
 				if endpointFound {
 					selectedEndpoint = endpointAddress
 					observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
-					
+
 					// Extract endpoint name from config
 					endpoints := r.Config.GetEndpointsForModel(matchedModel)
 					if len(endpoints) > 0 {
@@ -715,7 +715,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				} else {
 					observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
 				}
-				
+
 				backendSpan.End()
 				ctx.TraceContext = backendCtx
 
@@ -755,7 +755,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
 						// Start system prompt injection span
 						promptCtx, promptSpan := observability.StartSpan(ctx.TraceContext, observability.SpanSystemPromptInjection)
-						
+
 						mode := category.GetSystemPromptMode()
 						var injected bool
 						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
@@ -766,12 +766,12 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 							promptSpan.End()
 							return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
 						}
-						
+
 						observability.SetSpanAttributes(promptSpan,
 							attribute.Bool("system_prompt.injected", injected),
 							attribute.String("system_prompt.mode", mode),
 							attribute.String(observability.AttrCategoryName, categoryName))
-						
+
 						if injected {
 							ctx.VSRInjectedSystemPrompt = true
 							observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
@@ -779,7 +779,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 						// Log metadata about system prompt injection (avoid logging sensitive user data)
 						observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
-						
+
 						promptSpan.End()
 						ctx.TraceContext = promptCtx
 					} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {

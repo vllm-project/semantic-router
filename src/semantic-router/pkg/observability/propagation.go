@@ -25,7 +25,7 @@ func ExtractTraceContext(ctx context.Context, headers map[string]string) context
 func InjectTraceContextToSlice(ctx context.Context) [][2]string {
 	headers := make(map[string]string)
 	InjectTraceContext(ctx, headers)
-	
+
 	result := make([][2]string, 0, len(headers))
 	for k, v := range headers {
 		result = append(result, [2]string{k, v})

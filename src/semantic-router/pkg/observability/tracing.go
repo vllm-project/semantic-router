@@ -154,7 +154,7 @@ func StartSpan(ctx context.Context, spanName string, opts ...trace.SpanStartOpti
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	
+
 	if tracer == nil {
 		// Return noop tracer if tracing is not initialized
 		return otel.Tracer("semantic-router").Start(ctx, spanName, opts...)
@@ -196,12 +196,12 @@ const (
 	AttrClassifierType     = "classifier.type"
 
 	// Routing
-	AttrRoutingStrategy  = "routing.strategy"
-	AttrRoutingReason    = "routing.reason"
-	AttrOriginalModel    = "routing.original_model"
-	AttrSelectedModel    = "routing.selected_model"
-	AttrEndpointName     = "endpoint.name"
-	AttrEndpointAddress  = "endpoint.address"
+	AttrRoutingStrategy = "routing.strategy"
+	AttrRoutingReason   = "routing.reason"
+	AttrOriginalModel   = "routing.original_model"
+	AttrSelectedModel   = "routing.selected_model"
+	AttrEndpointName    = "endpoint.name"
+	AttrEndpointAddress = "endpoint.address"
 
 	// Security
 	AttrPIIDetected       = "pii.detected"
@@ -226,17 +226,17 @@ const (
 	AttrToolsCount    = "tools.count"
 
 	// Processing times
-	AttrProcessingTimeMs    = "processing.time_ms"
-	AttrClassificationTimeMs = "classification.time_ms"
-	AttrCacheLookupTimeMs   = "cache.lookup_time_ms"
-	AttrPIIDetectionTimeMs  = "pii.detection_time_ms"
+	AttrProcessingTimeMs         = "processing.time_ms"
+	AttrClassificationTimeMs     = "classification.time_ms"
+	AttrCacheLookupTimeMs        = "cache.lookup_time_ms"
+	AttrPIIDetectionTimeMs       = "pii.detection_time_ms"
 	AttrJailbreakDetectionTimeMs = "jailbreak.detection_time_ms"
 )
 
 // Span names for different operations
 const (
-	SpanRequestReceived        = "semantic_router.request.received"
-	SpanClassification         = "semantic_router.classification"
+	SpanRequestReceived       = "semantic_router.request.received"
+	SpanClassification        = "semantic_router.classification"
 	SpanPIIDetection          = "semantic_router.security.pii_detection"
 	SpanJailbreakDetection    = "semantic_router.security.jailbreak_detection"
 	SpanCacheLookup           = "semantic_router.cache.lookup"

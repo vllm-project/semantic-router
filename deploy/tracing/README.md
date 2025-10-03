@@ -5,16 +5,19 @@ This directory contains an example deployment configuration for testing distribu
 ## Quick Start
 
 1. **Start the services**:
+
 ```bash
 docker-compose -f ../docker-compose.tracing.yaml up -d
 ```
 
 2. **Access the UIs**:
+
 - Jaeger UI: http://localhost:16686
 - Grafana: http://localhost:3000
 - Router API: http://localhost:8080
 
 3. **Send test requests**:
+
 ```bash
 # Example request
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -26,6 +29,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```
 
 4. **View traces in Jaeger**:
+
 - Navigate to http://localhost:16686
 - Select service: `vllm-semantic-router`
 - Click "Find Traces"
@@ -52,17 +56,20 @@ observability:
 ## Services
 
 ### Jaeger
+
 - **OTLP gRPC**: Port 4317
 - **OTLP HTTP**: Port 4318
 - **Jaeger UI**: Port 16686
 - **Collector**: Port 14268
 
 ### Semantic Router
+
 - **gRPC ExtProc**: Port 50051
 - **Classification API**: Port 8080
 - **Metrics**: Port 9190
 
 ### Grafana
+
 - **Web UI**: Port 3000
 - Default credentials: admin/admin
 - Pre-configured with Jaeger data source
@@ -70,6 +77,7 @@ observability:
 ## Trace Examples
 
 ### Request Flow
+
 ```
 semantic_router.request.received [2ms]
 ├─ semantic_router.classification [45ms]
@@ -85,6 +93,7 @@ semantic_router.request.received [2ms]
 ```
 
 ### Key Attributes
+
 - `request.id`: Unique request identifier
 - `category.name`: Classified category
 - `routing.selected_model`: Selected model
@@ -98,6 +107,7 @@ docker-compose -f ../docker-compose.tracing.yaml down
 ```
 
 To remove volumes:
+
 ```bash
 docker-compose -f ../docker-compose.tracing.yaml down -v
 ```
@@ -107,16 +117,19 @@ docker-compose -f ../docker-compose.tracing.yaml down -v
 ### Traces not appearing
 
 1. Check Jaeger is running:
+
 ```bash
 curl http://localhost:16686
 ```
 
 2. Verify router can connect to Jaeger:
+
 ```bash
 docker logs semantic-router | grep -i tracing
 ```
 
 3. Check for initialization message:
+
 ```
 Distributed tracing initialized (provider: opentelemetry, exporter: otlp)
 ```
@@ -124,11 +137,13 @@ Distributed tracing initialized (provider: opentelemetry, exporter: otlp)
 ### Router fails to start
 
 1. Check configuration:
+
 ```bash
 docker logs semantic-router
 ```
 
 2. Verify Jaeger is ready:
+
 ```bash
 docker logs jaeger
 ```
