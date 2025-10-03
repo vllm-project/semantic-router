@@ -61,14 +61,14 @@ model_config:
     reasoning_family: "qwen3"  # This model uses Qwen reasoning syntax
     preferred_endpoints: ["qwen-endpoint"]
     pii_policy:
-      allow_by_default: true
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
+      allow_by_default: false  # Strict PII blocking model
+      pii_types_allowed: ["EMAIL_ADDRESS"]  # Only allow emails
   "Model-B":
     use_reasoning: false
     preferred_endpoints: ["tinyllama-endpoint"]
     pii_policy:
-      allow_by_default: true
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
+      allow_by_default: true  # Permissive PII model for safe routing
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
 
 # Classifier configuration for text classification
 classifier:

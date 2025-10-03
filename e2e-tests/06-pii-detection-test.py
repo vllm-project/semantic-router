@@ -23,6 +23,7 @@ This demonstrates inconsistent PII classifier usage between components.
 
 import json
 import sys
+import time
 import unittest
 import uuid
 
@@ -466,6 +467,214 @@ class PIIDetectionTest(SemanticRouterTestBase):
                 passed=True,
                 message="✅ Request blocked: ExtProc may have PII filtering enabled",
             )
+
+    def test_extproc_pii_detection_comprehensive(self):
+        """
+        TEST 3.5: ExtProc PII Detection - Comprehensive Production Pipeline Test
+
+        WHAT IS TESTED: Full production pipeline PII detection capabilities
+        PIPELINE: client → envoy → extProc → semantic-router → model routing
+        EXPECTED RESULT: ⚠️ VALIDATION - Tests actual PII detection in production flow
+
+        This tests the MAIN USE CASE: whether ExtProc actually detects PII and enforces policies
+        in the production request pipeline, not just whether responses leak PII.
+        """
+        self.print_test_header(
+            "TEST 3.5: ExtProc PII Detection - Comprehensive Production Pipeline",
+            "Expected: ⚠️ VALIDATION - Tests if ExtProc actually detects PII in production flow",
+        )
+
+        # Generate unique PII test cases
+        pii_cases, safe_cases = generate_unique_test_cases()
+
+        # Test 1: High-value PII that should trigger policy enforcement
+        high_value_pii = pii_cases[0]["text"]  # SSN case
+
+        # Test 2: Safe content that should pass through
+        safe_content = safe_cases[0]["text"]  # Math problem
+
+        test_cases = [
+            {
+                "name": "High-Value PII Content",
+                "content": high_value_pii,
+                "expected_pii": True,
+                "expected_action": "May block or route to PII-safe model",
+            },
+            {
+                "name": "Safe Content",
+                "content": safe_content,
+                "expected_pii": False,
+                "expected_action": "Should route normally",
+            },
+        ]
+
+        results = []
+
+        for test_case in test_cases:
+            print(f"\n🔍 Testing: {test_case['name']}")
+            print(f"Content: {test_case['content'][:60]}...")
+
+            # Send request through full ExtProc pipeline
+            payload = {
+                "model": "auto",
+                "messages": [{"role": "user", "content": test_case["content"]}],
+                "temperature": 0.1,
+            }
+
+            # Monitor for specific behaviors that indicate PII detection
+            start_time = time.time()
+
+            response = requests.post(
+                f"{ENVOY_URL}{OPENAI_ENDPOINT}",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
+
+            processing_time = (time.time() - start_time) * 1000
+
+            # Analyze response for PII detection indicators
+            request_allowed = response.status_code == 200
+
+            # Check for PII policy violation response
+            is_pii_blocked = response.status_code == 403 or response.status_code == 400
+
+            # Analyze response content
+            response_content = ""
+            model_used = "unknown"
+            if request_allowed:
+                try:
+                    response_json = response.json()
+                    if "choices" in response_json:
+                        response_content = response_json["choices"][0]["message"][
+                            "content"
+                        ]
+                    model_used = response_json.get("model", "unknown")
+                except:
+                    response_content = "Could not parse response"
+
+            # Check for PII-related routing decisions
+            # ExtProc may route PII content to specific models or add safety measures
+            pii_safe_routing = model_used in [
+                "Model-A",
+                "safe-model",
+                "pii-compliant-model",
+            ]
+
+            # Check response quality/safety indicators
+            response_looks_safe = (
+                len(response_content) > 50
+                and "sorry" not in response_content.lower()
+                and "can't help" not in response_content.lower()
+            )
+
+            # Analyze processing time (PII detection may add latency)
+            baseline_time = 1000  # ms
+            has_extra_processing = processing_time > baseline_time * 1.5
+
+            result = {
+                "test_case": test_case["name"],
+                "content": test_case["content"][:50] + "...",
+                "expected_pii": test_case["expected_pii"],
+                "request_allowed": request_allowed,
+                "is_blocked": is_pii_blocked,
+                "model_used": model_used,
+                "processing_time_ms": processing_time,
+                "has_extra_processing": has_extra_processing,
+                "response_safe": response_looks_safe,
+                "response_preview": (
+                    response_content[:100] + "..." if response_content else "No content"
+                ),
+            }
+
+            results.append(result)
+
+            print(f"  📊 Results:")
+            print(f"    Request Status: {response.status_code}")
+            print(f"    Model Used: {model_used}")
+            print(f"    Processing Time: {processing_time:.1f}ms")
+            print(f"    Expected PII: {test_case['expected_pii']}")
+            print(f"    Blocked: {is_pii_blocked}")
+            print(f"    Extra Processing: {has_extra_processing}")
+
+        # Analyze results for PII detection patterns
+        pii_test = results[0]  # High-value PII test
+        safe_test = results[1]  # Safe content test
+
+        # Check for differential behavior between PII and safe content
+        differential_routing = pii_test["model_used"] != safe_test["model_used"]
+        differential_processing = (
+            abs(pii_test["processing_time_ms"] - safe_test["processing_time_ms"]) > 200
+        )
+        differential_blocking = pii_test["is_blocked"] != safe_test["is_blocked"]
+
+        # Overall PII detection indicators
+        pii_detection_indicators = []
+        if pii_test["is_blocked"]:
+            pii_detection_indicators.append("Request blocking")
+        if differential_routing:
+            pii_detection_indicators.append("Model routing differences")
+        if differential_processing:
+            pii_detection_indicators.append("Processing time differences")
+        if not pii_test["response_safe"] and safe_test["response_safe"]:
+            pii_detection_indicators.append("Response quality differences")
+
+        # Final assessment
+        pii_detection_evidence = len(pii_detection_indicators) > 0
+
+        self.print_response_info(
+            response,  # Use last response for HTTP details
+            {
+                "Test Cases": len(test_cases),
+                "PII Detection Evidence": (
+                    "✅ YES" if pii_detection_evidence else "❌ NO"
+                ),
+                "Detection Indicators": (
+                    ", ".join(pii_detection_indicators)
+                    if pii_detection_indicators
+                    else "None found"
+                ),
+                "PII Content Model": pii_test["model_used"],
+                "Safe Content Model": safe_test["model_used"],
+                "Differential Routing": "✅ YES" if differential_routing else "❌ NO",
+                "PII Request Blocked": "✅ YES" if pii_test["is_blocked"] else "❌ NO",
+                "Overall Assessment": (
+                    "✅ PII DETECTION ACTIVE"
+                    if pii_detection_evidence
+                    else "⚠️ NO CLEAR PII DETECTION"
+                ),
+            },
+        )
+
+        # Print detailed analysis
+        print(f"\n📋 Detailed ExtProc PII Analysis:")
+        for result in results:
+            status = (
+                "🔒"
+                if result["is_blocked"]
+                else "✅" if result["request_allowed"] else "❌"
+            )
+            print(f"  {status} {result['test_case']}")
+            print(f"      Content: {result['content']}")
+            print(
+                f"      Model: {result['model_used']}, Time: {result['processing_time_ms']:.1f}ms"
+            )
+            print(f"      Status: {'Blocked' if result['is_blocked'] else 'Allowed'}")
+
+        if pii_detection_evidence:
+            self.print_test_result(
+                passed=True,
+                message=f"✅ ExtProc PII detection evidence found: {', '.join(pii_detection_indicators)}",
+            )
+        else:
+            self.print_test_result(
+                passed=False,
+                message="⚠️ No clear evidence of ExtProc PII detection in production pipeline",
+            )
+            print(
+                "📝 NOTE: This may indicate PII detection is not active in ExtProc or"
+            )
+            print("         PII policies are configured to allow all content through")
 
     def test_multiple_pii_types_analysis(self):
         """
