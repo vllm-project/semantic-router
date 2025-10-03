@@ -56,24 +56,26 @@ Check your console output for JSON trace spans:
 ### Production Deployment with Jaeger
 
 1. **Start Jaeger**:
-```bash
-docker run -d -p 4317:4317 -p 16686:16686 \
-  jaegertracing/all-in-one:latest
-```
+
+   ```bash
+   docker run -d -p 4317:4317 -p 16686:16686 \
+     jaegertracing/all-in-one:latest
+   ```
 
 2. **Update config.yaml**:
-```yaml
-observability:
-  tracing:
-    enabled: true
-    exporter:
-      type: "otlp"
-      endpoint: "localhost:4317"
-      insecure: true
-    sampling:
-      type: "probabilistic"
-      rate: 0.1
-```
+
+   ```yaml
+   observability:
+     tracing:
+       enabled: true
+       exporter:
+         type: "otlp"
+         endpoint: "localhost:4317"
+         insecure: true
+       sampling:
+         type: "probabilistic"
+         rate: 0.1
+   ```
 
 3. **View traces**: http://localhost:16686
 
