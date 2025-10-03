@@ -184,6 +184,9 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Health check endpoint
 	mux.HandleFunc("GET /health", s.handleHealth)
 
+	// API discovery endpoint
+	mux.HandleFunc("GET /api/v1", s.handleAPIOverview)
+
 	// Classification endpoints
 	mux.HandleFunc("POST /api/v1/classify/intent", s.handleIntentClassification)
 	mux.HandleFunc("POST /api/v1/classify/pii", s.handlePIIDetection)
@@ -222,6 +225,105 @@ func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
+}
+
+// APIOverviewResponse represents the response for GET /api/v1
+type APIOverviewResponse struct {
+	Service     string            `json:"service"`
+	Version     string            `json:"version"`
+	Description string            `json:"description"`
+	Endpoints   []EndpointInfo    `json:"endpoints"`
+	TaskTypes   []TaskTypeInfo    `json:"task_types"`
+	Links       map[string]string `json:"links"`
+}
+
+// EndpointInfo represents information about an API endpoint
+type EndpointInfo struct {
+	Path        string `json:"path"`
+	Method      string `json:"method"`
+	Description string `json:"description"`
+}
+
+// TaskTypeInfo represents information about a task type
+type TaskTypeInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// handleAPIOverview handles GET /api/v1 for API discovery
+func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, r *http.Request) {
+	response := APIOverviewResponse{
+		Service:     "Semantic Router Classification API",
+		Version:     "v1",
+		Description: "API for intent classification, PII detection, and security analysis",
+		Endpoints: []EndpointInfo{
+			{
+				Path:        "/api/v1/classify/intent",
+				Method:      "POST",
+				Description: "Classify user queries into routing categories",
+			},
+			{
+				Path:        "/api/v1/classify/pii",
+				Method:      "POST",
+				Description: "Detect personally identifiable information in text",
+			},
+			{
+				Path:        "/api/v1/classify/security",
+				Method:      "POST",
+				Description: "Detect jailbreak attempts and security threats",
+			},
+			{
+				Path:        "/api/v1/classify/combined",
+				Method:      "POST",
+				Description: "Perform combined classification (intent, PII, and security)",
+			},
+			{
+				Path:        "/api/v1/classify/batch",
+				Method:      "POST",
+				Description: "Batch classification with configurable task_type parameter",
+			},
+			{
+				Path:        "/health",
+				Method:      "GET",
+				Description: "Health check endpoint",
+			},
+			{
+				Path:        "/info/models",
+				Method:      "GET",
+				Description: "Get information about loaded models",
+			},
+			{
+				Path:        "/v1/models",
+				Method:      "GET",
+				Description: "OpenAI-compatible model listing",
+			},
+		},
+		TaskTypes: []TaskTypeInfo{
+			{
+				Name:        "intent",
+				Description: "Intent/category classification (default for batch endpoint)",
+			},
+			{
+				Name:        "pii",
+				Description: "Personally Identifiable Information detection",
+			},
+			{
+				Name:        "security",
+				Description: "Jailbreak and security threat detection",
+			},
+			{
+				Name:        "all",
+				Description: "All classification types combined",
+			},
+		},
+		Links: map[string]string{
+			"documentation": "https://vllm-project.github.io/semantic-router/",
+			"models_info":   "/info/models",
+			"health":        "/health",
+		},
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
 // handleIntentClassification handles intent classification requests
@@ -332,6 +434,13 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 		// Record validation error in metrics
 		metrics.RecordBatchClassificationError("unified", "empty_texts")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+		return
+	}
+
+	// Validate task_type if provided
+	if err := validateTaskType(req.TaskType); err != nil {
+		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", err.Error())
 		return
 	}
 
@@ -620,6 +729,24 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 		MemoryUsage:  fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024),
 		GPUAvailable: false, // TODO: Implement GPU detection
 	}
+}
+
+// validateTaskType validates the task_type parameter for batch classification
+// Returns an error if the task_type is invalid, nil if valid or empty
+func validateTaskType(taskType string) error {
+	// Empty task_type defaults to "intent", so it's valid
+	if taskType == "" {
+		return nil
+	}
+
+	validTaskTypes := []string{"intent", "pii", "security", "all"}
+	for _, valid := range validTaskTypes {
+		if taskType == valid {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid task_type '%s'. Supported values: %v", taskType, validTaskTypes)
 }
 
 // extractRequestedResults converts unified results to batch format based on task type

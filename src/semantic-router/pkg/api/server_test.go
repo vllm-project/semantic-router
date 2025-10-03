@@ -35,6 +35,59 @@ func TestHandleBatchClassification(t *testing.T) {
 			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
+			name: "Invalid task_type - jailbreak",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "jailbreak"
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid task_type 'jailbreak'. Supported values: [intent pii security all]",
+		},
+		{
+			name: "Invalid task_type - random",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "invalid_type"
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid task_type 'invalid_type'. Supported values: [intent pii security all]",
+		},
+		{
+			name: "Valid task_type - pii",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "pii"
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
+			name: "Valid task_type - security",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "security"
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
+			name: "Valid task_type - all",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "all"
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
+			name: "Empty task_type defaults to intent",
+			requestBody: `{
+				"texts": ["test text"]
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
 			name: "Valid large batch",
 			requestBody: func() string {
 				texts := make([]string, 50)
@@ -729,5 +782,86 @@ func TestSetupRoutesSecurityBehavior(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestAPIOverviewEndpoint tests the API discovery endpoint
+func TestAPIOverviewEndpoint(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleAPIOverview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	var response APIOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// Verify the response structure
+	if response.Service == "" {
+		t.Error("Expected non-empty service name")
+	}
+
+	if response.Version != "v1" {
+		t.Errorf("Expected version 'v1', got '%s'", response.Version)
+	}
+
+	// Check that we have endpoints listed
+	if len(response.Endpoints) == 0 {
+		t.Error("Expected at least one endpoint")
+	}
+
+	// Check that we have task types listed
+	expectedTaskTypes := map[string]bool{
+		"intent":   false,
+		"pii":      false,
+		"security": false,
+		"all":      false,
+	}
+
+	for _, taskType := range response.TaskTypes {
+		if _, exists := expectedTaskTypes[taskType.Name]; exists {
+			expectedTaskTypes[taskType.Name] = true
+		}
+	}
+
+	for taskType, found := range expectedTaskTypes {
+		if !found {
+			t.Errorf("Expected to find task_type '%s' in response", taskType)
+		}
+	}
+
+	// Check that we have links
+	if len(response.Links) == 0 {
+		t.Error("Expected at least one link")
+	}
+
+	// Verify specific endpoints are present
+	endpointPaths := make(map[string]bool)
+	for _, endpoint := range response.Endpoints {
+		endpointPaths[endpoint.Path] = true
+	}
+
+	requiredPaths := []string{
+		"/api/v1/classify/intent",
+		"/api/v1/classify/pii",
+		"/api/v1/classify/security",
+		"/api/v1/classify/batch",
+		"/health",
+	}
+
+	for _, path := range requiredPaths {
+		if !endpointPaths[path] {
+			t.Errorf("Expected to find endpoint '%s' in response", path)
+		}
 	}
 }
