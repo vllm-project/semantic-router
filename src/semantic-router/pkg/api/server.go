@@ -187,6 +187,10 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// API discovery endpoint
 	mux.HandleFunc("GET /api/v1", s.handleAPIOverview)
 
+	// OpenAPI and documentation endpoints
+	mux.HandleFunc("GET /openapi.json", s.handleOpenAPISpec)
+	mux.HandleFunc("GET /docs", s.handleSwaggerUI)
+
 	// Classification endpoints
 	mux.HandleFunc("POST /api/v1/classify/intent", s.handleIntentClassification)
 	mux.HandleFunc("POST /api/v1/classify/pii", s.handlePIIDetection)
@@ -261,6 +265,8 @@ type EndpointMetadata struct {
 var endpointRegistry = []EndpointMetadata{
 	{Path: "/health", Method: "GET", Description: "Health check endpoint"},
 	{Path: "/api/v1", Method: "GET", Description: "API discovery and documentation"},
+	{Path: "/openapi.json", Method: "GET", Description: "OpenAPI 3.0 specification"},
+	{Path: "/docs", Method: "GET", Description: "Interactive Swagger UI documentation"},
 	{Path: "/api/v1/classify/intent", Method: "POST", Description: "Classify user queries into routing categories"},
 	{Path: "/api/v1/classify/pii", Method: "POST", Description: "Detect personally identifiable information in text"},
 	{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats"},
@@ -282,6 +288,78 @@ var taskTypeRegistry = []TaskTypeInfo{
 	{Name: "pii", Description: "Personally Identifiable Information detection"},
 	{Name: "security", Description: "Jailbreak and security threat detection"},
 	{Name: "all", Description: "All classification types combined"},
+}
+
+// OpenAPI 3.0 spec structures
+
+// OpenAPISpec represents an OpenAPI 3.0 specification
+type OpenAPISpec struct {
+	OpenAPI    string                 `json:"openapi"`
+	Info       OpenAPIInfo            `json:"info"`
+	Servers    []OpenAPIServer        `json:"servers"`
+	Paths      map[string]OpenAPIPath `json:"paths"`
+	Components OpenAPIComponents      `json:"components,omitempty"`
+}
+
+// OpenAPIInfo contains API metadata
+type OpenAPIInfo struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Version     string `json:"version"`
+}
+
+// OpenAPIServer describes a server
+type OpenAPIServer struct {
+	URL         string `json:"url"`
+	Description string `json:"description"`
+}
+
+// OpenAPIPath represents operations for a path
+type OpenAPIPath struct {
+	Get    *OpenAPIOperation `json:"get,omitempty"`
+	Post   *OpenAPIOperation `json:"post,omitempty"`
+	Put    *OpenAPIOperation `json:"put,omitempty"`
+	Delete *OpenAPIOperation `json:"delete,omitempty"`
+}
+
+// OpenAPIOperation describes an API operation
+type OpenAPIOperation struct {
+	Summary     string                     `json:"summary"`
+	Description string                     `json:"description,omitempty"`
+	OperationID string                     `json:"operationId,omitempty"`
+	Responses   map[string]OpenAPIResponse `json:"responses"`
+	RequestBody *OpenAPIRequestBody        `json:"requestBody,omitempty"`
+}
+
+// OpenAPIResponse describes a response
+type OpenAPIResponse struct {
+	Description string                  `json:"description"`
+	Content     map[string]OpenAPIMedia `json:"content,omitempty"`
+}
+
+// OpenAPIRequestBody describes a request body
+type OpenAPIRequestBody struct {
+	Description string                  `json:"description,omitempty"`
+	Required    bool                    `json:"required,omitempty"`
+	Content     map[string]OpenAPIMedia `json:"content"`
+}
+
+// OpenAPIMedia describes media type content
+type OpenAPIMedia struct {
+	Schema *OpenAPISchema `json:"schema,omitempty"`
+}
+
+// OpenAPISchema describes a schema
+type OpenAPISchema struct {
+	Type       string                   `json:"type,omitempty"`
+	Properties map[string]OpenAPISchema `json:"properties,omitempty"`
+	Items      *OpenAPISchema           `json:"items,omitempty"`
+	Ref        string                   `json:"$ref,omitempty"`
+}
+
+// OpenAPIComponents contains reusable components
+type OpenAPIComponents struct {
+	Schemas map[string]OpenAPISchema `json:"schemas,omitempty"`
 }
 
 // handleAPIOverview handles GET /api/v1 for API discovery
@@ -308,12 +386,166 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, r *ht
 		TaskTypes:   taskTypeRegistry,
 		Links: map[string]string{
 			"documentation": "https://vllm-project.github.io/semantic-router/",
+			"openapi_spec":  "/openapi.json",
+			"swagger_ui":    "/docs",
 			"models_info":   "/info/models",
 			"health":        "/health",
 		},
 	}
 
 	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// generateOpenAPISpec generates an OpenAPI 3.0 specification from the endpoint registry
+func (s *ClassificationAPIServer) generateOpenAPISpec() OpenAPISpec {
+	spec := OpenAPISpec{
+		OpenAPI: "3.0.0",
+		Info: OpenAPIInfo{
+			Title:       "Semantic Router Classification API",
+			Description: "API for intent classification, PII detection, and security analysis",
+			Version:     "v1",
+		},
+		Servers: []OpenAPIServer{
+			{
+				URL:         "/",
+				Description: "Classification API Server",
+			},
+		},
+		Paths: make(map[string]OpenAPIPath),
+	}
+
+	// Generate paths from endpoint registry
+	for _, endpoint := range endpointRegistry {
+		// Filter out system prompt endpoints if they are disabled
+		if !s.enableSystemPromptAPI && endpoint.Path == "/config/system-prompts" {
+			continue
+		}
+
+		path, ok := spec.Paths[endpoint.Path]
+		if !ok {
+			path = OpenAPIPath{}
+		}
+
+		operation := &OpenAPIOperation{
+			Summary:     endpoint.Description,
+			Description: endpoint.Description,
+			OperationID: fmt.Sprintf("%s_%s", endpoint.Method, endpoint.Path),
+			Responses: map[string]OpenAPIResponse{
+				"200": {
+					Description: "Successful response",
+					Content: map[string]OpenAPIMedia{
+						"application/json": {
+							Schema: &OpenAPISchema{
+								Type: "object",
+							},
+						},
+					},
+				},
+				"400": {
+					Description: "Bad request",
+					Content: map[string]OpenAPIMedia{
+						"application/json": {
+							Schema: &OpenAPISchema{
+								Type: "object",
+								Properties: map[string]OpenAPISchema{
+									"error": {
+										Type: "object",
+										Properties: map[string]OpenAPISchema{
+											"code":      {Type: "string"},
+											"message":   {Type: "string"},
+											"timestamp": {Type: "string"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Add request body for POST and PUT methods
+		if endpoint.Method == "POST" || endpoint.Method == "PUT" {
+			operation.RequestBody = &OpenAPIRequestBody{
+				Required: true,
+				Content: map[string]OpenAPIMedia{
+					"application/json": {
+						Schema: &OpenAPISchema{
+							Type: "object",
+						},
+					},
+				},
+			}
+		}
+
+		// Map operation to the appropriate method
+		switch endpoint.Method {
+		case "GET":
+			path.Get = operation
+		case "POST":
+			path.Post = operation
+		case "PUT":
+			path.Put = operation
+		case "DELETE":
+			path.Delete = operation
+		}
+
+		spec.Paths[endpoint.Path] = path
+	}
+
+	return spec
+}
+
+// handleOpenAPISpec serves the OpenAPI 3.0 specification at /openapi.json
+func (s *ClassificationAPIServer) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+	spec := s.generateOpenAPISpec()
+	s.writeJSONResponse(w, http.StatusOK, spec)
+}
+
+// handleSwaggerUI serves the Swagger UI at /docs
+func (s *ClassificationAPIServer) handleSwaggerUI(w http.ResponseWriter, r *http.Request) {
+	// Serve a simple HTML page that loads Swagger UI from CDN
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Router API Documentation</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            window.ui = SwaggerUIBundle({
+                url: "/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        };
+    </script>
+</body>
+</html>`
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(html))
 }
 
 // handleIntentClassification handles intent classification requests
