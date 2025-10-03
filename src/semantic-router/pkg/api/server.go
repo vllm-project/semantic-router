@@ -250,72 +250,62 @@ type TaskTypeInfo struct {
 	Description string `json:"description"`
 }
 
+// EndpointMetadata stores metadata about an endpoint for API documentation
+type EndpointMetadata struct {
+	Path        string
+	Method      string
+	Description string
+}
+
+// endpointRegistry is a centralized registry of all API endpoints with their metadata
+var endpointRegistry = []EndpointMetadata{
+	{Path: "/health", Method: "GET", Description: "Health check endpoint"},
+	{Path: "/api/v1", Method: "GET", Description: "API discovery and documentation"},
+	{Path: "/api/v1/classify/intent", Method: "POST", Description: "Classify user queries into routing categories"},
+	{Path: "/api/v1/classify/pii", Method: "POST", Description: "Detect personally identifiable information in text"},
+	{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats"},
+	{Path: "/api/v1/classify/combined", Method: "POST", Description: "Perform combined classification (intent, PII, and security)"},
+	{Path: "/api/v1/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter"},
+	{Path: "/info/models", Method: "GET", Description: "Get information about loaded models"},
+	{Path: "/info/classifier", Method: "GET", Description: "Get classifier information and status"},
+	{Path: "/v1/models", Method: "GET", Description: "OpenAI-compatible model listing"},
+	{Path: "/metrics/classification", Method: "GET", Description: "Get classification metrics and statistics"},
+	{Path: "/config/classification", Method: "GET", Description: "Get classification configuration"},
+	{Path: "/config/classification", Method: "PUT", Description: "Update classification configuration"},
+	{Path: "/config/system-prompts", Method: "GET", Description: "Get system prompt configuration (requires explicit enablement)"},
+	{Path: "/config/system-prompts", Method: "PUT", Description: "Update system prompt configuration (requires explicit enablement)"},
+}
+
+// taskTypeRegistry is a centralized registry of all supported task types
+var taskTypeRegistry = []TaskTypeInfo{
+	{Name: "intent", Description: "Intent/category classification (default for batch endpoint)"},
+	{Name: "pii", Description: "Personally Identifiable Information detection"},
+	{Name: "security", Description: "Jailbreak and security threat detection"},
+	{Name: "all", Description: "All classification types combined"},
+}
+
 // handleAPIOverview handles GET /api/v1 for API discovery
 func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, r *http.Request) {
+	// Build endpoints list from registry, filtering out disabled endpoints
+	endpoints := make([]EndpointInfo, 0, len(endpointRegistry))
+	for _, metadata := range endpointRegistry {
+		// Filter out system prompt endpoints if they are disabled
+		if !s.enableSystemPromptAPI && (metadata.Path == "/config/system-prompts") {
+			continue
+		}
+		endpoints = append(endpoints, EndpointInfo{
+			Path:        metadata.Path,
+			Method:      metadata.Method,
+			Description: metadata.Description,
+		})
+	}
+
 	response := APIOverviewResponse{
 		Service:     "Semantic Router Classification API",
 		Version:     "v1",
 		Description: "API for intent classification, PII detection, and security analysis",
-		Endpoints: []EndpointInfo{
-			{
-				Path:        "/api/v1/classify/intent",
-				Method:      "POST",
-				Description: "Classify user queries into routing categories",
-			},
-			{
-				Path:        "/api/v1/classify/pii",
-				Method:      "POST",
-				Description: "Detect personally identifiable information in text",
-			},
-			{
-				Path:        "/api/v1/classify/security",
-				Method:      "POST",
-				Description: "Detect jailbreak attempts and security threats",
-			},
-			{
-				Path:        "/api/v1/classify/combined",
-				Method:      "POST",
-				Description: "Perform combined classification (intent, PII, and security)",
-			},
-			{
-				Path:        "/api/v1/classify/batch",
-				Method:      "POST",
-				Description: "Batch classification with configurable task_type parameter",
-			},
-			{
-				Path:        "/health",
-				Method:      "GET",
-				Description: "Health check endpoint",
-			},
-			{
-				Path:        "/info/models",
-				Method:      "GET",
-				Description: "Get information about loaded models",
-			},
-			{
-				Path:        "/v1/models",
-				Method:      "GET",
-				Description: "OpenAI-compatible model listing",
-			},
-		},
-		TaskTypes: []TaskTypeInfo{
-			{
-				Name:        "intent",
-				Description: "Intent/category classification (default for batch endpoint)",
-			},
-			{
-				Name:        "pii",
-				Description: "Personally Identifiable Information detection",
-			},
-			{
-				Name:        "security",
-				Description: "Jailbreak and security threat detection",
-			},
-			{
-				Name:        "all",
-				Description: "All classification types combined",
-			},
-		},
+		Endpoints:   endpoints,
+		TaskTypes:   taskTypeRegistry,
 		Links: map[string]string{
 			"documentation": "https://vllm-project.github.io/semantic-router/",
 			"models_info":   "/info/models",

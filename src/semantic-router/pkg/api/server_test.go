@@ -864,4 +864,42 @@ func TestAPIOverviewEndpoint(t *testing.T) {
 			t.Errorf("Expected to find endpoint '%s' in response", path)
 		}
 	}
+
+	// Verify system prompt endpoints are not included when disabled (default)
+	if endpointPaths["/config/system-prompts"] {
+		t.Error("Expected system prompt endpoints to be excluded when enableSystemPromptAPI is false")
+	}
+}
+
+// TestAPIOverviewEndpointWithSystemPrompts tests API discovery with system prompts enabled
+func TestAPIOverviewEndpointWithSystemPrompts(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc:     services.NewPlaceholderClassificationService(),
+		config:                &config.RouterConfig{},
+		enableSystemPromptAPI: true,
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleAPIOverview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	var response APIOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// Verify system prompt endpoints are included when enabled
+	endpointPaths := make(map[string]bool)
+	for _, endpoint := range response.Endpoints {
+		endpointPaths[endpoint.Path] = true
+	}
+
+	if !endpointPaths["/config/system-prompts"] {
+		t.Error("Expected system prompt endpoints to be included when enableSystemPromptAPI is true")
+	}
 }
