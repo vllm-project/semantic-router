@@ -1,0 +1,138 @@
+/* A simple, AI generated HTML modern dashboard UI for the Semantic Router project. */
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Semantic Router Dashboard</title>
+    <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #222;
+        }
+        header {
+            background: #2d3748;
+            color: #fff;
+            padding: 2rem 0 1.5rem 0;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(44,62,80,0.08);
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        header p {
+            margin: 0.5rem 0 0 0;
+            font-size: 1.2rem;
+            color: #cbd5e1;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+        }
+        .card {
+            background: #fff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 24px rgba(44,62,80,0.10);
+            padding: 2rem;
+            transition: box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .card:hover {
+            box-shadow: 0 8px 32px rgba(44,62,80,0.18);
+        }
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #2d3748;
+        }
+        .card-desc {
+            font-size: 1rem;
+            color: #4a5568;
+            margin-bottom: 1.5rem;
+        }
+        .card-action {
+            margin-top: auto;
+        }
+        .btn {
+            background: linear-gradient(90deg, #667eea 0%, #5a67d8 100%);
+            color: #fff;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.7rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(102,126,234,0.12);
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background: linear-gradient(90deg, #5a67d8 0%, #434190 100%);
+        }
+        @media (max-width: 600px) {
+            header h1 { font-size: 1.6rem; }
+            .container { padding: 0 0.5rem; }
+            .dashboard-grid { gap: 1rem; }
+            .card { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Semantic Router Test Dashboard</h1>
+        <p>Monitor, manage, and optimize your semantic routing with ease.</p>
+    </header>
+    <div class="container">
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-title">Traffic Overview</div>
+                <div class="card-desc">Visualize real-time routing traffic and performance metrics.</div>
+                <div class="card-action">
+                    <a href="/" class="btn">View Analytics</a>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Route Management</div>
+                <div class="card-desc">Add, edit, or remove semantic routes and configure rules.</div>
+                <div class="card-action"> 
+                    /* set the links for each button */
+                    <a href="#" class="btn">Manage Routes</a>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">System Health</div>
+                <div class="card-desc">Check system status, uptime, and resource utilization.</div>
+                <div class="card-action">
+                    /* set the links for each button */
+                    <a href="#" class="btn">View Status</a>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Settings</div>
+                <div class="card-desc">Configure dashboard preferences and notification options.</div>
+                <div class="card-action">
+                    /* set the links for each button */
+                    <a href="#" class="btn">Go to Settings</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
