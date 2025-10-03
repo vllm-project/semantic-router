@@ -14,7 +14,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -123,13 +122,9 @@ func createOTLPExporter(ctx context.Context, cfg TracingConfig) (sdktrace.SpanEx
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(insecure.NewCredentials()))
 	}
 
-	// Add dial options with timeout
-	opts = append(opts, otlptracegrpc.WithDialOption(
-		grpc.WithBlock(),
-		grpc.FailOnNonTempDialError(true),
-	))
-
-	// Create exporter with timeout context
+	// Create exporter with timeout context for initialization
+	// Note: We don't use WithBlock() to allow the exporter to connect asynchronously
+	// This prevents blocking on startup if the collector is temporarily unavailable
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
