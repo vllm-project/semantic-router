@@ -413,6 +413,65 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
+	// Perform PII detection and policy enforcement
+	if r.PIIChecker != nil {
+		// Start PII detection span
+		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
+		defer span.End()
+
+		startTime := time.Now()
+		detectedPII := r.Classifier.DetectPIIInContent(allContent)
+		detectionTime := time.Since(startTime).Milliseconds()
+
+		observability.SetSpanAttributes(span,
+			attribute.Int64(observability.AttrPIIDetectionTimeMs, detectionTime))
+
+		if len(detectedPII) > 0 {
+			observability.Infof("PII detected: %v", detectedPII)
+
+			// Check PII policy against default model (Model-A has strictest policy)
+			allowed, deniedPII, err := r.PIIChecker.CheckPolicy("Model-A", detectedPII)
+
+			if err != nil {
+				observability.Errorf("Error checking PII policy: %v", err)
+				observability.RecordError(span, err)
+				metrics.RecordRequestError(ctx.RequestModel, "pii_policy_check_failed")
+			} else if !allowed {
+				observability.SetSpanAttributes(span,
+					attribute.Bool(observability.AttrPIIDetected, true),
+					attribute.StringSlice("denied_pii_types", deniedPII),
+					attribute.String(observability.AttrSecurityAction, "blocked"))
+
+				observability.Warnf("PII POLICY VIOLATION BLOCKED: %v (denied types: %v)", detectedPII, deniedPII)
+
+				// Structured log for security block
+				observability.LogEvent("security_block", map[string]interface{}{
+					"reason_code":  "pii_policy_violation",
+					"detected_pii": detectedPII,
+					"denied_pii":   deniedPII,
+					"request_id":   ctx.RequestID,
+				})
+
+				// Count this as a blocked request
+				metrics.RecordRequestError(ctx.RequestModel, "pii_policy_block")
+				piiResponse := http.CreatePIIViolationResponse("Model-A", deniedPII)
+				ctx.TraceContext = spanCtx
+				return piiResponse, true
+			} else {
+				observability.SetSpanAttributes(span,
+					attribute.Bool(observability.AttrPIIDetected, true),
+					attribute.StringSlice("detected_pii_types", detectedPII),
+					attribute.String(observability.AttrSecurityAction, "allowed"))
+				observability.Infof("PII detected but allowed by policy: %v", detectedPII)
+			}
+		} else {
+			observability.SetSpanAttributes(span,
+				attribute.Bool(observability.AttrPIIDetected, false))
+			observability.Infof("No PII detected in request content")
+		}
+		ctx.TraceContext = spanCtx
+	}
+
 	// Perform jailbreak detection on all message content
 	if r.Classifier.IsJailbreakEnabled() {
 		// Start jailbreak detection span
