@@ -35,6 +35,59 @@ func TestHandleBatchClassification(t *testing.T) {
 			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
 		},
 		{
+			name: "Invalid task_type - jailbreak",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "jailbreak"
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid task_type 'jailbreak'. Supported values: [intent pii security all]",
+		},
+		{
+			name: "Invalid task_type - random",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "invalid_type"
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid task_type 'invalid_type'. Supported values: [intent pii security all]",
+		},
+		{
+			name: "Valid task_type - pii",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "pii"
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
+			name: "Valid task_type - security",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "security"
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
+			name: "Valid task_type - all",
+			requestBody: `{
+				"texts": ["test text"],
+				"task_type": "all"
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
+			name: "Empty task_type defaults to intent",
+			requestBody: `{
+				"texts": ["test text"]
+			}`,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.",
+		},
+		{
 			name: "Valid large batch",
 			requestBody: func() string {
 				texts := make([]string, 50)
@@ -729,5 +782,301 @@ func TestSetupRoutesSecurityBehavior(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestAPIOverviewEndpoint tests the API discovery endpoint
+func TestAPIOverviewEndpoint(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleAPIOverview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	var response APIOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// Verify the response structure
+	if response.Service == "" {
+		t.Error("Expected non-empty service name")
+	}
+
+	if response.Version != "v1" {
+		t.Errorf("Expected version 'v1', got '%s'", response.Version)
+	}
+
+	// Check that we have endpoints listed
+	if len(response.Endpoints) == 0 {
+		t.Error("Expected at least one endpoint")
+	}
+
+	// Check that we have task types listed
+	expectedTaskTypes := map[string]bool{
+		"intent":   false,
+		"pii":      false,
+		"security": false,
+		"all":      false,
+	}
+
+	for _, taskType := range response.TaskTypes {
+		if _, exists := expectedTaskTypes[taskType.Name]; exists {
+			expectedTaskTypes[taskType.Name] = true
+		}
+	}
+
+	for taskType, found := range expectedTaskTypes {
+		if !found {
+			t.Errorf("Expected to find task_type '%s' in response", taskType)
+		}
+	}
+
+	// Check that we have links
+	if len(response.Links) == 0 {
+		t.Error("Expected at least one link")
+	}
+
+	// Verify specific endpoints are present
+	endpointPaths := make(map[string]bool)
+	for _, endpoint := range response.Endpoints {
+		endpointPaths[endpoint.Path] = true
+	}
+
+	requiredPaths := []string{
+		"/api/v1/classify/intent",
+		"/api/v1/classify/pii",
+		"/api/v1/classify/security",
+		"/api/v1/classify/batch",
+		"/health",
+	}
+
+	for _, path := range requiredPaths {
+		if !endpointPaths[path] {
+			t.Errorf("Expected to find endpoint '%s' in response", path)
+		}
+	}
+
+	// Verify system prompt endpoints are not included when disabled (default)
+	if endpointPaths["/config/system-prompts"] {
+		t.Error("Expected system prompt endpoints to be excluded when enableSystemPromptAPI is false")
+	}
+}
+
+// TestAPIOverviewEndpointWithSystemPrompts tests API discovery with system prompts enabled
+func TestAPIOverviewEndpointWithSystemPrompts(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc:     services.NewPlaceholderClassificationService(),
+		config:                &config.RouterConfig{},
+		enableSystemPromptAPI: true,
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleAPIOverview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	var response APIOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// Verify system prompt endpoints are included when enabled
+	endpointPaths := make(map[string]bool)
+	for _, endpoint := range response.Endpoints {
+		endpointPaths[endpoint.Path] = true
+	}
+
+	if !endpointPaths["/config/system-prompts"] {
+		t.Error("Expected system prompt endpoints to be included when enableSystemPromptAPI is true")
+	}
+}
+
+// TestOpenAPISpecEndpoint tests the OpenAPI specification endpoint
+func TestOpenAPISpecEndpoint(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+	}
+
+	req := httptest.NewRequest("GET", "/openapi.json", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleOpenAPISpec(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	// Check Content-Type
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
+	}
+
+	var spec OpenAPISpec
+	if err := json.Unmarshal(rr.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("Failed to unmarshal OpenAPI spec: %v", err)
+	}
+
+	// Verify the OpenAPI version
+	if spec.OpenAPI != "3.0.0" {
+		t.Errorf("Expected OpenAPI version '3.0.0', got '%s'", spec.OpenAPI)
+	}
+
+	// Verify the info
+	if spec.Info.Title == "" {
+		t.Error("Expected non-empty title")
+	}
+
+	if spec.Info.Version != "v1" {
+		t.Errorf("Expected version 'v1', got '%s'", spec.Info.Version)
+	}
+
+	// Verify paths are present
+	if len(spec.Paths) == 0 {
+		t.Error("Expected at least one path in OpenAPI spec")
+	}
+
+	// Check that key endpoints are documented
+	requiredPaths := []string{
+		"/health",
+		"/api/v1",
+		"/api/v1/classify/batch",
+		"/openapi.json",
+		"/docs",
+	}
+
+	for _, path := range requiredPaths {
+		if _, exists := spec.Paths[path]; !exists {
+			t.Errorf("Expected path '%s' to be in OpenAPI spec", path)
+		}
+	}
+
+	// Verify system prompt endpoints are not included when disabled
+	if _, exists := spec.Paths["/config/system-prompts"]; exists {
+		t.Error("Expected system prompt endpoints to be excluded from OpenAPI spec when disabled")
+	}
+}
+
+// TestOpenAPISpecWithSystemPrompts tests OpenAPI spec generation with system prompts enabled
+func TestOpenAPISpecWithSystemPrompts(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc:     services.NewPlaceholderClassificationService(),
+		config:                &config.RouterConfig{},
+		enableSystemPromptAPI: true,
+	}
+
+	req := httptest.NewRequest("GET", "/openapi.json", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleOpenAPISpec(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	var spec OpenAPISpec
+	if err := json.Unmarshal(rr.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("Failed to unmarshal OpenAPI spec: %v", err)
+	}
+
+	// Verify system prompt endpoints are included when enabled
+	if _, exists := spec.Paths["/config/system-prompts"]; !exists {
+		t.Error("Expected system prompt endpoints to be included in OpenAPI spec when enabled")
+	}
+}
+
+// TestSwaggerUIEndpoint tests the Swagger UI endpoint
+func TestSwaggerUIEndpoint(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+	}
+
+	req := httptest.NewRequest("GET", "/docs", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleSwaggerUI(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	// Check Content-Type
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "text/html; charset=utf-8" {
+		t.Errorf("Expected Content-Type 'text/html; charset=utf-8', got '%s'", contentType)
+	}
+
+	// Check that the HTML contains Swagger UI references
+	html := rr.Body.String()
+	if !bytes.Contains([]byte(html), []byte("swagger-ui")) {
+		t.Error("Expected HTML to contain 'swagger-ui'")
+	}
+
+	if !bytes.Contains([]byte(html), []byte("/openapi.json")) {
+		t.Error("Expected HTML to reference '/openapi.json'")
+	}
+
+	if !bytes.Contains([]byte(html), []byte("SwaggerUIBundle")) {
+		t.Error("Expected HTML to contain 'SwaggerUIBundle'")
+	}
+}
+
+// TestAPIOverviewIncludesNewEndpoints tests that API overview includes new documentation endpoints
+func TestAPIOverviewIncludesNewEndpoints(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            &config.RouterConfig{},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleAPIOverview(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d", rr.Code)
+	}
+
+	var response APIOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	// Verify new documentation endpoints are included
+	endpointPaths := make(map[string]bool)
+	for _, endpoint := range response.Endpoints {
+		endpointPaths[endpoint.Path] = true
+	}
+
+	if !endpointPaths["/openapi.json"] {
+		t.Error("Expected '/openapi.json' to be in API overview")
+	}
+
+	if !endpointPaths["/docs"] {
+		t.Error("Expected '/docs' to be in API overview")
+	}
+
+	// Verify links include new documentation endpoints
+	if response.Links["openapi_spec"] != "/openapi.json" {
+		t.Error("Expected 'openapi_spec' link to '/openapi.json'")
+	}
+
+	if response.Links["swagger_ui"] != "/docs" {
+		t.Error("Expected 'swagger_ui' link to '/docs'")
 	}
 }
