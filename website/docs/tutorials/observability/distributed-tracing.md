@@ -499,16 +499,125 @@ sampling:
 
 ## Integration with vLLM Stack
 
+### End-to-End Tracing Example
+
+A complete end-to-end tracing example is available in the repository at [`examples/distributed-tracing/`](https://github.com/vllm-project/semantic-router/tree/main/examples/distributed-tracing).
+
+The example demonstrates:
+
+**Client Application (Python with OpenAI SDK)**
+
+```python
+from openai import OpenAI
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+# Auto-instrument for automatic trace header injection
+RequestsInstrumentor().instrument()
+OpenAIInstrumentor().instrument()
+
+# Point client to semantic router
+client = OpenAI(base_url="http://semantic-router:8000/v1")
+
+# Make request - trace context flows automatically
+response = client.chat.completions.create(
+    model="auto",  # Triggers semantic routing
+    messages=[{"role": "user", "content": "What is quantum computing?"}]
+)
+```
+
+**Trace Context Flow**
+
+```
+Client Application
+    ↓ (HTTP headers: traceparent, tracestate)
+Semantic Router ExtProc
+    ↓ (Extract trace context from headers)
+Processing Spans
+    ├─ semantic_router.classification (45ms) [category=science]
+    ├─ semantic_router.cache.lookup (3ms) [cache_miss=true]
+    ├─ semantic_router.security.pii_detection (2ms) [pii_detected=false]
+    └─ semantic_router.routing.decision (23ms) [selected=llama-3.1-70b]
+    ↓ (Inject trace context into upstream headers)
+vLLM Backend Request
+    ↓ (HTTP headers: traceparent, tracestate)
+vLLM Processing (if OTEL-enabled)
+    └─ vllm.generate (2.0s) [tokens=156]
+    ↓
+OTLP Collector / Jaeger
+```
+
+**Running the Example**
+
+1. **Start the tracing stack:**
+
+```bash
+cd examples/distributed-tracing
+docker-compose up -d
+```
+
+2. **Install dependencies:**
+
+```bash
+pip install -r requirements.txt
+```
+
+3. **Run the example:**
+
+```bash
+python openai_client_tracing.py
+```
+
+4. **View traces in Jaeger UI:**
+
+Open http://localhost:16686 and search for service `openai-client-example`.
+
+**Example Trace Visualization**
+
+You'll see a complete trace showing the request flow:
+
+```
+Trace: user-query-quantum-computing (2.3s total)
+├── app.chat_completion (2.3s)
+│   └── HTTP POST /v1/chat/completions (2.2s)
+│       ├── semantic_router.request.received (2.2s)
+│       │   ├── semantic_router.classification (45ms) [category=science]
+│       │   ├── semantic_router.cache.lookup (3ms) [cache_miss=true]
+│       │   ├── semantic_router.security.pii_detection (2ms) [pii_detected=false]
+│       │   └── semantic_router.routing.decision (23ms) [selected=llama-3.1-70b]
+│       └── semantic_router.upstream.request (2.1s)
+│           └── vllm.chat_completion (2.1s) [tokens=156]
+```
+
+**Benefits for Different Personas**
+
+*For Developers:*
+- **End-to-end visibility** from application to vLLM
+- **Performance debugging** with detailed timing breakdowns
+- **Error correlation** across service boundaries
+- **Routing decision analysis** with full context
+
+*For Operations:*
+- **SLA monitoring** with distributed latency tracking
+- **Capacity planning** based on actual usage patterns
+- **Incident response** with complete request traces
+- **Cost optimization** through routing efficiency analysis
+
+*For Product Teams:*
+- **User experience insights** with real performance data
+- **A/B testing** of routing strategies with trace correlation
+- **Quality metrics** tied to specific routing decisions
+
+See the [complete example README](https://github.com/vllm-project/semantic-router/tree/main/examples/distributed-tracing/README.md) for more details.
+
 ### Future Enhancements
 
 The tracing implementation is designed to support future integration with vLLM backends:
 
-1. **Trace context propagation** to vLLM
-2. **Correlated spans** across router and engine
-3. **End-to-end latency** analysis
-4. **Token-level timing** from vLLM
-
-Stay tuned for updates on vLLM integration!
+1. **Trace context propagation** to vLLM (already supported via HTTP headers)
+2. **Native vLLM OTEL support** for correlated spans
+3. **Token-level timing** from vLLM generation
+4. **Structured logging** correlation with trace IDs
 
 ## References
 
