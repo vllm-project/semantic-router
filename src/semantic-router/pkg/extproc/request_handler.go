@@ -9,6 +9,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/responses"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -69,6 +70,103 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 	}
 
 	return sdkBytes, nil
+}
+
+// parseOpenAIResponsesRequest parses the raw JSON into Responses API request structure
+func parseOpenAIResponsesRequest(data []byte) (*responses.ResponseNewParams, error) {
+	var req responses.ResponseNewParams
+	if err := json.Unmarshal(data, &req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+// serializeOpenAIResponsesRequest converts Responses API request back to JSON
+func serializeOpenAIResponsesRequest(req *responses.ResponseNewParams) ([]byte, error) {
+	return json.Marshal(req)
+}
+
+// serializeOpenAIResponsesRequestWithStream converts Responses API request back to JSON, preserving the stream parameter
+func serializeOpenAIResponsesRequestWithStream(req *responses.ResponseNewParams, hasStreamParam bool) ([]byte, error) {
+	// First serialize the SDK object
+	sdkBytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// If original request had stream parameter, add it back
+	if hasStreamParam {
+		var sdkMap map[string]interface{}
+		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
+			sdkMap["stream"] = true
+			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
+				return modifiedBytes, nil
+			}
+		}
+	}
+
+	return sdkBytes, nil
+}
+
+// extractContentFromResponsesInput extracts user and non-user content from Responses API input field
+// Returns (userContent, nonUserMessages)
+func extractContentFromResponsesInput(req *responses.ResponseNewParams) (string, []string) {
+	var userContent string
+	var nonUser []string
+
+	// Handle the input field which can be:
+	// 1. A simple string
+	// 2. An array of messages (EasyInputMessage format)
+	// 3. An array of InputItem objects
+
+	// Get the raw input to determine its type
+	inputBytes, err := json.Marshal(req.Input)
+	if err != nil {
+		observability.Errorf("Failed to marshal input: %v", err)
+		return "", nil
+	}
+
+	// First, try to parse as a simple string
+	var inputString string
+	if err := json.Unmarshal(inputBytes, &inputString); err == nil && inputString != "" {
+		// Input is a simple string - treat it as user content
+		return inputString, nil
+	}
+
+	// Try to parse as array of messages or input items
+	var inputArray []map[string]interface{}
+	if err := json.Unmarshal(inputBytes, &inputArray); err == nil {
+		for _, item := range inputArray {
+			// Check if it's a message (has "role" field)
+			if role, hasRole := item["role"].(string); hasRole {
+				// It's a message-like object
+				var content string
+				if contentStr, ok := item["content"].(string); ok {
+					content = contentStr
+				} else if contentArray, ok := item["content"].([]interface{}); ok {
+					// Content is an array of content parts
+					var parts []string
+					for _, part := range contentArray {
+						if partMap, ok := part.(map[string]interface{}); ok {
+							if textContent, ok := partMap["text"].(string); ok {
+								parts = append(parts, textContent)
+							}
+						}
+					}
+					content = strings.Join(parts, " ")
+				}
+
+				// Categorize by role
+				if role == "user" {
+					userContent = content
+				} else if role != "" {
+					nonUser = append(nonUser, content)
+				}
+			}
+		}
+	}
+
+	return userContent, nonUser
 }
 
 // addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
@@ -236,6 +334,9 @@ type RequestContext struct {
 	StartTime           time.Time
 	ProcessingStartTime time.Time
 
+	// Request type tracking
+	IsResponsesAPI bool // true if this is a Responses API request (POST /v1/responses or GET /v1/responses/{id})
+
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
@@ -292,6 +393,28 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.handleModelsRequest(path)
 	}
 
+	// Check if this is a Responses API request
+	if method == "POST" && strings.HasPrefix(path, "/v1/responses") && !strings.Contains(path, "/input_items") {
+		// POST /v1/responses - create response
+		ctx.IsResponsesAPI = true
+		observability.Infof("Detected Responses API POST request")
+	} else if method == "GET" && strings.HasPrefix(path, "/v1/responses/") && !strings.Contains(path, "/input_items") {
+		// GET /v1/responses/{id} - retrieve response
+		ctx.IsResponsesAPI = true
+		observability.Infof("Detected Responses API GET request")
+		// For GET requests, we'll just pass through without routing
+		// Return immediate CONTINUE response
+		return &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestHeaders{
+				RequestHeaders: &ext_proc.HeadersResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}, nil
+	}
+
 	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
@@ -326,6 +449,18 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.ExpectStreamingResponse = true // Set this if stream param is found
 	}
 
+	// Route based on API type
+	if ctx.IsResponsesAPI {
+		// Handle Responses API request
+		return r.handleResponsesAPIRequest(v, ctx, hasStreamParam)
+	}
+
+	// Handle Chat Completions API request (existing logic)
+	return r.handleChatCompletionsRequest(v, ctx, hasStreamParam)
+}
+
+// handleChatCompletionsRequest handles Chat Completions API requests
+func (r *OpenAIRouter) handleChatCompletionsRequest(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext, hasStreamParam bool) (*ext_proc.ProcessingResponse, error) {
 	// Parse the OpenAI request using SDK types
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
@@ -363,6 +498,282 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Handle model selection and routing
 	return r.handleModelRouting(openAIRequest, originalModel, userContent, nonUserMessages, ctx)
+}
+
+// handleResponsesAPIRequest handles Responses API requests
+func (r *OpenAIRouter) handleResponsesAPIRequest(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext, hasStreamParam bool) (*ext_proc.ProcessingResponse, error) {
+	// Parse the Responses API request using SDK types
+	responsesRequest, err := parseOpenAIResponsesRequest(ctx.OriginalRequestBody)
+	if err != nil {
+		observability.Errorf("Error parsing Responses API request: %v", err)
+		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
+		metrics.RecordModelRequest(ctx.RequestModel)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid responses API request body: %v", err)
+	}
+
+	// Extract model from the request
+	originalModel := string(responsesRequest.Model)
+	observability.Infof("Responses API - Original model: %s", originalModel)
+
+	// Record the initial request to this model (count all requests)
+	metrics.RecordModelRequest(originalModel)
+	if ctx.RequestModel == "" {
+		ctx.RequestModel = originalModel
+	}
+
+	// Get content from input field
+	userContent, nonUserMessages := extractContentFromResponsesInput(responsesRequest)
+	observability.Infof("Responses API - Extracted user content length: %d, non-user messages count: %d", len(userContent), len(nonUserMessages))
+
+	// Perform security checks
+	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages); shouldReturn {
+		return response, nil
+	}
+
+	// Handle caching (reuse existing cache logic with extracted content)
+	if response, shouldReturn := r.handleCaching(ctx); shouldReturn {
+		return response, nil
+	}
+
+	// Check if this is a chained conversation (has previous_response_id)
+	// If so, we need to use consistent hashing to route to the same backend instance
+	var conversationID string
+	if responsesRequest.PreviousResponseID.Valid() && responsesRequest.PreviousResponseID.Value != "" {
+		conversationID = responsesRequest.PreviousResponseID.Value
+		observability.Infof("Responses API - Request has previous_response_id: %s, using consistent hashing for endpoint selection", conversationID)
+	}
+
+	// Handle model selection and routing for Responses API
+	return r.handleResponsesAPIModelRouting(responsesRequest, originalModel, userContent, nonUserMessages, ctx, hasStreamParam, conversationID)
+}
+
+// handleResponsesAPIModelRouting handles model selection and routing logic for Responses API
+// The conversationID parameter (if non-empty) is used for consistent hashing to ensure
+// conversation continuity across multiple backend instances
+func (r *OpenAIRouter) handleResponsesAPIModelRouting(responsesRequest *responses.ResponseNewParams, originalModel, userContent string, nonUserMessages []string, ctx *RequestContext, hasStreamParam bool, conversationID string) (*ext_proc.ProcessingResponse, error) {
+	// Create default response with CONTINUE status
+	response := &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status: ext_proc.CommonResponse_CONTINUE,
+				},
+			},
+		},
+	}
+
+	// Only change the model if the original model is "auto"
+	actualModel := originalModel
+	var selectedEndpoint string
+	if originalModel == "auto" && (len(nonUserMessages) > 0 || userContent != "") {
+		observability.Infof("Responses API - Using Auto Model Selection")
+		// Determine text to use for classification/similarity
+		var classificationText string
+		if len(userContent) > 0 {
+			classificationText = userContent
+		} else if len(nonUserMessages) > 0 {
+			classificationText = strings.Join(nonUserMessages, " ")
+		}
+
+		if classificationText != "" {
+			// Find the most similar task description or classify, then select best model
+			matchedModel := r.classifyAndSelectBestModel(classificationText)
+			if matchedModel != originalModel && matchedModel != "" {
+				// Get detected PII for policy checking
+				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
+				if r.PIIChecker.IsPIIEnabled(matchedModel) {
+					observability.Infof("PII policy enabled for model %s", matchedModel)
+					detectedPII := r.Classifier.DetectPIIInContent(allContent)
+
+					// Check if the initially selected model passes PII policy
+					allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
+					if err != nil {
+						observability.Errorf("Error checking PII policy for model %s: %v", matchedModel, err)
+					} else if !allowed {
+						observability.Warnf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
+						// Find alternative models from the same category
+						categoryName := r.findCategoryForClassification(classificationText)
+						if categoryName != "" {
+							alternativeModels := r.Classifier.GetModelsForCategory(categoryName)
+							allowedModels := r.PIIChecker.FilterModelsForPII(alternativeModels, detectedPII)
+							if len(allowedModels) > 0 {
+								matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
+								observability.Infof("Selected alternative model %s that passes PII policy", matchedModel)
+								metrics.RecordRoutingReasonCode("pii_policy_alternative_selected", matchedModel)
+							} else {
+								observability.Warnf("No models in category %s pass PII policy, using default", categoryName)
+								matchedModel = r.Config.DefaultModel
+								defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
+								if !defaultAllowed {
+									observability.Errorf("Default model also violates PII policy, returning error")
+									observability.LogEvent("routing_block", map[string]interface{}{
+										"reason_code": "pii_policy_denied_default_model",
+										"request_id":  ctx.RequestID,
+										"model":       matchedModel,
+										"denied_pii":  defaultDeniedPII,
+									})
+									metrics.RecordRequestError(matchedModel, "pii_policy_denied")
+									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII)
+									return piiResponse, nil
+								}
+							}
+						} else {
+							observability.Warnf("Could not determine category, returning PII violation for model %s", matchedModel)
+							observability.LogEvent("routing_block", map[string]interface{}{
+								"reason_code": "pii_policy_denied",
+								"request_id":  ctx.RequestID,
+								"model":       matchedModel,
+								"denied_pii":  deniedPII,
+							})
+							metrics.RecordRequestError(matchedModel, "pii_policy_denied")
+							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII)
+							return piiResponse, nil
+						}
+					}
+				}
+
+				observability.Infof("Responses API - Routing to model: %s", matchedModel)
+
+				// Check reasoning mode for this category
+				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
+				observability.Infof("Responses API - Entropy-based reasoning decision: %v on [%s] model (confidence: %.3f, reason: %s)",
+					useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
+				effortForMetrics := r.getReasoningEffort(categoryName)
+				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
+
+				// Track VSR decision information
+				ctx.VSRSelectedCategory = categoryName
+				ctx.VSRSelectedModel = matchedModel
+				if useReasoning {
+					ctx.VSRReasoningMode = "on"
+				} else {
+					ctx.VSRReasoningMode = "off"
+				}
+
+				// Track the model routing change
+				metrics.RecordModelRouting(originalModel, matchedModel)
+
+				// Update the model in the request
+				actualModel = matchedModel
+				// Note: Model will be updated in serialization phase
+
+				// Select the best endpoint for this model
+				// If conversationID is present, use consistent hashing to maintain conversation affinity
+				var endpointAddress string
+				var endpointFound bool
+				if conversationID != "" {
+					endpointAddress, endpointFound = r.Config.SelectEndpointForConversation(matchedModel, conversationID)
+					if endpointFound {
+						observability.Infof("Responses API - Selected endpoint via consistent hashing (conversation: %s): %s for model: %s", conversationID, endpointAddress, matchedModel)
+					}
+				} else {
+					endpointAddress, endpointFound = r.Config.SelectBestEndpointAddressForModel(matchedModel)
+					if endpointFound {
+						observability.Infof("Responses API - Selected endpoint address: %s for model: %s", endpointAddress, matchedModel)
+					}
+				}
+				
+				if endpointFound {
+					selectedEndpoint = endpointAddress
+				} else {
+					observability.Warnf("Responses API - No endpoint found for model %s, using fallback", matchedModel)
+				}
+			}
+		}
+	}
+
+	// Get the endpoint if not already determined
+	if selectedEndpoint == "" {
+		// If conversationID is present, use consistent hashing
+		if conversationID != "" {
+			endpointAddress, endpointFound := r.Config.SelectEndpointForConversation(actualModel, conversationID)
+			if endpointFound {
+				selectedEndpoint = endpointAddress
+				observability.Infof("Responses API - Selected endpoint via consistent hashing (conversation: %s): %s", conversationID, selectedEndpoint)
+			}
+		} else {
+			endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(actualModel)
+			if endpointFound {
+				selectedEndpoint = endpointAddress
+			}
+		}
+	}
+
+	// Record model request for the actual model used
+	if actualModel != originalModel {
+		metrics.RecordModelRequest(actualModel)
+	}
+
+	// Prepare the modified request body
+	var modifiedBody []byte
+
+	// If model was changed, serialize with the new model
+	if actualModel != originalModel {
+		// Update model in a map-based approach to preserve all fields
+		var requestMap map[string]interface{}
+		if unmarshalErr := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); unmarshalErr == nil {
+			requestMap["model"] = actualModel
+			var marshalErr error
+			modifiedBody, marshalErr = json.Marshal(requestMap)
+			if marshalErr != nil {
+				observability.Errorf("Error serializing modified Responses API request: %v", marshalErr)
+				metrics.RecordRequestError(actualModel, "serialization_failed")
+				return nil, status.Errorf(codes.Internal, "failed to serialize modified request: %v", marshalErr)
+			}
+		} else {
+			// Fallback to using SDK serialization
+			var serializeErr error
+			modifiedBody, serializeErr = serializeOpenAIResponsesRequestWithStream(responsesRequest, hasStreamParam)
+			if serializeErr != nil {
+				observability.Errorf("Error serializing modified Responses API request: %v", serializeErr)
+				metrics.RecordRequestError(actualModel, "serialization_failed")
+				return nil, status.Errorf(codes.Internal, "failed to serialize modified request: %v", serializeErr)
+			}
+		}
+	} else {
+		// Use original request body if model wasn't changed
+		modifiedBody = ctx.OriginalRequestBody
+	}
+
+	// Create body mutation
+	bodyMutation := &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{
+			Body: modifiedBody,
+		},
+	}
+
+	// Create header mutations for routing
+	var setHeaders []*core.HeaderValueOption
+	if selectedEndpoint != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "x-gateway-destination-endpoint",
+				RawValue: []byte(selectedEndpoint),
+			},
+		})
+	}
+
+	setHeaders = append(setHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      "x-selected-model",
+			RawValue: []byte(actualModel),
+		},
+	})
+
+	// Remove content-length header since body may have changed
+	removeHeaders := []string{"content-length"}
+
+	headerMutation := &ext_proc.HeaderMutation{
+		SetHeaders:    setHeaders,
+		RemoveHeaders: removeHeaders,
+	}
+
+	// Update the response with mutations
+	response.GetRequestBody().Response.BodyMutation = bodyMutation
+	response.GetRequestBody().Response.HeaderMutation = headerMutation
+
+	observability.Infof("Responses API routing complete: model=%s, endpoint=%s", actualModel, selectedEndpoint)
+	return response, nil
 }
 
 // performSecurityChecks performs PII and jailbreak detection

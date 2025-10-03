@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"slices"
@@ -626,6 +627,33 @@ func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (stri
 	}
 
 	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
+}
+
+// SelectEndpointForConversation selects an endpoint for a conversation using consistent hashing
+// based on the conversationID (e.g., previous_response_id). This ensures that all requests
+// in the same conversation chain are routed to the same backend instance, maintaining state.
+// Returns the endpoint address:port string and whether selection was successful
+func (c *RouterConfig) SelectEndpointForConversation(modelName string, conversationID string) (string, bool) {
+	endpoints := c.GetEndpointsForModel(modelName)
+	if len(endpoints) == 0 {
+		return "", false
+	}
+
+	// If only one endpoint, return it
+	if len(endpoints) == 1 {
+		return fmt.Sprintf("%s:%d", endpoints[0].Address, endpoints[0].Port), true
+	}
+
+	// Use consistent hashing to select an endpoint based on conversationID
+	// This ensures the same conversation always goes to the same instance
+	hash := fnv.New32a()
+	hash.Write([]byte(conversationID))
+	hashValue := hash.Sum32()
+	
+	// Select endpoint based on hash modulo number of endpoints
+	selectedEndpoint := endpoints[int(hashValue)%len(endpoints)]
+	
+	return fmt.Sprintf("%s:%d", selectedEndpoint.Address, selectedEndpoint.Port), true
 }
 
 // GetModelReasoningForCategory returns whether a specific model supports reasoning in a given category
