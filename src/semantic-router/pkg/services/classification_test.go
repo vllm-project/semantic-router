@@ -8,9 +8,9 @@ import (
 )
 
 func TestNewUnifiedClassificationService(t *testing.T) {
-	// Test with nil unified classifier (this is expected to work)
+	// Test with nil unified classifier and nil legacy classifier (this is expected to work)
 	config := &config.RouterConfig{}
-	service := NewUnifiedClassificationService(nil, config)
+	service := NewUnifiedClassificationService(nil, nil, config)
 
 	if service == nil {
 		t.Error("Expected non-nil service")
@@ -20,6 +20,28 @@ func TestNewUnifiedClassificationService(t *testing.T) {
 	}
 	if service.unifiedClassifier != nil {
 		t.Error("Expected unified classifier to be nil when passed nil")
+	}
+	if service.config != config {
+		t.Error("Expected config to match")
+	}
+}
+
+func TestNewUnifiedClassificationService_WithBothClassifiers(t *testing.T) {
+	// Test with both unified and legacy classifiers
+	config := &config.RouterConfig{}
+	unifiedClassifier := &classification.UnifiedClassifier{}
+	legacyClassifier := &classification.Classifier{}
+
+	service := NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config)
+
+	if service == nil {
+		t.Error("Expected non-nil service")
+	}
+	if service.classifier != legacyClassifier {
+		t.Error("Expected legacy classifier to match provided classifier")
+	}
+	if service.unifiedClassifier != unifiedClassifier {
+		t.Error("Expected unified classifier to match provided classifier")
 	}
 	if service.config != config {
 		t.Error("Expected config to match")
