@@ -182,3 +182,21 @@ api:
       sample_rate: 1.0
       duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
       size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+# Observability Configuration
+observability:
+  tracing:
+    enabled: false  # Enable distributed tracing (default: false)
+    provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
+    exporter:
+      type: "stdout"  # Exporter: otlp, jaeger, zipkin, stdout
+      endpoint: "localhost:4317"  # OTLP endpoint (when type: otlp)
+      insecure: true  # Use insecure connection (no TLS)
+    sampling:
+      type: "always_on"  # Sampling: always_on, always_off, probabilistic
+      rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
+    resource:
+      service_name: "vllm-semantic-router"
+      service_version: "v0.1.0"
+      deployment_environment: "development"
+

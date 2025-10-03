@@ -87,6 +87,9 @@ type RouterConfig struct {
 
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
+
+	// Observability configuration for tracing, metrics, and logging
+	Observability ObservabilityConfig `yaml:"observability"`
 }
 
 // APIConfig represents configuration for API endpoints
@@ -96,6 +99,63 @@ type APIConfig struct {
 		// Metrics configuration for batch classification monitoring
 		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 	} `yaml:"batch_classification"`
+}
+
+// ObservabilityConfig represents configuration for observability features
+type ObservabilityConfig struct {
+	// Tracing configuration for distributed tracing
+	Tracing TracingConfig `yaml:"tracing"`
+}
+
+// TracingConfig represents configuration for distributed tracing
+type TracingConfig struct {
+	// Enable distributed tracing
+	Enabled bool `yaml:"enabled"`
+
+	// Provider type (opentelemetry, openinference, openllmetry)
+	Provider string `yaml:"provider,omitempty"`
+
+	// Exporter configuration
+	Exporter TracingExporterConfig `yaml:"exporter"`
+
+	// Sampling configuration
+	Sampling TracingSamplingConfig `yaml:"sampling"`
+
+	// Resource attributes
+	Resource TracingResourceConfig `yaml:"resource"`
+}
+
+// TracingExporterConfig represents exporter configuration
+type TracingExporterConfig struct {
+	// Exporter type (otlp, jaeger, zipkin, stdout)
+	Type string `yaml:"type"`
+
+	// Endpoint for the exporter (e.g., localhost:4317 for OTLP)
+	Endpoint string `yaml:"endpoint,omitempty"`
+
+	// Use insecure connection (no TLS)
+	Insecure bool `yaml:"insecure,omitempty"`
+}
+
+// TracingSamplingConfig represents sampling configuration
+type TracingSamplingConfig struct {
+	// Sampling type (always_on, always_off, probabilistic)
+	Type string `yaml:"type"`
+
+	// Sampling rate for probabilistic sampling (0.0 to 1.0)
+	Rate float64 `yaml:"rate,omitempty"`
+}
+
+// TracingResourceConfig represents resource attributes
+type TracingResourceConfig struct {
+	// Service name
+	ServiceName string `yaml:"service_name"`
+
+	// Service version
+	ServiceVersion string `yaml:"service_version,omitempty"`
+
+	// Deployment environment
+	DeploymentEnvironment string `yaml:"deployment_environment,omitempty"`
 }
 
 // BatchClassificationMetricsConfig represents configuration for batch classification metrics
