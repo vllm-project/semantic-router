@@ -172,6 +172,19 @@ func TestGetTracerWhenNotInitialized(t *testing.T) {
 	span.End()
 }
 
+func TestStartSpanWithNilContext(t *testing.T) {
+	// Test that StartSpan handles nil context gracefully
+	// This simulates the scenario where TraceContext may not be initialized
+	ctx, span := StartSpan(nil, "test-span")
+	if span == nil {
+		t.Error("StartSpan returned nil span with nil context")
+	}
+	if ctx == nil {
+		t.Error("StartSpan returned nil context")
+	}
+	span.End()
+}
+
 func TestSpanAttributeConstants(t *testing.T) {
 	// Verify span name constants are defined
 	spanNames := []string{

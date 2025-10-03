@@ -150,6 +150,11 @@ func GetTracer() trace.Tracer {
 
 // StartSpan starts a new span with the given name and options
 func StartSpan(ctx context.Context, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	// Handle nil context by using background context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	
 	if tracer == nil {
 		// Return noop tracer if tracing is not initialized
 		return otel.Tracer("semantic-router").Start(ctx, spanName, opts...)
