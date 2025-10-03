@@ -414,7 +414,8 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
 	// Perform PII detection and policy enforcement
-	if r.PIIChecker != nil {
+	// Only check if allow_by_default is false (strict policy enforcement enabled)
+	if r.PIIChecker != nil && r.PIIChecker.IsPIIEnabled("Model-A") {
 		// Start PII detection span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
 		defer span.End()
