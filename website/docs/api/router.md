@@ -359,7 +359,10 @@ The router will still perform classification and routing, but the actual executi
 
 - GET `/v1/responses/{id}` requests pass through without modification (no routing or classification)
 - POST `/v1/responses` requests go through the full routing pipeline
-- **Conversation Chaining Limitation**: When using `previous_response_id` to chain conversations, the router will **not** change the model to ensure conversation continuity. This is because response state is stored on specific backend instances. For multi-turn conversations, specify a fixed model instead of using "auto", or ensure all backend instances share response storage.
+- **Conversation Chaining with Instance Affinity**: When using `previous_response_id`, the router uses **consistent hashing** based on the response ID to ensure all requests in the same conversation chain are routed to the same backend instance. This allows you to use `model="auto"` even in multi-turn conversations while maintaining conversation state.
+  - The router hashes the `previous_response_id` to consistently select the same backend instance
+  - Model routing (auto model selection) still works - the router can switch models while maintaining backend affinity
+  - This ensures conversation continuity without requiring the application to track which instance to use
 - All Responses API features (tools, reasoning, streaming, background) work transparently through the router
 
 ## Routing Headers

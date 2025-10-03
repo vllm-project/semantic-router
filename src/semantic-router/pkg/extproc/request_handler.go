@@ -521,23 +521,6 @@ func (r *OpenAIRouter) handleResponsesAPIRequest(v *ext_proc.ProcessingRequest_R
 		ctx.RequestModel = originalModel
 	}
 
-	// Check if this is a chained conversation (has previous_response_id)
-	// If so, we cannot change the model as the conversation state is tied to a specific backend instance
-	hasPreviousResponseID := responsesRequest.PreviousResponseID.Valid() && responsesRequest.PreviousResponseID.Value != ""
-	if hasPreviousResponseID {
-		observability.Infof("Responses API - Request has previous_response_id, skipping model routing to maintain conversation continuity")
-		// Return a pass-through response without model changes
-		return &ext_proc.ProcessingResponse{
-			Response: &ext_proc.ProcessingResponse_RequestBody{
-				RequestBody: &ext_proc.BodyResponse{
-					Response: &ext_proc.CommonResponse{
-						Status: ext_proc.CommonResponse_CONTINUE,
-					},
-				},
-			},
-		}, nil
-	}
-
 	// Get content from input field
 	userContent, nonUserMessages := extractContentFromResponsesInput(responsesRequest)
 	observability.Infof("Responses API - Extracted user content length: %d, non-user messages count: %d", len(userContent), len(nonUserMessages))
@@ -552,12 +535,22 @@ func (r *OpenAIRouter) handleResponsesAPIRequest(v *ext_proc.ProcessingRequest_R
 		return response, nil
 	}
 
+	// Check if this is a chained conversation (has previous_response_id)
+	// If so, we need to use consistent hashing to route to the same backend instance
+	var conversationID string
+	if responsesRequest.PreviousResponseID.Valid() && responsesRequest.PreviousResponseID.Value != "" {
+		conversationID = responsesRequest.PreviousResponseID.Value
+		observability.Infof("Responses API - Request has previous_response_id: %s, using consistent hashing for endpoint selection", conversationID)
+	}
+
 	// Handle model selection and routing for Responses API
-	return r.handleResponsesAPIModelRouting(responsesRequest, originalModel, userContent, nonUserMessages, ctx, hasStreamParam)
+	return r.handleResponsesAPIModelRouting(responsesRequest, originalModel, userContent, nonUserMessages, ctx, hasStreamParam, conversationID)
 }
 
 // handleResponsesAPIModelRouting handles model selection and routing logic for Responses API
-func (r *OpenAIRouter) handleResponsesAPIModelRouting(responsesRequest *responses.ResponseNewParams, originalModel, userContent string, nonUserMessages []string, ctx *RequestContext, hasStreamParam bool) (*ext_proc.ProcessingResponse, error) {
+// The conversationID parameter (if non-empty) is used for consistent hashing to ensure
+// conversation continuity across multiple backend instances
+func (r *OpenAIRouter) handleResponsesAPIModelRouting(responsesRequest *responses.ResponseNewParams, originalModel, userContent string, nonUserMessages []string, ctx *RequestContext, hasStreamParam bool, conversationID string) (*ext_proc.ProcessingResponse, error) {
 	// Create default response with CONTINUE status
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
@@ -665,10 +658,23 @@ func (r *OpenAIRouter) handleResponsesAPIModelRouting(responsesRequest *response
 				// Note: Model will be updated in serialization phase
 
 				// Select the best endpoint for this model
-				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
+				// If conversationID is present, use consistent hashing to maintain conversation affinity
+				var endpointAddress string
+				var endpointFound bool
+				if conversationID != "" {
+					endpointAddress, endpointFound = r.Config.SelectEndpointForConversation(matchedModel, conversationID)
+					if endpointFound {
+						observability.Infof("Responses API - Selected endpoint via consistent hashing (conversation: %s): %s for model: %s", conversationID, endpointAddress, matchedModel)
+					}
+				} else {
+					endpointAddress, endpointFound = r.Config.SelectBestEndpointAddressForModel(matchedModel)
+					if endpointFound {
+						observability.Infof("Responses API - Selected endpoint address: %s for model: %s", endpointAddress, matchedModel)
+					}
+				}
+				
 				if endpointFound {
 					selectedEndpoint = endpointAddress
-					observability.Infof("Responses API - Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
 				} else {
 					observability.Warnf("Responses API - No endpoint found for model %s, using fallback", matchedModel)
 				}
@@ -678,9 +684,18 @@ func (r *OpenAIRouter) handleResponsesAPIModelRouting(responsesRequest *response
 
 	// Get the endpoint if not already determined
 	if selectedEndpoint == "" {
-		endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(actualModel)
-		if endpointFound {
-			selectedEndpoint = endpointAddress
+		// If conversationID is present, use consistent hashing
+		if conversationID != "" {
+			endpointAddress, endpointFound := r.Config.SelectEndpointForConversation(actualModel, conversationID)
+			if endpointFound {
+				selectedEndpoint = endpointAddress
+				observability.Infof("Responses API - Selected endpoint via consistent hashing (conversation: %s): %s", conversationID, selectedEndpoint)
+			}
+		} else {
+			endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(actualModel)
+			if endpointFound {
+				selectedEndpoint = endpointAddress
+			}
 		}
 	}
 
