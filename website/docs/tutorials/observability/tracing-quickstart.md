@@ -106,5 +106,5 @@ Sort by: Duration (desc)
 ## Learn More
 
 - [Full Distributed Tracing Guide](./distributed-tracing.md)
-- [Configuration Reference](../../api/configuration.md)
+- [Configuration Reference](../../installation/configuration.md)
 - [Observability Overview](./observability.md)
