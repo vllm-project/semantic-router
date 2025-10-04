@@ -8,7 +8,12 @@ Katan (קטן) means "small" in Hebrew.
 Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
-__version__ = "0.1.4"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+
+    __version__ = version("llm-katan")
+except PackageNotFoundError:
+    __version__ = "unknown"
 __author__ = "Yossi Ovadia"
 __email__ = "yovadia@redhat.com"
 

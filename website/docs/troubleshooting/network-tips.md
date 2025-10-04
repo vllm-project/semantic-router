@@ -174,7 +174,36 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
 docker compose -f docker-compose.yml -f docker-compose.override.yml --profile testing up -d
 ```
 
-## 5. Troubleshooting
+## 5. Kubernetes clusters with limited egress
+
+Container runtimes on Kubernetes nodes do not automatically reuse the host Docker daemon settings. When registries are slow or blocked, pods can sit in `ImagePullBackOff`. Pick one or combine several of these mitigations:
+
+### 5.1 Configure containerd or CRI mirrors
+
+- For clusters backed by containerd (Kind, k3s, kubeadm), edit `/etc/containerd/config.toml` or use Kind’s `containerdConfigPatches` to add regional mirror endpoints for registries such as `docker.io`, `ghcr.io`, or `quay.io`.
+- Restart containerd and kubelet after changes so the new mirrors take effect.
+- Avoid pointing mirrors to loopback proxies unless every node can reach that proxy address.
+
+### 5.2 Preload or sideload images
+
+- Build required images locally, then push them into the cluster runtime. For Kind, run `kind load docker-image --name <cluster> <image:tag>`; for other clusters, use `crictl pull` or `ctr -n k8s.io images import` on each node.
+- Patch deployments to set `imagePullPolicy: IfNotPresent` when you know the image already exists on the node.
+
+### 5.3 Publish to an accessible registry
+
+- Tag and push images to a registry that is reachable from the cluster (cloud provider registry, privately hosted Harbor, etc.).
+- Update your `kustomization.yaml` or Helm values with the new image name, and configure `imagePullSecrets` if the registry requires authentication.
+
+### 5.4 Run a local pull-through cache
+
+- Start a registry proxy (`registry:2` or vendor-specific cache) inside the same network, configure it as a mirror in containerd, and regularly warm it with the images you need.
+
+### 5.5 Verify after adjustments
+
+- Use `kubectl describe pod <name>` or `kubectl get events` to confirm pull errors disappear.
+- Check that services such as `semantic-router-metrics` now expose endpoints and respond via port-forward (`kubectl port-forward svc/<service> <local-port>:<service-port>`).
+
+## 6. Troubleshooting
 
 - Go modules still time out:
   - Verify `GOPROXY` and `GOSUMDB` are present in the go-builder stage logs.

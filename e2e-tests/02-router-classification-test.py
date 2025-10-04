@@ -10,33 +10,49 @@ import json
 import os
 import sys
 import time
+import unittest
 from collections import defaultdict
 
 import requests
 
 # Add parent directory to path to allow importing common test utilities
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
 ROUTER_METRICS_URL = "http://localhost:9190/metrics"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed from gemma3:27b to match make test-prompt
+DEFAULT_MODEL = "Model-A"  # Use configured model that matches router config
 
 # Category test cases - each designed to trigger a specific classifier category
+# Based on config.e2e.yaml: math→Model-B, computer science→Model-B, business→Model-A, history→Model-A
 CATEGORY_TEST_CASES = [
     {
         "name": "Math Query",
         "expected_category": "math",
-        "content": "Solve the differential equation dy/dx + 2y = x^2 with the initial condition y(0) = 1.",
+        "expected_model": "Model-B",  # math has Model-B with score 1.0
+        "content": "Solve the quadratic equation x^2 + 5x + 6 = 0 and explain the steps.",
     },
     {
-        "name": "Creative Writing Query",
-        "expected_category": "creative",
-        "content": "Write a short story about a space cat.",
+        "name": "Computer Science/Coding Query",
+        "expected_category": "computer science",
+        "expected_model": "Model-B",  # computer science has Model-B with score 0.6
+        "content": "Write a Python function to implement a linked list with insert and delete operations.",
     },
-]  # Reduced to just 2 test cases to avoid timeouts
+    {
+        "name": "Business Query",
+        "expected_category": "business",
+        "expected_model": "Model-A",  # business has Model-A with score 0.8
+        "content": "What are the key principles of supply chain management in modern business?",
+    },
+    {
+        "name": "History Query",
+        "expected_category": "history",
+        "expected_model": "Model-A",  # history has Model-A with score 0.8
+        "content": "Describe the main causes and key events of World War I.",
+    },
+]
 
 
 class RouterClassificationTest(SemanticRouterTestBase):
@@ -129,7 +145,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{ENVOY_URL}{OPENAI_ENDPOINT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=10,
+                timeout=60,
             )
 
             passed = response.status_code < 400
@@ -165,7 +181,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
             self.print_subtest_header(test_case["name"])
 
             payload = {
-                "model": DEFAULT_MODEL,
+                "model": "auto",  # Use "auto" to trigger category-based classification routing
                 "messages": [
                     {
                         "role": "assistant",
@@ -178,7 +194,7 @@ class RouterClassificationTest(SemanticRouterTestBase):
 
             self.print_request_info(
                 payload=payload,
-                expectations=f"Expect: Query to be classified as {test_case['expected_category']} and routed accordingly",
+                expectations=f"Expect: Query classified as '{test_case['expected_category']}' → routed to {test_case.get('expected_model', 'appropriate model')}",
             )
 
             response = requests.post(
@@ -188,25 +204,30 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 timeout=60,
             )
 
-            passed = response.status_code < 400
             response_json = response.json()
-            model = response_json.get("model", "unknown")
-            results[test_case["name"]] = model
+            actual_model = response_json.get("model", "unknown")
+            expected_model = test_case.get("expected_model", "unknown")
+            results[test_case["name"]] = actual_model
+
+            model_match = actual_model == expected_model
+            passed = response.status_code < 400 and model_match
 
             self.print_response_info(
                 response,
                 {
                     "Expected Category": test_case["expected_category"],
-                    "Selected Model": model,
+                    "Expected Model": expected_model,
+                    "Actual Model": actual_model,
+                    "Routing Correct": "✅" if model_match else "❌",
                 },
             )
 
             self.print_test_result(
                 passed=passed,
                 message=(
-                    f"Query successfully routed to model: {model}"
-                    if passed
-                    else f"Request failed with status {response.status_code}"
+                    f"Query correctly routed to {actual_model}"
+                    if model_match
+                    else f"Routing failed: expected {expected_model}, got {actual_model}"
                 ),
             )
 
@@ -216,22 +237,29 @@ class RouterClassificationTest(SemanticRouterTestBase):
                 f"{test_case['name']} request failed with status {response.status_code}",
             )
 
+            self.assertEqual(
+                actual_model,
+                expected_model,
+                f"{test_case['name']}: Expected routing to {expected_model}, but got {actual_model}",
+            )
+
     def test_classifier_metrics(self):
-        """Test that classification metrics are being recorded."""
+        """Test that router metrics are being recorded and exposed."""
         self.print_test_header(
-            "Classifier Metrics Test",
-            "Verifies that classification metrics are being properly recorded and exposed",
+            "Router Metrics Test",
+            "Verifies that router metrics (classification, cache operations) are being properly recorded and exposed",
         )
 
         # First, let's get the current metrics as a baseline
         response = requests.get(ROUTER_METRICS_URL)
         baseline_metrics = response.text
 
-        # Check if classification metrics exist without making additional requests
+        # Check if classification and routing metrics exist
+        # These are the actual metrics exposed by the router
         classification_metrics = [
-            "llm_router_classification_duration_seconds",
-            "llm_router_requests_total",
-            "llm_router_model_selection_count",
+            "llm_entropy_classification_latency_seconds",  # Entropy-based classification timing
+            "llm_cache_hits_total",  # Cache operations (related to classification)
+            "llm_cache_misses_total",  # Cache misses
         ]
 
         metrics_found = 0
@@ -259,13 +287,17 @@ class RouterClassificationTest(SemanticRouterTestBase):
         self.print_test_result(
             passed=passed,
             message=(
-                f"Found {metrics_found} classification metrics"
+                f"Found {metrics_found}/{len(classification_metrics)} router metrics"
                 if passed
-                else "No classification metrics found"
+                else "No router metrics found"
             ),
         )
 
-        self.assertGreaterEqual(metrics_found, 0, "No classification metrics found")
+        self.assertGreater(
+            metrics_found,
+            0,
+            f"No router metrics found. Expected at least one of: {', '.join(classification_metrics)}",
+        )
 
 
 if __name__ == "__main__":
