@@ -79,3 +79,6 @@ async def chat_completions(req: ChatRequest):
         # Some SDKs look for token_usage; keep it as an alias for convenience.
         "token_usage": usage,
     }
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
