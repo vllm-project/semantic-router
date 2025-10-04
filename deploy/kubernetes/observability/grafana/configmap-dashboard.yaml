@@ -33,7 +33,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -93,7 +93,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "disableTextWrap": false,
               "editorMode": "builder",
@@ -113,7 +113,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -196,7 +196,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_model_completion_tokens_total[5m])) by (model)",
@@ -211,7 +211,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -294,7 +294,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_model_routing_modifications_total[5m])) by (source_model, target_model)",
@@ -310,7 +310,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -397,7 +397,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.95, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
@@ -412,7 +412,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -499,7 +499,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le, model))",
@@ -514,7 +514,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -597,7 +597,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le, model))",
@@ -612,7 +612,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -695,7 +695,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_reasoning_decisions_total{enabled=\"true\"}[5m])) by (model, effort)",
@@ -706,7 +706,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_reasoning_decisions_total{enabled=\"false\"}[5m])) by (model)",
@@ -721,7 +721,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -804,7 +804,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_model_cost_total{currency=\"USD\"}[5m])) by (model)",
@@ -819,7 +819,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -906,7 +906,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_request_errors_total{reason=\"pii_policy_denied\"}[5m])) by (model)",
@@ -917,7 +917,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_request_errors_total{reason=\"jailbreak_block\"}[5m])) by (model)",
@@ -932,7 +932,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -997,7 +997,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(rate(llm_request_errors_total{reason=~\"pii_policy_denied|jailbreak_block\"}[5m])) by (model) / sum(rate(llm_model_requests_total[5m])) by (model)",
@@ -1012,7 +1012,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -1069,7 +1069,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "sum(llm_model_cost_total{currency=\"USD\"}) by (model)",
@@ -1084,7 +1084,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${DS_PROMETHEUS}"
           },
           "fieldConfig": {
             "defaults": {
@@ -1167,7 +1167,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
@@ -1178,7 +1178,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.90, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
@@ -1189,7 +1189,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
