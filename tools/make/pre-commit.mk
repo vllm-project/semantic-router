@@ -1,25 +1,25 @@
+# Copyright 2025 The vLLM Semantic Router Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
 
 precommit-install:
 	pip install pre-commit
 
 precommit-check:
-	@FILES=$$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" \) \
-		! -path "./target/*" \
-		! -path "./candle-binding/target/*" \
-		! -path "./.git/*" \
-		! -path "./node_modules/*" \
-		! -path "./vendor/*" \
-		! -path "./__pycache__/*" \
-		! -path "./site/*" \
-		! -name "*.pb.go" \
-		| tr '\n' ' '); \
-	if [ -n "$$FILES" ]; then \
-		echo "Running pre-commit on files: $$FILES"; \
-		pre-commit run --files $$FILES; \
-	else \
-		echo "No Go, Rust, JavaScript, Markdown, Yaml, or Python files found to check"; \
-	fi
+	@echo "Running pre-commit on all files..."
+	pre-commit run --all-files
 
 # Run pre-commit hooks in a Docker container,
 # and you can exec container to run bash for debug.

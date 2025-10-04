@@ -311,3 +311,21 @@ pre-commit run --all-files
 ## License
 
 By contributing to this project, you agree that your contributions will be licensed under the same license as the project (Apache 2.0).
+
+### License Headers
+
+All source code files must include the Apache 2.0 license header. The project uses [license-eye](https://github.com/apache/skywalking-eyes) to automatically manage license headers.
+
+**Check license headers:**
+
+```bash
+make license-check
+```
+
+**Automatically add missing license headers:**
+
+```bash
+make license-fix
+```
+
+The license header check is automatically run as part of the pre-commit hooks and CI pipeline. If you encounter license header issues, simply run `make license-fix` to automatically add the required headers to all applicable files.
