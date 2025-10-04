@@ -19,11 +19,6 @@ on:
         required: false
         type: boolean
         default: false
-      skip_multiarch:
-        description: 'Skip multi-architecture build for faster CI'
-        required: false
-        type: boolean
-        default: false
   push:
     branches: ["main"]
 
