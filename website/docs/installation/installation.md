@@ -188,6 +188,23 @@ curl -X POST http://localhost:8801/v1/chat/completions \
   }'
 ```
 
+> **Tip:** Optional: Run Without vLLM (Using Mock Server)
+>
+> No vLLM? Use the built-in mock server for testing:
+> 
+> pip install fastapi uvicorn
+> python tools/mock-vllm/app.py
+> 
+> Then open two terminals:
+>
+> # Terminal 1
+> make run-envoy
+>
+> # Terminal 2
+> make run-router
+>
+> Now you can test with `curl`.
+
 ## Next Steps
 
 After successful installation:
