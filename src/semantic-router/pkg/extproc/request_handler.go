@@ -415,7 +415,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 
 	// Perform PII detection and policy enforcement
 	// Only check if allow_by_default is false (strict policy enforcement enabled)
-	if r.PIIChecker != nil && r.PIIChecker.IsPIIEnabled("Model-A") {
+	if r.PIIChecker != nil && r.PIIChecker.IsPIIEnabled(r.Config.DefaultModel) {
 		// Start PII detection span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
 		defer span.End()
@@ -430,8 +430,8 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 		if len(detectedPII) > 0 {
 			observability.Infof("PII detected: %v", detectedPII)
 
-			// Check PII policy against default model (Model-A has strictest policy)
-			allowed, deniedPII, err := r.PIIChecker.CheckPolicy("Model-A", detectedPII)
+			// Check PII policy against default model
+			allowed, deniedPII, err := r.PIIChecker.CheckPolicy(r.Config.DefaultModel, detectedPII)
 
 			if err != nil {
 				observability.Errorf("Error checking PII policy: %v", err)
@@ -455,7 +455,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 
 				// Count this as a blocked request
 				metrics.RecordRequestError(ctx.RequestModel, "pii_policy_block")
-				piiResponse := http.CreatePIIViolationResponse("Model-A", deniedPII)
+				piiResponse := http.CreatePIIViolationResponse(r.Config.DefaultModel, deniedPII)
 				ctx.TraceContext = spanCtx
 				return piiResponse, true
 			} else {
