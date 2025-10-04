@@ -74,7 +74,6 @@ jobs:
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
-
       - name: Download models (minimal on PRs)
         env:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
@@ -103,13 +102,19 @@ jobs:
         run: |
           echo "::error::Test and build failed. Check the workflow run for details."
 
-  # Trigger Docker publishing on successful runs
+  # Trigger fast build for PRs, full publish for other events
+  fast-build-pr:
+    needs: test-and-build
+    if: success() && github.event_name == 'pull_request'
+    uses: ./.github/workflows/fast-build.yml
+
+  # Trigger Docker publishing on successful non-PR runs
   publish-docker:
     needs: test-and-build
-    if: success()
+    if: success() && github.event_name != 'pull_request'
     uses: ./.github/workflows/docker-publish.yml
     with:
       tag_suffix: ${{ github.event_name == 'schedule' && format('nightly-{0}', github.run_id) || '' }}
       is_nightly: ${{ github.event_name == 'schedule' }}
-      skip_multiarch: ${{ github.event_name == 'pull_request' }}
+      skip_multiarch: false
     secrets: inherit
