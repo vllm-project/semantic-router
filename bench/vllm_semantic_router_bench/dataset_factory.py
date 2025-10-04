@@ -7,20 +7,28 @@ implementations in a unified way.
 
 from typing import Dict, List, Optional, Type
 
+from .dataset_implementations.aqua_rat_dataset import AquaRatDataset
 from .dataset_implementations.arc_dataset import (
     ARCChallengeDataset,
     ARCDataset,
     ARCEasyDataset,
 )
 from .dataset_implementations.commonsenseqa_dataset import CommonsenseQADataset
+from .dataset_implementations.drop_dataset import DROPDataset
 from .dataset_implementations.gpqa_dataset import (
     GPQADataset,
     GPQADiamondDataset,
     GPQAExtendedDataset,
     GPQAMainDataset,
 )
+from .dataset_implementations.gsm8k_dataset import GSM8KDataset
 from .dataset_implementations.hellaswag_dataset import HellaSwagDataset
+
+# from .dataset_implementations.math_dataset import MATHDataset  # Disabled - dataset not available
 from .dataset_implementations.mmlu_dataset import MMLUDataset
+from .dataset_implementations.openbookqa_dataset import OpenBookQADataset
+from .dataset_implementations.sciq_dataset import SciQDataset
+from .dataset_implementations.strategyqa_dataset import StrategyQADataset
 from .dataset_implementations.truthfulqa_dataset import TruthfulQADataset
 from .dataset_interface import DatasetInterface
 
@@ -100,6 +108,19 @@ DatasetFactory.register_dataset("gpqa", GPQAMainDataset)
 DatasetFactory.register_dataset("gpqa-main", GPQAMainDataset)
 DatasetFactory.register_dataset("gpqa-extended", GPQAExtendedDataset)
 DatasetFactory.register_dataset("gpqa-diamond", GPQADiamondDataset)
+
+# Register mathematical reasoning datasets
+# DatasetFactory.register_dataset("math", MATHDataset)  # Disabled - dataset not available
+DatasetFactory.register_dataset("gsm8k", GSM8KDataset)
+DatasetFactory.register_dataset("aqua-rat", AquaRatDataset)
+
+# Register multi-step reasoning datasets
+DatasetFactory.register_dataset("drop", DROPDataset)
+DatasetFactory.register_dataset("strategyqa", StrategyQADataset)
+
+# Register scientific reasoning datasets
+DatasetFactory.register_dataset("sciq", SciQDataset)
+DatasetFactory.register_dataset("openbookqa", OpenBookQADataset)
 
 # Register hard reasoning datasets
 DatasetFactory.register_dataset("truthfulqa", TruthfulQADataset)
