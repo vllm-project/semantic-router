@@ -14,15 +14,25 @@ on:
         required: false
         type: boolean
         default: false
+      skip_multiarch:
+        description: 'Skip multi-architecture build for faster CI'
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [ "main" ]
 
 jobs:
-  build_and_push_extproc:
+  # Parallel job for building both images
+  build_and_push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        image: [extproc, llm-katan]
+      fail-fast: false # Continue building other images if one fails
 
     steps:
     - name: Check out the repo
@@ -30,9 +40,16 @@ jobs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          network=host
+          image=moby/buildkit:v0.12.5
 
-    - name: Set up QEMU
+    - name: Set up QEMU (only for multi-arch builds)
+      if: inputs.skip_multiarch != true
       uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
@@ -49,62 +66,84 @@ jobs:
     - name: Set lowercase repository owner
       run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-    - name: Build and push extproc Docker image
-      uses: docker/build-push-action@v5
+    # Rust build cache for extproc
+    - name: Cache Rust dependencies (extproc only)
+      if: matrix.image == 'extproc'
+      uses: actions/cache@v4
       with:
-        context: .
-        file: ./Dockerfile.extproc
-        platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
-        tags: |
-          ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/extproc:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/extproc:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}
-          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/extproc:latest', env.REPOSITORY_OWNER_LOWER) || '' }}
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          candle-binding/target/
+        key: ${{ runner.os }}-cargo-extproc-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-extproc-
 
-  build_and_push_llm_katan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    # Set build context and dockerfile based on matrix
+    - name: Set build parameters
+      id: build-params
+      run: |
+        if [ "${{ matrix.image }}" = "extproc" ]; then
+          echo "context=." >> $GITHUB_OUTPUT
+          echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
+          echo "platforms=${{ inputs.skip_multiarch == true && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" >> $GITHUB_OUTPUT
+        elif [ "${{ matrix.image }}" = "llm-katan" ]; then
+          echo "context=./e2e-tests/llm-katan" >> $GITHUB_OUTPUT
+          echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
+          echo "platforms=${{ inputs.skip_multiarch == true && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" >> $GITHUB_OUTPUT
+        fi
 
-    steps:
-    - name: Check out the repo
-      uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Generate date tag for nightly builds
-      id: date
-      if: inputs.is_nightly == true
-      run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
-
-    - name: Set lowercase repository owner
-      run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
+    # Extract version for llm-katan
     - name: Extract version from pyproject.toml
       id: version
+      if: matrix.image == 'llm-katan'
       run: |
         VERSION=$(grep '^version = ' e2e-tests/llm-katan/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-    - name: Build and push llm-katan Docker image
+    # Generate tags for extproc
+    - name: Generate extproc tags
+      id: extproc-tags
+      if: matrix.image == 'extproc'
+      run: |
+        REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
+        if [ "${{ inputs.is_nightly }}" = "true" ]; then
+          echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:nightly-${{ steps.date.outputs.date_tag }}" >> $GITHUB_OUTPUT
+        else
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/extproc:latest" >> $GITHUB_OUTPUT
+          else
+            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    # Generate tags for llm-katan
+    - name: Generate llm-katan tags
+      id: llm-katan-tags
+      if: matrix.image == 'llm-katan'
+      run: |
+        REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
+        if [ "${{ inputs.is_nightly }}" = "true" ]; then
+          echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:nightly-${{ steps.date.outputs.date_tag }}" >> $GITHUB_OUTPUT
+        else
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:latest,ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: Build and push ${{ matrix.image }} Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./e2e-tests/llm-katan
-        file: ./e2e-tests/llm-katan/Dockerfile
-        platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
-        tags: |
-          ${{ inputs.is_nightly == true && format('ghcr.io/{0}/semantic-router/llm-katan:nightly-{1}', env.REPOSITORY_OWNER_LOWER, steps.date.outputs.date_tag) || format('ghcr.io/{0}/semantic-router/llm-katan:{1}', env.REPOSITORY_OWNER_LOWER, github.sha) }}
-          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/llm-katan:latest', env.REPOSITORY_OWNER_LOWER) || '' }}
-          ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/llm-katan:v{1}', env.REPOSITORY_OWNER_LOWER, steps.version.outputs.version) || '' }}
+        context: ${{ steps.build-params.outputs.context }}
+        file: ${{ steps.build-params.outputs.dockerfile }}
+        platforms: ${{ steps.build-params.outputs.platforms }}
+        push: ${{ github.event_name != 'pull_request' }}
+        cache-from: type=gha,scope=${{ matrix.image }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+        tags: ${{ matrix.image == 'extproc' && steps.extproc-tags.outputs.tags || steps.llm-katan-tags.outputs.tags }}
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1

@@ -103,12 +103,13 @@ jobs:
         run: |
           echo "::error::Test and build failed. Check the workflow run for details."
 
-  # Trigger Docker publishing on successful nightly runs
+  # Trigger Docker publishing on successful runs
   publish-docker:
     needs: test-and-build
-    if: success() && github.event_name == 'schedule'
+    if: success()
     uses: ./.github/workflows/docker-publish.yml
     with:
-      tag_suffix: nightly-$(date +'%Y%m%d')
-      is_nightly: true
+      tag_suffix: ${{ github.event_name == 'schedule' && format('nightly-{0}', github.run_id) || '' }}
+      is_nightly: ${{ github.event_name == 'schedule' }}
+      skip_multiarch: ${{ github.event_name == 'pull_request' }}
     secrets: inherit
