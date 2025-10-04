@@ -10,17 +10,12 @@ on:
         type: string
         default: ""
       is_nightly:
-        description: "Whether this is a nightly build"
+        description: 'Whether this is a nightly build'
         required: false
         type: boolean
         default: false
       skip_multiarch:
         description: "Skip multi-architecture build for faster CI"
-        required: false
-        type: boolean
-        default: false
-      skip_multiarch:
-        description: 'Skip multi-architecture build for faster CI'
         required: false
         type: boolean
         default: false
