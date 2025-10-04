@@ -2,6 +2,7 @@ import math
 import time
 from typing import List, Optional
 
+import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -79,3 +80,7 @@ async def chat_completions(req: ChatRequest):
         # Some SDKs look for token_usage; keep it as an alias for convenience.
         "token_usage": usage,
     }
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
