@@ -2,7 +2,26 @@
 # = Everything For rust   =
 # ======== rust.mk ========
 
-# Test the Rust library
+# Test Rust unit tests
+test-rust: rust
+	@$(LOG_TARGET)
+	@echo "Running Rust unit tests"
+	@cd candle-binding && cargo test --lib -- --nocapture
+
+# Test specific Rust module
+#   Example: make test-rust-module MODULE=classifiers::lora::pii_lora_test
+#   Example: make test-rust-module MODULE=classifiers::lora::pii_lora_test::test_pii_lora_pii_lora_classifier_new
+test-rust-module: rust
+	@$(LOG_TARGET)
+	@if [ -z "$(MODULE)" ]; then \
+		echo "Usage: make test-rust-module MODULE=<module_name>"; \
+		echo "Example: make test-rust-module MODULE=core::similarity_test"; \
+		exit 1; \
+	fi
+	@echo "Running Rust tests for module: $(MODULE)"
+	@cd candle-binding && cargo test $(MODULE) --lib -- --nocapture
+
+# Test the Rust library (Go binding tests)
 test-binding: rust
 	@$(LOG_TARGET)
 	@echo "Running Go tests with static library..."

@@ -50,6 +50,8 @@ help:
 	@echo ""
 	@echo "  Test targets:"
 	@echo "    test                    - Run all tests"
+	@echo "    test-rust               - Run Rust unit tests"
+	@echo "    test-rust-module MODULE=<name> - Run specific Rust module tests"
 	@echo "    test-binding            - Test candle-binding"
 	@echo "    test-semantic-router    - Test semantic router"
 	@echo "    test-category-classifier - Test category classifier"
