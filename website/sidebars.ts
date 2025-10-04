@@ -113,6 +113,8 @@ const sidebars: SidebarsConfig = {
       label: 'Troubleshooting',
       items: [
         'troubleshooting/network-tips',
+        'troubleshooting/container-connectivity',
+        'troubleshooting/vsr-headers',
       ],
     },
   ],
