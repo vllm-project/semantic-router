@@ -23,8 +23,7 @@ on:
     branches: ["main"]
 
 jobs:
-  # Parallel job for building both images
-  build_and_push:
+  build_and_push_extproc:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -142,3 +141,4 @@ jobs:
           tags: ${{ matrix.image == 'extproc' && steps.extproc-tags.outputs.tags || steps.llm-katan-tags.outputs.tags }}
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+
