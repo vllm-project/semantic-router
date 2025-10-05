@@ -122,6 +122,38 @@ model_config:
     preferred_endpoints: ["your-endpoint"]
 ```
 
+:::tip[**No vLLM Backend? Use Mock Services for Testing**]
+If you don't have a vLLM backend set up, you can use the provided mock services for testing:
+
+**Option 1: Mock vLLM (Simple Echo Service)**
+```bash
+# Start a simple mock service that echoes back responses
+python tools/mock-vllm/app.py
+```
+
+**Option 2: LLM Katan Server (Real LLM with Lightweight Backend)**
+```bash
+# First, start llm-katan backend (requires pip install llm-katan)
+llm-katan --model Qwen/Qwen2-0.5B-Instruct --port 8001
+
+# Then start the FastAPI wrapper
+python tools/llm-katan-server/app.py
+```
+
+For the mock services, update your `config/config.yaml`:
+```yaml
+vllm_endpoints:
+  - name: "mock-endpoint"
+    address: "127.0.0.1"
+    port: 8000                    # Mock service port
+    models:
+      - "openai/gpt-oss-20b"      # For mock-vllm
+      # OR
+      - "Qwen/Qwen2-0.5B-Instruct"  # For llm-katan-server
+    weight: 1
+```
+:::
+
 :::note[**Important: Address Format Requirements**]
 The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain names are not supported.
 

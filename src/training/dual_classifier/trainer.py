@@ -22,7 +22,7 @@ class DualTaskDataset(Dataset):
         category_labels: List[int],
         pii_labels: List[List[int]],  # Token-level PII labels
         tokenizer,
-        max_length: int = 512,
+        max_length: int = 100000,
     ):
         self.texts = texts
         self.category_labels = category_labels

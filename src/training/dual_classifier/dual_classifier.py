@@ -19,7 +19,7 @@ class DualClassifier(nn.Module):
         self,
         num_categories: int,
         model_name: str = "distilbert-base-uncased",
-        max_length: int = 512,
+        max_length: int = 100000,
     ):
         super().__init__()
 

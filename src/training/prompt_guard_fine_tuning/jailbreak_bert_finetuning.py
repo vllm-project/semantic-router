@@ -641,7 +641,7 @@ class GPUOptimizer:
         }
 
     def optimize_sequence_length(
-        self, texts: List[str], tokenizer, default_max_length: int = 512
+        self, texts: List[str], tokenizer, default_max_length: int = 100000
     ) -> int:
         """Find optimal sequence length based on dataset characteristics."""
         logger.info("Analyzing sequence length distribution...")

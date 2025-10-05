@@ -495,7 +495,7 @@ impl BertSimilarity {
         let mut tokenizer = self.tokenizer.clone();
         tokenizer
             .with_truncation(Some(TruncationParams {
-                max_length: max_length.unwrap_or(512),
+                max_length: max_length.unwrap_or(100000),
                 strategy: TruncationStrategy::LongestFirst,
                 stride: 0,
                 direction: TruncationDirection::Right,
@@ -517,7 +517,7 @@ impl BertSimilarity {
         let mut tokenizer = self.tokenizer.clone();
         tokenizer
             .with_truncation(Some(TruncationParams {
-                max_length: max_length.unwrap_or(512),
+                max_length: max_length.unwrap_or(100000),
                 strategy: TruncationStrategy::LongestFirst,
                 stride: 0,
                 direction: TruncationDirection::Right,
