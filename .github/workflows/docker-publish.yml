@@ -62,9 +62,9 @@ jobs:
       - name: Set lowercase repository owner
         run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Rust build cache for extproc
+      # Rust build cache for extproc - only use GitHub Actions cache for non-PR builds
       - name: Cache Rust dependencies (extproc only)
-        if: matrix.image == 'extproc'
+        if: matrix.image == 'extproc' && github.event_name != 'pull_request'
         uses: actions/cache@v4
         with:
           path: |
@@ -108,7 +108,11 @@ jobs:
           if [ "${{ inputs.is_nightly }}" = "true" ]; then
             echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:nightly-${{ steps.date.outputs.date_tag }}" >> $GITHUB_OUTPUT
           else
-            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/extproc:latest" >> $GITHUB_OUTPUT
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/extproc:latest" >> $GITHUB_OUTPUT
+            else
+              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }}" >> $GITHUB_OUTPUT
+            fi
           fi
 
       # Generate tags for llm-katan
@@ -120,7 +124,11 @@ jobs:
           if [ "${{ inputs.is_nightly }}" = "true" ]; then
             echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:nightly-${{ steps.date.outputs.date_tag }}" >> $GITHUB_OUTPUT
           else
-            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:latest,ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:latest,ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+            else
+              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }}" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Build and push ${{ matrix.image }} Docker image
