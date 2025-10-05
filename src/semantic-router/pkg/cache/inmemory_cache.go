@@ -5,7 +5,6 @@ package cache
 
 import (
 	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -235,14 +234,14 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	// Check for expired entries during search
 	c.cleanupExpiredEntriesReadOnly()
 
-	type SimilarityResult struct {
-		EntryIndex int
-		Entry      CacheEntry
-		Similarity float32
-	}
+	var (
+		bestIndex      = -1
+		bestEntry      CacheEntry
+		bestSimilarity float32
+		entriesChecked int
+	)
 
-	// Compare with completed entries for the same model
-	results := make([]SimilarityResult, 0, len(c.entries))
+	// Compare with completed entries for the same model, tracking only the best match
 	for entryIndex, entry := range c.entries {
 		if entry.ResponseBody == nil {
 			continue // Skip incomplete entries
@@ -259,18 +258,22 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 			dotProduct += queryEmbedding[i] * entry.Embedding[i]
 		}
 
-		results = append(results, SimilarityResult{
-			EntryIndex: entryIndex,
-			Entry:      entry,
-			Similarity: dotProduct,
-		})
+		entriesChecked++
+		if bestIndex == -1 || dotProduct > bestSimilarity {
+			bestSimilarity = dotProduct
+			bestIndex = entryIndex
+		}
+	}
+	// Snapshot the best entry before releasing the read lock
+	if bestIndex >= 0 {
+		bestEntry = c.entries[bestIndex]
 	}
 
-	// unlock the read lock since we need the write lock to update the access info
+	// Unlock the read lock since we need the write lock to update the access info
 	c.mu.RUnlock()
 
 	// Handle case where no suitable entries exist
-	if len(results) == 0 {
+	if bestIndex < 0 {
 		atomic.AddInt64(&c.missCount, 1)
 		observability.Debugf("InMemoryCache.FindSimilar: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
@@ -278,41 +281,36 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 		return nil, false, nil
 	}
 
-	// Sort results by similarity score (highest first)
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Similarity > results[j].Similarity
-	})
-
 	// Check if the best match meets the similarity threshold
-	if results[0].Similarity >= c.similarityThreshold {
+	if bestSimilarity >= c.similarityThreshold {
 		atomic.AddInt64(&c.hitCount, 1)
 
 		c.mu.Lock()
-		c.updateAccessInfo(results[0].EntryIndex, results[0].Entry)
+		c.updateAccessInfo(bestIndex, bestEntry)
 		c.mu.Unlock()
 
 		observability.Debugf("InMemoryCache.FindSimilar: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-			results[0].Similarity, c.similarityThreshold, len(results[0].Entry.ResponseBody))
+			bestSimilarity, c.similarityThreshold, len(bestEntry.ResponseBody))
 		observability.LogEvent("cache_hit", map[string]interface{}{
 			"backend":    "memory",
-			"similarity": results[0].Similarity,
+			"similarity": bestSimilarity,
 			"threshold":  c.similarityThreshold,
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
 		metrics.RecordCacheHit()
-		return results[0].Entry.ResponseBody, true, nil
+		return bestEntry.ResponseBody, true, nil
 	}
 
 	atomic.AddInt64(&c.missCount, 1)
 	observability.Debugf("InMemoryCache.FindSimilar: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
-		results[0].Similarity, c.similarityThreshold, len(results))
+		bestSimilarity, c.similarityThreshold, entriesChecked)
 	observability.LogEvent("cache_miss", map[string]interface{}{
 		"backend":         "memory",
-		"best_similarity": results[0].Similarity,
+		"best_similarity": bestSimilarity,
 		"threshold":       c.similarityThreshold,
 		"model":           model,
-		"entries_checked": len(results),
+		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 	metrics.RecordCacheMiss()
