@@ -1,0 +1,42 @@
+# Local observability stack for monitoring semantic-router running on host
+#
+# Usage: make obs-local
+# Or: docker compose -f docker-compose.obs.yml up
+#
+# This provides Prometheus and Grafana in Docker with network_mode: host
+# to scrape metrics from router running natively on localhost:9190
+
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus-local
+    network_mode: host
+    volumes:
+      - ./tools/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-local-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    environment:
+      - ROUTER_TARGET=localhost:9190
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: grafana-local
+    network_mode: host
+    volumes:
+      - ./tools/observability/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./tools/observability/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
+      - ./tools/observability/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - grafana-local-data:/var/lib/grafana
+    environment:
+      - PROMETHEUS_URL=localhost:9090
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+volumes:
+  prometheus-local-data:
+  grafana-local-data:
