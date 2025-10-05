@@ -652,7 +652,9 @@ class PIIDetectionTest(SemanticRouterTestBase):
             status = (
                 "🔒"
                 if result["is_blocked"]
-                else "✅" if result["request_allowed"] else "❌"
+                else "✅"
+                if result["request_allowed"]
+                else "❌"
             )
             print(f"  {status} {result['test_case']}")
             print(f"      Content: {result['content']}")
@@ -671,9 +673,7 @@ class PIIDetectionTest(SemanticRouterTestBase):
                 passed=False,
                 message="⚠️ No clear evidence of ExtProc PII detection in production pipeline",
             )
-            print(
-                "📝 NOTE: This may indicate PII detection is not active in ExtProc or"
-            )
+            print("📝 NOTE: This may indicate PII detection is not active in ExtProc or")
             print("         PII policies are configured to allow all content through")
 
     def test_multiple_pii_types_analysis(self):

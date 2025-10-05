@@ -100,9 +100,9 @@ import numpy as np
 import torch
 
 # Suppress common non-critical warnings
-os.environ["TOKENIZERS_PARALLELISM"] = (
-    "false"  # Suppress tokenizer parallelism warnings
-)
+os.environ[
+    "TOKENIZERS_PARALLELISM"
+] = "false"  # Suppress tokenizer parallelism warnings
 warnings.filterwarnings(
     "ignore", message=".*TensorFloat32.*"
 )  # Suppress TF32 performance hints
@@ -2343,19 +2343,25 @@ def main_single_attempt(
 
     # Evaluate on validation set
     logger.info("Evaluating on validation set...")
-    val_accuracy, val_report, val_conf_matrix, val_predictions = (
-        evaluate_jailbreak_classifier(
-            model, tokenizer, val_texts, val_categories, idx_to_category, device
-        )
+    (
+        val_accuracy,
+        val_report,
+        val_conf_matrix,
+        val_predictions,
+    ) = evaluate_jailbreak_classifier(
+        model, tokenizer, val_texts, val_categories, idx_to_category, device
     )
     logger.info(f"Validation accuracy: {val_accuracy:.4f}")
 
     # Evaluate on test set
     logger.info("Evaluating on test set...")
-    test_accuracy, test_report, test_conf_matrix, test_predictions = (
-        evaluate_jailbreak_classifier(
-            model, tokenizer, test_texts, test_categories, idx_to_category, device
-        )
+    (
+        test_accuracy,
+        test_report,
+        test_conf_matrix,
+        test_predictions,
+    ) = evaluate_jailbreak_classifier(
+        model, tokenizer, test_texts, test_categories, idx_to_category, device
     )
     logger.info(f"Test accuracy: {test_accuracy:.4f}")
 

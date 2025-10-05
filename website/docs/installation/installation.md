@@ -126,12 +126,14 @@ model_config:
 If you don't have a vLLM backend set up, you can use the provided mock services for testing:
 
 **Option 1: Mock vLLM (Simple Echo Service)**
+
 ```bash
 # Start a simple mock service that echoes back responses
 python tools/mock-vllm/app.py
 ```
 
 **Option 2: LLM Katan Server (Real LLM with Lightweight Backend)**
+
 ```bash
 # First, start llm-katan backend (requires pip install llm-katan)
 llm-katan --model Qwen/Qwen2-0.5B-Instruct --port 8001
@@ -141,6 +143,7 @@ python tools/llm-katan-server/app.py
 ```
 
 For the mock services, update your `config/config.yaml`:
+
 ```yaml
 vllm_endpoints:
   - name: "mock-endpoint"
@@ -152,6 +155,7 @@ vllm_endpoints:
       - "Qwen/Qwen2-0.5B-Instruct"  # For llm-katan-server
     weight: 1
 ```
+
 :::
 
 :::note[**Important: Address Format Requirements**]

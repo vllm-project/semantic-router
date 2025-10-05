@@ -508,19 +508,25 @@ def main(model_name="minilm", num_epochs=5, batch_size=16):
 
     # Evaluate on validation set
     logger.info("Evaluating on validation set...")
-    val_accuracy, val_report, val_conf_matrix, val_predictions = (
-        evaluate_category_classifier(
-            model, tokenizer, val_texts, val_categories, idx_to_category, device
-        )
+    (
+        val_accuracy,
+        val_report,
+        val_conf_matrix,
+        val_predictions,
+    ) = evaluate_category_classifier(
+        model, tokenizer, val_texts, val_categories, idx_to_category, device
     )
     logger.info(f"Validation accuracy: {val_accuracy:.4f}")
 
     # Evaluate on test set
     logger.info("Evaluating on test set...")
-    test_accuracy, test_report, test_conf_matrix, test_predictions = (
-        evaluate_category_classifier(
-            model, tokenizer, test_texts, test_categories, idx_to_category, device
-        )
+    (
+        test_accuracy,
+        test_report,
+        test_conf_matrix,
+        test_predictions,
+    ) = evaluate_category_classifier(
+        model, tokenizer, test_texts, test_categories, idx_to_category, device
     )
     logger.info(f"Test accuracy: {test_accuracy:.4f}")
 

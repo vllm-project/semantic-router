@@ -5,6 +5,7 @@ A FastAPI wrapper around [llm-katan](https://pypi.org/project/llm-katan/) that p
 ## Architecture
 
 This server acts as a proxy that:
+
 1. Receives OpenAI-compatible API requests
 2. Forwards them to a running `llm-katan` instance
 3. Returns the responses with proper model name mapping
@@ -78,24 +79,3 @@ services:
     depends_on:
       - llm-katan-backend
 ```
-
-### Testing
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# List models
-curl http://localhost:8000/v1/models
-
-# Chat completion (uses real LLM)
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen2-0.5B-Instruct",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 50
-  }'
-```
-
-Intended for local testing with Docker Compose profile `testing`.

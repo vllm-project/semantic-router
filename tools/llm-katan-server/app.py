@@ -1,9 +1,9 @@
 import math
-import time
 import os
-import requests
+import time
 from typing import List, Optional
 
+import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -18,7 +18,9 @@ LLM_KATAN_URL = os.getenv("LLM_KATAN_URL", "http://localhost:8001")
 # Check if HuggingFace token is set
 hf_token = os.getenv("HUGGINGFACE_HUB_TOKEN")
 if not hf_token:
-    print("Warning: HUGGINGFACE_HUB_TOKEN not set. Some models may require authentication.")
+    print(
+        "Warning: HUGGINGFACE_HUB_TOKEN not set. Some models may require authentication."
+    )
 
 
 class ChatMessage(BaseModel):
@@ -49,37 +51,37 @@ async def chat_completions(req: ChatRequest):
         # Forward request to llm-katan backend
         llm_katan_request = {
             "model": MODEL,
-            "messages": [{"role": msg.role, "content": msg.content} for msg in req.messages],
+            "messages": [
+                {"role": msg.role, "content": msg.content} for msg in req.messages
+            ],
             "temperature": req.temperature,
         }
-        
+
         if req.max_tokens:
             llm_katan_request["max_tokens"] = req.max_tokens
-        
+
         # Make request to llm-katan
         response = requests.post(
-            f"{LLM_KATAN_URL}/v1/chat/completions",
-            json=llm_katan_request,
-            timeout=30
+            f"{LLM_KATAN_URL}/v1/chat/completions", json=llm_katan_request, timeout=30
         )
-        
+
         if response.status_code != 200:
             raise HTTPException(
                 status_code=response.status_code,
-                detail=f"LLM Katan error: {response.text}"
+                detail=f"LLM Katan error: {response.text}",
             )
-        
+
         result = response.json()
-        
+
         # Update the model name in response to match our served model name
         result["model"] = req.model
-        
+
         return result
-        
+
     except requests.exceptions.RequestException as e:
         # Fallback to simple echo behavior if llm-katan is not available
         print(f"Warning: LLM Katan not available ({e}), using fallback response")
-        
+
         # Simple echo-like behavior as fallback
         last_user = next(
             (m.content for m in reversed(req.messages) if m.role == "user"), ""
