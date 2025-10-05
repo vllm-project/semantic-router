@@ -74,6 +74,7 @@ jobs:
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
+
       - name: Download models (minimal on PRs)
         env:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
