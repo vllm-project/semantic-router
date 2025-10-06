@@ -32,10 +32,15 @@ from .dataset_factory import DatasetFactory, list_available_datasets
 from .dataset_interface import DatasetInfo, Question, questions_to_dataframe
 
 # Robust answer extraction patterns for structured response parsing
-ANSWER_PATTERN_PRIMARY = re.compile(r"(?:answer\s*:?\s*)([A-Z])", re.IGNORECASE)
-ANSWER_PATTERN_FINAL = re.compile(r"(?:final\s*answer\s*:?\s*)([A-Z])", re.IGNORECASE)
+ANSWER_PATTERN_PRIMARY = re.compile(
+    r"(?:answer\s*:?\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE
+)
+ANSWER_PATTERN_FINAL = re.compile(
+    r"(?:final\s*answer\s*:?\s+)([A-Z])(?:\s|[.!?)]|$)", re.IGNORECASE
+)
 ANSWER_PATTERN_CONCLUSION = re.compile(
-    r"(?:therefore|thus|so).*?([A-Z])", re.IGNORECASE
+    r"(?:therefore|thus|so).*?(?:answer\s+is\s+|is\s+)([A-Z])(?:\s|[.!?)]|$)",
+    re.IGNORECASE,
 )
 
 
@@ -196,25 +201,46 @@ def get_dataset_optimal_tokens(dataset_info, model_name=None):
     model_multiplier = 1.0
     if model_name:
         model_lower = model_name.lower()
+        print(f"  🔍 Model detection: '{model_name}' -> '{model_lower}'")
         if "qwen" in model_lower:
             # Qwen models are more efficient and can handle longer contexts
             model_multiplier = 1.5
+            print(f"  ✅ Qwen model detected, using multiplier: {model_multiplier}")
         elif "deepseek" in model_lower:
             # DeepSeek models (e.g., V3.1) are capable and can handle longer contexts
             model_multiplier = 1.5
+            print(f"  ✅ DeepSeek model detected, using multiplier: {model_multiplier}")
         elif "gpt-oss" in model_lower:
             # GPT-OSS models use baseline token limits
             model_multiplier = 1.0
+            print(f"  ✅ GPT-OSS model detected, using multiplier: {model_multiplier}")
+        else:
+            print(
+                f"  ⚠️  Unknown model type, using baseline multiplier: {model_multiplier}"
+            )
         # Default to baseline for unknown models
 
-    # Base token limits per dataset (optimized for gpt-oss20b baseline)
+    # Base token limits per dataset (optimized for reasoning tasks with generous headroom)
     base_dataset_tokens = {
-        "gpqa": 3000,  # Graduate-level scientific reasoning (increased for complex multi-step reasoning)
-        "truthfulqa": 800,  # Misconception analysis
-        "hellaswag": 800,  # Natural continuation reasoning
-        "arc": 800,  # Elementary/middle school science
-        "commonsenseqa": 1000,  # Common sense reasoning
-        "mmlu": 3000,  # Academic knowledge (increased for complex technical domains like engineering/chemistry)
+        # Proven optimal datasets
+        "gpqa": 4000,  # Graduate-level scientific reasoning (proven optimal from results)
+        "mmlu": 4000,  # Academic knowledge (proven optimal from results)
+        "truthfulqa": 2500,  # Misconception analysis (proven adequate from results)
+        # Mathematical reasoning datasets
+        # "math": 6000,  # Competition mathematics - DISABLED: dataset not available
+        "gsm8k": 2500,  # Elementary math word problems - simpler than competition math
+        "aqua-rat": 3000,  # Algebraic word problems with rationales
+        # Multi-step reasoning datasets
+        "drop": 4000,  # Reading comprehension with discrete reasoning - complex passages
+        "strategyqa": 3500,  # Multi-step implicit reasoning - requires detailed thinking
+        # Scientific reasoning datasets
+        "sciq": 2000,  # Science questions - moderate complexity
+        "openbookqa": 2500,  # Elementary science with fact reasoning
+        # Other datasets
+        "hellaswag": 2000,  # Natural continuation reasoning
+        "arc": 2000,  # Elementary/middle school science
+        "arc-challenge": 3000,  # Harder ARC questions
+        "commonsenseqa": 2500,  # Common sense reasoning
     }
 
     # Find matching dataset and apply model multiplier
@@ -229,16 +255,34 @@ def get_dataset_optimal_tokens(dataset_info, model_name=None):
         difficulty_tokens = {"graduate": 300, "hard": 300, "moderate": 200, "easy": 150}
         base_tokens = difficulty_tokens.get(difficulty, 200)
 
+    # Special case: Qwen3 models need higher tokens for complex reasoning datasets
+    if model_name and "qwen" in model_name.lower():
+        if "mmlu" in dataset_name or "gpqa" in dataset_name:
+            final_tokens = 10240
+            dataset_type = "MMLU" if "mmlu" in dataset_name else "GPQA"
+            print(
+                f"  🎯 Special case: Qwen3 + {dataset_type} = {final_tokens} tokens (fixed requirement)"
+            )
+            return final_tokens
+        # elif "math" in dataset_name:  # DISABLED: dataset not available
+        #     final_tokens = 8000  # Competition math needs extensive proofs
+        #     print(f"  🎯 Special case: Qwen3 + MATH = {final_tokens} tokens (competition math requirement)")
+        #     return final_tokens
+
     # Apply model-specific multiplier and round to nearest 50
     final_tokens = int(base_tokens * model_multiplier)
     final_tokens = ((final_tokens + 25) // 50) * 50  # Round to nearest 50
+
+    print(
+        f"  🧮 Token calculation: {base_tokens} × {model_multiplier} = {int(base_tokens * model_multiplier)} → {final_tokens} (rounded)"
+    )
 
     return final_tokens
 
 
 def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
     """Get available models from an endpoint."""
-    client = OpenAI(base_url=endpoint, api_key=api_key or None)
+    client = OpenAI(base_url=endpoint, api_key=api_key or None, timeout=300.0)
     try:
         models = client.models.list()
         return [m.id for m in models.data]
@@ -247,8 +291,8 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
         return []
 
 
-def extract_answer(response: Any) -> Optional[str]:
-    """Extract answer from model response."""
+def extract_answer(response: Any, question: Optional[Question] = None) -> Optional[str]:
+    """Extract answer from model response based on question format."""
     # Normalize non-string responses into a string to be robust to providers
     # that return structured content (e.g., lists of parts or dicts).
     if response is None:
@@ -285,11 +329,58 @@ def extract_answer(response: Any) -> Optional[str]:
         except Exception:
             response = str(response)
 
+    # First, try to extract structured answer format "ANSWER: [value]"
+    structured_answer = extract_structured_answer(response)
+    if structured_answer:
+        return structured_answer
+
+    # Determine answer format based on question type
+    if question and hasattr(question, "options") and question.options:
+        if len(question.options) == 2 and set(question.options) == {"Yes", "No"}:
+            # Binary Yes/No questions (StrategyQA)
+            return extract_binary_answer(response)
+        else:
+            # Multiple choice questions (GPQA, MMLU, etc.)
+            return extract_multiple_choice_answer(response)
+    else:
+        # Free-form questions (GSM8K, DROP, etc.)
+        return extract_free_form_answer(response)
+
+
+def extract_structured_answer(response: str) -> Optional[str]:
+    """Extract answer from structured 'ANSWER: [value]' format."""
+    # Look for "ANSWER: [value]" pattern (case insensitive)
+    pattern = re.compile(r"ANSWER:\s*(.+?)(?:\n|$)", re.IGNORECASE)
+    match = pattern.search(response)
+    if match:
+        answer = match.group(1).strip()
+        # Clean up common trailing punctuation
+        answer = re.sub(r"[.!?]+$", "", answer)
+        return answer
+    return None
+
+
+def extract_multiple_choice_answer(response: str) -> Optional[str]:
+    """Extract multiple choice answer (A, B, C, D, etc.)."""
     # Try multiple extraction patterns in order of preference
     patterns = [ANSWER_PATTERN_PRIMARY, ANSWER_PATTERN_FINAL, ANSWER_PATTERN_CONCLUSION]
 
     for pattern in patterns:
         match = pattern.search(response)
+        if match:
+            return match.group(1).upper()
+
+    # Additional patterns for common answer formats
+    additional_patterns = [
+        r"(?:correct\s+answer\s+is\s+)([A-Z])",  # "correct answer is E"
+        r"(?:option\s+)([A-Z])",  # "option E"
+        r"(?:choice\s+)([A-Z])",  # "choice E"
+        r"([A-Z])\)",  # "E)" format
+        r"([A-Z])\s*[.!]?\s*$",  # Letter at end of line
+    ]
+
+    for pattern in additional_patterns:
+        match = re.search(pattern, response, re.IGNORECASE)
         if match:
             return match.group(1).upper()
 
@@ -300,12 +391,204 @@ def extract_answer(response: Any) -> Optional[str]:
         if len(line) == 1 and line.upper() in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
             return line.upper()
 
-    # Fallback 2: Find last letter in entire response
-    for char in reversed(response):
-        if char.upper() in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-            return char.upper()
+    # Fallback 2: Look for letters in specific contexts (more targeted)
+    # Check for patterns like "is E" or "answer E" in last few lines
+    for line in reversed(lines[-3:]):
+        line = line.strip()
+        # Look for letter after common words
+        context_match = re.search(
+            r"(?:is|answer|option|choice)\s+([A-Z])(?:\s|[.!?]|$)", line, re.IGNORECASE
+        )
+        if context_match:
+            return context_match.group(1).upper()
+
+    # Final fallback: Find last letter that appears to be an answer (not in middle of words)
+    # Only consider letters that are standalone or followed by punctuation
+    for match in re.finditer(r"\b([A-Z])(?:\s|[.!?)]|$)", response):
+        letter = match.group(1).upper()
+        if letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            return letter  # Return the last match found
 
     return None
+
+
+def extract_binary_answer(response: str) -> Optional[str]:
+    """Extract Yes/No answer from response."""
+    response_lower = response.lower()
+
+    # Look for explicit yes/no patterns
+    yes_patterns = [r"\byes\b", r"\btrue\b", r"\bcorrect\b", r"\baffirmative\b"]
+    no_patterns = [r"\bno\b", r"\bfalse\b", r"\bincorrect\b", r"\bnegative\b"]
+
+    # Check last few lines first (most likely to contain final answer)
+    lines = response.strip().split("\n")
+    for line in reversed(lines[-3:]):
+        line_lower = line.lower().strip()
+
+        for pattern in yes_patterns:
+            if re.search(pattern, line_lower):
+                return "Yes"
+
+        for pattern in no_patterns:
+            if re.search(pattern, line_lower):
+                return "No"
+
+    # Fallback: check entire response
+    for pattern in yes_patterns:
+        if re.search(pattern, response_lower):
+            return "Yes"
+
+    for pattern in no_patterns:
+        if re.search(pattern, response_lower):
+            return "No"
+
+    return None
+
+
+def extract_free_form_answer(response: str) -> Optional[str]:
+    """Extract free-form answer (numbers, text, etc.)."""
+    # For numerical answers, look for numbers with improved patterns
+    number_patterns = [
+        r"(?:answer\s*:?\s*)([0-9,.-]+)",  # "Answer: 42" or "Answer 42"
+        r"####\s*([0-9,.-]+)",  # GSM8K format "#### 42"
+        r"\$([0-9,.-]+)",  # Money format "$42"
+        r"([0-9,.-]+)\s*(?:dollars?|cents?|%|percent)",  # "42 dollars"
+        r"(?:is\s+)([0-9,.-]+)",  # "is 42" or "is 68.5"
+        r"(?:was\s+)([0-9,.-]+)",  # "was 42"
+        r"(?:were\s+)([0-9,.-]+)",  # "were 42"
+        r"([0-9,.-]+)(?:\s+(?:people|units|items|years|days|months|miles|kilometers|percent|%|dollars?|cents?))",  # "68.5 people"
+    ]
+
+    # Check last few lines first (most likely to contain final answer)
+    lines = response.strip().split("\n")
+    for line in reversed(lines[-3:]):
+        line = line.strip()
+
+        for pattern in number_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                return match.group(1).replace(",", "")  # Remove commas from numbers
+
+    # Fallback: check entire response for numbers
+    for pattern in number_patterns:
+        match = re.search(pattern, response, re.IGNORECASE)
+        if match:
+            return match.group(1).replace(",", "")
+
+    # For non-numerical free-form answers (like "germans", "Centenary Medal")
+    # Look for explicit answer patterns first
+    text_patterns = [
+        r"(?:answer\s*:?\s*)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "Answer: germans" or "Answer: Centenary Medal"
+        r"(?:is\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "is germans"
+        r"(?:was\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "was Centenary Medal"
+        r"(?:were\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "were germans"
+        r"(?:awarded\s+(?:him\s+)?(?:the\s+)?)([A-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "awarded the Centenary Medal"
+        r"(?:received\s+(?:the\s+)?)([A-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "received the Centenary Medal"
+        r"(?:called\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "called germans"
+        r"(?:named\s+)([a-zA-Z][a-zA-Z0-9\s-]+?)(?:\s*[.!?]|$)",  # "named Centenary Medal"
+    ]
+
+    # Check last few lines for text answers
+    for line in reversed(lines[-3:]):
+        line = line.strip()
+
+        for pattern in text_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                answer = match.group(1).strip()
+                # Clean up common suffixes but preserve important words
+                answer = re.sub(
+                    r"\s+(?:in\s+\d+|for\s+service).*$", "", answer, flags=re.IGNORECASE
+                )
+                # Limit to reasonable length (1-4 words for most DROP answers)
+                words = answer.split()
+                if len(words) <= 4:
+                    return answer
+                else:
+                    return " ".join(words[:2])  # Take first 2 words for long matches
+
+    # Final fallback: extract last meaningful line
+    for line in reversed(lines[-3:]):
+        line = line.strip()
+        if line and not line.startswith(
+            (
+                "Question:",
+                "Answer:",
+                "Therefore",
+                "So",
+                "Thus",
+                "Based on",
+                "Looking at",
+            )
+        ):
+            # Remove common prefixes and return clean answer
+            line = re.sub(
+                r"^(?:the\s+)?(?:answer\s+is\s+)?", "", line, flags=re.IGNORECASE
+            )
+            # Take first few words if it's a long sentence
+            words = line.split()
+            if len(words) > 5:
+                return " ".join(words[:3])  # Take first 3 words
+            return line.strip()
+
+    return None
+
+
+def compare_free_form_answers(predicted: str, correct: str) -> bool:
+    """Compare free-form answers with normalization."""
+    if not predicted or not correct:
+        return False
+
+    # Normalize both answers
+    predicted_norm = normalize_answer(predicted)
+    correct_norm = normalize_answer(correct)
+
+    # Direct match
+    if predicted_norm == correct_norm:
+        return True
+
+    # For numerical answers, try parsing as numbers
+    try:
+        pred_num = float(predicted_norm.replace(",", ""))
+        correct_num = float(correct_norm.replace(",", ""))
+        # Allow small floating point differences
+        return abs(pred_num - correct_num) < 1e-6
+    except (ValueError, AttributeError):
+        pass
+
+    # For text answers, check if predicted contains correct or vice versa
+    if len(predicted_norm) > 3 and len(correct_norm) > 3:
+        return predicted_norm in correct_norm or correct_norm in predicted_norm
+
+    return False
+
+
+def normalize_answer(answer: str) -> str:
+    """Normalize answer for comparison."""
+    if not isinstance(answer, str):
+        answer = str(answer)
+
+    # Convert to lowercase and strip
+    answer = answer.lower().strip()
+
+    # Remove common punctuation and extra spaces
+    answer = re.sub(r"[^\w\s.-]", "", answer)
+    answer = re.sub(r"\s+", " ", answer).strip()
+
+    # Remove common prefixes
+    prefixes = [
+        "the answer is",
+        "answer:",
+        "the answer:",
+        "answer is",
+        "final answer:",
+        "therefore",
+    ]
+    for prefix in prefixes:
+        if answer.startswith(prefix):
+            answer = answer[len(prefix) :].strip()
+
+    return answer
 
 
 def call_model(
@@ -343,41 +626,41 @@ def build_extra_body_for_model(
 ) -> Optional[Dict[str, Any]]:
     """Return an extra_body dict to toggle reasoning for a given model.
 
+    This function matches the exact pattern from reasoning_eval_consolidated.py
+    to ensure compatibility and consistent behavior.
+
     - DeepSeek v3.1: {"chat_template_kwargs": {"thinking": true/false}}
-    - GPT-OSS: {"reasoning_effort": "low|medium|high"} when ON; if not provided, then low
+    - Qwen3: {"chat_template_kwargs": {"enable_thinking": true/false}}
+    - GPT-OSS: {"reasoning_effort": "low|high"} based on reasoning flag
     """
-    # reasoning: True -> ON, False -> OFF, None -> base (default behavior)
+    # reasoning: True -> ON, False -> OFF, None -> no reasoning parameters
+    if reasoning is None:
+        return None
 
     lower = model_name.lower()
+
+    # DeepSeek v3.1 family (matches reasoning_eval_consolidated.py pattern)
     if (("ds" in lower) or ("deepseek" in lower)) and (
         "v31" in lower or "v3.1" in lower or "v3" in lower
     ):
-        if reasoning is True:
-            return {"chat_template_kwargs": {"thinking": True}}
-        elif reasoning is False:
-            return {"chat_template_kwargs": {"thinking": False}}
-        else:  # reasoning is None (base mode)
-            # Base: do not set thinking for DeepSeek - let it use default behavior
-            return None
+        return {"chat_template_kwargs": {"thinking": reasoning}}
 
-    # Qwen3 family
+    # Qwen3 family (matches reasoning_eval_consolidated.py pattern)
     if "qwen3" in lower:
-        if reasoning is True:
-            return {"chat_template_kwargs": {"enable_thinking": True}}
-        if reasoning is False:
-            return {"chat_template_kwargs": {"enable_thinking": False}}
-        return None
+        return {"chat_template_kwargs": {"enable_thinking": reasoning}}
 
-    # GPT OSS family
+    # GPT-OSS family (matches reasoning_eval_consolidated.py pattern)
     if "gpt-oss" in lower or "openai/gpt-oss" in lower or "gpt_oss" in lower:
-        if reasoning is True:
+        if reasoning:
             return {"reasoning_effort": "high"}
-        elif reasoning is False:
+        else:
             return {"reasoning_effort": "low"}
-        else:  # reasoning is None (base mode)
-            # Base: do not set reasoning_effort - let it use default behavior
-            return None
 
+    # OpenAI models with reasoning parameter
+    if "gpt" in lower or "o1" in lower:
+        return {"reasoning": reasoning}
+
+    # Model does not support reasoning parameters
     return None
 
 
@@ -396,13 +679,17 @@ def process_question_single(
     # Format prompt based on mode
     if prompt_mode == "XC":
         prompt = dataset.format_prompt(question, "explicit_cot")
-        extra_body = None
+        extra_body = (
+            None  # XC mode never uses reasoning parameters (CoT prompt instead)
+        )
     elif prompt_mode == "AR":
         prompt = dataset.format_prompt(question, "plain")
         extra_body = ar_extra_body
-    else:  # NR or Router-Transparent
+    else:  # NR mode (could be Router-Transparent or direct vLLM)
         prompt = dataset.format_prompt(question, "plain")
-        extra_body = None
+        # For Router-Transparent: ar_extra_body=None (router decides reasoning)
+        # For direct vLLM: ar_extra_body contains reasoning parameters
+        extra_body = ar_extra_body
 
     start_time = time.time()
     response_text, success, prompt_tokens, completion_tokens, total_tokens = call_model(
@@ -410,21 +697,29 @@ def process_question_single(
     )
     end_time = time.time()
 
-    predicted_answer = extract_answer(response_text) if success else None
+    predicted_answer = extract_answer(response_text, question) if success else None
 
-    # Compare predicted answer with correct answer (handle both letter and index formats)
-    if predicted_answer and predicted_answer in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        if isinstance(question.correct_answer, str):
-            # Dataset stores answer as letter (e.g., MMLU: "F")
-            is_correct = predicted_answer == question.correct_answer
-        elif isinstance(question.correct_answer, int):
-            # Dataset stores answer as index (e.g., CommonsenseQA: 1, ARC: 0)
-            predicted_idx = ord(predicted_answer) - ord("A")
-            is_correct = predicted_idx == question.correct_answer
+    # Compare predicted answer with correct answer (handle multiple formats)
+    is_correct = False
+    if predicted_answer:
+        if hasattr(question, "options") and question.options:
+            if len(question.options) == 2 and set(question.options) == {"Yes", "No"}:
+                # Binary Yes/No questions (StrategyQA)
+                is_correct = predicted_answer == question.correct_answer
+            elif predicted_answer in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                # Multiple choice questions (GPQA, MMLU, etc.)
+                if isinstance(question.correct_answer, str):
+                    # Dataset stores answer as letter (e.g., MMLU: "F")
+                    is_correct = predicted_answer == question.correct_answer
+                elif isinstance(question.correct_answer, int):
+                    # Dataset stores answer as index (e.g., CommonsenseQA: 1, ARC: 0)
+                    predicted_idx = ord(predicted_answer) - ord("A")
+                    is_correct = predicted_idx == question.correct_answer
         else:
-            is_correct = False
-    else:
-        is_correct = False
+            # Free-form questions (GSM8K, DROP, etc.)
+            is_correct = compare_free_form_answers(
+                predicted_answer, question.correct_answer
+            )
 
     return {
         "mode": prompt_mode,
@@ -456,7 +751,7 @@ def evaluate_model_router_transparent(
     temperature: float,
 ) -> pd.DataFrame:
     """Evaluate model in router-transparent mode."""
-    client = OpenAI(base_url=endpoint, api_key=api_key or None)
+    client = OpenAI(base_url=endpoint, api_key=api_key or None, timeout=300.0)
     print(f"Using model: {model}, endpoint: {endpoint}")
 
     results: List[Dict[str, Any]] = []
@@ -526,7 +821,7 @@ def evaluate_model_vllm_multimode(
     2. XC - CoT prompt, no reasoning toggle (prompt-based reasoning) - ONLY if dataset has CoT
     3. NR_REASONING - Plain prompt, reasoning toggle ON (model-based reasoning) - ALWAYS included
     """
-    client = OpenAI(base_url=endpoint, api_key=api_key or "dummy-key")
+    client = OpenAI(base_url=endpoint, api_key=api_key or "dummy-key", timeout=300.0)
     print(f"Using vLLM model: {model}, endpoint: {endpoint}")
 
     # Check if dataset has actual CoT content by examining sample questions
@@ -565,35 +860,22 @@ def evaluate_model_vllm_multimode(
     ) or ("qwen3" in model_lower)
 
     # Base modes (always included)
-    if is_deepseek_or_qwen:
-        mode_variants: List[Tuple[str, str, Optional[bool]]] = [
-            ("VLLM_NR", "NR", False),  # Plain prompt, reasoning OFF (baseline)
-            (
-                "VLLM_NR_REASONING",
-                "NR",
-                True,
-            ),  # Plain prompt, reasoning ON (model reasoning)
-        ]
-    else:
-        mode_variants: List[Tuple[str, str, Optional[bool]]] = [
-            ("VLLM_NR", "NR", None),  # Plain prompt, no toggle (baseline)
-            (
-                "VLLM_NR_REASONING",
-                "NR",
-                True,
-            ),  # Plain prompt, reasoning toggle ON (model reasoning)
-        ]
+    # Always use explicit True/False for reasoning-capable models to ensure consistent behavior
+    mode_variants: List[Tuple[str, str, Optional[bool]]] = [
+        ("VLLM_NR", "NR", False),  # Plain prompt, reasoning OFF (baseline)
+        (
+            "VLLM_NR_REASONING",
+            "NR",
+            True,
+        ),  # Plain prompt, reasoning ON (model reasoning)
+    ]
 
     # Add XC mode only if dataset has CoT content
     if has_cot_content:
-        if is_deepseek_or_qwen:
-            mode_variants.insert(
-                1, ("VLLM_XC", "XC", False)
-            )  # Insert between NR and NR_REASONING
-        else:
-            mode_variants.insert(
-                1, ("VLLM_XC", "XC", None)
-            )  # Insert between NR and NR_REASONING
+        # Always use explicit False for XC mode (CoT prompt with reasoning OFF)
+        mode_variants.insert(
+            1, ("VLLM_XC", "XC", False)
+        )  # Insert between NR and NR_REASONING
 
     def run_variants(q: Question) -> List[Dict[str, Any]]:
         local_records: List[Dict[str, Any]] = []
@@ -869,13 +1151,23 @@ def main():
     print(f"vLLM models: {vllm_models}")
 
     # Function to get optimal tokens for a specific model
-    # For fair comparison, use consistent token limits regardless of model name
+    # Use model-aware token allocation for optimal performance
     def get_model_optimal_tokens(model_name):
         if args.max_tokens:
             return args.max_tokens
         else:
-            # Use base dataset tokens without model-specific multipliers for fair comparison
-            return get_dataset_optimal_tokens(dataset_info, model_name=None)
+            # For router evaluation, use the first vLLM model for token calculation if available
+            # This ensures consistent token allocation between router and vLLM evaluations
+            reference_model = None
+            if vllm_models and len(vllm_models) > 0:
+                reference_model = vllm_models[0]
+                print(
+                    f"  🔗 Using vLLM model '{reference_model}' for router token calculation"
+                )
+            elif model_name and model_name != "auto":
+                reference_model = model_name
+
+            return get_dataset_optimal_tokens(dataset_info, model_name=reference_model)
 
     # Router evaluation (NR-only)
     if args.run_router and router_endpoint and router_models:

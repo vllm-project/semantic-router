@@ -21,7 +21,7 @@ Examples:
   semantic-router-bench test --dataset mmlu --samples 5
 
   # Full benchmark comparison
-  semantic-router-bench compare --dataset arc --samples 10
+  semantic-router-bench compare --dataset arc-challenge --samples 10
 
   # List available datasets
   semantic-router-bench list-datasets
@@ -40,7 +40,15 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     test_parser.add_argument(
         "--dataset",
         required=True,
-        choices=["mmlu", "arc", "gpqa", "truthfulqa", "commonsenseqa", "hellaswag"],
+        choices=[
+            "mmlu",
+            "arc",
+            "arc-challenge",
+            "gpqa",
+            "truthfulqa",
+            "commonsenseqa",
+            "hellaswag",
+        ],
         help="Dataset to test",
     )
     test_parser.add_argument(
@@ -68,7 +76,15 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     compare_parser.add_argument(
         "--dataset",
         required=True,
-        choices=["mmlu", "arc", "gpqa", "truthfulqa", "commonsenseqa", "hellaswag"],
+        choices=[
+            "mmlu",
+            "arc",
+            "arc-challenge",
+            "gpqa",
+            "truthfulqa",
+            "commonsenseqa",
+            "hellaswag",
+        ],
         help="Dataset to benchmark",
     )
     compare_parser.add_argument(
@@ -119,7 +135,14 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     comprehensive_parser.add_argument(
         "--datasets",
         nargs="+",
-        default=["mmlu", "arc", "gpqa", "truthfulqa", "commonsenseqa", "hellaswag"],
+        default=[
+            "mmlu",
+            "arc-challenge",
+            "gpqa",
+            "truthfulqa",
+            "commonsenseqa",
+            "hellaswag",
+        ],
         help="Datasets to benchmark",
     )
     comprehensive_parser.add_argument(
@@ -227,7 +250,7 @@ def list_datasets():
 
         print("\nUsage examples:")
         print("  semantic-router-bench test --dataset mmlu --samples 5")
-        print("  semantic-router-bench compare --dataset arc --samples 10")
+        print("  semantic-router-bench compare --dataset arc-challenge --samples 10")
 
         return 0
     except ImportError as e:
