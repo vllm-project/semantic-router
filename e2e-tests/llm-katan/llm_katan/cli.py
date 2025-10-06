@@ -16,6 +16,13 @@ import click
 from .config import ServerConfig
 from .server import run_server
 
+try:
+    from importlib.metadata import PackageNotFoundError, version
+
+    __version__ = version("llm-katan")
+except PackageNotFoundError:
+    __version__ = "unknown"
+
 # Set up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -83,7 +90,7 @@ logger = logging.getLogger(__name__)
     default="INFO",
     help="Log level (default: INFO)",
 )
-@click.version_option(version="0.1.4", prog_name="LLM Katan")
+@click.version_option(version=__version__, prog_name="LLM Katan")
 def main(
     model: str,
     served_model_name: Optional[str],

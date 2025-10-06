@@ -55,12 +55,30 @@ categories:
 - **Type**: String
 - **Description**: Category-specific system prompt automatically injected into requests
 - **Behavior**: Replaces existing system messages or adds new one at the beginning
+- **Runtime Control**: Can be enabled/disabled via API when `--enable-system-prompt-api` flag is used
 - **Example**: `"You are a mathematics expert. Provide step-by-step solutions."`
 
 ```yaml
 categories:
   - name: "math"
     system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+```
+
+**Runtime Management**: System prompts can be dynamically controlled via REST API endpoints when the server is started with `--enable-system-prompt-api` flag:
+
+```bash
+# Start server with system prompt API enabled
+./semantic-router --enable-system-prompt-api
+
+# Toggle system prompt for specific category
+curl -X PUT http://localhost:8080/config/system-prompts \
+  -H "Content-Type: application/json" \
+  -d '{"category": "math", "enabled": false}'
+
+# Set injection mode (replace/insert)
+curl -X PUT http://localhost:8080/config/system-prompts \
+  -H "Content-Type: application/json" \
+  -d '{"category": "math", "mode": "insert"}'
 ```
 
 ### Reasoning Configuration

@@ -230,6 +230,64 @@ var _ = Describe("Endpoint Selection", func() {
 				}
 			})
 		})
+
+		It("should only set one of Value or RawValue in header mutations to avoid Envoy 500 errors", func() {
+			// Create a request that will trigger model routing and header mutations
+			openAIRequest := map[string]interface{}{
+				"model": "auto",
+				"messages": []map[string]interface{}{
+					{
+						"role":    "user",
+						"content": "Write a Python function to sort a list",
+					},
+				},
+			}
+
+			requestBody, err := json.Marshal(openAIRequest)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create processing request
+			processingRequest := &ext_proc.ProcessingRequest{
+				Request: &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{
+						Body: requestBody,
+					},
+				},
+			}
+
+			// Create mock stream
+			stream := NewMockStream([]*ext_proc.ProcessingRequest{processingRequest})
+
+			// Process the request
+			err = router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify response was sent
+			Expect(stream.Responses).To(HaveLen(1))
+			response := stream.Responses[0]
+
+			// Get the request body response
+			bodyResp := response.GetRequestBody()
+			Expect(bodyResp).NotTo(BeNil())
+
+			// Check header mutations if they exist
+			headerMutation := bodyResp.GetResponse().GetHeaderMutation()
+			if headerMutation != nil && len(headerMutation.SetHeaders) > 0 {
+				for _, headerOption := range headerMutation.SetHeaders {
+					header := headerOption.Header
+					Expect(header).NotTo(BeNil())
+
+					// Envoy requires that only one of Value or RawValue is set
+					// Setting both causes HTTP 500 errors
+					hasValue := header.Value != ""
+					hasRawValue := len(header.RawValue) > 0
+
+					// Exactly one should be set, not both and not neither
+					Expect(hasValue || hasRawValue).To(BeTrue(), "Header %s should have either Value or RawValue set", header.Key)
+					Expect(!(hasValue && hasRawValue)).To(BeTrue(), "Header %s should not have both Value and RawValue set (causes Envoy 500 error)", header.Key)
+				}
+			}
+		})
 	})
 
 	Describe("Endpoint Configuration Validation", func() {

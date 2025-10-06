@@ -1,21 +1,21 @@
 import React, { useEffect, useRef } from 'react'
 import styles from './AIChipAnimation.module.css'
 
-const AIChipAnimation = () => {
-  const svgRef = useRef(null)
+const AIChipAnimation: React.FC = () => {
+  const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
 
     // Add pulsing animation to circuit paths
-    const paths = svg.querySelectorAll('.circuit-path')
+    const paths = svg.querySelectorAll<SVGPathElement>('.circuit-path')
     paths.forEach((path, index) => {
       path.style.animationDelay = `${index * 0.2}s`
     })
 
     // Add data flow animation
-    const dataPoints = svg.querySelectorAll('.data-point')
+    const dataPoints = svg.querySelectorAll<SVGCircleElement>('.data-point')
     dataPoints.forEach((point, index) => {
       point.style.animationDelay = `${index * 0.3}s`
     })

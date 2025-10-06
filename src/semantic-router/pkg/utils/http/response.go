@@ -169,7 +169,7 @@ func CreateCacheHitResponse(cachedResponse []byte) *ext_proc.ProcessingResponse 
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:      "x-cache-hit",
+						Key:      "x-vsr-cache-hit",
 						RawValue: []byte("true"),
 					},
 				},

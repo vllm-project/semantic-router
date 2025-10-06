@@ -16,6 +16,12 @@ jobs:
     - name: Check out the repo
       uses: actions/checkout@v4
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
     - name: Extract tag name
       id: extract_tag
       run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
@@ -35,6 +41,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile.extproc
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: |
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/extproc:${{ steps.extract_tag.outputs.tag }}
@@ -49,6 +56,12 @@ jobs:
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
 
     - name: Extract tag name
       id: extract_tag
@@ -75,6 +88,7 @@ jobs:
       with:
         context: ./e2e-tests/llm-katan
         file: ./e2e-tests/llm-katan/Dockerfile
+        platforms: linux/amd64,linux/arm64
         push: true
         tags: |
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/llm-katan:${{ steps.extract_tag.outputs.tag }}

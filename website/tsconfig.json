@@ -1,0 +1,25 @@
+{
+  "extends": "@tsconfig/docusaurus/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "commonjs",
+    "jsx": "react",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@site/*": ["./"],
+      "@docusaurus/*": ["./node_modules/@docusaurus/*"],
+      "@theme/*": ["./src/theme/*"]
+    }
+  },
+  "include": ["src", "*.ts", "*.tsx"],
+  "exclude": ["node_modules", "build", ".docusaurus"]
+}

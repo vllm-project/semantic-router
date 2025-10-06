@@ -8,7 +8,7 @@
 [![Crates.io](https://img.shields.io/crates/v/candle-semantic-router.svg)](https://crates.io/crates/candle-semantic-router)
 ![Test And Build](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
 
-**📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/getting-started/installation) | 📣 [Blog](https://vllm-semantic-router.com/blog/) | 📖 [API Reference](https://vllm-semantic-router.com/docs/api/router/)**
+**📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/installation) | 📣 [Blog](https://vllm-semantic-router.com/blog/) | 📖 [API Reference](https://vllm-semantic-router.com/docs/api/router/)**
 
 ![code](./website/static/img/code.png)
 
@@ -62,6 +62,18 @@ Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts t
 
 Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
 
+### Distributed Tracing 🔍
+
+Comprehensive observability with OpenTelemetry distributed tracing provides fine-grained visibility into the request processing pipeline:
+
+- **Request Flow Tracing**: Track requests through classification, security checks, caching, and routing
+- **Performance Analysis**: Identify bottlenecks with detailed timing for each operation
+- **Security Monitoring**: Trace PII detection and jailbreak prevention operations
+- **Routing Decisions**: Understand why specific models were selected
+- **OpenTelemetry Standard**: Industry-standard tracing with support for Jaeger, Tempo, and other OTLP backends
+
+See [Distributed Tracing Guide](https://vllm-semantic-router.com/docs/tutorials/observability/distributed-tracing/) for complete setup instructions.
+
 ## Documentation 📖
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
@@ -70,10 +82,11 @@ For comprehensive documentation including detailed setup instructions, architect
 
 The documentation includes:
 
-- **[Installation Guide](https://vllm-semantic-router.com/docs/getting-started/installation/)** - Complete setup instructions
-- **[System Architecture](https://vllm-semantic-router.com/docs/architecture/system-architecture/)** - Technical deep dive
+- **[Installation Guide](https://vllm-semantic-router.com/docs/installation/)** - Complete setup instructions
+- **[System Architecture](https://vllm-semantic-router.com/docs/overview/architecture/system-architecture/)** - Technical deep dive
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
+- **[Distributed Tracing](https://vllm-semantic-router.com/docs/tutorials/observability/distributed-tracing/)** - Observability and debugging guide
 
 ## Community 👋
 

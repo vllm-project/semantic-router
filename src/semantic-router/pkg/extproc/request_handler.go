@@ -1,17 +1,22 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
@@ -32,60 +37,130 @@ func serializeOpenAIRequest(req *openai.ChatCompletionNewParams) ([]byte, error)
 	return json.Marshal(req)
 }
 
+// extractStreamParam extracts the stream parameter from the original request body
+func extractStreamParam(originalBody []byte) bool {
+	var requestMap map[string]interface{}
+	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
+		return false
+	}
+
+	if streamValue, exists := requestMap["stream"]; exists {
+		if stream, ok := streamValue.(bool); ok {
+			return stream
+		}
+	}
+	return false
+}
+
+// serializeOpenAIRequestWithStream converts request back to JSON, preserving the stream parameter from original request
+func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasStreamParam bool) ([]byte, error) {
+	// First serialize the SDK object
+	sdkBytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// If original request had stream parameter, add it back
+	if hasStreamParam {
+		var sdkMap map[string]interface{}
+		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
+			sdkMap["stream"] = true
+			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
+				return modifiedBytes, nil
+			}
+		}
+	}
+
+	return sdkBytes, nil
+}
+
 // addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
-func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string) ([]byte, error) {
+// Returns the modified body, whether the system prompt was actually injected, and any error
+func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode string) ([]byte, bool, error) {
 	if systemPrompt == "" {
-		return requestBody, nil
+		return requestBody, false, nil
 	}
 
 	// Parse the JSON request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Get the messages array
 	messagesInterface, ok := requestMap["messages"]
 	if !ok {
-		return requestBody, nil // No messages array, return original
+		return requestBody, false, nil // No messages array, return original
 	}
 
 	messages, ok := messagesInterface.([]interface{})
 	if !ok {
-		return requestBody, nil // Messages is not an array, return original
-	}
-
-	// Create a new system message
-	systemMessage := map[string]interface{}{
-		"role":    "system",
-		"content": systemPrompt,
+		return requestBody, false, nil // Messages is not an array, return original
 	}
 
 	// Check if there's already a system message at the beginning
 	hasSystemMessage := false
+	var existingSystemContent string
 	if len(messages) > 0 {
 		if firstMsg, ok := messages[0].(map[string]interface{}); ok {
 			if role, ok := firstMsg["role"].(string); ok && role == "system" {
 				hasSystemMessage = true
+				if content, ok := firstMsg["content"].(string); ok {
+					existingSystemContent = content
+				}
 			}
 		}
 	}
 
+	// Handle different injection modes
+	var finalSystemContent string
+	var logMessage string
+
+	switch mode {
+	case "insert":
+		if hasSystemMessage {
+			// Insert mode: prepend category prompt to existing system message
+			finalSystemContent = systemPrompt + "\n\n" + existingSystemContent
+			logMessage = "Inserted category-specific system prompt before existing system message"
+		} else {
+			// No existing system message, just use the category prompt
+			finalSystemContent = systemPrompt
+			logMessage = "Added category-specific system prompt (insert mode, no existing system message)"
+		}
+	case "replace":
+		fallthrough
+	default:
+		// Replace mode: use only the category prompt
+		finalSystemContent = systemPrompt
+		if hasSystemMessage {
+			logMessage = "Replaced existing system message with category-specific system prompt"
+		} else {
+			logMessage = "Added category-specific system prompt to the beginning of messages"
+		}
+	}
+
+	// Create the final system message
+	systemMessage := map[string]interface{}{
+		"role":    "system",
+		"content": finalSystemContent,
+	}
+
 	if hasSystemMessage {
-		// Replace the existing system message
+		// Update the existing system message
 		messages[0] = systemMessage
-		observability.Infof("Replaced existing system message with category-specific system prompt")
 	} else {
 		// Prepend the system message to the beginning of the messages array
 		messages = append([]interface{}{systemMessage}, messages...)
-		observability.Infof("Added category-specific system prompt to the beginning of messages")
 	}
+
+	observability.Infof("%s (mode: %s)", logMessage, mode)
 
 	// Update the messages in the request map
 	requestMap["messages"] = messages
 
 	// Marshal back to JSON
-	return json.Marshal(requestMap)
+	modifiedBody, err := json.Marshal(requestMap)
+	return modifiedBody, true, err
 }
 
 // extractUserAndNonUserContent extracts content from request messages
@@ -165,12 +240,22 @@ type RequestContext struct {
 	ProcessingStartTime time.Time
 
 	// Streaming detection
-	ExpectStreamingResponse bool // set from request Accept header
+	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
 
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
+
+	// VSR decision tracking
+	VSRSelectedCategory     string // The category selected by VSR
+	VSRReasoningMode        string // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel        string // The model selected by VSR
+	VSRCacheHit             bool   // Whether this request hit the cache
+	VSRInjectedSystemPrompt bool   // Whether a system prompt was injected into the request
+
+	// Tracing context
+	TraceContext context.Context // OpenTelemetry trace context for span propagation
 }
 
 // handleRequestHeaders processes the request headers
@@ -178,6 +263,26 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// Record start time for overall request processing
 	ctx.StartTime = time.Now()
 	observability.Infof("Received request headers")
+
+	// Initialize trace context from incoming headers
+	baseCtx := context.Background()
+	headerMap := make(map[string]string)
+	for _, h := range v.RequestHeaders.Headers.Headers {
+		headerValue := h.Value
+		if headerValue == "" && len(h.RawValue) > 0 {
+			headerValue = string(h.RawValue)
+		}
+		headerMap[h.Key] = headerValue
+	}
+
+	// Extract trace context from headers (if present)
+	ctx.TraceContext = observability.ExtractTraceContext(baseCtx, headerMap)
+
+	// Start root span for the request
+	spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanRequestReceived,
+		trace.WithSpanKind(trace.SpanKindServer))
+	ctx.TraceContext = spanCtx
+	defer span.End()
 
 	// Store headers for later use
 	headers := v.RequestHeaders.Headers
@@ -196,11 +301,30 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		}
 	}
 
+	// Set request metadata on span
+	if ctx.RequestID != "" {
+		observability.SetSpanAttributes(span,
+			attribute.String(observability.AttrRequestID, ctx.RequestID))
+	}
+
+	method := ctx.Headers[":method"]
+	path := ctx.Headers[":path"]
+	observability.SetSpanAttributes(span,
+		attribute.String(observability.AttrHTTPMethod, method),
+		attribute.String(observability.AttrHTTPPath, path))
+
 	// Detect if the client expects a streaming response (SSE)
 	if accept, ok := ctx.Headers["accept"]; ok {
 		if strings.Contains(strings.ToLower(accept), "text/event-stream") {
 			ctx.ExpectStreamingResponse = true
+			observability.Infof("Client expects streaming response based on Accept header")
 		}
+	}
+
+	// Check if this is a GET request to /v1/models
+	if method == "GET" && strings.HasPrefix(path, "/v1/models") {
+		observability.Infof("Handling /v1/models request with path: %s", path)
+		return r.handleModelsRequest(path)
 	}
 
 	// Prepare base response
@@ -230,6 +354,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Save the original request body
 	ctx.OriginalRequestBody = v.RequestBody.GetBody()
 
+	// Extract stream parameter from original request and update ExpectStreamingResponse if needed
+	hasStreamParam := extractStreamParam(ctx.OriginalRequestBody)
+	if hasStreamParam {
+		observability.Infof("Original request contains stream parameter: true")
+		ctx.ExpectStreamingResponse = true // Set this if stream param is found
+	}
+
 	// Parse the OpenAI request using SDK types
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
@@ -244,6 +375,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Store the original model
 	originalModel := string(openAIRequest.Model)
 	observability.Infof("Original model: %s", originalModel)
+
+	// Set model on span
+	if ctx.TraceContext != nil {
+		_, span := observability.StartSpan(ctx.TraceContext, "parse_request")
+		observability.SetSpanAttributes(span,
+			attribute.String(observability.AttrOriginalModel, originalModel))
+		span.End()
+	}
 
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(originalModel)
@@ -276,9 +415,20 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 
 	// Perform jailbreak detection on all message content
 	if r.Classifier.IsJailbreakEnabled() {
+		// Start jailbreak detection span
+		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanJailbreakDetection)
+		defer span.End()
+
+		startTime := time.Now()
 		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
+		detectionTime := time.Since(startTime).Milliseconds()
+
+		observability.SetSpanAttributes(span,
+			attribute.Int64(observability.AttrJailbreakDetectionTimeMs, detectionTime))
+
 		if err != nil {
 			observability.Errorf("Error performing jailbreak analysis: %v", err)
+			observability.RecordError(span, err)
 			// Continue processing despite jailbreak analysis error
 			metrics.RecordRequestError(ctx.RequestModel, "classification_failed")
 		} else if hasJailbreak {
@@ -293,6 +443,11 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 				}
 			}
 
+			observability.SetSpanAttributes(span,
+				attribute.Bool(observability.AttrJailbreakDetected, true),
+				attribute.String(observability.AttrJailbreakType, jailbreakType),
+				attribute.String(observability.AttrSecurityAction, "blocked"))
+
 			observability.Warnf("JAILBREAK ATTEMPT BLOCKED: %s (confidence: %.3f)", jailbreakType, confidence)
 
 			// Return immediate jailbreak violation response
@@ -306,9 +461,13 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 			// Count this as a blocked request
 			metrics.RecordRequestError(ctx.RequestModel, "jailbreak_block")
 			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence)
+			ctx.TraceContext = spanCtx
 			return jailbreakResponse, true
 		} else {
+			observability.SetSpanAttributes(span,
+				attribute.Bool(observability.AttrJailbreakDetected, false))
 			observability.Infof("No jailbreak detected in request content")
+			ctx.TraceContext = spanCtx
 		}
 	}
 
@@ -329,11 +488,26 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 	ctx.RequestQuery = requestQuery
 
 	if requestQuery != "" && r.Cache.IsEnabled() {
+		// Start cache lookup span
+		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanCacheLookup)
+		defer span.End()
+
+		startTime := time.Now()
 		// Try to find a similar cached response
 		cachedResponse, found, err := r.Cache.FindSimilar(requestModel, requestQuery)
+		lookupTime := time.Since(startTime).Milliseconds()
+
+		observability.SetSpanAttributes(span,
+			attribute.String(observability.AttrCacheKey, requestQuery),
+			attribute.Bool(observability.AttrCacheHit, found),
+			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime))
+
 		if err != nil {
 			observability.Errorf("Error searching cache: %v", err)
+			observability.RecordError(span, err)
 		} else if found {
+			// Mark this request as a cache hit
+			ctx.VSRCacheHit = true
 			// Log cache hit
 			observability.LogEvent("cache_hit", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -342,15 +516,17 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 			})
 			// Return immediate response from cache
 			response := http.CreateCacheHitResponse(cachedResponse)
+			ctx.TraceContext = spanCtx
 			return response, true
 		}
+		ctx.TraceContext = spanCtx
+	}
 
-		// Cache miss, store the request for later
-		err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
-		if err != nil {
-			observability.Errorf("Error adding pending request to cache: %v", err)
-			// Continue without caching
-		}
+	// Cache miss, store the request for later
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
+	if err != nil {
+		observability.Errorf("Error adding pending request to cache: %v", err)
+		// Continue without caching
 	}
 
 	return nil, false
@@ -384,14 +560,50 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 
 		if classificationText != "" {
+			// Start classification span
+			classifyCtx, classifySpan := observability.StartSpan(ctx.TraceContext, observability.SpanClassification)
+			classifyStart := time.Now()
+
 			// Find the most similar task description or classify, then select best model
 			matchedModel := r.classifyAndSelectBestModel(classificationText)
+			classifyTime := time.Since(classifyStart).Milliseconds()
+
+			// Get category information for the span
+			categoryName := r.findCategoryForClassification(classificationText)
+
+			observability.SetSpanAttributes(classifySpan,
+				attribute.String(observability.AttrCategoryName, categoryName),
+				attribute.String(observability.AttrClassifierType, "bert"),
+				attribute.Int64(observability.AttrClassificationTimeMs, classifyTime))
+			classifySpan.End()
+			ctx.TraceContext = classifyCtx
+
 			if matchedModel != originalModel && matchedModel != "" {
-				// Get detected PII for policy checking
+				// Start PII detection span if enabled
 				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 				if r.PIIChecker.IsPIIEnabled(matchedModel) {
+					piiCtx, piiSpan := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
+					piiStart := time.Now()
+
 					observability.Infof("PII policy enabled for model %s", matchedModel)
 					detectedPII := r.Classifier.DetectPIIInContent(allContent)
+
+					piiTime := time.Since(piiStart).Milliseconds()
+					piiDetected := len(detectedPII) > 0
+
+					observability.SetSpanAttributes(piiSpan,
+						attribute.Bool(observability.AttrPIIDetected, piiDetected),
+						attribute.Int64(observability.AttrPIIDetectionTimeMs, piiTime))
+
+					if piiDetected {
+						// Convert detected PII to comma-separated string
+						piiTypesStr := strings.Join(detectedPII, ",")
+						observability.SetSpanAttributes(piiSpan,
+							attribute.String(observability.AttrPIITypes, piiTypesStr))
+					}
+
+					piiSpan.End()
+					ctx.TraceContext = piiCtx
 
 					// Check if the initially selected model passes PII policy
 					allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
@@ -446,6 +658,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				observability.Infof("Routing to model: %s", matchedModel)
 
+				// Start routing decision span
+				routingCtx, routingSpan := observability.StartSpan(ctx.TraceContext, observability.SpanRoutingDecision)
+
 				// Check reasoning mode for this category using entropy-based approach
 				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
 				observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
@@ -454,26 +669,61 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
+				// Set routing attributes on span
+				observability.SetSpanAttributes(routingSpan,
+					attribute.String(observability.AttrRoutingStrategy, "auto"),
+					attribute.String(observability.AttrRoutingReason, reasoningDecision.DecisionReason),
+					attribute.String(observability.AttrOriginalModel, originalModel),
+					attribute.String(observability.AttrSelectedModel, matchedModel),
+					attribute.Bool(observability.AttrReasoningEnabled, useReasoning),
+					attribute.String(observability.AttrReasoningEffort, effortForMetrics))
+
+				routingSpan.End()
+				ctx.TraceContext = routingCtx
+
+				// Track VSR decision information
+				ctx.VSRSelectedCategory = categoryName
+				ctx.VSRSelectedModel = matchedModel
+				if useReasoning {
+					ctx.VSRReasoningMode = "on"
+				} else {
+					ctx.VSRReasoningMode = "off"
+				}
+
 				// Track the model routing change
 				metrics.RecordModelRouting(originalModel, matchedModel)
 
 				// Update the actual model that will be used
 				actualModel = matchedModel
 
+				// Start backend selection span
+				backendCtx, backendSpan := observability.StartSpan(ctx.TraceContext, observability.SpanBackendSelection)
+
 				// Select the best endpoint for this model
 				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
 				if endpointFound {
 					selectedEndpoint = endpointAddress
 					observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
+
+					// Extract endpoint name from config
+					endpoints := r.Config.GetEndpointsForModel(matchedModel)
+					if len(endpoints) > 0 {
+						observability.SetSpanAttributes(backendSpan,
+							attribute.String(observability.AttrEndpointName, endpoints[0].Name),
+							attribute.String(observability.AttrEndpointAddress, selectedEndpoint))
+					}
 				} else {
 					observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
 				}
 
+				backendSpan.End()
+				ctx.TraceContext = backendCtx
+
 				// Modify the model in the request
 				openAIRequest.Model = openai.ChatModel(matchedModel)
 
-				// Serialize the modified request
-				modifiedBody, err := serializeOpenAIRequest(openAIRequest)
+				// Serialize the modified request with stream parameter preserved
+				modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
 				if err != nil {
 					observability.Errorf("Error serializing modified request: %v", err)
 					metrics.RecordRequestError(actualModel, "serialization_error")
@@ -489,15 +739,51 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Add category-specific system prompt if configured
 				if categoryName != "" {
-					category := r.Classifier.GetCategoryByName(categoryName)
-					if category != nil && category.SystemPrompt != "" {
-						modifiedBody, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt)
+					// Try to get the most up-to-date category configuration from global config first
+					// This ensures API updates are reflected immediately
+					globalConfig := config.GetConfig()
+					var category *config.Category
+					if globalConfig != nil {
+						category = globalConfig.GetCategoryByName(categoryName)
+					}
+
+					// If not found in global config, fall back to router's config (for tests and initial setup)
+					if category == nil {
+						category = r.Classifier.GetCategoryByName(categoryName)
+					}
+
+					if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
+						// Start system prompt injection span
+						promptCtx, promptSpan := observability.StartSpan(ctx.TraceContext, observability.SpanSystemPromptInjection)
+
+						mode := category.GetSystemPromptMode()
+						var injected bool
+						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
 						if err != nil {
 							observability.Errorf("Error adding system prompt to request: %v", err)
+							observability.RecordError(promptSpan, err)
 							metrics.RecordRequestError(actualModel, "serialization_error")
+							promptSpan.End()
 							return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
 						}
-						observability.Infof("Added category-specific system prompt for category: %s", categoryName)
+
+						observability.SetSpanAttributes(promptSpan,
+							attribute.Bool("system_prompt.injected", injected),
+							attribute.String("system_prompt.mode", mode),
+							attribute.String(observability.AttrCategoryName, categoryName))
+
+						if injected {
+							ctx.VSRInjectedSystemPrompt = true
+							observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
+						}
+
+						// Log metadata about system prompt injection (avoid logging sensitive user data)
+						observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
+
+						promptSpan.End()
+						ctx.TraceContext = promptCtx
+					} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {
+						observability.Infof("System prompt disabled for category: %s", categoryName)
 					}
 				}
 
@@ -567,6 +853,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		}
 	} else if originalModel != "auto" {
 		observability.Infof("Using specified model: %s", originalModel)
+		// Track VSR decision information for non-auto models
+		ctx.VSRSelectedModel = originalModel
+		ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 		// For non-auto models, check PII policy compliance
 		allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 		detectedPII := r.Classifier.DetectPIIInContent(allContent)
@@ -728,8 +1017,8 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 
 // updateRequestWithTools updates the request body with the selected tools
 func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
-	// Re-serialize the request with modified tools
-	modifiedBody, err := serializeOpenAIRequest(openAIRequest)
+	// Re-serialize the request with modified tools and preserved stream parameter
+	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
 	if err != nil {
 		return err
 	}
@@ -800,4 +1089,128 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	}
 
 	return nil
+}
+
+// OpenAIModel represents a single model in the OpenAI /v1/models response
+type OpenAIModel struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// OpenAIModelList is the container for the models list response
+type OpenAIModelList struct {
+	Object string        `json:"object"`
+	Data   []OpenAIModel `json:"data"`
+}
+
+// handleModelsRequest handles GET /v1/models requests and returns a direct response
+func (r *OpenAIRouter) handleModelsRequest(path string) (*ext_proc.ProcessingResponse, error) {
+	now := time.Now().Unix()
+
+	// Start with the special "auto" model always available from the router
+	models := []OpenAIModel{
+		{
+			ID:      "auto",
+			Object:  "model",
+			Created: now,
+			OwnedBy: "vllm-semantic-router",
+		},
+	}
+
+	// Append underlying models from config (if available)
+	if r.Config != nil {
+		for _, m := range r.Config.GetAllModels() {
+			// Skip if already added as "auto" (or avoid duplicates in general)
+			if m == "auto" {
+				continue
+			}
+			models = append(models, OpenAIModel{
+				ID:      m,
+				Object:  "model",
+				Created: now,
+				OwnedBy: "vllm-semantic-router",
+			})
+		}
+	}
+
+	resp := OpenAIModelList{
+		Object: "list",
+		Data:   models,
+	}
+
+	return r.createJSONResponse(200, resp), nil
+}
+
+// statusCodeToEnum converts HTTP status code to typev3.StatusCode enum
+func statusCodeToEnum(statusCode int) typev3.StatusCode {
+	switch statusCode {
+	case 200:
+		return typev3.StatusCode_OK
+	case 400:
+		return typev3.StatusCode_BadRequest
+	case 404:
+		return typev3.StatusCode_NotFound
+	case 500:
+		return typev3.StatusCode_InternalServerError
+	default:
+		return typev3.StatusCode_OK
+	}
+}
+
+// createJSONResponseWithBody creates a direct response with pre-marshaled JSON body
+func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte) *ext_proc.ProcessingResponse {
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &ext_proc.ImmediateResponse{
+				Status: &typev3.HttpStatus{
+					Code: statusCodeToEnum(statusCode),
+				},
+				Headers: &ext_proc.HeaderMutation{
+					SetHeaders: []*core.HeaderValueOption{
+						{
+							Header: &core.HeaderValue{
+								Key:      "content-type",
+								RawValue: []byte("application/json"),
+							},
+						},
+					},
+				},
+				Body: jsonBody,
+			},
+		},
+	}
+}
+
+// createJSONResponse creates a direct response with JSON content
+func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		observability.Errorf("Failed to marshal JSON response: %v", err)
+		return r.createErrorResponse(500, "Internal server error")
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
+}
+
+// createErrorResponse creates a direct error response
+func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	errorResp := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    "invalid_request_error",
+			"code":    statusCode,
+		},
+	}
+
+	jsonData, err := json.Marshal(errorResp)
+	if err != nil {
+		observability.Errorf("Failed to marshal error response: %v", err)
+		jsonData = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
+		// Use 500 status code for fallback error
+		statusCode = 500
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
 }
