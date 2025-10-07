@@ -45,6 +45,8 @@ type RouterConfig struct {
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 
+	// TODO: Default use of RAG?
+
 	// Reasoning family configurations to define how different model families handle reasoning syntax
 	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
 
@@ -263,12 +265,15 @@ type ModelScore struct {
 	UseReasoning *bool   `yaml:"use_reasoning"` // Pointer to detect missing field
 }
 
-// Category represents a category for routing queries
+// Category represents a category for routing queries, TODO: Update for RAG
 type Category struct {
 	Name                 string       `yaml:"name"`
 	Description          string       `yaml:"description,omitempty"`
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
+	RagStrategy			 string       `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
+	RagDescription       string       `yaml:"rag_description,omitempty"`
+	// TODO: Knowledge Domains?
 	ModelScores          []ModelScore `yaml:"model_scores"`
 	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
 	// used by the classifier model. When provided, classifier outputs will be translated
