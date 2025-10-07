@@ -181,8 +181,13 @@ def create_app(config: ServerConfig) -> FastAPI:
 
                 return StreamingResponse(
                     generate_stream(),
-                    media_type="text/plain",
-                    headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                    },
                 )
             else:
                 # Non-streaming response
