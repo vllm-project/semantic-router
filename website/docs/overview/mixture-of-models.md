@@ -437,4 +437,4 @@ The Mixture of Models approach is not just a cost optimization strategy—it's a
 
 The evidence from production deployments is clear: MoM isn't just the future of LLM deployment—it's the present reality for organizations serious about scaling AI responsibly and cost-effectively.
 
-Ready to implement your own Mixture of Models system? Continue to our [System Architecture](../architecture/system-architecture.md) guide to understand the technical implementation details.
+Ready to implement your own Mixture of Models system? Continue to our [System Architecture](architecture/system-architecture.md) guide to understand the technical implementation details.

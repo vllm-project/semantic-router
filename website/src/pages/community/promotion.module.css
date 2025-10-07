@@ -1,0 +1,477 @@
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 4rem;
+}
+
+.header h1 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1rem;
+}
+
+.subtitle {
+  font-size: 1.3rem;
+  color: var(--ifm-color-emphasis-700);
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 4rem;
+}
+
+/* Overview Section */
+.overview h2 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: var(--ifm-color-primary);
+  text-align: center;
+}
+
+.overviewContent {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: auto auto;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.overviewContent .overviewCard:nth-child(3) {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+}
+
+/* Growth Path Styles */
+.growthPathSimple {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.pathText {
+  font-size: 1.3rem;
+  color: var(--ifm-color-primary);
+  display: block;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
+
+.pathText strong {
+  background: linear-gradient(135deg, var(--ifm-color-primary), var(--ifm-color-primary-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
+.pathDescription {
+  font-size: 1rem;
+  color: var(--ifm-color-emphasis-600);
+  margin: 0;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.overviewCard {
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 16px;
+  padding: 2rem;
+  border: 2px solid var(--ifm-color-emphasis-200);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  text-align: center;
+}
+
+.overviewCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+}
+
+.overviewCard h3 {
+  margin-bottom: 1rem;
+  color: var(--ifm-color-primary);
+  font-size: 1.3rem;
+}
+
+.overviewCard p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* Promotion Rules Section */
+.promotionRules h2 {
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--ifm-color-primary);
+  text-align: center;
+}
+
+.rulesDescription {
+  font-size: 1.2rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 3rem;
+  text-align: center;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+/* Rules Grid */
+.rulesGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Promotion Card */
+.promotionCard {
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 20px;
+  padding: 2.5rem;
+  border: 3px solid var(--ifm-color-emphasis-200);
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  height: 100%;
+}
+
+.promotionCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: inherit;
+}
+
+.promotionCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* Card Header */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.roleIcon {
+  font-size: 2.5rem;
+}
+
+.roleTitle {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin: 0;
+  flex: 1;
+}
+
+.permissions {
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 25px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Card Content */
+.cardContent {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.cardContent h4 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  color: var(--ifm-color-emphasis-800);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.mainRequirement {
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-800);
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.detailsList {
+  margin: 0 0 1.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.detailsList li {
+  margin-bottom: 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.5;
+  font-size: 1rem;
+}
+
+.timeline, .application {
+  margin-bottom: 1.5rem;
+}
+
+.timeline p, .application p {
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+/* Application Process Section */
+.applicationProcess h2 {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  color: var(--ifm-color-primary);
+  text-align: center;
+}
+
+.processSteps {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 16px;
+  border: 2px solid var(--ifm-color-emphasis-200);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.step:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.stepNumber {
+  background: var(--ifm-color-primary);
+  color: white;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.stepContent h3 {
+  margin: 0 0 0.75rem 0;
+  color: var(--ifm-color-primary);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.stepContent p {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+/* Get Started Section */
+.getStarted {
+  text-align: center;
+  padding: 3rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  border-radius: 20px;
+  border: 2px solid var(--ifm-color-emphasis-200);
+  margin-top: 2rem;
+}
+
+.getStarted h2 {
+  font-size: 2.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--ifm-color-primary);
+  font-weight: 800;
+}
+
+.getStarted p {
+  font-size: 1.2rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 2.5rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: var(--ifm-color-primary);
+  color: white;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.actionButton:hover {
+  background: var(--ifm-color-primary-dark);
+  color: white;
+  text-decoration: none;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .rulesGrid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .processSteps {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .header h1 {
+    font-size: 2.5rem;
+  }
+
+  .subtitle {
+    font-size: 1.1rem;
+  }
+
+  .overviewContent {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    gap: 1.5rem;
+  }
+
+  .overviewContent .overviewCard:nth-child(3) {
+    grid-column: 1;
+    width: 100%;
+    margin: 0;
+  }
+
+  .pathText {
+    font-size: 1.1rem;
+  }
+
+  .pathDescription {
+    font-size: 0.9rem;
+  }
+
+  .overviewCard {
+    padding: 1.5rem;
+  }
+
+  .rulesGrid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .promotionCard {
+    padding: 1.5rem;
+  }
+
+  .roleTitle {
+    font-size: 1.5rem;
+  }
+
+  .processSteps {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .step {
+    padding: 1.5rem;
+  }
+
+  .stepNumber {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1rem;
+  }
+
+  .actionButtons {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .actionButton {
+    width: 100%;
+    max-width: 300px;
+    justify-content: center;
+  }
+
+  .getStarted {
+    padding: 2rem 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: 2rem;
+  }
+
+  .promotionRules h2,
+  .applicationProcess h2,
+  .getStarted h2 {
+    font-size: 2rem;
+  }
+
+  .roleTitle {
+    font-size: 1.3rem;
+  }
+
+  .promotionCard {
+    padding: 1.2rem;
+  }
+}

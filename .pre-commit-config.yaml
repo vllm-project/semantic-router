@@ -30,7 +30,7 @@ repos:
     entry: bash -c "make markdown-lint"
     language: system
     files: \.md$
-    exclude: ^(\node_modules/)
+    exclude: ^(\node_modules/|CLAUDE\.md)
 
 # Yaml specific hooks
 - repo: local

@@ -87,6 +87,9 @@ type RouterConfig struct {
 
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
+
+	// Observability configuration for tracing, metrics, and logging
+	Observability ObservabilityConfig `yaml:"observability"`
 }
 
 // APIConfig represents configuration for API endpoints
@@ -96,6 +99,63 @@ type APIConfig struct {
 		// Metrics configuration for batch classification monitoring
 		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 	} `yaml:"batch_classification"`
+}
+
+// ObservabilityConfig represents configuration for observability features
+type ObservabilityConfig struct {
+	// Tracing configuration for distributed tracing
+	Tracing TracingConfig `yaml:"tracing"`
+}
+
+// TracingConfig represents configuration for distributed tracing
+type TracingConfig struct {
+	// Enable distributed tracing
+	Enabled bool `yaml:"enabled"`
+
+	// Provider type (opentelemetry, openinference, openllmetry)
+	Provider string `yaml:"provider,omitempty"`
+
+	// Exporter configuration
+	Exporter TracingExporterConfig `yaml:"exporter"`
+
+	// Sampling configuration
+	Sampling TracingSamplingConfig `yaml:"sampling"`
+
+	// Resource attributes
+	Resource TracingResourceConfig `yaml:"resource"`
+}
+
+// TracingExporterConfig represents exporter configuration
+type TracingExporterConfig struct {
+	// Exporter type (otlp, jaeger, zipkin, stdout)
+	Type string `yaml:"type"`
+
+	// Endpoint for the exporter (e.g., localhost:4317 for OTLP)
+	Endpoint string `yaml:"endpoint,omitempty"`
+
+	// Use insecure connection (no TLS)
+	Insecure bool `yaml:"insecure,omitempty"`
+}
+
+// TracingSamplingConfig represents sampling configuration
+type TracingSamplingConfig struct {
+	// Sampling type (always_on, always_off, probabilistic)
+	Type string `yaml:"type"`
+
+	// Sampling rate for probabilistic sampling (0.0 to 1.0)
+	Rate float64 `yaml:"rate,omitempty"`
+}
+
+// TracingResourceConfig represents resource attributes
+type TracingResourceConfig struct {
+	// Service name
+	ServiceName string `yaml:"service_name"`
+
+	// Service version
+	ServiceVersion string `yaml:"service_version,omitempty"`
+
+	// Deployment environment
+	DeploymentEnvironment string `yaml:"deployment_environment,omitempty"`
 }
 
 // BatchClassificationMetricsConfig represents configuration for batch classification metrics
@@ -184,9 +244,6 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
-
-	// Health check path for this endpoint
-	HealthCheckPath string `yaml:"health_check_path,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters
@@ -259,19 +316,33 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	return c.BertModel.Threshold
 }
 
-// Category represents a category for routing queries
+// ModelScore associates an LLM with its selection weight and reasoning flag within a category.
 type ModelScore struct {
 	Model        string  `yaml:"model"`
 	Score        float64 `yaml:"score"`
 	UseReasoning *bool   `yaml:"use_reasoning"` // Pointer to detect missing field
 }
 
+// Category represents a category for routing queries
 type Category struct {
 	Name                 string       `yaml:"name"`
 	Description          string       `yaml:"description,omitempty"`
 	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
 	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
 	ModelScores          []ModelScore `yaml:"model_scores"`
+	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
+	// used by the classifier model. When provided, classifier outputs will be translated
+	// from these MMLU categories to this generic category name.
+	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
+	// SystemPrompt is an optional category-specific system prompt automatically injected into requests
+	SystemPrompt string `yaml:"system_prompt,omitempty"`
+	// SystemPromptEnabled controls whether the system prompt should be injected for this category
+	// Defaults to true when SystemPrompt is not empty
+	SystemPromptEnabled *bool `yaml:"system_prompt_enabled,omitempty"`
+	// SystemPromptMode controls how the system prompt is injected: "replace" (default) or "insert"
+	// "replace": Replace any existing system message with the category-specific prompt
+	// "insert": Prepend the category-specific prompt to the existing system message content
+	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
 }
 
 // Legacy types - can be removed once migration is complete
@@ -363,6 +434,11 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		}
 	}
 
+	// Validate vLLM endpoints address formats
+	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -402,6 +478,8 @@ func ReplaceGlobalConfig(newCfg *RouterConfig) {
 
 // GetConfig returns the current configuration
 func GetConfig() *RouterConfig {
+	configMu.RLock()
+	defer configMu.RUnlock()
 	return config
 }
 
@@ -660,5 +738,33 @@ func (c *RouterConfig) ValidateEndpoints() error {
 		}
 	}
 
+	return nil
+}
+
+// IsSystemPromptEnabled returns whether system prompt injection is enabled for a category
+func (c *Category) IsSystemPromptEnabled() bool {
+	// If SystemPromptEnabled is explicitly set, use that value
+	if c.SystemPromptEnabled != nil {
+		return *c.SystemPromptEnabled
+	}
+	// Default to true if SystemPrompt is not empty
+	return c.SystemPrompt != ""
+}
+
+// GetSystemPromptMode returns the system prompt injection mode, defaulting to "replace"
+func (c *Category) GetSystemPromptMode() string {
+	if c.SystemPromptMode == "" {
+		return "replace" // Default mode
+	}
+	return c.SystemPromptMode
+}
+
+// GetCategoryByName returns a category by name
+func (c *RouterConfig) GetCategoryByName(name string) *Category {
+	for i := range c.Categories {
+		if c.Categories[i].Name == name {
+			return &c.Categories[i]
+		}
+	}
 	return nil
 }

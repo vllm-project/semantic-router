@@ -11,6 +11,13 @@
   background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 25%, #F0F3F6 50%, #FFFFFF 75%, #F6F8FA 100%);
   border-bottom: 1px solid var(--tech-border);
   min-height: 80vh;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme hero banner */
+[data-theme='dark'] .heroBanner {
+  background: linear-gradient(135deg, #0D1117 0%, #161B22 25%, #21262D 50%, #161B22 75%, #0D1117 100%);
+  border-bottom-color: var(--tech-border);
 }
 
 .heroBanner::before {
@@ -26,6 +33,15 @@
     radial-gradient(circle at 50% 50%, rgba(130, 80, 223, 0.06) 0%, transparent 70%);
   pointer-events: none;
   animation: backgroundPulse 8s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+/* Dark theme hero banner background */
+[data-theme='dark'] .heroBanner::before {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(88, 166, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(253, 181, 22, 0.12) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.1) 0%, transparent 70%);
 }
 
 .heroContent {
@@ -137,6 +153,12 @@
   transition: all 0.3s ease;
 }
 
+[data-theme='dark'] .techBadge {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: rgba(88, 166, 255, 0.4);
+  color: #7BB8FF;
+}
+
 .techBadge:hover {
   background: rgba(88, 166, 255, 0.2);
   border-color: rgba(88, 166, 255, 0.5);
@@ -144,7 +166,11 @@
   box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
 }
 
-
+[data-theme='dark'] .techBadge:hover {
+  background: rgba(88, 166, 255, 0.25);
+  border-color: rgba(88, 166, 255, 0.6);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+}
 
 /* Flow Diagram Section */
 .flowSection {
@@ -152,6 +178,11 @@
   background: linear-gradient(135deg, #FFFFFF 0%, #F6F8FA 50%, #FFFFFF 100%);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .flowSection {
+  background: linear-gradient(135deg, #161B22 0%, #21262D 50%, #161B22 100%);
 }
 
 .flowSection::before {
@@ -166,6 +197,14 @@
     radial-gradient(circle at 80% 80%, rgba(9, 105, 218, 0.03) 0%, transparent 50%),
     radial-gradient(circle at 40% 60%, rgba(9, 105, 218, 0.02) 0%, transparent 50%);
   pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .flowSection::before {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(88, 166, 255, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(88, 166, 255, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 40% 60%, rgba(88, 166, 255, 0.04) 0%, transparent 50%);
 }
 
 .flowContainer {
@@ -202,6 +241,13 @@
   border: 1px solid rgba(88, 166, 255, 0.1);
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 32px rgba(9, 105, 218, 0.1);
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .architectureImageWrapper {
+  background: rgba(33, 38, 45, 0.8);
+  border-color: rgba(88, 166, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .architectureImage {
@@ -212,9 +258,17 @@
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
+[data-theme='dark'] .architectureImage {
+  box-shadow: 0 4px 20px rgba(88, 166, 255, 0.2);
+}
+
 .architectureImage:hover {
   transform: scale(1.02);
   box-shadow: 0 8px 32px rgba(9, 105, 218, 0.2);
+}
+
+[data-theme='dark'] .architectureImage:hover {
+  box-shadow: 0 8px 32px rgba(88, 166, 255, 0.3);
 }
 
 /* AI Tech Showcase Section */
@@ -223,6 +277,11 @@
   background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 50%, #F0F3F6 100%);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .aiTechSection {
+  background: linear-gradient(135deg, #21262D 0%, #161B22 50%, #21262D 100%);
 }
 
 .aiTechSection::before {
@@ -238,6 +297,14 @@
     radial-gradient(circle at 50% 50%, rgba(130, 80, 223, 0.03) 0%, transparent 50%);
   pointer-events: none;
   animation: aiBackgroundFlow 12s ease-in-out infinite;
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .aiTechSection::before {
+  background-image:
+    radial-gradient(circle at 30% 20%, rgba(253, 181, 22, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(88, 166, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
 }
 
 .aiTechContainer {
@@ -301,6 +368,12 @@
   box-shadow: 0 4px 16px rgba(9, 105, 218, 0.08);
 }
 
+[data-theme='dark'] .aiFeature {
+  background: rgba(33, 38, 45, 0.8);
+  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
 .aiFeature:hover {
   background: rgba(255, 255, 255, 0.95);
   border-color: rgba(88, 166, 255, 0.4);
@@ -308,9 +381,10 @@
   box-shadow: 0 8px 24px rgba(9, 105, 218, 0.15);
 }
 
-.aiFeatureIcon {
-  font-size: 1.5rem;
-  filter: drop-shadow(0 0 8px rgba(9, 105, 218, 0.3));
+[data-theme='dark'] .aiFeature:hover {
+  background: rgba(33, 38, 45, 0.95);
+  border-color: rgba(88, 166, 255, 0.5);
+  box-shadow: 0 8px 24px rgba(88, 166, 255, 0.2);
 }
 
 .aiFeature span:last-child {
@@ -319,15 +393,9 @@
   font-size: 0.95rem;
 }
 
-
-
-
-
-
-
-
-
-
+[data-theme='dark'] .aiFeature span:last-child {
+  color: #F0F6FC;
+}
 
 /* Responsive Design */
 @media screen and (max-width: 996px) {
@@ -528,6 +596,39 @@
   }
 }
 
+/* Additional AI tech styles for dark theme */
+.aiFeatureIcon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(9, 105, 218, 0.3));
+  transition: filter 0.3s ease;
+}
 
+[data-theme='dark'] .aiFeatureIcon {
+  filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.4));
+}
 
+[data-theme='dark'] .aiTechTitle {
+  background: linear-gradient(45deg, #58A6FF, #FDB516, #A855F7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
+.aiTechDescription {
+  transition: color 0.3s ease;
+}
+
+[data-theme='dark'] .aiTechDescription {
+  color: #8B949E;
+}
+
+.architectureTitle {
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .architectureTitle {
+  background: linear-gradient(135deg, var(--ifm-color-primary), #A855F7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

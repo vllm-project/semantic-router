@@ -1,0 +1,616 @@
+name: Kubernetes Integration Test
+
+# This workflow tests the CORE semantic-router Kubernetes deployment.
+#
+# Test Scope:
+#   ✅ Core deployment (namespace, pvc, deployment, service, configmap)
+#   ✅ Manifest validation (kubeconform)
+#   ✅ Service connectivity (gRPC, metrics, API ports)
+#   ✅ Security scanning (Trivy, Checkov)
+#   ✅ Basic syntax validation for observability and ai-gateway configs
+#
+# Out of Scope (planned for follow-up PRs):
+#   🔄 Observability stack deployment (Prometheus + Grafana)
+#   🔄 AI Gateway end-to-end testing (Envoy Gateway + InferencePool)
+
+on:
+  pull_request:
+    paths:
+      - "deploy/kubernetes/**"
+      - ".github/workflows/k8s-integration-test.yml"
+      - "Dockerfile.extproc"
+      - "tools/kind/**"
+  workflow_dispatch: # Allow manual triggering
+  schedule:
+    # Run nightly at 3:00 AM UTC
+    - cron: "0 3 * * *"
+
+env:
+  KIND_VERSION: v0.20.0
+  KUBECTL_VERSION: v1.28.0
+  KUSTOMIZE_VERSION: v5.2.1
+
+jobs:
+  validate-manifests:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
+
+      - name: Validate Kustomize build
+        run: |
+          echo "Building kustomization..."
+          kustomize build deploy/kubernetes > /tmp/k8s-manifests.yaml
+          echo "Kustomize build successful!"
+          echo "Generated manifests:"
+          cat /tmp/k8s-manifests.yaml
+
+      - name: Setup kubeconform
+        run: |
+          wget https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+          kubeconform -v
+
+      - name: Validate manifests with kubeconform
+        run: |
+          echo "Validating Kubernetes manifests..."
+          kustomize build deploy/kubernetes | \
+            kubeconform -strict -summary \
+              -kubernetes-version 1.28.0 \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+              -skip CustomResourceDefinition \
+              -ignore-missing-schemas
+
+      - name: Upload validated manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-manifests
+          path: /tmp/k8s-manifests.yaml
+          retention-days: 5
+
+  kind-integration-test:
+    name: kind Cluster Integration Test
+    runs-on: ubuntu-latest
+    needs: validate-manifests
+    timeout-minutes: 45 # Increased to account for model downloads
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          version: ${{ env.KIND_VERSION }}
+          config: tools/kind/kind-config.yaml
+          cluster_name: semantic-router-test
+          wait: 120s
+
+      - name: Build semantic-router image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.extproc
+          tags: ghcr.io/vllm-project/semantic-router/extproc:test
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Load image into kind cluster
+        run: |
+          echo "Loading image into kind cluster..."
+          kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name semantic-router-test
+          echo "Image loaded successfully!"
+
+      - name: Verify cluster
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          kubectl version
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Create temporary kustomization for testing
+        run: |
+          # Create a test overlay directory
+          mkdir -p deploy/kubernetes/test-overlay
+          cd deploy/kubernetes/test-overlay
+
+          # Copy all base resources to overlay directory
+          cp ../namespace.yaml ./
+          cp ../service.yaml ./
+          cp ../config.yaml ./
+          cp ../tools_db.json ./
+
+          # Copy resources for CI testing
+          cp ../deployment.yaml ./deployment.yaml
+          cp ../pvc.yaml ./pvc.yaml
+
+          # Optimize init container for CI testing
+          # 1. Update pip install to include hf_transfer for faster downloads
+          perl -i -pe 's/pip install --no-cache-dir huggingface_hub\[cli\]/pip install --no-cache-dir "huggingface_hub[cli]" hf_transfer/g' deployment.yaml
+
+          # 2. Enable HF_HUB_ENABLE_HF_TRANSFER for faster downloads
+          perl -i -pe 's/(env:)/\1\n        - name: HF_HUB_ENABLE_HF_TRANSFER\n          value: "1"/g' deployment.yaml
+
+          # 3. Simplify the download logic - remove directory checks since CI always starts fresh
+          # Replace the entire args section with a simpler version
+          perl -i -0pe 's/args:\s*\n\s*-\s*\|\s*\n\s*set -e.*?ls -la \/app\/models\//args:\n        - |\n          set -e\n          echo "Installing Hugging Face CLI..."\n          pip install --no-cache-dir "huggingface_hub[cli]" hf_transfer\n          \n          echo "Downloading models to persistent volume..."\n          cd \/app\/models\n          \n          echo "Downloading category classifier model..."\n          hf download LLM-Semantic-Router\/category_classifier_modernbert-base_model --local-dir category_classifier_modernbert-base_model\n          \n          echo "Downloading PII classifier model..."\n          hf download LLM-Semantic-Router\/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model\n          \n          echo "Downloading jailbreak classifier model..."\n          hf download LLM-Semantic-Router\/jailbreak_classifier_modernbert-base_model --local-dir jailbreak_classifier_modernbert-base_model\n          \n          echo "Downloading PII token classifier model..."\n          hf download LLM-Semantic-Router\/pii_classifier_modernbert-base_presidio_token_model --local-dir pii_classifier_modernbert-base_presidio_token_model\n          \n          echo "All models downloaded successfully!"\n          ls -la \/app\/models\//gs' deployment.yaml
+
+          echo "✓ Updated init container with optimized model download for CI"
+
+          # Create kustomization with local resources
+          cat > kustomization.yaml << EOF
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+
+          resources:
+          - namespace.yaml
+          - pvc.yaml
+          - deployment.yaml
+          - service.yaml
+
+          configMapGenerator:
+          - name: semantic-router-config
+            files:
+            - config.yaml
+            - tools_db.json
+
+          namespace: vllm-semantic-router-system
+
+          # Use the same image that was loaded into kind cluster
+          images:
+          - name: ghcr.io/vllm-project/semantic-router/extproc
+            newTag: test
+
+          # Reduce resource requirements for CI testing and set imagePullPolicy
+          patches:
+          # Patch for main container
+          - patch: |-
+              - op: replace
+                path: /spec/template/spec/containers/0/resources/requests/memory
+                value: "2Gi"
+              - op: replace
+                path: /spec/template/spec/containers/0/resources/requests/cpu
+                value: "1"
+              - op: replace
+                path: /spec/template/spec/containers/0/resources/limits/memory
+                value: "4Gi"
+              - op: replace
+                path: /spec/template/spec/containers/0/resources/limits/cpu
+                value: "2"
+              - op: add
+                path: /spec/template/spec/containers/0/imagePullPolicy
+                value: "IfNotPresent"
+            target:
+              kind: Deployment
+              name: semantic-router
+          # Patch for init container - increase resources for faster downloads
+          - patch: |-
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/requests/memory
+                value: "1Gi"
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/requests/cpu
+                value: "500m"
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/limits/memory
+                value: "2Gi"
+              - op: replace
+                path: /spec/template/spec/initContainers/0/resources/limits/cpu
+                value: "1"
+            target:
+              kind: Deployment
+              name: semantic-router
+          EOF
+
+          echo "=== Generated kustomization.yaml ==="
+          cat kustomization.yaml
+          echo "=== Files in overlay directory ==="
+          ls -la
+
+      - name: Pre-flight check for Hugging Face connectivity
+        run: |
+          echo "Testing Hugging Face Hub connectivity..."
+          curl -I https://huggingface.co || {
+            echo "⚠️  Warning: Cannot reach huggingface.co"
+          }
+
+          # Test one of the model repos
+          curl -I https://huggingface.co/LLM-Semantic-Router/category_classifier_modernbert-base_model || {
+            echo "⚠️  Warning: Cannot reach model repository"
+          }
+
+          echo "✓ Connectivity check completed"
+
+      - name: Deploy to kind cluster
+        run: |
+          echo "Deploying semantic-router to kind cluster..."
+          kustomize build deploy/kubernetes/test-overlay | kubectl apply -f -
+
+          echo "Waiting for namespace to be active..."
+          kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/vllm-semantic-router-system --timeout=60s
+
+          echo "Deployment initiated. Checking resources..."
+          kubectl get all -n vllm-semantic-router-system
+
+      - name: Wait for deployment readiness
+        run: |
+          echo "Waiting for deployment to be ready (this may take a few minutes)..."
+          echo "Note: Using PVC for model storage, init container will download models"
+
+          # Wait for PVC to be bound
+          echo "Waiting for PVC to be bound..."
+          kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/semantic-router-models -n vllm-semantic-router-system --timeout=120s || {
+            echo "PVC binding timeout. Checking PVC status..."
+            kubectl describe pvc -n vllm-semantic-router-system
+            exit 1
+          }
+
+          # Wait for pods to be created
+          echo "Waiting for pods to be created..."
+          timeout 120 bash -c 'until kubectl get pods -n vllm-semantic-router-system | grep -q semantic-router; do echo "Waiting for pod creation..."; sleep 5; done'
+
+          # Show pod status
+          kubectl get pods -n vllm-semantic-router-system
+
+          # Wait for init container to complete (model download)
+          # Increased timeout to 15 minutes for model downloads
+          echo "Waiting for init container to complete (downloading models, this may take 10-15 minutes)..."
+          kubectl wait --for=condition=Initialized pods -l app=semantic-router -n vllm-semantic-router-system --timeout=900s || {
+            echo "❌ Init container did not complete in time. Showing logs..."
+            kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=200 || true
+            echo ""
+            echo "Checking pod status..."
+            kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
+            exit 1
+          }
+
+          # Show init container logs and verify models were downloaded
+          echo "=== Init Container Logs ==="
+          kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=100 || true
+
+          # Verify models were actually downloaded
+          echo ""
+          echo "=== Verifying Model Downloads ==="
+          POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].metadata.name}')
+
+          # Check if models directory has content
+          echo "Checking models directory content..."
+          kubectl exec -n vllm-semantic-router-system $POD_NAME -- ls -la /app/models/ || {
+            echo "⚠️  Warning: Could not list models directory"
+          }
+
+          # Count model directories (should be 4)
+          MODEL_COUNT=$(kubectl exec -n vllm-semantic-router-system $POD_NAME -- sh -c 'ls -1 /app/models/ | grep -c "model" || echo 0')
+          echo "Found $MODEL_COUNT model directories"
+
+          if [ "$MODEL_COUNT" -lt 4 ]; then
+            echo "❌ Error: Expected 4 model directories, found $MODEL_COUNT"
+            echo "Init container may have failed to download all models"
+            exit 1
+          fi
+
+          echo "✓ All models verified successfully"
+
+          # Wait for main container to be ready
+          echo ""
+          echo "Waiting for main container to be ready..."
+          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=300s || {
+            echo "❌ Pod did not become ready in time. Showing status and logs..."
+            kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
+            kubectl logs -n vllm-semantic-router-system -l app=semantic-router --tail=200 || true
+            exit 1
+          }
+
+          echo "✅ Deployment is ready!"
+
+      - name: Verify deployment
+        run: |
+          echo "=== Verifying Deployment ==="
+
+          # Check deployment status
+          kubectl get deployment -n vllm-semantic-router-system semantic-router -o wide
+
+          # Check pod status
+          kubectl get pods -n vllm-semantic-router-system -o wide
+
+          # Check services
+          kubectl get svc -n vllm-semantic-router-system
+
+          # Check configmaps
+          kubectl get configmap -n vllm-semantic-router-system
+
+          # Verify pod is running
+          POD_STATUS=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].status.phase}')
+          if [ "$POD_STATUS" != "Running" ]; then
+            echo "Error: Pod is not running. Status: $POD_STATUS"
+            kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
+            exit 1
+          fi
+
+          echo "✓ Pod is running"
+
+          # Verify all containers are ready
+          READY_CONTAINERS=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].status.containerStatuses[0].ready}')
+          if [ "$READY_CONTAINERS" != "true" ]; then
+            echo "Error: Container is not ready"
+            kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
+            exit 1
+          fi
+
+          echo "✓ All containers are ready"
+
+      - name: Test service connectivity
+        run: |
+          echo "=== Testing Service Connectivity ==="
+
+          # Get pod name
+          POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].metadata.name}')
+          echo "Pod name: $POD_NAME"
+
+          # Test gRPC port
+          echo "Testing gRPC port (50051)..."
+          kubectl exec -n vllm-semantic-router-system $POD_NAME -- timeout 5 nc -zv localhost 50051 || {
+            echo "Warning: gRPC port test failed"
+          }
+
+          # Test metrics port
+          echo "Testing metrics port (9190)..."
+          kubectl exec -n vllm-semantic-router-system $POD_NAME -- timeout 5 nc -zv localhost 9190 || {
+            echo "Warning: Metrics port test failed"
+          }
+
+          # Test classify API port
+          echo "Testing classify API port (8080)..."
+          kubectl exec -n vllm-semantic-router-system $POD_NAME -- timeout 5 nc -zv localhost 8080 || {
+            echo "Warning: Classify API port test failed"
+          }
+
+          # Port forward for external testing
+          echo "Setting up port-forward for testing..."
+          kubectl port-forward -n vllm-semantic-router-system svc/semantic-router 8080:8080 &
+          PF_PID=$!
+          sleep 5
+
+          # Test HTTP endpoint (if available)
+          echo "Testing HTTP endpoint..."
+          curl -v http://localhost:8080/health || echo "Health endpoint not available or not implemented"
+
+          # Cleanup port-forward
+          kill $PF_PID || true
+
+          echo "✓ Service connectivity tests completed"
+
+      - name: Check logs
+        if: always()
+        run: |
+          echo "=== Deployment Logs ==="
+          kubectl logs -n vllm-semantic-router-system -l app=semantic-router --tail=200 --all-containers=true || true
+
+          echo "=== Events ==="
+          kubectl get events -n vllm-semantic-router-system --sort-by='.lastTimestamp' || true
+
+      - name: Export cluster logs on failure
+        if: failure()
+        run: |
+          echo "=== Exporting cluster information for debugging ==="
+          mkdir -p /tmp/k8s-logs
+
+          # Export pod descriptions
+          kubectl describe pods -n vllm-semantic-router-system > /tmp/k8s-logs/pod-descriptions.txt || true
+
+          # Export deployment description
+          kubectl describe deployment -n vllm-semantic-router-system > /tmp/k8s-logs/deployment-description.txt || true
+
+          # Export all logs
+          kubectl logs -n vllm-semantic-router-system -l app=semantic-router --all-containers=true --previous > /tmp/k8s-logs/previous-logs.txt || true
+          kubectl logs -n vllm-semantic-router-system -l app=semantic-router --all-containers=true > /tmp/k8s-logs/current-logs.txt || true
+
+          # Export events
+          kubectl get events -n vllm-semantic-router-system --sort-by='.lastTimestamp' > /tmp/k8s-logs/events.txt || true
+
+          # Export resource status
+          kubectl get all -n vllm-semantic-router-system -o yaml > /tmp/k8s-logs/all-resources.yaml || true
+
+      - name: Upload cluster logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-cluster-logs
+          path: /tmp/k8s-logs/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up resources..."
+          kubectl delete namespace vllm-semantic-router-system --timeout=60s || true
+
+  test-with-custom-config:
+    name: Test with Custom Configuration
+    runs-on: ubuntu-latest
+    needs: validate-manifests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Test kustomize with different overlays
+        run: |
+          echo "Testing base kustomization..."
+          kustomize build deploy/kubernetes > /tmp/base-manifests.yaml
+
+          echo "Validating generated resources..."
+
+          # Check if all expected resources are present
+          if ! grep -q "kind: Namespace" /tmp/base-manifests.yaml; then
+            echo "Error: Namespace not found"
+            exit 1
+          fi
+
+          if ! grep -q "kind: Deployment" /tmp/base-manifests.yaml; then
+            echo "Error: Deployment not found"
+            exit 1
+          fi
+
+          if ! grep -q "kind: Service" /tmp/base-manifests.yaml; then
+            echo "Error: Service not found"
+            exit 1
+          fi
+
+          if ! grep -q "kind: ConfigMap" /tmp/base-manifests.yaml; then
+            echo "Error: ConfigMap not found"
+            exit 1
+          fi
+
+          echo "✓ All expected resources are present"
+
+      - name: Verify ConfigMap generation
+        run: |
+          echo "Checking ConfigMap generation..."
+          kustomize build deploy/kubernetes | grep -A 20 "kind: ConfigMap"
+
+          # Verify config files are included
+          if ! kustomize build deploy/kubernetes | grep -q "config.yaml"; then
+            echo "Warning: config.yaml might not be properly included in ConfigMap"
+          fi
+
+          if ! kustomize build deploy/kubernetes | grep -q "tools_db.json"; then
+            echo "Warning: tools_db.json might not be properly included in ConfigMap"
+          fi
+
+      - name: Validate observability kustomization
+        run: |
+          echo "Validating observability stack kustomization..."
+          if [ -d "deploy/kubernetes/observability" ]; then
+            kustomize build deploy/kubernetes/observability > /tmp/observability-manifests.yaml
+            echo "✓ Observability kustomization is valid"
+            
+            # Verify expected resources
+            for resource in "Deployment" "Service" "ConfigMap" "PersistentVolumeClaim"; do
+              if ! grep -q "kind: $resource" /tmp/observability-manifests.yaml; then
+                echo "Warning: $resource not found in observability manifests"
+              fi
+            done
+          else
+            echo "Observability directory not found, skipping..."
+          fi
+
+      - name: Validate AI Gateway configurations
+        run: |
+          echo "Validating AI Gateway configurations..."
+
+          # Check if ai-gateway directory exists
+          if [ -d "deploy/kubernetes/ai-gateway" ]; then
+            # Validate configuration yamls (without CRDs)
+            for yaml_file in deploy/kubernetes/ai-gateway/configuration/*.yaml; do
+              if [ -f "$yaml_file" ]; then
+                echo "Checking $yaml_file..."
+                # Basic YAML syntax check
+                kubectl create --dry-run=client -f "$yaml_file" || echo "Warning: Issues with $yaml_file"
+              fi
+            done
+            
+            # Validate inference-pool manifests (skip CRD validation as they may not be installed)
+            for yaml_file in deploy/kubernetes/ai-gateway/inference-pool/*.yaml; do
+              if [ -f "$yaml_file" ]; then
+                echo "Checking $yaml_file for YAML syntax..."
+                # Just check if it's valid YAML
+                kubectl create --dry-run=client -f "$yaml_file" 2>&1 | grep -q "no matches for kind" && echo "✓ $yaml_file syntax valid (CRD not installed)" || echo "Validated $yaml_file"
+              fi
+            done
+            
+            echo "✓ AI Gateway configuration validation completed"
+          else
+            echo "AI Gateway directory not found, skipping..."
+          fi
+
+  security-scan:
+    name: Security Scan for K8s Manifests
+    runs-on: ubuntu-latest
+    needs: validate-manifests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "config"
+          scan-ref: "deploy/kubernetes"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0" # Don't fail on vulnerabilities, just report
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Run Checkov scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: deploy/kubernetes
+          framework: kubernetes
+          output_format: cli
+          soft_fail: true # Don't fail the build
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        validate-manifests,
+        kind-integration-test,
+        test-with-custom-config,
+        security-scan,
+      ]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "=== Kubernetes Integration Test Summary ==="
+          echo "Manifest Validation: ${{ needs.validate-manifests.result }}"
+          echo "kind Integration Test: ${{ needs.kind-integration-test.result }}"
+          echo "Custom Config Test: ${{ needs.test-with-custom-config.result }}"
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+
+          if [[ "${{ needs.validate-manifests.result }}" == "failure" ]] || \
+             [[ "${{ needs.kind-integration-test.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-with-custom-config.result }}" == "failure" ]]; then
+            echo "❌ Some tests failed"
+            exit 1
+          else
+            echo "✅ All tests passed"
+          fi

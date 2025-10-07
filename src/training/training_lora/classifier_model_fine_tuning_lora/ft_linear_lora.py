@@ -100,6 +100,24 @@ from common_lora_utils import (
 # Setup logging
 logger = setup_logging()
 
+# Required categories to match legacy model (14 categories)
+REQUIRED_CATEGORIES = [
+    "biology",
+    "business",
+    "chemistry",
+    "computer science",
+    "economics",
+    "engineering",
+    "health",
+    "history",
+    "law",
+    "math",
+    "other",
+    "philosophy",
+    "physics",
+    "psychology",
+]
+
 
 def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
     """
@@ -135,7 +153,7 @@ class MMLU_Dataset:
         self.id2label = {}
 
     def load_huggingface_dataset(self, max_samples=1000):
-        """Load the MMLU-Pro dataset from HuggingFace."""
+        """Load the MMLU-Pro dataset from HuggingFace with balanced category sampling."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
@@ -145,17 +163,103 @@ class MMLU_Dataset:
 
             # Extract questions and categories from the test split
             # Note: MMLU-Pro typically uses 'test' split for training data
-            texts = dataset["test"]["question"]
-            labels = dataset["test"]["category"]
+            all_texts = dataset["test"]["question"]
+            all_labels = dataset["test"]["category"]
 
-            # Limit samples for faster training
-            if max_samples and len(texts) > max_samples:
-                texts = texts[:max_samples]
-                labels = labels[:max_samples]
-                logger.info(f"Limited dataset to {max_samples} samples")
+            logger.info(f"Total samples in dataset: {len(all_texts)}")
 
-            logger.info(f"Loaded {len(texts)} samples")
-            return texts, labels
+            # Group samples by category
+            category_samples = {}
+            for text, label in zip(all_texts, all_labels):
+                if label not in category_samples:
+                    category_samples[label] = []
+                category_samples[label].append(text)
+
+            logger.info(
+                f"Available categories in dataset: {sorted(category_samples.keys())}"
+            )
+            logger.info(f"Required categories: {REQUIRED_CATEGORIES}")
+
+            # Check which required categories are missing
+            missing_categories = set(REQUIRED_CATEGORIES) - set(category_samples.keys())
+            if missing_categories:
+                logger.warning(f"Missing categories in dataset: {missing_categories}")
+
+            # Calculate samples per category for balanced sampling
+            available_required_categories = [
+                cat for cat in REQUIRED_CATEGORIES if cat in category_samples
+            ]
+
+            # Ensure minimum samples per category for stable training
+            min_samples_per_category = max(
+                50, max_samples // (len(available_required_categories) * 2)
+            )
+            target_samples_per_category = max_samples // len(
+                available_required_categories
+            )
+
+            logger.info(f"Available categories: {len(available_required_categories)}")
+            logger.info(f"Min samples per category: {min_samples_per_category}")
+            logger.info(f"Target samples per category: {target_samples_per_category}")
+
+            # Collect balanced samples from required categories with improved strategy
+            filtered_texts = []
+            filtered_labels = []
+            category_counts = {}
+            insufficient_categories = []
+
+            # First pass: collect available samples for each category
+            for category in available_required_categories:
+                if category in category_samples:
+                    available_samples = len(category_samples[category])
+
+                    if available_samples < min_samples_per_category:
+                        insufficient_categories.append(category)
+                        samples_to_take = available_samples  # Take all available
+                    else:
+                        samples_to_take = min(
+                            target_samples_per_category, available_samples
+                        )
+
+                    category_texts = category_samples[category][:samples_to_take]
+                    filtered_texts.extend(category_texts)
+                    filtered_labels.extend([category] * len(category_texts))
+                    category_counts[category] = len(category_texts)
+
+            # Log insufficient categories
+            if insufficient_categories:
+                logger.warning(
+                    f"Categories with insufficient samples: {insufficient_categories}"
+                )
+                for cat in insufficient_categories:
+                    logger.warning(
+                        f"  {cat}: only {category_counts.get(cat, 0)} samples available"
+                    )
+
+            logger.info(f"Final category distribution: {category_counts}")
+            logger.info(f"Total filtered samples: {len(filtered_texts)}")
+
+            # Ensure we have samples for all required categories
+            missing_categories = set(available_required_categories) - set(
+                category_counts.keys()
+            )
+            if missing_categories:
+                logger.error(
+                    f"CRITICAL: Categories with no samples: {missing_categories}"
+                )
+
+            # Validate minimum category coverage
+            if (
+                len(category_counts) < len(REQUIRED_CATEGORIES) * 0.8
+            ):  # At least 80% of categories
+                logger.error(
+                    f"CRITICAL: Only {len(category_counts)}/{len(REQUIRED_CATEGORIES)} categories have samples!"
+                )
+                logger.error(
+                    "This will result in poor model performance. Consider increasing max_samples or using a different dataset."
+                )
+
+            return filtered_texts, filtered_labels
 
         except Exception as e:
             logger.error(f"Error loading dataset: {e}")
@@ -167,12 +271,20 @@ class MMLU_Dataset:
         # Load the dataset
         texts, labels = self.load_huggingface_dataset(max_samples)
 
-        # Create label mapping
+        # Create label mapping using required categories order for consistency
         unique_labels = sorted(list(set(labels)))
-        self.label2id = {label: idx for idx, label in enumerate(unique_labels)}
+
+        # Ensure we use the same order as legacy model for consistency
+        ordered_labels = [cat for cat in REQUIRED_CATEGORIES if cat in unique_labels]
+        # Add any extra categories that might exist
+        extra_labels = [cat for cat in unique_labels if cat not in REQUIRED_CATEGORIES]
+        final_labels = ordered_labels + sorted(extra_labels)
+
+        self.label2id = {label: idx for idx, label in enumerate(final_labels)}
         self.id2label = {idx: label for label, idx in self.label2id.items()}
 
-        logger.info(f"Found {len(unique_labels)} unique categories: {unique_labels}")
+        logger.info(f"Found {len(final_labels)} unique categories: {final_labels}")
+        logger.info(f"Label mapping: {self.label2id}")
 
         # Convert labels to IDs
         label_ids = [self.label2id[label] for label in labels]
@@ -245,8 +357,19 @@ class EnhancedLoRATrainer(Trainer):
             logits.view(-1, self.model.config.num_labels), labels.view(-1)
         )
 
-        # TODO: Add feature alignment loss when original model is available
+        # Feature alignment loss to improve LoRA adaptation
         total_loss = classification_loss
+
+        if self.enable_feature_alignment:
+            # Add L2 regularization on LoRA parameters to prevent overfitting
+            l2_reg = 0.0
+            for name, param in model.named_parameters():
+                if "lora_" in name and param.requires_grad:
+                    l2_reg += torch.norm(param, p=2)
+
+            # Add feature alignment loss
+            alignment_loss = self.alignment_weight * l2_reg
+            total_loss = classification_loss + alignment_loss
 
         return (total_loss, outputs) if return_outputs else total_loss
 
@@ -321,7 +444,7 @@ def main(
     lora_dropout: float = 0.1,
     num_epochs: int = 3,
     batch_size: int = 8,
-    learning_rate: float = 1e-4,
+    learning_rate: float = 3e-5,  # Reduced from 1e-4 to prevent gradient explosion
     max_samples: int = 1000,
     output_dir: str = None,
     enable_feature_alignment: bool = False,
@@ -370,13 +493,12 @@ def main(
 
     logger.info(f"Model will be saved to: {output_dir}")
 
-    # Training arguments
+    # Training arguments optimized for LoRA sequence classification based on PEFT best practices
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        warmup_steps=100,
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
@@ -386,6 +508,13 @@ def main(
         metric_for_best_model="eval_f1",
         greater_is_better=True,
         learning_rate=learning_rate,
+        # PEFT optimization: Enhanced stability measures
+        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
+        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
+        warmup_ratio=0.06,  # PEFT recommended warmup ratio for sequence classification
+        # Additional stability measures for intent classification
+        dataloader_drop_last=False,
+        eval_accumulation_steps=1,
     )
 
     # Create trainer
@@ -419,18 +548,18 @@ def main(
         json.dump(label_mapping, f, indent=2)
 
     logger.info(f"LoRA intent classification model saved to: {output_dir}")
-    logger.info("✅ Saved both label_mapping.json and category_mapping.json")
+    logger.info("Saved both label_mapping.json and category_mapping.json")
 
     # Auto-merge LoRA adapter with base model for Rust compatibility
-    logger.info("🔄 Auto-merging LoRA adapter with base model for Rust inference...")
+    logger.info("Auto-merging LoRA adapter with base model for Rust inference...")
     try:
         merged_output_dir = f"{output_dir}_rust"
         merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-        logger.info(f"✅ Rust-compatible model saved to: {merged_output_dir}")
-        logger.info(f"   This model can be used with Rust candle-binding!")
+        logger.info(f"Rust-compatible model saved to: {merged_output_dir}")
+        logger.info(f"This model can be used with Rust candle-binding!")
     except Exception as e:
-        logger.warning(f"⚠️  Auto-merge failed: {e}")
-        logger.info(f"   You can manually merge using a merge script")
+        logger.warning(f"Auto-merge failed: {e}")
+        logger.info(f"You can manually merge using a merge script")
 
     # Final evaluation
     logger.info("Final evaluation on validation set...")
@@ -448,7 +577,7 @@ def merge_lora_adapter_to_full_model(
     This function is automatically called after training to generate Rust-compatible models.
     """
 
-    logger.info(f"🔄 Loading base model: {base_model_path}")
+    logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
     with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
@@ -463,17 +592,17 @@ def merge_lora_adapter_to_full_model(
     # Load tokenizer with model-specific configuration
     tokenizer = create_tokenizer_for_model(base_model_path, base_model_path)
 
-    logger.info(f"🔄 Loading LoRA adapter from: {lora_adapter_path}")
+    logger.info(f"Loading LoRA adapter from: {lora_adapter_path}")
 
     # Load LoRA model
     lora_model = PeftModel.from_pretrained(base_model, lora_adapter_path)
 
-    logger.info("🔄 Merging LoRA adapter with base model...")
+    logger.info("Merging LoRA adapter with base model...")
 
     # Merge and unload LoRA
     merged_model = lora_model.merge_and_unload()
 
-    logger.info(f"💾 Saving merged model to: {output_path}")
+    logger.info(f"Saving merged model to: {output_path}")
 
     # Create output directory
     os.makedirs(output_path, exist_ok=True)
@@ -496,7 +625,7 @@ def merge_lora_adapter_to_full_model(
             json.dump(config, f, indent=2)
 
         logger.info(
-            "✅ Updated config.json with correct intent classification label mappings"
+            "Updated config.json with correct intent classification label mappings"
         )
 
     # Copy important files from LoRA adapter
@@ -513,9 +642,9 @@ def merge_lora_adapter_to_full_model(
         shutil.copy(
             os.path.join(output_path, "label_mapping.json"), category_mapping_path
         )
-        logger.info("✅ Created category_mapping.json")
+        logger.info("Created category_mapping.json")
 
-    logger.info("✅ LoRA adapter merged successfully!")
+    logger.info("LoRA adapter merged successfully!")
 
 
 def demo_inference(model_path: str, model_name: str = "modernbert-base"):
@@ -592,16 +721,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
-            "modernbert-base",
-            "modernbert-large",
-            "bert-base-uncased",
-            "bert-large-uncased",
-            "roberta-base",
-            "roberta-large",
-            "deberta-v3-base",
-            "deberta-v3-large",
+            "modernbert-base",  # ModernBERT base model - latest architecture
+            "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
+            "roberta-base",  # RoBERTa base model - best intent classification performance
         ],
-        default="modernbert-base",
+        default="bert-base-uncased",
     )
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)
@@ -610,12 +734,12 @@ if __name__ == "__main__":
     parser.add_argument("--alignment-weight", type=float, default=0.1)
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--learning-rate", type=float, default=3e-5)
     parser.add_argument(
         "--max-samples",
         type=int,
-        default=1000,
-        help="Maximum samples from MMLU-Pro dataset",
+        default=5000,
+        help="Maximum samples from MMLU-Pro dataset (recommended: 5000+ for all 14 categories)",
     )
     parser.add_argument(
         "--output-dir",

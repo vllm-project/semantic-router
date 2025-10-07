@@ -55,4 +55,8 @@ ENV LD_LIBRARY_PATH=/app/lib
 
 EXPOSE 50051
 
-CMD ["/app/extproc-server", "--config", "/app/config/config.yaml"]
+# Copy entrypoint to allow switching config via env var CONFIG_FILE
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]

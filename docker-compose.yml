@@ -13,6 +13,7 @@ services:
       - ./models:/app/models:ro
     environment:
       - LD_LIBRARY_PATH=/app/lib
+      - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
     networks:
       - semantic-network
     healthcheck:
@@ -38,15 +39,81 @@ services:
     networks:
       - semantic-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:19000/ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:19000/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
+  # Mock vLLM service for testing profile
+  mock-vllm:
+    build:
+      context: ./tools/mock-vllm
+      dockerfile: Dockerfile
+    container_name: mock-vllm
+    profiles: ["testing"]
+    ports:
+      - "8000:8000"
+    networks:
+      semantic-network:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # Prometheus and Grafana for observability
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "9090:9090"
+    networks:
+      - semantic-network
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./config/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./deploy/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+    networks:
+      - semantic-network
+
+  # LLM Katan service for testing
+  llm-katan:
+    build:
+      context: ./e2e-tests/llm-katan
+      dockerfile: Dockerfile
+    container_name: llm-katan
+    profiles: ["testing", "llm-katan"]
+    ports:
+      - "8002:8000"
+    environment:
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
+    networks:
+      - semantic-network
+    command: ["llm-katan", "--model", "Qwen/Qwen3-0.6B", "--host", "0.0.0.0", "--port", "8000"]
+
 networks:
   semantic-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
 
 volumes:
   models-cache:

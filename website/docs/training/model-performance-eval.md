@@ -59,6 +59,29 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
   pip install -r requirements.txt
   ```
 
+**⚠️ Critical Configuration Requirement:**
+
+The `--served-model-name` parameter in your vLLM command **must exactly match** the model names in your `config/config.yaml`:
+
+```yaml
+# config/config.yaml must match the --served-model-name values above
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 11434
+    models: ["phi4"]          # ✅ Matches --served_model_name phi4
+  - name: "endpoint2"
+    address: "127.0.0.1"
+    port: 11435
+    models: ["qwen3-0.6B"]    # ✅ Matches --served_model_name qwen3-0.6B
+
+model_config:
+  "phi4":                     # ✅ Matches --served_model_name phi4
+    # ... configuration
+  "qwen3-0.6B":               # ✅ Matches --served_model_name qwen3-0.6B
+    # ... configuration
+```
+
 **Optional tip:**
 
 - Ensure your `config/config.yaml` includes your deployed model names under `vllm_endpoints[].models` and any pricing/policy under `model_config` if you plan to use the generated config directly.
@@ -246,7 +269,7 @@ python src/training/model_eval/result_to_config.py \
 - If your production config.yaml carries **environment-specific settings (endpoints, pricing, policies)**, port the evaluated `categories[].model_scores` and `default_model` back into your canonical config.
 
 ### Example config.eval.yaml
-see more about config at [configuration](https://vllm-semantic-router.com/docs/getting-started/configuration)
+see more about config at [configuration](https://vllm-semantic-router.com/docs/installation/configuration)
 
 ```yaml
 bert_model:

@@ -148,7 +148,7 @@ The router adds metadata headers to both requests and responses:
 
 | Header | Description | Example |
 |--------|-------------|---------|
-| `x-semantic-destination-endpoint` | Backend endpoint selected | `endpoint1` |
+| `x-gateway-destination-endpoint` | Backend endpoint selected | `endpoint1` |
 | `x-selected-model` | Model category determined | `mathematics` |
 | `x-routing-confidence` | Classification confidence | `0.956` |
 | `x-request-id` | Unique request identifier | `req-abc123` |
@@ -326,6 +326,36 @@ sum by (model) (rate(llm_request_errors_total[15m]))
 # PII policy blocks over the last 24 hours
 sum(increase(llm_request_errors_total{reason="pii_policy_denied"}[24h]))
 ```
+
+### TTFT and TPOT Metrics
+
+Time-to-first-token (TTFT) and time-per-output-token (TPOT) are exported as Prometheus histograms and can be visualized at p95 with histogram_quantile.
+
+- `llm_model_ttft_seconds{model}`
+  - Histogram: Exposes `_bucket`, `_sum`, `_count`
+  - Description: Time to first token since the router started processing the request
+  - Example p95 (last 5m) by model:
+
+```prometheus
+histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le, model))
+```
+
+- `llm_model_tpot_seconds{model}`
+  - Histogram: Exposes `_bucket`, `_sum`, `_count`
+  - Description: Seconds per output token (completion latency / completion tokens)
+  - Example p95 (last 5m) by model:
+
+```prometheus
+histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le, model))
+```
+
+These are included in the provided Grafana dashboard at deploy/llm-router-dashboard.json as “TTFT (p95) by Model” and “TPOT (p95) by Model (sec/token)”.
+
+#### Streaming (SSE) notes
+
+- For Server-Sent Events (SSE) responses, the router measures TTFT on the first streamed body chunk (i.e., the first token), not on response headers.
+- No manual change to your Envoy config is required: the ExtProc handler automatically sets a ModeOverride with `response_body_mode: STREAMED` for SSE responses so the first chunk reaches ExtProc immediately.
+- Prerequisite: Envoy’s ext_proc filter must have `allow_mode_override: true` (the default configs in `config/envoy.yaml` and `config/envoy-docker.yaml` already include this). Keeping `response_body_mode: BUFFERED` in the static processing mode is fine; the router will flip it to STREAMED at runtime for SSE.
 
 ### Pricing Configuration
 
@@ -647,8 +677,8 @@ logger.info(f"Request routed to {routing_info.get('selected_model')} "
 ## Next Steps
 
 - **[Classification API](classification.md)**: Detailed classification endpoints
-- **[System Architecture](../architecture/system-architecture.md)**: System monitoring and observability
-- **[Quick Start Guide](../getting-started/installation.md)**: Real-world integration examples
-- **[Configuration Guide](../getting-started/configuration.md)**: Production configuration
+- **[System Architecture](../overview/architecture/system-architecture.md)**: System monitoring and observability
+- **[Quick Start Guide](../installation/installation.md)**: Real-world integration examples
+- **[Configuration Guide](../installation/configuration.md)**: Production configuration
 
 For more advanced API usage and custom integrations, refer to the examples directory or join our community discussions.

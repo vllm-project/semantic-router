@@ -264,4 +264,4 @@ Ready to implement semantic routing? Our system provides:
 - **Comprehensive monitoring** and observability tools
 - **Flexible configuration** for custom routing rules
 
-Continue to [Architecture Overview](../architecture/system-architecture.md) to understand how our semantic router is implemented, or explore [Model Training](../training/training-overview.md) to learn about the classification models powering the routing decisions.
+Continue to [Architecture Overview](architecture/system-architecture.md) to understand how our semantic router is implemented, or explore [Model Training](../training/training-overview.md) to learn about the classification models powering the routing decisions.

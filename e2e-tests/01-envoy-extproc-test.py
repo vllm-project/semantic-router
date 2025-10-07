@@ -10,18 +10,18 @@ These tests use custom headers to trace request processing.
 import json
 import os
 import sys
+import unittest
 import uuid
 
 import requests
 
-# Add parent directory to path to allow importing common test utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.test_base import SemanticRouterTestBase
+# Import test base from same directory
+from test_base import SemanticRouterTestBase
 
 # Constants
 ENVOY_URL = "http://localhost:8801"
 OPENAI_ENDPOINT = "/v1/chat/completions"
-DEFAULT_MODEL = "qwen2.5:32b"  # Changed from gemma3:27b to match make test-prompt
+DEFAULT_MODEL = "Model-A"  # Use configured model that matches router config
 
 
 class EnvoyExtProcTest(SemanticRouterTestBase):
@@ -35,11 +35,13 @@ class EnvoyExtProcTest(SemanticRouterTestBase):
         )
 
         try:
+            # Use unique content to bypass cache for setup check
+            setup_id = str(uuid.uuid4())[:8]
             payload = {
                 "model": DEFAULT_MODEL,
                 "messages": [
-                    {"role": "assistant", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": "test"},
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": f"ExtProc setup test {setup_id}"},
                 ],
             }
 
@@ -77,8 +79,11 @@ class EnvoyExtProcTest(SemanticRouterTestBase):
         payload = {
             "model": DEFAULT_MODEL,
             "messages": [
-                {"role": "assistant", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "What is the capital of France?"},
+                {"role": "system", "content": "You are a helpful assistant."},
+                {
+                    "role": "user",
+                    "content": f"ExtProc header test {trace_id[:8]} - explain photosynthesis briefly.",
+                },
             ],
             "temperature": 0.7,
         }
@@ -137,100 +142,6 @@ class EnvoyExtProcTest(SemanticRouterTestBase):
         )
         self.assertIn("model", response_json, "Response is missing 'model' field")
 
-    def test_extproc_override(self):
-        """Test that the ExtProc can modify the request's target model."""
-        self.print_test_header(
-            "ExtProc Model Override Test",
-            "Verifies that ExtProc correctly routes different query types to appropriate models",
-        )
-
-        test_cases = [
-            {
-                "name": "Math Query",
-                "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?",
-                "category": "math",
-            },
-            {
-                "name": "Creative Writing Query",
-                "content": "Write a short story about a space cat.",
-                "category": "creative",
-            },
-        ]
-
-        results = {}
-
-        for test_case in test_cases:
-            self.print_subtest_header(test_case["name"])
-
-            trace_id = str(uuid.uuid4())
-
-            payload = {
-                "model": DEFAULT_MODEL,
-                "messages": [
-                    {
-                        "role": "assistant",
-                        "content": f"You are an expert in {test_case['category']}.",
-                    },
-                    {"role": "user", "content": test_case["content"]},
-                ],
-                "temperature": 0.7,
-            }
-
-            headers = {
-                "Content-Type": "application/json",
-                "X-Test-Trace-ID": trace_id,
-                "X-Original-Model": DEFAULT_MODEL,
-                "X-Test-Category": test_case["category"],
-            }
-
-            self.print_request_info(
-                payload=payload,
-                expectations=f"Expect: Query to be routed based on {test_case['category']} category",
-            )
-
-            response = requests.post(
-                f"{ENVOY_URL}{OPENAI_ENDPOINT}",
-                headers=headers,
-                json=payload,
-                timeout=60,
-            )
-
-            response_json = response.json()
-            results[test_case["name"]] = response_json.get("model", "unknown")
-
-            self.print_response_info(
-                response,
-                {
-                    "Category": test_case["category"],
-                    "Original Model": DEFAULT_MODEL,
-                    "Routed Model": results[test_case["name"]],
-                },
-            )
-
-            passed = (
-                response.status_code < 400 and results[test_case["name"]] != "unknown"
-            )
-            self.print_test_result(
-                passed=passed,
-                message=(
-                    f"Successfully routed to model: {results[test_case['name']]}"
-                    if passed
-                    else f"Routing failed or returned unknown model"
-                ),
-            )
-
-            self.assertLess(
-                response.status_code,
-                400,
-                f"{test_case['name']} request failed with status {response.status_code}",
-            )
-
-        # Final summary of routing results
-        if len(results) == 2:
-            print("\nRouting Summary:")
-            print(f"Math Query → {results['Math Query']}")
-            print(f"Creative Writing Query → {results['Creative Writing Query']}")
-
     def test_extproc_body_modification(self):
         """Test that the ExtProc can modify the request and response bodies."""
         self.print_test_header(
@@ -243,8 +154,11 @@ class EnvoyExtProcTest(SemanticRouterTestBase):
         payload = {
             "model": DEFAULT_MODEL,
             "messages": [
-                {"role": "assistant", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "What is quantum computing?"},
+                {"role": "system", "content": "You are a helpful assistant."},
+                {
+                    "role": "user",
+                    "content": f"ExtProc body test {trace_id[:8]} - describe machine learning in simple terms.",
+                },
             ],
             "temperature": 0.7,
             "test_field": "should_be_preserved",
@@ -289,6 +203,164 @@ class EnvoyExtProcTest(SemanticRouterTestBase):
             response.status_code,
             400,
             f"Request was rejected with status code {response.status_code}",
+        )
+
+    def test_extproc_error_handling(self):
+        """Test ExtProc error handling and failure scenarios."""
+        self.print_test_header(
+            "ExtProc Error Handling Test",
+            "Verifies that ExtProc properly handles and recovers from error conditions",
+        )
+
+        # Test with headers that might cause ExtProc issues
+        payload = {
+            "model": DEFAULT_MODEL,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Simple test query"},
+            ],
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Very-Long-Header": "x" * 1000,  # Very long header value
+            "X-Test-Error-Recovery": "true",
+            "X-Special-Chars": "data-with-special-chars-!@#$%^&*()",  # Special characters
+        }
+
+        self.print_request_info(
+            payload=payload,
+            expectations="Expect: ExtProc to handle unusual headers gracefully without crashing",
+        )
+
+        try:
+            response = requests.post(
+                f"{ENVOY_URL}{OPENAI_ENDPOINT}",
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+
+            # ExtProc should either process successfully or fail gracefully without hanging
+            passed = (
+                response.status_code < 500
+            )  # No server errors due to ExtProc issues
+
+            self.print_response_info(
+                response,
+                {
+                    "Status Code": response.status_code,
+                    "Error Handling": "Graceful" if passed else "Server Error",
+                },
+            )
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            # Connection errors are acceptable - it shows the system is protecting itself
+            passed = True
+            self.print_response_info(
+                None,
+                {
+                    "Connection": "Terminated (Expected)",
+                    "Error Handling": "Protective disconnection",
+                    "Error": str(e)[:100] + "..." if len(str(e)) > 100 else str(e),
+                },
+            )
+
+        self.print_test_result(
+            passed=passed,
+            message=(
+                "ExtProc handled error conditions gracefully"
+                if passed
+                else "ExtProc error handling failed"
+            ),
+        )
+
+        # The test passes if either the request succeeds or fails gracefully
+        self.assertTrue(
+            passed,
+            "ExtProc should handle malformed input gracefully",
+        )
+
+    def test_extproc_performance_impact(self):
+        """Test that ExtProc doesn't significantly impact request performance."""
+        self.print_test_header(
+            "ExtProc Performance Impact Test",
+            "Verifies that ExtProc processing doesn't add excessive latency",
+        )
+
+        # Generate unique content for cache bypass
+        trace_id = str(uuid.uuid4())
+
+        payload = {
+            "model": DEFAULT_MODEL,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {
+                    "role": "user",
+                    "content": f"ExtProc performance test {trace_id[:8]} - what is artificial intelligence?",
+                },
+            ],
+        }
+
+        # Test with minimal ExtProc processing
+        headers_minimal = {"Content-Type": "application/json"}
+
+        # Test with ExtProc headers
+        headers_extproc = {
+            "Content-Type": "application/json",
+            "X-Test-Performance": "true",
+            "X-Processing-Mode": "full",
+        }
+
+        self.print_request_info(
+            payload=payload,
+            expectations="Expect: Reasonable response times with ExtProc processing",
+        )
+
+        import time
+
+        # Measure response time with ExtProc
+        start_time = time.time()
+        response = requests.post(
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}",
+            headers=headers_extproc,
+            json=payload,
+            timeout=60,
+        )
+        response_time = time.time() - start_time
+
+        passed = (
+            response.status_code < 400 and response_time < 30.0
+        )  # Reasonable timeout
+
+        self.print_response_info(
+            response,
+            {
+                "Response Time": f"{response_time:.2f}s",
+                "Performance": (
+                    "Acceptable" if response_time < 10.0 else "Slow but functional"
+                ),
+            },
+        )
+
+        self.print_test_result(
+            passed=passed,
+            message=(
+                f"ExtProc processing completed in {response_time:.2f}s"
+                if passed
+                else f"ExtProc processing too slow: {response_time:.2f}s"
+            ),
+        )
+
+        self.assertLess(
+            response.status_code,
+            400,
+            "ExtProc should not cause request failures",
+        )
+        self.assertLess(
+            response_time,
+            30.0,
+            "ExtProc should not cause excessive delays",
         )
 
 

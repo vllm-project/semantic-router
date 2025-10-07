@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openai/openai-go"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -86,23 +87,24 @@ var _ = Describe("Metrics recording", func() {
 		beforePrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
 		beforeCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
 
-		openAIResponse := map[string]interface{}{
-			"id":      "chatcmpl-xyz",
-			"object":  "chat.completion",
-			"created": time.Now().Unix(),
-			"model":   ctx.RequestModel,
-			"usage": map[string]interface{}{
-				"prompt_tokens":     10,
-				"completion_tokens": 5,
-				"total_tokens":      15,
+		openAIResponse := openai.ChatCompletion{
+			ID:      "chatcmpl-xyz",
+			Object:  "chat.completion",
+			Created: time.Now().Unix(),
+			Model:   ctx.RequestModel,
+			Usage: openai.CompletionUsage{
+				PromptTokens:     10,
+				CompletionTokens: 5,
+				TotalTokens:      15,
 			},
-			"choices": []map[string]interface{}{
+			Choices: []openai.ChatCompletionChoice{
 				{
-					"message":       map[string]interface{}{"role": "assistant", "content": "Hello"},
-					"finish_reason": "stop",
+					Message:      openai.ChatCompletionMessage{Role: "assistant", Content: "Hello"},
+					FinishReason: "stop",
 				},
 			},
 		}
+
 		respBodyJSON, err := json.Marshal(openAIResponse)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -122,5 +124,43 @@ var _ = Describe("Metrics recording", func() {
 		afterCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
 		Expect(afterPrompt).To(BeNumerically(">", beforePrompt))
 		Expect(afterCompletion).To(BeNumerically(">", beforeCompletion))
+	})
+
+	It("records TTFT on first streamed body chunk for SSE responses", func() {
+		ctx := &RequestContext{
+			RequestModel:        "model-stream",
+			ProcessingStartTime: time.Now().Add(-120 * time.Millisecond),
+			Headers:             map[string]string{"accept": "text/event-stream"},
+		}
+
+		// Simulate header phase: SSE content-type indicates streaming
+		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{
+				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: "content-type", Value: "text/event-stream"}}},
+			},
+		}
+
+		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+
+		// Handle response headers (should NOT record TTFT for streaming)
+		response1, err := router.handleResponseHeaders(respHeaders, ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(response1.GetResponseHeaders()).NotTo(BeNil())
+		Expect(ctx.IsStreamingResponse).To(BeTrue())
+		Expect(ctx.TTFTRecorded).To(BeFalse())
+
+		// Now simulate the first streamed body chunk
+		respBody := &ext_proc.ProcessingRequest_ResponseBody{
+			ResponseBody: &ext_proc.HttpBody{Body: []byte("data: chunk-1\n")},
+		}
+
+		response2, err := router.handleResponseBody(respBody, ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(response2.GetResponseBody()).NotTo(BeNil())
+
+		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		Expect(after).To(BeNumerically(">", before))
+		Expect(ctx.TTFTRecorded).To(BeTrue())
+		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))
 	})
 })
