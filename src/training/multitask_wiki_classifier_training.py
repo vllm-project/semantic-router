@@ -207,7 +207,7 @@ class MultitaskTrainer:
             return samples
         except Exception as e:
             import traceback; logger.error(f"Failed to load jailbreak dataset: {e}"); traceback.print_exc(); return []
-    
+
     def _save_checkpoint(self, epoch, global_step, optimizer, scheduler, checkpoint_dir, label_mappings):
         os.makedirs(checkpoint_dir, exist_ok=True)
         latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pt')
@@ -223,7 +223,7 @@ class MultitaskTrainer:
         torch.save(state, latest_checkpoint_path)
         logger.info(f"Checkpoint saved for step {global_step} at {latest_checkpoint_path}")
 
-    def train(self, train_samples, val_samples, label_mappings, num_epochs=3, batch_size=16, learning_rate=2e-5, 
+    def train(self, train_samples, val_samples, label_mappings, num_epochs=3, batch_size=16, learning_rate=2e-5,
               checkpoint_dir='checkpoints', resume=False, save_steps=500, checkpoint_to_load=None):
         train_dataset = MultitaskDataset(train_samples, self.tokenizer)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -252,7 +252,7 @@ class MultitaskTrainer:
             pbar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}")
             for step, batch in pbar:
                 if steps_to_skip > 0 and step < steps_to_skip: continue
-                
+
                 optimizer.zero_grad()
                 outputs = self.model(
                     input_ids=batch["input_ids"].to(self.device),
@@ -269,7 +269,7 @@ class MultitaskTrainer:
                 optimizer.step(); scheduler.step(); global_step += 1
                 if global_step > 0 and global_step % save_steps == 0:
                     self._save_checkpoint(epoch, global_step, optimizer, scheduler, checkpoint_dir, label_mappings)
-            
+
             if val_loader: self.evaluate(val_loader)
             self._save_checkpoint(epoch + 1, global_step, optimizer, scheduler, checkpoint_dir, label_mappings)
             steps_to_skip = 0
@@ -325,13 +325,13 @@ def main():
     logger.info("--- Starting Model Training ---")
 
     task_configs, label_mappings, checkpoint_to_load = {}, {}, None
-    
+
     if args.resume:
         latest_checkpoint_path = os.path.join(args.checkpoint_dir, 'latest_checkpoint.pt')
         if os.path.exists(latest_checkpoint_path):
             logger.info(f"Resuming training from checkpoint: {latest_checkpoint_path}")
             checkpoint_to_load = torch.load(latest_checkpoint_path, map_location=device)
-            
+
             task_configs = checkpoint_to_load.get('task_configs')
             label_mappings = checkpoint_to_load.get('label_mappings')
 
@@ -340,10 +340,10 @@ def main():
                 logger.warning("Cannot safely resume. Starting a fresh training run.")
                 args.resume = False
                 checkpoint_to_load = None
-                task_configs = {} 
+                task_configs = {}
             else:
                 logger.info("Loaded model configuration from checkpoint.")
-                
+
         else:
             logger.warning(f"Resume flag is set, but no checkpoint found in '{args.checkpoint_dir}'. Starting fresh run.")
             args.resume = False
@@ -358,12 +358,12 @@ def main():
             task_configs["pii"] = {"num_classes": len(label_mappings["pii"]["label_mapping"]["label_to_idx"]), "weight": 3.0}
         if "jailbreak" in label_mappings:
             task_configs["jailbreak"] = {"num_classes": len(label_mappings["jailbreak"]["label_mapping"]["label_to_idx"]), "weight": 2.0}
-    
+
     if not task_configs:
         logger.error("No tasks configured. Exiting."); return
 
     logger.info(f"Final task configurations: {task_configs}")
-    
+
     model = MultitaskBertModel(base_model_name, task_configs)
 
     if args.resume and checkpoint_to_load:
@@ -379,9 +379,9 @@ def main():
     active_label_mappings = label_mappings if (args.resume and label_mappings) else final_label_mappings
 
     trainer = MultitaskTrainer(model, tokenizer, task_configs, device)
-    
+
     logger.info(f"Total training samples: {len(train_samples)}")
-    
+
     trainer.train(
         train_samples, val_samples, active_label_mappings,
         num_epochs=10, batch_size=16,
@@ -390,7 +390,7 @@ def main():
         save_steps=args.save_steps,
         checkpoint_to_load=checkpoint_to_load
     )
-    
+
     trainer.save_model(output_path)
     with open(os.path.join(output_path, "label_mappings.json"), "w") as f:
         json.dump(active_label_mappings, f, indent=2)
@@ -398,4 +398,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
