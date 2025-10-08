@@ -9,6 +9,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
@@ -101,7 +102,7 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:      "x-pii-violation",
+						Key:      headers.VSRPIIViolation,
 						RawValue: []byte("true"),
 					},
 				},
@@ -202,19 +203,19 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:      "x-jailbreak-blocked",
+						Key:      headers.VSRJailbreakBlocked,
 						RawValue: []byte("true"),
 					},
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:      "x-jailbreak-type",
+						Key:      headers.VSRJailbreakType,
 						RawValue: []byte(jailbreakType),
 					},
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:      "x-jailbreak-confidence",
+						Key:      headers.VSRJailbreakConfidence,
 						RawValue: []byte(fmt.Sprintf("%.3f", confidence)),
 					},
 				},
@@ -246,7 +247,7 @@ func CreateCacheHitResponse(cachedResponse []byte) *ext_proc.ProcessingResponse 
 				},
 				{
 					Header: &core.HeaderValue{
-						Key:      "x-vsr-cache-hit",
+						Key:      headers.VSRCacheHit,
 						RawValue: []byte("true"),
 					},
 				},

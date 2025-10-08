@@ -17,6 +17,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
@@ -285,8 +286,8 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	defer span.End()
 
 	// Store headers for later use
-	headers := v.RequestHeaders.Headers
-	for _, h := range headers.Headers {
+	requestHeaders := v.RequestHeaders.Headers
+	for _, h := range requestHeaders.Headers {
 		// Prefer Value when available; fall back to RawValue
 		headerValue := h.Value
 		if headerValue == "" && len(h.RawValue) > 0 {
@@ -296,7 +297,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 		ctx.Headers[h.Key] = headerValue
 		// Store request ID if present (case-insensitive)
-		if strings.ToLower(h.Key) == "x-request-id" {
+		if strings.ToLower(h.Key) == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
 	}
@@ -800,7 +801,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				if selectedEndpoint != "" {
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:      "x-gateway-destination-endpoint",
+							Key:      headers.GatewayDestinationEndpoint,
 							RawValue: []byte(selectedEndpoint),
 						},
 					})
@@ -808,7 +809,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				if actualModel != "" {
 					setHeaders = append(setHeaders, &core.HeaderValueOption{
 						Header: &core.HeaderValue{
-							Key:      "x-selected-model",
+							Key:      headers.SelectedModel,
 							RawValue: []byte(actualModel),
 						},
 					})
@@ -889,7 +890,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		if selectedEndpoint != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{
 				Header: &core.HeaderValue{
-					Key:      "x-gateway-destination-endpoint",
+					Key:      headers.GatewayDestinationEndpoint,
 					RawValue: []byte(selectedEndpoint),
 				},
 			})
@@ -1042,9 +1043,9 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		(*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() != nil {
 		for _, header := range (*response).GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
 			switch header.Header.Key {
-			case "x-gateway-destination-endpoint":
+			case headers.GatewayDestinationEndpoint:
 				selectedEndpoint = header.Header.Value
-			case "x-selected-model":
+			case headers.SelectedModel:
 				actualModel = header.Header.Value
 			}
 		}
@@ -1054,7 +1055,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	if selectedEndpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "x-gateway-destination-endpoint",
+				Key:      headers.GatewayDestinationEndpoint,
 				RawValue: []byte(selectedEndpoint),
 			},
 		})
@@ -1062,7 +1063,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	if actualModel != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "x-selected-model",
+				Key:      headers.SelectedModel,
 				RawValue: []byte(actualModel),
 			},
 		})
