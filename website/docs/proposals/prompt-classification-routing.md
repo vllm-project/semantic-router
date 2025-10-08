@@ -1,4 +1,4 @@
-# Additional Prompt Classification Routing for vLLM Semantic Router
+# Prompt Classification Routing
 
 **Related Issues:** [#313](https://github.com/vllm-project/semantic-router/issues/313), [#200](https://github.com/vllm-project/semantic-router/issues/200)
 
@@ -212,7 +212,7 @@ The Regex Scanner uses regular expression patterns to detect structured data and
 - **Performance:** ~2-5ms for dozens of patterns
 - **Use Case:** PII patterns (SSN, credit cards), CVE IDs, email addresses, structured data
 - **Safety:** RE2 engine prevents catastrophic backtracking (ReDoS protection)
-- **Limitations:** Best for <100 patterns; for larger rule sets, use MCP with Hyperscan
+- **Limitations:** Best for fewer than 100 patterns; for larger rule sets, use MCP with Hyperscan
 
 **Example Use:** Detect and block Social Security Numbers, route CVE IDs to security models.
 
@@ -347,7 +347,7 @@ The Signal Fusion Layer is the decision-making engine that combines all signals 
 - **Priority-Based**: Rules evaluated from highest to lowest priority (200 → 0)
 - **Short-Circuit**: First matching rule wins, no further evaluation
 - **Boolean Expressions**: Combine multiple signal conditions with AND, OR, NOT
-- **Flexible Comparisons**: Support ==, !=, >, <, >=, <= for numeric thresholds
+- **Flexible Comparisons**: Support `==`, `!=`, `>`, `<`, `>=`, `<=` for numeric thresholds
 
 **Expression Capabilities:**
 
