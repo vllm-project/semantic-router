@@ -97,6 +97,7 @@ const sidebars: SidebarsConfig = {
       label: 'Proposals',
       items: [
         'proposals/prompt-classification-routing',
+        'proposals/nvidia-dynamo-integration',
       ],
     },
     {
