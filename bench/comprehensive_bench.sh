@@ -12,6 +12,7 @@ ROUTER_ENDPOINT="http://127.0.0.1:8801/v1"
 VLLM_ENDPOINT="http://127.0.0.1:8000/v1"
 VLLM_MODEL=""  # Will be auto-detected from endpoint if not specified
 ROUTER_MODEL="auto"
+CONCURRENT_REQUESTS=8
 OUTPUT_BASE="results/comprehensive_research_$(date +%Y%m%d_%H%M%S)"
 
 # Parse command line arguments
@@ -105,12 +106,28 @@ PERSISTENT_RESEARCH_CSV="results/research_results_master.csv"
 # Dataset configurations (dataset_name:samples_per_category)
 # Balanced for statistical significance vs runtime
 declare -A DATASET_CONFIGS=(
-    ["mmlu"]=10          # 57 subjects × 10 = 570 samples
-    ["arc"]=15           # 1 category × 15 = 15 samples  
-    ["gpqa"]=20          # 1 category × 20 = 20 samples
-    ["truthfulqa"]=15    # 1 category × 15 = 15 samples
-    ["commonsenseqa"]=20 # 1 category × 20 = 20 samples
-    ["hellaswag"]=8      # ~50 activities × 8 = ~400 samples
+    # Core proven datasets
+    ["gpqa"]=20          # 1 category × 20 = 20 samples - OUTSTANDING reasoning differentiation
+    ["mmlu"]=10          # 57 subjects × 10 = 570 samples - EXCELLENT reasoning differentiation
+    ["truthfulqa"]=15    # Truthfulness evaluation - some reasoning differentiation (60% → 73.3%)
+    
+    # Mathematical reasoning datasets
+    # ["math"]=15          # Competition mathematics - DISABLED: Dataset not available on HF Hub
+    ["gsm8k"]=25         # Elementary math word problems - EXPECTED good reasoning differentiation
+    ["aqua-rat"]=20      # Algebraic word problems with rationales - EXPECTED good differentiation
+    
+    # Multi-step reasoning datasets
+    ["drop"]=20          # Reading comprehension with discrete reasoning - EXPECTED excellent differentiation
+    ["strategyqa"]=20    # Multi-step implicit reasoning - EXPECTED good differentiation
+    
+    # Scientific reasoning datasets
+    ["sciq"]=25          # Science questions requiring reasoning - EXPECTED moderate differentiation
+    ["openbookqa"]=20    # Elementary science with fact reasoning - EXPECTED moderate differentiation
+    
+    # Disabled datasets with poor reasoning differentiation:
+    # ["arc-challenge"]=15 # 100% accuracy across all modes, minimal benefit
+    # ["commonsenseqa"]=20 # Same accuracy across modes, small token difference
+    # ["hellaswag"]=2      # Minimal differentiation, not reasoning-focused
 )
 
 echo -e "${BLUE}🔬 COMPREHENSIVE MULTI-DATASET BENCHMARK FOR RESEARCH${NC}"
@@ -136,13 +153,16 @@ source "$VENV_PATH/bin/activate"
 mkdir -p "$OUTPUT_BASE"
 mkdir -p "$(dirname "$PERSISTENT_RESEARCH_CSV")"
 
-# Initialize persistent research results CSV (create header only if file doesn't exist)
-if [[ ! -f "$PERSISTENT_RESEARCH_CSV" ]]; then
-    echo "Dataset,Mode,Model,Accuracy,Avg_Latency_ms,Avg_Total_Tokens,Sample_Count,Timestamp" > "$PERSISTENT_RESEARCH_CSV"
-    echo -e "${GREEN}📊 Created new master research CSV: $PERSISTENT_RESEARCH_CSV${NC}"
-else
-    echo -e "${BLUE}📊 Using existing master research CSV: $PERSISTENT_RESEARCH_CSV${NC}"
+# Backup and clear master research CSV for fresh results
+if [[ -f "$PERSISTENT_RESEARCH_CSV" ]]; then
+    BACKUP_CSV="${PERSISTENT_RESEARCH_CSV}.backup_$(date +%Y%m%d_%H%M%S)"
+    cp "$PERSISTENT_RESEARCH_CSV" "$BACKUP_CSV"
+    echo -e "${GREEN}📊 Backed up existing master CSV to: $BACKUP_CSV${NC}"
 fi
+
+# Create fresh master research CSV with header only
+echo "Dataset,Mode,Model,Accuracy,Avg_Latency_ms,Avg_Total_Tokens,Sample_Count,Timestamp" > "$PERSISTENT_RESEARCH_CSV"
+echo -e "${GREEN}📊 Created fresh master research CSV: $PERSISTENT_RESEARCH_CSV${NC}"
 
 # Also create a timestamped copy for this run
 RESEARCH_CSV="$OUTPUT_BASE/research_results.csv"
@@ -225,9 +245,12 @@ try:
             model_name = '$VLLM_MODEL'
         
         # For vLLM, we might have multiple modes (NR, NR_REASONING)
-        if '$mode' == 'vllm' and 'mode' in df.columns:
-            for mode_type in df['mode'].unique():
-                mode_df = df[df['mode'] == mode_type]
+        # Check both 'mode' and 'mode_label' columns for mode information
+        if '$mode' == 'vllm' and ('mode' in df.columns or 'mode_label' in df.columns):
+            # Use mode_label if available (more descriptive), otherwise use mode
+            mode_column = 'mode_label' if 'mode_label' in df.columns else 'mode'
+            for mode_type in df[mode_column].unique():
+                mode_df = df[df[mode_column] == mode_type]
                 
                 # Recalculate metrics for this specific mode using correct column names
                 if 'is_correct' in mode_df.columns:
@@ -253,7 +276,17 @@ try:
                     
                 mode_samples = len(mode_df)
                 
-                csv_line = f'$dataset,vLLM_{mode_type},{model_name},{mode_accuracy:.3f},{mode_latency:.1f},{mode_tokens:.1f},{mode_samples},$timestamp'
+                # Map technical mode names to descriptive names
+                if mode_type == 'VLLM_NR':
+                    display_mode = 'vLLM_No_Reasoning'
+                elif mode_type == 'VLLM_NR_REASONING':
+                    display_mode = 'vLLM_All_Reasoning'
+                elif mode_type == 'VLLM_XC':
+                    display_mode = 'vLLM_CoT'
+                else:
+                    display_mode = mode_type  # Use the mode_label as-is if not recognized
+                
+                csv_line = f'$dataset,{display_mode},{model_name},{mode_accuracy:.3f},{mode_latency:.1f},{mode_tokens:.1f},{mode_samples},$timestamp'
                 print(f'    📝 Writing to CSV: {csv_line}', file=sys.stderr)
                 print(csv_line)
         else:
@@ -283,7 +316,7 @@ run_dataset_benchmark() {
     
     echo -e "${GREEN}📊 Benchmarking $dataset dataset ($samples samples per category)...${NC}"
     
-    # Router benchmark
+    # Router benchmark (pass vLLM info for consistent token calculation)
     echo -e "${YELLOW}  🤖 Running router evaluation...${NC}"
     python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
         --dataset "$dataset" \
@@ -291,6 +324,9 @@ run_dataset_benchmark() {
         --run-router \
         --router-endpoint "$ROUTER_ENDPOINT" \
         --router-models "$ROUTER_MODEL" \
+        --vllm-endpoint "$VLLM_ENDPOINT" \
+        --vllm-models "$VLLM_MODEL" \
+        --concurrent-requests "$CONCURRENT_REQUESTS" \
         --output-dir "$OUTPUT_BASE/router_$dataset" \
         --seed 42
 
@@ -307,41 +343,104 @@ run_dataset_benchmark() {
         --vllm-models "$VLLM_MODEL" \
         --vllm-exec-modes NR NR_REASONING \
         --output-dir "$OUTPUT_BASE/vllm_$dataset" \
+        --concurrent-requests "$CONCURRENT_REQUESTS" \
         --seed 42
     
     # Extract and save vLLM metrics immediately
     extract_and_save_metrics "$dataset" "vllm" "$OUTPUT_BASE/vllm_$dataset"
     
-    echo -e "${GREEN}  ✅ Completed $dataset benchmark${NC}"
+    # Generate updated comprehensive plots for current dataset
+    echo -e "${BLUE}  📈 Updating comprehensive plots with $dataset results...${NC}"
+    generate_comprehensive_plot "$dataset"
+    
+    echo -e "${GREEN}  ✅ Completed $dataset benchmark and comprehensive plots updated${NC}"
+    echo -e "${GREEN}  📈 CSV data updated in: $PERSISTENT_RESEARCH_CSV${NC}"
     echo ""
 }
 
-# Function to generate comparison plots
+# Function to generate comprehensive plot with all completed datasets (called after each dataset completes)
+generate_comprehensive_plot() {
+    local current_dataset=$1
+    
+    if [[ -n "$current_dataset" ]]; then
+        echo -e "${YELLOW}    📊 Generating plot for current dataset: $current_dataset...${NC}"
+    else
+        echo -e "${YELLOW}    📊 Generating comprehensive plot with all completed datasets...${NC}"
+    fi
+    
+    # Use the plot_comprehensive_results.py script to generate updated charts
+    if [[ -f "plot_comprehensive_results.py" ]]; then
+        echo -e "${BLUE}      Running comprehensive plotting script...${NC}"
+        # Use the current run's CSV instead of the master CSV to show only this run's results
+        PLOT_CMD="python3 plot_comprehensive_results.py \
+            --csv \"$RESEARCH_CSV\" \
+            --output-dir \"$OUTPUT_BASE\" \
+            --model-filter \"$VLLM_MODEL\""
+        
+        # Add dataset filter if specified
+        if [[ -n "$current_dataset" ]]; then
+            PLOT_CMD="$PLOT_CMD --dataset-filter \"$current_dataset\""
+        fi
+        
+        eval $PLOT_CMD
+        
+        echo -e "${GREEN}    ✅ Comprehensive plots updated in $OUTPUT_BASE${NC}"
+        
+        # Print actual paths of generated charts
+        if [[ -f "$OUTPUT_BASE/accuracy_comparison.png" ]]; then
+            echo -e "${GREEN}    📊 Accuracy Chart: $OUTPUT_BASE/accuracy_comparison.png${NC}"
+        fi
+        if [[ -f "$OUTPUT_BASE/token_usage_comparison.png" ]]; then
+            echo -e "${GREEN}    📊 Token Usage Chart: $OUTPUT_BASE/token_usage_comparison.png${NC}"
+        fi
+        if [[ -f "$OUTPUT_BASE/efficiency_analysis.png" ]]; then
+            echo -e "${GREEN}    📊 Efficiency Chart: $OUTPUT_BASE/efficiency_analysis.png${NC}"
+        fi
+    else
+        echo -e "${RED}    ⚠️  plot_comprehensive_results.py not found, skipping comprehensive plots${NC}"
+    fi
+}
+
+# Function to generate plot for a single dataset (kept for compatibility)
+generate_dataset_plot() {
+    local dataset=$1
+    
+    echo -e "${YELLOW}    📊 Plotting $dataset results...${NC}"
+    
+    # Find the summary.json files
+    ROUTER_SUMMARY=$(find "$OUTPUT_BASE/router_$dataset" -name "summary.json" -type f | head -1)
+    VLLM_SUMMARY=$(find "$OUTPUT_BASE/vllm_$dataset" -name "summary.json" -type f | head -1)
+
+    if [[ -f "$VLLM_SUMMARY" ]]; then
+        PLOT_CMD="python3 -m vllm_semantic_router_bench.bench_plot --summary \"$VLLM_SUMMARY\" --out-dir \"$OUTPUT_BASE/plots_$dataset\""
+
+        if [[ -f "$ROUTER_SUMMARY" ]]; then
+            PLOT_CMD="$PLOT_CMD --router-summary \"$ROUTER_SUMMARY\""
+        fi
+
+        echo -e "${BLUE}      Running: $PLOT_CMD${NC}"
+        eval $PLOT_CMD
+        echo -e "${GREEN}    ✅ $dataset plots generated in $OUTPUT_BASE/plots_$dataset${NC}"
+    else
+        echo -e "${RED}    ⚠️  No vLLM summary.json found for $dataset, skipping plots${NC}"
+    fi
+}
+
+# Function to generate comparison plots (now just calls individual dataset plots)
 generate_plots() {
-    echo -e "${BLUE}📈 Generating comparison plots...${NC}"
+    echo -e "${BLUE}📈 Generating any remaining comparison plots...${NC}"
     
     for dataset in "${!DATASET_CONFIGS[@]}"; do
-        echo -e "${YELLOW}  📊 Plotting $dataset results...${NC}"
-        
-        # Find the summary.json files
-        ROUTER_SUMMARY=$(find "$OUTPUT_BASE/router_$dataset" -name "summary.json" -type f | head -1)
-        VLLM_SUMMARY=$(find "$OUTPUT_BASE/vllm_$dataset" -name "summary.json" -type f | head -1)
-
-        if [[ -f "$VLLM_SUMMARY" ]]; then
-            PLOT_CMD="python3 -m vllm_semantic_router_bench.bench_plot --summary \"$VLLM_SUMMARY\" --out-dir \"$OUTPUT_BASE/plots_$dataset\""
-
-            if [[ -f "$ROUTER_SUMMARY" ]]; then
-                PLOT_CMD="$PLOT_CMD --router-summary \"$ROUTER_SUMMARY\""
-            fi
-
-            echo -e "${BLUE}    Running: $PLOT_CMD${NC}"
-            eval $PLOT_CMD
+        # Check if plots already exist
+        if [[ ! -d "$OUTPUT_BASE/plots_$dataset" ]]; then
+            echo -e "${YELLOW}  📊 Generating missing plots for $dataset...${NC}"
+            generate_dataset_plot "$dataset"
         else
-            echo -e "${RED}    ⚠️  No vLLM summary.json found for $dataset, skipping plots${NC}"
+            echo -e "${GREEN}  ✅ Plots for $dataset already exist${NC}"
         fi
     done
 
-    echo -e "${GREEN}  ✅ All plots generated${NC}"
+    echo -e "${GREEN}  ✅ All plots verified/generated${NC}"
     echo ""
 }
 
@@ -372,8 +471,8 @@ EOF
             "mmlu")
                 echo "| MMLU | $samples | ~570 | 57 subjects | Academic Knowledge |" >> "$summary_file"
                 ;;
-            "arc")
-                echo "| ARC | $samples | $samples | 1 (Science) | Scientific Reasoning |" >> "$summary_file"
+            "arc-challenge")
+                echo "| ARC-Challenge | $samples | $samples | 1 (Science) | Scientific Reasoning (Hard) |" >> "$summary_file"
                 ;;
             "gpqa")
                 echo "| GPQA | $samples | $samples | 1 (Graduate) | Graduate-level Q&A |" >> "$summary_file"
@@ -385,7 +484,7 @@ EOF
                 echo "| CommonsenseQA | $samples | $samples | 1 (Common Sense) | Commonsense Reasoning |" >> "$summary_file"
                 ;;
             "hellaswag")
-                echo "| HellaSwag | $samples | ~400 | ~50 activities | Commonsense NLI |" >> "$summary_file"
+                echo "| HellaSwag | $samples | ~100 | ~50 activities | Commonsense NLI |" >> "$summary_file"
                 ;;
         esac
     done
@@ -398,8 +497,8 @@ EOF
 
 ### Accuracy Comparison
 - Router (auto model with reasoning): See research_results.csv
-- vLLM Direct (NR mode): See research_results.csv
-- vLLM Direct (NR_REASONING mode): See research_results.csv
+- vLLM Direct (No Reasoning): See research_results.csv
+- vLLM Direct (All Reasoning): See research_results.csv
 
 ### Token Usage Analysis
 - Average tokens per response by dataset and mode (in research_results.csv)
@@ -448,7 +547,7 @@ EOF
 
 - **Seed**: 42 (for reproducibility)
 - **Router Mode**: Auto model selection with reasoning
-- **vLLM Modes**: NR (neutral) and NR_REASONING (with reasoning)
+- **vLLM Modes**: No Reasoning and All Reasoning
 - **Sample Strategy**: Stratified sampling per category
 - **Evaluation**: Exact match accuracy and token usage
 
@@ -462,9 +561,24 @@ EOF
 echo -e "${BLUE}🚀 Starting comprehensive benchmark...${NC}"
 start_time=$(date +%s)
 
-# Run benchmarks for all datasets
-for dataset in "${!DATASET_CONFIGS[@]}"; do
+# Run benchmarks for reasoning-focused datasets (GPQA first for quick feedback)
+DATASET_ORDER=("gpqa" "truthfulqa" "gsm8k" "aqua-rat" "sciq" "openbookqa" "strategyqa" "drop" "mmlu")
+dataset_count=0
+total_datasets=${#DATASET_ORDER[@]}
+
+for dataset in "${DATASET_ORDER[@]}"; do
+    # Skip if dataset not configured
+    if [[ -z "${DATASET_CONFIGS[$dataset]}" ]]; then
+        echo -e "${YELLOW}⚠️  Dataset $dataset not configured, skipping...${NC}"
+        continue
+    fi
+    
+    dataset_count=$((dataset_count + 1))
+    echo -e "${BLUE}🚀 Progress: Dataset $dataset_count/$total_datasets - Starting $dataset${NC}"
     run_dataset_benchmark "$dataset"
+    echo -e "${GREEN}🎉 Progress: Dataset $dataset_count/$total_datasets - Completed $dataset${NC}"
+    echo -e "${YELLOW}📊 Remaining datasets: $((total_datasets - dataset_count))${NC}"
+    echo ""
 done
 
 # Generate plots
@@ -489,7 +603,16 @@ echo -e "${BLUE}📋 Next Steps:${NC}"
 echo "1. 📊 **Master research data**: $PERSISTENT_RESEARCH_CSV"
 echo "2. 📊 **This run's data**: $OUTPUT_BASE/research_results.csv"  
 echo "3. 📋 Review research summary: $OUTPUT_BASE/RESEARCH_SUMMARY.md"
-echo "4. 📈 Examine plots for visual insights"
+echo "4. 📈 **View comprehensive charts**:"
+if [[ -f "$OUTPUT_BASE/accuracy_comparison.png" ]]; then
+    echo "   📊 Accuracy: $OUTPUT_BASE/accuracy_comparison.png"
+fi
+if [[ -f "$OUTPUT_BASE/token_usage_comparison.png" ]]; then
+    echo "   📊 Token Usage: $OUTPUT_BASE/token_usage_comparison.png"
+fi
+if [[ -f "$OUTPUT_BASE/efficiency_analysis.png" ]]; then
+    echo "   📊 Efficiency: $OUTPUT_BASE/efficiency_analysis.png"
+fi
 echo "5. 📄 Analyze detailed CSV files if needed"
 echo ""
 echo -e "${GREEN}🎓 Research CSV Format:${NC}"

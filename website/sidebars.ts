@@ -54,7 +54,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Tutorials',
+      label: 'Capacities',
       items: [
         {
           type: 'category',
@@ -90,6 +90,13 @@ const sidebars: SidebarsConfig = {
             'tutorials/observability/observability',
           ],
         },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Proposals',
+      items: [
+        'proposals/prompt-classification-routing',
       ],
     },
     {

@@ -460,7 +460,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 			})
 			// Count this as a blocked request
 			metrics.RecordRequestError(ctx.RequestModel, "jailbreak_block")
-			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence)
+			jailbreakResponse := http.CreateJailbreakViolationResponse(jailbreakType, confidence, ctx.ExpectStreamingResponse)
 			ctx.TraceContext = spanCtx
 			return jailbreakResponse, true
 		} else {
@@ -637,7 +637,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 										"denied_pii":  defaultDeniedPII,
 									})
 									metrics.RecordRequestError(matchedModel, "pii_policy_denied")
-									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII)
+									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII, ctx.ExpectStreamingResponse)
 									return piiResponse, nil
 								}
 							}
@@ -650,7 +650,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 								"denied_pii":  deniedPII,
 							})
 							metrics.RecordRequestError(matchedModel, "pii_policy_denied")
-							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII)
+							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII, ctx.ExpectStreamingResponse)
 							return piiResponse, nil
 						}
 					}
@@ -873,7 +873,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				"denied_pii":  deniedPII,
 			})
 			metrics.RecordRequestError(originalModel, "pii_policy_denied")
-			piiResponse := http.CreatePIIViolationResponse(originalModel, deniedPII)
+			piiResponse := http.CreatePIIViolationResponse(originalModel, deniedPII, ctx.ExpectStreamingResponse)
 			return piiResponse, nil
 		}
 
