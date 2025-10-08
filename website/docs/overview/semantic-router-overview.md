@@ -1,4 +1,4 @@
-# Semantic Router Overview
+# What is Semantic Router?
 
 Semantic routers represent a paradigm shift in how we deploy and utilize large language models at scale. By intelligently routing queries to the most appropriate model based on semantic understanding, these systems optimize the critical balance between performance, cost, and quality.
 
