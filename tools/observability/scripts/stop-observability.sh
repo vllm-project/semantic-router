@@ -34,17 +34,48 @@ echo -e "${BLUE}  Stopping Observability Stack${NC}"
 echo -e "${BLUE}==================================================================${NC}"
 echo ""
 
+# Helpers
+container_exists() {
+    # Returns 0 if a container with the given name exists (in any state)
+    docker ps -a --format '{{.Names}}' | grep -Fxq "$1"
+}
+
+any_container_exists() {
+    # Returns 0 if any of the provided container names exist
+    local name
+    for name in "$@"; do
+        if container_exists "$name"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Stop services
 log_info "Stopping observability services..."
 
 # Try stopping local mode containers first
-if docker ps -a --format '{{.Names}}' | grep -qE '^(prometheus-local|grafana-local)$'; then
+LOCAL_MODE_RUNNING=false
+if any_container_exists "prometheus-local" "grafana-local"; then
+    LOCAL_MODE_RUNNING=true
+fi
+if [ "${LOCAL_MODE_RUNNING}" = true ]; then
     log_info "Stopping local mode containers..."
     docker compose -f "${PROJECT_ROOT}/docker-compose.obs.yml" down
 fi
 
 # Also stop compose mode if running as part of main stack
-if docker ps -a --format '{{.Names}}' | grep -qE '^(prometheus|grafana)$' && ! docker ps -a --format '{{.Names}}' | grep -q 'semantic-router'; then
+COMPOSE_O11Y_RUNNING=false
+if any_container_exists "prometheus" "grafana"; then
+    COMPOSE_O11Y_RUNNING=true
+fi
+
+ROUTER_RUNNING=false
+if container_exists "semantic-router"; then
+    ROUTER_RUNNING=true
+fi
+
+if [ "${COMPOSE_O11Y_RUNNING}" = true ] && [ "${ROUTER_RUNNING}" = false ]; then
     log_warn "Observability containers from main stack are running"
     log_info "Use 'docker compose down' to stop the full stack"
 fi

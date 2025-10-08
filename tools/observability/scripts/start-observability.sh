@@ -48,11 +48,11 @@ MODE="${1:-local}"
 case "${MODE}" in
     local)
         log_info "Starting observability in LOCAL mode (router on host, observability in Docker)"
-        COMPOSE_CMD="docker compose -f ${PROJECT_ROOT}/docker-compose.obs.yml"
+        COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.obs.yml"
         ;;
     compose)
         log_info "Starting observability in COMPOSE mode (all services in Docker)"
-        COMPOSE_CMD="docker compose -f ${PROJECT_ROOT}/docker-compose.yml"
+        COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yml"
         ;;
     *)
         log_error "Invalid mode: ${MODE}"
@@ -78,9 +78,9 @@ if ! docker info &> /dev/null; then
 fi
 
 log_info "Starting services..."
-log_debug "Command: ${COMPOSE_CMD} up -d"
+log_debug "Command: docker compose -f \"${COMPOSE_FILE}\" up -d"
 
-${COMPOSE_CMD} up -d
+docker compose -f "${COMPOSE_FILE}" up -d
 
 # Wait for services to become healthy
 log_info "Waiting for services to become healthy..."

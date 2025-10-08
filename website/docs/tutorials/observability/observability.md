@@ -53,7 +53,7 @@ make stop-observability
 
 All configs in `tools/observability/`:
 
-- `prometheus.yaml` - Scrapes `localhost:9190` when `ROUTER_TARGET=localhost:9190`
+- `prometheus.yaml` - Scrapes the target from the `ROUTER_TARGET` env var (default: `localhost:9190`)
 - `grafana-datasource.yaml` - Points to `localhost:9090`
 - `grafana-dashboard.yaml` - Dashboard provisioning
 - `llm-router-dashboard.json` - Dashboard definition
