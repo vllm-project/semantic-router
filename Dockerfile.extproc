@@ -25,7 +25,7 @@ FROM golang:1.24 as go-builder
 WORKDIR /app
 
 # Copy Go module files first for better layer caching
-RUN mkdir -p src/semantic-router candle-binding
+RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
 
