@@ -17,6 +17,7 @@ _run:
 		-f tools/make/docker.mk \
 		-f tools/make/kube.mk \
 		-f tools/make/observability.mk \
+		-f tools/make/openshift.mk \
 		$(MAKECMDGOALS)
 
 .PHONY: _run
