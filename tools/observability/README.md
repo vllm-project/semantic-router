@@ -14,13 +14,13 @@ Prometheus and Grafana configuration files for monitoring semantic-router.
 **Local mode** (router on host, observability in Docker):
 
 ```bash
-make obs-local
+make o11y-local
 ```
 
 **Compose mode** (all services in Docker):
 
 ```bash
-make obs-compose
+make o11y-compose
 # or: docker compose up
 ```
 

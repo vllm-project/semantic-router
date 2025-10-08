@@ -6,20 +6,32 @@
 OBS_CONFIG_DIR = tools/observability
 OBS_SCRIPTS_DIR = tools/observability/scripts
 
-.PHONY: run-observability stop-observability obs-local obs-compose open-observability obs-logs obs-status obs-clean
+.PHONY: run-observability stop-observability \
+	obs-local obs-compose obs-logs obs-status obs-clean \
+	o11y-local o11y-compose o11y-logs o11y-status o11y-clean open-observability
 
-## run-observability: Start observability stack (alias for obs-local)
-run-observability: obs-local
+## run-observability: Start observability stack (alias for o11y-local)
+run-observability: o11y-local
 
-## obs-local: Start observability in LOCAL mode (router on host, obs in Docker)
-obs-local:
+## o11y-local: Start observability in LOCAL mode (router on host, o11y in Docker)
+o11y-local:
 	@$(call log, Starting observability in LOCAL mode...)
 	@$(OBS_SCRIPTS_DIR)/start-observability.sh local
 
-## obs-compose: Start observability in COMPOSE mode (all services in Docker)
-obs-compose:
+## obs-local: Alias for o11y-local (deprecated name)
+obs-local:
+	@echo "Note: 'obs-local' is deprecated, use 'o11y-local' instead" 
+	@$(MAKE) o11y-local
+
+## o11y-compose: Start observability in COMPOSE mode (all services in Docker)
+o11y-compose:
 	@$(call log, Starting observability in COMPOSE mode...)
 	@$(OBS_SCRIPTS_DIR)/start-observability.sh compose
+
+## obs-compose: Alias for o11y-compose (deprecated name)
+obs-compose:
+	@echo "Note: 'obs-compose' is deprecated, use 'o11y-compose' instead" 
+	@$(MAKE) o11y-compose
 
 ## stop-observability: Stop and remove observability containers
 stop-observability:
@@ -32,20 +44,35 @@ open-observability:
 	@open http://localhost:9090 2>/dev/null || xdg-open http://localhost:9090 2>/dev/null || echo "Please open http://localhost:9090"
 	@open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 2>/dev/null || echo "Please open http://localhost:3000"
 
-## obs-logs: Show logs from observability containers
-obs-logs:
+## o11y-logs: Show logs from observability containers
+o11y-logs:
 	@docker compose -f $(PWD)/docker-compose.obs.yml logs -f 2>/dev/null || docker compose logs prometheus grafana -f
 
-## obs-status: Check status of observability containers
-obs-status:
+## obs-logs: Alias for o11y-logs (deprecated name)
+obs-logs:
+	@echo "Note: 'obs-logs' is deprecated, use 'o11y-logs' instead" 
+	@$(MAKE) o11y-logs
+
+## o11y-status: Check status of observability containers
+o11y-status:
 	@echo "==> Local mode:"
 	@docker compose -f $(PWD)/docker-compose.obs.yml ps 2>/dev/null || echo "  Not running"
 	@echo ""
 	@echo "==> Compose mode:"
 	@docker compose ps prometheus grafana 2>/dev/null || echo "  Not running"
 
-## obs-clean: Remove observability data volumes
-obs-clean:
+## obs-status: Alias for o11y-status (deprecated name)
+obs-status:
+	@echo "Note: 'obs-status' is deprecated, use 'o11y-status' instead" 
+	@$(MAKE) o11y-status
+
+## o11y-clean: Remove observability data volumes
+o11y-clean:
 	@echo "⚠️  Removing all observability data volumes..."
 	@docker volume rm prometheus-local-data grafana-local-data prometheus-data grafana-data 2>/dev/null || true
 	@echo "✓ Done"
+
+## obs-clean: Alias for o11y-clean (deprecated name)
+obs-clean:
+	@echo "Note: 'obs-clean' is deprecated, use 'o11y-clean' instead" 
+	@$(MAKE) o11y-clean

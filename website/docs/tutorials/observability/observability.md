@@ -28,7 +28,7 @@ Run router natively on host, observability in Docker.
 make run-router
 
 # Start observability
-make obs-local
+make o11y-local
 ```
 
 **Access:**
