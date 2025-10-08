@@ -336,9 +336,14 @@ func (c *Classifier) initializeCategoryClassifier() error {
 
 // ClassifyCategory performs category classification on the given text
 func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
-	// Try in-tree first
+	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryInTree(text)
+	}
+
+	// If in-tree classifier was initialized but config is now invalid, return specific error
+	if c.categoryInference != nil && !c.IsCategoryEnabled() {
+		return "", 0.0, fmt.Errorf("category classification is not properly configured")
 	}
 
 	// Fall back to MCP
@@ -514,9 +519,14 @@ func (c *Classifier) initializePIIClassifier() error {
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
-	// Try in-tree first
+	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryWithEntropyInTree(text)
+	}
+
+	// If in-tree classifier was initialized but config is now invalid, return specific error
+	if c.categoryInference != nil && !c.IsCategoryEnabled() {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category classification is not properly configured")
 	}
 
 	// Fall back to MCP
