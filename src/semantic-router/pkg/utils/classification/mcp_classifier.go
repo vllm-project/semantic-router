@@ -1,0 +1,453 @@
+package classification
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
+)
+
+// MCPCategoryInitializer initializes MCP connection for category classification
+type MCPCategoryInitializer interface {
+	Init(cfg *config.RouterConfig) error
+	Close() error
+}
+
+// MCPCategoryInference performs classification via MCP
+type MCPCategoryInference interface {
+	Classify(ctx context.Context, text string) (candle_binding.ClassResult, error)
+	ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error)
+}
+
+// MCPCategoryClassifier implements both MCPCategoryInitializer and MCPCategoryInference
+type MCPCategoryClassifier struct {
+	client   mcpclient.MCPClient
+	toolName string
+	config   *config.RouterConfig
+}
+
+// Init initializes the MCP client connection
+func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	// Validate MCP configuration
+	if !cfg.Classifier.MCPCategoryModel.Enabled {
+		return fmt.Errorf("MCP category classifier is not enabled")
+	}
+	if cfg.Classifier.MCPCategoryModel.ToolName == "" {
+		return fmt.Errorf("MCP tool name is not specified")
+	}
+
+	// Store config and tool name
+	m.config = cfg
+	m.toolName = cfg.Classifier.MCPCategoryModel.ToolName
+
+	// Create MCP client configuration
+	mcpConfig := mcpclient.ClientConfig{
+		TransportType: cfg.Classifier.MCPCategoryModel.TransportType,
+		Command:       cfg.Classifier.MCPCategoryModel.Command,
+		Args:          cfg.Classifier.MCPCategoryModel.Args,
+		Env:           cfg.Classifier.MCPCategoryModel.Env,
+		URL:           cfg.Classifier.MCPCategoryModel.URL,
+		Options: mcpclient.ClientOptions{
+			LogEnabled: true,
+		},
+	}
+
+	// Set timeout if specified
+	if cfg.Classifier.MCPCategoryModel.TimeoutSeconds > 0 {
+		mcpConfig.Timeout = time.Duration(cfg.Classifier.MCPCategoryModel.TimeoutSeconds) * time.Second
+	}
+
+	// Create MCP client
+	client, err := mcpclient.NewClient("category_classifier", mcpConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create MCP client: %w", err)
+	}
+
+	// Connect to MCP server
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("failed to connect to MCP server: %w", err)
+	}
+
+	m.client = client
+	observability.Infof("Successfully initialized MCP category classifier with tool '%s'", m.toolName)
+	return nil
+}
+
+// Close closes the MCP client connection
+func (m *MCPCategoryClassifier) Close() error {
+	if m.client != nil {
+		return m.client.Close()
+	}
+	return nil
+}
+
+// Classify performs category classification via MCP
+func (m *MCPCategoryClassifier) Classify(ctx context.Context, text string) (candle_binding.ClassResult, error) {
+	if m.client == nil {
+		return candle_binding.ClassResult{}, fmt.Errorf("MCP client not initialized")
+	}
+
+	// Prepare arguments for MCP tool call
+	arguments := map[string]interface{}{
+		"text": text,
+	}
+
+	// Call MCP tool
+	result, err := m.client.CallTool(ctx, m.toolName, arguments)
+	if err != nil {
+		return candle_binding.ClassResult{}, fmt.Errorf("MCP tool call failed: %w", err)
+	}
+
+	// Check for errors in result
+	if result.IsError {
+		return candle_binding.ClassResult{}, fmt.Errorf("MCP tool returned error: %v", result.Content)
+	}
+
+	// Parse response from first content block
+	if len(result.Content) == 0 {
+		return candle_binding.ClassResult{}, fmt.Errorf("MCP tool returned empty content")
+	}
+
+	// Extract text content
+	var responseText string
+	firstContent := result.Content[0]
+	if textContent, ok := mcp.AsTextContent(firstContent); ok {
+		responseText = textContent.Text
+	} else {
+		return candle_binding.ClassResult{}, fmt.Errorf("MCP tool returned non-text content")
+	}
+
+	// Parse JSON response: {"class": int, "confidence": float}
+	var response struct {
+		Class      int     `json:"class"`
+		Confidence float32 `json:"confidence"`
+	}
+	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
+		return candle_binding.ClassResult{}, fmt.Errorf("failed to parse MCP response: %w", err)
+	}
+
+	return candle_binding.ClassResult{
+		Class:      response.Class,
+		Confidence: response.Confidence,
+	}, nil
+}
+
+// ClassifyWithProbabilities performs category classification with full probability distribution via MCP
+func (m *MCPCategoryClassifier) ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
+	if m.client == nil {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP client not initialized")
+	}
+
+	// Prepare arguments for MCP tool call with probabilities request
+	arguments := map[string]interface{}{
+		"text":               text,
+		"with_probabilities": true,
+	}
+
+	// Call MCP tool
+	result, err := m.client.CallTool(ctx, m.toolName, arguments)
+	if err != nil {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP tool call failed: %w", err)
+	}
+
+	// Check for errors in result
+	if result.IsError {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP tool returned error: %v", result.Content)
+	}
+
+	// Parse response from first content block
+	if len(result.Content) == 0 {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP tool returned empty content")
+	}
+
+	// Extract text content
+	var responseText string
+	firstContent := result.Content[0]
+	if textContent, ok := mcp.AsTextContent(firstContent); ok {
+		responseText = textContent.Text
+	} else {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP tool returned non-text content")
+	}
+
+	// Parse JSON response: {"class": int, "confidence": float, "probabilities": []float}
+	var response struct {
+		Class         int       `json:"class"`
+		Confidence    float32   `json:"confidence"`
+		Probabilities []float32 `json:"probabilities"`
+	}
+	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
+		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to parse MCP response: %w", err)
+	}
+
+	return candle_binding.ClassResultWithProbs{
+		Class:         response.Class,
+		Confidence:    response.Confidence,
+		Probabilities: response.Probabilities,
+	}, nil
+}
+
+// createMCPCategoryInitializer creates an MCP category initializer
+func createMCPCategoryInitializer() MCPCategoryInitializer {
+	return &MCPCategoryClassifier{}
+}
+
+// createMCPCategoryInference creates an MCP category inference from the initializer
+func createMCPCategoryInference(initializer MCPCategoryInitializer) MCPCategoryInference {
+	if classifier, ok := initializer.(*MCPCategoryClassifier); ok {
+		return classifier
+	}
+	return nil
+}
+
+// IsMCPCategoryEnabled checks if MCP-based category classification is properly configured
+func (c *Classifier) IsMCPCategoryEnabled() bool {
+	return c.Config.Classifier.MCPCategoryModel.Enabled &&
+		c.Config.Classifier.MCPCategoryModel.ToolName != "" &&
+		c.mcpCategoryInitializer != nil
+}
+
+// initializeMCPCategoryClassifier initializes the MCP category classification model
+func (c *Classifier) initializeMCPCategoryClassifier() error {
+	if !c.IsMCPCategoryEnabled() {
+		return fmt.Errorf("MCP category classification is not properly configured")
+	}
+
+	if err := c.mcpCategoryInitializer.Init(c.Config); err != nil {
+		return fmt.Errorf("failed to initialize MCP category classifier: %w", err)
+	}
+
+	observability.Infof("Successfully initialized MCP category classifier")
+	return nil
+}
+
+// classifyCategoryMCP performs category classification using MCP
+func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
+	if !c.IsMCPCategoryEnabled() {
+		return "", 0.0, fmt.Errorf("MCP category classification is not properly configured")
+	}
+
+	// Create context with timeout
+	ctx := context.Background()
+	if c.Config.Classifier.MCPCategoryModel.TimeoutSeconds > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.Classifier.MCPCategoryModel.TimeoutSeconds)*time.Second)
+		defer cancel()
+	}
+
+	// Classify via MCP
+	start := time.Now()
+	result, err := c.mcpCategoryInference.Classify(ctx, text)
+	metrics.RecordClassifierLatency("category_mcp", time.Since(start).Seconds())
+
+	if err != nil {
+		return "", 0.0, fmt.Errorf("MCP classification error: %w", err)
+	}
+
+	observability.Infof("MCP classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
+
+	// Check threshold
+	threshold := c.Config.Classifier.MCPCategoryModel.Threshold
+	if threshold == 0 {
+		threshold = 0.5 // Default threshold
+	}
+
+	if result.Confidence < threshold {
+		observability.Infof("MCP classification confidence (%.4f) below threshold (%.4f)",
+			result.Confidence, threshold)
+		return "", float64(result.Confidence), nil
+	}
+
+	// Map class index to category name
+	var categoryName string
+	if c.CategoryMapping != nil {
+		name, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
+		if ok {
+			categoryName = c.translateMMLUToGeneric(name)
+		} else {
+			categoryName = fmt.Sprintf("category_%d", result.Class)
+		}
+	} else {
+		categoryName = fmt.Sprintf("category_%d", result.Class)
+	}
+
+	metrics.RecordCategoryClassification(categoryName)
+	observability.Infof("MCP classified as category: %s (class=%d)", categoryName, result.Class)
+
+	return categoryName, float64(result.Confidence), nil
+}
+
+// classifyCategoryWithEntropyMCP performs category classification with entropy using MCP
+func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float64, entropy.ReasoningDecision, error) {
+	if !c.IsMCPCategoryEnabled() {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP category classification is not properly configured")
+	}
+
+	// Create context with timeout
+	ctx := context.Background()
+	if c.Config.Classifier.MCPCategoryModel.TimeoutSeconds > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.Classifier.MCPCategoryModel.TimeoutSeconds)*time.Second)
+		defer cancel()
+	}
+
+	// Get full probability distribution via MCP
+	start := time.Now()
+	result, err := c.mcpCategoryInference.ClassifyWithProbabilities(ctx, text)
+	metrics.RecordClassifierLatency("category_mcp", time.Since(start).Seconds())
+
+	if err != nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP classification error: %w", err)
+	}
+
+	observability.Infof("MCP classification result: class=%d, confidence=%.4f, entropy_available=%t",
+		result.Class, result.Confidence, len(result.Probabilities) > 0)
+
+	// Get category names for all classes and translate to generic names when configured
+	categoryNames := make([]string, len(result.Probabilities))
+	for i := range result.Probabilities {
+		if c.CategoryMapping != nil {
+			if name, ok := c.CategoryMapping.GetCategoryFromIndex(i); ok {
+				categoryNames[i] = c.translateMMLUToGeneric(name)
+			} else {
+				categoryNames[i] = fmt.Sprintf("unknown_%d", i)
+			}
+		} else {
+			categoryNames[i] = fmt.Sprintf("category_%d", i)
+		}
+	}
+
+	// Build category reasoning map from configuration
+	categoryReasoningMap := make(map[string]bool)
+	for _, category := range c.Config.Categories {
+		useReasoning := false
+		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
+			useReasoning = *category.ModelScores[0].UseReasoning
+		}
+		categoryReasoningMap[strings.ToLower(category.Name)] = useReasoning
+	}
+
+	// Determine threshold
+	threshold := c.Config.Classifier.MCPCategoryModel.Threshold
+	if threshold == 0 {
+		threshold = 0.5 // Default threshold
+	}
+
+	// Make entropy-based reasoning decision
+	entropyStart := time.Now()
+	reasoningDecision := entropy.MakeEntropyBasedReasoningDecision(
+		result.Probabilities,
+		categoryNames,
+		categoryReasoningMap,
+		float64(threshold),
+	)
+	entropyLatency := time.Since(entropyStart).Seconds()
+
+	// Calculate entropy value for metrics
+	entropyValue := entropy.CalculateEntropy(result.Probabilities)
+
+	// Determine top category for metrics
+	topCategory := "none"
+	if len(reasoningDecision.TopCategories) > 0 {
+		topCategory = reasoningDecision.TopCategories[0].Category
+	}
+
+	// Validate probability distribution quality
+	probSum := float32(0.0)
+	for _, prob := range result.Probabilities {
+		probSum += prob
+	}
+
+	// Record probability distribution quality checks
+	if probSum >= 0.99 && probSum <= 1.01 {
+		metrics.RecordProbabilityDistributionQuality("sum_check", "valid")
+	} else {
+		metrics.RecordProbabilityDistributionQuality("sum_check", "invalid")
+		observability.Warnf("MCP probability distribution sum is %.3f (should be ~1.0)", probSum)
+	}
+
+	// Check for negative probabilities
+	hasNegative := false
+	for _, prob := range result.Probabilities {
+		if prob < 0 {
+			hasNegative = true
+			break
+		}
+	}
+
+	if hasNegative {
+		metrics.RecordProbabilityDistributionQuality("negative_check", "invalid")
+	} else {
+		metrics.RecordProbabilityDistributionQuality("negative_check", "valid")
+	}
+
+	// Calculate uncertainty level from entropy value
+	entropyResult := entropy.AnalyzeEntropy(result.Probabilities)
+	uncertaintyLevel := entropyResult.UncertaintyLevel
+
+	// Record comprehensive entropy classification metrics
+	metrics.RecordEntropyClassificationMetrics(
+		topCategory,
+		uncertaintyLevel,
+		entropyValue,
+		reasoningDecision.Confidence,
+		reasoningDecision.UseReasoning,
+		reasoningDecision.DecisionReason,
+		topCategory,
+		entropyLatency,
+	)
+
+	// Check confidence threshold for category determination
+	if result.Confidence < threshold {
+		observability.Infof("MCP classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
+			result.Confidence, threshold)
+
+		// Still return reasoning decision based on entropy even if confidence is low
+		return "", float64(result.Confidence), reasoningDecision, nil
+	}
+
+	// Map class index to category name
+	var categoryName string
+	var genericCategory string
+	if c.CategoryMapping != nil {
+		name, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
+		if ok {
+			categoryName = name
+			genericCategory = c.translateMMLUToGeneric(name)
+		} else {
+			categoryName = fmt.Sprintf("category_%d", result.Class)
+			genericCategory = categoryName
+		}
+	} else {
+		categoryName = fmt.Sprintf("category_%d", result.Class)
+		genericCategory = categoryName
+	}
+
+	// Record the category classification metric
+	metrics.RecordCategoryClassification(genericCategory)
+
+	observability.Infof("MCP classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
+		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
+
+	return genericCategory, float64(result.Confidence), reasoningDecision, nil
+}
+
+// withMCPCategory creates an option function for MCP category classifier
+func withMCPCategory(mcpInitializer MCPCategoryInitializer, mcpInference MCPCategoryInference) option {
+	return func(c *Classifier) {
+		c.mcpCategoryInitializer = mcpInitializer
+		c.mcpCategoryInference = mcpInference
+	}
+}
