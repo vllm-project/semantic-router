@@ -21,6 +21,13 @@ on:
         default: false
   push:
     branches: [ "main" ]
+  pull_request:
+    paths:
+      - ".github/workflows/docker-publish.yml"
+      - "Dockerfile*"
+      - "candle-binding/**"
+      - "src/**"
+      - "e2e-tests/llm-katan/**"
 
 jobs:
   # Parallel job for building both images
@@ -42,7 +49,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Set up QEMU (only for multi-arch builds)
-        if: inputs.skip_multiarch != true
+        if: inputs.skip_multiarch != true && github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -62,33 +69,24 @@ jobs:
       - name: Set lowercase repository owner
         run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Rust build cache for extproc - only use GitHub Actions cache for non-PR builds
-      - name: Cache Rust dependencies (extproc only)
-        if: matrix.image == 'extproc' && github.event_name != 'pull_request'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            candle-binding/target/
-          key: ${{ runner.os }}-cargo-extproc-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-extproc-
-
       # Set build context and dockerfile based on matrix
       - name: Set build parameters
         id: build-params
         run: |
+          # Skip multi-arch for PRs to speed up CI, unless explicitly disabled
+          PLATFORMS="linux/amd64"
+          if [ "${{ inputs.skip_multiarch }}" != "true" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+            PLATFORMS="linux/amd64,linux/arm64"
+          fi
+
           if [ "${{ matrix.image }}" = "extproc" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
-            echo "platforms=${{ inputs.skip_multiarch == true && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" >> $GITHUB_OUTPUT
+            echo "platforms=${PLATFORMS}" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e-tests/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
-            echo "platforms=${{ inputs.skip_multiarch == true && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" >> $GITHUB_OUTPUT
+            echo "platforms=${PLATFORMS}" >> $GITHUB_OUTPUT
           fi
 
       # Extract version for llm-katan
@@ -132,6 +130,7 @@ jobs:
           fi
 
       - name: Build and push ${{ matrix.image }} Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ steps.build-params.outputs.context }}
@@ -140,5 +139,19 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ matrix.image == 'extproc' && steps.extproc-tags.outputs.tags || steps.llm-katan-tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+            CARGO_BUILD_JOBS=4
+            BUILDKIT_PROGRESS=plain
+
+      - name: Build summary
+        if: always()
+        run: |
+          if [ "${{ steps.build.conclusion }}" = "success" ]; then
+            echo "::notice title=Build Success::${{ matrix.image }} build completed successfully"
+            echo "Image digest: ${{ steps.build.outputs.digest }}"
+          else
+            echo "::error title=Build Failed::${{ matrix.image }} build failed"
+          fi
