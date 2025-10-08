@@ -27,8 +27,15 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Directories
+# SCRIPT_DIR points to tools/observability/scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Determine repository root robustly
+if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
+    PROJECT_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
+else
+    # Fallback: three levels up from scripts -> repo root
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../" && pwd)"
+fi
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }

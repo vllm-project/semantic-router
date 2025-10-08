@@ -34,12 +34,12 @@ open-observability:
 
 ## obs-logs: Show logs from observability containers
 obs-logs:
-	@docker compose -f docker-compose.obs.yml logs -f 2>/dev/null || docker compose logs prometheus grafana -f
+	@docker compose -f $(PWD)/docker-compose.obs.yml logs -f 2>/dev/null || docker compose logs prometheus grafana -f
 
 ## obs-status: Check status of observability containers
 obs-status:
 	@echo "==> Local mode:"
-	@docker compose -f docker-compose.obs.yml ps 2>/dev/null || echo "  Not running"
+	@docker compose -f $(PWD)/docker-compose.obs.yml ps 2>/dev/null || echo "  Not running"
 	@echo ""
 	@echo "==> Compose mode:"
 	@docker compose ps prometheus grafana 2>/dev/null || echo "  Not running"
