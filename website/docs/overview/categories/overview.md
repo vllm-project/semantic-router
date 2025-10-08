@@ -1,4 +1,4 @@
-# Category Overview
+# Overview
 
 The Category system is the intelligence core of vLLM Semantic Router, enabling intelligent query classification and routing decisions based on semantic understanding of user inputs.
 
