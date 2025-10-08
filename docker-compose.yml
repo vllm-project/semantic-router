@@ -69,10 +69,13 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
-      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./tools/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.retention.time=15d
+    environment:
+      - ROUTER_TARGET=semantic-router:9190
     ports:
       - "9090:9090"
     networks:
@@ -84,14 +87,18 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - PROMETHEUS_URL=prometheus:9090
     ports:
       - "3000:3000"
     volumes:
-      - ./config/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
-      - ./config/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
-      - ./deploy/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - ./tools/observability/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./tools/observability/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
+      - ./tools/observability/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - grafana-data:/var/lib/grafana
     networks:
       - semantic-network
+    depends_on:
+      - prometheus
 
   # LLM Katan service for testing
   llm-katan:
@@ -118,3 +125,5 @@ networks:
 volumes:
   models-cache:
     driver: local
+  prometheus-data:
+  grafana-data:
