@@ -381,10 +381,10 @@ func TextContentBlock(text string) ContentBlock {
 }
 
 // ImageContentBlock creates an image content block
-func ImageContentBlock(data, mimeType string) ContentBlock {
+func ImageContentBlock(base64Data, mimeType string) ContentBlock {
 	return ContentBlock{
 		Type: "image",
-		Text: data, // In practice, this would be base64 encoded data
+		Text: base64Data, // base64-encoded image data
 	}
 }
 
@@ -580,21 +580,3 @@ func ExtractAuthToken(authHeader string) string {
 }
 
 // SSEMessage represents a Server-Sent Events message
-
-// PromptGuard represents configuration for jailbreak detection
-type PromptGuard struct {
-	Enabled              bool    `json:"enabled"`
-	ModelID              string  `json:"modelId"`
-	Threshold            float32 `json:"threshold"`
-	UseCPU               bool    `json:"useCpu"`
-	JailbreakMappingPath string  `json:"jailbreakMappingPath"`
-}
-
-// JailbreakDetection represents the result of jailbreak analysis
-type JailbreakDetection struct {
-	Content       string  `json:"content"`
-	IsJailbreak   bool    `json:"is_jailbreak"`
-	JailbreakType string  `json:"jailbreak_type"`
-	Confidence    float32 `json:"confidence"`
-	ContentIndex  int     `json:"content_index"`
-}

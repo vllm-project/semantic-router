@@ -157,9 +157,6 @@ func (c *StdioClient) loadTools(ctx context.Context) error {
 	// Apply tool filtering
 	filteredTools := FilterTools(toolsResult.Tools, c.config.Options.ToolFilter)
 
-	// Analyze tool descriptions for potential jailbreak attempts using the prompt guard
-	// NOTE: Prompt guard disabled - would require proper package structure refactoring
-
 	c.tools = filteredTools
 	c.log(LoggingLevelInfo, fmt.Sprintf("Loaded %d tools (filtered from %d)", len(c.tools), len(toolsResult.Tools)))
 
@@ -220,18 +217,6 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 	}
 
 	// Validate that the tool hasn't been flagged as malicious
-	// NOTE: Commented out - promptGuard is in BaseClient which is commented out
-	// if c.promptGuard != nil && c.promptGuard.IsEnabled() {
-	if false {
-		if err := (error)(nil); err != nil { // c.promptGuard.ValidateToolCall(name)
-			c.log(LoggingLevelError, fmt.Sprintf("Tool call validation failed: %v", err))
-			return nil, err
-		}
-	}
-
-	// Perform jailbreak detection on tool arguments if prompt guard is enabled
-	// NOTE: Disabled - would require proper package structure refactoring
-
 	c.log(LoggingLevelDebug, fmt.Sprintf("Calling tool: %s with arguments: %+v", name, arguments))
 
 	// Log the type of each argument for debugging
@@ -295,9 +280,6 @@ func (c *StdioClient) GetPrompt(ctx context.Context, name string, arguments map[
 	}
 
 	c.log(LoggingLevelDebug, fmt.Sprintf("Getting prompt: %s", name))
-
-	// Perform jailbreak detection on prompt arguments if prompt guard is enabled
-	// NOTE: Disabled - would require proper package structure refactoring
 
 	// Convert map[string]interface{} to map[string]string for MCP library compatibility
 	stringArgs := make(map[string]string)

@@ -43,12 +43,11 @@ type BaseClient struct {
 	prompts    []mcp.Prompt
 	logHandler func(LoggingLevel, string)
 	connected  bool
-	// promptGuard *Guard // Commented out - Guard is in different package
 }
 
 // NewBaseClient creates a new base client
 func NewBaseClient(name string, config ClientConfig) *BaseClient {
-	baseClient := &BaseClient{
+	return &BaseClient{
 		name:      name,
 		config:    config,
 		connected: false,
@@ -56,20 +55,6 @@ func NewBaseClient(name string, config ClientConfig) *BaseClient {
 			// Default log handler - can be overridden
 		},
 	}
-
-	// Initialize prompt guard if configured
-	// NOTE: Commented out - Guard type is in pkg/utils/pkg/mcp, would need proper import
-	// if config.Options.PromptGuard.Enabled {
-	// 	promptGuard, err := NewGuard(config.Options.PromptGuard)
-	// 	if err != nil {
-	// 		baseClient.log(LoggingLevelError, fmt.Sprintf("Failed to initialize prompt guard: %v", err))
-	// 	} else {
-	// 		baseClient.promptGuard = promptGuard
-	// 		baseClient.log(LoggingLevelInfo, "Prompt guard initialized successfully")
-	// 	}
-	// }
-
-	return baseClient
 }
 
 // GetTools returns the available tools
@@ -124,11 +109,10 @@ type ToolFilter struct {
 
 // ClientOptions represents client options
 type ClientOptions struct {
-	PanicIfInvalid bool        `json:"panicIfInvalid"`
-	LogEnabled     bool        `json:"logEnabled"`
-	AuthTokens     []string    `json:"authTokens"`
-	ToolFilter     ToolFilter  `json:"toolFilter"`
-	PromptGuard    PromptGuard `json:"promptGuard"`
+	PanicIfInvalid bool       `json:"panicIfInvalid"`
+	LogEnabled     bool       `json:"logEnabled"`
+	AuthTokens     []string   `json:"authTokens"`
+	ToolFilter     ToolFilter `json:"toolFilter"`
 }
 
 // TransportType represents the transport type

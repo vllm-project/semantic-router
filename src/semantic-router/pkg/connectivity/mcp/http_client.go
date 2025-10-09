@@ -12,6 +12,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+const (
+	// MCPProtocolVersion is the MCP protocol version supported by this implementation
+	MCPProtocolVersion = "2024-11-05"
+)
+
 // HTTPClient implements MCPClient for streamable HTTP transport
 type HTTPClient struct {
 	*BaseClient
@@ -83,7 +88,7 @@ func (c *HTTPClient) testConnection() error {
 
 	// Try to initialize the connection
 	initRequest := mcp.InitializeRequest{}
-	initRequest.Params.ProtocolVersion = "2024-11-05"
+	initRequest.Params.ProtocolVersion = MCPProtocolVersion
 	initRequest.Params.Capabilities = mcp.ClientCapabilities{
 		Roots: &struct {
 			ListChanged bool `json:"listChanged,omitempty"`
@@ -141,10 +146,6 @@ func (c *HTTPClient) loadTools(ctx context.Context) error {
 
 	// Apply tool filtering
 	filteredTools := FilterTools(toolsResult.Tools, c.config.Options.ToolFilter)
-
-	// Analyze tool descriptions for potential jailbreak attempts using the prompt guard
-	// NOTE: Prompt guard disabled - would require proper package structure refactoring
-	// Disabled code: tool analysis for security threats
 
 	c.tools = filteredTools
 	c.log(LoggingLevelInfo, fmt.Sprintf("Loaded %d tools (filtered from %d)", len(c.tools), len(toolsResult.Tools)))
@@ -211,12 +212,6 @@ func (c *HTTPClient) CallTool(ctx context.Context, name string, arguments map[st
 		return nil, fmt.Errorf("tool '%s' not found or not allowed", name)
 	}
 
-	// Validate that the tool hasn't been flagged as malicious
-	// NOTE: Disabled - would require proper package structure refactoring
-
-	// Perform jailbreak detection on tool arguments if prompt guard is enabled
-	// NOTE: Disabled - would require proper package structure refactoring
-
 	c.log(LoggingLevelDebug, fmt.Sprintf("Calling tool via HTTP: %s", name))
 
 	request := mcp.CallToolRequest{}
@@ -271,9 +266,6 @@ func (c *HTTPClient) GetPrompt(ctx context.Context, name string, arguments map[s
 	}
 
 	c.log(LoggingLevelDebug, fmt.Sprintf("Getting prompt via HTTP: %s", name))
-
-	// Perform jailbreak detection on prompt arguments if prompt guard is enabled
-	// NOTE: Disabled - would require proper package structure refactoring
 
 	request := mcp.GetPromptRequest{}
 	request.Params.Name = name
