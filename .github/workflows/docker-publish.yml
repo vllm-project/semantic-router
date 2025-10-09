@@ -204,7 +204,6 @@ jobs:
       - name: Create and push manifest
         run: |
           REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
-          ARCH_SUFFIX="${{ matrix.arch }}"
 
           # Create manifest for the specific image
           if [ "${{ inputs.is_nightly }}" = "true" ]; then
@@ -213,11 +212,11 @@ jobs:
             if [ "${{ github.event_name }}" != "pull_request" ]; then
               TAG="${{ github.sha }}"
             else
-              TAG="pr-${{ github.event.number }}-${ARCH_SUFFIX}"
+              TAG="pr-${{ github.event.number }}"
             fi
           fi
 
-          # Create and push manifest
+          # Create and push manifest by combining architecture-specific images
           docker buildx imagetools create \
             --tag ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG} \
             ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}-amd64 \
