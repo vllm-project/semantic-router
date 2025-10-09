@@ -30,8 +30,8 @@ on:
       - "e2e-tests/llm-katan/**"
 
 jobs:
-  # Separate job for native builds vs emulated builds
-  build_native:
+  # Build job for multi-architecture Docker images
+  build_multiarch:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,9 +39,9 @@ jobs:
     strategy:
       matrix:
         image: [extproc, llm-katan]
-        # Smart architecture selection:
-        # - PR: Only AMD64 for faster feedback
-        # - Main/Release: Multi-arch for production
+        # Multi-architecture build strategy:
+        # - AMD64: Native build on ubuntu-latest (fast)
+        # - ARM64: Cross-compilation on ubuntu-latest (faster than emulation)
         # arch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64"]') || fromJSON('["amd64", "arm64"]') }}
         arch: ["amd64", "arm64"]
       fail-fast: false
@@ -175,12 +175,12 @@ jobs:
 
   # Create multi-arch manifest for final images
   create_manifest:
-    needs: build_native
+    needs: build_multiarch
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    if: github.event_name != 'pull_request'
+    # if: github.event_name != 'pull_request'
     strategy:
       matrix:
         image: [extproc, llm-katan]
