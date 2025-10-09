@@ -1,0 +1,22 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: openwebui
+  namespace: vllm-semantic-router-system
+  labels:
+    app: openwebui
+    component: frontend
+  annotations:
+    haproxy.router.openshift.io/timeout: "300s"
+spec:
+  host: openwebui-vllm-semantic-router-system.apps.cluster-pbd96.pbd96.sandbox5333.opentlc.com
+  to:
+    kind: Service
+    name: openwebui
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
