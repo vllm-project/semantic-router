@@ -248,4 +248,3 @@ func TestCreateCacheHitResponse_StreamingWithInvalidJSON(t *testing.T) {
 		t.Error("Expected SSE terminator even in error case")
 	}
 }
-
