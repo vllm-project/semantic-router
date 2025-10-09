@@ -578,5 +578,3 @@ func ExtractAuthToken(authHeader string) string {
 
 	return authHeader
 }
-
-// SSEMessage represents a Server-Sent Events message

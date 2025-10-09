@@ -76,13 +76,7 @@ func (c *StdioClient) Connect() error {
 		}()
 
 		c.log(LoggingLevelDebug, fmt.Sprintf("Starting MCP client..."))
-		// Start the client (required before Initialize)
-		// NOTE: Start() method removed in mcp-go v0.9.0 - connection starts automatically
-		// if err := c.mcpClient.Start(ctx); err != nil {
-		// 	c.log(LoggingLevelError, fmt.Sprintf("Failed to start MCP client: %v", err))
-		// 	initDone <- fmt.Errorf("failed to start MCP client: %w", err)
-		// 	return
-		// }
+		// Note: Start() method removed in mcp-go v0.9.0+ - connection starts automatically
 
 		c.log(LoggingLevelDebug, fmt.Sprintf("Initializing MCP client..."))
 		// Initialize the client with a simple request (no params needed for basic initialization)

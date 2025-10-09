@@ -15,6 +15,8 @@ import (
 const (
 	// MCPProtocolVersion is the MCP protocol version supported by this implementation
 	MCPProtocolVersion = "2024-11-05"
+	// MCPClientVersion is the version of this MCP client implementation
+	MCPClientVersion = "1.0.0"
 )
 
 // HTTPClient implements MCPClient for streamable HTTP transport
@@ -96,7 +98,7 @@ func (c *HTTPClient) testConnection() error {
 	}
 	initRequest.Params.ClientInfo = mcp.Implementation{
 		Name:    "http-mcp-client",
-		Version: "1.0.0",
+		Version: MCPClientVersion,
 	}
 
 	_, err := c.sendRequest(ctx, "initialize", initRequest)
