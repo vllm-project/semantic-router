@@ -40,8 +40,14 @@ RUN cd candle-binding && \
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
 
-# Use Makefile to build the Rust library
-RUN make rust
+# Use Makefile to build the Rust library (rebuild with actual source code)
+RUN echo "Building Rust library with actual source code..." && \
+    echo "Checking source files:" && \
+    ls -la candle-binding/src/ && \
+    make rust && \
+    echo "Checking built library:" && \
+    find candle-binding/target -name "*.so" -type f && \
+    ls -la candle-binding/target/release/
 
 # Build the Go application
 FROM golang:1.24 as go-builder
