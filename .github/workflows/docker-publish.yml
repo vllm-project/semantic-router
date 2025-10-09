@@ -42,7 +42,7 @@ jobs:
         # Multi-architecture build strategy:
         # - AMD64: Native build on ubuntu-latest (fast)
         # - ARM64: Cross-compilation on ubuntu-latest (faster than emulation)
-        # arch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64"]') || fromJSON('["amd64", "arm64"]') }}
+#        arch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64"]') || fromJSON('["amd64", "arm64"]') }}
         arch: ["amd64", "arm64"]
       fail-fast: false
 
@@ -149,8 +149,7 @@ jobs:
           context: ${{ steps.build-params.outputs.context }}
           file: ${{ steps.build-params.outputs.dockerfile }}
           platforms: ${{ steps.build-params.outputs.platform }}
-          # push: ${{ github.event_name != 'pull_request' }}
-          push: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: |
@@ -181,7 +180,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request'
     strategy:
       matrix:
         image: [extproc, llm-katan]
