@@ -489,18 +489,23 @@ func ConvertMCPResultToOpenAI(result *mcp.CallToolResult) map[string]interface{}
 
 	content := ""
 	if len(result.Content) > 0 {
-		// The mcp.Content type doesn't have a Type field, so we need to use type assertion directly
 		firstContent := result.Content[0]
 
-		// Try to extract content based on the actual type
-		if textContent, ok := firstContent.(*mcp.TextContent); ok {
-			content = textContent.Text
-		} else if imageContent, ok := firstContent.(*mcp.ImageContent); ok {
-			content = fmt.Sprintf("Image: %s", imageContent.Data)
-		} else if resourceContent, ok := firstContent.(*mcp.EmbeddedResource); ok {
-			// The mcp.EmbeddedResource has Resource field but it's an interface, so we'll use string representation
-			content = fmt.Sprintf("Resource: %v", resourceContent.Resource)
-		} else {
+		// Use a type switch to match the actual types from mcp-go
+		switch c := firstContent.(type) {
+		case *mcp.TextContent:
+			content = c.Text
+		case mcp.TextContent:
+			content = c.Text
+		case *mcp.ImageContent:
+			content = fmt.Sprintf("Image: %s", c.Data)
+		case mcp.ImageContent:
+			content = fmt.Sprintf("Image: %s", c.Data)
+		case *mcp.EmbeddedResource:
+			content = fmt.Sprintf("Resource: %v", c.Resource)
+		case mcp.EmbeddedResource:
+			content = fmt.Sprintf("Resource: %v", c.Resource)
+		default:
 			// Fallback: try to get string representation
 			content = fmt.Sprintf("%v", firstContent)
 		}

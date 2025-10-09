@@ -16,6 +16,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
+const (
+	// DefaultMCPThreshold is the default confidence threshold for MCP classification
+	DefaultMCPThreshold = 0.5
+)
+
 // MCPCategoryInitializer initializes MCP connection for category classification
 type MCPCategoryInitializer interface {
 	Init(cfg *config.RouterConfig) error
@@ -261,7 +266,7 @@ func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
 	// Check threshold
 	threshold := c.Config.Classifier.MCPCategoryModel.Threshold
 	if threshold == 0 {
-		threshold = 0.5 // Default threshold
+		threshold = DefaultMCPThreshold
 	}
 
 	if result.Confidence < threshold {
@@ -342,7 +347,7 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 	// Determine threshold
 	threshold := c.Config.Classifier.MCPCategoryModel.Threshold
 	if threshold == 0 {
-		threshold = 0.5 // Default threshold
+		threshold = DefaultMCPThreshold
 	}
 
 	// Make entropy-based reasoning decision
