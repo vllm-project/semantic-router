@@ -1,0 +1,45 @@
+# Optimized Dockerfile for llm-katan - OpenShift compatible
+FROM python:3.10-slim
+
+# Install minimal system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.x drivers)
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Install llm-katan and its dependencies
+RUN pip install --no-cache-dir \
+    llm-katan \
+    transformers \
+    accelerate \
+    fastapi \
+    uvicorn \
+    click \
+    pydantic \
+    numpy
+
+# Set environment variables for caching
+ENV HF_HUB_CACHE=/tmp/hf_cache
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/hf_cache
+
+# Create cache directories
+RUN mkdir -p /tmp/hf_cache /tmp/transformers_cache
+
+# Expose ports
+EXPOSE 8000 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command - this will be overridden by deployment args
+CMD ["llm-katan", "--help"]

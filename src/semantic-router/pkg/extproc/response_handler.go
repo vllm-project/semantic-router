@@ -11,6 +11,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/openai/openai-go"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
@@ -60,7 +61,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		if ctx.VSRSelectedCategory != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{
 				Header: &core.HeaderValue{
-					Key:      "x-vsr-selected-category",
+					Key:      headers.VSRSelectedCategory,
 					RawValue: []byte(ctx.VSRSelectedCategory),
 				},
 			})
@@ -70,7 +71,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		if ctx.VSRReasoningMode != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{
 				Header: &core.HeaderValue{
-					Key:      "x-vsr-selected-reasoning",
+					Key:      headers.VSRSelectedReasoning,
 					RawValue: []byte(ctx.VSRReasoningMode),
 				},
 			})
@@ -80,7 +81,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		if ctx.VSRSelectedModel != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{
 				Header: &core.HeaderValue{
-					Key:      "x-vsr-selected-model",
+					Key:      headers.VSRSelectedModel,
 					RawValue: []byte(ctx.VSRSelectedModel),
 				},
 			})
@@ -93,7 +94,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		}
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "x-vsr-injected-system-prompt",
+				Key:      headers.VSRInjectedSystemPrompt,
 				RawValue: []byte(injectedValue),
 			},
 		})

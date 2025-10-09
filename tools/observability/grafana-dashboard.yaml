@@ -1,0 +1,15 @@
+# Grafana dashboard provisioning configuration
+# This file tells Grafana where to find dashboard JSON files
+
+apiVersion: 1
+
+providers:
+  - name: "Semantic Router"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

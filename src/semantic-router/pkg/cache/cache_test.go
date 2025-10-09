@@ -5,9 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -499,6 +503,32 @@ development:
 			Expect(err).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(response).To(Equal([]byte("response")))
+		})
+
+		It("should update cache entries metric when cleanup occurs during UpdateWithResponse", func() {
+			// Reset gauge defensively so the assertion stands alone even if other specs fail early
+			metrics.UpdateCacheEntries("memory", 0)
+
+			Expect(inMemoryCache.Close()).NotTo(HaveOccurred())
+			inMemoryCache = cache.NewInMemoryCache(cache.InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: 0.8,
+				MaxEntries:          100,
+				TTLSeconds:          1,
+			})
+
+			err := inMemoryCache.AddPendingRequest("expired-request-id", "test-model", "stale query", []byte("request"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(testutil.ToFloat64(metrics.CacheEntriesTotal.WithLabelValues("memory"))).To(Equal(float64(1)))
+
+			// Wait for TTL to expire before triggering the update path
+			time.Sleep(2 * time.Second)
+
+			err = inMemoryCache.UpdateWithResponse("expired-request-id", []byte("response"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no pending request"))
+
+			Expect(testutil.ToFloat64(metrics.CacheEntriesTotal.WithLabelValues("memory"))).To(BeZero())
 		})
 
 		It("should respect similarity threshold", func() {

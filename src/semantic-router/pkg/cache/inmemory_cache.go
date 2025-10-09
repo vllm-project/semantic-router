@@ -324,6 +324,10 @@ func (c *InMemoryCache) Close() error {
 
 	// Clear all entries to free memory
 	c.entries = nil
+
+	// Zero cache entries metrics
+	metrics.UpdateCacheEntries("memory", 0)
+
 	return nil
 }
 
@@ -355,7 +359,7 @@ func (c *InMemoryCache) GetStats() CacheStats {
 	return stats
 }
 
-// cleanupExpiredEntries removes entries that have exceeded their TTL
+// cleanupExpiredEntries removes entries that have exceeded their TTL and updates the cache entry count metric to keep metrics in sync.
 // Caller must hold a write lock
 func (c *InMemoryCache) cleanupExpiredEntries() {
 	if c.ttlSeconds <= 0 {
@@ -372,20 +376,25 @@ func (c *InMemoryCache) cleanupExpiredEntries() {
 		}
 	}
 
-	if len(validEntries) < len(c.entries) {
-		expiredCount := len(c.entries) - len(validEntries)
-		observability.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
-			expiredCount, len(validEntries))
-		observability.LogEvent("cache_cleanup", map[string]interface{}{
-			"backend":         "memory",
-			"expired_count":   expiredCount,
-			"remaining_count": len(validEntries),
-			"ttl_seconds":     c.ttlSeconds,
-		})
-		c.entries = validEntries
-		cleanupTime := time.Now()
-		c.lastCleanupTime = &cleanupTime
+	if len(validEntries) == len(c.entries) {
+		return
 	}
+
+	expiredCount := len(c.entries) - len(validEntries)
+	observability.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
+		expiredCount, len(validEntries))
+	observability.LogEvent("cache_cleanup", map[string]interface{}{
+		"backend":         "memory",
+		"expired_count":   expiredCount,
+		"remaining_count": len(validEntries),
+		"ttl_seconds":     c.ttlSeconds,
+	})
+	c.entries = validEntries
+	cleanupTime := time.Now()
+	c.lastCleanupTime = &cleanupTime
+
+	// Update metrics after cleanup
+	metrics.UpdateCacheEntries("memory", len(c.entries))
 }
 
 // cleanupExpiredEntriesReadOnly identifies expired entries without modifying the cache
