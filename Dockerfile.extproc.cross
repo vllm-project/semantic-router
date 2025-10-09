@@ -1,7 +1,7 @@
-# Build the Rust library using Makefile
-FROM rust:1.85 as rust-builder
+# Cross-compilation optimized Dockerfile for ARM64
+FROM --platform=linux/amd64 rust:1.85 as rust-cross-builder
 
-# Install make and other build dependencies including cross-compilation tools
+# Install cross-compilation dependencies
 RUN apt-get update && apt-get install -y \
     make \
     build-essential \
@@ -9,17 +9,30 @@ RUN apt-get update && apt-get install -y \
     lld \
     clang \
     gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Rust for cross-compilation
-RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+# Install cross-compilation target
+RUN rustup target add aarch64-unknown-linux-gnu
 
-# Configure Cargo for optimized builds
+# Configure cross-compilation environment
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64
+
+# Optimize Rust compilation
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_INCREMENTAL=1
 ENV CARGO_PROFILE_RELEASE_LTO=thin
 ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+
+# Set target architecture for cross-compilation
+ARG TARGETARCH
+ENV RUST_TARGET=${TARGETARCH:-x86_64}-unknown-linux-gnu
 
 WORKDIR /app
 
@@ -30,21 +43,30 @@ COPY candle-binding/Cargo.loc[k] ./candle-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
 
+# Create a modified Makefile for cross-compilation
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        sed -i 's/cargo build --release/cargo build --release --target aarch64-unknown-linux-gnu/' tools/make/rust.mk; \
+    fi
+
 # Pre-build dependencies to cache them
 RUN cd candle-binding && \
     mkdir -p src && \
     echo "fn main() {}" > src/lib.rs && \
-    cargo build --release && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release; \
+    fi && \
     rm -rf src
 
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
 
-# Use Makefile to build the Rust library
+# Build with cross-compilation
 RUN make rust
 
 # Build the Go application
-FROM golang:1.24 as go-builder
+FROM --platform=linux/amd64 golang:1.24 as go-builder
 
 WORKDIR /app
 
@@ -59,13 +81,15 @@ RUN cd src/semantic-router && go mod download
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
 
-# Copy the built Rust library from rust-builder
-COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
+# Copy the built Rust library from rust-cross-builder
+ARG TARGETARCH
+COPY --from=rust-cross-builder /app/candle-binding/target/${TARGETARCH:-x86_64}-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/
 
 # Set environment variables for CGO to find the library
 ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
 ENV GOOS=linux
+ENV GOARCH=${TARGETARCH:-amd64}
 
 # Build the router binary with optimizations
 RUN mkdir -p bin && cd src/semantic-router && \
