@@ -112,7 +112,7 @@ Fix
 
 - Map the needed ports with `ports:`.
 
-Example docker-compose.yml snippet
+Example docker-compose.yml snippet (from `deploy/docker-compose/docker-compose.yml` after relocation)
 
 ```yaml
 services:

@@ -3,14 +3,14 @@ services:
   # Semantic Router External Processor Service
   semantic-router:
     build:
-      context: .
+      context: ../../
       dockerfile: Dockerfile.extproc
     container_name: semantic-router
     ports:
       - "50051:50051"
     volumes:
-      - ./config:/app/config:ro
-      - ./models:/app/models:ro
+      - ../../config:/app/config:ro
+      - ../../models:/app/models:ro
     environment:
       - LD_LIBRARY_PATH=/app/lib
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
@@ -31,7 +31,7 @@ services:
       - "8801:8801"  # Main proxy port
       - "19000:19000"  # Admin interface
     volumes:
-      - ./config/envoy-docker.yaml:/etc/envoy/envoy.yaml:ro
+      - ../../config/envoy-docker.yaml:/etc/envoy/envoy.yaml:ro
     command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
     depends_on:
       semantic-router:
@@ -48,7 +48,7 @@ services:
   # Mock vLLM service for testing profile
   mock-vllm:
     build:
-      context: ./tools/mock-vllm
+      context: ../../tools/mock-vllm
       dockerfile: Dockerfile
     container_name: mock-vllm
     profiles: ["testing"]
@@ -69,7 +69,7 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
-      - ./tools/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ../../tools/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
@@ -91,9 +91,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./tools/observability/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
-      - ./tools/observability/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
-      - ./tools/observability/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - ../../tools/observability/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ../../tools/observability/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
+      - ../../tools/observability/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
       - grafana-data:/var/lib/grafana
     networks:
       - semantic-network
@@ -103,7 +103,7 @@ services:
   # LLM Katan service for testing
   llm-katan:
     build:
-      context: ./e2e-tests/llm-katan
+      context: ../../e2e-tests/llm-katan
       dockerfile: Dockerfile
     container_name: llm-katan
     profiles: ["testing", "llm-katan"]

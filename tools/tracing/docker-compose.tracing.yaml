@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - tracing-network
+
+  semantic-router:
+    build:
+      context: ../../
+      dockerfile: Dockerfile.extproc
+    image: semantic-router-tracing:latest
+    container_name: semantic-router-tracing
+    depends_on:
+      - jaeger
+    ports:
+      - "50052:50051"
+      - "8081:8080"
+      - "9191:9190"
+    volumes:
+      - ../../config:/app/config:ro
+      - ../../models:/app/models:ro
+    environment:
+      - LD_LIBRARY_PATH=/app/lib
+      - CONFIG_FILE=/app/config/config.tracing.yaml
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=semantic-router
+    networks:
+      - tracing-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-tracing
+    profiles: ["grafana"]
+    ports:
+      - "33000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    networks:
+      - tracing-network
+
+networks:
+  tracing-network:
+    driver: bridge

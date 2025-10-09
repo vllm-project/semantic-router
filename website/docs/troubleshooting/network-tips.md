@@ -39,11 +39,11 @@ The router will download embedding models on first run unless you provide them l
      model_id: /app/models/all-MiniLM-L12-v2
    ```
 
-3) No extra env is required. `docker-compose.yml` already mounts `./models:/app/models:ro`.
+3) No extra env is required. `deploy/docker-compose/docker-compose.yml` already mounts `./models:/app/models:ro`.
 
 ### Option B — Use HF cache + mirror
 
-Create a compose override to persist cache and use a regional mirror (example below uses a China mirror). Save as `docker-compose.override.yml` in the repo root:
+Create a compose override to persist cache and use a regional mirror (example below uses a China mirror). Save as `docker-compose.override.yml` in the repo root (Compose will automatically combine it with `deploy/docker-compose/docker-compose.yml` when you specify both):
 
 ```yaml
 services:
@@ -164,14 +164,14 @@ services:
 With the overrides in place, build and run normally (Compose will auto-merge):
 
 ```bash
-# Build all images with overrides
-docker compose -f docker-compose.yml -f docker-compose.override.yml build
+# Build all images with overrides (explicitly reference the relocated compose file)
+docker compose -f deploy/docker-compose/docker-compose.yml -f docker-compose.override.yml build
 
 # Run router + envoy
-docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+docker compose -f deploy/docker-compose/docker-compose.yml -f docker-compose.override.yml up -d
 
 # If you need the testing profile (mock-vllm)
-docker compose -f docker-compose.yml -f docker-compose.override.yml --profile testing up -d
+docker compose -f deploy/docker-compose/docker-compose.yml -f docker-compose.override.yml --profile testing up -d
 ```
 
 ## 5. Kubernetes clusters with limited egress
