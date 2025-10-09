@@ -34,6 +34,16 @@ ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
 ARG TARGETARCH
 ENV RUST_TARGET=${TARGETARCH:-x86_64}-unknown-linux-gnu
 
+# Map Docker TARGETARCH to Rust target
+RUN echo "Mapping TARGETARCH=$TARGETARCH to Rust target" && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "export RUST_TARGET=aarch64-unknown-linux-gnu" >> ~/.bashrc; \
+        export RUST_TARGET=aarch64-unknown-linux-gnu; \
+    elif [ "$TARGETARCH" = "amd64" ]; then \
+        echo "export RUST_TARGET=x86_64-unknown-linux-gnu" >> ~/.bashrc; \
+        export RUST_TARGET=x86_64-unknown-linux-gnu; \
+    fi
+
 WORKDIR /app
 
 # Copy dependency files first for better layer caching
@@ -68,6 +78,12 @@ RUN make rust
 # Build the Go application
 FROM --platform=linux/amd64 golang:1.24 as go-builder
 
+# Install cross-compilation tools for Go
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy Go module files first for better layer caching
@@ -83,7 +99,36 @@ COPY src/semantic-router/ src/semantic-router/
 
 # Copy the built Rust library from rust-cross-builder
 ARG TARGETARCH
-COPY --from=rust-cross-builder /app/candle-binding/target/${TARGETARCH:-x86_64}-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/
+
+# Use a script to copy the correct library
+RUN mkdir -p /app/candle-binding/target/release
+
+# Copy all possible library locations and let the script figure it out
+COPY --from=rust-cross-builder /app/candle-binding/target/ /tmp/rust-target/
+
+# Copy the appropriate library to the expected location
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        if [ -f "/tmp/rust-target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so" ]; then \
+            cp /tmp/rust-target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/; \
+            echo "Copied ARM64 cross-compiled library"; \
+        else \
+            echo "ERROR: ARM64 library not found"; \
+            ls -la /tmp/rust-target/*/release/ || echo "No target directories found"; \
+            exit 1; \
+        fi; \
+    else \
+        if [ -f "/tmp/rust-target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.so" ]; then \
+            cp /tmp/rust-target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/; \
+            echo "Copied AMD64 library"; \
+        elif [ -f "/tmp/rust-target/release/libcandle_semantic_router.so" ]; then \
+            cp /tmp/rust-target/release/libcandle_semantic_router.so /app/candle-binding/target/release/; \
+            echo "Copied native library"; \
+        else \
+            echo "ERROR: AMD64 library not found"; \
+            ls -la /tmp/rust-target/*/release/ || echo "No target directories found"; \
+            exit 1; \
+        fi; \
+    fi
 
 # Set environment variables for CGO to find the library
 ENV CGO_ENABLED=1
@@ -91,9 +136,32 @@ ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
 ENV GOOS=linux
 ENV GOARCH=${TARGETARCH:-amd64}
 
-# Build the router binary with optimizations
+# Set up cross-compilation for Go if needed
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        export CC=aarch64-linux-gnu-gcc; \
+        export CXX=aarch64-linux-gnu-g++; \
+        export CGO_CFLAGS="-I/app/candle-binding"; \
+        export CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router"; \
+    fi
+
+# Verify the library exists and has the expected symbols
+RUN ls -la /app/candle-binding/target/release/libcandle_semantic_router.so && \
+    file /app/candle-binding/target/release/libcandle_semantic_router.so
+
+# Build the router binary with cross-compilation support
 RUN mkdir -p bin && cd src/semantic-router && \
-    go build -ldflags="-w -s" -o ../../bin/router cmd/main.go
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        CC=aarch64-linux-gnu-gcc \
+        CXX=aarch64-linux-gnu-g++ \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router" \
+        GOOS=linux GOARCH=arm64 \
+        go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
+    else \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router" \
+        go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
+    fi
 
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream9
