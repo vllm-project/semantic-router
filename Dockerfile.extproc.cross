@@ -55,7 +55,9 @@ COPY Makefile ./
 
 # Create a modified Makefile for cross-compilation
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        sed -i 's/cargo build --release/cargo build --release --target aarch64-unknown-linux-gnu/' tools/make/rust.mk; \
+        echo "Modifying rust.mk for ARM64 cross-compilation..."; \
+        sed -i 's/cd candle-binding && cargo build --release/cd candle-binding \&\& cargo build --release --target aarch64-unknown-linux-gnu/' tools/make/rust.mk; \
+        cat tools/make/rust.mk | grep "cargo build"; \
     fi
 
 # Pre-build dependencies to cache them
@@ -72,8 +74,21 @@ RUN cd candle-binding && \
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
 
-# Build with cross-compilation
-RUN make rust
+# Build with cross-compilation (rebuild with actual source code)
+RUN echo "Building Rust library with actual source code..." && \
+    echo "Current directory: $(pwd)" && \
+    echo "TARGETARCH: $TARGETARCH" && \
+    ls -la candle-binding/src/ && \
+    # Set up environment for cross-compilation
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc; \
+        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc; \
+        export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++; \
+        export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar; \
+    fi && \
+    make rust && \
+    echo "Checking built library..." && \
+    find candle-binding/target -name "*.so" -type f
 
 # Build the Go application
 FROM --platform=linux/amd64 golang:1.24 as go-builder
