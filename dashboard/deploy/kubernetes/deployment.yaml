@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router-dashboard
+  labels:
+    app: semantic-router-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: semantic-router-dashboard
+  template:
+    metadata:
+      labels:
+        app: semantic-router-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: semantic-router-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          args: ["-port=8700", "-static=/app/frontend"]
+          env:
+            - name: TARGET_GRAFANA_URL
+              value: http://grafana.vllm-semantic-router-system.svc.cluster.local:3000
+            - name: TARGET_PROMETHEUS_URL
+              value: http://prometheus.vllm-semantic-router-system.svc.cluster.local:9090
+            - name: TARGET_ROUTER_API_URL
+              value: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:8080
+            - name: TARGET_ROUTER_METRICS_URL
+              value: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:9190/metrics
+            - name: TARGET_OPENWEBUI_URL
+              value: ""
+          ports:
+            - name: http
+              containerPort: 8700
+          volumeMounts:
+            - name: frontend
+              mountPath: /app/frontend
+      volumes:
+        - name: frontend
+          configMap:
+            name: semantic-router-dashboard-frontend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router-dashboard
+  labels:
+    app: semantic-router-dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app: semantic-router-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-dashboard-frontend
+data:
+  index.html: |
+    <!doctype html>
+    <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Semantic Router Dashboard</title></head>
+    <body>
+      <script>
+        // Fallback page that redirects to container-mounted frontend if available
+        window.location.replace('/');
+      </script>
+    </body></html>

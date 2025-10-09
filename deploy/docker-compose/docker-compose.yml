@@ -88,6 +88,8 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - PROMETHEUS_URL=prometheus:9090
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SAMESITE=lax
     ports:
       - "3000:3000"
     volumes:

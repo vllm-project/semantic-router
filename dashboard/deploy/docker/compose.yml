@@ -1,0 +1,25 @@
+services:
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: dashboard/backend/Dockerfile
+    image: semantic-router-dashboard:dev
+    container_name: semantic-router-dashboard
+    command: ["/app/dashboard-backend", "-port=8700", "-static=/app/frontend"]
+    environment:
+      - DASHBOARD_PORT=8700
+      - TARGET_GRAFANA_URL=http://grafana:3000
+      - TARGET_PROMETHEUS_URL=http://prometheus:9090
+      - TARGET_ROUTER_API_URL=http://semantic-router:8080
+      - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
+      - TARGET_OPENWEBUI_URL=
+    ports:
+      - "8700:8700"
+    depends_on:
+      - grafana
+      - prometheus
+      - semantic-router
+
+# NOTE: This compose file expects to be used together with the root docker-compose.yml
+# Example:
+#   docker compose -f docker-compose.yml -f dashboard/deploy/docker/compose.yml up --build
