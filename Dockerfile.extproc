@@ -1,5 +1,5 @@
 # Build the Rust library using Makefile
-FROM rust:1.85 as rust-builder
+FROM rust:1.85 AS rust-builder
 
 # Install make and other build dependencies including cross-compilation tools
 RUN apt-get update && apt-get install -y \
@@ -53,7 +53,7 @@ RUN echo "Building Rust library with actual source code..." && \
     ls -la target/release/
 
 # Build the Go application
-FROM golang:1.24 as go-builder
+FROM golang:1.24 AS go-builder
 
 WORKDIR /app
 

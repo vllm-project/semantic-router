@@ -32,7 +32,7 @@ on:
 jobs:
   # Separate job for native builds vs emulated builds
   build_native:
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-26' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
