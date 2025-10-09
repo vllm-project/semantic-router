@@ -61,7 +61,7 @@ if any_container_exists "prometheus-local" "grafana-local"; then
 fi
 if [ "${LOCAL_MODE_RUNNING}" = true ]; then
     log_info "Stopping local mode containers..."
-    docker compose -f "${PROJECT_ROOT}/docker-compose.obs.yml" down
+    docker compose -f "${PROJECT_ROOT}/tools/observability/docker-compose.obs.yml" down
 fi
 
 # Also stop compose mode if running as part of main stack
@@ -77,7 +77,7 @@ fi
 
 if [ "${COMPOSE_O11Y_RUNNING}" = true ] && [ "${ROUTER_RUNNING}" = false ]; then
     log_warn "Observability containers from main stack are running"
-    log_info "Use 'docker compose down' to stop the full stack"
+    log_info "Use 'docker compose -f deploy/docker-compose/docker-compose.yml down' to stop the full stack"
 fi
 
 echo ""

@@ -28,3 +28,17 @@ make o11y-compose
 
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000 (admin/admin)
+
+## Tracing Stack (Jaeger)
+
+For distributed tracing (Jaeger + a tracing-enabled router instance), see:
+
+`tools/tracing/docker-compose.tracing.yaml`
+
+Start it independently:
+
+```bash
+make docker-compose-tracing-up
+```
+
+Then view Jaeger at http://localhost:16686 and (optional) tracing router API at http://localhost:8081.

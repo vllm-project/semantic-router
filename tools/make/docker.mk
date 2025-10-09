@@ -82,23 +82,35 @@ docker-push-llm-katan:
 # Docker compose shortcuts
 docker-compose-up:
 	@$(LOG_TARGET)
-	@echo "Starting services with docker-compose..."
-	@docker compose up --build
+	@echo "Starting services with docker-compose (deploy/docker-compose/docker-compose.yml)..."
+	@docker compose -f deploy/docker-compose/docker-compose.yml up --build
 
 docker-compose-up-testing:
 	@$(LOG_TARGET)
-	@echo "Starting services with testing profile..."
-	@docker compose --profile testing up --build
+	@echo "Starting services with testing profile (deploy/docker-compose/docker-compose.yml)..."
+	@docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
 
 docker-compose-up-llm-katan:
 	@$(LOG_TARGET)
-	@echo "Starting services with llm-katan profile..."
-	@docker compose --profile llm-katan up --build
+	@echo "Starting services with llm-katan profile (deploy/docker-compose/docker-compose.yml)..."
+	@docker compose -f deploy/docker-compose/docker-compose.yml --profile llm-katan up --build
 
 docker-compose-down:
 	@$(LOG_TARGET)
-	@echo "Stopping docker-compose services..."
-	@docker compose down
+	@echo "Stopping docker-compose services (deploy/docker-compose/docker-compose.yml)..."
+	@docker compose -f deploy/docker-compose/docker-compose.yml down
+
+# Tracing stack compose targets
+docker-compose-tracing-up:
+	@$(LOG_TARGET)
+	@echo "Starting tracing stack (tools/tracing/docker-compose.tracing.yaml)..."
+	@docker compose -f tools/tracing/docker-compose.tracing.yaml up --build -d
+	@echo "Jaeger UI: http://localhost:16686  Router (tracing): http://localhost:8081"
+
+docker-compose-tracing-down:
+	@$(LOG_TARGET)
+	@echo "Stopping tracing stack (tools/tracing/docker-compose.tracing.yaml)..."
+	@docker compose -f tools/tracing/docker-compose.tracing.yaml down
 
 # Help target for Docker commands
 docker-help:
@@ -111,10 +123,12 @@ docker-help:
 	@echo "  docker-run-llm-katan      - Run llm-katan Docker image locally"
 	@echo "  docker-run-llm-katan-custom SERVED_NAME=name - Run with custom served model name"
 	@echo "  docker-clean              - Clean up Docker images"
-	@echo "  docker-compose-up         - Start docker-compose services"
-	@echo "  docker-compose-up-testing - Start with testing profile"
-	@echo "  docker-compose-up-llm-katan - Start with llm-katan profile"
-	@echo "  docker-compose-down       - Stop docker-compose services"
+	@echo "  docker-compose-up         - Start docker-compose services (deploy/docker-compose/docker-compose.yml)"
+	@echo "  docker-compose-up-testing - Start with testing profile (deploy/docker-compose/docker-compose.yml)"
+	@echo "  docker-compose-up-llm-katan - Start with llm-katan profile (deploy/docker-compose/docker-compose.yml)"
+	@echo "  docker-compose-down       - Stop docker-compose services (deploy/docker-compose/docker-compose.yml)"
+	@echo "  docker-compose-tracing-up   - Start tracing stack (tools/tracing/docker-compose.tracing.yaml)"
+	@echo "  docker-compose-tracing-down - Stop tracing stack"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  DOCKER_REGISTRY - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
