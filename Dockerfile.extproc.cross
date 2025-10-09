@@ -118,9 +118,12 @@ RUN echo "Building Rust library with actual source code..." && \
 FROM --platform=linux/amd64 golang:1.24 AS go-builder
 
 # Install cross-compilation tools for Go
-RUN apt-get update && apt-get install -y \
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    libssl-dev:arm64 \
+    libssl-dev \
     file \
     && rm -rf /var/lib/apt/lists/*
 
@@ -188,23 +191,33 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 RUN ls -la /app/candle-binding/target/release/libcandle_semantic_router.so && \
     file /app/candle-binding/target/release/libcandle_semantic_router.so
 
-# Build the router binary with cross-compilation support
+# Build the router binary with cross-compilation support (with OpenSSL linking)
 RUN mkdir -p bin && cd src/semantic-router && \
     if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Building for ARM64 with cross-compilation..." && \
+        echo "Checking OpenSSL libraries..." && \
+        ls -la /usr/lib/aarch64-linux-gnu/libssl* /usr/lib/aarch64-linux-gnu/libcrypto* || true && \
         CC=aarch64-linux-gnu-gcc \
         CXX=aarch64-linux-gnu-g++ \
+        PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
         CGO_CFLAGS="-I/app/candle-binding" \
-        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lssl -lcrypto" \
         GOOS=linux GOARCH=arm64 \
         go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
     else \
+        echo "Building for AMD64..." && \
         CGO_CFLAGS="-I/app/candle-binding" \
-        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router -lssl -lcrypto" \
         go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
     fi
 
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream9
+
+# Install OpenSSL runtime libraries
+RUN dnf update -y && \
+    dnf install -y openssl-libs && \
+    dnf clean all
 
 WORKDIR /app
 
