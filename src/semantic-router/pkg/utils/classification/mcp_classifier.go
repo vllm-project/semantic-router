@@ -18,8 +18,8 @@ import (
 
 const (
 	// DefaultMCPThreshold is the default confidence threshold for MCP classification.
-	// A value of 0.5 is commonly used as it represents a neutral cutoff for binary or probabilistic classification,
-	// meaning predictions with confidence above 50% are considered positive. Adjust as needed for your use case.
+	// For multi-class classification, a value of 0.5 means that a predicted class must have more than 50% confidence
+	// to be selected. Adjust this threshold as needed for your use case.
 	DefaultMCPThreshold = 0.5
 )
 
@@ -222,14 +222,17 @@ func createMCPCategoryInference(initializer MCPCategoryInitializer) MCPCategoryI
 // IsMCPCategoryEnabled checks if MCP-based category classification is properly configured
 func (c *Classifier) IsMCPCategoryEnabled() bool {
 	return c.Config.Classifier.MCPCategoryModel.Enabled &&
-		c.Config.Classifier.MCPCategoryModel.ToolName != "" &&
-		c.mcpCategoryInitializer != nil
+		c.Config.Classifier.MCPCategoryModel.ToolName != ""
 }
 
 // initializeMCPCategoryClassifier initializes the MCP category classification model
 func (c *Classifier) initializeMCPCategoryClassifier() error {
 	if !c.IsMCPCategoryEnabled() {
 		return fmt.Errorf("MCP category classification is not properly configured")
+	}
+
+	if c.mcpCategoryInitializer == nil {
+		return fmt.Errorf("MCP category initializer is not set")
 	}
 
 	if err := c.mcpCategoryInitializer.Init(c.Config); err != nil {
@@ -244,6 +247,10 @@ func (c *Classifier) initializeMCPCategoryClassifier() error {
 func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
 	if !c.IsMCPCategoryEnabled() {
 		return "", 0.0, fmt.Errorf("MCP category classification is not properly configured")
+	}
+
+	if c.mcpCategoryInference == nil {
+		return "", 0.0, fmt.Errorf("MCP category inference is not initialized")
 	}
 
 	// Create context with timeout
@@ -300,6 +307,10 @@ func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
 func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float64, entropy.ReasoningDecision, error) {
 	if !c.IsMCPCategoryEnabled() {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP category classification is not properly configured")
+	}
+
+	if c.mcpCategoryInference == nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP category inference is not initialized")
 	}
 
 	// Create context with timeout

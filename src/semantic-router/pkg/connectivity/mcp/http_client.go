@@ -13,7 +13,11 @@ import (
 )
 
 const (
-	// MCPProtocolVersion is the MCP protocol version supported by this implementation
+	// MCPProtocolVersion is the MCP protocol version supported by this implementation.
+	// This version is defined by the Model Context Protocol specification and must match
+	// the version expected by MCP servers. The version "2024-11-05" represents the current
+	// stable MCP specification release. This is not derived from mcp-go as the library
+	// does not export a version constant; instead, it's specified by the protocol itself.
 	MCPProtocolVersion = "2024-11-05"
 	// MCPClientVersion is the version of this MCP client implementation
 	MCPClientVersion = "1.0.0"

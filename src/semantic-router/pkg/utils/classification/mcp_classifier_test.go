@@ -330,10 +330,9 @@ var _ = Describe("Classifier MCP Methods", func() {
 			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
 		})
 
-		It("should return false when initializer is nil", func() {
-			classifier.mcpCategoryInitializer = nil
-			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
-		})
+		// Note: IsMCPCategoryEnabled now only checks configuration, not runtime state.
+		// Runtime checks (like initializer != nil) are handled separately in the actual
+		// classification methods to maintain separation of concerns.
 	})
 
 	Describe("classifyCategoryMCP", func() {
@@ -471,6 +470,15 @@ var _ = Describe("Classifier MCP Methods", func() {
 				err := classifier.initializeMCPCategoryClassifier()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
+			})
+		})
+
+		Context("when initializer is nil", func() {
+			It("should return error", func() {
+				classifier.mcpCategoryInitializer = nil
+				err := classifier.initializeMCPCategoryClassifier()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("initializer is not set"))
 			})
 		})
 	})
