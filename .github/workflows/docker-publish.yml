@@ -149,7 +149,8 @@ jobs:
           context: ${{ steps.build-params.outputs.context }}
           file: ${{ steps.build-params.outputs.dockerfile }}
           platforms: ${{ steps.build-params.outputs.platform }}
-          push: ${{ github.event_name != 'pull_request' }}
+          # push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name == 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: |
