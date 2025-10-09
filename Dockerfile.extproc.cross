@@ -12,6 +12,7 @@ RUN dpkg --add-architecture arm64 && \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
+    binutils-aarch64-linux-gnu \
     libssl-dev:arm64 \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -19,11 +20,20 @@ RUN dpkg --add-architecture arm64 && \
 # Install cross-compilation target
 RUN rustup target add aarch64-unknown-linux-gnu
 
+# Verify cross-compilation toolchain
+RUN echo "Verifying cross-compilation toolchain..." && \
+    aarch64-linux-gnu-gcc --version && \
+    aarch64-linux-gnu-ld --version && \
+    which aarch64-linux-gnu-gcc && \
+    which aarch64-linux-gnu-ld
+
 # Configure cross-compilation environment
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
 ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
+ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64
 
 # Configure OpenSSL for cross-compilation
@@ -38,7 +48,6 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_INCREMENTAL=1
 ENV CARGO_PROFILE_RELEASE_LTO=thin
 ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
 
 # Set target architecture for cross-compilation
 ARG TARGETARCH
