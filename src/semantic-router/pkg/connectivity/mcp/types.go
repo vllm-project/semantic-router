@@ -453,7 +453,12 @@ func ConvertOpenAIToMCPCall(openAICall OpenAIToolCall) (mcp.CallToolRequest, err
 	var arguments map[string]interface{}
 	if openAICall.Function.Arguments != "" {
 		if err := json.Unmarshal([]byte(openAICall.Function.Arguments), &arguments); err != nil {
-			return mcp.CallToolRequest{}, fmt.Errorf("failed to parse arguments: %w", err)
+			argStr := openAICall.Function.Arguments
+			const maxLen = 200
+			if len(argStr) > maxLen {
+				argStr = argStr[:maxLen] + "...(truncated)"
+			}
+			return mcp.CallToolRequest{}, fmt.Errorf("failed to parse arguments (%q): %w", argStr, err)
 		}
 	}
 

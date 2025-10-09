@@ -17,7 +17,9 @@ import (
 )
 
 const (
-	// DefaultMCPThreshold is the default confidence threshold for MCP classification
+	// DefaultMCPThreshold is the default confidence threshold for MCP classification.
+	// A value of 0.5 is commonly used as it represents a neutral cutoff for binary or probabilistic classification,
+	// meaning predictions with confidence above 50% are considered positive. Adjust as needed for your use case.
 	DefaultMCPThreshold = 0.5
 )
 

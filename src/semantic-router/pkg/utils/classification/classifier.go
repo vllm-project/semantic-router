@@ -293,7 +293,10 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	return initModels(classifier)
 }
 
-// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities
+// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities.
+// Both in-tree and MCP classifiers can be configured simultaneously for category classification.
+// At runtime, in-tree classifier will be tried first, with MCP as a fallback,
+// allowing flexible deployment scenarios such as gradual migration or A/B testing.
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
 	options := []option{
 		withJailbreak(jailbreakMapping, createJailbreakInitializer(cfg.PromptGuard.UseModernBERT), createJailbreakInference(cfg.PromptGuard.UseModernBERT)),
