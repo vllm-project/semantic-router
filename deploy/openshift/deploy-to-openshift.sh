@@ -38,6 +38,9 @@ CLEANUP_FIRST="false"
 DRY_RUN="false"
 PORT_FORWARD="false"
 PORT_FORWARD_PORTS="8080:8080 8000:8000 8001:8001 50051:50051 8801:8801 19000:19000"
+WITH_OBSERVABILITY="true"
+OBSERVABILITY_ONLY="false"
+CLEANUP_OBSERVABILITY="false"
 
 # Function to print colored output
 log() {
@@ -82,6 +85,9 @@ OPTIONS:
     --port-forward           Set up port forwarding after successful deployment (default: enabled)
     --no-port-forward        Disable automatic port forwarding
     --port-forward-ports PORTS   Custom port mappings (default: "8080:8080 8000:8000 8001:8001")
+    --no-observability       Skip observability stack deployment (observability enabled by default)
+    --observability-only     Deploy ONLY observability stack (requires existing semantic-router deployment)
+    --cleanup-observability  Remove ONLY observability components (keeps semantic-router intact)
     -h, --help               Show this help message
 
 EXAMPLES:
@@ -102,6 +108,15 @@ EXAMPLES:
 
     # Deploy without automatic port forwarding
     $0 --no-port-forward
+
+    # Deploy without observability stack
+    $0 --no-observability
+
+    # Deploy only observability (if semantic-router already exists)
+    $0 --observability-only
+
+    # Remove only observability stack
+    $0 --cleanup-observability
 
 ENVIRONMENT VARIABLES:
     OPENSHIFT_SERVER         OpenShift API server URL
@@ -195,6 +210,18 @@ parse_args() {
             --port-forward-ports)
                 PORT_FORWARD_PORTS="$2"
                 shift 2
+                ;;
+            --with-observability)
+                WITH_OBSERVABILITY="true"
+                shift
+                ;;
+            --observability-only)
+                OBSERVABILITY_ONLY="true"
+                shift
+                ;;
+            --cleanup-observability)
+                CLEANUP_OBSERVABILITY="true"
+                shift
                 ;;
             -h|--help)
                 usage
@@ -791,6 +818,120 @@ show_deployment_info() {
     fi
 }
 
+# Function to display observability stack information
+show_observability_info() {
+    log "INFO" "Observability deployment information:"
+
+    echo ""
+    echo "=== Observability Pods ==="
+    oc get pods -n "$NAMESPACE" -l app.kubernetes.io/component=observability
+
+    echo ""
+    echo "=== Observability Routes ==="
+    oc get routes -n "$NAMESPACE" -l app.kubernetes.io/component=observability
+
+    local grafana_route=$(oc get route grafana -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null)
+    local prometheus_route=$(oc get route prometheus -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null)
+
+    echo ""
+    log "SUCCESS" "Access URLs:"
+    if [[ -n "$grafana_route" ]]; then
+        echo "  Grafana:    https://$grafana_route (Login: admin/admin)"
+        echo "  Dashboard:  https://$grafana_route/d/llm-router-metrics"
+    fi
+    if [[ -n "$prometheus_route" ]]; then
+        echo "  Prometheus: https://$prometheus_route"
+        echo "  Targets:    https://$prometheus_route/targets"
+    fi
+
+    echo ""
+    log "INFO" "Verify Prometheus is scraping semantic-router:"
+    echo "  oc logs deployment/prometheus -n $NAMESPACE | grep semantic-router"
+    echo ""
+    log "WARN" "Default Grafana password is 'admin'. Please change it after first login!"
+}
+
+# Function to deploy observability stack
+deploy_observability() {
+    log "INFO" "Deploying observability stack (Prometheus + Grafana)..."
+
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log "INFO" "[DRY RUN] Would deploy: oc apply -k $script_dir/observability/"
+        return 0
+    fi
+
+    # Verify semantic-router is deployed
+    if ! oc get deployment semantic-router -n "$NAMESPACE" &> /dev/null; then
+        log "ERROR" "Semantic router deployment not found in namespace $NAMESPACE"
+        log "ERROR" "Deploy semantic-router first or use --with-observability flag"
+        exit 1
+    fi
+
+    log "INFO" "Semantic router deployment found, proceeding with observability..."
+
+    # Apply observability stack
+    log "INFO" "Applying observability manifests from $script_dir/observability/"
+    if ! oc apply -k "$script_dir/observability/" -n "$NAMESPACE"; then
+        log "ERROR" "Failed to apply observability manifests"
+        exit 1
+    fi
+
+    # Wait for deployments
+    log "INFO" "Waiting for Prometheus to be ready..."
+    if ! oc wait --for=condition=Available deployment/prometheus -n "$NAMESPACE" --timeout=180s 2>/dev/null; then
+        log "WARN" "Prometheus may not be ready yet. Check status with: oc get pods -n $NAMESPACE"
+    else
+        log "SUCCESS" "Prometheus is ready"
+    fi
+
+    log "INFO" "Waiting for Grafana to be ready..."
+    if ! oc wait --for=condition=Available deployment/grafana -n "$NAMESPACE" --timeout=180s 2>/dev/null; then
+        log "WARN" "Grafana may not be ready yet. Check status with: oc get pods -n $NAMESPACE"
+    else
+        log "SUCCESS" "Grafana is ready"
+    fi
+
+    # Show access info
+    echo ""
+    show_observability_info
+
+    log "SUCCESS" "Observability stack deployed!"
+}
+
+# Function to cleanup observability stack
+cleanup_observability() {
+    log "INFO" "Cleaning up observability stack (keeping semantic-router)..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log "INFO" "[DRY RUN] Would delete observability resources"
+        return 0
+    fi
+
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Delete using kustomize (preserves semantic-router)
+    log "INFO" "Deleting observability resources..."
+    if ! oc delete -k "$script_dir/observability/" -n "$NAMESPACE" --ignore-not-found=true; then
+        log "WARN" "Some errors occurred during cleanup, but continuing..."
+    fi
+
+    # Wait for cleanup
+    log "INFO" "Waiting for cleanup to complete..."
+    sleep 5
+
+    # Verify cleanup
+    local observability_pods=$(oc get pods -n "$NAMESPACE" -l app.kubernetes.io/component=observability --no-headers 2>/dev/null | wc -l)
+
+    if [[ "$observability_pods" -eq 0 ]]; then
+        log "SUCCESS" "Observability stack cleaned up successfully"
+    else
+        log "WARN" "Some observability resources may still exist:"
+        oc get all -n "$NAMESPACE" -l app.kubernetes.io/component=observability
+    fi
+}
+
 # Main function
 main() {
     log "INFO" "Starting vLLM Semantic Router OpenShift deployment"
@@ -798,6 +939,19 @@ main() {
     parse_args "$@"
     validate_prerequisites
     login_openshift
+
+    # Handle observability-only mode
+    if [[ "$OBSERVABILITY_ONLY" == "true" ]]; then
+        deploy_observability
+        exit 0
+    fi
+
+    # Handle cleanup-observability mode
+    if [[ "$CLEANUP_OBSERVABILITY" == "true" ]]; then
+        cleanup_observability
+        exit 0
+    fi
+
     cleanup_deployment
 
     case "$DEPLOYMENT_METHOD" in
@@ -814,6 +968,14 @@ main() {
 
     if wait_for_ready; then
         show_deployment_info
+
+        # Deploy observability if requested
+        if [[ "$WITH_OBSERVABILITY" == "true" ]]; then
+            echo ""
+            log "INFO" "Deploying observability stack as requested..."
+            deploy_observability
+        fi
+
         setup_port_forwarding
         log "SUCCESS" "Deployment completed successfully!"
     else
