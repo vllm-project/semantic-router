@@ -6,6 +6,12 @@
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
+# Default docker compose environment
+# Point Compose to the relocated main stack by default; override by exporting COMPOSE_FILE
+export COMPOSE_FILE ?= deploy/docker-compose/docker-compose.yml
+# Keep a stable project name so network/volume names are predictable across runs
+export COMPOSE_PROJECT_NAME ?= semantic-router
+
 # Build all Docker images
 docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-precommit
 	@$(LOG_TARGET)
