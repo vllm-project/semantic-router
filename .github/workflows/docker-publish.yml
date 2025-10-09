@@ -204,12 +204,17 @@ jobs:
       - name: Create and push manifest
         run: |
           REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
+          ARCH_SUFFIX="${{ matrix.arch }}"
 
           # Create manifest for the specific image
           if [ "${{ inputs.is_nightly }}" = "true" ]; then
             TAG="nightly-${{ steps.date.outputs.date_tag }}"
           else
-            TAG="${{ github.sha }}"
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              TAG="${{ github.sha }}"
+            else
+              TAG="pr-${{ github.event.number }}-${ARCH_SUFFIX}"
+            fi
           fi
 
           # Create and push manifest
