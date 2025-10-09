@@ -40,6 +40,7 @@ oc get route openwebui -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
 ## Configuration
 
 OpenWebUI is configured to connect to the Envoy proxy automatically:
+
 - **Backend URL**: `http://semantic-router.vllm-semantic-router-system.svc.cluster.local:8801/v1`
 - **Available Models**: `auto` (load balancer), `Model-A`, `Model-B`
 - **Port**: Service exposed on port 3000, mapped to container port 8080
@@ -48,6 +49,7 @@ OpenWebUI is configured to connect to the Envoy proxy automatically:
 ### OpenWebUI Settings
 
 When configuring OpenWebUI in the interface:
+
 - **API Base URL**: `http://semantic-router.vllm-semantic-router-system.svc.cluster.local:8801/v1`
 - **API Key**: `not-needed-for-local-models` (or leave empty)
 - **Models**: Will auto-discover `auto`, `Model-A`, and `Model-B`
