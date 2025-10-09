@@ -14,17 +14,24 @@ on:
         required: false
         type: boolean
         default: false
-      skip_multiarch:
-        description: "Skip multi-architecture build for faster CI"
+      use_cross_compilation:
+        description: "Use cross-compilation instead of emulation for ARM64"
         required: false
         type: boolean
-        default: false
+        default: true
   push:
     branches: [ "main" ]
+  pull_request:
+    paths:
+      - ".github/workflows/docker-publish.yml"
+      - "Dockerfile*"
+      - "candle-binding/**"
+      - "src/**"
+      - "e2e-tests/llm-katan/**"
 
 jobs:
-  # Parallel job for building both images
-  build_and_push:
+  # Build job for multi-architecture Docker images
+  build_multiarch:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +39,12 @@ jobs:
     strategy:
       matrix:
         image: [extproc, llm-katan]
-      fail-fast: false # Continue building other images if one fails
+        # Multi-architecture build strategy:
+        # - AMD64: Native build on ubuntu-latest (fast)
+        # - ARM64: Cross-compilation on ubuntu-latest (faster than emulation)
+#        arch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64"]') || fromJSON('["amd64", "arm64"]') }}
+        arch: ["amd64", "arm64"]
+      fail-fast: false
 
     steps:
       - name: Check out the repo
@@ -41,8 +53,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Set up QEMU (only for multi-arch builds)
-        if: inputs.skip_multiarch != true
+      - name: Set up QEMU for cross-compilation
+        if: matrix.arch == 'arm64'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
@@ -54,6 +66,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Enhanced Rust caching for extproc builds with incremental compilation
+      - name: Cache Rust dependencies (extproc)
+        if: matrix.image == 'extproc'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+            ~/.rustup/
+          key: ${{ runner.os }}-cargo-${{ matrix.arch }}-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-${{ hashFiles('candle-binding/src/**/*.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.arch }}-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-${{ matrix.arch }}-${{ hashFiles('candle-binding/Cargo.toml') }}-
+            ${{ runner.os }}-cargo-${{ matrix.arch }}-
+            ${{ runner.os }}-cargo-
+
+      # Python caching for llm-katan builds
+      - name: Cache Python dependencies (llm-katan)
+        if: matrix.image == 'llm-katan'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            e2e-tests/llm-katan/.venv
+          key: ${{ runner.os }}-pip-${{ matrix.arch }}-${{ hashFiles('e2e-tests/llm-katan/requirements.txt', 'e2e-tests/llm-katan/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.arch }}-
+            ${{ runner.os }}-pip-
+
       - name: Generate date tag for nightly builds
         id: date
         if: inputs.is_nightly == true
@@ -62,83 +105,136 @@ jobs:
       - name: Set lowercase repository owner
         run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # Rust build cache for extproc - only use GitHub Actions cache for non-PR builds
-      - name: Cache Rust dependencies (extproc only)
-        if: matrix.image == 'extproc' && github.event_name != 'pull_request'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            candle-binding/target/
-          key: ${{ runner.os }}-cargo-extproc-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-extproc-
-
-      # Set build context and dockerfile based on matrix
       - name: Set build parameters
         id: build-params
         run: |
+          # Default to cross-compilation for ARM64 (always enabled for better performance)
+          USE_CROSS_COMPILATION="${{ inputs.use_cross_compilation || 'true' }}"
+
           if [ "${{ matrix.image }}" = "extproc" ]; then
             echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
-            echo "platforms=${{ inputs.skip_multiarch == true && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" >> $GITHUB_OUTPUT
+            if [ "$USE_CROSS_COMPILATION" = "true" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+              echo "dockerfile=./Dockerfile.extproc.cross" >> $GITHUB_OUTPUT
+              echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
+            else
+              echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
+              echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
+            fi
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e-tests/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
-            echo "platforms=${{ inputs.skip_multiarch == true && 'linux/amd64' || 'linux/amd64,linux/arm64' }}" >> $GITHUB_OUTPUT
+            echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
           fi
 
-      # Extract version for llm-katan
-      - name: Extract version from pyproject.toml
-        id: version
-        if: matrix.image == 'llm-katan'
-        run: |
-          VERSION=$(grep '^version = ' e2e-tests/llm-katan/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      # Generate tags for extproc
-      - name: Generate extproc tags
-        id: extproc-tags
-        if: matrix.image == 'extproc'
+      - name: Generate tags
+        id: tags
         run: |
           REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
-          if [ "${{ inputs.is_nightly }}" = "true" ]; then
-            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:nightly-${{ steps.date.outputs.date_tag }}" >> $GITHUB_OUTPUT
-          else
-            if [ "${{ github.event_name }}" != "pull_request" ]; then
-              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/extproc:latest" >> $GITHUB_OUTPUT
-            else
-              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/extproc:${{ github.sha }}" >> $GITHUB_OUTPUT
-            fi
-          fi
+          ARCH_SUFFIX="${{ matrix.arch }}"
 
-      # Generate tags for llm-katan
-      - name: Generate llm-katan tags
-        id: llm-katan-tags
-        if: matrix.image == 'llm-katan'
-        run: |
-          REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
           if [ "${{ inputs.is_nightly }}" = "true" ]; then
-            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:nightly-${{ steps.date.outputs.date_tag }}" >> $GITHUB_OUTPUT
+            echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:nightly-${{ steps.date.outputs.date_tag }}-${ARCH_SUFFIX}" >> $GITHUB_OUTPUT
           else
             if [ "${{ github.event_name }}" != "pull_request" ]; then
-              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }},ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:latest,ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:v${{ steps.version.outputs.version }}" >> $GITHUB_OUTPUT
+              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${{ github.sha }}-${ARCH_SUFFIX}" >> $GITHUB_OUTPUT
             else
-              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/llm-katan:${{ github.sha }}" >> $GITHUB_OUTPUT
+              echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:pr-${{ github.event.number }}-${ARCH_SUFFIX}" >> $GITHUB_OUTPUT
             fi
           fi
 
       - name: Build and push ${{ matrix.image }} Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ steps.build-params.outputs.context }}
           file: ${{ steps.build-params.outputs.dockerfile }}
-          platforms: ${{ steps.build-params.outputs.platforms }}
+          platforms: ${{ steps.build-params.outputs.platform }}
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ matrix.image == 'extproc' && steps.extproc-tags.outputs.tags || steps.llm-katan-tags.outputs.tags }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: |
+            type=gha
+            type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+            CARGO_BUILD_JOBS=${{ github.event_name == 'pull_request' && '8' || '16' }}
+            CARGO_INCREMENTAL=1
+            RUSTC_WRAPPER=""
+            CARGO_NET_GIT_FETCH_WITH_CLI=true
+            BUILDKIT_PROGRESS=plain
+            TARGETARCH=${{ matrix.arch }}
+            # Optimize Rust compilation for ARM64
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            # Enable link-time optimization for release builds
+            CARGO_PROFILE_RELEASE_LTO=thin
+            CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+            # Use faster linker
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+
+  # Create multi-arch manifest for final images
+  create_manifest:
+    needs: build_multiarch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    if: github.event_name != 'pull_request'
+    strategy:
+      matrix:
+        image: [extproc, llm-katan]
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repository owner
+        run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Generate date tag for nightly builds
+        id: date
+        if: inputs.is_nightly == true
+        run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Create and push manifest
+        run: |
+          REPO_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')
+
+          # Create manifest for the specific image
+          if [ "${{ inputs.is_nightly }}" = "true" ]; then
+            TAG="nightly-${{ steps.date.outputs.date_tag }}"
+          else
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              TAG="${{ github.sha }}"
+            else
+              TAG="pr-${{ github.event.number }}"
+            fi
+          fi
+
+          # Create and push manifest by combining architecture-specific images
+          docker buildx imagetools create \
+            --tag ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG} \
+            ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}-amd64 \
+            ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}-arm64
+
+          # Also tag as latest for non-nightly builds
+          if [ "${{ inputs.is_nightly }}" != "true" ]; then
+            docker buildx imagetools create \
+              --tag ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:latest \
+              ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}-amd64 \
+              ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}-arm64
+          fi
+
+      - name: Build summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "::notice title=Build Success::${{ matrix.image }} multi-arch manifest created successfully"
+          else
+            echo "::error title=Build Failed::${{ matrix.image }} build failed"
+          fi
