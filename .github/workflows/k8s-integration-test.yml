@@ -88,6 +88,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Free up disk space before build
+        run: |
+          echo "=== Initial disk usage ==="
+          df -h
+          echo ""
+          echo "=== Cleaning up system ==="
+          # Remove unnecessary packages and caches
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo rm -rf /tmp/*
+          sudo rm -rf /var/tmp/*
+
+          # Clean Docker system
+          docker system prune -af --volumes
+
+          # Remove large unnecessary files/directories
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+          echo ""
+          echo "=== Disk usage after cleanup ==="
+          df -h
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -114,6 +140,20 @@ jobs:
           echo "Loading image into kind cluster..."
           kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name semantic-router-test
           echo "Image loaded successfully!"
+
+      - name: Clean up after image build
+        run: |
+          echo "=== Cleaning up Docker build artifacts ==="
+          # Remove build cache and unused images
+          docker builder prune -af
+          docker image prune -af
+
+          # Keep only the images we need
+          docker images
+
+          echo ""
+          echo "=== Disk usage after build cleanup ==="
+          df -h
 
       - name: Verify cluster
         run: |
@@ -181,7 +221,7 @@ jobs:
 
           # Reduce resource requirements for CI testing and set imagePullPolicy
           patches:
-          # Patch for main container
+          # Patch for main container - reduced resources for CI
           - patch: |-
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/memory
@@ -238,6 +278,22 @@ jobs:
           }
 
           echo "✓ Connectivity check completed"
+
+      - name: Final disk cleanup before deployment
+        run: |
+          echo "=== Final cleanup before deployment ==="
+          # Clean up any remaining build artifacts
+          docker system prune -f
+
+          # Clear system caches
+          sudo sync
+          echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null || true
+
+          echo "=== Final disk usage ==="
+          df -h
+
+          echo "=== Available memory ==="
+          free -h
 
       - name: Deploy to kind cluster
         run: |

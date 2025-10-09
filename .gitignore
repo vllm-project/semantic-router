@@ -1,7 +1,8 @@
 # Rust
 target/
 **/*.rs.bk
-Cargo.lock
+# Note: Cargo.lock should be committed for applications and workspace roots
+# Cargo.lock
 
 # Python
 *.pyc

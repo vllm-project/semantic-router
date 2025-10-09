@@ -232,7 +232,56 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 }
 
 // CreateCacheHitResponse creates an immediate response from cache
-func CreateCacheHitResponse(cachedResponse []byte) *ext_proc.ProcessingResponse {
+func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.ProcessingResponse {
+	var responseBody []byte
+	var contentType string
+
+	if isStreaming {
+		// For streaming responses, convert cached JSON to SSE format
+		contentType = "text/event-stream"
+
+		// Parse the cached JSON response
+		var cachedCompletion openai.ChatCompletion
+		if err := json.Unmarshal(cachedResponse, &cachedCompletion); err != nil {
+			observability.Errorf("Error parsing cached response for streaming conversion: %v", err)
+			responseBody = []byte("data: {\"error\": \"Failed to convert cached response\"}\n\ndata: [DONE]\n\n")
+		} else {
+			// Convert chat.completion to chat.completion.chunk format
+			streamChunk := map[string]interface{}{
+				"id":      cachedCompletion.ID,
+				"object":  "chat.completion.chunk",
+				"created": cachedCompletion.Created,
+				"model":   cachedCompletion.Model,
+				"choices": []map[string]interface{}{},
+			}
+
+			// Convert choices from message format to delta format
+			for _, choice := range cachedCompletion.Choices {
+				streamChoice := map[string]interface{}{
+					"index": choice.Index,
+					"delta": map[string]interface{}{
+						"role":    choice.Message.Role,
+						"content": choice.Message.Content,
+					},
+					"finish_reason": choice.FinishReason,
+				}
+				streamChunk["choices"] = append(streamChunk["choices"].([]map[string]interface{}), streamChoice)
+			}
+
+			chunkJSON, err := json.Marshal(streamChunk)
+			if err != nil {
+				observability.Errorf("Error marshaling streaming cache response: %v", err)
+				responseBody = []byte("data: {\"error\": \"Failed to generate response\"}\n\ndata: [DONE]\n\n")
+			} else {
+				responseBody = []byte(fmt.Sprintf("data: %s\n\ndata: [DONE]\n\n", chunkJSON))
+			}
+		}
+	} else {
+		// For non-streaming responses, use cached JSON directly
+		contentType = "application/json"
+		responseBody = cachedResponse
+	}
+
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{
 			Code: typev3.StatusCode_OK,
@@ -242,7 +291,7 @@ func CreateCacheHitResponse(cachedResponse []byte) *ext_proc.ProcessingResponse 
 				{
 					Header: &core.HeaderValue{
 						Key:      "content-type",
-						RawValue: []byte("application/json"),
+						RawValue: []byte(contentType),
 					},
 				},
 				{
@@ -253,7 +302,7 @@ func CreateCacheHitResponse(cachedResponse []byte) *ext_proc.ProcessingResponse 
 				},
 			},
 		},
-		Body: cachedResponse,
+		Body: responseBody,
 	}
 
 	return &ext_proc.ProcessingResponse{
