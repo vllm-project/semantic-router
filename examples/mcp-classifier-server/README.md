@@ -62,10 +62,40 @@ default_model: openai/gpt-oss-20b
 
 **Tool Auto-Discovery:**
 The router automatically discovers classification tools from the MCP server by:
+
 1. Listing available tools on connection
 2. Looking for common names: `classify_text`, `classify`, `categorize`, `categorize_text`
 3. Pattern matching for tools containing "classif" in name/description
 4. Optionally specify `tool_name` to use a specific tool
+
+## Protocol API
+
+This server implements the MCP classification protocol defined in:
+
+```
+github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp/api
+```
+
+**Required Tools:**
+
+1. **`list_categories`** - Returns `ListCategoriesResponse`:
+
+   ```json
+   {"categories": ["math", "science", "technology", ...]}
+   ```
+
+2. **`classify_text`** - Returns `ClassifyResponse`:
+
+   ```json
+   {
+     "class": 1,
+     "confidence": 0.85,
+     "model": "openai/gpt-oss-20b",
+     "use_reasoning": true
+   }
+   ```
+
+See the `api` package for full type definitions and documentation.
 
 ## How It Works
 
@@ -76,17 +106,6 @@ The router automatically discovers classification tools from the MCP server by:
 - High confidence (>0.9) → `use_reasoning: false`
 - Low confidence (<0.6) → `use_reasoning: true`
 - Default → `use_reasoning: true`
-
-**Response Format:**
-
-```json
-{
-  "class": 1,
-  "confidence": 0.85,
-  "model": "openai/gpt-oss-20b",
-  "use_reasoning": true
-}
-```
 
 ## Customization
 

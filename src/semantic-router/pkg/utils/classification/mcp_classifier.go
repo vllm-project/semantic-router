@@ -11,6 +11,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -45,7 +46,21 @@ type MCPCategoryInference interface {
 	ListCategories(ctx context.Context) (*CategoryMapping, error)
 }
 
-// MCPCategoryClassifier implements both MCPCategoryInitializer and MCPCategoryInference
+// MCPCategoryClassifier implements both MCPCategoryInitializer and MCPCategoryInference.
+//
+// Protocol Contract:
+// This client relies on the MCP server to respect the protocol defined in the
+// github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp/api package.
+//
+// The MCP server must implement these tools:
+//  1. list_categories - Returns api.ListCategoriesResponse
+//  2. classify_text - Returns api.ClassifyResponse or api.ClassifyWithProbabilitiesResponse
+//
+// The MCP server controls both classification AND routing decisions. When the server returns
+// "model" and "use_reasoning" in the classification response, the router will use those values.
+// If not provided, the router falls back to the default_model configuration.
+//
+// For detailed type definitions and examples, see the api package documentation.
 type MCPCategoryClassifier struct {
 	client   mcpclient.MCPClient
 	toolName string
@@ -202,13 +217,8 @@ func (m *MCPCategoryClassifier) Classify(ctx context.Context, text string) (cand
 		return candle_binding.ClassResult{}, fmt.Errorf("MCP tool returned non-text content")
 	}
 
-	// Parse JSON response: {"class": int, "confidence": float, "model": str, "use_reasoning": bool}
-	var response struct {
-		Class        int     `json:"class"`
-		Confidence   float32 `json:"confidence"`
-		Model        string  `json:"model,omitempty"`
-		UseReasoning *bool   `json:"use_reasoning,omitempty"`
-	}
+	// Parse JSON response using the API type
+	var response api.ClassifyResponse
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
 		return candle_binding.ClassResult{}, fmt.Errorf("failed to parse MCP response: %w", err)
 	}
@@ -256,14 +266,8 @@ func (m *MCPCategoryClassifier) ClassifyWithProbabilities(ctx context.Context, t
 		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP tool returned non-text content")
 	}
 
-	// Parse JSON response: {"class": int, "confidence": float, "probabilities": []float, "model": str, "use_reasoning": bool}
-	var response struct {
-		Class         int       `json:"class"`
-		Confidence    float32   `json:"confidence"`
-		Probabilities []float32 `json:"probabilities"`
-		Model         string    `json:"model,omitempty"`
-		UseReasoning  *bool     `json:"use_reasoning,omitempty"`
-	}
+	// Parse JSON response using the API type
+	var response api.ClassifyWithProbabilitiesResponse
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
 		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to parse MCP response: %w", err)
 	}
@@ -306,10 +310,8 @@ func (m *MCPCategoryClassifier) ListCategories(ctx context.Context) (*CategoryMa
 		return nil, fmt.Errorf("MCP tool returned non-text content")
 	}
 
-	// Parse JSON response: {"categories": ["cat1", "cat2", ...]}
-	var response struct {
-		Categories []string `json:"categories"`
-	}
+	// Parse JSON response using the API type
+	var response api.ListCategoriesResponse
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
 		return nil, fmt.Errorf("failed to parse MCP categories response: %w", err)
 	}
@@ -342,10 +344,10 @@ func createMCPCategoryInference(initializer MCPCategoryInitializer) MCPCategoryI
 	return nil
 }
 
-// IsMCPCategoryEnabled checks if MCP-based category classification is properly configured
+// IsMCPCategoryEnabled checks if MCP-based category classification is properly configured.
+// Note: tool_name is optional and will be auto-discovered during initialization if not specified.
 func (c *Classifier) IsMCPCategoryEnabled() bool {
-	return c.Config.Classifier.MCPCategoryModel.Enabled &&
-		c.Config.Classifier.MCPCategoryModel.ToolName != ""
+	return c.Config.Classifier.MCPCategoryModel.Enabled
 }
 
 // initializeMCPCategoryClassifier initializes the MCP category classification model
@@ -455,13 +457,8 @@ func (c *Classifier) classifyCategoryMCPWithRouting(text string) (*MCPClassifica
 		return nil, fmt.Errorf("MCP tool returned non-text content")
 	}
 
-	// Parse JSON response with routing information
-	var response struct {
-		Class        int     `json:"class"`
-		Confidence   float32 `json:"confidence"`
-		Model        string  `json:"model,omitempty"`
-		UseReasoning *bool   `json:"use_reasoning,omitempty"`
-	}
+	// Parse JSON response with routing information using the API type
+	var response api.ClassifyResponse
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
 		return nil, fmt.Errorf("failed to parse MCP response: %w", err)
 	}

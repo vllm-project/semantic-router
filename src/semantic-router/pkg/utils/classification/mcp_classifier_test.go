@@ -431,14 +431,10 @@ var _ = Describe("Classifier MCP Methods", func() {
 			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
 		})
 
-		It("should return false when tool name is empty", func() {
-			classifier.Config.Classifier.MCPCategoryModel.ToolName = ""
-			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
-		})
-
-		// Note: IsMCPCategoryEnabled now only checks configuration, not runtime state.
-		// Runtime checks (like initializer != nil) are handled separately in the actual
-		// classification methods to maintain separation of concerns.
+		// Note: tool_name is now optional and will be auto-discovered if not specified.
+		// IsMCPCategoryEnabled only checks if MCP is enabled, not specific configuration details.
+		// Runtime checks (like initializer != nil or successful connection) are handled
+		// separately in the actual initialization and classification methods.
 	})
 
 	Describe("classifyCategoryMCP", func() {

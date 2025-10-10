@@ -530,7 +530,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--http", action="store_true", help="Run in HTTP mode instead of stdio"
     )
-    parser.add_argument("--port", type=int, default=8090, help="HTTP port")
+    parser.add_argument("--port", type=int, default=8090, help="HTTP port to listen on")
     args = parser.parse_args()
 
     if args.http:
