@@ -115,10 +115,15 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Static frontend
-	mux.Handle("/", staticFileServer(*staticDir))
+	// Health check endpoint
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy","service":"semantic-router-dashboard"}`))
+	})
 
-	// Router API proxy (forward Authorization)
+	// Static frontend
+	mux.Handle("/", staticFileServer(*staticDir)) // Router API proxy (forward Authorization)
 	if *routerAPI != "" {
 		rp, err := newReverseProxy(*routerAPI, "/api/router", true)
 		if err != nil {

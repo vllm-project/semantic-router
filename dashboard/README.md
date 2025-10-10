@@ -156,43 +156,100 @@ Recommended upstream settings for embedding:
 - OIDC enablement behind a flag
 - Metrics summary endpoint
 
-## Try it (proposed)
+## Quick Start
 
-Local with existing observability:
+### Method 1: One-click Start with Docker Compose (Recommended)
 
-1. Start Prometheus/Grafana on host network:
+The Dashboard is integrated into the main Compose stack, requiring no extra configuration:
 
-   - `docker compose -f docker-compose.obs.yml up -d`
+```bash
+# Run from the project root directory
+make docker-compose-up
 
-2. Start router natively or with Compose
-3. Start dashboard backend (port 8700) with env vars above
-4. Open `http://localhost:8700`
-
-### Docker Compose unified run (after adding dashboard overlay)
-
-```
-docker compose -f docker-compose.yml -f dashboard/deploy/docker/compose.yml up --build
+# Or use docker compose directly
+docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 ```
 
-The overlay builds the dashboard image using `dashboard/backend/Dockerfile` and exposes it at `http://localhost:8700`.
+After startup, access:
 
-### Rebuild only dashboard after code changes
+- **Dashboard**: http://localhost:8700
+- **Grafana** (direct access): http://localhost:3000 (admin/admin)
+- **Prometheus** (direct access): http://localhost:9090
 
+### Method 2: Local Development Mode
+
+When developing the Dashboard code locally:
+
+```bash
+# 1. Start the local Observability stack
+make o11y-local
+# Or
+docker compose -f tools/observability/docker-compose.obs.yml up -d
+
+# 2. Start the Router (in another terminal)
+cd src/semantic-router
+go run cmd/main.go -config ../../config/config.yaml
+
+# 3. Start the Dashboard backend (local development)
+cd dashboard/backend
+export TARGET_GRAFANA_URL=http://localhost:3000
+export TARGET_PROMETHEUS_URL=http://localhost:9090
+export TARGET_ROUTER_API_URL=http://localhost:8080
+export TARGET_ROUTER_METRICS_URL=http://localhost:9190/metrics
+go run main.go -port=8700 -static=../frontend
+
+# 4. Open your browser
+open http://localhost:8700
 ```
-docker compose -f docker-compose.yml -f dashboard/deploy/docker/compose.yml build dashboard
-docker compose -f docker-compose.yml -f dashboard/deploy/docker/compose.yml up -d dashboard
+
+### Method 3: Rebuild Dashboard Only
+
+For a quick rebuild after code changes:
+
+```bash
+# Rebuild the dashboard service
+docker compose -f deploy/docker-compose/docker-compose.yml build dashboard
+
+# Restart the dashboard
+docker compose -f deploy/docker-compose/docker-compose.yml up -d dashboard
+
+# View logs
+docker logs -f semantic-router-dashboard
 ```
 
-### Notes on Dockerfile
+## Deployment Details
 
-- Multi-stage build (Go → distroless) defined in `dashboard/backend/Dockerfile`.
-- Standalone Go module in `dashboard/backend/go.mod` isolates dependencies.
-- Frontend static assets baked into the image under `/app/frontend`.
+### Docker Compose Integration Notes
 
-### Grafana embedding
+- The Dashboard service is integrated as a **default service** in `deploy/docker-compose/docker-compose.yml`.
+- No additional overlay files are needed; `make docker-compose-up` will automatically start all services.
+- The Dashboard depends on the `semantic-router` (for health checks), `grafana`, and `prometheus` services.
 
-- Root `docker-compose.yml` now sets `GF_SECURITY_ALLOW_EMBEDDING=true` for iframe usage.
-- If you need stricter policies, remove the flag and authenticate Grafana separately; the dashboard proxy will still sanitize frame headers but Grafana may block unauthenticated panels.
+### Dockerfile Build
+
+- A multi-stage build (Go builder → distroless) is defined in `dashboard/backend/Dockerfile`.
+- An independent Go module `dashboard/backend/go.mod` isolates dependencies.
+- Frontend static assets are packaged into the image at `/app/frontend`.
+
+### Grafana Embedding Support
+
+Grafana is already configured for embedding in `deploy/docker-compose/docker-compose.yml`:
+
+```yaml
+- GF_SECURITY_ALLOW_EMBEDDING=true
+- GF_SECURITY_COOKIE_SAMESITE=lax
+```
+
+The Dashboard reverse proxy will automatically clean up `X-Frame-Options` and adjust CSP headers to ensure the iframe loads correctly.
+
+### Health Check
+
+The Dashboard provides a `/healthz` endpoint for container health checks:
+
+```bash
+curl http://localhost:8700/healthz
+# Returns: {"status":"healthy","service":"semantic-router-dashboard"}
+```
 
 ## Notes
 
