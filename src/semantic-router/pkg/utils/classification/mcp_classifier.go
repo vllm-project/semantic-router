@@ -18,7 +18,7 @@ import (
 
 const (
 	// DefaultMCPThreshold is the default confidence threshold for MCP classification.
-	// For multi-class classification, a value of 0.5 means that a predicted class must have more than 50% confidence
+	// For multi-class classification, a value of 0.5 means that a predicted class must have at least 50% confidence
 	// to be selected. Adjust this threshold as needed for your use case.
 	DefaultMCPThreshold = 0.5
 )
