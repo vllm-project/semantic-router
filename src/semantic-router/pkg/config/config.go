@@ -28,6 +28,17 @@ type RouterConfig struct {
 			UseModernBERT       bool    `yaml:"use_modernbert"`
 			CategoryMappingPath string  `yaml:"category_mapping_path"`
 		} `yaml:"category_model"`
+		MCPCategoryModel struct {
+			Enabled        bool              `yaml:"enabled"`
+			TransportType  string            `yaml:"transport_type"`
+			Command        string            `yaml:"command,omitempty"`
+			Args           []string          `yaml:"args,omitempty"`
+			Env            map[string]string `yaml:"env,omitempty"`
+			URL            string            `yaml:"url,omitempty"`
+			ToolName       string            `yaml:"tool_name,omitempty"` // Optional: will auto-discover if not specified
+			Threshold      float32           `yaml:"threshold"`
+			TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+		} `yaml:"mcp_category_model,omitempty"`
 		PIIModel struct {
 			ModelID        string  `yaml:"model_id"`
 			Threshold      float32 `yaml:"threshold"`
@@ -572,6 +583,11 @@ func (c *RouterConfig) IsPIIClassifierEnabled() bool {
 // IsCategoryClassifierEnabled checks if category classification is enabled
 func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
 	return c.Classifier.CategoryModel.ModelID != "" && c.Classifier.CategoryModel.CategoryMappingPath != ""
+}
+
+// IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
+func (c *RouterConfig) IsMCPCategoryClassifierEnabled() bool {
+	return c.Classifier.MCPCategoryModel.Enabled && c.Classifier.MCPCategoryModel.ToolName != ""
 }
 
 // GetPromptGuardConfig returns the prompt guard configuration

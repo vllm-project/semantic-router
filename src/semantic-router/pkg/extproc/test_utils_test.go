@@ -88,6 +88,17 @@ func CreateTestConfig() *config.RouterConfig {
 				UseModernBERT       bool    `yaml:"use_modernbert"`
 				CategoryMappingPath string  `yaml:"category_mapping_path"`
 			} `yaml:"category_model"`
+			MCPCategoryModel struct {
+				Enabled        bool              `yaml:"enabled"`
+				TransportType  string            `yaml:"transport_type"`
+				Command        string            `yaml:"command,omitempty"`
+				Args           []string          `yaml:"args,omitempty"`
+				Env            map[string]string `yaml:"env,omitempty"`
+				URL            string            `yaml:"url,omitempty"`
+				ToolName       string            `yaml:"tool_name,omitempty"`
+				Threshold      float32           `yaml:"threshold"`
+				TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+			} `yaml:"mcp_category_model,omitempty"`
 			PIIModel struct {
 				ModelID        string  `yaml:"model_id"`
 				Threshold      float32 `yaml:"threshold"`
@@ -106,6 +117,19 @@ func CreateTestConfig() *config.RouterConfig {
 				UseCPU:              true,
 				UseModernBERT:       true,
 				CategoryMappingPath: "../../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+			},
+			MCPCategoryModel: struct {
+				Enabled        bool              `yaml:"enabled"`
+				TransportType  string            `yaml:"transport_type"`
+				Command        string            `yaml:"command,omitempty"`
+				Args           []string          `yaml:"args,omitempty"`
+				Env            map[string]string `yaml:"env,omitempty"`
+				URL            string            `yaml:"url,omitempty"`
+				ToolName       string            `yaml:"tool_name,omitempty"`
+				Threshold      float32           `yaml:"threshold"`
+				TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+			}{
+				Enabled: false, // MCP not used in tests
 			},
 			PIIModel: struct {
 				ModelID        string  `yaml:"model_id"`

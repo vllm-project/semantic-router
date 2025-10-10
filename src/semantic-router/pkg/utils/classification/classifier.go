@@ -197,13 +197,17 @@ type PIIAnalysisResult struct {
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
-	// Dependencies
+	// Dependencies - In-tree classifiers
 	categoryInitializer  CategoryInitializer
 	categoryInference    CategoryInference
 	jailbreakInitializer JailbreakInitializer
 	jailbreakInference   JailbreakInference
 	piiInitializer       PIIInitializer
 	piiInference         PIIInference
+
+	// Dependencies - MCP-based classifiers
+	mcpCategoryInitializer MCPCategoryInitializer
+	mcpCategoryInference   MCPCategoryInference
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -245,8 +249,13 @@ func withPII(piiMapping *PIIMapping, piiInitializer PIIInitializer, piiInference
 
 // initModels initializes the models for the classifier
 func initModels(classifier *Classifier) (*Classifier, error) {
+	// Initialize either in-tree OR MCP-based category classifier
 	if classifier.IsCategoryEnabled() {
 		if err := classifier.initializeCategoryClassifier(); err != nil {
+			return nil, err
+		}
+	} else if classifier.IsMCPCategoryEnabled() {
+		if err := classifier.initializeMCPCategoryClassifier(); err != nil {
 			return nil, err
 		}
 	}
@@ -284,14 +293,32 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	return initModels(classifier)
 }
 
-// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities
+// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities.
+// Both in-tree and MCP classifiers can be configured simultaneously for category classification.
+// At runtime, in-tree classifier will be tried first, with MCP as a fallback,
+// allowing flexible deployment scenarios such as gradual migration.
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
-	return newClassifierWithOptions(
-		cfg,
-		withCategory(categoryMapping, createCategoryInitializer(cfg.Classifier.CategoryModel.UseModernBERT), createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT)),
+	options := []option{
 		withJailbreak(jailbreakMapping, createJailbreakInitializer(cfg.PromptGuard.UseModernBERT), createJailbreakInference(cfg.PromptGuard.UseModernBERT)),
 		withPII(piiMapping, createPIIInitializer(), createPIIInference()),
-	)
+	}
+
+	// Add in-tree classifier if configured
+	if cfg.Classifier.CategoryModel.ModelID != "" {
+		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.Classifier.CategoryModel.UseModernBERT), createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT)))
+	}
+
+	// Add MCP classifier if configured
+	// Note: Both in-tree and MCP classifiers can be configured simultaneously.
+	// At runtime, in-tree classifier will be tried first, with MCP as a fallback.
+	// This allows flexible deployment scenarios (e.g., gradual migration, A/B testing).
+	if cfg.Classifier.MCPCategoryModel.Enabled {
+		mcpInit := createMCPCategoryInitializer()
+		mcpInf := createMCPCategoryInference(mcpInit)
+		options = append(options, withMCPCategory(mcpInit, mcpInf))
+	}
+
+	return newClassifierWithOptions(cfg, options...)
 }
 
 // IsCategoryEnabled checks if category classification is properly configured
@@ -315,6 +342,26 @@ func (c *Classifier) initializeCategoryClassifier() error {
 
 // ClassifyCategory performs category classification on the given text
 func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
+	// Try in-tree first if properly configured
+	if c.IsCategoryEnabled() && c.categoryInference != nil {
+		return c.classifyCategoryInTree(text)
+	}
+
+	// If in-tree classifier was initialized but config is now invalid, return specific error
+	if c.categoryInference != nil && !c.IsCategoryEnabled() {
+		return "", 0.0, fmt.Errorf("category classification is not properly configured")
+	}
+
+	// Fall back to MCP
+	if c.IsMCPCategoryEnabled() && c.mcpCategoryInference != nil {
+		return c.classifyCategoryMCP(text)
+	}
+
+	return "", 0.0, fmt.Errorf("no category classification method available")
+}
+
+// classifyCategoryInTree performs category classification using in-tree model
+func (c *Classifier) classifyCategoryInTree(text string) (string, float64, error) {
 	if !c.IsCategoryEnabled() {
 		return "", 0.0, fmt.Errorf("category classification is not properly configured")
 	}
@@ -478,6 +525,26 @@ func (c *Classifier) initializePIIClassifier() error {
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
+	// Try in-tree first if properly configured
+	if c.IsCategoryEnabled() && c.categoryInference != nil {
+		return c.classifyCategoryWithEntropyInTree(text)
+	}
+
+	// If in-tree classifier was initialized but config is now invalid, return specific error
+	if c.categoryInference != nil && !c.IsCategoryEnabled() {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category classification is not properly configured")
+	}
+
+	// Fall back to MCP
+	if c.IsMCPCategoryEnabled() && c.mcpCategoryInference != nil {
+		return c.classifyCategoryWithEntropyMCP(text)
+	}
+
+	return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("no category classification method available")
+}
+
+// classifyCategoryWithEntropyInTree performs category classification with entropy using in-tree model
+func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, float64, entropy.ReasoningDecision, error) {
 	if !c.IsCategoryEnabled() {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category classification is not properly configured")
 	}
