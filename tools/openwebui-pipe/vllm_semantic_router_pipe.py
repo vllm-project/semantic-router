@@ -2,9 +2,9 @@
 title: vLLM Semantic Router Pipe
 author: open-webui
 date: 2025-10-01
-version: 1.0
+version: 1.1
 license: Apache-2.0
-description: A pipe for proxying requests to vLLM Semantic Router and displaying decision headers (category, reasoning, model, injection).
+description: A pipe for proxying requests to vLLM Semantic Router and displaying decision headers (category, reasoning, model, injection) and security alerts (PII violations, jailbreak detection).
 requirements: requests, pydantic
 """
 
@@ -134,11 +134,17 @@ class Pipeline:
 
         # List of VSR headers to extract
         vsr_header_keys = [
+            # Decision headers
             "x-vsr-selected-category",
             "x-vsr-selected-reasoning",
             "x-vsr-selected-model",
             "x-vsr-injected-system-prompt",
             "x-vsr-cache-hit",
+            # Security headers
+            "x-vsr-pii-violation",
+            "x-vsr-jailbreak-blocked",
+            "x-vsr-jailbreak-type",
+            "x-vsr-jailbreak-confidence",
         ]
 
         # Extract headers (case-insensitive)
@@ -160,6 +166,10 @@ class Pipeline:
     def _format_vsr_info(self, vsr_headers: dict, position: str = "prefix") -> str:
         """
         Format VSR headers into a readable message for display.
+        Shows the semantic router's decision chain in 3 stages (multi-line format):
+        Stage 1: Security Validation
+        Stage 2: Cache Check
+        Stage 3: Intelligent Routing
 
         Args:
             vsr_headers: VSR decision headers
@@ -168,54 +178,119 @@ class Pipeline:
         if not vsr_headers:
             return ""
 
-        vsr_message_parts = []
+        # Build decision chain in stages (multi-line format)
+        lines = ["**🔀 vLLM Semantic Router - Chain-Of-Thought 🔀**"]
 
-        if vsr_headers.get("x-vsr-selected-category"):
-            vsr_message_parts.append(
-                f"📂 **User Intent Category**: {vsr_headers['x-vsr-selected-category']}"
+        # ============================================================
+        # Stage 1: Security Validation (🛡️)
+        # ============================================================
+        security_parts = []
+
+        has_jailbreak = vsr_headers.get("x-vsr-jailbreak-blocked") == "true"
+        has_pii = vsr_headers.get("x-vsr-pii-violation") == "true"
+        is_blocked = has_jailbreak or has_pii
+
+        # Jailbreak check
+        if has_jailbreak:
+            jailbreak_type = vsr_headers.get("x-vsr-jailbreak-type", "unknown")
+            jailbreak_confidence = vsr_headers.get("x-vsr-jailbreak-confidence", "N/A")
+            security_parts.append(
+                f"🚨 *Jailbreak Detected, Confidence: {jailbreak_confidence}*"
             )
+        else:
+            security_parts.append("✅ *No Jailbreak*")
 
+        # PII check
+        if has_pii:
+            security_parts.append("🚨 *PII Detected*")
+        else:
+            security_parts.append("✅ *No PII*")
+
+        # Result
+        if is_blocked:
+            security_parts.append("❌ ***BLOCKED***")
+        else:
+            security_parts.append("💯 ***Continue***")
+
+        lines.append(
+            "  → 🛡️ ***Stage 1 - Prompt Guard***: " + " → ".join(security_parts)
+        )
+
+        # If blocked, stop here
+        if is_blocked:
+            result = "\n".join(lines)
+            if position == "prefix":
+                return result + "\n\n---\n\n"
+            else:
+                return "\n\n---\n\n" + result
+
+        # ============================================================
+        # Stage 2: Cache Check (🔥)
+        # ============================================================
+        cache_parts = []
+        has_cache_hit = vsr_headers.get("x-vsr-cache-hit") == "true"
+
+        if has_cache_hit:
+            cache_parts.append("🔥 *HIT*")
+            cache_parts.append("⚡️ *Retrieve Memory*")
+            cache_parts.append("💯 ***Fast Response***")
+        else:
+            cache_parts.append("🌊 *MISS*")
+            cache_parts.append("🧠 *Update Memory*")
+            cache_parts.append("💯 ***Continue***")
+
+        lines.append("  → 🔥 ***Stage 2 - Router Memory***: " + " → ".join(cache_parts))
+
+        # If cache hit, stop here
+        if has_cache_hit:
+            result = "\n".join(lines)
+            if position == "prefix":
+                return result + "\n\n---\n\n"
+            else:
+                return "\n\n---\n\n" + result
+
+        # ============================================================
+        # Stage 3: Intelligent Routing (🧠)
+        # ============================================================
+        routing_parts = []
+
+        # Domain
+        category = vsr_headers.get("x-vsr-selected-category", "").strip()
+        if not category:
+            category = "other"
+        routing_parts.append(f"📂 *{category}*")
+
+        # Reasoning mode
         if vsr_headers.get("x-vsr-selected-reasoning"):
             reasoning = vsr_headers["x-vsr-selected-reasoning"]
-            reasoning_emoji = "🧠" if reasoning == "on" else "⚡"
-            vsr_message_parts.append(
-                f"{reasoning_emoji} **Chain-of-Thought**: {reasoning}"
-            )
-
-        if vsr_headers.get("x-vsr-selected-model"):
-            vsr_message_parts.append(
-                f"🥷 **Hidden Model**: {vsr_headers['x-vsr-selected-model']}"
-            )
-
-        if vsr_headers.get("x-vsr-injected-system-prompt"):
-            injection = vsr_headers["x-vsr-injected-system-prompt"]
-            injection_emoji = "🎯" if injection == "true" else "🚫"
-            vsr_message_parts.append(
-                f"{injection_emoji} **System Prompt Optimized**: {injection}"
-            )
-
-        # Add cache hit information
-        if vsr_headers.get("x-vsr-cache-hit"):
-            cache_hit = vsr_headers["x-vsr-cache-hit"].lower()
-            if cache_hit == "true":
-                vsr_message_parts.append(f"🔥 **Semantic Cache**: Hit (Fast Response)")
-
-        if vsr_message_parts:
-            if position == "prefix":
-                # Before response: VSR info + separator + response content
-                return (
-                    "**🔀 vLLM Semantic Router Decision 🔀**\n\n"
-                    + "\n\n".join(vsr_message_parts)
-                    + "\n\n---\n\n"
-                )
+            if reasoning == "on":
+                routing_parts.append("🧠 *Reasoning On*")
             else:
-                # After response: response content + separator + VSR info
-                return (
-                    "\n\n---\n\n**🔀 vLLM Semantic Router Decision 🔀**\n\n"
-                    + "\n\n".join(vsr_message_parts)
-                )
+                routing_parts.append("⚡ *Reasoning Off*")
 
-        return ""
+        # Model
+        if vsr_headers.get("x-vsr-selected-model"):
+            model = vsr_headers["x-vsr-selected-model"]
+            routing_parts.append(f"🥷 *{model}*")
+
+        # Prompt optimization
+        if vsr_headers.get("x-vsr-injected-system-prompt") == "true":
+            routing_parts.append("🎯 *Prompt Optimized*")
+
+        routing_parts.append(f"💯 ***Continue***")
+
+        if routing_parts:
+            lines.append(
+                "  → 🧠 ***Stage 3 - Smart Routing***: " + " → ".join(routing_parts)
+            )
+
+        # Combine all lines
+        result = "\n".join(lines)
+
+        if position == "prefix":
+            return result + "\n\n---\n\n"
+        else:
+            return "\n\n---\n\n" + result
 
     def _log_vsr_info(self, vsr_headers: dict):
         """
@@ -224,10 +299,31 @@ class Pipeline:
         if not vsr_headers or not self.valves.log_vsr_info:
             return
 
+        # Check if there are security violations
+        has_security_violation = (
+            vsr_headers.get("x-vsr-pii-violation") == "true"
+            or vsr_headers.get("x-vsr-jailbreak-blocked") == "true"
+        )
+
         print("=" * 60)
-        print("vLLM Semantic Router Decision:")
+        if has_security_violation:
+            print("🛡️  SECURITY ALERT & Routing Decision:")
+        else:
+            print("vLLM Semantic Router Decision:")
         print("=" * 60)
 
+        # Log security violations first
+        if vsr_headers.get("x-vsr-pii-violation") == "true":
+            print("  🚨 PII VIOLATION: Request blocked")
+
+        if vsr_headers.get("x-vsr-jailbreak-blocked") == "true":
+            print("  🚨 JAILBREAK BLOCKED: Potential attack detected")
+            if vsr_headers.get("x-vsr-jailbreak-type"):
+                print(f"     Type: {vsr_headers['x-vsr-jailbreak-type']}")
+            if vsr_headers.get("x-vsr-jailbreak-confidence"):
+                print(f"     Confidence: {vsr_headers['x-vsr-jailbreak-confidence']}")
+
+        # Log routing decision information
         if vsr_headers.get("x-vsr-selected-category"):
             print(f"  Category: {vsr_headers['x-vsr-selected-category']}")
 
