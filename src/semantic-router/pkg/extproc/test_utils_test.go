@@ -95,7 +95,7 @@ func CreateTestConfig() *config.RouterConfig {
 				Args           []string          `yaml:"args,omitempty"`
 				Env            map[string]string `yaml:"env,omitempty"`
 				URL            string            `yaml:"url,omitempty"`
-				ToolName       string            `yaml:"tool_name"`
+				ToolName       string            `yaml:"tool_name,omitempty"`
 				Threshold      float32           `yaml:"threshold"`
 				TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
 			} `yaml:"mcp_category_model,omitempty"`
@@ -125,7 +125,7 @@ func CreateTestConfig() *config.RouterConfig {
 				Args           []string          `yaml:"args,omitempty"`
 				Env            map[string]string `yaml:"env,omitempty"`
 				URL            string            `yaml:"url,omitempty"`
-				ToolName       string            `yaml:"tool_name"`
+				ToolName       string            `yaml:"tool_name,omitempty"`
 				Threshold      float32           `yaml:"threshold"`
 				TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
 			}{

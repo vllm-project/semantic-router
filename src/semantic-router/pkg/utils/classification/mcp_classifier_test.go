@@ -19,6 +19,7 @@ type MockMCPClient struct {
 	callToolError  error
 	closeError     error
 	connected      bool
+	getToolsResult []mcp.Tool
 }
 
 func (m *MockMCPClient) Connect() error {
@@ -46,7 +47,7 @@ func (m *MockMCPClient) Ping(ctx context.Context) error {
 }
 
 func (m *MockMCPClient) GetTools() []mcp.Tool {
-	return nil
+	return m.getToolsResult
 }
 
 func (m *MockMCPClient) GetResources() []mcp.Resource {
@@ -119,17 +120,164 @@ var _ = Describe("MCP Category Classifier", func() {
 			})
 		})
 
-		Context("when tool name is not specified", func() {
-			It("should return error", func() {
-				cfg.Classifier.MCPCategoryModel.ToolName = ""
-				err := mcpClassifier.Init(cfg)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("tool name is not specified"))
+		// Note: tool_name is now optional and will be auto-discovered if not specified.
+		// The Init method will automatically discover classification tools from the MCP server
+		// by calling discoverClassificationTool().
+
+		// Note: Full initialization test requires mocking NewClient and GetTools which is complex
+		// In real tests, we'd need dependency injection for the client factory
+	})
+
+	Describe("discoverClassificationTool", func() {
+		BeforeEach(func() {
+			mcpClassifier.client = mockClient
+			mcpClassifier.config = cfg
+		})
+
+		Context("when tool name is explicitly configured", func() {
+			It("should use the configured tool name", func() {
+				cfg.Classifier.MCPCategoryModel.ToolName = "my_classifier"
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("my_classifier"))
 			})
 		})
 
-		// Note: Full initialization test requires mocking NewClient which is complex
-		// In real tests, we'd need dependency injection for the client factory
+		Context("when tool name is not configured", func() {
+			BeforeEach(func() {
+				cfg.Classifier.MCPCategoryModel.ToolName = ""
+			})
+
+			It("should discover classify_text tool", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "some_other_tool", Description: "Other tool"},
+					{Name: "classify_text", Description: "Classifies text into categories"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("classify_text"))
+			})
+
+			It("should discover classify tool", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "classify", Description: "Classify text"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("classify"))
+			})
+
+			It("should discover categorize tool", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "categorize", Description: "Categorize text"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("categorize"))
+			})
+
+			It("should discover categorize_text tool", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "categorize_text", Description: "Categorize text into categories"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("categorize_text"))
+			})
+
+			It("should prioritize classify_text over other common names", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "categorize", Description: "Categorize"},
+					{Name: "classify_text", Description: "Main classifier"},
+					{Name: "classify", Description: "Classify"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("classify_text"))
+			})
+
+			It("should prefer common names over pattern matching", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "my_classification_tool", Description: "Custom classifier"},
+					{Name: "classify", Description: "Built-in classifier"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("classify"))
+			})
+
+			It("should discover by pattern matching in name", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "text_classification", Description: "Some description"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("text_classification"))
+			})
+
+			It("should discover by pattern matching in description", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "analyze_text", Description: "Tool for text classification"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("analyze_text"))
+			})
+
+			It("should return error when no tools available", func() {
+				mockClient.getToolsResult = []mcp.Tool{}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no tools available"))
+			})
+
+			It("should return error when no classification tool found", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "foo", Description: "Does foo"},
+					{Name: "bar", Description: "Does bar"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no classification tool found"))
+			})
+
+			It("should handle case-insensitive pattern matching", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "TextClassification", Description: "Classify documents"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("TextClassification"))
+			})
+
+			It("should match 'classif' in description (case-insensitive)", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "my_tool", Description: "This tool performs Classification tasks"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mcpClassifier.toolName).To(Equal("my_tool"))
+			})
+
+			It("should log available tools when none match", func() {
+				mockClient.getToolsResult = []mcp.Tool{
+					{Name: "tool1", Description: "Does something"},
+					{Name: "tool2", Description: "Does another thing"},
+				}
+				err := mcpClassifier.discoverClassificationTool()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("tool1"))
+				Expect(err.Error()).To(ContainSubstring("tool2"))
+			})
+		})
+
+		// Test suite summary:
+		// - Explicit configuration: ✓ (1 test)
+		// - Common tool names discovery: ✓ (4 tests - classify_text, classify, categorize, categorize_text)
+		// - Priority/precedence: ✓ (2 tests - classify_text first, common names over patterns)
+		// - Pattern matching: ✓ (4 tests - name, description, case-insensitive)
+		// - Error cases: ✓ (3 tests - no tools, no match, logging)
+		// Total: 14 comprehensive tests for auto-discovery
 	})
 
 	Describe("Close", func() {
