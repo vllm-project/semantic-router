@@ -1,26 +1,59 @@
 # Build the Rust library using Makefile
-FROM rust:1.85 as rust-builder
+FROM rust:1.85 AS rust-builder
 
-# Install make and other build dependencies
+# Install make and other build dependencies including cross-compilation tools
 RUN apt-get update && apt-get install -y \
     make \
     build-essential \
     pkg-config \
+    lld \
+    clang \
+    gcc-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
+
+# Set up Rust for cross-compilation
+RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+# Configure Cargo for optimized builds
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+ENV CARGO_INCREMENTAL=1
+ENV CARGO_PROFILE_RELEASE_LTO=thin
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
 
 WORKDIR /app
 
-# Copy only essential files for Rust build
+# Copy dependency files first for better layer caching
+COPY candle-binding/Cargo.toml ./candle-binding/
+# Copy Cargo.lock if it exists in the build context
+COPY candle-binding/Cargo.loc[k] ./candle-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
-COPY candle-binding/Cargo.toml candle-binding/
-COPY candle-binding/src/ candle-binding/src/
 
-# Use Makefile to build the Rust library
-RUN make rust
+# Pre-build dependencies to cache them
+RUN cd candle-binding && \
+    mkdir -p src && \
+    echo "fn main() {}" > src/lib.rs && \
+    cargo build --release && \
+    rm -rf src
+
+# Copy source code and build
+COPY candle-binding/src/ ./candle-binding/src/
+
+# Use Makefile to build the Rust library (rebuild with actual source code)
+RUN echo "Building Rust library with actual source code..." && \
+    echo "Checking source files:" && \
+    ls -la candle-binding/src/ && \
+    echo "Forcing clean rebuild..." && \
+    cd candle-binding && \
+    cargo clean && \
+    cargo build --release && \
+    echo "Checking built library:" && \
+    find target -name "*.so" -type f && \
+    ls -la target/release/
 
 # Build the Go application
-FROM golang:1.24 as go-builder
+FROM golang:1.24 AS go-builder
 
 WORKDIR /app
 
@@ -28,6 +61,9 @@ WORKDIR /app
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+
+# Download Go dependencies (cached layer)
+RUN cd src/semantic-router && go mod download
 
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
@@ -38,9 +74,11 @@ COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_r
 # Set environment variables for CGO to find the library
 ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
+ENV GOOS=linux
 
-# Build the router binary
-RUN mkdir -p bin && cd src/semantic-router && go build -o ../../bin/router cmd/main.go
+# Build the router binary with optimizations
+RUN mkdir -p bin && cd src/semantic-router && \
+    go build -ldflags="-w -s" -o ../../bin/router cmd/main.go
 
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream9

@@ -1,0 +1,361 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: semantic-router
+  namespace: openshift
+  annotations:
+    description: "vLLM Semantic Router deployment template for OpenShift"
+    iconClass: "icon-load-balancer"
+    openshift.io/display-name: "vLLM Semantic Router"
+    openshift.io/documentation-url: "https://github.com/vllm-project/semantic-router"
+    openshift.io/support-url: "https://github.com/vllm-project/semantic-router/issues"
+    tags: "semantic-router,vllm,ai,ml,routing"
+    template.openshift.io/bindable: "false"
+labels:
+  app: semantic-router
+  template: semantic-router
+objects:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: ${NAMESPACE}
+    labels:
+      name: ${NAMESPACE}
+      app.kubernetes.io/name: semantic-router
+      app.kubernetes.io/component: system
+    annotations:
+      openshift.io/description: "Namespace for vLLM Semantic Router deployment on OpenShift"
+      openshift.io/display-name: "vLLM Semantic Router System"
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: semantic-router-models
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${STORAGE_SIZE}
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: semantic-router
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+  spec:
+    replicas: ${{REPLICAS}}
+    selector:
+      matchLabels:
+        app: semantic-router
+    template:
+      metadata:
+        labels:
+          app: semantic-router
+      spec:
+        containers:
+        - name: semantic-router
+          image: ${CONTAINER_IMAGE}:${CONTAINER_TAG}
+          args: ["--secure=${SECURE_MODE}"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+          - containerPort: 50051
+            name: grpc
+            protocol: TCP
+          - containerPort: 9190
+            name: metrics
+            protocol: TCP
+          - containerPort: 8080
+            name: classify-api
+            protocol: TCP
+          env:
+          - name: LD_LIBRARY_PATH
+            value: "/app/lib"
+          volumeMounts:
+          - name: config-volume
+            mountPath: /app/config
+            readOnly: true
+          - name: models-volume
+            mountPath: /app/models
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: ${LIVENESS_INITIAL_DELAY}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: ${READINESS_INITIAL_DELAY}
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: ${MEMORY_REQUEST}
+              cpu: ${CPU_REQUEST}
+            limits:
+              memory: ${MEMORY_LIMIT}
+              cpu: ${CPU_LIMIT}
+        volumes:
+        - name: config-volume
+          configMap:
+            name: semantic-router-config
+        - name: models-volume
+          persistentVolumeClaim:
+            claimName: semantic-router-models
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: semantic-router
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+    annotations:
+      service.alpha.openshift.io/serving-cert-secret-name: semantic-router-tls
+  spec:
+    type: ClusterIP
+    ports:
+    - port: 50051
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: classify-api
+    selector:
+      app: semantic-router
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: semantic-router-metrics
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+      service: metrics
+  spec:
+    type: ClusterIP
+    ports:
+    - port: 9190
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    selector:
+      app: semantic-router
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: semantic-router-api
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+      service: api
+    annotations:
+      description: "Route for Semantic Router Classification API"
+  spec:
+    host: ${API_HOSTNAME}
+    to:
+      kind: Service
+      name: semantic-router
+    port:
+      targetPort: classify-api
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+    wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: semantic-router-grpc
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+      service: grpc
+    annotations:
+      description: "Route for Semantic Router gRPC API"
+      haproxy.router.openshift.io/balance: roundrobin
+      haproxy.router.openshift.io/disable_cookies: "true"
+  spec:
+    host: ${GRPC_HOSTNAME}
+    to:
+      kind: Service
+      name: semantic-router
+    port:
+      targetPort: grpc
+    tls:
+      termination: passthrough
+    wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: semantic-router-metrics
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+      service: metrics
+    annotations:
+      description: "Route for Semantic Router Prometheus metrics"
+  spec:
+    host: ${METRICS_HOSTNAME}
+    to:
+      kind: Service
+      name: semantic-router-metrics
+    port:
+      targetPort: metrics
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+    wildcardPolicy: None
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: semantic-router-config
+    namespace: ${NAMESPACE}
+    labels:
+      app: semantic-router
+  data:
+    config.yaml: |
+      server:
+        port: 50051
+        secure: ${SECURE_MODE}
+
+      metrics:
+        enabled: true
+        port: 9190
+
+      classification:
+        api:
+          enabled: true
+          port: 8080
+
+        router:
+          category:
+            enabled: true
+            model_path: "models/category_classifier_modernbert-base_model"
+
+          pii:
+            enabled: true
+            model_path: "models/pii_classifier_modernbert-base_model"
+
+          jailbreak:
+            enabled: true
+            model_path: "models/jailbreak_classifier_modernbert-base_model"
+
+          pii_token:
+            enabled: true
+            model_path: "models/pii_classifier_modernbert-base_presidio_token_model"
+
+        tools:
+          enabled: true
+          database_path: "/app/config/tools_db.json"
+
+      logging:
+        level: ${LOG_LEVEL}
+        format: "json"
+
+      cache:
+        enabled: true
+        ttl: "5m"
+    tools_db.json: |
+      {
+        "tools": [
+          {
+            "name": "search",
+            "description": "Search for information on the web",
+            "category": "search",
+            "parameters": {
+              "query": {
+                "type": "string",
+                "description": "The search query"
+              }
+            }
+          },
+          {
+            "name": "calculator",
+            "description": "Perform mathematical calculations",
+            "category": "math",
+            "parameters": {
+              "expression": {
+                "type": "string",
+                "description": "The mathematical expression to evaluate"
+              }
+            }
+          }
+        ]
+      }
+parameters:
+- name: NAMESPACE
+  description: "The namespace to deploy the semantic router into"
+  value: "vllm-semantic-router-system"
+  required: true
+- name: CONTAINER_IMAGE
+  description: "Container image for the semantic router"
+  value: "ghcr.io/vllm-project/semantic-router/extproc"
+  required: true
+- name: CONTAINER_TAG
+  description: "Container image tag"
+  value: "latest"
+  required: true
+- name: REPLICAS
+  description: "Number of replicas to deploy"
+  value: "1"
+  required: true
+- name: STORAGE_SIZE
+  description: "Size of persistent storage for models"
+  value: "10Gi"
+  required: true
+- name: MEMORY_REQUEST
+  description: "Memory request for container"
+  value: "3Gi"
+  required: true
+- name: MEMORY_LIMIT
+  description: "Memory limit for container"
+  value: "6Gi"
+  required: true
+- name: CPU_REQUEST
+  description: "CPU request for container"
+  value: "1"
+  required: true
+- name: CPU_LIMIT
+  description: "CPU limit for container"
+  value: "2"
+  required: true
+- name: SECURE_MODE
+  description: "Enable secure mode (TLS)"
+  value: "true"
+  required: true
+- name: LIVENESS_INITIAL_DELAY
+  description: "Initial delay for liveness probe (seconds)"
+  value: "60"
+  required: true
+- name: READINESS_INITIAL_DELAY
+  description: "Initial delay for readiness probe (seconds)"
+  value: "90"
+  required: true
+- name: LOG_LEVEL
+  description: "Logging level (debug, info, warn, error)"
+  value: "info"
+  required: true
+- name: API_HOSTNAME
+  description: "Custom hostname for API route (leave empty for auto-generated)"
+  value: ""
+  required: false
+- name: GRPC_HOSTNAME
+  description: "Custom hostname for gRPC route (leave empty for auto-generated)"
+  value: ""
+  required: false
+- name: METRICS_HOSTNAME
+  description: "Custom hostname for metrics route (leave empty for auto-generated)"
+  value: ""
+  required: false

@@ -48,11 +48,11 @@ MODE="${1:-local}"
 case "${MODE}" in
     local)
         log_info "Starting observability in LOCAL mode (router on host, observability in Docker)"
-        COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.obs.yml"
+        COMPOSE_FILE="${PROJECT_ROOT}/tools/observability/docker-compose.obs.yml"
         ;;
     compose)
         log_info "Starting observability in COMPOSE mode (all services in Docker)"
-        COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yml"
+        COMPOSE_FILE="${PROJECT_ROOT}/deploy/docker-compose/docker-compose.yml"
         ;;
     *)
         log_error "Invalid mode: ${MODE}"

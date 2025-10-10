@@ -35,15 +35,15 @@ open-observability:
 
 ## o11y-logs: Show logs from observability containers
 o11y-logs:
-	@docker compose -f docker-compose.obs.yml logs -f 2>/dev/null || docker compose logs prometheus grafana -f
+	@docker compose -f tools/observability/docker-compose.obs.yml logs -f 2>/dev/null || docker compose -f deploy/docker-compose/docker-compose.yml logs prometheus grafana -f
 
 ## o11y-status: Check status of observability containers
 o11y-status:
 	@echo "==> Local mode:"
-	@docker compose -f docker-compose.obs.yml ps 2>/dev/null || echo "  Not running"
+	@docker compose -f tools/observability/docker-compose.obs.yml ps 2>/dev/null || echo "  Not running"
 	@echo ""
 	@echo "==> Compose mode:"
-	@docker compose ps prometheus grafana 2>/dev/null || echo "  Not running"
+	@docker compose -f deploy/docker-compose/docker-compose.yml ps prometheus grafana 2>/dev/null || echo "  Not running"
 
 ## o11y-clean: Remove observability data volumes
 o11y-clean:

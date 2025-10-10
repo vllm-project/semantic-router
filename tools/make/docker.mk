@@ -6,6 +6,12 @@
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
+# Default docker compose environment
+# Point Compose to the relocated main stack by default; override by exporting COMPOSE_FILE
+export COMPOSE_FILE ?= deploy/docker-compose/docker-compose.yml
+# Keep a stable project name so network/volume names are predictable across runs
+export COMPOSE_PROJECT_NAME ?= semantic-router
+
 # Build all Docker images
 docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-precommit
 	@$(LOG_TARGET)
@@ -79,21 +85,35 @@ docker-push-llm-katan:
 	@echo "Pushing llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
 
-# Docker compose shortcuts
+# Docker compose build flag logic
+# Usage: make docker-compose-up REBUILD=1  (forces image rebuild)
+BUILD_FLAG=$(if $(REBUILD),--build,)
+
+# Docker compose shortcuts (no rebuild by default)
 docker-compose-up:
 	@$(LOG_TARGET)
-	@echo "Starting services with docker-compose..."
-	@docker compose up --build
+	@echo "Starting services with docker-compose (REBUILD=$(REBUILD))..."
+	@docker compose up -d $(BUILD_FLAG)
 
 docker-compose-up-testing:
 	@$(LOG_TARGET)
-	@echo "Starting services with testing profile..."
-	@docker compose --profile testing up --build
+	@echo "Starting services with testing profile (REBUILD=$(REBUILD))..."
+	@docker compose --profile testing up -d $(BUILD_FLAG)
 
 docker-compose-up-llm-katan:
 	@$(LOG_TARGET)
-	@echo "Starting services with llm-katan profile..."
-	@docker compose --profile llm-katan up --build
+	@echo "Starting services with llm-katan profile (REBUILD=$(REBUILD))..."
+	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
+
+# Explicit rebuild targets for convenience
+docker-compose-rebuild: REBUILD=1
+docker-compose-rebuild: docker-compose-up
+
+docker-compose-rebuild-testing: REBUILD=1
+docker-compose-rebuild-testing: docker-compose-up-testing
+
+docker-compose-rebuild-llm-katan: REBUILD=1
+docker-compose-rebuild-llm-katan: docker-compose-up-llm-katan
 
 docker-compose-down:
 	@$(LOG_TARGET)
@@ -111,10 +131,13 @@ docker-help:
 	@echo "  docker-run-llm-katan      - Run llm-katan Docker image locally"
 	@echo "  docker-run-llm-katan-custom SERVED_NAME=name - Run with custom served model name"
 	@echo "  docker-clean              - Clean up Docker images"
-	@echo "  docker-compose-up         - Start docker-compose services"
-	@echo "  docker-compose-up-testing - Start with testing profile"
-	@echo "  docker-compose-up-llm-katan - Start with llm-katan profile"
-	@echo "  docker-compose-down       - Stop docker-compose services"
+	@echo "  docker-compose-up                    - Start services (add REBUILD=1 to rebuild)"
+	@echo "  docker-compose-up-testing            - Start with testing profile (REBUILD=1 optional)"
+	@echo "  docker-compose-up-llm-katan          - Start with llm-katan profile (REBUILD=1 optional)"
+	@echo "  docker-compose-rebuild               - Force rebuild then start"
+	@echo "  docker-compose-rebuild-testing       - Force rebuild (testing profile)"
+	@echo "  docker-compose-rebuild-llm-katan     - Force rebuild (llm-katan profile)"
+	@echo "  docker-compose-down                  - Stop docker-compose services"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  DOCKER_REGISTRY - Docker registry (default: ghcr.io/vllm-project/semantic-router)"

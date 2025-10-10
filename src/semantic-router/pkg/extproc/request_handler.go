@@ -516,7 +516,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 				"query":      requestQuery,
 			})
 			// Return immediate response from cache
-			response := http.CreateCacheHitResponse(cachedResponse)
+			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse)
 			ctx.TraceContext = spanCtx
 			return response, true
 		}

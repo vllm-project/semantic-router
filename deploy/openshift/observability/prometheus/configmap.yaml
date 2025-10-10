@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: vllm-semantic-router-system
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: semantic-router-stack
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'openshift'
+        namespace: 'vllm-semantic-router-system'
+
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - localhost:9090
+
+      # Semantic Router metrics
+      - job_name: semantic-router
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - vllm-semantic-router-system
+        relabel_configs:
+          # Keep only semantic-router-metrics service
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: semantic-router-metrics
+            action: keep
+          # Keep only metrics port
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: metrics
+            action: keep
+          # Add namespace label
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          # Add pod label
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          # Add service label
+          - source_labels: [__meta_kubernetes_service_name]
+            target_label: service
+          # Use pod IP as instance
+          - source_labels: [__address__]
+            target_label: instance
