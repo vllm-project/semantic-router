@@ -52,13 +52,20 @@ classifier:
     enabled: true
     transport_type: "http"
     url: "http://localhost:8090/mcp"
-    tool_name: "classify_text"
+    # tool_name: optional - auto-discovers classification tool if not specified
     threshold: 0.6
     timeout_seconds: 30
 
 categories: []  # Loaded dynamically from MCP
 default_model: openai/gpt-oss-20b
 ```
+
+**Tool Auto-Discovery:**
+The router automatically discovers classification tools from the MCP server by:
+1. Listing available tools on connection
+2. Looking for common names: `classify_text`, `classify`, `categorize`, `categorize_text`
+3. Pattern matching for tools containing "classif" in name/description
+4. Optionally specify `tool_name` to use a specific tool
 
 ## How It Works
 

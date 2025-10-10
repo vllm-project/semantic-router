@@ -62,13 +62,9 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 	if !cfg.Classifier.MCPCategoryModel.Enabled {
 		return fmt.Errorf("MCP category classifier is not enabled")
 	}
-	if cfg.Classifier.MCPCategoryModel.ToolName == "" {
-		return fmt.Errorf("MCP tool name is not specified")
-	}
 
-	// Store config and tool name
+	// Store config
 	m.config = cfg
-	m.toolName = cfg.Classifier.MCPCategoryModel.ToolName
 
 	// Create MCP client configuration
 	mcpConfig := mcpclient.ClientConfig{
@@ -99,8 +95,67 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 	}
 
 	m.client = client
+
+	// Discover classification tool
+	if err := m.discoverClassificationTool(); err != nil {
+		client.Close()
+		return fmt.Errorf("failed to discover classification tool: %w", err)
+	}
+
 	observability.Infof("Successfully initialized MCP category classifier with tool '%s'", m.toolName)
 	return nil
+}
+
+// discoverClassificationTool finds the appropriate classification tool from available MCP tools
+func (m *MCPCategoryClassifier) discoverClassificationTool() error {
+	// If tool name is explicitly specified, use it
+	if m.config.Classifier.MCPCategoryModel.ToolName != "" {
+		m.toolName = m.config.Classifier.MCPCategoryModel.ToolName
+		observability.Infof("Using explicitly configured tool: %s", m.toolName)
+		return nil
+	}
+
+	// Otherwise, auto-discover by listing available tools
+	tools := m.client.GetTools()
+	if len(tools) == 0 {
+		return fmt.Errorf("no tools available from MCP server")
+	}
+
+	// Look for classification-related tools by common names
+	classificationToolNames := []string{
+		"classify_text",
+		"classify",
+		"categorize",
+		"categorize_text",
+	}
+
+	for _, toolName := range classificationToolNames {
+		for _, tool := range tools {
+			if tool.Name == toolName {
+				m.toolName = tool.Name
+				observability.Infof("Auto-discovered classification tool: %s - %s", m.toolName, tool.Description)
+				return nil
+			}
+		}
+	}
+
+	// If no common name found, look for tools that mention "classif" in name or description
+	for _, tool := range tools {
+		lowerName := strings.ToLower(tool.Name)
+		lowerDesc := strings.ToLower(tool.Description)
+		if strings.Contains(lowerName, "classif") || strings.Contains(lowerDesc, "classif") {
+			m.toolName = tool.Name
+			observability.Infof("Auto-discovered classification tool by pattern match: %s - %s", m.toolName, tool.Description)
+			return nil
+		}
+	}
+
+	// Log available tools for debugging
+	var toolNames []string
+	for _, tool := range tools {
+		toolNames = append(toolNames, tool.Name)
+	}
+	return fmt.Errorf("no classification tool found among available tools: %v", toolNames)
 }
 
 // Close closes the MCP client connection
