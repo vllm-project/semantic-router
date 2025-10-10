@@ -351,6 +351,7 @@
   font-size: 1.1rem;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--ifm-color-primary);
 }
 
 .actionButton:hover {
@@ -359,6 +360,22 @@
   text-decoration: none;
   transform: translateY(-3px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  border-color: var(--ifm-color-primary-dark);
+}
+
+/* Dark mode enhancement */
+[data-theme='dark'] .actionButton {
+  background: var(--ifm-color-primary);
+  color: var(--ifm-color-gray-100);
+  border: 2px solid var(--ifm-color-primary-light);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .actionButton:hover {
+  background: var(--ifm-color-primary-light);
+  color: white;
+  border-color: var(--ifm-color-primary-lighter);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
 }
 
 /* Responsive Design */
