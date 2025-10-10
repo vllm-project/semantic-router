@@ -90,11 +90,32 @@ func staticFileServer(staticDir string) http.Handler {
 		// Serve index.html for root and for unknown routes (SPA)
 		p := r.URL.Path
 		full := path.Join(staticDir, path.Clean(p))
-		// If path has no extension and isn't a file, serve index.html
-		if _, err := os.Stat(full); err != nil || strings.HasSuffix(p, "/") {
+
+		// Check if file exists
+		info, err := os.Stat(full)
+		if err == nil {
+			// File exists
+			if !info.IsDir() {
+				// It's a file, serve it
+				fs.ServeHTTP(w, r)
+				return
+			}
+			// It's a directory, try index.html
+			indexPath := path.Join(full, "index.html")
+			if _, err := os.Stat(indexPath); err == nil {
+				http.ServeFile(w, r, indexPath)
+				return
+			}
+		}
+
+		// File doesn't exist or is directory without index.html
+		// For SPA routing: serve index.html for routes without file extension
+		if !strings.Contains(path.Base(p), ".") {
 			http.ServeFile(w, r, path.Join(staticDir, "index.html"))
 			return
 		}
+
+		// Otherwise let the file server handle it (will return 404)
 		fs.ServeHTTP(w, r)
 	})
 }

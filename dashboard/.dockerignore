@@ -1,0 +1,33 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+.vite/
+.docusaurus/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.log
+*.tmp
+.cache/
+
+# Keep necessary files
+!dashboard/frontend/package.json
+!dashboard/frontend/tsconfig*.json
+!dashboard/frontend/vite.config.ts

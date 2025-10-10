@@ -25,41 +25,75 @@ Unified dashboard that brings together Configuration Management, an Interactive 
 
 These are sufficient to embed and proxy—no need to duplicate core functionality.
 
-## Architecture (MVP)
+## Architecture
 
-- frontend/ (SPA)
-  - Tabs: Monitoring, Config Viewer, Playground
-  - Iframes for Grafana dashboards and Open WebUI
-  - Simple viewer for router config JSON
-- backend/ (Go HTTP server)
-  - Serves static frontend
-  - Reverse proxy with auth/cors/csp controls:
-    - `GET /embedded/grafana/*` → Grafana
-    - `GET /embedded/prometheus/*` → Prometheus (optional link-outs)
-    - `GET /embedded/openwebui/*` → Open WebUI (optional)
-    - `GET /api/router/*` → Router Classification API (`:8080`)
-    - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
-  - Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
-  - Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
+### Frontend (React + TypeScript + Vite)
 
-## Directory layout
+Modern SPA built with:
+
+- **React 18** with TypeScript for type safety
+- **Vite 5** for fast development and optimized builds
+- **React Router v6** for client-side routing
+- **CSS Modules** for scoped styling with theme support (dark/light mode)
+
+Pages:
+
+- **Monitoring** (`/monitoring`): Grafana dashboard embedding with custom path input
+- **Config** (`/config`): Real-time configuration viewer with multiple endpoints
+- **Playground** (`/playground`): Open WebUI interface for testing
+
+Features:
+
+- 🌓 Dark/Light theme toggle with localStorage persistence
+- 📱 Responsive design
+- ⚡ Fast navigation with React Router
+- 🎨 Modern UI inspired by vLLM website design
+
+### Backend (Go HTTP Server)
+
+- Serves static frontend (Vite production build)
+- Reverse proxy with auth/cors/csp controls:
+  - `GET /embedded/grafana/*` → Grafana
+  - `GET /embedded/prometheus/*` → Prometheus (optional link-outs)
+  - `GET /embedded/openwebui/*` → Open WebUI (optional)
+  - `GET /api/router/*` → Router Classification API (`:8080`)
+  - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
+  - `GET /healthz` → Health check endpoint
+- Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
+- SPA routing support: serves `index.html` for all non-asset routes
+- Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
+
+## Directory Layout
 
 ```
 dashboard/
-├── frontend/                        # UI for configuration, playground, monitoring
-│   ├─ Monitoring (iframe Grafana)
-│   ├─ Config Viewer (fetch /api/router/config/classification)
-│   └─ Playground (iframe Open WebUI)
-├── backend/                         # Go proxy, auth, thin API
-│   ├─ /embedded/grafana → Grafana
-│   ├─ /embedded/prometheus → Prometheus
-│   ├─ /embedded/openwebui → Open WebUI
-│   └─ /api/router/* → Semantic Router API
+├── frontend/                        # React + TypeScript SPA
+│   ├── src/
+│   │   ├── components/             # Reusable components
+│   │   │   ├── Layout.tsx          # Main layout with header/nav
+│   │   │   └── Layout.module.css
+│   │   ├── pages/                  # Page components
+│   │   │   ├── MonitoringPage.tsx  # Grafana iframe with path control
+│   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
+│   │   │   ├── PlaygroundPage.tsx  # Open WebUI iframe
+│   │   │   └── *.module.css        # Scoped styles per page
+│   │   ├── App.tsx                 # Root component with routing
+│   │   ├── main.tsx                # Entry point
+│   │   └── index.css               # Global styles & CSS variables
+│   ├── public/                     # Static assets (vllm.png)
+│   ├── package.json                # Node dependencies
+│   ├── tsconfig.json               # TypeScript configuration
+│   ├── vite.config.ts              # Vite build configuration
+│   └── index.html                  # SPA shell
+├── backend/                         # Go reverse proxy server
+│   ├── main.go                     # Proxy routes & static file server
+│   ├── go.mod                      # Go module (minimal dependencies)
+│   └── Dockerfile                  # Multi-stage build (Node + Go + Alpine)
 ├── deploy/
-│   ├── docker/                      # Docker Compose setup for the dashboard
-│   ├── kubernetes/                  # K8s manifests (Service/Ingress/ConfigMap)
-│   └── local/                       # Local/dev launcher
-└── helm-chart/                      # (optional) Helm chart for dashboard
+│   ├── docker/                      # Docker Compose overlay (deprecated)
+│   └── kubernetes/                  # K8s manifests (Service/Ingress/ConfigMap)
+├── README.md                        # This file
+└── RISKS.md                         # Security considerations
 ```
 
 ## Environment-agnostic configuration
@@ -190,16 +224,24 @@ docker compose -f tools/observability/docker-compose.obs.yml up -d
 cd src/semantic-router
 go run cmd/main.go -config ../../config/config.yaml
 
-# 3. Start the Dashboard backend (local development)
+# 3. Install frontend dependencies
+cd dashboard/frontend
+npm install
+
+# 4. Start the frontend dev server (with HMR)
+npm run dev
+# Vite will start on http://localhost:3001 with proxy to backend
+
+# 5. Start the Dashboard backend (in another terminal)
 cd dashboard/backend
 export TARGET_GRAFANA_URL=http://localhost:3000
 export TARGET_PROMETHEUS_URL=http://localhost:9090
 export TARGET_ROUTER_API_URL=http://localhost:8080
 export TARGET_ROUTER_METRICS_URL=http://localhost:9190/metrics
-go run main.go -port=8700 -static=../frontend
+go run main.go -port=8700 -static=../frontend/dist
 
-# 4. Open your browser
-open http://localhost:8700
+# For development, use the Vite dev server at http://localhost:3001
+# For production preview, build first: cd frontend && npm run build
 ```
 
 ### Method 3: Rebuild Dashboard Only
@@ -227,9 +269,12 @@ docker logs -f semantic-router-dashboard
 
 ### Dockerfile Build
 
-- A multi-stage build (Go builder → distroless) is defined in `dashboard/backend/Dockerfile`.
-- An independent Go module `dashboard/backend/go.mod` isolates dependencies.
-- Frontend static assets are packaged into the image at `/app/frontend`.
+- A **3-stage multi-stage build** is defined in `dashboard/backend/Dockerfile`:
+  1. **Node.js stage**: Builds the React frontend with Vite (`npm run build` → `dist/`)
+  2. **Go builder stage**: Compiles the backend binary
+  3. **Alpine runtime stage**: Combines backend + frontend dist in minimal image
+- An independent Go module `dashboard/backend/go.mod` isolates backend dependencies.
+- Frontend production build (`dist/`) is packaged into the image at `/app/frontend`.
 
 ### Grafana Embedding Support
 

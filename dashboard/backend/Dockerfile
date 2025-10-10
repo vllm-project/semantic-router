@@ -1,18 +1,27 @@
-FROM golang:1.24 AS builder
+# Stage 1: Build frontend with Node.js
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY dashboard/frontend/package.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
+COPY dashboard/frontend/src ./src
+COPY dashboard/frontend/public ./public
+COPY dashboard/frontend/index.html ./
+RUN npm install
+RUN npm run build
+
+# Stage 2: Build backend with Go
+FROM golang:1.24 AS backend-builder
 WORKDIR /app
-# Copy source and frontend assets
 COPY dashboard/backend/ /app/dashboard/backend/
-COPY dashboard/frontend/ /app/dashboard/frontend/
-# Build the binary
 WORKDIR /app/dashboard/backend
 RUN go mod download || true
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/dashboard-backend main.go
 
+# Stage 3: Final runtime image
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates wget
 WORKDIR /app
-COPY --from=builder /app/dashboard-backend /app/dashboard-backend
-COPY --from=builder /app/dashboard/frontend /app/frontend
+COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
+COPY --from=frontend-builder /app/frontend/dist /app/frontend
 RUN addgroup -g 65532 nonroot && \
     adduser -D -u 65532 -G nonroot nonroot && \
     chown -R nonroot:nonroot /app

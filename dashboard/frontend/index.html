@@ -1,103 +1,14 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Semantic Router Dashboard</title>
-    <style>
-      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol; }
-      header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #eee; }
-      h1 { font-size: 16px; margin: 0; }
-      nav { display: flex; gap: 8px; }
-      nav button { padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; background: #fafafa; cursor: pointer; }
-      nav button.active { background: #2563eb; color: white; border-color: #2563eb; }
-      main { height: calc(100vh - 58px); }
-      section { display: none; height: 100%; }
-      section.active { display: block; }
-      iframe { width: 100%; height: 100%; border: 0; background: #fff; }
-      .panel { padding: 16px; height: 100%; box-sizing: border-box; overflow: auto; }
-      pre { background: #0b1020; color: #d1e7ff; padding: 12px; border-radius: 8px; overflow: auto; }
-      .note { color: #555; }
-      .row { display: flex; gap: 12px; align-items: center; }
-      .row input { width: 360px; padding: 6px 8px; }
-      .row button { padding: 6px 10px; }
-    </style>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/vllm.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="vLLM Semantic Router Dashboard - Monitoring, Configuration, and Playground" />
+    <title>vLLM Semantic Router Dashboard</title>
   </head>
   <body>
-    <header>
-      <h1>Semantic Router Dashboard</h1>
-      <nav>
-        <button id="tab-monitoring" class="active">Monitoring</button>
-        <button id="tab-config">Config Viewer</button>
-        <button id="tab-playground">Playground</button>
-      </nav>
-      <div style="margin-left:auto" class="row">
-        <label for="grafanaPath" class="note">Grafana path:</label>
-        <input id="grafanaPath" placeholder="/d/<uid>?kiosk&theme=light"/>
-        <button id="loadGrafana">Load</button>
-      </div>
-    </header>
-    <main>
-      <section id="panel-monitoring" class="active">
-        <iframe id="grafanaFrame" src="/embedded/grafana/" title="Grafana"></iframe>
-      </section>
-      <section id="panel-config" class="panel">
-        <p class="note">Read-only classification config from Router API (<code>/api/router/config/classification</code>)</p>
-        <pre id="configOutput">Loading...</pre>
-      </section>
-      <section id="panel-playground">
-        <iframe id="owuiFrame" src="/embedded/openwebui/" title="Open WebUI"></iframe>
-      </section>
-    </main>
-    <script>
-      const tabs = [
-        { btn: 'tab-monitoring', panel: 'panel-monitoring' },
-        { btn: 'tab-config', panel: 'panel-config' },
-        { btn: 'tab-playground', panel: 'panel-playground' },
-      ];
-      function activate(id) {
-        tabs.forEach(({btn, panel}) => {
-          document.getElementById(btn).classList.toggle('active', btn === id);
-          document.getElementById(panel).classList.toggle('active', btn === id);
-        });
-      }
-      tabs.forEach(({btn}) => document.getElementById(btn).addEventListener('click', () => activate(btn)));
-
-      // Config Viewer
-      async function loadConfig() {
-        const out = document.getElementById('configOutput');
-        try {
-          const res = await fetch('/api/router/config/classification');
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          out.textContent = JSON.stringify(data, null, 2);
-        } catch (e) {
-          out.textContent = 'Failed to fetch config: ' + e.message;
-        }
-      }
-      loadConfig();
-
-      // Monitoring tab controls
-      const gInput = document.getElementById('grafanaPath');
-      const gBtn = document.getElementById('loadGrafana');
-      const gFrame = document.getElementById('grafanaFrame');
-      gBtn.addEventListener('click', () => {
-        let p = (gInput.value || '').trim();
-        if (!p.startsWith('/')) p = '/' + p;
-        gFrame.src = '/embedded/grafana' + p;
-      });
-
-      // Detect if Open WebUI is available by probing a lightweight asset
-      async function checkOpenWebUI() {
-        try {
-          const res = await fetch('/embedded/openwebui/', { method: 'HEAD' });
-          if (!res.ok) throw new Error('OWUI not reachable');
-        } catch {
-          // Hide the tab if not available
-          document.getElementById('tab-playground').style.display = 'none';
-        }
-      }
-      checkOpenWebUI();
-    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
-  </html>
+</html>
