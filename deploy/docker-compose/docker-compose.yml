@@ -94,6 +94,14 @@ services:
       - PROMETHEUS_URL=prometheus:9090
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_SECURITY_COOKIE_SAMESITE=lax
+      # Configure for subpath serving through dashboard proxy
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      # Enable anonymous access for iframe embedding
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      # Disable login requirement for embedding
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
     ports:
       - "3000:3000"
     volumes:

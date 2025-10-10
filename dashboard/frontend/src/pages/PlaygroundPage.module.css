@@ -4,6 +4,7 @@
   height: 100%;
   padding: 1rem;
   gap: 1rem;
+  overflow: hidden;
 }
 
 .controls {
@@ -14,6 +15,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .controlGroup {
@@ -92,6 +94,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 0;
 }
 
 .placeholder {

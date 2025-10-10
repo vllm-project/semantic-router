@@ -4,6 +4,7 @@
   height: 100%;
   padding: 1rem;
   gap: 1rem;
+  overflow: hidden;
 }
 
 .header {
@@ -14,6 +15,7 @@
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  flex-shrink: 0;
 }
 
 .headerLeft {
@@ -71,6 +73,7 @@
   border-radius: var(--radius-lg);
   overflow: auto;
   padding: 1rem;
+  min-height: 0;
 }
 
 .loading {

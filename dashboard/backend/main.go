@@ -49,6 +49,15 @@ func newReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		if !forwardAuth {
 			r.Header.Del("Authorization")
 		}
+
+		// Log the proxied request for debugging
+		log.Printf("Proxying: %s %s -> %s://%s%s", r.Method, stripPrefix, targetURL.Scheme, targetURL.Host, p)
+	}
+
+	// Add error handler for proxy failures
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("Proxy error for %s: %v", r.URL.Path, err)
+		http.Error(w, fmt.Sprintf("Bad Gateway: %v", err), http.StatusBadGateway)
 	}
 
 	// Sanitize response headers for iframe embedding
@@ -87,8 +96,18 @@ func newReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 func staticFileServer(staticDir string) http.Handler {
 	fs := http.FileServer(http.Dir(staticDir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Serve index.html for root and for unknown routes (SPA)
+		// Never serve index.html for API or embedded proxy routes
+		// These should be handled by their respective handlers
 		p := r.URL.Path
+		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/embedded/") ||
+			strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||
+			strings.HasPrefix(p, "/avatar/") {
+			// These paths should have been handled by other handlers
+			// If we reach here, it means the proxy failed or route not found
+			http.Error(w, "Service not available", http.StatusBadGateway)
+			return
+		}
+
 		full := path.Join(staticDir, path.Clean(p))
 
 		// Check if file exists
@@ -143,32 +162,66 @@ func main() {
 		w.Write([]byte(`{"status":"healthy","service":"semantic-router-dashboard"}`))
 	})
 
-	// Static frontend
-	mux.Handle("/", staticFileServer(*staticDir)) // Router API proxy (forward Authorization)
+	// Router API proxy (forward Authorization) - MUST be registered before Grafana
+	var routerAPIProxy *httputil.ReverseProxy
 	if *routerAPI != "" {
 		rp, err := newReverseProxy(*routerAPI, "/api/router", true)
 		if err != nil {
 			log.Fatalf("router API proxy error: %v", err)
 		}
-		mux.Handle("/api/router", rp)
+		routerAPIProxy = rp
 		mux.Handle("/api/router/", rp)
+		log.Printf("Router API proxy configured: %s", *routerAPI)
 	}
 
-	// Router metrics passthrough (no rewrite, simple redirect/proxy)
-	mux.HandleFunc("/metrics/router", func(w http.ResponseWriter, r *http.Request) {
-		// Simple 302 redirect for now to let Prometheus UI open directly
-		http.Redirect(w, r, *routerMetrics, http.StatusTemporaryRedirect)
-	})
-
-	// Grafana proxy
+	// Grafana proxy and static assets
+	var grafanaStaticProxy *httputil.ReverseProxy
 	if *grafanaURL != "" {
 		gp, err := newReverseProxy(*grafanaURL, "/embedded/grafana", false)
 		if err != nil {
 			log.Fatalf("grafana proxy error: %v", err)
 		}
-		mux.Handle("/embedded/grafana", gp)
 		mux.Handle("/embedded/grafana/", gp)
+
+		// Proxy for Grafana static assets (no prefix stripping)
+		grafanaStaticProxy, _ = newReverseProxy(*grafanaURL, "", false)
+		mux.Handle("/public/", grafanaStaticProxy)
+		mux.Handle("/avatar/", grafanaStaticProxy)
+
+		log.Printf("Grafana proxy configured: %s", *grafanaURL)
+		log.Printf("Grafana static assets proxied: /public/, /avatar/")
+	} else {
+		mux.HandleFunc("/embedded/grafana/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"Grafana not configured","message":"TARGET_GRAFANA_URL environment variable is not set"}`))
+		})
+		log.Printf("Warning: Grafana URL not configured")
 	}
+
+	// Smart /api/ router: route to Router API or Grafana API based on path
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		// If path starts with /api/router/, use Router API proxy
+		if strings.HasPrefix(r.URL.Path, "/api/router/") && routerAPIProxy != nil {
+			routerAPIProxy.ServeHTTP(w, r)
+			return
+		}
+		// Otherwise, if Grafana is configured, proxy to Grafana API
+		if grafanaStaticProxy != nil {
+			grafanaStaticProxy.ServeHTTP(w, r)
+			return
+		}
+		// No handler available
+		http.Error(w, "Service not available", http.StatusBadGateway)
+	})
+
+	// Router metrics passthrough
+	mux.HandleFunc("/metrics/router", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, *routerMetrics, http.StatusTemporaryRedirect)
+	})
+
+	// Static frontend - MUST be registered last
+	mux.Handle("/", staticFileServer(*staticDir))
 
 	// Prometheus proxy (optional)
 	if *promURL != "" {
@@ -178,6 +231,14 @@ func main() {
 		}
 		mux.Handle("/embedded/prometheus", pp)
 		mux.Handle("/embedded/prometheus/", pp)
+		log.Printf("Prometheus proxy configured: %s", *promURL)
+	} else {
+		mux.HandleFunc("/embedded/prometheus/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"Prometheus not configured","message":"TARGET_PROMETHEUS_URL environment variable is not set"}`))
+		})
+		log.Printf("Warning: Prometheus URL not configured")
 	}
 
 	// Open WebUI proxy (optional)
@@ -188,6 +249,14 @@ func main() {
 		}
 		mux.Handle("/embedded/openwebui", op)
 		mux.Handle("/embedded/openwebui/", op)
+		log.Printf("Open WebUI proxy configured: %s", *openwebuiURL)
+	} else {
+		mux.HandleFunc("/embedded/openwebui/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"Open WebUI not configured","message":"TARGET_OPENWEBUI_URL environment variable is not set or empty"}`))
+		})
+		log.Printf("Info: Open WebUI not configured (optional)")
 	}
 
 	addr := ":" + *port
