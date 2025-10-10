@@ -72,7 +72,11 @@ Comprehensive observability with OpenTelemetry distributed tracing provides fine
 - **Routing Decisions**: Understand why specific models were selected
 - **OpenTelemetry Standard**: Industry-standard tracing with support for Jaeger, Tempo, and other OTLP backends
 
-See [Distributed Tracing Guide](https://vllm-semantic-router.com/docs/tutorials/observability/distributed-tracing/) for complete setup instructions.
+### Open WebUI Integration 💬
+
+To view the ***Chain-Of-Thought*** of the vLLM-SR's decision-making process, we have integrated with Open WebUI.
+
+![code](./website/static/img/chat.png)
 
 ## Documentation 📖
 
