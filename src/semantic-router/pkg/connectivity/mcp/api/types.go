@@ -12,8 +12,8 @@ package api
 
 // ClassifyRequest represents the arguments for the classify_text tool call
 type ClassifyRequest struct {
-	Text               string `json:"text"`                          // Text to classify
-	WithProbabilities  bool   `json:"with_probabilities,omitempty"`  // Request full probability distribution
+	Text              string `json:"text"`                         // Text to classify
+	WithProbabilities bool   `json:"with_probabilities,omitempty"` // Request full probability distribution
 }
 
 // ClassifyResponse represents the response from the classify_text MCP tool.
@@ -22,12 +22,13 @@ type ClassifyRequest struct {
 // results (class index and confidence) and optional routing information (model and use_reasoning).
 //
 // Example JSON:
-//   {
-//     "class": 3,
-//     "confidence": 0.85,
-//     "model": "openai/gpt-oss-20b",
-//     "use_reasoning": true
-//   }
+//
+//	{
+//	  "class": 3,
+//	  "confidence": 0.85,
+//	  "model": "openai/gpt-oss-20b",
+//	  "use_reasoning": true
+//	}
 type ClassifyResponse struct {
 	// Class is the 0-based index of the predicted category
 	Class int `json:"class"`
@@ -53,13 +54,14 @@ type ClassifyResponse struct {
 // "with_probabilities": true.
 //
 // Example JSON:
-//   {
-//     "class": 3,
-//     "confidence": 0.85,
-//     "probabilities": [0.05, 0.03, 0.07, 0.85, ...],
-//     "model": "openai/gpt-oss-20b",
-//     "use_reasoning": true
-//   }
+//
+//	{
+//	  "class": 3,
+//	  "confidence": 0.85,
+//	  "probabilities": [0.05, 0.03, 0.07, 0.85, ...],
+//	  "model": "openai/gpt-oss-20b",
+//	  "use_reasoning": true
+//	}
 type ClassifyWithProbabilitiesResponse struct {
 	// Class is the 0-based index of the predicted category
 	Class int `json:"class"`
@@ -84,9 +86,10 @@ type ClassifyWithProbabilitiesResponse struct {
 // The client calls this tool during initialization to discover which categories the server supports.
 //
 // Example JSON:
-//   {
-//     "categories": ["business", "law", "medical", "technical", "general"]
-//   }
+//
+//	{
+//	  "categories": ["business", "law", "medical", "technical", "general"]
+//	}
 type ListCategoriesResponse struct {
 	// Categories is the ordered list of category names.
 	// The index position in this array corresponds to the "class" index in ClassifyResponse.
@@ -96,4 +99,3 @@ type ListCategoriesResponse struct {
 	//   - class 2 = "medical"
 	Categories []string `json:"categories"`
 }
-
