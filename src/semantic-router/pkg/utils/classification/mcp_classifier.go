@@ -23,6 +23,15 @@ const (
 	DefaultMCPThreshold = 0.5
 )
 
+// MCPClassificationResult holds the classification result with routing information from MCP server
+type MCPClassificationResult struct {
+	Class        int
+	Confidence   float32
+	CategoryName string
+	Model        string // Model recommended by MCP server
+	UseReasoning *bool  // Whether to use reasoning (nil means use default)
+}
+
 // MCPCategoryInitializer initializes MCP connection for category classification
 type MCPCategoryInitializer interface {
 	Init(cfg *config.RouterConfig) error
@@ -33,6 +42,7 @@ type MCPCategoryInitializer interface {
 type MCPCategoryInference interface {
 	Classify(ctx context.Context, text string) (candle_binding.ClassResult, error)
 	ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error)
+	ListCategories(ctx context.Context) (*CategoryMapping, error)
 }
 
 // MCPCategoryClassifier implements both MCPCategoryInitializer and MCPCategoryInference
@@ -137,10 +147,12 @@ func (m *MCPCategoryClassifier) Classify(ctx context.Context, text string) (cand
 		return candle_binding.ClassResult{}, fmt.Errorf("MCP tool returned non-text content")
 	}
 
-	// Parse JSON response: {"class": int, "confidence": float}
+	// Parse JSON response: {"class": int, "confidence": float, "model": str, "use_reasoning": bool}
 	var response struct {
-		Class      int     `json:"class"`
-		Confidence float32 `json:"confidence"`
+		Class        int     `json:"class"`
+		Confidence   float32 `json:"confidence"`
+		Model        string  `json:"model,omitempty"`
+		UseReasoning *bool   `json:"use_reasoning,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
 		return candle_binding.ClassResult{}, fmt.Errorf("failed to parse MCP response: %w", err)
@@ -189,11 +201,13 @@ func (m *MCPCategoryClassifier) ClassifyWithProbabilities(ctx context.Context, t
 		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("MCP tool returned non-text content")
 	}
 
-	// Parse JSON response: {"class": int, "confidence": float, "probabilities": []float}
+	// Parse JSON response: {"class": int, "confidence": float, "probabilities": []float, "model": str, "use_reasoning": bool}
 	var response struct {
 		Class         int       `json:"class"`
 		Confidence    float32   `json:"confidence"`
 		Probabilities []float32 `json:"probabilities"`
+		Model         string    `json:"model,omitempty"`
+		UseReasoning  *bool     `json:"use_reasoning,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
 		return candle_binding.ClassResultWithProbs{}, fmt.Errorf("failed to parse MCP response: %w", err)
@@ -204,6 +218,60 @@ func (m *MCPCategoryClassifier) ClassifyWithProbabilities(ctx context.Context, t
 		Confidence:    response.Confidence,
 		Probabilities: response.Probabilities,
 	}, nil
+}
+
+// ListCategories retrieves the category mapping from the MCP server
+func (m *MCPCategoryClassifier) ListCategories(ctx context.Context) (*CategoryMapping, error) {
+	if m.client == nil {
+		return nil, fmt.Errorf("MCP client not initialized")
+	}
+
+	// Call the list_categories tool
+	result, err := m.client.CallTool(ctx, "list_categories", map[string]interface{}{})
+	if err != nil {
+		return nil, fmt.Errorf("MCP list_categories call failed: %w", err)
+	}
+
+	// Check for errors in result
+	if result.IsError {
+		return nil, fmt.Errorf("MCP tool returned error: %v", result.Content)
+	}
+
+	// Parse response from first content block
+	if len(result.Content) == 0 {
+		return nil, fmt.Errorf("MCP tool returned empty content")
+	}
+
+	// Extract text content
+	var responseText string
+	firstContent := result.Content[0]
+	if textContent, ok := mcp.AsTextContent(firstContent); ok {
+		responseText = textContent.Text
+	} else {
+		return nil, fmt.Errorf("MCP tool returned non-text content")
+	}
+
+	// Parse JSON response: {"categories": ["cat1", "cat2", ...]}
+	var response struct {
+		Categories []string `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
+		return nil, fmt.Errorf("failed to parse MCP categories response: %w", err)
+	}
+
+	// Build CategoryMapping from the list
+	mapping := &CategoryMapping{
+		CategoryToIdx: make(map[string]int),
+		IdxToCategory: make(map[string]string),
+	}
+
+	for idx, category := range response.Categories {
+		mapping.CategoryToIdx[category] = idx
+		mapping.IdxToCategory[fmt.Sprintf("%d", idx)] = category
+	}
+
+	observability.Infof("Loaded %d categories from MCP server: %v", len(response.Categories), response.Categories)
+	return mapping, nil
 }
 
 // createMCPCategoryInitializer creates an MCP category initializer
@@ -239,18 +307,51 @@ func (c *Classifier) initializeMCPCategoryClassifier() error {
 		return fmt.Errorf("failed to initialize MCP category classifier: %w", err)
 	}
 
+	// If no in-tree category model is configured and no category mapping exists,
+	// load categories from the MCP server
+	if c.Config.Classifier.CategoryModel.ModelID == "" && c.CategoryMapping == nil {
+		observability.Infof("Loading category mapping from MCP server...")
+
+		// Create a context with timeout for the list_categories call
+		ctx := context.Background()
+		if c.Config.Classifier.MCPCategoryModel.TimeoutSeconds > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.Classifier.MCPCategoryModel.TimeoutSeconds)*time.Second)
+			defer cancel()
+		}
+
+		// Get categories from MCP server
+		categoryMapping, err := c.mcpCategoryInference.ListCategories(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to load categories from MCP server: %w", err)
+		}
+
+		// Store the category mapping
+		c.CategoryMapping = categoryMapping
+		observability.Infof("Successfully loaded %d categories from MCP server", c.CategoryMapping.GetCategoryCount())
+	}
+
 	observability.Infof("Successfully initialized MCP category classifier")
 	return nil
 }
 
 // classifyCategoryMCP performs category classification using MCP
 func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
+	result, err := c.classifyCategoryMCPWithRouting(text)
+	if err != nil {
+		return "", 0.0, err
+	}
+	return result.CategoryName, float64(result.Confidence), nil
+}
+
+// classifyCategoryMCPWithRouting performs category classification using MCP and returns routing information
+func (c *Classifier) classifyCategoryMCPWithRouting(text string) (*MCPClassificationResult, error) {
 	if !c.IsMCPCategoryEnabled() {
-		return "", 0.0, fmt.Errorf("MCP category classification is not properly configured")
+		return nil, fmt.Errorf("MCP category classification is not properly configured")
 	}
 
 	if c.mcpCategoryInference == nil {
-		return "", 0.0, fmt.Errorf("MCP category inference is not initialized")
+		return nil, fmt.Errorf("MCP category inference is not initialized")
 	}
 
 	// Create context with timeout
@@ -261,16 +362,57 @@ func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
 		defer cancel()
 	}
 
-	// Classify via MCP
+	// Classify via MCP - need to call the raw client to get model/reasoning info
 	start := time.Now()
-	result, err := c.mcpCategoryInference.Classify(ctx, text)
+
+	// Get MCP classifier to access raw response
+	mcpClassifier, ok := c.mcpCategoryInference.(*MCPCategoryClassifier)
+	if !ok {
+		return nil, fmt.Errorf("MCP category inference is not MCPCategoryClassifier type")
+	}
+
+	// Call MCP tool directly to get full response
+	arguments := map[string]interface{}{
+		"text": text,
+	}
+
+	mcpResult, err := mcpClassifier.client.CallTool(ctx, mcpClassifier.toolName, arguments)
 	metrics.RecordClassifierLatency("category_mcp", time.Since(start).Seconds())
 
 	if err != nil {
-		return "", 0.0, fmt.Errorf("MCP classification error: %w", err)
+		return nil, fmt.Errorf("MCP tool call failed: %w", err)
 	}
 
-	observability.Infof("MCP classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
+	if mcpResult.IsError {
+		return nil, fmt.Errorf("MCP tool returned error: %v", mcpResult.Content)
+	}
+
+	if len(mcpResult.Content) == 0 {
+		return nil, fmt.Errorf("MCP tool returned empty content")
+	}
+
+	// Extract text content
+	var responseText string
+	firstContent := mcpResult.Content[0]
+	if textContent, ok := mcp.AsTextContent(firstContent); ok {
+		responseText = textContent.Text
+	} else {
+		return nil, fmt.Errorf("MCP tool returned non-text content")
+	}
+
+	// Parse JSON response with routing information
+	var response struct {
+		Class        int     `json:"class"`
+		Confidence   float32 `json:"confidence"`
+		Model        string  `json:"model,omitempty"`
+		UseReasoning *bool   `json:"use_reasoning,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
+		return nil, fmt.Errorf("failed to parse MCP response: %w", err)
+	}
+
+	observability.Infof("MCP classification result: class=%d, confidence=%.4f, model=%s, use_reasoning=%v",
+		response.Class, response.Confidence, response.Model, response.UseReasoning)
 
 	// Check threshold
 	threshold := c.Config.Classifier.MCPCategoryModel.Threshold
@@ -278,29 +420,41 @@ func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
 		threshold = DefaultMCPThreshold
 	}
 
-	if result.Confidence < threshold {
+	if response.Confidence < threshold {
 		observability.Infof("MCP classification confidence (%.4f) below threshold (%.4f)",
-			result.Confidence, threshold)
-		return "", float64(result.Confidence), nil
+			response.Confidence, threshold)
+		return &MCPClassificationResult{
+			Class:        response.Class,
+			Confidence:   response.Confidence,
+			Model:        response.Model,
+			UseReasoning: response.UseReasoning,
+		}, nil
 	}
 
 	// Map class index to category name
 	var categoryName string
 	if c.CategoryMapping != nil {
-		name, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
+		name, ok := c.CategoryMapping.GetCategoryFromIndex(response.Class)
 		if ok {
 			categoryName = c.translateMMLUToGeneric(name)
 		} else {
-			categoryName = fmt.Sprintf("category_%d", result.Class)
+			categoryName = fmt.Sprintf("category_%d", response.Class)
 		}
 	} else {
-		categoryName = fmt.Sprintf("category_%d", result.Class)
+		categoryName = fmt.Sprintf("category_%d", response.Class)
 	}
 
 	metrics.RecordCategoryClassification(categoryName)
-	observability.Infof("MCP classified as category: %s (class=%d)", categoryName, result.Class)
+	observability.Infof("MCP classified as category: %s (class=%d), routing: model=%s, reasoning=%v",
+		categoryName, response.Class, response.Model, response.UseReasoning)
 
-	return categoryName, float64(result.Confidence), nil
+	return &MCPClassificationResult{
+		Class:        response.Class,
+		Confidence:   response.Confidence,
+		CategoryName: categoryName,
+		Model:        response.Model,
+		UseReasoning: response.UseReasoning,
+	}, nil
 }
 
 // classifyCategoryWithEntropyMCP performs category classification with entropy using MCP

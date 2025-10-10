@@ -83,7 +83,19 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 func createLegacyClassifier(config *config.RouterConfig) (*classification.Classifier, error) {
 	// Load category mapping
 	var categoryMapping *classification.CategoryMapping
-	if config.Classifier.CategoryModel.CategoryMappingPath != "" {
+
+	// Check if we should load categories from MCP server
+	useMCPCategories := config.Classifier.CategoryModel.ModelID == "" &&
+		config.Classifier.MCPCategoryModel.Enabled &&
+		config.Classifier.MCPCategoryModel.ToolName != ""
+
+	if useMCPCategories {
+		// Categories will be loaded from MCP server during initialization
+		observability.Infof("Category mapping will be loaded from MCP server")
+		// Create empty mapping initially - will be populated during initialization
+		categoryMapping = nil
+	} else if config.Classifier.CategoryModel.CategoryMappingPath != "" {
+		// Load from file as usual
 		var err error
 		categoryMapping, err = classification.LoadCategoryMapping(config.Classifier.CategoryModel.CategoryMappingPath)
 		if err != nil {

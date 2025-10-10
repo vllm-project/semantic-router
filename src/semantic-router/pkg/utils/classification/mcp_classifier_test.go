@@ -215,7 +215,7 @@ var _ = Describe("MCP Category Classifier", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 2, "confidence": 0.95}`,
+							Text: `{"class": 2, "confidence": 0.95, "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
 						},
 					},
 				}
@@ -223,6 +223,24 @@ var _ = Describe("MCP Category Classifier", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result.Class).To(Equal(2))
 				Expect(result.Confidence).To(BeNumerically("~", 0.95, 0.001))
+			})
+		})
+
+		Context("when MCP tool returns classification with routing info", func() {
+			It("should parse model and use_reasoning fields", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `{"class": 1, "confidence": 0.85, "model": "openai/gpt-oss-20b", "use_reasoning": false}`,
+						},
+					},
+				}
+				result, err := mcpClassifier.Classify(context.Background(), "test text")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.Class).To(Equal(1))
+				Expect(result.Confidence).To(BeNumerically("~", 0.85, 0.001))
 			})
 		})
 
@@ -266,7 +284,7 @@ var _ = Describe("MCP Category Classifier", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 1, "confidence": 0.85, "probabilities": [0.10, 0.85, 0.05]}`,
+							Text: `{"class": 1, "confidence": 0.85, "probabilities": [0.10, 0.85, 0.05], "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
 						},
 					},
 				}
@@ -278,6 +296,94 @@ var _ = Describe("MCP Category Classifier", func() {
 				Expect(result.Probabilities[0]).To(BeNumerically("~", 0.10, 0.001))
 				Expect(result.Probabilities[1]).To(BeNumerically("~", 0.85, 0.001))
 				Expect(result.Probabilities[2]).To(BeNumerically("~", 0.05, 0.001))
+			})
+		})
+	})
+
+	Describe("ListCategories", func() {
+		BeforeEach(func() {
+			mcpClassifier.client = mockClient
+		})
+
+		Context("when client is not initialized", func() {
+			It("should return error", func() {
+				mcpClassifier.client = nil
+				_, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not initialized"))
+			})
+		})
+
+		Context("when MCP tool returns valid categories", func() {
+			It("should return category mapping", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `{"categories": ["math", "science", "technology", "history", "general"]}`,
+						},
+					},
+				}
+				mapping, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mapping).ToNot(BeNil())
+				Expect(mapping.CategoryToIdx).To(HaveLen(5))
+				Expect(mapping.CategoryToIdx["math"]).To(Equal(0))
+				Expect(mapping.CategoryToIdx["science"]).To(Equal(1))
+				Expect(mapping.CategoryToIdx["technology"]).To(Equal(2))
+				Expect(mapping.CategoryToIdx["history"]).To(Equal(3))
+				Expect(mapping.CategoryToIdx["general"]).To(Equal(4))
+				Expect(mapping.IdxToCategory["0"]).To(Equal("math"))
+				Expect(mapping.IdxToCategory["4"]).To(Equal("general"))
+			})
+		})
+
+		Context("when MCP tool returns error", func() {
+			It("should return error", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{mcp.TextContent{Type: "text", Text: "error loading categories"}},
+				}
+				_, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("returned error"))
+			})
+		})
+
+		Context("when MCP tool returns invalid JSON", func() {
+			It("should return error", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `invalid json`,
+						},
+					},
+				}
+				_, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to parse"))
+			})
+		})
+
+		Context("when MCP tool returns empty categories", func() {
+			It("should return empty mapping", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `{"categories": []}`,
+						},
+					},
+				}
+				mapping, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mapping).ToNot(BeNil())
+				Expect(mapping.CategoryToIdx).To(HaveLen(0))
+				Expect(mapping.IdxToCategory).To(HaveLen(0))
 			})
 		})
 	})
@@ -352,7 +458,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 2, "confidence": 0.95}`,
+							Text: `{"class": 2, "confidence": 0.95, "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
 						},
 					},
 				}
@@ -371,7 +477,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 1, "confidence": 0.3}`,
+							Text: `{"class": 1, "confidence": 0.3, "model": "openai/gpt-oss-20b", "use_reasoning": false}`,
 						},
 					},
 				}
@@ -390,7 +496,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 99, "confidence": 0.85}`,
+							Text: `{"class": 99, "confidence": 0.85, "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
 						},
 					},
 				}
@@ -408,7 +514,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 
 				_, _, err := classifier.classifyCategoryMCP("test text")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("MCP classification error"))
+				Expect(err.Error()).To(ContainSubstring("MCP tool call failed"))
 			})
 		})
 	})
@@ -429,7 +535,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 2, "confidence": 0.95, "probabilities": [0.02, 0.03, 0.95]}`,
+							Text: `{"class": 2, "confidence": 0.95, "probabilities": [0.02, 0.03, 0.95], "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
 						},
 					},
 				}
@@ -449,7 +555,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: `{"class": 0, "confidence": 0.3, "probabilities": [0.3, 0.35, 0.35]}`,
+							Text: `{"class": 0, "confidence": 0.3, "probabilities": [0.3, 0.35, 0.35], "model": "openai/gpt-oss-20b", "use_reasoning": false}`,
 						},
 					},
 				}

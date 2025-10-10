@@ -115,7 +115,9 @@ type ClientOptions struct {
 	ToolFilter     ToolFilter `json:"toolFilter"`
 }
 
-// TransportType represents the transport type
+// TransportType represents the transport type for MCP communication.
+// Supported values: "stdio" for stdin/stdout and "streamable-http" for HTTP transport.
+// Note: "http" is also accepted as an alias for "streamable-http" for convenience.
 type TransportType string
 
 const (

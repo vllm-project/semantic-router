@@ -1,17 +1,20 @@
-# Example Configuration for MCP-Based Category Classifier
+# Example Configuration for MCP-Based Category Classifier (HTTP Transport)
 #
 # This configuration demonstrates how to use an external MCP (Model Context Protocol)
-# service for category classification instead of the built-in Candle/ModernBERT models.
+# service via HTTP for category classification instead of the built-in Candle/ModernBERT models.
 #
 # Use cases:
-# - Offload classification to a remote service
+# - Offload classification to a remote HTTP service
 # - Use custom classification models not supported in-tree
 # - Scale classification independently from the router
-# - Integrate with existing ML infrastructure
+# - Integrate with existing ML infrastructure via REST API
+#
+# Note: This example uses HTTP transport. The MCP server should expose an HTTP endpoint
+# that implements the MCP protocol (e.g., http://localhost:8080/mcp)
 
 # BERT model for semantic caching and tool selection
 bert_model:
-  model_id: "models/all-MiniLM-L6-v2"
+  model_id: "sentence-transformers/all-MiniLM-L6-v2"
   threshold: 0.85
   use_cpu: true
 
@@ -20,156 +23,85 @@ classifier:
   # Disable in-tree category classifier (leave model_id empty)
   category_model:
     model_id: ""  # Empty = disabled
-    threshold: 0.6
-    use_cpu: true
-    use_modernbert: false
-    category_mapping_path: ""
 
-  # Enable MCP-based category classifier
+  # Enable MCP-based category classifier (HTTP transport only)
   mcp_category_model:
     enabled: true                    # Enable MCP classifier
-    transport_type: "stdio"          # "stdio" or "http"
+    transport_type: "http"           # HTTP transport
+    url: "http://localhost:8090/mcp" # MCP server endpoint
     
-    # For stdio transport: run a local Python MCP server
-    command: "python"
-    args: ["-m", "mcp_category_classifier"]
-    env:
-      PYTHONPATH: "/opt/ml/models"
-      MODEL_PATH: "/opt/ml/models/category_classifier"
-      LOG_LEVEL: "INFO"
-    
-    # For http transport: use this instead
-    # transport_type: "http"
-    # url: "http://localhost:8080/mcp"
-    
-    tool_name: "classify_text"      # MCP tool name to call
+    tool_name: "classify_text"       # MCP tool name to call
     threshold: 0.6                   # Confidence threshold
     timeout_seconds: 30              # Request timeout
 
-  # PII model configuration (unchanged)
-  pii_model:
-    model_id: "models/pii_classifier"
-    threshold: 0.7
-    use_cpu: true
-    pii_mapping_path: "models/pii_classifier/pii_type_mapping.json"
-
-# Prompt guard configuration (unchanged)
-prompt_guard:
-  enabled: true
-  model_id: "models/jailbreak_classifier"
-  threshold: 0.8
-  use_cpu: true
-  use_modernbert: true
-  jailbreak_mapping_path: "models/jailbreak_classifier/jailbreak_mapping.json"
-
 # Categories for routing queries
-categories:
-  - name: "math"
-    description: "Mathematical problems, equations, calculus, algebra, statistics"
-    model_scores:
-      - model: "deepseek/deepseek-r1:70b"
-        score: 0.95
-        use_reasoning: true
-      - model: "qwen/qwen3-235b"
-        score: 0.90
-        use_reasoning: true
-    mmlu_categories:
-      - "mathematics"
-      - "statistics"
-
-  - name: "coding"
-    description: "Programming, software development, debugging, algorithms"
-    model_scores:
-      - model: "deepseek/deepseek-r1-coder:33b"
-        score: 0.95
-        use_reasoning: true
-      - model: "meta/llama3.1-70b"
-        score: 0.85
-        use_reasoning: false
-    mmlu_categories:
-      - "computer_science"
-      - "engineering"
-
-  - name: "general"
-    description: "General knowledge, conversation, misc queries"
-    model_scores:
-      - model: "meta/llama3.1-70b"
-        score: 0.90
-        use_reasoning: false
-      - model: "qwen/qwen3-235b"
-        score: 0.85
-        use_reasoning: false
+# 
+# Categories are automatically loaded from MCP server via 'list_categories' tool.
+# The MCP server controls BOTH classification AND routing decisions.
+#
+# How it works:
+#   1. Router connects to MCP server at startup
+#   2. Calls 'list_categories' tool: MCP returns {"categories": ["business", "law", ...]}
+#   3. For each request, calls 'classify_text' tool which returns:
+#      {
+#        "class": 3,
+#        "confidence": 0.85,
+#        "model": "openai/gpt-oss-20b",        # MCP decides which model to use
+#        "use_reasoning": true                  # MCP decides whether to use reasoning
+#      }
+#   4. Router uses the model and reasoning settings from MCP response
+#
+# BENEFITS:
+#   - MCP server makes intelligent routing decisions per query
+#   - No hardcoded routing rules needed in config
+#   - MCP can adapt routing based on query complexity, content, etc.
+#   - Centralized routing logic in MCP server
+#
+# FALLBACK:
+#   - If MCP doesn't return model/use_reasoning, uses default_model below
+#   - Can also add category-specific overrides here if needed
+#
+categories: []
 
 # Default model to use when category can't be determined
-default_model: "meta/llama3.1-70b"
+default_model: openai/gpt-oss-20b
 
 # vLLM endpoints configuration
 vllm_endpoints:
-  - name: "deepseek-endpoint"
-    address: "10.0.1.10"
+  - name: endpoint1
+    address: 127.0.0.1
     port: 8000
     models:
-      - "deepseek/deepseek-r1:70b"
-      - "deepseek/deepseek-r1-coder:33b"
-    weight: 100
-
-  - name: "qwen-endpoint"
-    address: "10.0.1.11"
-    port: 8000
-    models:
-      - "qwen/qwen3-235b"
-    weight: 100
-
-  - name: "llama-endpoint"
-    address: "10.0.1.12"
-    port: 8000
-    models:
-      - "meta/llama3.1-70b"
-    weight: 100
-
-# Semantic cache configuration (optional)
-semantic_cache:
-  enabled: true
-  backend_type: "in-memory"
-  similarity_threshold: 0.90
-  max_entries: 1000
-  ttl_seconds: 3600
-  eviction_policy: "lru"
+      - openai/gpt-oss-20b
+    weight: 1
+    health_check_path: /health
 
 # Model-specific configuration
 model_config:
-  "deepseek/deepseek-r1:70b":
-    reasoning_family: "deepseek"
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: []
-
-  "deepseek/deepseek-r1-coder:33b":
-    reasoning_family: "deepseek"
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: []
-
-  "qwen/qwen3-235b":
-    reasoning_family: "qwen3"
-    pii_policy:
-      allow_by_default: true
-
-  "meta/llama3.1-70b":
+  openai/gpt-oss-20b:
+    reasoning_family: gpt-oss
+    preferred_endpoints:
+      - endpoint1
     pii_policy:
       allow_by_default: true
 
 # Reasoning family configurations
 reasoning_families:
   deepseek:
-    type: "chat_template_kwargs"
-    parameter: "thinking"
+    type: chat_template_kwargs
+    parameter: thinking
   qwen3:
-    type: "reasoning_effort"
-    parameter: "reasoning_effort"
+    type: chat_template_kwargs
+    parameter: enable_thinking
   gpt-oss:
-    type: "chat_template_kwargs"
-    parameter: "enable_thinking"
+    type: reasoning_effort
+    parameter: reasoning_effort
+  gpt:
+    type: reasoning_effort
+    parameter: reasoning_effort
+
+# Default reasoning effort level
+default_reasoning_effort: high
 
 # Tools configuration (optional)
 tools:
@@ -182,9 +114,37 @@ tools:
 # API configuration
 api:
   batch_classification:
+    max_batch_size: 100
+    concurrency_threshold: 5
+    max_concurrency: 8
     metrics:
       enabled: true
+      detailed_goroutine_tracking: true
+      high_resolution_timing: false
       sample_rate: 1.0
+      duration_buckets:
+        - 0.001
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+        - 30
+      size_buckets:
+        - 1
+        - 2
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+        - 200
 
 # Observability configuration
 observability:

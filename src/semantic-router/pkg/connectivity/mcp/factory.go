@@ -20,7 +20,7 @@ func (f *ClientFactory) CreateClient(name string, config ClientConfig) (MCPClien
 	switch transportType {
 	case string(TransportStdio):
 		return NewStdioClient(name, config), nil
-	case string(TransportStreamableHTTP):
+	case string(TransportStreamableHTTP), "http":
 		return NewHTTPClient(name, config), nil
 	default:
 		return nil, fmt.Errorf("unsupported transport type: %s", transportType)
@@ -92,7 +92,14 @@ func validateConfig(config ClientConfig) error {
 			return fmt.Errorf("URL is required for %s transport", transportType)
 		}
 	default:
-		return fmt.Errorf("unsupported transport type: %s", transportType)
+		// Also accept "http" as an alias for "streamable-http"
+		if transportType == "http" {
+			if config.URL == "" {
+				return fmt.Errorf("URL is required for http transport")
+			}
+		} else {
+			return fmt.Errorf("unsupported transport type: %s", transportType)
+		}
 	}
 
 	return nil
