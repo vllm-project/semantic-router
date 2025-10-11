@@ -114,37 +114,61 @@
   min-height: 0;
 }
 
-.structuredView {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+.mainLayout {
+  display: flex;
   gap: 1.5rem;
   padding: 0.5rem;
-  align-items: start;
+  height: 100%;
 }
 
-/* Make Categories section span all columns */
+.contentArea {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.sectionPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.observabilityInfo {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.observabilityInfo p {
+  margin: 0.5rem 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.observabilityInfo code {
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(99, 102, 241, 0.1);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  font-size: 0.85rem;
+}
+
+.observabilityInfo strong {
+  color: var(--color-text);
+}
+
+/* Make Categories section span all columns when in full view */
 .categoriesSection {
   grid-column: 1 / -1;
 }
 
-/* Three column layout for large screens */
-@media (min-width: 1800px) {
-  .structuredView {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Two column layout for medium screens */
-@media (min-width: 1200px) and (max-width: 1799px) {
-  .structuredView {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* Single column on smaller screens */
+/* Responsive layout */
 @media (max-width: 1199px) {
-  .structuredView {
-    grid-template-columns: 1fr;
+  .mainLayout {
+    flex-direction: column;
   }
 }
 
@@ -316,6 +340,21 @@
 .badgehigh {
   background-color: rgba(239, 68, 68, 0.1);
   color: #dc2626;
+}
+
+.badgedevelopment {
+  background-color: rgba(234, 179, 8, 0.1);
+  color: #ca8a04;
+}
+
+.badgeproduction {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.badgetesting {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
 }
 
 .statusBadge {
@@ -667,5 +706,106 @@
 }
 
 .featureBody {
+  padding: 1rem 1.25rem;
+}
+
+/* Model Config Grid */
+.modelConfigGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.modelConfigCard {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.modelConfigCard:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  transform: translateY(-2px);
+}
+
+.modelConfigHeader {
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modelConfigName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+.modelConfigBody {
+  padding: 1rem 1.25rem;
+}
+
+.endpointTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.endpointTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  background-color: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.badgeInfo {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+/* Reasoning Families Grid */
+.reasoningFamiliesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.reasoningFamilyCard {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.reasoningFamilyCard:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  transform: translateY(-2px);
+}
+
+.reasoningFamilyHeader {
+  padding: 0.875rem 1.25rem;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reasoningFamilyName {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reasoningFamilyBody {
   padding: 1rem 1.25rem;
 }
