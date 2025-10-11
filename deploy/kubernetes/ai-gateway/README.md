@@ -40,7 +40,7 @@ Deploy the semantic router service with all required components:
 
 ```bash
 # Deploy semantic router using Kustomize
-kubectl apply -k deploy/kubernetes/
+kubectl apply -k deploy/kubernetes/base/
 
 # Wait for deployment to be ready (this may take several minutes for model downloads)
 kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semantic-router-system --timeout=600s
@@ -250,7 +250,7 @@ kubectl delete -f deploy/kubernetes/ai-gateway/inference-pool
 kubectl delete -f deploy/kubernetes/ai-gateway/configuration
 
 # Remove semantic router
-kubectl delete -k deploy/kubernetes/
+kubectl delete -k deploy/kubernetes/base/
 
 # Remove AI gateway
 helm uninstall aieg -n envoy-ai-gateway-system

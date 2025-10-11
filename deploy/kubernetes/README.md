@@ -26,7 +26,7 @@ The deployment consists of:
 ### Standard Kubernetes Deployment
 
 ```bash
-kubectl apply -k deploy/kubernetes/
+kubectl apply -k deploy/kubernetes/base/
 
 # Check deployment status
 kubectl get pods -l app=semantic-router -n semantic-router
@@ -83,7 +83,7 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 **Step 2: Deploy the application**
 
 ```bash
-kubectl apply -k deploy/kubernetes/
+kubectl apply -k deploy/kubernetes/base/
 
 # Wait for deployment to be ready
 kubectl wait --for=condition=Available deployment/semantic-router -n semantic-router --timeout=600s
@@ -189,7 +189,7 @@ Or using kubectl/kind directly:
 
 ```bash
 # Remove deployment
-kubectl delete -k deploy/kubernetes/
+kubectl delete -k deploy/kubernetes/base/
 
 # Delete the kind cluster
 kind delete cluster --name semantic-router-cluster
@@ -305,7 +305,7 @@ Edit the `resources` section in `deployment.yaml` accordingly.
 
 ## Files Overview
 
-### Kubernetes Manifests (`deploy/kubernetes/`)
+### Kubernetes Manifests (`deploy/kubernetes/base`)
 
 - `deployment.yaml` - Main application deployment with optimized resource settings
 - `service.yaml` - Services for gRPC, HTTP API, and metrics
