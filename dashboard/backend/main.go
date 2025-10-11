@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -9,7 +10,10 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
+
+	yaml "gopkg.in/yaml.v3"
 )
 
 // env returns the env var or default
@@ -18,6 +22,41 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// configHandler reads and serves the config.yaml file as JSON
+func configHandler(configPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only allow GET requests
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Read the config file
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			log.Printf("Error reading config file: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to read config file: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Parse YAML
+		var config interface{}
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			log.Printf("Error parsing config YAML: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to parse config: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Convert to JSON and send response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(config); err != nil {
+			log.Printf("Error encoding config to JSON: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to encode config: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
 }
 
 // newReverseProxy creates a reverse proxy to targetBase and strips the given prefix from the incoming path
@@ -143,6 +182,7 @@ func main() {
 	// Flags/env for configuration
 	port := flag.String("port", env("DASHBOARD_PORT", "8700"), "dashboard port")
 	staticDir := flag.String("static", env("DASHBOARD_STATIC_DIR", "../frontend"), "static assets directory")
+	configFile := flag.String("config", env("ROUTER_CONFIG_PATH", "../../config/config.yaml"), "path to config.yaml")
 
 	// Upstream targets
 	grafanaURL := flag.String("grafana", env("TARGET_GRAFANA_URL", ""), "Grafana base URL")
@@ -153,6 +193,13 @@ func main() {
 
 	flag.Parse()
 
+	// Resolve config file path to absolute path
+	absConfigPath, err := filepath.Abs(*configFile)
+	if err != nil {
+		log.Fatalf("Failed to resolve config path: %v", err)
+	}
+	log.Printf("Config file path: %s", absConfigPath)
+
 	mux := http.NewServeMux()
 
 	// Health check endpoint
@@ -161,6 +208,10 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"healthy","service":"semantic-router-dashboard"}`))
 	})
+
+	// Config endpoint - serve the config.yaml as JSON
+	mux.HandleFunc("/api/router/config/all", configHandler(absConfigPath))
+	log.Printf("Config API endpoint registered: /api/router/config/all")
 
 	// Router API proxy (forward Authorization) - MUST be registered before Grafana
 	var routerAPIProxy *httputil.ReverseProxy
