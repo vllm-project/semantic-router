@@ -133,6 +133,22 @@ model_config:
     preferred_endpoints: ["endpoint1"]
 ```
 
+## Configuration Recipes (presets)
+
+We provide curated, versioned presets you can use directly or as a starting point:
+
+- Accuracy optimized: https://github.com/vllm-project/semantic-router/blob/main/config/config.recipe-accuracy.yaml
+- Token efficiency optimized: https://github.com/vllm-project/semantic-router/blob/main/config/config.recipe-token-efficiency.yaml
+- Latency optimized: https://github.com/vllm-project/semantic-router/blob/main/config/config.recipe-latency.yaml
+- Guide and usage: https://github.com/vllm-project/semantic-router/blob/main/config/RECIPES.md
+
+Quick usage:
+
+- Local: copy a recipe over config.yaml, then run
+  - cp config/config.recipe-accuracy.yaml config/config.yaml
+  - make run-router
+- Helm/Argo: reference the recipe file contents in your config map (examples are in the guide above).
+
 ## Key Configuration Sections
 
 ### Backend Endpoints
