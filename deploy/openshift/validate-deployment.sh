@@ -95,7 +95,7 @@ fi
 # Test 6: Check model-a loaded successfully
 log "INFO" "Test 6: Checking model-a loaded successfully..."
 if [[ -n "$POD_NAME" ]]; then
-    MODEL_STATUS=$(oc logs -n "$NAMESPACE" "$POD_NAME" -c model-a --tail=200 | grep -i "model loaded" | tail -1)
+    MODEL_STATUS=$(oc logs -n "$NAMESPACE" "$POD_NAME" -c model-a | grep -i "model loaded" | tail -1)
     if [[ -n "$MODEL_STATUS" ]]; then
         DEVICE=$(echo "$MODEL_STATUS" | grep -oE "(cuda|cpu)" || echo "unknown")
         log "PASS" "Model-A loaded successfully on $DEVICE"
@@ -107,7 +107,7 @@ fi
 # Test 7: Check model-b loaded successfully
 log "INFO" "Test 7: Checking model-b loaded successfully..."
 if [[ -n "$POD_NAME" ]]; then
-    MODEL_STATUS=$(oc logs -n "$NAMESPACE" "$POD_NAME" -c model-b --tail=200 | grep -i "model loaded" | tail -1)
+    MODEL_STATUS=$(oc logs -n "$NAMESPACE" "$POD_NAME" -c model-b | grep -i "model loaded" | tail -1)
     if [[ -n "$MODEL_STATUS" ]]; then
         DEVICE=$(echo "$MODEL_STATUS" | grep -oE "(cuda|cpu)" || echo "unknown")
         log "PASS" "Model-B loaded successfully on $DEVICE"
