@@ -78,8 +78,8 @@ class Pipeline:
         print(f"  Debug: {self.valves.debug}")
         print(f"  Timeout: {self.valves.timeout}s")
 
-        # Test if pipes() is being called
-        pipes_list = self.pipes()
+        # Test if pipelines() is being called
+        pipes_list = self.pipelines()
         print(f"\n📋 Available Pipes/Models:")
         for pipe in pipes_list:
             print(f"    - ID: {pipe['id']}")
@@ -102,6 +102,13 @@ class Pipeline:
         print(f"  Debug: {self.valves.debug}")
         print(f"  Timeout: {self.valves.timeout}s")
         print("=" * 80 + "\n")
+
+    def pipes(self) -> List[dict]:
+        """
+        Deprecated: manifold type uses pipelines() method instead of pipes()
+        The returned model list will be displayed in Open WebUI's model selector
+        """
+        return self.pipelines()
 
     def pipelines(self) -> List[dict]:
         """

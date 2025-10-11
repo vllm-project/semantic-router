@@ -129,3 +129,17 @@ results/
 
 # Claude Code configuration (should not be committed)
 CLAUDE.md
+
+# Dashboard frontend (React + TypeScript + Vite)
+dashboard/frontend/node_modules/
+dashboard/frontend/dist/
+dashboard/frontend/build/
+dashboard/frontend/.vite/
+dashboard/frontend/*.local
+
+# Dashboard backend build artifacts
+dashboard/backend/dashboard-backend
+dashboard/backend/dashboard-backend.exe
+
+# Keep old HTML backup for reference
+dashboard/frontend/index.html.old
