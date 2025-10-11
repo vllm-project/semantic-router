@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import styles from './PlaygroundPage.module.css'
 
 const PlaygroundPage: React.FC = () => {
-  const [openWebUIUrl, setOpenWebUIUrl] = useState('http://localhost:3000')
+  const [openWebUIUrl, setOpenWebUIUrl] = useState('http://localhost:3001')
   const [currentUrl, setCurrentUrl] = useState('')
   const [isEmbedMode, setIsEmbedMode] = useState(false)
 

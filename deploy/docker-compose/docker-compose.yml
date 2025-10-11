@@ -118,14 +118,34 @@ services:
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: openwebui
-    # Expose externally only if you want to access Open WebUI directly
     ports:
       - "3001:8080"
     environment:
       # Add any Open WebUI env here if needed (auth, providers, etc.)
       - WEBUI_NAME=Open WebUI
+      # Route Open WebUI's OpenAI-compatible calls through Pipelines by default
+      - OPENAI_API_BASE_URL=http://pipelines:9099
+      - OPENAI_API_KEY=0p3n-w3bu!
     volumes:
       - openwebui-data:/app/backend/data
+    networks:
+      - semantic-network
+
+  # Open WebUI Pipelines server (executes Python pipelines)
+  pipelines:
+    image: ghcr.io/open-webui/pipelines:main
+    container_name: pipelines
+    # Optional: expose on host for debugging
+    # ports:
+    #   - "9099:9099"
+    environment:
+      # Allow pipelines to reach services running on host if ever required
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Persistent pipelines storage (auto-loaded on start)
+      - openwebui-pipelines:/app/pipelines
+      # Mount our vLLM Semantic Router pipeline
+      - ../../tools/openwebui-pipe/vllm_semantic_router_pipe.py:/app/pipelines/vllm_semantic_router_pipe.py:ro
     networks:
       - semantic-network
 
@@ -172,6 +192,8 @@ services:
         condition: service_started
       openwebui:
         condition: service_started
+      pipelines:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8700/healthz"]
       interval: 10s
@@ -192,3 +214,4 @@ volumes:
   prometheus-data:
   grafana-data:
   openwebui-data:
+  openwebui-pipelines:
