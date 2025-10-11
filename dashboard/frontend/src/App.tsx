@@ -69,7 +69,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/monitoring" replace />} />
+          <Route path="/" element={<Navigate to="/playground" replace />} />
           <Route path="/monitoring" element={<MonitoringPage />} />
           <Route path="/config" element={<ConfigPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />

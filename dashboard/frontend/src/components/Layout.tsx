@@ -27,20 +27,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <div className={styles.headerLeft}>
+      <aside className={styles.sidebar}>
+        <div className={styles.brand}>
           <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-          <h1 className={styles.title}>Semantic Router Dashboard</h1>
+          <span className={styles.brandText}>Semantic Router</span>
         </div>
         <nav className={styles.nav}>
           <NavLink
-            to="/monitoring"
+            to="/playground"
             className={({ isActive }) =>
               isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
             }
           >
-            <span className={styles.navIcon}>📊</span>
-            Monitoring
+            <span className={styles.navIcon}>🎮</span>
+            <span className={styles.navText}>Playground</span>
           </NavLink>
           <NavLink
             to="/config"
@@ -49,26 +49,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             }
           >
             <span className={styles.navIcon}>⚙️</span>
-            Config
+            <span className={styles.navText}>Configuration</span>
           </NavLink>
           <NavLink
-            to="/playground"
+            to="/monitoring"
             className={({ isActive }) =>
               isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
             }
           >
-            <span className={styles.navIcon}>🎮</span>
-            Playground
+            <span className={styles.navIcon}>📊</span>
+            <span className={styles.navText}>Monitoring</span>
           </NavLink>
         </nav>
-        <button
-          className={styles.themeToggle}
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
-        >
-          {theme === 'light' ? '🌙' : '☀️'}
-        </button>
-      </header>
+        <div className={styles.sidebarFooter}>
+          <button
+            className={styles.themeToggle}
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title="Toggle theme"
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+        </div>
+      </aside>
       <main className={styles.main}>{children}</main>
     </div>
   )
