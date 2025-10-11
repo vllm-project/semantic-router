@@ -85,7 +85,7 @@ Install the Custom Resource Definitions (CRDs) for managing inference pools:
 
 ```bash
 # Install Gateway API Inference Extension CRDs
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v0.5.1/manifests.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.0.1/manifests.yaml
 
 # Verify CRDs are installed
 kubectl get crd | grep inference
@@ -259,7 +259,7 @@ helm uninstall aieg -n envoy-ai-gateway-system
 helm uninstall eg -n envoy-gateway-system
 
 # Remove Gateway API CRDs (optional)
-kubectl delete -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v0.5.1/manifests.yaml
+kubectl delete -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.0.1/manifests.yaml
 
 # Delete kind cluster
 kind delete cluster --name semantic-router-cluster
