@@ -56,7 +56,7 @@ const PlaygroundPage: React.FC = () => {
               onChange={handleUrlChange}
               onKeyPress={handleKeyPress}
               className={styles.input}
-              placeholder="http://localhost:3000"
+              placeholder="http://localhost:3001"
             />
             <button onClick={handleApply} className={styles.button}>
               Load
@@ -73,12 +73,9 @@ const PlaygroundPage: React.FC = () => {
         )}
 
         <div className={styles.hints}>
-          <span className={styles.hint}>
-            🎮 Open WebUI Playground: Test your LLM models and semantic routing
-          </span>
-          <span className={styles.hint}>
-            💡 Embedded mode requires Open WebUI to be configured with proper CORS headers
-          </span>
+            <span className={styles.hint}>
+            🎮 Open WebUI Playground: Test your LLM models and semantic routing. 💡 Embedded mode requires Open WebUI to be configured with proper CORS headers.
+            </span>
         </div>
       </div>
 
