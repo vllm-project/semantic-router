@@ -1,0 +1,101 @@
+version: "2"
+
+run:
+  timeout: "5m"
+
+linters:
+
+  # enable specific linters
+  enable:
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - errorlint
+    - gocritic
+    - gosec
+    - importas
+    - misspell
+    - revive
+    - staticcheck
+    - testifylint
+    - unconvert
+  settings:
+    depguard:
+      rules:
+        Main:
+          deny:
+            - pkg: github.com/gogo/protobuf
+              desc: gogo/protobuf is deprecated, use golang/protobuf
+            - pkg: gopkg.in/yaml.v2
+              desc: use sigs.k8s.io/yaml instead
+            - pkg: gopkg.in/yaml.v3
+              desc: use sigs.k8s.io/yaml instead
+            - pkg: k8s.io/utils/pointer
+              desc: use k8s.io/utils/ptr instead
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+    importas:
+      # go module alias configuration.
+      alias:
+        - pkg: sigs.k8s.io/gateway-api/apis/v1
+          alias: gwapiv1
+      no-unaliased: true
+      no-extra-aliases: false
+    testifylint:
+      enable:
+        - bool-compare
+        - compares
+        - empty
+        - error-is-as
+        - error-nil
+        - expected-actual
+        - len
+        - require-error
+        - suite-dont-use-pkg
+        - suite-extra-assert-call
+      disable:
+        - float-compare
+        - go-require
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - godot
+        path: api
+      - linters:
+          - staticcheck
+        text: "SA1019:"
+      - linters:
+          - bodyclose
+        path: test/e2e
+    paths:
+      - examples$
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  # enable gofumpt and gci for formatting
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/vllm-project/semantic-router)
+  exclusions:
+    generated: lax
+    paths:
+      - examples$
+      - zz_generated
+  

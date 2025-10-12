@@ -2,6 +2,13 @@
 # = Everything For Golang   =
 # ======== golang.mk ========
 
+# Run go lint check for Go modules
+go-lint:
+	@$(LOG_TARGET)
+	@echo "Running golangci-lint for src/semantic-router..."
+	@cd src/semantic-router/ && golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
+	@echo "✅ src/semantic-router go module lint passed"
+
 # Run go vet for all Go modules
 vet:
 	@$(LOG_TARGET)
