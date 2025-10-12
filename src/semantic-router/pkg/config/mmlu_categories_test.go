@@ -3,7 +3,7 @@ package config_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )

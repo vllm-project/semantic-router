@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 // RouterConfig represents the main configuration for the LLM Router
