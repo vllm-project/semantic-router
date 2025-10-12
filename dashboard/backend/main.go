@@ -59,6 +59,83 @@ func configHandler(configPath string) http.HandlerFunc {
 	}
 }
 
+// updateConfigHandler updates the config.yaml file
+func updateConfigHandler(configPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only allow POST/PUT requests
+		if r.Method != http.MethodPost && r.Method != http.MethodPut {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Read the request body
+		var configData map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
+			log.Printf("Error decoding request body: %v", err)
+			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Convert to YAML
+		yamlData, err := yaml.Marshal(configData)
+		if err != nil {
+			log.Printf("Error marshaling config to YAML: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to convert config to YAML: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Write to file
+		if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
+			log.Printf("Error writing config file: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to write config file: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("Configuration updated successfully")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Configuration updated successfully"})
+	}
+}
+
+// toolsDBHandler reads and serves the tools_db.json file
+func toolsDBHandler(configDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only allow GET requests
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Construct the tools_db.json path
+		toolsDBPath := filepath.Join(configDir, "tools_db.json")
+
+		// Read the tools database file
+		data, err := os.ReadFile(toolsDBPath)
+		if err != nil {
+			log.Printf("Error reading tools_db.json: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to read tools database: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Parse JSON to validate it
+		var tools interface{}
+		if err := json.Unmarshal(data, &tools); err != nil {
+			log.Printf("Error parsing tools_db.json: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to parse tools database: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Send response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(tools); err != nil {
+			log.Printf("Error encoding tools to JSON: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to encode tools: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
 // newReverseProxy creates a reverse proxy to targetBase and strips the given prefix from the incoming path
 func newReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputil.ReverseProxy, error) {
 	targetURL, err := url.Parse(targetBase)
@@ -212,6 +289,15 @@ func main() {
 	// Config endpoint - serve the config.yaml as JSON
 	mux.HandleFunc("/api/router/config/all", configHandler(absConfigPath))
 	log.Printf("Config API endpoint registered: /api/router/config/all")
+
+	// Config update endpoint - update the config.yaml file
+	mux.HandleFunc("/api/router/config/update", updateConfigHandler(absConfigPath))
+	log.Printf("Config update API endpoint registered: /api/router/config/update")
+
+	// Tools DB endpoint - serve the tools_db.json
+	configDir := filepath.Dir(absConfigPath)
+	mux.HandleFunc("/api/tools-db", toolsDBHandler(configDir))
+	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
 	// Router API proxy (forward Authorization) - MUST be registered before Grafana
 	var routerAPIProxy *httputil.ReverseProxy
