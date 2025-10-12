@@ -528,8 +528,11 @@ prompt_guard:
 
 ### 4.3 System Architecture
 
-```mermaid
-graph TB
+import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
+
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={10.5}>
+
+{`graph TB
     Client[LLM Application<br/>OpenAI SDK]
 
     subgraph Main["Main Processing Flow"]
@@ -628,8 +631,8 @@ graph TB
     style DynamoRouter fill:#c8e6c9
     style SemanticCache fill:#fff9c4
     style KVBM fill:#fff9c4
-    style SL fill:#f5f5f5
-```
+    style SL fill:#f5f5f5`}
+</ZoomableMermaid>
 
 **Architecture Layers:**
 
