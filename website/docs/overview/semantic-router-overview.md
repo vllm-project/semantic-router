@@ -151,8 +151,10 @@ GPT-5 introduces a revolutionary **router-as-coordinator** architecture:
 
 **Operational Flow:**
 
-```mermaid
-sequenceDiagram
+import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
+
+<ZoomableMermaid title="Operational Flow" defaultZoom={5.5}>
+{`sequenceDiagram
     participant User
     participant Router as GPT-5 Router
     participant Math as Math Specialist
@@ -164,8 +166,8 @@ sequenceDiagram
     Router->>Router: Analyze query intent
     Router->>Math: Route to math specialist
     Math->>Router: Mathematical solution
-    Router->>User: Optimized response
-```
+    Router->>User: Optimized response`}
+</ZoomableMermaid>
 
 **Business Impact:**
 

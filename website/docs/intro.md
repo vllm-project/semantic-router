@@ -46,8 +46,10 @@ Our testing shows significant improvements in model accuracy through specialized
 
 ## 🛠️ Architecture Overview
 
-```mermaid
-graph TB
+import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
+
+<ZoomableMermaid title="Architecture Overview" defaultZoom={3.1}>
+{`graph TB
     Client[Client Request] --> Envoy[Envoy Proxy]
     Envoy --> Router[Semantic Router ExtProc]
     
@@ -74,8 +76,8 @@ graph TB
     Models --> Math[Math Model]
     Models --> Creative[Creative Model] 
     Models --> Code[Code Model]
-    Models --> General[General Model]
-```
+    Models --> General[General Model]`}
+</ZoomableMermaid>
 
 ## 🎯 Use Cases
 
