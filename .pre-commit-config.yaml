@@ -29,6 +29,7 @@ repos:
       entry: make go-lint
       language: system
       files: \.go$
+      pass_filenames: false
 
 # Markdown specific hooks
 - repo: local
