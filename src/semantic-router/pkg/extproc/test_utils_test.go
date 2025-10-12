@@ -227,8 +227,8 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	}
 
 	// Initialize the BERT model for similarity search
-	if err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); err != nil {
-		return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
+	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
 	// Create semantic cache

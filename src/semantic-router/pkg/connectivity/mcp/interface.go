@@ -51,7 +51,7 @@ func NewBaseClient(name string, config ClientConfig) *BaseClient {
 		name:      name,
 		config:    config,
 		connected: false,
-		logHandler: func(level LoggingLevel, message string) {
+		logHandler: func(_ LoggingLevel, message string) {
 			// Default log handler - can be overridden
 		},
 	}

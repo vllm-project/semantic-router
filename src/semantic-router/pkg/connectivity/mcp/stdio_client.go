@@ -30,7 +30,7 @@ func (c *StdioClient) Connect() error {
 		return nil
 	}
 
-	c.log(LoggingLevelInfo, fmt.Sprintf("Connecting to MCP server with stdio transport"))
+	c.log(LoggingLevelInfo, "Connecting to MCP server with stdio transport")
 
 	if c.config.Command == "" {
 		return fmt.Errorf("command is required for stdio transport")
@@ -75,10 +75,10 @@ func (c *StdioClient) Connect() error {
 			}
 		}()
 
-		c.log(LoggingLevelDebug, fmt.Sprintf("Starting MCP client..."))
+		c.log(LoggingLevelDebug, "Starting MCP client...")
 		// Note: Connection starts automatically; Start() method is not required
 
-		c.log(LoggingLevelDebug, fmt.Sprintf("Initializing MCP client..."))
+		c.log(LoggingLevelDebug, "Initializing MCP client...")
 		// Initialize the client with a simple request (no params needed for basic initialization)
 		initResult, err := c.mcpClient.Initialize(ctx, mcp.InitializeRequest{})
 		if err != nil {
@@ -225,7 +225,6 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments map[s
 	callReq.Params.Arguments = arguments
 
 	result, err := c.mcpClient.CallTool(ctx, callReq)
-
 	if err != nil {
 		c.log(LoggingLevelError, fmt.Sprintf("Tool call failed for %s: %v", name, err))
 		c.log(LoggingLevelError, fmt.Sprintf("Arguments were: %+v", arguments))
@@ -257,7 +256,6 @@ func (c *StdioClient) ReadResource(ctx context.Context, uri string) (*mcp.ReadRe
 	readReq.Params.URI = uri
 
 	result, err := c.mcpClient.ReadResource(ctx, readReq)
-
 	if err != nil {
 		c.log(LoggingLevelError, fmt.Sprintf("Resource read failed: %v", err))
 		return nil, fmt.Errorf("resource read failed: %w", err)
@@ -290,7 +288,6 @@ func (c *StdioClient) GetPrompt(ctx context.Context, name string, arguments map[
 	getPromptReq.Params.Arguments = stringArgs
 
 	result, err := c.mcpClient.GetPrompt(ctx, getPromptReq)
-
 	if err != nil {
 		c.log(LoggingLevelError, fmt.Sprintf("Prompt get failed: %v", err))
 		return nil, fmt.Errorf("prompt get failed: %w", err)

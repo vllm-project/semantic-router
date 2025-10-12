@@ -17,7 +17,7 @@ func CreateSelfSignedTLSCertificate() (tls.Certificate, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error creating serial number: %v", err)
+		return tls.Certificate{}, fmt.Errorf("error creating serial number: %w", err)
 	}
 	now := time.Now()
 	notBefore := now.UTC()
@@ -35,19 +35,19 @@ func CreateSelfSignedTLSCertificate() (tls.Certificate, error) {
 
 	priv, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error generating key: %v", err)
+		return tls.Certificate{}, fmt.Errorf("error generating key: %w", err)
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error creating certificate: %v", err)
+		return tls.Certificate{}, fmt.Errorf("error creating certificate: %w", err)
 	}
 
 	certBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 
 	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("error marshalling private key: %v", err)
+		return tls.Certificate{}, fmt.Errorf("error marshalling private key: %w", err)
 	}
 	keyBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
 

@@ -329,15 +329,16 @@ func TestEntropyMetricsIntegration(t *testing.T) {
 			normalizedEntropy := CalculateNormalizedEntropy(tc.probabilities)
 
 			var uncertaintyLevel string
-			if normalizedEntropy >= 0.8 {
+			switch {
+			case normalizedEntropy >= 0.8:
 				uncertaintyLevel = "very_high"
-			} else if normalizedEntropy >= 0.6 {
+			case normalizedEntropy >= 0.6:
 				uncertaintyLevel = "high"
-			} else if normalizedEntropy >= 0.4 {
+			case normalizedEntropy >= 0.4:
 				uncertaintyLevel = "medium"
-			} else if normalizedEntropy >= 0.2 {
+			case normalizedEntropy >= 0.2:
 				uncertaintyLevel = "low"
-			} else {
+			default:
 				uncertaintyLevel = "very_low"
 			}
 

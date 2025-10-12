@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 // RouterConfig represents the main configuration for the LLM Router
@@ -380,18 +380,6 @@ func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFami
 	}
 
 	return &familyConfig
-}
-
-// Legacy functions - can be removed once migration is complete
-
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 var (

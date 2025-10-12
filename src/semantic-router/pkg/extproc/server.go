@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -14,10 +15,11 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/fsnotify/fsnotify"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
-	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
@@ -94,7 +96,7 @@ func (s *Server) Start() error {
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
 	go func() {
-		if err := s.server.Serve(lis); err != nil && err != grpc.ErrServerStopped {
+		if err := s.server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			observability.Errorf("Server error: %v", err)
 			serverErrCh <- err
 		} else {

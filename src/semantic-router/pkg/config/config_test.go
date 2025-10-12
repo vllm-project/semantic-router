@@ -6,12 +6,11 @@ import (
 	"sync"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/yaml"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestConfig(t *testing.T) {

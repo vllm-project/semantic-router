@@ -406,7 +406,7 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 }
 
 // Helper methods
-func (s *ClassificationService) getRecommendedModel(category string, confidence float64) string {
+func (s *ClassificationService) getRecommendedModel(category string, _ float64) string {
 	// TODO: Implement model recommendation logic based on category
 	return fmt.Sprintf("%s-specialized-model", category)
 }
@@ -438,7 +438,7 @@ func (s *ClassificationService) ClassifyBatchUnified(texts []string) (*UnifiedBa
 }
 
 // ClassifyBatchUnifiedWithOptions performs unified batch classification with options support
-func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, options interface{}) (*UnifiedBatchResponse, error) {
+func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, _ interface{}) (*UnifiedBatchResponse, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("texts cannot be empty")
 	}

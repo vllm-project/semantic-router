@@ -60,15 +60,16 @@ func AnalyzeEntropy(probabilities []float32) EntropyResult {
 
 	// Determine uncertainty level
 	var uncertaintyLevel string
-	if normalizedEntropy >= 0.8 {
+	switch {
+	case normalizedEntropy >= 0.8:
 		uncertaintyLevel = "very_high"
-	} else if normalizedEntropy >= 0.6 {
+	case normalizedEntropy >= 0.6:
 		uncertaintyLevel = "high"
-	} else if normalizedEntropy >= 0.4 {
+	case normalizedEntropy >= 0.4:
 		uncertaintyLevel = "medium"
-	} else if normalizedEntropy >= 0.2 {
+	case normalizedEntropy >= 0.2:
 		uncertaintyLevel = "low"
-	} else {
+	default:
 		uncertaintyLevel = "very_low"
 	}
 
@@ -96,7 +97,6 @@ func MakeEntropyBasedReasoningDecision(
 	categoryReasoningMap map[string]bool,
 	baseConfidenceThreshold float64,
 ) ReasoningDecision {
-
 	if len(probabilities) == 0 || len(categoryNames) == 0 {
 		return ReasoningDecision{
 			UseReasoning:     false,
@@ -214,7 +214,7 @@ func getTopCategories(probabilities []float32, categoryNames []string, topN int)
 	})
 
 	// Return top N
-	n := min(topN, len(pairs))
+	n := minInt(topN, len(pairs))
 	return pairs[:n]
 }
 
@@ -251,7 +251,7 @@ func makeWeightedDecision(topCategories []CategoryProbability, categoryReasoning
 }
 
 // Helper function to get minimum of two integers
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

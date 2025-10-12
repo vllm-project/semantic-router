@@ -3,10 +3,9 @@ package extproc_test
 import (
 	"testing"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 )
 
 func TestExtProc(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 )
 
 // TestReasoningModeConfiguration demonstrates how the reasoning mode works with the new config-based approach
-func TestReasoningModeConfiguration(t *testing.T) {
+func TestReasoningModeConfiguration(_ *testing.T) {
 	fmt.Println("=== Configuration-Based Reasoning Mode Test ===")
 
 	// Create a mock configuration for testing
@@ -225,7 +225,7 @@ requestBody := buildRequestBody(model, messages, useReasoning, stream)
 }
 
 // TestAddReasoningModeToRequestBody tests the addReasoningModeToRequestBody function
-func TestAddReasoningModeToRequestBody(t *testing.T) {
+func TestAddReasoningModeToRequestBody(_ *testing.T) {
 	fmt.Println("=== Testing addReasoningModeToRequestBody Function ===")
 
 	// Create a mock router with family-based reasoning config
@@ -291,8 +291,8 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 
 	// Verify the modification
 	var modifiedRequest map[string]interface{}
-	if err := json.Unmarshal(modifiedBody, &modifiedRequest); err != nil {
-		fmt.Printf("Error unmarshaling modified request: %v\n", err)
+	if unmarshalErr := json.Unmarshal(modifiedBody, &modifiedRequest); unmarshalErr != nil {
+		fmt.Printf("Error unmarshaling modified request: %v\n", unmarshalErr)
 		return
 	}
 
@@ -338,8 +338,8 @@ func TestAddReasoningModeToRequestBody(t *testing.T) {
 	fmt.Printf("Modified deepseek request with reasoning:\n%s\n\n", string(modifiedDeepseekBody))
 
 	var modifiedDeepseekRequest map[string]interface{}
-	if err := json.Unmarshal(modifiedDeepseekBody, &modifiedDeepseekRequest); err != nil {
-		fmt.Printf("Error unmarshaling modified deepseek request: %v\n", err)
+	if unmarshalErr := json.Unmarshal(modifiedDeepseekBody, &modifiedDeepseekRequest); unmarshalErr != nil {
+		fmt.Printf("Error unmarshaling modified deepseek request: %v\n", unmarshalErr)
 		return
 	}
 

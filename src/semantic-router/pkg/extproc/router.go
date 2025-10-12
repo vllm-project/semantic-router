@@ -6,7 +6,6 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
@@ -70,8 +69,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Initialize the BERT model for similarity search
-	if err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); err != nil {
-		return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
+	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
@@ -121,8 +120,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Load tools from file if enabled and path is provided
 	if toolsDatabase.IsEnabled() && cfg.Tools.ToolsDBPath != "" {
-		if err := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); err != nil {
-			observability.Warnf("Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, err)
+		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
+			observability.Warnf("Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, loadErr)
 		}
 		observability.Infof("Tools database enabled with threshold: %.4f, top-k: %d",
 			toolsThreshold, cfg.Tools.TopK)

@@ -274,7 +274,7 @@ func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string, startTime tim
 	// Lazy initialization of LoRA C bindings
 	if !uc.loraInitialized {
 		if err := uc.initializeLoRABindings(); err != nil {
-			return nil, fmt.Errorf("failed to initialize loRA bindings: %v", err)
+			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", err)
 		}
 		uc.loraInitialized = true
 	}
@@ -311,7 +311,6 @@ func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string, startTime tim
 
 // classifyBatchLegacy uses legacy ModernBERT models (lower confidence)
 func (uc *UnifiedClassifier) classifyBatchLegacy(texts []string, startTime time.Time) (*UnifiedBatchResults, error) {
-
 	// Convert Go strings to C string array
 	cTexts := make([]*C.char, len(texts))
 	for i, text := range texts {

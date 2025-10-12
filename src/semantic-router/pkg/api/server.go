@@ -225,10 +225,10 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 }
 
 // handleHealth handles health check requests
-func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
+	_, _ = w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
 }
 
 // APIOverviewResponse represents the response for GET /api/v1
@@ -363,7 +363,7 @@ type OpenAPIComponents struct {
 }
 
 // handleAPIOverview handles GET /api/v1 for API discovery
-func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *http.Request) {
 	// Build endpoints list from registry, filtering out disabled endpoints
 	endpoints := make([]EndpointInfo, 0, len(endpointRegistry))
 	for _, metadata := range endpointRegistry {
@@ -371,11 +371,7 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, r *ht
 		if !s.enableSystemPromptAPI && (metadata.Path == "/config/system-prompts") {
 			continue
 		}
-		endpoints = append(endpoints, EndpointInfo{
-			Path:        metadata.Path,
-			Method:      metadata.Method,
-			Description: metadata.Description,
-		})
+		endpoints = append(endpoints, EndpointInfo(metadata))
 	}
 
 	response := APIOverviewResponse{
@@ -497,13 +493,13 @@ func (s *ClassificationAPIServer) generateOpenAPISpec() OpenAPISpec {
 }
 
 // handleOpenAPISpec serves the OpenAPI 3.0 specification at /openapi.json
-func (s *ClassificationAPIServer) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleOpenAPISpec(w http.ResponseWriter, _ *http.Request) {
 	spec := s.generateOpenAPISpec()
 	s.writeJSONResponse(w, http.StatusOK, spec)
 }
 
 // handleSwaggerUI serves the Swagger UI at /docs
-func (s *ClassificationAPIServer) handleSwaggerUI(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
 	// Serve a simple HTML page that loads Swagger UI from CDN
 	html := `<!DOCTYPE html>
 <html lang="en">
@@ -545,7 +541,7 @@ func (s *ClassificationAPIServer) handleSwaggerUI(w http.ResponseWriter, r *http
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	_, _ = w.Write([]byte(html))
 }
 
 // handleIntentClassification handles intent classification requests
@@ -609,7 +605,7 @@ func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter,
 }
 
 // Placeholder handlers for remaining endpoints
-func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWriter, _ *http.Request) {
 	s.writeErrorResponse(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Combined classification not implemented yet")
 }
 
@@ -631,7 +627,7 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 
 	// Check if texts field exists in JSON
 	var rawReq map[string]interface{}
-	if err := json.Unmarshal(body, &rawReq); err != nil {
+	if unmarshalErr := json.Unmarshal(body, &rawReq); unmarshalErr != nil {
 		metrics.RecordBatchClassificationError("unified", "invalid_json")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
 		return
@@ -645,9 +641,9 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	}
 
 	var req BatchClassificationRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if parseErr := s.parseJSONRequest(r, &req); parseErr != nil {
 		metrics.RecordBatchClassificationError("unified", "parse_request_failed")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", parseErr.Error())
 		return
 	}
 
@@ -660,9 +656,9 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	}
 
 	// Validate task_type if provided
-	if err := validateTaskType(req.TaskType); err != nil {
+	if validateErr := validateTaskType(req.TaskType); validateErr != nil {
 		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", err.Error())
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", validateErr.Error())
 		return
 	}
 
@@ -703,12 +699,12 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, _ *http.Request) {
 	response := s.buildModelsInfoResponse()
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ *http.Request) {
 	if s.config == nil {
 		s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "no_config",
@@ -726,7 +722,7 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, r 
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
 // It returns all models discoverable from the router configuration plus a synthetic "auto" model.
-func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *http.Request) {
 	now := time.Now().Unix()
 
 	// Start with the special "auto" model always available from the router
@@ -763,15 +759,15 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, r *h
 	s.writeJSONResponse(w, http.StatusOK, resp)
 }
 
-func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, _ *http.Request) {
 	s.writeErrorResponse(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Classification metrics not implemented yet")
 }
 
-func (s *ClassificationAPIServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	s.writeErrorResponse(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Get config not implemented yet")
 }
 
-func (s *ClassificationAPIServer) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleUpdateConfig(w http.ResponseWriter, _ *http.Request) {
 	s.writeErrorResponse(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Update config not implemented yet")
 }
 
@@ -1096,7 +1092,7 @@ type SystemPromptUpdateRequest struct {
 }
 
 // handleGetSystemPrompts handles GET /config/system-prompts
-func (s *ClassificationAPIServer) handleGetSystemPrompts(w http.ResponseWriter, r *http.Request) {
+func (s *ClassificationAPIServer) handleGetSystemPrompts(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.config
 	if cfg == nil {
 		http.Error(w, "Configuration not available", http.StatusInternalServerError)

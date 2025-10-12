@@ -17,10 +17,10 @@ func TestAutoDiscoverModels(t *testing.T) {
 	securityDir := filepath.Join(tempDir, "jailbreak_classifier_modernbert-base_model")
 
 	// Create directories
-	os.MkdirAll(modernbertDir, 0o755)
-	os.MkdirAll(intentDir, 0o755)
-	os.MkdirAll(piiDir, 0o755)
-	os.MkdirAll(securityDir, 0o755)
+	_ = os.MkdirAll(modernbertDir, 0o755)
+	_ = os.MkdirAll(intentDir, 0o755)
+	_ = os.MkdirAll(piiDir, 0o755)
+	_ = os.MkdirAll(securityDir, 0o755)
 
 	// Create mock model files
 	createMockModelFile(t, modernbertDir, "config.json")
@@ -83,10 +83,10 @@ func TestValidateModelPaths(t *testing.T) {
 	piiDir := filepath.Join(tempDir, "pii")
 	securityDir := filepath.Join(tempDir, "security")
 
-	os.MkdirAll(modernbertDir, 0o755)
-	os.MkdirAll(intentDir, 0o755)
-	os.MkdirAll(piiDir, 0o755)
-	os.MkdirAll(securityDir, 0o755)
+	_ = os.MkdirAll(modernbertDir, 0o755)
+	_ = os.MkdirAll(intentDir, 0o755)
+	_ = os.MkdirAll(piiDir, 0o755)
+	_ = os.MkdirAll(securityDir, 0o755)
 
 	// Create model files
 	createMockModelFile(t, modernbertDir, "config.json")
@@ -151,7 +151,7 @@ func TestGetModelDiscoveryInfo(t *testing.T) {
 	tempDir := t.TempDir()
 
 	modernbertDir := filepath.Join(tempDir, "modernbert-base")
-	os.MkdirAll(modernbertDir, 0o755)
+	_ = os.MkdirAll(modernbertDir, 0o755)
 	createMockModelFile(t, modernbertDir, "config.json")
 
 	info := GetModelDiscoveryInfo(tempDir)
@@ -228,7 +228,7 @@ func createMockModelFile(t *testing.T, dir, filename string) {
 	defer file.Close()
 
 	// Write some dummy content
-	file.WriteString(`{"mock": "model file"}`)
+	_, _ = file.WriteString(`{"mock": "model file"}`)
 }
 
 func TestAutoDiscoverModels_RealModels(t *testing.T) {
@@ -326,10 +326,10 @@ func BenchmarkAutoDiscoverModels(b *testing.B) {
 	piiDir := filepath.Join(tempDir, "pii_classifier_modernbert-base_presidio_token_model")
 	securityDir := filepath.Join(tempDir, "jailbreak_classifier_modernbert-base_model")
 
-	os.MkdirAll(modernbertDir, 0o755)
-	os.MkdirAll(intentDir, 0o755)
-	os.MkdirAll(piiDir, 0o755)
-	os.MkdirAll(securityDir, 0o755)
+	_ = os.MkdirAll(modernbertDir, 0o755)
+	_ = os.MkdirAll(intentDir, 0o755)
+	_ = os.MkdirAll(piiDir, 0o755)
+	_ = os.MkdirAll(securityDir, 0o755)
 
 	// Create mock files using helper
 	createMockModelFileForBench(b, modernbertDir, "config.json")
@@ -339,7 +339,7 @@ func BenchmarkAutoDiscoverModels(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		AutoDiscoverModels(tempDir)
+		_, _ = AutoDiscoverModels(tempDir)
 	}
 }
 
@@ -351,5 +351,5 @@ func createMockModelFileForBench(b *testing.B, dir, filename string) {
 		b.Fatalf("Failed to create mock file %s: %v", filePath, err)
 	}
 	defer file.Close()
-	file.WriteString(`{"mock": "model file"}`)
+	_, _ = file.WriteString(`{"mock": "model file"}`)
 }
