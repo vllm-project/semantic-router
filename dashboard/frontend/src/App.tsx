@@ -5,9 +5,11 @@ import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
 import ConfigPage from './pages/ConfigPage'
 import PlaygroundPage from './pages/PlaygroundPage'
+import { ConfigSection } from './components/ConfigNav'
 
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
+  const [configSection, setConfigSection] = useState<ConfigSection>('models')
 
   useEffect(() => {
     // Detect if we're running inside an iframe (potential loop)
@@ -70,9 +72,39 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/monitoring" element={<Layout><MonitoringPage /></Layout>} />
-        <Route path="/config" element={<Layout><ConfigPage /></Layout>} />
-        <Route path="/playground" element={<Layout><PlaygroundPage /></Layout>} />
+        <Route
+          path="/monitoring"
+          element={
+            <Layout
+              configSection={configSection}
+              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+            >
+              <MonitoringPage />
+            </Layout>
+          }
+        />
+        <Route
+          path="/config"
+          element={
+            <Layout
+              configSection={configSection}
+              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+            >
+              <ConfigPage activeSection={configSection} />
+            </Layout>
+          }
+        />
+        <Route
+          path="/playground"
+          element={
+            <Layout
+              configSection={configSection}
+              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+            >
+              <PlaygroundPage />
+            </Layout>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
