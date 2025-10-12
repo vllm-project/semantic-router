@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
-import ConfigNav, { ConfigSection } from '../components/ConfigNav'
+import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { FieldConfig } from '../components/EditModal'
 
 interface VLLMEndpoint {
@@ -163,12 +163,20 @@ interface ConfigData {
   [key: string]: unknown
 }
 
-const ConfigPage: React.FC = () => {
+interface ConfigPageProps {
+  activeSection?: ConfigSection
+}
+
+// Helper function to format threshold as percentage
+const formatThreshold = (value: number): string => {
+  return `${Math.round(value * 100)}%`
+}
+
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedView, setSelectedView] = useState<'structured' | 'raw'>('structured')
-  const [activeSection, setActiveSection] = useState<ConfigSection>('models')
 
   // Tools database state
   const [toolsData, setToolsData] = useState<Tool[]>([])
@@ -751,10 +759,11 @@ const ConfigPage: React.FC = () => {
                   {
                     name: 'threshold',
                     label: 'Detection Threshold',
-                    type: 'number',
+                    type: 'percentage',
                     required: true,
-                    placeholder: '0.5',
-                    description: 'Confidence threshold for PII detection (0-1)'
+                    placeholder: '50',
+                    description: 'Confidence threshold for PII detection (0-100%)',
+                    step: 1
                   },
                   {
                     name: 'use_cpu',
@@ -805,7 +814,7 @@ const ConfigPage: React.FC = () => {
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{config.classifier.pii_model.threshold}</span>
+                <span className={styles.configValue}>{formatThreshold(config.classifier.pii_model.threshold)}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>ModernBERT</span>
@@ -858,10 +867,11 @@ const ConfigPage: React.FC = () => {
                   {
                     name: 'threshold',
                     label: 'Detection Threshold',
-                    type: 'number',
+                    type: 'percentage',
                     required: true,
-                    placeholder: '0.5',
-                    description: 'Confidence threshold for jailbreak detection (0-1)'
+                    placeholder: '50',
+                    description: 'Confidence threshold for jailbreak detection (0-100%)',
+                    step: 1
                   },
                   {
                     name: 'use_cpu',
@@ -912,7 +922,7 @@ const ConfigPage: React.FC = () => {
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{config.prompt_guard.threshold}</span>
+                  <span className={styles.configValue}>{formatThreshold(config.prompt_guard.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Use CPU</span>
@@ -970,10 +980,11 @@ const ConfigPage: React.FC = () => {
                   {
                     name: 'threshold',
                     label: 'Similarity Threshold',
-                    type: 'number',
+                    type: 'percentage',
                     required: true,
-                    placeholder: '0.8',
-                    description: 'Minimum similarity score for cache hits (0-1)'
+                    placeholder: '80',
+                    description: 'Minimum similarity score for cache hits (0-100%)',
+                    step: 1
                   },
                   {
                     name: 'use_cpu',
@@ -1010,7 +1021,7 @@ const ConfigPage: React.FC = () => {
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{config.bert_model.threshold}</span>
+                <span className={styles.configValue}>{formatThreshold(config.bert_model.threshold)}</span>
               </div>
             </div>
           </div>
@@ -1049,10 +1060,11 @@ const ConfigPage: React.FC = () => {
                         {
                           name: 'similarity_threshold',
                           label: 'Similarity Threshold',
-                          type: 'number',
+                          type: 'percentage',
                           required: true,
-                          placeholder: '0.9',
-                          description: 'Minimum similarity score for cache hits (0-1)'
+                          placeholder: '90',
+                          description: 'Minimum similarity score for cache hits (0-100%)',
+                          step: 1
                         },
                         {
                           name: 'max_entries',
@@ -1096,7 +1108,7 @@ const ConfigPage: React.FC = () => {
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{config.semantic_cache.similarity_threshold}</span>
+                  <span className={styles.configValue}>{formatThreshold(config.semantic_cache.similarity_threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Entries</span>
@@ -1162,10 +1174,11 @@ const ConfigPage: React.FC = () => {
                           {
                             name: 'threshold',
                             label: 'Classification Threshold',
-                            type: 'number',
+                            type: 'percentage',
                             required: true,
-                            placeholder: '0.7',
-                            description: 'Confidence threshold for category classification (0-1)'
+                            placeholder: '70',
+                            description: 'Confidence threshold for category classification (0-100%)',
+                            step: 1
                           },
                           {
                             name: 'use_cpu',
@@ -1211,7 +1224,7 @@ const ConfigPage: React.FC = () => {
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{config.classifier.category_model.threshold}</span>
+                  <span className={styles.configValue}>{formatThreshold(config.classifier.category_model.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>ModernBERT</span>
@@ -1295,10 +1308,11 @@ const ConfigPage: React.FC = () => {
                           {
                             name: 'threshold',
                             label: 'Classification Threshold',
-                            type: 'number',
+                            type: 'percentage',
                             required: true,
-                            placeholder: '0.7',
-                            description: 'Confidence threshold for classification (0-1)'
+                            placeholder: '70',
+                            description: 'Confidence threshold for classification (0-100%)',
+                            step: 1
                           },
                           {
                             name: 'timeout_seconds',
@@ -1350,7 +1364,7 @@ const ConfigPage: React.FC = () => {
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{config.classifier.mcp_category_model.threshold}</span>
+                  <span className={styles.configValue}>{formatThreshold(config.classifier.mcp_category_model.threshold)}</span>
                 </div>
                 {config.classifier.mcp_category_model.timeout_seconds && (
                   <div className={styles.configRow}>
@@ -1734,9 +1748,10 @@ const ConfigPage: React.FC = () => {
                   {
                     name: 'similarity_threshold',
                     label: 'Similarity Threshold',
-                    type: 'number',
-                    placeholder: '0.7',
-                    description: 'Minimum similarity score for tool selection (0-1)'
+                    type: 'percentage',
+                    placeholder: '70',
+                    description: 'Minimum similarity score for tool selection (0-100%)',
+                    step: 1
                   },
                   {
                     name: 'fallback_to_empty',
@@ -1781,7 +1796,7 @@ const ConfigPage: React.FC = () => {
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{config.tools.similarity_threshold}</span>
+                  <span className={styles.configValue}>{formatThreshold(config.tools.similarity_threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Fallback to Empty</span>
@@ -2258,14 +2273,8 @@ const ConfigPage: React.FC = () => {
         {config && !loading && !error && (
           <>
             {selectedView === 'structured' ? (
-              <div className={styles.mainLayout}>
-                <ConfigNav
-                  activeSection={activeSection}
-                  onSectionChange={setActiveSection}
-                />
-                <div className={styles.contentArea}>
-                  {renderActiveSection()}
-                </div>
+              <div className={styles.contentArea}>
+                {renderActiveSection()}
               </div>
             ) : (
               <pre className={styles.codeBlock}>
