@@ -121,8 +121,10 @@ embedding_similarity:
 
 ### High-Level System Design
 
-```mermaid
-graph TD
+import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
+
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={5.5}>
+{`graph TD
     A[Envoy External Processor<br/>semantic-router ExtProc] --> B[Request Handler<br/>handleModelRouting]
     
     B --> C{Execution Path}
@@ -166,8 +168,8 @@ graph TD
     style E2 fill:#fff9c4
     style F fill:#c8e6c9
     style H fill:#ffcdd2
-    style M fill:#c8e6c9
-```
+    style M fill:#c8e6c9`}
+</ZoomableMermaid>
 
 ### Component Breakdown
 
