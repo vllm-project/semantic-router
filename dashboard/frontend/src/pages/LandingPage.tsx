@@ -215,7 +215,7 @@ const LandingPage: React.FC = () => {
         <div className={styles.navContent}>
           <div className={styles.navBrand}>
             <img src="/vllm.png" alt="vLLM" className={styles.navLogo} />
-            <span className={styles.navBrandText}>vLLM Semantic Router Dashboard</span>
+            <span className={styles.navBrandText}>Dashboard</span>
           </div>
           <div className={styles.navLinks}>
             <Link to="/playground" className={styles.navLink}>
@@ -239,10 +239,15 @@ const LandingPage: React.FC = () => {
         {/* Left Side - Content */}
         <div className={styles.leftPanel}>
           <div className={styles.heroSection}>
-            <h1 className={styles.heroTitle}>
-              <span className={styles.titleGradient}>Semantic Router</span>
-            </h1>
-            <p className={styles.heroDescription}>
+            <div className={styles.heroTitleWrapper}>
+              <img src="/vllm.png" alt="vLLM Logo" className={styles.vllmLogo} />
+              <h1 className={styles.heroTitle}>
+                <span className={styles.aiGlow}>AI-Powered</span>
+                <br />
+                vLLM Semantic Router
+              </h1>
+            </div>
+            <p className={styles.heroSubtitle}>
               🧠 Intelligent Router for Efficient LLM Inference
             </p>
 

@@ -116,34 +116,52 @@
   animation: slideInLeft 1s ease-out;
 }
 
-.heroTitle {
-  font-size: 4rem;
-  font-weight: 800;
-  line-height: 1.1;
+.heroTitleWrapper {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.vllmLogo {
+  height: 80px;
+  width: auto;
+  filter: drop-shadow(0 4px 16px rgba(59, 130, 246, 0.3));
+  transition: all 0.3s ease;
+}
+
+.vllmLogo:hover {
+  transform: scale(1.05);
+  filter: drop-shadow(0 8px 24px rgba(59, 130, 246, 0.4));
+}
+
+.heroTitle {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.2;
   color: #1e293b;
+  margin: 0;
 }
 
-.heroSubtitle {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #475569;
-  margin-bottom: 1.25rem;
-}
-
-.titleGradient {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%);
+.aiGlow {
+  background: linear-gradient(45deg, #FDB516, #30A2FF, #58A6FF);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: gradientShift 3s ease-in-out infinite alternate;
+  animation: aiTextGlow 3s ease-in-out infinite;
 }
 
-.heroDescription {
+.heroSubtitle {
   font-size: 1.15rem;
   line-height: 1.7;
   color: #64748b;
   margin-bottom: 2.5rem;
+}
+
+.heroSubtitle strong {
+  color: #3b82f6;
+  font-weight: 600;
 }
 
 .features {
@@ -516,6 +534,15 @@
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes aiTextGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(253, 181, 22, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(48, 162, 255, 0.7));
   }
 }
 
