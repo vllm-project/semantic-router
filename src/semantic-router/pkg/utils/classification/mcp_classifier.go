@@ -318,8 +318,10 @@ func (m *MCPCategoryClassifier) ListCategories(ctx context.Context) (*CategoryMa
 
 	// Build CategoryMapping from the list
 	mapping := &CategoryMapping{
-		CategoryToIdx: make(map[string]int),
-		IdxToCategory: make(map[string]string),
+		CategoryToIdx:         make(map[string]int),
+		IdxToCategory:         make(map[string]string),
+		CategorySystemPrompts: response.CategorySystemPrompts,
+		CategoryDescriptions:  response.CategoryDescriptions,
 	}
 
 	for idx, category := range response.Categories {
@@ -327,7 +329,13 @@ func (m *MCPCategoryClassifier) ListCategories(ctx context.Context) (*CategoryMa
 		mapping.IdxToCategory[fmt.Sprintf("%d", idx)] = category
 	}
 
-	observability.Infof("Loaded %d categories from MCP server: %v", len(response.Categories), response.Categories)
+	if len(response.CategorySystemPrompts) > 0 {
+		observability.Infof("Loaded %d categories with %d system prompts from MCP server: %v",
+			len(response.Categories), len(response.CategorySystemPrompts), response.Categories)
+	} else {
+		observability.Infof("Loaded %d categories from MCP server: %v", len(response.Categories), response.Categories)
+	}
+
 	return mapping, nil
 }
 

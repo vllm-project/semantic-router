@@ -487,6 +487,116 @@ var _ = Describe("MCP Category Classifier", func() {
 			})
 		})
 
+		Context("when MCP tool returns categories with per-category system prompts", func() {
+			It("should store system prompts in mapping", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `{
+								"categories": ["math", "science", "technology"],
+								"category_system_prompts": {
+									"math": "You are a mathematics expert. Show step-by-step solutions.",
+									"science": "You are a science expert. Provide evidence-based answers.",
+									"technology": "You are a technology expert. Include practical examples."
+								},
+								"category_descriptions": {
+									"math": "Mathematical and computational queries",
+									"science": "Scientific concepts and queries",
+									"technology": "Technology and computing topics"
+								}
+							}`,
+						},
+					},
+				}
+				mapping, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mapping).ToNot(BeNil())
+				Expect(mapping.CategoryToIdx).To(HaveLen(3))
+
+				// Verify system prompts are stored
+				Expect(mapping.CategorySystemPrompts).ToNot(BeNil())
+				Expect(mapping.CategorySystemPrompts).To(HaveLen(3))
+
+				mathPrompt, ok := mapping.GetCategorySystemPrompt("math")
+				Expect(ok).To(BeTrue())
+				Expect(mathPrompt).To(ContainSubstring("mathematics expert"))
+
+				sciencePrompt, ok := mapping.GetCategorySystemPrompt("science")
+				Expect(ok).To(BeTrue())
+				Expect(sciencePrompt).To(ContainSubstring("science expert"))
+
+				techPrompt, ok := mapping.GetCategorySystemPrompt("technology")
+				Expect(ok).To(BeTrue())
+				Expect(techPrompt).To(ContainSubstring("technology expert"))
+
+				// Verify descriptions are stored
+				Expect(mapping.CategoryDescriptions).ToNot(BeNil())
+				Expect(mapping.CategoryDescriptions).To(HaveLen(3))
+
+				mathDesc, ok := mapping.GetCategoryDescription("math")
+				Expect(ok).To(BeTrue())
+				Expect(mathDesc).To(Equal("Mathematical and computational queries"))
+			})
+		})
+
+		Context("when MCP tool returns categories without system prompts", func() {
+			It("should handle missing system prompts gracefully", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `{"categories": ["math", "science"]}`,
+						},
+					},
+				}
+				mapping, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mapping).ToNot(BeNil())
+				Expect(mapping.CategoryToIdx).To(HaveLen(2))
+
+				// System prompts should be nil or empty
+				mathPrompt, ok := mapping.GetCategorySystemPrompt("math")
+				Expect(ok).To(BeFalse())
+				Expect(mathPrompt).To(Equal(""))
+			})
+		})
+
+		Context("when MCP tool returns partial system prompts", func() {
+			It("should store only provided system prompts", func() {
+				mockClient.callToolResult = &mcp.CallToolResult{
+					IsError: false,
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Type: "text",
+							Text: `{
+								"categories": ["math", "science", "history"],
+								"category_system_prompts": {
+									"math": "You are a mathematics expert.",
+									"science": "You are a science expert."
+								}
+							}`,
+						},
+					},
+				}
+				mapping, err := mcpClassifier.ListCategories(context.Background())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(mapping).ToNot(BeNil())
+				Expect(mapping.CategoryToIdx).To(HaveLen(3))
+				Expect(mapping.CategorySystemPrompts).To(HaveLen(2))
+
+				mathPrompt, ok := mapping.GetCategorySystemPrompt("math")
+				Expect(ok).To(BeTrue())
+				Expect(mathPrompt).To(ContainSubstring("mathematics expert"))
+
+				historyPrompt, ok := mapping.GetCategorySystemPrompt("history")
+				Expect(ok).To(BeFalse())
+				Expect(historyPrompt).To(Equal(""))
+			})
+		})
+
 		Context("when MCP tool returns error", func() {
 			It("should return error", func() {
 				mockClient.callToolResult = &mcp.CallToolResult{
@@ -535,6 +645,79 @@ var _ = Describe("MCP Category Classifier", func() {
 			})
 		})
 	})
+
+	Describe("CategoryMapping System Prompt Methods", func() {
+		var mapping *CategoryMapping
+
+		BeforeEach(func() {
+			mapping = &CategoryMapping{
+				CategoryToIdx: map[string]int{"math": 0, "science": 1, "tech": 2},
+				IdxToCategory: map[string]string{"0": "math", "1": "science", "2": "tech"},
+				CategorySystemPrompts: map[string]string{
+					"math":    "You are a mathematics expert. Show step-by-step solutions.",
+					"science": "You are a science expert. Provide evidence-based answers.",
+				},
+				CategoryDescriptions: map[string]string{
+					"math":    "Mathematical queries",
+					"science": "Scientific queries",
+					"tech":    "Technology queries",
+				},
+			}
+		})
+
+		Describe("GetCategorySystemPrompt", func() {
+			Context("when category has system prompt", func() {
+				It("should return the prompt", func() {
+					prompt, ok := mapping.GetCategorySystemPrompt("math")
+					Expect(ok).To(BeTrue())
+					Expect(prompt).To(Equal("You are a mathematics expert. Show step-by-step solutions."))
+				})
+			})
+
+			Context("when category exists but has no system prompt", func() {
+				It("should return empty string and false", func() {
+					prompt, ok := mapping.GetCategorySystemPrompt("tech")
+					Expect(ok).To(BeFalse())
+					Expect(prompt).To(Equal(""))
+				})
+			})
+
+			Context("when category does not exist", func() {
+				It("should return empty string and false", func() {
+					prompt, ok := mapping.GetCategorySystemPrompt("nonexistent")
+					Expect(ok).To(BeFalse())
+					Expect(prompt).To(Equal(""))
+				})
+			})
+
+			Context("when CategorySystemPrompts is nil", func() {
+				It("should return empty string and false", func() {
+					mapping.CategorySystemPrompts = nil
+					prompt, ok := mapping.GetCategorySystemPrompt("math")
+					Expect(ok).To(BeFalse())
+					Expect(prompt).To(Equal(""))
+				})
+			})
+		})
+
+		Describe("GetCategoryDescription", func() {
+			Context("when category has description", func() {
+				It("should return the description", func() {
+					desc, ok := mapping.GetCategoryDescription("math")
+					Expect(ok).To(BeTrue())
+					Expect(desc).To(Equal("Mathematical queries"))
+				})
+			})
+
+			Context("when category does not have description", func() {
+				It("should return empty string and false", func() {
+					desc, ok := mapping.GetCategoryDescription("nonexistent")
+					Expect(ok).To(BeFalse())
+					Expect(desc).To(Equal(""))
+				})
+			})
+		})
+	})
 })
 
 var _ = Describe("Classifier MCP Methods", func() {
@@ -565,6 +748,16 @@ var _ = Describe("Classifier MCP Methods", func() {
 			CategoryMapping: &CategoryMapping{
 				CategoryToIdx: map[string]int{"tech": 0, "sports": 1, "politics": 2},
 				IdxToCategory: map[string]string{"0": "tech", "1": "sports", "2": "politics"},
+				CategorySystemPrompts: map[string]string{
+					"tech":     "You are a technology expert. Include practical examples.",
+					"sports":   "You are a sports expert. Provide game analysis.",
+					"politics": "You are a politics expert. Provide balanced perspectives.",
+				},
+				CategoryDescriptions: map[string]string{
+					"tech":     "Technology and computing topics",
+					"sports":   "Sports and athletics",
+					"politics": "Political topics and governance",
+				},
 			},
 		}
 	})
@@ -774,6 +967,111 @@ var _ = Describe("MCP Helper Functions", func() {
 
 			Expect(classifier.mcpCategoryInitializer).To(Equal(initializer))
 			Expect(classifier.mcpCategoryInference).To(Equal(inference))
+		})
+	})
+})
+
+var _ = Describe("Classifier Per-Category System Prompts", func() {
+	var classifier *Classifier
+
+	BeforeEach(func() {
+		cfg := &config.RouterConfig{}
+		cfg.Classifier.MCPCategoryModel.Enabled = true
+
+		classifier = &Classifier{
+			Config: cfg,
+			CategoryMapping: &CategoryMapping{
+				CategoryToIdx: map[string]int{"math": 0, "science": 1, "tech": 2},
+				IdxToCategory: map[string]string{"0": "math", "1": "science", "2": "tech"},
+				CategorySystemPrompts: map[string]string{
+					"math":    "You are a mathematics expert. Show step-by-step solutions with clear explanations.",
+					"science": "You are a science expert. Provide evidence-based answers grounded in research.",
+					"tech":    "You are a technology expert. Include practical examples and code snippets.",
+				},
+				CategoryDescriptions: map[string]string{
+					"math":    "Mathematical and computational queries",
+					"science": "Scientific concepts and queries",
+					"tech":    "Technology and computing topics",
+				},
+			},
+		}
+	})
+
+	Describe("GetCategorySystemPrompt", func() {
+		Context("when category exists with system prompt", func() {
+			It("should return the category-specific system prompt", func() {
+				prompt, ok := classifier.GetCategorySystemPrompt("math")
+				Expect(ok).To(BeTrue())
+				Expect(prompt).To(ContainSubstring("mathematics expert"))
+				Expect(prompt).To(ContainSubstring("step-by-step solutions"))
+			})
+		})
+
+		Context("when requesting different categories", func() {
+			It("should return different system prompts for each category", func() {
+				mathPrompt, ok := classifier.GetCategorySystemPrompt("math")
+				Expect(ok).To(BeTrue())
+
+				sciencePrompt, ok := classifier.GetCategorySystemPrompt("science")
+				Expect(ok).To(BeTrue())
+
+				techPrompt, ok := classifier.GetCategorySystemPrompt("tech")
+				Expect(ok).To(BeTrue())
+
+				// Verify they are different
+				Expect(mathPrompt).ToNot(Equal(sciencePrompt))
+				Expect(mathPrompt).ToNot(Equal(techPrompt))
+				Expect(sciencePrompt).ToNot(Equal(techPrompt))
+
+				// Verify each has category-specific content
+				Expect(mathPrompt).To(ContainSubstring("mathematics"))
+				Expect(sciencePrompt).To(ContainSubstring("science"))
+				Expect(techPrompt).To(ContainSubstring("technology"))
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should return empty string and false", func() {
+				prompt, ok := classifier.GetCategorySystemPrompt("nonexistent")
+				Expect(ok).To(BeFalse())
+				Expect(prompt).To(Equal(""))
+			})
+		})
+
+		Context("when CategoryMapping is nil", func() {
+			It("should return empty string and false", func() {
+				classifier.CategoryMapping = nil
+				prompt, ok := classifier.GetCategorySystemPrompt("math")
+				Expect(ok).To(BeFalse())
+				Expect(prompt).To(Equal(""))
+			})
+		})
+	})
+
+	Describe("GetCategoryDescription", func() {
+		Context("when category has description", func() {
+			It("should return the description", func() {
+				desc, ok := classifier.GetCategoryDescription("math")
+				Expect(ok).To(BeTrue())
+				Expect(desc).To(Equal("Mathematical and computational queries"))
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should return empty string and false", func() {
+				desc, ok := classifier.GetCategoryDescription("nonexistent")
+				Expect(ok).To(BeFalse())
+				Expect(desc).To(Equal(""))
+			})
+		})
+
+		Context("when CategoryMapping is nil", func() {
+			It("should return empty string and false", func() {
+				classifier.CategoryMapping = nil
+				desc, ok := classifier.GetCategoryDescription("math")
+				Expect(ok).To(BeFalse())
+				Expect(desc).To(Equal(""))
+			})
 		})
 	})
 })

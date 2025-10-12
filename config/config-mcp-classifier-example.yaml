@@ -45,7 +45,19 @@ classifier:
 #
 # How it works:
 #   1. Router connects to MCP server at startup
-#   2. Calls 'list_categories' tool: MCP returns {"categories": ["business", "law", ...]}
+#   2. Calls 'list_categories' tool and MCP returns:
+#      {
+#        "categories": ["math", "science", "technology", "history", "general"],
+#        "category_system_prompts": {
+#          "math": "You are a mathematics expert. When answering math questions...",
+#          "science": "You are a science expert. When answering science questions...",
+#          "technology": "You are a technology expert..."
+#        },
+#        "category_descriptions": {
+#          "math": "Mathematical and computational queries",
+#          "science": "Scientific concepts and queries"
+#        }
+#      }
 #   3. For each request, calls 'classify_text' tool which returns:
 #      {
 #        "class": 3,
@@ -55,14 +67,28 @@ classifier:
 #      }
 #   4. Router uses the model and reasoning settings from MCP response
 #
+# PER-CATEGORY SYSTEM PROMPT INJECTION:
+#   - The MCP server provides SEPARATE system prompts for EACH category
+#   - Each category gets its own specialized instructions and context
+#   - The router stores these prompts and injects the appropriate one per query
+#   - Use classifier.GetCategorySystemPrompt(categoryName) to retrieve for a specific category
+#   - Examples:
+#       * Math category: "You are a mathematics expert. Show step-by-step solutions..."
+#       * Science category: "You are a science expert. Provide evidence-based answers..."
+#       * Technology category: "You are a tech expert. Include practical code examples..."
+#   - This allows domain-specific expertise per category
+#
 # BENEFITS:
 #   - MCP server makes intelligent routing decisions per query
 #   - No hardcoded routing rules needed in config
 #   - MCP can adapt routing based on query complexity, content, etc.
-#   - Centralized routing logic in MCP server
+#   - Centralized routing logic and per-category system prompts in MCP server
+#   - Category descriptions available for logging and debugging
+#   - Domain-specific LLM behavior for each category
 #
 # FALLBACK:
 #   - If MCP doesn't return model/use_reasoning, uses default_model below
+#   - If MCP doesn't return category_system_prompts, router can use default prompts
 #   - Can also add category-specific overrides here if needed
 #
 categories: []

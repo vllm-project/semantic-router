@@ -8,8 +8,10 @@ import (
 
 // CategoryMapping holds the mapping between indices and domain categories
 type CategoryMapping struct {
-	CategoryToIdx map[string]int    `json:"category_to_idx"`
-	IdxToCategory map[string]string `json:"idx_to_category"`
+	CategoryToIdx         map[string]int    `json:"category_to_idx"`
+	IdxToCategory         map[string]string `json:"idx_to_category"`
+	CategorySystemPrompts map[string]string `json:"category_system_prompts,omitempty"` // Optional per-category system prompts from MCP server
+	CategoryDescriptions  map[string]string `json:"category_descriptions,omitempty"`   // Optional category descriptions
 }
 
 // PIIMapping holds the mapping between indices and PII types
@@ -96,6 +98,24 @@ func (jm *JailbreakMapping) GetJailbreakTypeFromIndex(classIndex int) (string, b
 // GetCategoryCount returns the number of categories in the mapping
 func (cm *CategoryMapping) GetCategoryCount() int {
 	return len(cm.CategoryToIdx)
+}
+
+// GetCategorySystemPrompt returns the system prompt for a specific category if available
+func (cm *CategoryMapping) GetCategorySystemPrompt(category string) (string, bool) {
+	if cm.CategorySystemPrompts == nil {
+		return "", false
+	}
+	prompt, ok := cm.CategorySystemPrompts[category]
+	return prompt, ok
+}
+
+// GetCategoryDescription returns the description for a given category
+func (cm *CategoryMapping) GetCategoryDescription(category string) (string, bool) {
+	if cm.CategoryDescriptions == nil {
+		return "", false
+	}
+	desc, ok := cm.CategoryDescriptions[category]
+	return desc, ok
 }
 
 // GetPIITypeCount returns the number of PII types in the mapping

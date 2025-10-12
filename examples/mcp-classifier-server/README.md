@@ -5,6 +5,7 @@ Example MCP server that provides text classification with intelligent routing fo
 ## Features
 
 - **Dynamic Categories**: Loaded from MCP server at runtime via `list_categories`
+- **Per-Category System Prompts**: Each category has its own specialized system prompt for LLM context
 - **Intelligent Routing**: Returns `model` and `use_reasoning` in classification response  
 - **Regex-Based**: Simple pattern matching (replace with ML models for production)
 - **Dual Transport**: Supports both HTTP and stdio
@@ -81,8 +82,23 @@ github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp
 1. **`list_categories`** - Returns `ListCategoriesResponse`:
 
    ```json
-   {"categories": ["math", "science", "technology", ...]}
+   {
+     "categories": ["math", "science", "technology", "history", "general"],
+     "category_system_prompts": {
+       "math": "You are a mathematics expert. When answering math questions...",
+       "science": "You are a science expert. When answering science questions...",
+       "technology": "You are a technology expert. When answering tech questions..."
+     },
+     "category_descriptions": {
+       "math": "Mathematical and computational queries",
+       "science": "Scientific concepts and queries"
+     }
+   }
    ```
+   
+   The `category_system_prompts` and `category_descriptions` fields are optional but recommended.
+   Per-category system prompts allow the MCP server to provide specialized instructions for each
+   category that the router can inject when processing queries in that specific category.
 
 2. **`classify_text`** - Returns `ClassifyResponse`:
 
@@ -109,24 +125,43 @@ See the `api` package for full type definitions and documentation.
 
 ## Customization
 
-Edit `CATEGORIES` to add categories:
+**Edit `CATEGORIES` to add categories with per-category system prompts:**
 
 ```python
 CATEGORIES = {
     "your_category": {
         "patterns": [r"\b(keyword1|keyword2)\b"],
-        "description": "Your description"
+        "description": "Your description",
+        "system_prompt": """You are an expert in your_category. When answering:
+- Provide specific guidance
+- Use domain-specific terminology
+- Follow best practices for this domain"""
     }
 }
 ```
 
-Edit `decide_routing()` for custom routing logic:
+Each category can have its own specialized system prompt tailored to that domain.
+
+**Edit `decide_routing()` for custom routing logic:**
 
 ```python
 def decide_routing(text, category, confidence):
     if category == "math":
         return "deepseek/deepseek-math", False
     return "openai/gpt-oss-20b", True
+```
+
+**Using Per-Category System Prompts in the Router:**
+
+The router stores per-category system prompts when loading categories. To use them:
+
+```go
+// After classifying a query, get the category-specific system prompt
+category := "math"  // from classification result
+if systemPrompt, ok := classifier.GetCategorySystemPrompt(category); ok {
+    // Inject the category-specific system prompt when making LLM requests
+    // Each category gets its own specialized instructions
+}
 ```
 
 ## License

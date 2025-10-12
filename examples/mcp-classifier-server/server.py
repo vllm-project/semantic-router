@@ -8,11 +8,22 @@ This is an example MCP server that demonstrates:
 3. Intelligent routing decisions (model selection and reasoning control)
 
 The server implements two MCP tools:
-- 'list_categories': Returns available categories for dynamic loading
+- 'list_categories': Returns available categories with per-category system prompts and descriptions
 - 'classify_text': Classifies text and returns routing recommendations
 
 Protocol:
-- list_categories returns: {"categories": ["math", "science", "technology", ...]}
+- list_categories returns: {
+    "categories": ["math", "science", "technology", ...],
+    "category_system_prompts": {  # optional, per-category system prompts
+      "math": "You are a mathematics expert. When answering math questions...",
+      "science": "You are a science expert. When answering science questions...",
+      "technology": "You are a technology expert. When answering tech questions..."
+    },
+    "category_descriptions": {  # optional
+      "math": "Mathematical and computational queries",
+      "science": "Scientific concepts and queries"
+    }
+  }
 - classify_text returns: {
     "class": 0,
     "confidence": 0.85,
@@ -46,7 +57,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Define classification categories and their regex patterns
+# Define classification categories with their regex patterns, descriptions, and system prompts
+# Each category has its own system prompt for specialized context
 CATEGORIES = {
     "math": {
         "patterns": [
@@ -56,6 +68,12 @@ CATEGORIES = {
             r"\b(sin|cos|tan|log|sqrt|sum|average|mean)\b",
         ],
         "description": "Mathematical and computational queries",
+        "system_prompt": """You are a mathematics expert. When answering math questions:
+- Show step-by-step solutions with clear explanations
+- Use proper mathematical notation and terminology
+- Verify calculations and provide intermediate steps
+- Explain the underlying concepts and principles
+- Offer alternative approaches when applicable""",
     },
     "science": {
         "patterns": [
@@ -65,6 +83,12 @@ CATEGORIES = {
             r"\b(planet|star|galaxy|universe|ecosystem|organism)\b",
         ],
         "description": "Scientific concepts and queries",
+        "system_prompt": """You are a science expert. When answering science questions:
+- Provide evidence-based answers grounded in scientific research
+- Explain relevant scientific concepts and principles
+- Use appropriate scientific terminology
+- Cite the scientific method and experimental evidence when relevant
+- Distinguish between established facts and current theories""",
     },
     "technology": {
         "patterns": [
@@ -74,6 +98,12 @@ CATEGORIES = {
             r"\b(python|java|javascript|C\+\+|golang|rust)\b",
         ],
         "description": "Technology and computing topics",
+        "system_prompt": """You are a technology expert. When answering tech questions:
+- Include practical examples and code snippets when relevant
+- Follow best practices and industry standards
+- Explain both high-level concepts and implementation details
+- Consider security, performance, and maintainability
+- Recommend appropriate tools and technologies for the use case""",
     },
     "history": {
         "patterns": [
@@ -83,10 +113,22 @@ CATEGORIES = {
             r"\b(BCE|CE|AD|BC|\d{4})\b.*\b(year|century|ago)\b",
         ],
         "description": "Historical events and topics",
+        "system_prompt": """You are a history expert. When answering historical questions:
+- Provide accurate dates, names, and historical context
+- Cite time periods and geographical locations
+- Explain the causes, events, and consequences
+- Consider multiple perspectives and historical interpretations
+- Connect historical events to their broader significance""",
     },
     "general": {
         "patterns": [r".*"],  # Catch-all pattern
         "description": "General questions and topics",
+        "system_prompt": """You are a knowledgeable assistant. When answering general questions:
+- Provide balanced, well-rounded responses
+- Draw from multiple domains of knowledge when relevant
+- Be clear, concise, and accurate
+- Adapt your explanation to the complexity of the question
+- Acknowledge limitations and uncertainties when appropriate""",
     },
 }
 
@@ -300,8 +342,9 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="list_categories",
             description=(
-                "List all available classification categories. "
-                "Returns a simple array of category names that the router will use for dynamic category loading."
+                "List all available classification categories with per-category system prompts and descriptions. "
+                "Returns: categories (array), category_system_prompts (object), category_descriptions (object). "
+                "Each category can have its own system prompt that the router injects for category-specific LLM context."
             ),
             inputSchema={"type": "object", "properties": {}},
         ),
@@ -328,9 +371,27 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
     elif name == "list_categories":
-        # Return simple list of category names as expected by semantic router
-        categories_response = {"categories": CATEGORY_NAMES}
-        logger.info(f"Returning {len(CATEGORY_NAMES)} categories: {CATEGORY_NAMES}")
+        # Return category information including per-category system prompts and descriptions
+        # This allows the router to get category-specific instructions from the MCP server
+        category_descriptions = {
+            name: CATEGORIES[name]["description"] for name in CATEGORY_NAMES
+        }
+
+        category_system_prompts = {
+            name: CATEGORIES[name]["system_prompt"]
+            for name in CATEGORY_NAMES
+            if "system_prompt" in CATEGORIES[name]
+        }
+
+        categories_response = {
+            "categories": CATEGORY_NAMES,
+            "category_system_prompts": category_system_prompts,
+            "category_descriptions": category_descriptions,
+        }
+
+        logger.info(
+            f"Returning {len(CATEGORY_NAMES)} categories with {len(category_system_prompts)} system prompts: {CATEGORY_NAMES}"
+        )
         return [TextContent(type="text", text=json.dumps(categories_response))]
 
     else:

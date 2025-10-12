@@ -88,7 +88,17 @@ type ClassifyWithProbabilitiesResponse struct {
 // Example JSON:
 //
 //	{
-//	  "categories": ["business", "law", "medical", "technical", "general"]
+//	  "categories": ["business", "law", "medical", "technical", "general"],
+//	  "category_system_prompts": {
+//	    "business": "You are a business and finance expert. Provide detailed financial analysis...",
+//	    "law": "You are a legal expert. Provide accurate legal information and cite relevant laws...",
+//	    "medical": "You are a medical professional. Provide evidence-based health information..."
+//	  },
+//	  "category_descriptions": {
+//	    "business": "Business and finance related queries",
+//	    "law": "Legal questions and regulations",
+//	    "medical": "Healthcare and medical information"
+//	  }
 //	}
 type ListCategoriesResponse struct {
 	// Categories is the ordered list of category names.
@@ -98,4 +108,14 @@ type ListCategoriesResponse struct {
 	//   - class 1 = "law"
 	//   - class 2 = "medical"
 	Categories []string `json:"categories"`
+
+	// CategorySystemPrompts provides optional per-category system prompts that the router
+	// can inject when processing queries in specific categories. This allows the MCP server
+	// to provide category-specific instructions that guide the LLM's behavior.
+	// The map key is the category name, and the value is the system prompt for that category.
+	CategorySystemPrompts map[string]string `json:"category_system_prompts,omitempty"`
+
+	// CategoryDescriptions provides optional human-readable descriptions for each category.
+	// This can be used for logging, debugging, or providing context to downstream systems.
+	CategoryDescriptions map[string]string `json:"category_descriptions,omitempty"`
 }

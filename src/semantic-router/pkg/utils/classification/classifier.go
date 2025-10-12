@@ -858,6 +858,27 @@ func (c *Classifier) GetCategoryByName(categoryName string) *config.Category {
 	return c.findCategory(categoryName)
 }
 
+// GetCategorySystemPrompt returns the system prompt for a specific category if available.
+// This is useful when the MCP server provides category-specific system prompts that should
+// be injected when processing queries in that category.
+// Returns empty string and false if no system prompt is available for the category.
+func (c *Classifier) GetCategorySystemPrompt(category string) (string, bool) {
+	if c.CategoryMapping == nil {
+		return "", false
+	}
+	return c.CategoryMapping.GetCategorySystemPrompt(category)
+}
+
+// GetCategoryDescription returns the description for a given category if available.
+// This is useful for logging, debugging, or providing context to downstream systems.
+// Returns empty string and false if the category has no description.
+func (c *Classifier) GetCategoryDescription(category string) (string, bool) {
+	if c.CategoryMapping == nil {
+		return "", false
+	}
+	return c.CategoryMapping.GetCategoryDescription(category)
+}
+
 // buildCategoryNameMappings builds translation maps between MMLU-Pro and generic categories
 func (c *Classifier) buildCategoryNameMappings() {
 	c.MMLUToGeneric = make(map[string]string)
