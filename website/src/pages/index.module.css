@@ -48,19 +48,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4rem;
+  gap: 3rem;
   margin-bottom: 3rem;
 }
 
 .heroLeft {
-  flex: 1;
+  flex: 0 0 40%;
   text-align: left;
 }
 
 .heroRight {
-  flex: 1;
+  flex: 0 0 55%;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
 }
 

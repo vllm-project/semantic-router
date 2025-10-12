@@ -4,7 +4,7 @@ import Link from '@docusaurus/Link'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import Layout from '@theme/Layout'
 import HomepageFeatures from '@site/src/components/HomepageFeatures'
-import TypewriterCode from '@site/src/components/TypewriterCode'
+import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
 import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground'
 import AIChipAnimation from '@site/src/components/AIChipAnimation'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
@@ -47,7 +47,7 @@ const HomepageHeader: React.FC = () => {
             </p>
           </div>
           <div className={styles.heroRight}>
-            <TypewriterCode />
+            <ChainOfThoughtTerminal />
           </div>
         </div>
         <div className={styles.buttons}>
