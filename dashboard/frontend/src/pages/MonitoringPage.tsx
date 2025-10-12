@@ -7,7 +7,7 @@ const MonitoringPage: React.FC = () => {
     return document.documentElement.getAttribute('data-theme') || 'dark'
   }
 
-  const [grafanaPath, setGrafanaPath] = useState('/d/semantic-router-dashboard/semantic-router')
+  const [grafanaPath, setGrafanaPath] = useState('/d/llm-router-metrics/llm-router-metrics')
   const [currentPath, setCurrentPath] = useState(grafanaPath)
   const [theme, setTheme] = useState(getTheme())
   const [loading, setLoading] = useState(true)
