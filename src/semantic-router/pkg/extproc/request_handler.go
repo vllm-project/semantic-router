@@ -75,6 +75,12 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 	return sdkBytes, nil
 }
 
+// shouldClearRouteCache checks if route cache should be cleared
+func (r *OpenAIRouter) shouldClearRouteCache() bool {
+	// Check if feature is enabled
+	return r.Config.ClearRouteCache
+}
+
 // addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
 // Returns the modified body, whether the system prompt was actually injected, and any error
 func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode string) ([]byte, bool, error) {
@@ -895,16 +901,31 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				},
 			})
 		}
+		// Set x-selected-model header for non-auto models
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "x-selected-model",
+				RawValue: []byte(originalModel),
+			},
+		})
+		// Create CommonResponse with cache clearing if enabled
+		commonResponse := &ext_proc.CommonResponse{
+			Status: ext_proc.CommonResponse_CONTINUE,
+			HeaderMutation: &ext_proc.HeaderMutation{
+				SetHeaders: setHeaders,
+			},
+		}
+
+		// Check if route cache should be cleared
+		if r.shouldClearRouteCache() {
+			commonResponse.ClearRouteCache = true
+		}
+
 		// Set the response with body mutation and content-length removal
 		response = &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_RequestBody{
 				RequestBody: &ext_proc.BodyResponse{
-					Response: &ext_proc.CommonResponse{
-						Status: ext_proc.CommonResponse_CONTINUE,
-						HeaderMutation: &ext_proc.HeaderMutation{
-							SetHeaders: setHeaders,
-						},
-					},
+					Response: commonResponse,
 				},
 			},
 		}
@@ -921,6 +942,15 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
 		})
 		metrics.RecordRoutingReasonCode("model_specified", originalModel)
+	}
+
+	// Check if route cache should be cleared (only for auto models, non-auto models handle this in their own path)
+	if originalModel == "auto" && r.shouldClearRouteCache() {
+		// Access the CommonResponse that's already created in this function
+		if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
+			response.GetRequestBody().GetResponse().ClearRouteCache = true
+			observability.Debugf("Setting ClearRouteCache=true (feature enabled) for auto model")
+		}
 	}
 
 	// Save the actual model that will be used for token tracking
@@ -1076,15 +1106,24 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		SetHeaders:    setHeaders,
 	}
 
+	// Create CommonResponse
+	commonResponse := &ext_proc.CommonResponse{
+		Status:         ext_proc.CommonResponse_CONTINUE,
+		HeaderMutation: headerMutation,
+		BodyMutation:   bodyMutation,
+	}
+
+	// Check if route cache should be cleared
+	if r.shouldClearRouteCache() {
+		commonResponse.ClearRouteCache = true
+		observability.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
+	}
+
 	// Update the response with body mutation and content-length removal
 	*response = &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
-				Response: &ext_proc.CommonResponse{
-					Status:         ext_proc.CommonResponse_CONTINUE,
-					HeaderMutation: headerMutation,
-					BodyMutation:   bodyMutation,
-				},
+				Response: commonResponse,
 			},
 		},
 	}

@@ -101,6 +101,9 @@ type RouterConfig struct {
 
 	// Observability configuration for tracing, metrics, and logging
 	Observability ObservabilityConfig `yaml:"observability"`
+
+	// Gateway route cache clearing
+	ClearRouteCache bool `yaml:"clear_route_cache"`
 }
 
 // APIConfig represents configuration for API endpoints
