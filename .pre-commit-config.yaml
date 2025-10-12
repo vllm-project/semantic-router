@@ -22,6 +22,14 @@ repos:
     language: system
     files: \.go$
 
+- repo: local
+  hooks:
+    - id: golang-lint
+      name: go lint
+      entry: make go-lint
+      language: system
+      files: \.go$
+
 # Markdown specific hooks
 - repo: local
   hooks:
