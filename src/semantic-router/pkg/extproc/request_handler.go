@@ -914,12 +914,12 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				SetHeaders: setHeaders,
 			},
 		}
-		
+
 		// Check if route cache should be cleared
 		if r.shouldClearRouteCache() {
 			commonResponse.ClearRouteCache = true
 		}
-		
+
 		// Set the response with body mutation and content-length removal
 		response = &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_RequestBody{
@@ -1111,7 +1111,7 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 		HeaderMutation: headerMutation,
 		BodyMutation:   bodyMutation,
 	}
-	
+
 	// Check if route cache should be cleared
 	if r.shouldClearRouteCache() {
 		commonResponse.ClearRouteCache = true
