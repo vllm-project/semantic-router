@@ -283,6 +283,56 @@ curl http://localhost:8700/healthz
 # Returns: {"status":"healthy","service":"semantic-router-dashboard"}
 ```
 
+### Kubernetes deployment
+
+The manifest at `dashboard/deploy/kubernetes/deployment.yaml` includes:
+
+- Deployment with args `-port=8700 -static=/app/frontend -config=/app/config/config.yaml`
+- Service (ClusterIP) exposing port 80 → container port 8700
+- ConfigMap `semantic-router-dashboard-config` for upstream targets (`TARGET_*` env)
+- ConfigMap `semantic-router-config` to provide a minimal `config.yaml` (replace with your real one)
+
+Quick start:
+
+```bash
+# Set your namespace and apply
+kubectl create ns vllm-semantic-router-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n vllm-semantic-router-system apply -f dashboard/deploy/kubernetes/deployment.yaml
+
+# Port-forward for local testing
+kubectl -n vllm-semantic-router-system port-forward svc/semantic-router-dashboard 8700:80
+# Open http://localhost:8700
+```
+
+Notes:
+
+- Edit `semantic-router-dashboard-config` in the YAML to match your in-cluster service DNS names and namespace.
+- Replace `semantic-router-config` content with your actual `config.yaml` or mount a Secret/ConfigMap you already manage.
+- To expose externally, add an Ingress or Service of type LoadBalancer according to your cluster.
+
+Optional Ingress example (Nginx Ingress):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: semantic-router-dashboard
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: dashboard.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: semantic-router-dashboard
+                port:
+                  number: 80
+```
+
 ## Notes
 
 - The dashboard is a runtime operator/try-it surface, not docs. See repository docs for broader guides.
