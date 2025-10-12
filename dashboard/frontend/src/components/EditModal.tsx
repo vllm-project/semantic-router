@@ -14,11 +14,14 @@ interface EditModalProps {
 export interface FieldConfig {
   name: string
   label: string
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json'
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json' | 'percentage'
   required?: boolean
   options?: string[]
   placeholder?: string
   description?: string
+  min?: number
+  max?: number
+  step?: number
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -36,10 +39,17 @@ const EditModal: React.FC<EditModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setFormData(data || {})
+      // Convert percentage fields from 0-1 to 0-100 for display
+      const convertedData = { ...data }
+      fields.forEach(field => {
+        if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
+          convertedData[field.name] = Math.round(convertedData[field.name] * 100)
+        }
+      })
+      setFormData(convertedData || {})
       setError(null)
     }
-  }, [isOpen, data])
+  }, [isOpen, data, fields])
 
   const handleChange = (fieldName: string, value: any) => {
     setFormData((prev: any) => ({
@@ -54,7 +64,14 @@ const EditModal: React.FC<EditModalProps> = ({
     setError(null)
 
     try {
-      await onSave(formData)
+      // Convert percentage fields from 0-100 back to 0-1 before saving
+      const convertedData = { ...formData }
+      fields.forEach(field => {
+        if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
+          convertedData[field.name] = convertedData[field.name] / 100
+        }
+      })
+      await onSave(convertedData)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
@@ -106,13 +123,46 @@ const EditModal: React.FC<EditModalProps> = ({
                 {field.type === 'number' && (
                   <input
                     type="number"
-                    step="any"
+                    step={field.step !== undefined ? field.step : "any"}
+                    min={field.min}
+                    max={field.max}
                     className={styles.input}
                     value={formData[field.name] || ''}
                     onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
                     placeholder={field.placeholder}
                     required={field.required}
                   />
+                )}
+
+                {field.type === 'percentage' && (
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      step={field.step !== undefined ? field.step : 1}
+                      min={0}
+                      max={100}
+                      className={styles.input}
+                      value={formData[field.name] !== undefined ? formData[field.name] : ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        handleChange(field.name, val === '' ? '' : parseFloat(val))
+                      }}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      style={{ paddingRight: '2.5rem' }}
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      right: '0.75rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'var(--color-text-secondary)',
+                      fontSize: '0.875rem',
+                      pointerEvents: 'none'
+                    }}>
+                      %
+                    </span>
+                  </div>
                 )}
 
                 {field.type === 'boolean' && (

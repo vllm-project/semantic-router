@@ -86,32 +86,6 @@ const MonitoringPage: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.controls}>
-        <div className={styles.controlGroup}>
-          <label htmlFor="grafana-path" className={styles.label}>
-            Grafana Dashboard Path:
-          </label>
-          <input
-            id="grafana-path"
-            type="text"
-            value={grafanaPath}
-            onChange={handlePathChange}
-            onKeyPress={handleKeyPress}
-            className={styles.input}
-            placeholder="/d/semantic-router-dashboard/semantic-router"
-          />
-          <button onClick={handleApply} className={styles.button}>
-            Apply
-          </button>
-        </div>
-        <div className={styles.hints}>
-          <span className={styles.hint}>💡 Tip: Press Enter to apply changes</span>
-          <span className={styles.hint}>
-            🎨 Theme: <strong>{theme}</strong> (synced with dashboard)
-          </span>
-        </div>
-      </div>
-
       {error && (
         <div className={styles.errorBanner}>
           <span className={styles.errorIcon}>⚠️</span>
@@ -137,6 +111,32 @@ const MonitoringPage: React.FC = () => {
           onLoad={handleIframeLoad}
           onError={handleIframeError}
         />
+      </div>
+
+      <div className={styles.controls}>
+        <div className={styles.controlGroup}>
+          <label htmlFor="grafana-path" className={styles.label}>
+            Grafana Dashboard Path:
+          </label>
+          <input
+            id="grafana-path"
+            type="text"
+            value={grafanaPath}
+            onChange={handlePathChange}
+            onKeyPress={handleKeyPress}
+            className={styles.input}
+            placeholder="/d/semantic-router-dashboard/semantic-router"
+          />
+          <button onClick={handleApply} className={styles.button}>
+            Apply
+          </button>
+        </div>
+        <div className={styles.hints}>
+          <span className={styles.hint}>💡 Tip: Press Enter to apply changes</span>
+          <span className={styles.hint}>
+            🎨 Theme: <strong>{theme}</strong> (synced with dashboard)
+          </span>
+        </div>
       </div>
     </div>
   )

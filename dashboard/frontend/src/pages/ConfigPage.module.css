@@ -178,25 +178,23 @@
   box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4);
 }
 
+/* Main content area */
 .content {
   flex: 1;
   background-color: var(--color-bg);
   border-radius: var(--radius-lg);
   overflow: auto;
   min-height: 0;
-}
-
-.mainLayout {
   display: flex;
-  gap: 1.5rem;
-  padding: 0.5rem;
-  height: 100%;
+  flex-direction: column;
 }
 
+/* Content area for sections */
 .contentArea {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  padding: 1rem;
 }
 
 .sectionPanel {
@@ -449,12 +447,12 @@
   color: #6b7280;
 }
 
-/* Endpoint Card */
+/* Endpoint Card - Unified with Model Card structure */
 .endpointCard {
   background-color: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 0.875rem;
+  overflow: hidden;
   margin-bottom: 0.875rem;
   transition: all var(--transition-fast);
 }
@@ -472,21 +470,24 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
   border-bottom: 1px solid var(--color-border);
 }
 
 .endpointName {
-  font-size: 1rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .endpointDetails {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  padding: 0.875rem;
 }
 
 .modelTags {
@@ -1017,12 +1018,26 @@
   font-style: italic;
 }
 
-/* Tools Grid */
+/* Tools Grid - Maximum 3 columns */
 .toolsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.25rem;
   margin-top: 1.5rem;
+}
+
+/* Responsive: 2 columns on medium screens */
+@media (max-width: 1400px) {
+  .toolsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Responsive: 1 column on small screens */
+@media (max-width: 900px) {
+  .toolsGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .toolCard {
