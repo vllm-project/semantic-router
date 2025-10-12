@@ -9,13 +9,9 @@ services:
     volumes:
       - ../../config:/app/config:ro
       - ../../models:/app/models:ro
-      - ~/.cache/huggingface:/root/.cache/huggingface
     environment:
       - LD_LIBRARY_PATH=/app/lib
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
-      - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
-      - HF_HUB_ENABLE_HF_TRANSFER=1
-      - HF_ENDPOINT=https://hf-mirror.com
     networks:
       - semantic-network
     healthcheck:

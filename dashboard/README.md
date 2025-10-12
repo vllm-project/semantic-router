@@ -37,8 +37,9 @@ Modern SPA built with:
 
 Pages:
 
+- **Landing** (`/`): Intro landing with animated terminal demo and quick links
 - **Monitoring** (`/monitoring`): Grafana dashboard embedding with custom path input
-- **Config** (`/config`): Real-time configuration viewer with multiple endpoints
+- **Config** (`/config`): Real-time configuration viewer with non-persistent edit demo (see note)
 - **Playground** (`/playground`): Open WebUI interface for testing
 
 Features:
@@ -47,6 +48,13 @@ Features:
 - 📱 Responsive design
 - ⚡ Fast navigation with React Router
 - 🎨 Modern UI inspired by vLLM website design
+
+Config edit demo (frontend only):
+
+- The Config page includes edit/add modals to showcase how configuration could be managed.
+- Current backend is read-only for config: it exposes `GET /api/router/config/all` only.
+- Demo save targets `POST /api/router/config/update` (not implemented by default). You can wire this endpoint in the backend to persist changes, or keep the edits as a UI mock.
+- Tools DB panel attempts to load `/api/tools-db` for `tools_db.json`. Add a backend route or static file handler to serve this if you want it live.
 
 ### Backend (Go HTTP Server)
 
@@ -73,6 +81,7 @@ dashboard/
 │   │   │   ├── Layout.tsx          # Main layout with header/nav
 │   │   │   └── Layout.module.css
 │   │   ├── pages/                  # Page components
+│   │   │   ├── LandingPage.tsx     # Welcome page with terminal demo
 │   │   │   ├── MonitoringPage.tsx  # Grafana iframe with path control
 │   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
 │   │   │   ├── PlaygroundPage.tsx  # Open WebUI iframe
@@ -116,9 +125,9 @@ Recommended upstream settings for embedding:
 
 ## URL strategy (stable, user-facing)
 
-- Dashboard Home: `http://<host>:8700/`
+- Dashboard Home (Landing): `http://<host>:8700/`
 - Monitoring tab: iframe `src="/embedded/grafana/d/<dashboard-uid>?kiosk&theme=light"`
-- Config tab: frontend fetch `GET /api/router/config/all`
+- Config tab: frontend fetch `GET /api/router/config/all` (demo edit modals; see note above)
 - Playground tab: iframe `src="/embedded/openwebui/"` (rendered only if `TARGET_OPENWEBUI_URL` is set)
 
 ## Deployment matrix
