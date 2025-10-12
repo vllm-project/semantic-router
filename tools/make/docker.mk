@@ -13,7 +13,7 @@ export COMPOSE_FILE ?= deploy/docker-compose/docker-compose.yml
 export COMPOSE_PROJECT_NAME ?= semantic-router
 
 # Build all Docker images
-docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-precommit
+docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
 	@$(LOG_TARGET)
 	@echo "All Docker images built successfully"
 
@@ -28,6 +28,12 @@ docker-build-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Building llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) build -f e2e-tests/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e-tests/llm-katan/
+
+# Build dashboard Docker image
+docker-build-dashboard:
+	@$(LOG_TARGET)
+	@echo "Building dashboard Docker image..."
+	@$(CONTAINER_RUNTIME) build -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
 
 # Build precommit Docker image
 docker-build-precommit:
@@ -126,6 +132,7 @@ docker-help:
 	@echo "  docker-build-all          - Build all Docker images"
 	@echo "  docker-build-extproc      - Build extproc Docker image"
 	@echo "  docker-build-llm-katan    - Build llm-katan Docker image"
+	@echo "  docker-build-dashboard    - Build dashboard Docker image"
 	@echo "  docker-build-precommit    - Build precommit Docker image"
 	@echo "  docker-test-llm-katan     - Test llm-katan Docker image"
 	@echo "  docker-run-llm-katan      - Run llm-katan Docker image locally"

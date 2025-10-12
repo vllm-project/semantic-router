@@ -271,10 +271,12 @@ docker logs -f semantic-router-dashboard
 
 - A **3-stage multi-stage build** is defined in `dashboard/backend/Dockerfile`:
   1. **Node.js stage**: Builds the React frontend with Vite (`npm run build` → `dist/`)
-  2. **Go builder stage**: Compiles the backend binary
+  2. **Go builder stage**: Compiles the backend binary with multi-architecture support
   3. **Alpine runtime stage**: Combines backend + frontend dist in minimal image
 - An independent Go module `dashboard/backend/go.mod` isolates backend dependencies.
 - Frontend production build (`dist/`) is packaged into the image at `/app/frontend`.
+- **Multi-architecture support**: The Dockerfile supports both AMD64 and ARM64 architectures.
+- **Pre-built images**: Available at `ghcr.io/vllm-project/semantic-router/dashboard` with tags for releases and latest.
 
 ### Grafana Embedding Support
 
