@@ -215,7 +215,7 @@ const LandingPage: React.FC = () => {
         <div className={styles.navContent}>
           <div className={styles.navBrand}>
             <img src="/vllm.png" alt="vLLM" className={styles.navLogo} />
-            <span className={styles.navBrandText}>Dashboard</span>
+            <span className={styles.navBrandText}>vLLM Semantic Router Dashboard</span>
           </div>
           <div className={styles.navLinks}>
             <Link to="/playground" className={styles.navLink}>
