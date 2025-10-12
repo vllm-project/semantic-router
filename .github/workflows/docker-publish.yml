@@ -38,7 +38,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan]
+        image: [extproc, llm-katan, dashboard]
         # Multi-architecture build strategy:
         # - AMD64: Native build on ubuntu-latest (fast)
         # - ARM64: Cross-compilation on ubuntu-latest (faster than emulation)
@@ -97,6 +97,32 @@ jobs:
             ${{ runner.os }}-pip-${{ matrix.arch }}-
             ${{ runner.os }}-pip-
 
+      # Node.js and Go caching for dashboard builds
+      - name: Cache Node.js dependencies (dashboard)
+        if: matrix.image == 'dashboard'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            dashboard/frontend/node_modules
+          key: ${{ runner.os }}-node-${{ matrix.arch }}-${{ hashFiles('dashboard/frontend/package.json', 'dashboard/frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.arch }}-
+            ${{ runner.os }}-node-
+
+      - name: Cache Go dependencies (dashboard)
+        if: matrix.image == 'dashboard'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            dashboard/backend/go.sum
+          key: ${{ runner.os }}-go-${{ matrix.arch }}-${{ hashFiles('dashboard/backend/go.mod', 'dashboard/backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.arch }}-
+            ${{ runner.os }}-go-
+
       - name: Generate date tag for nightly builds
         id: date
         if: inputs.is_nightly == true
@@ -123,6 +149,10 @@ jobs:
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e-tests/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
+            echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "dashboard" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
             echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
           fi
 
@@ -183,7 +213,7 @@ jobs:
     if: github.event_name != 'pull_request'
     strategy:
       matrix:
-        image: [extproc, llm-katan]
+        image: [extproc, llm-katan, dashboard]
 
     steps:
       - name: Log in to GitHub Container Registry

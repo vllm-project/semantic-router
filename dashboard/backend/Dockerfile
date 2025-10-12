@@ -16,6 +16,10 @@ WORKDIR /app
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GOSUMDB=sum.golang.google.cn
 
+# Accept build arguments for target architecture
+ARG TARGETARCH
+ARG TARGETOS=linux
+
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
 WORKDIR /app/dashboard/backend
@@ -23,7 +27,7 @@ RUN go mod download
 
 # Copy source code and build
 COPY dashboard/backend/ /app/dashboard/backend/
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/dashboard-backend main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/dashboard-backend main.go
 
 # Stage 3: Final runtime image
 FROM alpine:3.19

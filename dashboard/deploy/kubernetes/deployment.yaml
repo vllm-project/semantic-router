@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: dashboard
-          image: semantic-router-dashboard:latest
+          image: ghcr.io/vllm-project/semantic-router/dashboard:latest
           imagePullPolicy: IfNotPresent
           args: ["-port=8700", "-static=/app/frontend"]
           env:
