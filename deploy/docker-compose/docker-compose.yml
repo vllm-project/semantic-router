@@ -180,7 +180,7 @@ services:
       - TARGET_OPENWEBUI_URL=http://openwebui:8080
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
     volumes:
-      - ../../config:/app/config:ro
+      - ../../config:/app/config:rw
     ports:
       - "8700:8700"
     networks:
