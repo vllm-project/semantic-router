@@ -2,9 +2,7 @@ services:
 
   # Semantic Router External Processor Service
   semantic-router:
-    build:
-      context: ../../
-      dockerfile: Dockerfile.extproc
+    image: ghcr.io/vllm-project/semantic-router/extproc:latest
     container_name: semantic-router
     ports:
       - "50051:50051"

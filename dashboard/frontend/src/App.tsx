@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
+import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
 import ConfigPage from './pages/ConfigPage'
 import PlaygroundPage from './pages/PlaygroundPage'
@@ -67,14 +68,12 @@ const App: React.FC = () => {
 
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/playground" replace />} />
-          <Route path="/monitoring" element={<MonitoringPage />} />
-          <Route path="/config" element={<ConfigPage />} />
-          <Route path="/playground" element={<PlaygroundPage />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/monitoring" element={<Layout><MonitoringPage /></Layout>} />
+        <Route path="/config" element={<Layout><ConfigPage /></Layout>} />
+        <Route path="/playground" element={<Layout><PlaygroundPage /></Layout>} />
+      </Routes>
     </BrowserRouter>
   )
 }

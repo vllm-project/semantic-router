@@ -1,0 +1,168 @@
+.terminalContainer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.terminal {
+  width: 100%;
+  background: #1e293b;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.terminalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.terminalControls {
+  display: flex;
+  gap: 0.5rem;
+  position: absolute;
+  left: 1rem;
+}
+
+.terminalButton {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminalTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.terminalBody {
+  padding: 1.25rem;
+  font-family: 'Fira Code', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  height: 320px;
+  overflow-y: auto;
+  background: #0f172a;
+  text-align: left;
+}
+
+.terminalLine {
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.terminalLine.command {
+  color: #4ade80;
+}
+
+.terminalLine.output {
+  color: #94a3b8;
+}
+
+.terminalLine.comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.prompt {
+  color: #4ade80;
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.lineContent {
+  flex: 1;
+  word-break: break-word;
+}
+
+.cursor {
+  color: #4ade80;
+  animation: blink 1s infinite;
+  margin-left: 0.25rem;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scrollbar styling */
+.terminalBody::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminalBody::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.terminalBody::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+
+.terminalBody::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Responsive Design */
+@media (max-width: 996px) {
+  .terminalBody {
+    height: 350px;
+    font-size: 0.75rem;
+    padding: 1rem;
+  }
+
+  .terminalHeader {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .terminalButton {
+    width: 10px;
+    height: 10px;
+  }
+
+  .terminalTitle {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .terminalBody {
+    height: 300px;
+    font-size: 0.7rem;
+    padding: 0.875rem;
+  }
+
+  .terminalHeader {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .terminalControls {
+    left: 0.75rem;
+  }
+}
+
