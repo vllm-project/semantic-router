@@ -673,7 +673,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
 					useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 				// Record reasoning decision metric with the effort that will be applied if enabled
-				effortForMetrics := r.getReasoningEffort(categoryName)
+				effortForMetrics := r.getReasoningEffort(categoryName, matchedModel)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
 				// Set routing attributes on span

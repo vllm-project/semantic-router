@@ -17,24 +17,21 @@ func TestReasoningModeConfiguration(t *testing.T) {
 	cfg := &config.RouterConfig{
 		Categories: []config.Category{
 			{
-				Name:                 "math",
-				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				Name: "math",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning"},
 				},
 			},
 			{
-				Name:                 "business",
-				ReasoningDescription: "Business content is typically conversational",
+				Name: "business",
 				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
 				},
 			},
 			{
-				Name:                 "biology",
-				ReasoningDescription: "Biological processes benefit from structured analysis",
+				Name: "biology",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Biological processes benefit from structured analysis"},
 				},
 			},
 		},
@@ -47,15 +44,17 @@ func TestReasoningModeConfiguration(t *testing.T) {
 	for _, category := range cfg.Categories {
 		reasoningStatus := "DISABLED"
 		bestModel := "no-model"
+		reasoningDesc := ""
 		if len(category.ModelScores) > 0 {
 			bestModel = category.ModelScores[0].Model
 			if category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning {
 				reasoningStatus = "ENABLED"
 			}
+			reasoningDesc = category.ModelScores[0].ReasoningDescription
 		}
 
 		fmt.Printf("Category: %-15s | Model: %-12s | Reasoning: %-8s | %s\n",
-			category.Name, bestModel, reasoningStatus, category.ReasoningDescription)
+			category.Name, bestModel, reasoningStatus, reasoningDesc)
 	}
 
 	// Test queries with expected categories
@@ -82,10 +81,12 @@ func TestReasoningModeConfiguration(t *testing.T) {
 
 		for _, category := range cfg.Categories {
 			if strings.EqualFold(category.Name, test.category) {
-				if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
-					useReasoning = *category.ModelScores[0].UseReasoning
+				if len(category.ModelScores) > 0 {
+					if category.ModelScores[0].UseReasoning != nil {
+						useReasoning = *category.ModelScores[0].UseReasoning
+					}
+					reasoningDesc = category.ModelScores[0].ReasoningDescription
 				}
-				reasoningDesc = category.ReasoningDescription
 				found = true
 				break
 			}
@@ -129,21 +130,22 @@ func TestReasoningModeConfiguration(t *testing.T) {
 	fmt.Print(`
 categories:
 - name: math
-  reasoning_description: "Mathematical problems require step-by-step reasoning"
   model_scores:
   - model: deepseek-v31
     score: 0.9
     use_reasoning: true
+    reasoning_description: "Mathematical problems require step-by-step reasoning"
+    reasoning_effort: high
   - model: phi4
     score: 0.7
     use_reasoning: false
 
 - name: business
-  reasoning_description: "Business content is typically conversational"
   model_scores:
   - model: phi4
     score: 0.8
     use_reasoning: false
+    reasoning_description: "Business content is typically conversational"
 `)
 }
 
@@ -190,21 +192,22 @@ func DemonstrateConfigurationUsage() {
 	fmt.Print(`
 categories:
 - name: math
-  reasoning_description: "Mathematical problems require step-by-step reasoning"
   model_scores:
   - model: deepseek-v31
     score: 0.9
     use_reasoning: true
+    reasoning_description: "Mathematical problems require step-by-step reasoning"
+    reasoning_effort: high
   - model: phi4
     score: 0.7
     use_reasoning: false
 
 - name: creative_writing
-  reasoning_description: "Creative content flows better without structured reasoning"
   model_scores:
   - model: phi4
     score: 0.8
     use_reasoning: false
+    reasoning_description: "Creative content flows better without structured reasoning"
 `)
 
 	fmt.Println("\n2. Use in Go code:")

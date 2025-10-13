@@ -86,13 +86,12 @@ classifier:
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 categories:
   - name: business
-    use_reasoning: false
-    reasoning_description: "Business content is typically conversational"
-    reasoning_effort: low  # Business conversations need low reasoning effort
     model_scores:
       - model: "Model-A"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "Business content is typically conversational"
+        reasoning_effort: low
       - model: "Model-B"
         score: 0.4
         use_reasoning: false
@@ -100,12 +99,11 @@ categories:
         score: 0.2
         use_reasoning: false
   - name: law
-    use_reasoning: false
-    reasoning_description: "Legal content is typically explanatory"
     model_scores:
       - model: "Model-B"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "Legal content is typically explanatory"
       - model: "Model-A"
         score: 0.6
         use_reasoning: false
@@ -113,12 +111,11 @@ categories:
         score: 0.4
         use_reasoning: false
   - name: psychology
-    use_reasoning: false
-    reasoning_description: "Psychology content is usually explanatory"
     model_scores:
       - model: "Model-A"
         score: 0.6
         use_reasoning: false
+        reasoning_description: "Psychology content is usually explanatory"
       - model: "Model-B"
         score: 0.4
         use_reasoning: false
@@ -126,12 +123,11 @@ categories:
         score: 0.4
         use_reasoning: false
   - name: biology
-    use_reasoning: true
-    reasoning_description: "Biological processes benefit from structured analysis"
     model_scores:
       - model: "Model-A"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "Biological processes benefit from structured analysis"
       - model: "Model-B"
         score: 0.6
         use_reasoning: false
@@ -139,13 +135,12 @@ categories:
         score: 0.2
         use_reasoning: false
   - name: chemistry
-    use_reasoning: true
-    reasoning_description: "Chemical reactions and formulas require systematic thinking"
-    reasoning_effort: high  # Chemistry requires high reasoning effort
     model_scores:
       - model: "Model-A"
         score: 0.8
         use_reasoning: true
+        reasoning_description: "Chemical reactions and formulas require systematic thinking"
+        reasoning_effort: high
       - model: "Model-B"
         score: 0.6
         use_reasoning: false
@@ -153,12 +148,11 @@ categories:
         score: 0.6
         use_reasoning: false
   - name: history
-    use_reasoning: false
-    reasoning_description: "Historical content is narrative-based"
     model_scores:
       - model: "Model-A"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "Historical content is narrative-based"
       - model: "Model-A"
         score: 0.6
         use_reasoning: false
@@ -166,12 +160,11 @@ categories:
         score: 0.4
         use_reasoning: false
   - name: other
-    use_reasoning: false
-    reasoning_description: "General content doesn't require reasoning"
     model_scores:
       - model: "Model-B"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "General content doesn't require reasoning"
       - model: "Model-A"
         score: 0.6
         use_reasoning: false
@@ -179,12 +172,11 @@ categories:
         score: 0.6
         use_reasoning: false
   - name: health
-    use_reasoning: false
-    reasoning_description: "Health information is typically informational"
     model_scores:
       - model: "Model-B"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "Health information is typically informational"
       - model: "Model-A"
         score: 0.8
         use_reasoning: false
@@ -192,12 +184,11 @@ categories:
         score: 0.6
         use_reasoning: false
   - name: economics
-    use_reasoning: false
-    reasoning_description: "Economic discussions are usually explanatory"
     model_scores:
       - model: "Model-B"
         score: 0.8
         use_reasoning: false
+        reasoning_description: "Economic discussions are usually explanatory"
       - model: "Model-A"
         score: 0.8
         use_reasoning: false
@@ -205,16 +196,17 @@ categories:
         score: 0.1
         use_reasoning: false
   - name: math
-    use_reasoning: true
-    reasoning_description: "Mathematical problems require step-by-step reasoning"
-    reasoning_effort: high  # Math problems need high reasoning effort
     model_scores:
       - model: "Model-B"
         score: 1.0
         use_reasoning: true
+        reasoning_description: "Mathematical problems require step-by-step reasoning"
+        reasoning_effort: high
       - model: "Model-A"
         score: 0.9
         use_reasoning: true
+        reasoning_description: "Mathematical problems require step-by-step reasoning"
+        reasoning_effort: high
       - model: "Model-A"
         score: 0.8
         use_reasoning: false
@@ -222,12 +214,11 @@ categories:
         score: 0.6
         use_reasoning: false
   - name: physics
-    use_reasoning: true
-    reasoning_description: "Physics concepts need logical analysis"
     model_scores:
       - model: "Model-B"
         score: 0.4
         use_reasoning: true
+        reasoning_description: "Physics concepts need logical analysis"
       - model: "Model-A"
         score: 0.4
         use_reasoning: false
@@ -235,12 +226,11 @@ categories:
         score: 0.4
         use_reasoning: false
   - name: computer science
-    use_reasoning: true
-    reasoning_description: "Programming and algorithms need logical reasoning"
     model_scores:
       - model: "Model-B"
         score: 0.6
         use_reasoning: false
+        reasoning_description: "Programming and algorithms need logical reasoning"
       - model: "Model-A"
         score: 0.6
         use_reasoning: false
@@ -248,12 +238,11 @@ categories:
         score: 0.1
         use_reasoning: false
   - name: philosophy
-    use_reasoning: false
-    reasoning_description: "Philosophical discussions are conversational"
     model_scores:
       - model: "Model-A"
         score: 0.6
         use_reasoning: false
+        reasoning_description: "Philosophical discussions are conversational"
       - model: "Model-B"
         score: 0.2
         use_reasoning: false
@@ -261,12 +250,11 @@ categories:
         score: 0.2
         use_reasoning: false
   - name: engineering
-    use_reasoning: true
-    reasoning_description: "Engineering problems require systematic problem-solving"
     model_scores:
       - model: "Model-B"
         score: 0.6
         use_reasoning: false
+        reasoning_description: "Engineering problems require systematic problem-solving"
       - model: "Model-A"
         score: 0.6
         use_reasoning: false

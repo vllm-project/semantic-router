@@ -14,18 +14,16 @@ func TestReasoningModeIntegration(t *testing.T) {
 		DefaultReasoningEffort: "medium",
 		Categories: []config.Category{
 			{
-				Name:                 "math",
-				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				Name: "math",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning", ReasoningEffort: "high"},
 					{Model: "phi4", Score: 0.7, UseReasoning: config.BoolPtr(false)},
 				},
 			},
 			{
-				Name:                 "business",
-				ReasoningDescription: "Business content is typically conversational",
+				Name: "business",
 				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
 					{Model: "deepseek-v31", Score: 0.6, UseReasoning: config.BoolPtr(false)},
 				},
 			},
@@ -286,10 +284,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Math category with reasoning enabled",
 			category: config.Category{
-				Name:                 "math",
-				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				Name: "math",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning"},
 				},
 			},
 			expected: true,
@@ -297,10 +294,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Business category with reasoning disabled",
 			category: config.Category{
-				Name:                 "business",
-				ReasoningDescription: "Business content is typically conversational",
+				Name: "business",
 				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
 				},
 			},
 			expected: false,
@@ -308,10 +304,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Science category with reasoning enabled",
 			category: config.Category{
-				Name:                 "science",
-				ReasoningDescription: "Scientific concepts benefit from structured analysis",
+				Name: "science",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Scientific concepts benefit from structured analysis"},
 				},
 			},
 			expected: true,
@@ -331,9 +326,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 					tc.expected, tc.category.Name, bestModelReasoning)
 			}
 
-			// Verify description is not empty
-			if tc.category.ReasoningDescription == "" {
-				t.Errorf("ReasoningDescription should not be empty for category %s", tc.category.Name)
+			// Verify description is not empty (now in ModelScore)
+			if len(tc.category.ModelScores) > 0 && tc.category.ModelScores[0].ReasoningDescription == "" {
+				t.Errorf("ReasoningDescription should not be empty for best model in category %s", tc.category.Name)
 			}
 		})
 	}
