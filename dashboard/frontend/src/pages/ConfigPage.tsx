@@ -38,14 +38,13 @@ interface ModelScore {
   model: string
   score: number
   use_reasoning: boolean
+  reasoning_description?: string
+  reasoning_effort?: string
 }
 
 interface Category {
   name: string
   system_prompt?: string
-  use_reasoning: boolean
-  reasoning_description: string
-  reasoning_effort: string
   model_scores: ModelScore[]
 }
 
@@ -1408,14 +1407,21 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
         {config?.categories && config.categories.length > 0 ? (
           <div className={styles.categoryGridTwoColumn}>
-            {config.categories.map((category, index) => (
+            {config.categories.map((category, index) => {
+              // Get reasoning info from best model (first model score)
+              const bestModel = category.model_scores?.[0]
+              const useReasoning = bestModel?.use_reasoning || false
+              const reasoningEffort = bestModel?.reasoning_effort || 'medium'
+              const reasoningDescription = bestModel?.reasoning_description || ''
+
+              return (
               <div key={index} className={styles.categoryCard}>
                 <div className={styles.categoryHeader}>
                   <span className={styles.categoryName}>{category.name}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {category.use_reasoning && (
-                      <span className={`${styles.reasoningBadge} ${styles[`reasoning${category.reasoning_effort}`]}`}>
-                        ⚡ {category.reasoning_effort}
+                    {useReasoning && (
+                      <span className={`${styles.reasoningBadge} ${styles[`reasoning${reasoningEffort}`]}`}>
+                        ⚡ {reasoningEffort}
                       </span>
                     )}
                     <button
@@ -1424,10 +1430,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                         openEditModal(
                           `Edit Category: ${category.name}`,
                           {
-                            system_prompt: category.system_prompt || '',
-                            use_reasoning: category.use_reasoning || false,
-                            reasoning_effort: category.reasoning_effort || 'medium',
-                            reasoning_description: category.reasoning_description || ''
+                            system_prompt: category.system_prompt || ''
                           },
                           [
                             {
@@ -1436,26 +1439,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                               type: 'textarea',
                               placeholder: 'Enter system prompt for this category...',
                               description: 'Instructions for the model when handling this category'
-                            },
-                            {
-                              name: 'use_reasoning',
-                              label: 'Use Reasoning',
-                              type: 'boolean',
-                              description: 'Enable reasoning for this category'
-                            },
-                            {
-                              name: 'reasoning_effort',
-                              label: 'Reasoning Effort',
-                              type: 'select',
-                              options: ['low', 'medium', 'high'],
-                              description: 'Computational effort level for reasoning'
-                            },
-                            {
-                              name: 'reasoning_description',
-                              label: 'Reasoning Description',
-                              type: 'textarea',
-                              placeholder: 'Describe the reasoning approach...',
-                              description: 'Description of how reasoning is applied'
                             }
                           ],
                           async (data) => {
@@ -1484,7 +1467,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   </div>
                 )}
 
-                <p className={styles.categoryDescription}>{category.reasoning_description}</p>
+                {reasoningDescription && (
+                  <p className={styles.categoryDescription}>{reasoningDescription}</p>
+                )}
 
                 <div className={styles.categoryModels}>
                   <div className={styles.categoryModelsHeader}>
@@ -1635,7 +1620,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   )}
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         ) : (
           <div className={styles.emptyState}>No categories configured</div>
