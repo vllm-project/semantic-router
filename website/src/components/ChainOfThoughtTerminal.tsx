@@ -137,7 +137,8 @@ const ChainOfThoughtTerminal: React.FC = () => {
       if (currentLine.type === 'clear') {
         // Clear the terminal
         setTerminalLines([])
-      } else {
+      }
+      else {
         // Add the line
         setTerminalLines(prev => [...prev, currentLine])
       }
