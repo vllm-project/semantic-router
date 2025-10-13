@@ -552,6 +552,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
+				// Check rag for this category
+				// ragStrategy, categoryName := r.getRagStrategy()
+				// observability.Info
+				// metrics stuff
+
 				// Track VSR decision information
 				ctx.VSRSelectedCategory = categoryName
 				ctx.VSRSelectedModel = matchedModel
@@ -630,6 +635,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					}
 				}
 
+				// Modify the prompt with RAG
+					// 1. Retrieve the RAG chunks
+					// 2. Modify the request body with the chunks 
+				
 				// Create body mutation with the modified body
 				bodyMutation := &ext_proc.BodyMutation{
 					Mutation: &ext_proc.BodyMutation_Body{
