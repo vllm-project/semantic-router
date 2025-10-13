@@ -7,6 +7,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -18,8 +19,15 @@ func TestHandleModelsRequest(t *testing.T) {
 				Name:    "primary",
 				Address: "127.0.0.1",
 				Port:    8000,
-				Models:  []string{"gpt-4o-mini", "llama-3.1-8b-instruct"},
 				Weight:  1,
+			},
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"gpt-4o-mini": {
+				PreferredEndpoints: []string{"primary"},
+			},
+			"llama-3.1-8b-instruct": {
+				PreferredEndpoints: []string{"primary"},
 			},
 		},
 	}
@@ -142,8 +150,12 @@ func TestHandleRequestHeadersWithModelsEndpoint(t *testing.T) {
 				Name:    "primary",
 				Address: "127.0.0.1",
 				Port:    8000,
-				Models:  []string{"gpt-4o-mini"},
 				Weight:  1,
+			},
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"gpt-4o-mini": {
+				PreferredEndpoints: []string{"primary"},
 			},
 		},
 	}

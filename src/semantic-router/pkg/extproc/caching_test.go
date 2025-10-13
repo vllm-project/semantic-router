@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openai/openai-go"
-
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"

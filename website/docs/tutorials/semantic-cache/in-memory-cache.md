@@ -162,4 +162,4 @@ The in-memory cache automatically manages memory through:
 
 - **[Milvus Cache](./milvus-cache.md)** - Set up persistent, distributed caching
 - **[Cache Overview](./overview.md)** - Learn about semantic caching concepts
-- **[Observability](../observability/observability.md)** - Monitor cache performance
+- **[Observability](../observability/overview.md)** - Monitor cache performance

@@ -308,7 +308,7 @@ func (c *HTTPClient) Ping(ctx context.Context) error {
 }
 
 // RefreshCapabilities reloads tools, resources, and prompts
-func (c *HTTPClient) RefreshCapabilities(ctx context.Context) error {
+func (c *HTTPClient) RefreshCapabilities(_ context.Context) error {
 	if !c.connected {
 		return fmt.Errorf("client not connected")
 	}

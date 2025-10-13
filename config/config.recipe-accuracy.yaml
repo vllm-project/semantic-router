@@ -44,8 +44,6 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "openai/gpt-oss-20b"
     weight: 1
 
 model_config:

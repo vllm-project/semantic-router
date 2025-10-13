@@ -27,20 +27,32 @@ var _ = Describe("generic category mapping (MMLU-Pro -> generic)", func() {
 		// Define generic categories with MMLU-Pro mappings
 		cfg.Categories = []config.Category{
 			{
-				Name:            "tech",
-				MMLUCategories:  []string{"computer science", "engineering"},
-				ModelScores:     []config.ModelScore{{Model: "phi4", Score: 0.9, UseReasoning: config.BoolPtr(false)}},
-				ReasoningEffort: "low",
+				Name:           "tech",
+				MMLUCategories: []string{"computer science", "engineering"},
+				ModelScores: []config.ModelScore{{
+					Model:           "phi4",
+					Score:           0.9,
+					UseReasoning:    config.BoolPtr(false),
+					ReasoningEffort: "low",
+				}},
 			},
 			{
 				Name:           "finance",
 				MMLUCategories: []string{"economics"},
-				ModelScores:    []config.ModelScore{{Model: "gemma3:27b", Score: 0.8, UseReasoning: config.BoolPtr(true)}},
+				ModelScores: []config.ModelScore{{
+					Model:        "gemma3:27b",
+					Score:        0.8,
+					UseReasoning: config.BoolPtr(true),
+				}},
 			},
 			{
 				Name: "politics",
 				// No explicit mmlu_categories -> identity fallback when label exists in mapping
-				ModelScores: []config.ModelScore{{Model: "gemma3:27b", Score: 0.6, UseReasoning: config.BoolPtr(false)}},
+				ModelScores: []config.ModelScore{{
+					Model:        "gemma3:27b",
+					Score:        0.6,
+					UseReasoning: config.BoolPtr(false),
+				}},
 			},
 		}
 

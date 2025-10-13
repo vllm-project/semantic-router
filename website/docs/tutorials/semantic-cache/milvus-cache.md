@@ -145,5 +145,5 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ## Next Steps
 
 - **[In-Memory Cache](./in-memory-cache.md)** - Compare with in-memory caching
-- **[Cache Overview](./overview.md)** - Learn semantic caching concepts  
-- **[Observability](../observability/observability.md)** - Monitor Milvus performance
+- **[Cache Overview](./overview.md)** - Learn semantic caching concepts
+- **[Observability](../observability/overview.md)** - Monitor Milvus performance

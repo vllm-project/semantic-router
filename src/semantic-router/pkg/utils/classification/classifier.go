@@ -729,7 +729,7 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 
 	for _, content := range allContent {
 		if content != "" {
-			//TODO: classifier may not handle the entire content, so we need to split the content into smaller chunks
+			// TODO: classifier may not handle the entire content, so we need to split the content into smaller chunks
 			piiTypes, err := c.ClassifyPII(content)
 			if err != nil {
 				observability.Errorf("PII classification error: %v", err)

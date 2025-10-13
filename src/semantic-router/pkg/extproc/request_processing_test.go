@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/openai/openai-go"
-
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -361,7 +360,6 @@ var _ = Describe("Request Processing", func() {
 
 	Describe("handleResponseBody", func() {
 		It("should process response body with token parsing", func() {
-
 			openAIResponse := openai.ChatCompletion{
 				ID:      "chatcmpl-123",
 				Object:  "chat.completion",

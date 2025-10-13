@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/packages/param"
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 func TestTools(t *testing.T) {

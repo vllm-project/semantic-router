@@ -14,18 +14,16 @@ func TestReasoningModeIntegration(t *testing.T) {
 		DefaultReasoningEffort: "medium",
 		Categories: []config.Category{
 			{
-				Name:                 "math",
-				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				Name: "math",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning", ReasoningEffort: "high"},
 					{Model: "phi4", Score: 0.7, UseReasoning: config.BoolPtr(false)},
 				},
 			},
 			{
-				Name:                 "business",
-				ReasoningDescription: "Business content is typically conversational",
+				Name: "business",
 				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
 					{Model: "deepseek-v31", Score: 0.6, UseReasoning: config.BoolPtr(false)},
 				},
 			},
@@ -120,8 +118,8 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		var modifiedRequest map[string]interface{}
-		if err := json.Unmarshal(modifiedBody, &modifiedRequest); err != nil {
-			t.Fatalf("Failed to unmarshal modified request: %v", err)
+		if unmarshalErr := json.Unmarshal(modifiedBody, &modifiedRequest); unmarshalErr != nil {
+			t.Fatalf("Failed to unmarshal modified request: %v", unmarshalErr)
 		}
 
 		// Check if chat_template_kwargs was added for DeepSeek model
@@ -189,7 +187,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 	// Test case 4: Test buildReasoningRequestFields function with config-driven approach
 	t.Run("buildReasoningRequestFields returns correct values", func(t *testing.T) {
 		// Create a router with sample configurations for testing
-		router := &OpenAIRouter{
+		testRouter := &OpenAIRouter{
 			Config: &config.RouterConfig{
 				DefaultReasoningEffort: "medium",
 				ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
@@ -217,7 +215,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with DeepSeek model and reasoning enabled
-		fields, _ := router.buildReasoningRequestFields("deepseek-v31", true, "test-category")
+		fields, _ := testRouter.buildReasoningRequestFields("deepseek-v31", true, "test-category")
 		if fields == nil {
 			t.Error("Expected non-nil fields for DeepSeek model with reasoning enabled")
 		}
@@ -230,13 +228,13 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with DeepSeek model and reasoning disabled
-		fields, _ = router.buildReasoningRequestFields("deepseek-v31", false, "test-category")
+		fields, _ = testRouter.buildReasoningRequestFields("deepseek-v31", false, "test-category")
 		if fields != nil {
 			t.Errorf("Expected nil fields for DeepSeek model with reasoning disabled, got %v", fields)
 		}
 
 		// Test with Qwen3 model and reasoning enabled
-		fields, _ = router.buildReasoningRequestFields("qwen3-model", true, "test-category")
+		fields, _ = testRouter.buildReasoningRequestFields("qwen3-model", true, "test-category")
 		if fields == nil {
 			t.Error("Expected non-nil fields for Qwen3 model with reasoning enabled")
 		}
@@ -249,7 +247,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with unknown model (should return no fields)
-		fields, effort := router.buildReasoningRequestFields("unknown-model", true, "test-category")
+		fields, effort := testRouter.buildReasoningRequestFields("unknown-model", true, "test-category")
 		if fields != nil {
 			t.Errorf("Expected nil fields for unknown model with reasoning enabled, got %v", fields)
 		}
@@ -286,10 +284,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Math category with reasoning enabled",
 			category: config.Category{
-				Name:                 "math",
-				ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+				Name: "math",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning"},
 				},
 			},
 			expected: true,
@@ -297,10 +294,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Business category with reasoning disabled",
 			category: config.Category{
-				Name:                 "business",
-				ReasoningDescription: "Business content is typically conversational",
+				Name: "business",
 				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)},
+					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
 				},
 			},
 			expected: false,
@@ -308,10 +304,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Science category with reasoning enabled",
 			category: config.Category{
-				Name:                 "science",
-				ReasoningDescription: "Scientific concepts benefit from structured analysis",
+				Name: "science",
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)},
+					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Scientific concepts benefit from structured analysis"},
 				},
 			},
 			expected: true,
@@ -331,9 +326,9 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 					tc.expected, tc.category.Name, bestModelReasoning)
 			}
 
-			// Verify description is not empty
-			if tc.category.ReasoningDescription == "" {
-				t.Errorf("ReasoningDescription should not be empty for category %s", tc.category.Name)
+			// Verify description is not empty (now in ModelScore)
+			if len(tc.category.ModelScores) > 0 && tc.category.ModelScores[0].ReasoningDescription == "" {
+				t.Errorf("ReasoningDescription should not be empty for best model in category %s", tc.category.Name)
 			}
 		})
 	}

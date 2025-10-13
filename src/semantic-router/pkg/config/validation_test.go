@@ -186,13 +186,11 @@ var _ = Describe("IP Address Validation", func() {
 						Name:    "endpoint1",
 						Address: "127.0.0.1",
 						Port:    8000,
-						Models:  []string{"model1"},
 					},
 					{
 						Name:    "endpoint2",
 						Address: "::1",
 						Port:    8001,
-						Models:  []string{"model2"},
 					},
 				}
 
@@ -208,7 +206,6 @@ var _ = Describe("IP Address Validation", func() {
 						Name:    "invalid-endpoint",
 						Address: "example.com",
 						Port:    8000,
-						Models:  []string{"model1"},
 					},
 				}
 
@@ -228,7 +225,6 @@ var _ = Describe("IP Address Validation", func() {
 						Name:    "test-endpoint",
 						Address: "http://127.0.0.1",
 						Port:    8000,
-						Models:  []string{"model1"},
 					},
 				}
 
