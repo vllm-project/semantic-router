@@ -19,4 +19,9 @@ resources:
   - grafana/configmap-dashboard.yaml
   - grafana/deployment.yaml
   - grafana/service.yaml
+  - dashboard/configmap.yaml
+  - dashboard/deployment.yaml
+  - dashboard/service.yaml
+  - pipelines/deployment.yaml
+  - openwebui/deployment.yaml
   - ingress.yaml
