@@ -134,12 +134,12 @@
   text-align: left;
 }
 
-/* 默认深色 */
+/* Default dark color */
 .defaultColor {
   color: #1F2328;
 }
 
-/* 特殊单词样式 */
+/* Special word styles */
 .vllmSemanticRouterColor {
   color: #0969DA;
   text-shadow: 0 0 10px rgba(9, 105, 218, 0.3);
@@ -254,9 +254,9 @@
 
 
 
-/* 移除科技感增强效果，保持背景统一 */
+/* Remove tech enhancement effects, keep background unified */
 
-/* 响应式设计 */
+/* Responsive design */
 @media screen and (max-width: 768px) {
   .codeBlock {
     min-width: 320px;
