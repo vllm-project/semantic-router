@@ -7,7 +7,6 @@ interface VLLMEndpoint {
   name: string
   address: string
   port: number
-  models: string[]
   weight: number
   health_check_path: string
 }

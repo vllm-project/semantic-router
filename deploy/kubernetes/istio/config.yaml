@@ -34,14 +34,10 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "10.104.192.205"  # IPv4 address - REQUIRED format
     port: 80
-    models:
-      - "llama3-8b"
     weight: 1
   - name: "endpoint2"
     address: "10.99.27.202"  # IPv4 address - REQUIRED format
     port: 80
-    models:
-      - "phi4-mini"
     weight: 1
 
 model_config:

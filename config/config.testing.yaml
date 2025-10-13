@@ -30,8 +30,6 @@ vllm_endpoints:
   - name: "mock"
     address: "172.28.0.10"
     port: 8000
-    models:
-      - "openai/gpt-oss-20b"
     weight: 1
     health_check_path: "/health"
 
