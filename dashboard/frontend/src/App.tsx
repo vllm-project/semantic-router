@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
 import ConfigPage from './pages/ConfigPage'
 import PlaygroundPage from './pages/PlaygroundPage'
+import TopologyPage from './pages/TopologyPage'
 import { ConfigSection } from './components/ConfigNav'
 
 const App: React.FC = () => {
@@ -102,6 +103,17 @@ const App: React.FC = () => {
               onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
             >
               <PlaygroundPage />
+            </Layout>
+          }
+        />
+        <Route
+          path="/topology"
+          element={
+            <Layout
+              configSection={configSection}
+              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+            >
+              <TopologyPage />
             </Layout>
           }
         />

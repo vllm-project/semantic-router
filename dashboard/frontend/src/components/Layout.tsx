@@ -56,16 +56,26 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 { id: 'prompt-guard', icon: '🛡️', title: 'Prompt Guard' },
                 { id: 'similarity-cache', icon: '⚡', title: 'Similarity Cache' },
                 { id: 'intelligent-routing', icon: '🧠', title: 'Intelligent Routing' },
+                { id: 'topology', icon: '🗺️', title: 'Topology' },
                 { id: 'tools-selection', icon: '🔧', title: 'Tools Selection' },
                 { id: 'observability', icon: '👁️', title: 'Observability' },
                 { id: 'classification-api', icon: '🔌', title: 'Classification API' }
               ].map((section) => (
                 <button
                   key={section.id}
-                  className={`${styles.navLink} ${isConfigPage && configSection === section.id ? styles.navLinkActive : ''}`}
+                  className={`${styles.navLink} ${
+                    (section.id === 'topology' && location.pathname === '/topology') ||
+                    (isConfigPage && configSection === section.id)
+                      ? styles.navLinkActive
+                      : ''
+                  }`}
                   onClick={() => {
-                    onConfigSectionChange(section.id)
-                    navigate('/config')
+                    if (section.id === 'topology') {
+                      navigate('/topology')
+                    } else {
+                      onConfigSectionChange(section.id)
+                      navigate('/config')
+                    }
                   }}
                 >
                   <span className={styles.navIcon}>{section.icon}</span>
@@ -95,7 +105,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
           <a
-            href="https://github.com/vllm-project/vllm"
+            href="https://github.com/vllm-project/semantic-router"
             target="_blank"
             rel="noopener noreferrer"
             className={styles.iconButton}
@@ -107,7 +117,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             </svg>
           </a>
           <a
-            href="https://docs.vllm.ai"
+            href="https://vllm-semantic-router.com"
             target="_blank"
             rel="noopener noreferrer"
             className={styles.iconButton}
