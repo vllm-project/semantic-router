@@ -332,18 +332,18 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 
 // ModelScore associates an LLM with its selection weight and reasoning flag within a category.
 type ModelScore struct {
-	Model        string  `yaml:"model"`
-	Score        float64 `yaml:"score"`
-	UseReasoning *bool   `yaml:"use_reasoning"` // Pointer to detect missing field
+	Model                string  `yaml:"model"`
+	Score                float64 `yaml:"score"`
+	UseReasoning         *bool   `yaml:"use_reasoning"`                   // Pointer to detect missing field
+	ReasoningDescription string  `yaml:"reasoning_description,omitempty"` // Model-specific reasoning description
+	ReasoningEffort      string  `yaml:"reasoning_effort,omitempty"`      // Model-specific reasoning effort level (low, medium, high)
 }
 
 // Category represents a category for routing queries
 type Category struct {
-	Name                 string       `yaml:"name"`
-	Description          string       `yaml:"description,omitempty"`
-	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
-	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
-	ModelScores          []ModelScore `yaml:"model_scores"`
+	Name        string       `yaml:"name"`
+	Description string       `yaml:"description,omitempty"`
+	ModelScores []ModelScore `yaml:"model_scores"`
 	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
 	// used by the classifier model. When provided, classifier outputs will be translated
 	// from these MMLU categories to this generic category name.
@@ -358,8 +358,6 @@ type Category struct {
 	// "insert": Prepend the category-specific prompt to the existing system message content
 	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
 }
-
-// Legacy types - can be removed once migration is complete
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
@@ -380,18 +378,6 @@ func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFami
 	}
 
 	return &familyConfig
-}
-
-// Legacy functions - can be removed once migration is complete
-
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 var (
