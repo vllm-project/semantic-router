@@ -42,15 +42,11 @@ vllm_endpoints:
   - name: "qwen-endpoint"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "Model-A"
     weight: 1
     health_check_path: "/health"
   - name: "tinyllama-endpoint"
     address: "127.0.0.1"
     port: 8001
-    models:
-      - "Model-B"
     weight: 1
     health_check_path: "/health"
 

@@ -91,15 +91,10 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "model-a"
-      - "model-b"
     weight: 1
   - name: "endpoint2"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "model-b"
     weight: 2
 
 model_config:
@@ -176,7 +171,6 @@ tools:
 				Expect(cfg.VLLMEndpoints[0].Name).To(Equal("endpoint1"))
 				Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
 				Expect(cfg.VLLMEndpoints[0].Port).To(Equal(8000))
-				Expect(cfg.VLLMEndpoints[0].Models).To(ContainElements("model-a", "model-b"))
 				Expect(cfg.VLLMEndpoints[0].Weight).To(Equal(1))
 
 				Expect(cfg.VLLMEndpoints[1].Name).To(Equal("endpoint2"))
@@ -787,22 +781,14 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "model-a"
-      - "model-b"
     weight: 1
   - name: "endpoint2"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "model-b"
-      - "model-c"
     weight: 2
   - name: "endpoint3"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "model-a"
     weight: 1
 
 model_config:
@@ -840,13 +826,12 @@ default_model: "model-b"
 				Expect(endpointNames).To(ContainElements("endpoint1", "endpoint3"))
 			})
 
-			It("should return all available endpoints when no preferences configured", func() {
+			It("should return empty slice when no preferred endpoints configured", func() {
 				cfg, err := config.LoadConfig(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-c")
-				Expect(endpoints).To(HaveLen(1))
-				Expect(endpoints[0].Name).To(Equal("endpoint2"))
+				Expect(endpoints).To(BeEmpty())
 			})
 
 			It("should return empty slice for non-existent model", func() {
@@ -857,11 +842,11 @@ default_model: "model-b"
 				Expect(endpoints).To(BeEmpty())
 			})
 
-			It("should fallback to all available endpoints if preferred endpoints don't exist", func() {
+			It("should return only preferred endpoints", func() {
 				cfg, err := config.LoadConfig(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				// model-b has preferred endpoint2, which serves it
+				// model-b has preferred endpoint2
 				endpoints := cfg.GetEndpointsForModel("model-b")
 				Expect(endpoints).To(HaveLen(1))
 				Expect(endpoints[0].Name).To(Equal("endpoint2"))
@@ -878,7 +863,6 @@ default_model: "model-b"
 				Expect(endpoint.Name).To(Equal("endpoint1"))
 				Expect(endpoint.Address).To(Equal("127.0.0.1"))
 				Expect(endpoint.Port).To(Equal(8000))
-				Expect(endpoint.Models).To(ContainElements("model-a", "model-b"))
 			})
 
 			It("should return false when endpoint doesn't exist", func() {
@@ -892,7 +876,7 @@ default_model: "model-b"
 		})
 
 		Describe("GetAllModels", func() {
-			It("should return all unique models across endpoints", func() {
+			It("should return all models from model_config", func() {
 				cfg, err := config.LoadConfig(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -907,7 +891,7 @@ default_model: "model-b"
 				cfg, err := config.LoadConfig(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				// model-a is available on endpoint1 (weight 1) and endpoint3 (weight 1)
+				// model-a has preferred endpoints: endpoint1 (weight 1) and endpoint3 (weight 1)
 				// Since they have the same weight, it should return the first one found
 				endpointName, found := cfg.SelectBestEndpointForModel("model-a")
 				Expect(found).To(BeTrue())
@@ -923,13 +907,13 @@ default_model: "model-b"
 				Expect(endpointName).To(BeEmpty())
 			})
 
-			It("should select single endpoint when only one available", func() {
+			It("should return false when model has no preferred endpoints", func() {
 				cfg, err := config.LoadConfig(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpointName, found := cfg.SelectBestEndpointForModel("model-c")
-				Expect(found).To(BeTrue())
-				Expect(endpointName).To(Equal("endpoint2"))
+				Expect(found).To(BeFalse())
+				Expect(endpointName).To(BeEmpty())
 			})
 		})
 
@@ -943,15 +927,17 @@ default_model: "model-b"
 			})
 
 			It("should fail validation when a category model has no endpoints", func() {
-				// Add a model to categories that doesn't exist in any endpoint
+				// Add a model to categories that doesn't have preferred_endpoints configured
 				configContent := `
 vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "existing-model"
     weight: 1
+
+model_config:
+  "existing-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -980,9 +966,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "existing-model"
     weight: 1
+
+model_config:
+  "existing-model":
+    preferred_endpoints: ["endpoint1"]
 
 default_model: "missing-default-model"
 `
@@ -1006,9 +994,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -1033,9 +1023,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "::1"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -1062,9 +1054,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "example.com"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -1091,9 +1085,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "http://127.0.0.1"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -1119,9 +1115,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1/api"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -1146,9 +1144,11 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1:8080"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["endpoint1"]
 
 categories:
   - name: "test"
@@ -1174,9 +1174,11 @@ vllm_endpoints:
   - name: "test-endpoint"
     address: "https://example.com"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
+
+model_config:
+  "test-model":
+    preferred_endpoints: ["test-endpoint"]
 
 categories:
   - name: "test"
@@ -1211,15 +1213,17 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "test-model1"
     weight: 1
   - name: "endpoint2"
     address: "example.com"
     port: 8001
-    models:
-      - "test-model2"
     weight: 1
+
+model_config:
+  "test-model1":
+    preferred_endpoints: ["endpoint1"]
+  "test-model2":
+    preferred_endpoints: ["endpoint2"]
 
 categories:
   - name: "test"

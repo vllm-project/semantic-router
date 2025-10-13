@@ -253,9 +253,6 @@ type VLLMEndpoint struct {
 	// Port of the vLLM endpoint
 	Port int `yaml:"port"`
 
-	// List of models served by this endpoint
-	Models []string `yaml:"models"`
-
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
 }
@@ -590,32 +587,21 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 }
 
 // GetEndpointsForModel returns all endpoints that can serve the specified model
-// If the model has preferred endpoints configured, returns only those endpoints that are available
-// Otherwise, returns all endpoints that list the model in their Models array
+// Returns endpoints based on the model's preferred_endpoints configuration in model_config
 func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
-	var availableEndpoints []VLLMEndpoint
-
-	// First, find all endpoints that can serve this model
-	for _, endpoint := range c.VLLMEndpoints {
-		if slices.Contains(endpoint.Models, modelName) {
-			availableEndpoints = append(availableEndpoints, endpoint)
-		}
-	}
+	var endpoints []VLLMEndpoint
 
 	// Check if model has preferred endpoints configured
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
-		var preferredEndpoints []VLLMEndpoint
-		for _, endpoint := range availableEndpoints {
-			if slices.Contains(modelConfig.PreferredEndpoints, endpoint.Name) {
-				preferredEndpoints = append(preferredEndpoints, endpoint)
+		// Return only the preferred endpoints
+		for _, endpointName := range modelConfig.PreferredEndpoints {
+			if endpoint, found := c.GetEndpointByName(endpointName); found {
+				endpoints = append(endpoints, *endpoint)
 			}
-		}
-		if len(preferredEndpoints) > 0 {
-			return preferredEndpoints
 		}
 	}
 
-	return availableEndpoints
+	return endpoints
 }
 
 // GetEndpointByName returns the endpoint with the specified name
@@ -628,18 +614,12 @@ func (c *RouterConfig) GetEndpointByName(name string) (*VLLMEndpoint, bool) {
 	return nil, false
 }
 
-// GetAllModels returns a list of all models available across all endpoints
+// GetAllModels returns a list of all models configured in model_config
 func (c *RouterConfig) GetAllModels() []string {
-	modelSet := make(map[string]bool)
 	var models []string
 
-	for _, endpoint := range c.VLLMEndpoints {
-		for _, model := range endpoint.Models {
-			if !modelSet[model] {
-				modelSet[model] = true
-				models = append(models, model)
-			}
-		}
+	for modelName := range c.ModelConfig {
+		models = append(models, modelName)
 	}
 
 	return models

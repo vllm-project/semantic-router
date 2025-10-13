@@ -19,8 +19,15 @@ func TestHandleModelsRequest(t *testing.T) {
 				Name:    "primary",
 				Address: "127.0.0.1",
 				Port:    8000,
-				Models:  []string{"gpt-4o-mini", "llama-3.1-8b-instruct"},
 				Weight:  1,
+			},
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"gpt-4o-mini": {
+				PreferredEndpoints: []string{"primary"},
+			},
+			"llama-3.1-8b-instruct": {
+				PreferredEndpoints: []string{"primary"},
 			},
 		},
 	}
@@ -143,8 +150,12 @@ func TestHandleRequestHeadersWithModelsEndpoint(t *testing.T) {
 				Name:    "primary",
 				Address: "127.0.0.1",
 				Port:    8000,
-				Models:  []string{"gpt-4o-mini"},
 				Weight:  1,
+			},
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"gpt-4o-mini": {
+				PreferredEndpoints: []string{"primary"},
 			},
 		},
 	}

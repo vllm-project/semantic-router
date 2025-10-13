@@ -299,7 +299,6 @@ var _ = Describe("Endpoint Selection", func() {
 			Expect(endpoint1.Name).To(Equal("test-endpoint1"))
 			Expect(endpoint1.Address).To(Equal("127.0.0.1"))
 			Expect(endpoint1.Port).To(Equal(8000))
-			Expect(endpoint1.Models).To(ContainElements("model-a", "model-b"))
 			Expect(endpoint1.Weight).To(Equal(1))
 
 			// Verify second endpoint
@@ -307,7 +306,6 @@ var _ = Describe("Endpoint Selection", func() {
 			Expect(endpoint2.Name).To(Equal("test-endpoint2"))
 			Expect(endpoint2.Address).To(Equal("127.0.0.1"))
 			Expect(endpoint2.Port).To(Equal(8001))
-			Expect(endpoint2.Models).To(ContainElement("model-b"))
 			Expect(endpoint2.Weight).To(Equal(2))
 		})
 

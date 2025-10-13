@@ -69,11 +69,9 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 11434
-    models: ["phi4"]          # ✅ Matches --served_model_name phi4
   - name: "endpoint2"
     address: "127.0.0.1"
     port: 11435
-    models: ["qwen3-0.6B"]    # ✅ Matches --served_model_name qwen3-0.6B
 
 model_config:
   "phi4":                     # ✅ Matches --served_model_name phi4
