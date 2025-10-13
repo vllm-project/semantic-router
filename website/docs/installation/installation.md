@@ -109,13 +109,11 @@ Edit `config/config.yaml` to point to your LLM endpoints:
 vllm_endpoints:
   - name: "your-endpoint"
     address: "127.0.0.1"        # MUST be IP address (IPv4 or IPv6)
-    port: 11434                     # Replace with your port
-    models:
-      - "your-model-name"           # Replace with your model
+    port: 11434                 # Replace with your port
     weight: 1
 
 model_config:
-  "your-model-name":
+  "your-model-name":            # Replace with your model name
     pii_policy:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
@@ -146,11 +144,12 @@ The model name in your configuration **must exactly match** the `--served-model-
 # When starting vLLM server:
 vllm serve microsoft/phi-4 --port 11434 --served-model-name your-model-name
 
-# The config.yaml must use the same name:
-vllm_endpoints:
-  - models: ["your-model-name"]  # ✅ Must match --served-model-name
-
+# The config.yaml must reference the model in model_config:
 model_config:
+  "your-model-name":  # ✅ Must match --served-model-name
+    preferred_endpoints: ["your-endpoint"]
+
+vllm_endpoints:
   "your-model-name":             # ✅ Must match --served-model-name
     # ... configuration
 ```
