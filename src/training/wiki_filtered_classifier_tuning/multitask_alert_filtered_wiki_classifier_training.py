@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURATION ---
 HIGH_LEVEL_CATEGORIES = ["Science", "History", "Technology", "Art", "Sports", "Geography", "Philosophy", "Mathematics"]
 MMLU_TO_HIGH_LEVEL = {
-    'anatomy': 'Science', 'astronomy': 'Science', 'college_biology': 'Science', 'college_chemistry': 'Science', 'college_physics': 'Science', 'conceptual_physics': 'Science', 'electrical_engineering': 'Science', 'high_school_biology': 'Science', 'high_school_chemistry': 'Science', 'high_school_physics': 'Science', 'medical_genetics': 'Science', 'nutrition': 'Science', 'virology': 'Science', 'clinical_knowledge': 'Science', 'college_medicine': 'Science', 'professional_medicine': 'Science', 'human_aging': 'Science', 'human_sexuality': 'Science',
+    'anatomy': 'Science', 'astronomy': 'Science', 'college_biology': 'Science', 'college_chemistry': 'Science', 'college_physics': 'Science', 'conceptual_physics': 'Science', 'electrical_engineering': 'Science','high_school_biology': 'Science', 'high_school_chemistry': 'Science', 'high_school_physics': 'Science', 'medical_genetics': 'Science', 'nutrition': 'Science', 'virology': 'Science', 'clinical_knowledge': 'Science', 'college_medicine': 'Science', 'professional_medicine': 'Science', 'human_aging': 'Science', 'human_sexuality': 'Science',
     'high_school_us_history': 'History', 'high_school_world_history': 'History', 'prehistory': 'History',
     'college_computer_science': 'Technology', 'computer_security': 'Technology', 'high_school_computer_science': 'Technology', 'machine_learning': 'Technology',
     'high_school_geography': 'Geography',
