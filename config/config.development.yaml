@@ -29,8 +29,6 @@ vllm_endpoints:
   - name: "local-endpoint"
     address: "127.0.0.1"
     port: 8000
-    models:
-      - "test-model"
     weight: 1
 
 model_config:

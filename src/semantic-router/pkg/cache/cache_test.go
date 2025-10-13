@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-
-	"github.com/prometheus/client_golang/prometheus/testutil"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 func TestCache(t *testing.T) {
@@ -29,9 +28,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("Cache Package", func() {
-	var (
-		tempDir string
-	)
+	var tempDir string
 
 	BeforeEach(func() {
 		var err error
@@ -213,7 +210,6 @@ development:
 					Expect(backend).To(BeNil())
 				})
 			})
-
 		})
 
 		Describe("ValidateCacheConfig", func() {
@@ -412,9 +408,7 @@ development:
 	})
 
 	Describe("InMemoryCache", func() {
-		var (
-			inMemoryCache cache.CacheBackend
-		)
+		var inMemoryCache cache.CacheBackend
 
 		BeforeEach(func() {
 			options := cache.InMemoryCacheOptions{
@@ -435,7 +429,7 @@ development:
 
 		It("should implement CacheBackend interface", func() {
 			// Check that the concrete type implements the interface
-			var _ cache.CacheBackend = inMemoryCache
+			_ = inMemoryCache
 			Expect(inMemoryCache).NotTo(BeNil())
 		})
 

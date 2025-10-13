@@ -100,9 +100,9 @@ default_reasoning_effort: medium
 # vLLM endpoints configuration
 vllm_endpoints:
   - name: "mock"
-    address: "http://127.0.0.1:8000"
-    models:
-      - "openai/gpt-oss-20b"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
 
 # Usage Notes:
 # 1. System prompts are automatically injected based on query classification

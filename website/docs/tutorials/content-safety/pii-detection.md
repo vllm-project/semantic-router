@@ -61,11 +61,9 @@ vllm_endpoints:
   - name: secure-model
     address: "127.0.0.1"
     port: 8080
-    models: ["secure-llm"]
   - name: general-model
     address: "127.0.0.1"
     port: 8081
-    models: ["general-llm"]
 
 # Model-specific configurations
 model_config:

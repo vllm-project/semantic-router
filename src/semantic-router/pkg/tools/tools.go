@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )

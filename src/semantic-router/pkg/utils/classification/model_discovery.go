@@ -145,7 +145,7 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error scanning models directory: %v", err)
+		return nil, fmt.Errorf("error scanning models directory: %w", err)
 	}
 
 	// Intelligent architecture selection based on performance priority: BERT > RoBERTa > ModernBERT
@@ -333,12 +333,12 @@ func AutoInitializeUnifiedClassifier(modelsDir string) (*UnifiedClassifier, erro
 	// Discover models
 	paths, err := AutoDiscoverModels(modelsDir)
 	if err != nil {
-		return nil, fmt.Errorf("model discovery failed: %v", err)
+		return nil, fmt.Errorf("model discovery failed: %w", err)
 	}
 
 	// Validate paths
 	if err := ValidateModelPaths(paths); err != nil {
-		return nil, fmt.Errorf("model validation failed: %v", err)
+		return nil, fmt.Errorf("model validation failed: %w", err)
 	}
 
 	// Check if we should use LoRA models
@@ -372,7 +372,7 @@ func initializeLoRAUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, err
 
 	// Pre-initialize LoRA C bindings to avoid lazy loading during first API call
 	if err := classifier.initializeLoRABindings(); err != nil {
-		return nil, fmt.Errorf("failed to pre-initialize LoRA bindings: %v", err)
+		return nil, fmt.Errorf("failed to pre-initialize LoRA bindings: %w", err)
 	}
 	classifier.loraInitialized = true
 
@@ -385,7 +385,7 @@ func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, e
 	categoryMappingPath := filepath.Join(paths.IntentClassifier, "category_mapping.json")
 	categoryMapping, err := LoadCategoryMapping(categoryMappingPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load category mapping from %s: %v", categoryMappingPath, err)
+		return nil, fmt.Errorf("failed to load category mapping from %s: %w", categoryMappingPath, err)
 	}
 
 	// Extract intent labels in correct order (by index)
@@ -401,10 +401,10 @@ func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, e
 	// Load PII labels from the actual model's mapping file
 	var piiLabels []string
 	piiMappingPath := filepath.Join(paths.PIIClassifier, "pii_type_mapping.json")
-	if _, err := os.Stat(piiMappingPath); err == nil {
-		piiMapping, err := LoadPIIMapping(piiMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load PII mapping from %s: %v", piiMappingPath, err)
+	if _, statErr := os.Stat(piiMappingPath); statErr == nil {
+		piiMapping, loadErr := LoadPIIMapping(piiMappingPath)
+		if loadErr != nil {
+			return nil, fmt.Errorf("failed to load PII mapping from %s: %w", piiMappingPath, loadErr)
 		}
 		// Extract labels from PII mapping (ordered by index)
 		piiLabels = make([]string, len(piiMapping.IdxToLabel))
@@ -422,10 +422,10 @@ func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, e
 	// Load security labels from the actual model's mapping file
 	var securityLabels []string
 	securityMappingPath := filepath.Join(paths.SecurityClassifier, "jailbreak_type_mapping.json")
-	if _, err := os.Stat(securityMappingPath); err == nil {
-		jailbreakMapping, err := LoadJailbreakMapping(securityMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load jailbreak mapping from %s: %v", securityMappingPath, err)
+	if _, statErr2 := os.Stat(securityMappingPath); statErr2 == nil {
+		jailbreakMapping, loadErr2 := LoadJailbreakMapping(securityMappingPath)
+		if loadErr2 != nil {
+			return nil, fmt.Errorf("failed to load jailbreak mapping from %s: %w", securityMappingPath, loadErr2)
 		}
 		// Extract labels from jailbreak mapping (ordered by index)
 		securityLabels = make([]string, len(jailbreakMapping.IdxToLabel))
@@ -455,7 +455,7 @@ func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, e
 		false, // Default to GPU, will fallback to CPU if needed
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unified classifier initialization failed: %v", err)
+		return nil, fmt.Errorf("unified classifier initialization failed: %w", err)
 	}
 
 	return classifier, nil

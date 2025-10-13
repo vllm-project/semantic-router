@@ -72,7 +72,7 @@ func TestBatchClassificationMetrics(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			// Record metrics
 			RecordBatchClassificationRequest(tt.processingType)
 			RecordBatchSizeDistribution(tt.processingType, tt.batchSize)
@@ -112,7 +112,7 @@ func TestGetBatchSizeRange(t *testing.T) {
 }
 
 // TestConcurrentGoroutineTracking tests goroutine tracking functionality
-func TestConcurrentGoroutineTracking(t *testing.T) {
+func TestConcurrentGoroutineTracking(_ *testing.T) {
 	batchID := "test_batch_123"
 
 	// Simulate goroutine start
@@ -141,7 +141,7 @@ func BenchmarkBatchClassificationMetrics(b *testing.B) {
 }
 
 // TestMetricsIntegration tests the integration of all batch classification metrics
-func TestMetricsIntegration(t *testing.T) {
+func TestMetricsIntegration(_ *testing.T) {
 	// Simulate a complete batch processing scenario
 	processingType := "concurrent"
 	batchSize := 8

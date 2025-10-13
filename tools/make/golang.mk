@@ -2,6 +2,23 @@
 # = Everything For Golang   =
 # ======== golang.mk ========
 
+# Run go lint check for Go modules
+# Refer: https://golangci-lint.run/
+# if local run, add -v for verbose output
+go-lint:
+	@$(LOG_TARGET)
+	@echo "Running golangci-lint for src/semantic-router..."
+	@cd src/semantic-router/ && golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
+	@echo "✅ src/semantic-router go module lint passed"
+
+# golangci-lint fix for Go modules
+# Tips: only fix src/semantic-router and some files may need manual fix.
+go-lint-fix:
+	@$(LOG_TARGET)
+	@echo "Running golangci-lint fix for src/semantic-router..."
+	@cd src/semantic-router/ && golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
+	@echo "✅ src/semantic-router go module lint fix applied"
+
 # Run go vet for all Go modules
 vet:
 	@$(LOG_TARGET)

@@ -253,9 +253,6 @@ type VLLMEndpoint struct {
 	// Port of the vLLM endpoint
 	Port int `yaml:"port"`
 
-	// List of models served by this endpoint
-	Models []string `yaml:"models"`
-
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
 }
@@ -332,18 +329,18 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 
 // ModelScore associates an LLM with its selection weight and reasoning flag within a category.
 type ModelScore struct {
-	Model        string  `yaml:"model"`
-	Score        float64 `yaml:"score"`
-	UseReasoning *bool   `yaml:"use_reasoning"` // Pointer to detect missing field
+	Model                string  `yaml:"model"`
+	Score                float64 `yaml:"score"`
+	UseReasoning         *bool   `yaml:"use_reasoning"`                   // Pointer to detect missing field
+	ReasoningDescription string  `yaml:"reasoning_description,omitempty"` // Model-specific reasoning description
+	ReasoningEffort      string  `yaml:"reasoning_effort,omitempty"`      // Model-specific reasoning effort level (low, medium, high)
 }
 
 // Category represents a category for routing queries
 type Category struct {
-	Name                 string       `yaml:"name"`
-	Description          string       `yaml:"description,omitempty"`
-	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
-	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
-	ModelScores          []ModelScore `yaml:"model_scores"`
+	Name        string       `yaml:"name"`
+	Description string       `yaml:"description,omitempty"`
+	ModelScores []ModelScore `yaml:"model_scores"`
 	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
 	// used by the classifier model. When provided, classifier outputs will be translated
 	// from these MMLU categories to this generic category name.
@@ -358,8 +355,6 @@ type Category struct {
 	// "insert": Prepend the category-specific prompt to the existing system message content
 	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
 }
-
-// Legacy types - can be removed once migration is complete
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
@@ -380,18 +375,6 @@ func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFami
 	}
 
 	return &familyConfig
-}
-
-// Legacy functions - can be removed once migration is complete
-
-// contains checks if a slice contains a string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 var (
@@ -604,32 +587,21 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 }
 
 // GetEndpointsForModel returns all endpoints that can serve the specified model
-// If the model has preferred endpoints configured, returns only those endpoints that are available
-// Otherwise, returns all endpoints that list the model in their Models array
+// Returns endpoints based on the model's preferred_endpoints configuration in model_config
 func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
-	var availableEndpoints []VLLMEndpoint
-
-	// First, find all endpoints that can serve this model
-	for _, endpoint := range c.VLLMEndpoints {
-		if slices.Contains(endpoint.Models, modelName) {
-			availableEndpoints = append(availableEndpoints, endpoint)
-		}
-	}
+	var endpoints []VLLMEndpoint
 
 	// Check if model has preferred endpoints configured
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
-		var preferredEndpoints []VLLMEndpoint
-		for _, endpoint := range availableEndpoints {
-			if slices.Contains(modelConfig.PreferredEndpoints, endpoint.Name) {
-				preferredEndpoints = append(preferredEndpoints, endpoint)
+		// Return only the preferred endpoints
+		for _, endpointName := range modelConfig.PreferredEndpoints {
+			if endpoint, found := c.GetEndpointByName(endpointName); found {
+				endpoints = append(endpoints, *endpoint)
 			}
-		}
-		if len(preferredEndpoints) > 0 {
-			return preferredEndpoints
 		}
 	}
 
-	return availableEndpoints
+	return endpoints
 }
 
 // GetEndpointByName returns the endpoint with the specified name
@@ -642,18 +614,12 @@ func (c *RouterConfig) GetEndpointByName(name string) (*VLLMEndpoint, bool) {
 	return nil, false
 }
 
-// GetAllModels returns a list of all models available across all endpoints
+// GetAllModels returns a list of all models configured in model_config
 func (c *RouterConfig) GetAllModels() []string {
-	modelSet := make(map[string]bool)
 	var models []string
 
-	for _, endpoint := range c.VLLMEndpoints {
-		for _, model := range endpoint.Models {
-			if !modelSet[model] {
-				modelSet[model] = true
-				models = append(models, model)
-			}
-		}
+	for modelName := range c.ModelConfig {
+		models = append(models, modelName)
 	}
 
 	return models
