@@ -6,7 +6,7 @@
       "id": "vLLM",
       "name": "vLLM",
       "logo": "/img/acknowledgements/vllm-logo.png",
-      "url": "https://github.com/vllm-project/vllm",
+      "url": "https://github.com/vllm-project/semantic-router",
       "description": "A high-throughput and memory-efficient inference and serving engine for LLMs"
     },{
       "id": "huggingFace-candle",
