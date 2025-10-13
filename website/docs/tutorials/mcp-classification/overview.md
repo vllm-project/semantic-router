@@ -199,7 +199,7 @@ The repository includes two reference implementations:
 1. **Regex-Based**
    - Simple pattern matching
    - Fast prototyping
-   - <5ms classification
+   - Less than 5ms classification
 
 2. **Embedding-Based**
    - Qwen3-Embedding-0.6B model

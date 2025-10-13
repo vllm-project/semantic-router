@@ -326,7 +326,7 @@ classification:
 
 ### Latency
 
-- Target classification latency: <100ms for production
+- Target classification latency: under 100ms for production
 - Use caching for `list_categories` (changes infrequently)
 - Consider async/concurrent classification for batch requests
 
