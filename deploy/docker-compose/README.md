@@ -35,7 +35,20 @@ Example mappings:
 ## Profiles
 
 - `testing` : enables `mock-vllm` and `llm-katan`
-- `llm-katan` : enables only `llm-katan`
+- `llm-katan` : only `llm-katan`
+
+## Services and Ports
+
+These host ports are exposed when you bring the stack up:
+
+- Dashboard: http://localhost:8700 (Semantic Router Dashboard)
+- Envoy proxy: http://localhost:8801
+- Envoy admin: http://localhost:19000
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+- Open WebUI: http://localhost:3001
+- Mock vLLM (testing profile): http://localhost:8000
+- LLM Katan (testing/llm-katan profiles): http://localhost:8002
 
 ## Quick Start
 
@@ -70,6 +83,8 @@ docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up 
 # Tear down
 docker compose -f deploy/docker-compose/docker-compose.yml down
 ```
+
+After the stack is healthy, open the Dashboard at http://localhost:8700.
 
 ## Overrides
 
@@ -130,18 +145,3 @@ All services join the `semantic-network` bridge network with a fixed subnet to m
 
 - Local observability only: `tools/observability/docker-compose.obs.yml`
 - Tracing stack: `tools/tracing/docker-compose.tracing.yaml`
-
-## Related Stacks
-
-- Local observability only: `tools/observability/docker-compose.obs.yml`
-- Tracing stack (standalone, dev): `tools/tracing/docker-compose.tracing.yaml`
-
-## Tracing & Grafana
-
-- Jaeger UI: http://localhost:16686
-- Grafana: http://localhost:3000 (admin/admin)
-  - Prometheus datasource (default) for metrics
-  - Jaeger datasource for exploring traces (search service `vllm-semantic-router`)
-
-By default, the router container uses `config/config.tracing.yaml` (enabled tracing, exporter to Jaeger).
-Override with `CONFIG_FILE=/app/config/config.yaml` if you don’t want tracing.
