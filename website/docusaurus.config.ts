@@ -85,6 +85,11 @@ const config: Config = {
           label: 'Documentation',
         },
         {
+          to: '/publications',
+          label: 'Publications',
+          position: 'left',
+        },
+        {
           to: '/blog',
           label: 'Blog',
           position: 'left',
@@ -92,10 +97,10 @@ const config: Config = {
         {
           type: 'dropdown',
           label: 'Community',
-          position: 'left',
+          position: 'right',
           items: [
             {
-              label: 'Team',
+              label: 'vLLM-SR Team',
               to: '/community/team',
             },
             {
@@ -103,7 +108,7 @@ const config: Config = {
               to: '/community/work-groups',
             },
             {
-              label: 'Promotion',
+              label: 'Membership Promotion',
               to: '/community/promotion',
             },
             {
@@ -131,7 +136,7 @@ const config: Config = {
         {
           type: 'dropdown',
           label: 'Roadmap',
-          position: 'left',
+          position: 'right',
           items: [
             {
               label: 'v0.1',

@@ -100,8 +100,10 @@ Different models excel at different tasks. MoM leverages this specialization:
 
 #### 3. **Improved System Reliability**
 
-```mermaid
-graph TB
+import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
+
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={5.5}>
+{`graph TB
     subgraph "Single Model Risk"
         SingleQuery[Query] --> SingleModel[GPT-4]
         SingleModel -->|Failure| SingleFailure[Complete System Down]
@@ -114,8 +116,8 @@ graph TB
         Router --> Model3[Model C]
         Model1 -->|Failure| Fallback[Automatic Fallback]
         Fallback --> Model2
-    end
-```
+    end`}
+</ZoomableMermaid>
 
 **Reliability Benefits:**
 
@@ -276,8 +278,8 @@ subject_routing = {
 
 MoM architecture supports various deployment strategies:
 
-```mermaid
-graph TB
+<ZoomableMermaid title="System Architecture Overview" defaultZoom={5.5}>
+{`graph TB
     subgraph "Cloud Deployment"
         CloudQueries[Queries] --> CloudRouter[Cloud Router]
         CloudRouter --> OpenAI[OpenAI GPT]
@@ -295,8 +297,8 @@ graph TB
         OnPremQueries[Queries] --> OnPremRouter[On-Prem Router]
         OnPremRouter --> LocalLLaMA[Local LLaMA Models]
         OnPremRouter --> FineTuned[Fine-tuned Specialized Models]
-    end
-```
+    end`}
+</ZoomableMermaid>
 
 ### 2. **A/B Testing and Gradual Rollouts**
 

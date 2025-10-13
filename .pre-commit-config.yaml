@@ -42,14 +42,14 @@ repos:
     files: \.(yaml|yml)$
     exclude: ^(\node_modules/)
 
-# JavaScript specific hooks
+# JavaScript and TypeScript specific hooks
 - repo: local
   hooks:
-  - id: js-lint
-    name: js lint
+  - id: js-ts-lint
+    name: js/ts lint
     entry: bash -c 'cd website && npm install 2>/dev/null || true && npm run lint'
     language: system
-    files: \.js$
+    files: \.(js|ts|tsx)$
     exclude: ^(\node_modules/)
     pass_filenames: false
 
