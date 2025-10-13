@@ -18,28 +18,46 @@ spec:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
           imagePullPolicy: IfNotPresent
-          args: ["-port=8700", "-static=/app/frontend"]
+          args: ["-port=8700", "-static=/app/frontend", "-config=/app/config/config.yaml"]
           env:
             - name: TARGET_GRAFANA_URL
-              value: http://grafana.vllm-semantic-router-system.svc.cluster.local:3000
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_GRAFANA_URL
             - name: TARGET_PROMETHEUS_URL
-              value: http://prometheus.vllm-semantic-router-system.svc.cluster.local:9090
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_PROMETHEUS_URL
             - name: TARGET_ROUTER_API_URL
-              value: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:8080
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_ROUTER_API_URL
             - name: TARGET_ROUTER_METRICS_URL
-              value: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:9190/metrics
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_ROUTER_METRICS_URL
             - name: TARGET_OPENWEBUI_URL
-              value: ""
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_OPENWEBUI_URL
+            - name: ROUTER_CONFIG_PATH
+              value: /app/config/config.yaml
           ports:
             - name: http
               containerPort: 8700
           volumeMounts:
-            - name: frontend
-              mountPath: /app/frontend
+            - name: router-config
+              mountPath: /app/config
+              readOnly: true
       volumes:
-        - name: frontend
+        - name: router-config
           configMap:
-            name: semantic-router-dashboard-frontend
+            name: semantic-router-config
 ---
 apiVersion: v1
 kind: Service
@@ -59,14 +77,24 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: semantic-router-dashboard-frontend
+  name: semantic-router-dashboard-config
 data:
-  index.html: |
-    <!doctype html>
-    <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Semantic Router Dashboard</title></head>
-    <body>
-      <script>
-        // Fallback page that redirects to container-mounted frontend if available
-        window.location.replace('/');
-      </script>
-    </body></html>
+  TARGET_GRAFANA_URL: http://grafana.vllm-semantic-router-system.svc.cluster.local:3000
+  TARGET_PROMETHEUS_URL: http://prometheus.vllm-semantic-router-system.svc.cluster.local:9090
+  TARGET_ROUTER_API_URL: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:8080
+  TARGET_ROUTER_METRICS_URL: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:9190/metrics
+  TARGET_OPENWEBUI_URL: ""
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-config
+data:
+  # Minimal config.yaml to let /api/router/config/all return something.
+  # Replace with your real configuration or mount a different ConfigMap/Secret.
+  config.yaml: |
+    default_model: example-model
+    default_reasoning_effort: medium
+    vllm_endpoints: []
+    model_config: {}
