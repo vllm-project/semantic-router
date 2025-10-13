@@ -25,3 +25,12 @@ resources:
   - pipelines/deployment.yaml
   - openwebui/deployment.yaml
   - ingress.yaml
+
+# Generate ConfigMaps from source files
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: openwebui-pipelines-config
+    files:
+      - vllm_semantic_router_pipe.py=../../../tools/openwebui-pipe/vllm_semantic_router_pipe.py
