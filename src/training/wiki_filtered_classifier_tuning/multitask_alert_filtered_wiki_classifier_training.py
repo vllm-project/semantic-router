@@ -1,14 +1,13 @@
 import json
 import logging
 import os
-from collections import defaultdict
-from pathlib import Path
 import random
 import argparse
-from tqdm import tqdm
 import time
-from datetime import datetime, timedelta
 import urllib.parse
+from collections import defaultdict
+from pathlib import Path
+from datetime import datetime, timedelta
 
 import numpy as np
 import requests
@@ -37,7 +36,7 @@ MMLU_TO_HIGH_LEVEL = {
 
 
 WIKI_DATA_DIR = "wikipedia_data"
-ARTICLES_PER_CATEGORY = 10000 
+ARTICLES_PER_CATEGORY = 10000
 PAGEVIEWS_API_USER_AGENT = "MyMultitaskProject/1.0 (youremail@example.com) requests/2.0"
 
 
@@ -90,7 +89,7 @@ class MultitaskTrainer:
         self.device = device
         self.jailbreak_label_mapping = None
         self.loss_fns = {task: nn.CrossEntropyLoss() for task in task_configs if task_configs}
-        
+
         self.EXCLUDED_CATEGORIES = {
             "fiction", "culture", "arts", "comics", "media", "entertainment",
             "people", "religion", "sports", "society", "geography", "history"
@@ -104,16 +103,16 @@ class MultitaskTrainer:
         if visited_categories is None:
             visited_categories = set()
 
-        if depth >= max_depth or len(visited_categories) > max_articles * 2: 
+        if depth >= max_depth or len(visited_categories) > max_articles * 2:
             return []
-            
+
         articles = []
         visited_categories.add(category_page.title)
-        
+
         members = list(category_page.categorymembers.values())
         for member in members:
             if len(articles) >= max_articles: break
-            
+
             if member.ns == wikipediaapi.Namespace.CATEGORY and member.title not in visited_categories:
                 member_title_lower = member.title.lower()
                 if not any(excluded in member_title_lower for excluded in self.EXCLUDED_CATEGORIES):
@@ -126,7 +125,7 @@ class MultitaskTrainer:
                     ))
             elif member.ns == wikipediaapi.Namespace.MAIN:
                 articles.append(member.title)
-                
+
         return list(set(articles))
 
     def _get_pageviews(self, article_title, session, start_date, end_date):
@@ -153,7 +152,7 @@ class MultitaskTrainer:
         logger.info("--- Starting Wikipedia Data Download and Preparation ---")
         os.makedirs(data_dir, exist_ok=True)
         wiki_wiki = wikipediaapi.Wikipedia('MyMultitaskProject (youremail@example.com)', 'en')
-        
+
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=90)
         end_date_str = end_date.strftime('%Y%m%d')
@@ -172,9 +171,9 @@ class MultitaskTrainer:
 
             num_candidates = articles_per_category * candidate_multiplier
             logger.info(f"  Recursively searching for up to {num_candidates} candidate articles (max depth=4)...")
-            
+
             candidate_titles = self._get_wiki_articles_recursive(cat_page, num_candidates)
-            
+
             logger.info(f"  Found {len(candidate_titles)} unique candidate articles.")
 
             if not candidate_titles:
@@ -202,7 +201,7 @@ class MultitaskTrainer:
             for title in tqdm(article_titles, desc=f"  Downloading '{category}'"):
                 safe_filename = "".join([c for c in title if c.isalpha() or c.isdigit() or c==' ']).rstrip() + ".txt"
                 file_path = os.path.join(category_path, safe_filename)
-                
+
                 if os.path.exists(file_path): continue
 
                 page = wiki_wiki.page(title)
@@ -213,7 +212,7 @@ class MultitaskTrainer:
                         saved_count += 1
                     except Exception as e:
                         logger.error(f"    Could not save article '{title}': {e}")
-            
+
             logger.info(f"  Saved {saved_count} new articles for '{category}'.")
 
         logger.info("\n--- Wikipedia Data Download Complete ---")
@@ -313,13 +312,13 @@ class MultitaskTrainer:
             logger.info(f"Total loaded jailbreak samples: {len(all_texts)}")
             unique_labels = sorted(list(set(all_labels)))
             label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
-            
+
             logger.info(f"Jailbreak label distribution: {dict(sorted([(label, all_labels.count(label)) for label in set(all_labels)], key=lambda x: x[1], reverse=True))}")
             logger.info(f"Total unique jailbreak labels: {len(unique_labels)}")
-            
+
             label_indices = [label_to_idx[label] for label in all_labels]
             samples = list(zip(all_texts, label_indices))
-            
+
             self.jailbreak_label_mapping = {"label_to_idx": label_to_idx, "idx_to_label": {idx: label for label, idx in label_to_idx.items()}}
             return samples
         except Exception as e:
@@ -327,7 +326,7 @@ class MultitaskTrainer:
             logger.error(f"Failed to load jailbreak datasets: {e}")
             traceback.print_exc()
             return []
-    
+
     def _save_checkpoint(self, epoch, global_step, optimizer, scheduler, checkpoint_dir, label_mappings):
         os.makedirs(checkpoint_dir, exist_ok=True)
         latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pt')
@@ -371,7 +370,7 @@ class MultitaskTrainer:
             pbar = tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch+1}")
             for step, batch in pbar:
                 if steps_to_skip > 0 and step < steps_to_skip: continue
-                
+
                 optimizer.zero_grad()
                 outputs = self.model(
                     input_ids=batch["input_ids"].to(self.device),
@@ -388,7 +387,7 @@ class MultitaskTrainer:
                 optimizer.step(); scheduler.step(); global_step += 1
                 if global_step > 0 and global_step % save_steps == 0:
                     self._save_checkpoint(epoch, global_step, optimizer, scheduler, checkpoint_dir, label_mappings)
-            
+
             if val_loader: self.evaluate(val_loader)
             self._save_checkpoint(epoch + 1, global_step, optimizer, scheduler, checkpoint_dir, label_mappings)
             steps_to_skip = 0
@@ -442,13 +441,13 @@ def main():
     logger.info("--- Starting Model Training ---")
 
     task_configs, label_mappings, checkpoint_to_load = {}, {}, None
-    
+
     if args.resume:
         latest_checkpoint_path = os.path.join(args.checkpoint_dir, 'latest_checkpoint.pt')
         if os.path.exists(latest_checkpoint_path):
             logger.info(f"Resuming training from checkpoint: {latest_checkpoint_path}")
             checkpoint_to_load = torch.load(latest_checkpoint_path, map_location=device)
-            
+
             task_configs = checkpoint_to_load.get('task_configs')
             label_mappings = checkpoint_to_load.get('label_mappings')
 
@@ -460,7 +459,7 @@ def main():
                 task_configs = {}
             else:
                 logger.info("Loaded model configuration from checkpoint.")
-                
+
         else:
             logger.warning(f"Resume flag is set, but no checkpoint found in '{args.checkpoint_dir}'. Starting fresh run.")
             args.resume = False
@@ -475,12 +474,12 @@ def main():
             task_configs["pii"] = {"num_classes": len(label_mappings["pii"]["label_mapping"]["label_to_idx"]), "weight": 3.0}
         if "jailbreak" in label_mappings:
             task_configs["jailbreak"] = {"num_classes": len(label_mappings["jailbreak"]["label_mapping"]["label_to_idx"]), "weight": 2.0}
-    
+
     if not task_configs:
         logger.error("No tasks configured. Exiting."); return
 
     logger.info(f"Final task configurations: {task_configs}")
-    
+
     model = MultitaskBertModel(base_model_name, task_configs)
 
     if args.resume and checkpoint_to_load:
@@ -496,9 +495,9 @@ def main():
     active_label_mappings = label_mappings if (args.resume and label_mappings) else final_label_mappings
 
     trainer = MultitaskTrainer(model, tokenizer, task_configs, device)
-    
+
     logger.info(f"Total training samples: {len(train_samples)}")
-    
+
     trainer.train(
         train_samples, val_samples, active_label_mappings,
         num_epochs=10, batch_size=16,
@@ -507,7 +506,7 @@ def main():
         save_steps=args.save_steps,
         checkpoint_to_load=checkpoint_to_load
     )
-    
+
     trainer.save_model(output_path)
     with open(os.path.join(output_path, "label_mappings.json"), "w") as f:
         json.dump(active_label_mappings, f, indent=2)
