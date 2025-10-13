@@ -33,4 +33,4 @@ generatorOptions:
 configMapGenerator:
   - name: openwebui-pipelines-config
     files:
-      - vllm_semantic_router_pipe.py=../../../tools/openwebui-pipe/vllm_semantic_router_pipe.py
+      - vllm_semantic_router_pipe.py=pipelines/vllm_semantic_router_pipe.py
