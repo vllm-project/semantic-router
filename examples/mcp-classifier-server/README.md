@@ -224,4 +224,3 @@ python3 server_embedding.py --http --port 8090
 | **Memory** | ~10MB | ~600MB |
 | **Setup** | Simple | Requires model |
 | **Best For** | Prototyping | Production |
-

@@ -121,6 +121,7 @@ class EmbeddingClassifier:
         model_name: str = "Qwen/Qwen3-Embedding-0.6B",
         csv_path: str = "training_data.csv",
         index_path: str = "faiss_index.bin",
+        device: str = "auto",
     ):
         """
         Initialize the embedding classifier.
@@ -129,6 +130,7 @@ class EmbeddingClassifier:
             model_name: Name of the embedding model to use
             csv_path: Path to the CSV training data file
             index_path: Path to save/load FAISS index
+            device: Device to use ("cuda", "cpu", or "auto" for auto-detection)
         """
         self.model_name = model_name
         self.csv_path = csv_path
@@ -139,7 +141,19 @@ class EmbeddingClassifier:
             model_name, trust_remote_code=True
         )
         self.model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
-        self.device = torch.device("cpu")
+
+        # Set device based on user preference
+        if device == "auto":
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        elif device == "cuda":
+            if not torch.cuda.is_available():
+                logger.warning("CUDA requested but not available, falling back to CPU")
+                self.device = torch.device("cpu")
+            else:
+                self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
+
         logger.info(f"Using device: {self.device}")
         self.model.to(self.device)
         self.model.eval()
@@ -399,7 +413,10 @@ class EmbeddingClassifier:
 
 
 # Initialize classifier globally
+# Note: This is safe for aiohttp as it uses a single-threaded event loop.
+# For multi-process deployments, each process gets its own instance.
 classifier = None
+classifier_device = "auto"  # Default device setting
 
 
 def get_classifier():
@@ -415,6 +432,7 @@ def get_classifier():
             model_name="Qwen/Qwen3-Embedding-0.6B",
             csv_path=str(csv_path),
             index_path=str(index_path),
+            device=classifier_device,
         )
     return classifier
 
@@ -511,20 +529,27 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         ]
 
 
-async def main_stdio():
+async def main_stdio(device: str = "auto"):
     """Run the MCP server in stdio mode."""
+    global classifier_device
+    classifier_device = device
+
     logger.info("Starting Embedding-Based MCP Classification Server (stdio mode)")
     clf = get_classifier()
     logger.info(f"Available categories: {', '.join(clf.category_names)}")
     logger.info(f"Model: {clf.model_name}")
+    logger.info(f"Device: {clf.device}")
     logger.info(f"Index size: {clf.index.ntotal} vectors")
 
     async with stdio_server() as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 
-async def main_http(port: int = 8091):
+async def main_http(port: int = 8091, device: str = "auto"):
     """Run the MCP server in HTTP mode."""
+    global classifier_device
+    classifier_device = device
+
     try:
         from aiohttp import web
     except ImportError:
@@ -537,6 +562,7 @@ async def main_http(port: int = 8091):
     clf = get_classifier()
     logger.info(f"Available categories: {', '.join(clf.category_names)}")
     logger.info(f"Model: {clf.model_name}")
+    logger.info(f"Device: {clf.device}")
     logger.info(f"Index size: {clf.index.ntotal} vectors")
     logger.info(f"Listening on http://0.0.0.0:{port}/mcp")
 
@@ -634,7 +660,11 @@ async def main_http(port: int = 8091):
             logger.error(f"Error handling request: {e}", exc_info=True)
             error = {
                 "jsonrpc": "2.0",
-                "id": request.get("id") if isinstance(request, dict) else None,
+                "id": (
+                    data.get("id")
+                    if "data" in locals() and isinstance(data, dict)
+                    else None
+                ),
                 "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
             }
             return web.json_response(error, status=500)
@@ -681,8 +711,6 @@ async def main_http(port: int = 8091):
 
     # Keep the server running
     try:
-        import asyncio
-
         while True:
             await asyncio.sleep(3600)
     except KeyboardInterrupt:
@@ -702,9 +730,16 @@ if __name__ == "__main__":
         "--http", action="store_true", help="Run in HTTP mode instead of stdio"
     )
     parser.add_argument("--port", type=int, default=8091, help="HTTP port to listen on")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "cpu"],
+        help="Device to use for inference (auto=auto-detect, cuda=force GPU, cpu=force CPU)",
+    )
     args = parser.parse_args()
 
     if args.http:
-        asyncio.run(main_http(args.port))
+        asyncio.run(main_http(args.port, args.device))
     else:
-        asyncio.run(main_stdio())
+        asyncio.run(main_stdio(args.device))
