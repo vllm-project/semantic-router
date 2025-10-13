@@ -452,8 +452,3 @@ Include version information in server responses:
   }
 }
 ```
-
-## Next Steps
-
-- [Implementation Guide](./implementation.md) - Build your own classifier
-- [Embedding Classifier Example](./embedding-classifier.md) - Reference implementation
