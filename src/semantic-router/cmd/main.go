@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
@@ -63,16 +64,16 @@ func main() {
 			ServiceVersion:        cfg.Observability.Tracing.Resource.ServiceVersion,
 			DeploymentEnvironment: cfg.Observability.Tracing.Resource.DeploymentEnvironment,
 		}
-		if err := observability.InitTracing(ctx, tracingCfg); err != nil {
-			observability.Warnf("Failed to initialize tracing: %v", err)
+		if tracingErr := observability.InitTracing(ctx, tracingCfg); tracingErr != nil {
+			observability.Warnf("Failed to initialize tracing: %v", tracingErr)
 		}
 
 		// Set up graceful shutdown for tracing
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := observability.ShutdownTracing(shutdownCtx); err != nil {
-				observability.Errorf("Failed to shutdown tracing: %v", err)
+			if shutdownErr := observability.ShutdownTracing(shutdownCtx); shutdownErr != nil {
+				observability.Errorf("Failed to shutdown tracing: %v", shutdownErr)
 			}
 		}()
 	}
@@ -86,8 +87,8 @@ func main() {
 		observability.Infof("Received shutdown signal, cleaning up...")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := observability.ShutdownTracing(shutdownCtx); err != nil {
-			observability.Errorf("Failed to shutdown tracing: %v", err)
+		if shutdownErr := observability.ShutdownTracing(shutdownCtx); shutdownErr != nil {
+			observability.Errorf("Failed to shutdown tracing: %v", shutdownErr)
 		}
 		os.Exit(0)
 	}()
@@ -97,8 +98,8 @@ func main() {
 		http.Handle("/metrics", promhttp.Handler())
 		metricsAddr := fmt.Sprintf(":%d", *metricsPort)
 		observability.Infof("Starting metrics server on %s", metricsAddr)
-		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
-			observability.Errorf("Metrics server error: %v", err)
+		if metricsErr := http.ListenAndServe(metricsAddr, nil); metricsErr != nil {
+			observability.Errorf("Metrics server error: %v", metricsErr)
 		}
 	}()
 

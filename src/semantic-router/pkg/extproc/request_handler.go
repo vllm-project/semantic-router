@@ -33,11 +33,6 @@ func parseOpenAIRequest(data []byte) (*openai.ChatCompletionNewParams, error) {
 	return &req, nil
 }
 
-// serializeOpenAIRequest converts request back to JSON
-func serializeOpenAIRequest(req *openai.ChatCompletionNewParams) ([]byte, error) {
-	return json.Marshal(req)
-}
-
 // extractStreamParam extracts the stream parameter from the original request body
 func extractStreamParam(originalBody []byte) bool {
 	var requestMap map[string]interface{}
@@ -380,7 +375,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 
 	// Store the original model
-	originalModel := string(openAIRequest.Model)
+	originalModel := openAIRequest.Model
 	observability.Infof("Original model: %s", originalModel)
 
 	// Set model on span
@@ -501,7 +496,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 
 		startTime := time.Now()
 		// Try to find a similar cached response
-		cachedResponse, found, err := r.Cache.FindSimilar(requestModel, requestQuery)
+		cachedResponse, found, cacheErr := r.Cache.FindSimilar(requestModel, requestQuery)
 		lookupTime := time.Since(startTime).Milliseconds()
 
 		observability.SetSpanAttributes(span,
@@ -509,9 +504,9 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 			attribute.Bool(observability.AttrCacheHit, found),
 			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime))
 
-		if err != nil {
-			observability.Errorf("Error searching cache: %v", err)
-			observability.RecordError(span, err)
+		if cacheErr != nil {
+			observability.Errorf("Error searching cache: %v", cacheErr)
+			observability.RecordError(span, cacheErr)
 		} else if found {
 			// Mark this request as a cache hit
 			ctx.VSRCacheHit = true
@@ -727,7 +722,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				ctx.TraceContext = backendCtx
 
 				// Modify the model in the request
-				openAIRequest.Model = openai.ChatModel(matchedModel)
+				openAIRequest.Model = matchedModel
 
 				// Serialize the modified request with stream parameter preserved
 				modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
@@ -1146,7 +1141,7 @@ type OpenAIModelList struct {
 }
 
 // handleModelsRequest handles GET /v1/models requests and returns a direct response
-func (r *OpenAIRouter) handleModelsRequest(path string) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
 	// Start with the special "auto" model always available from the router

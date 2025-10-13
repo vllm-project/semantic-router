@@ -32,6 +32,7 @@ jobs:
             make \
             build-essential \
             pkg-config
+            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
 
       - name: Cache Rust dependencies
         uses: actions/cache@v4
@@ -73,7 +74,6 @@ jobs:
       - name: Install HuggingFace CLI
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
-
 
       - name: Download models (minimal on PRs)
         env:

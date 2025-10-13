@@ -3,11 +3,11 @@ package extproc_test
 import (
 	"encoding/json"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 )
@@ -284,7 +284,7 @@ var _ = Describe("Endpoint Selection", func() {
 
 					// Exactly one should be set, not both and not neither
 					Expect(hasValue || hasRawValue).To(BeTrue(), "Header %s should have either Value or RawValue set", header.Key)
-					Expect(!(hasValue && hasRawValue)).To(BeTrue(), "Header %s should not have both Value and RawValue set (causes Envoy 500 error)", header.Key)
+					Expect(!hasValue || !hasRawValue).To(BeTrue(), "Header %s should not have both Value and RawValue set (causes Envoy 500 error)", header.Key)
 				}
 			}
 		})

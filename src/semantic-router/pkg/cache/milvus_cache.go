@@ -11,10 +11,11 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"sigs.k8s.io/yaml"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
-	"gopkg.in/yaml.v3"
 )
 
 // MilvusConfig defines the complete configuration structure for Milvus cache backend
@@ -168,7 +169,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 // loadMilvusConfig reads and parses the Milvus configuration from file
 func loadMilvusConfig(configPath string) (*MilvusConfig, error) {
 	if configPath == "" {
-		return nil, fmt.Errorf("Milvus config path is required")
+		return nil, fmt.Errorf("milvus config path is required")
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -303,8 +304,8 @@ func (c *MilvusCache) createCollection() error {
 	}
 
 	// Create collection
-	if err := c.client.CreateCollection(ctx, schema, 1); err != nil {
-		return err
+	if createErr := c.client.CreateCollection(ctx, schema, 1); createErr != nil {
+		return createErr
 	}
 
 	// Create index with updated API
@@ -364,7 +365,6 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
 		[]string{"id", "model", "query", "request_body"})
-
 	if err != nil {
 		observability.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -528,7 +528,6 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 		c.config.Search.TopK,
 		searchParam,
 	)
-
 	if err != nil {
 		observability.Debugf("MilvusCache.FindSimilar: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
@@ -622,7 +621,7 @@ func (c *MilvusCache) GetStats() CacheStats {
 		if err == nil {
 			// Extract entity count from statistics
 			if entityCount, ok := stats["row_count"]; ok {
-				fmt.Sscanf(entityCount, "%d", &totalEntries)
+				_, _ = fmt.Sscanf(entityCount, "%d", &totalEntries)
 				observability.Debugf("MilvusCache.GetStats: collection '%s' contains %d entries",
 					c.collectionName, totalEntries)
 			}

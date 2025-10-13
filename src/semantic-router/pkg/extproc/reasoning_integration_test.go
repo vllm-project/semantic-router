@@ -118,8 +118,8 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		var modifiedRequest map[string]interface{}
-		if err := json.Unmarshal(modifiedBody, &modifiedRequest); err != nil {
-			t.Fatalf("Failed to unmarshal modified request: %v", err)
+		if unmarshalErr := json.Unmarshal(modifiedBody, &modifiedRequest); unmarshalErr != nil {
+			t.Fatalf("Failed to unmarshal modified request: %v", unmarshalErr)
 		}
 
 		// Check if chat_template_kwargs was added for DeepSeek model
@@ -187,7 +187,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 	// Test case 4: Test buildReasoningRequestFields function with config-driven approach
 	t.Run("buildReasoningRequestFields returns correct values", func(t *testing.T) {
 		// Create a router with sample configurations for testing
-		router := &OpenAIRouter{
+		testRouter := &OpenAIRouter{
 			Config: &config.RouterConfig{
 				DefaultReasoningEffort: "medium",
 				ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
@@ -215,7 +215,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with DeepSeek model and reasoning enabled
-		fields, _ := router.buildReasoningRequestFields("deepseek-v31", true, "test-category")
+		fields, _ := testRouter.buildReasoningRequestFields("deepseek-v31", true, "test-category")
 		if fields == nil {
 			t.Error("Expected non-nil fields for DeepSeek model with reasoning enabled")
 		}
@@ -228,13 +228,13 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with DeepSeek model and reasoning disabled
-		fields, _ = router.buildReasoningRequestFields("deepseek-v31", false, "test-category")
+		fields, _ = testRouter.buildReasoningRequestFields("deepseek-v31", false, "test-category")
 		if fields != nil {
 			t.Errorf("Expected nil fields for DeepSeek model with reasoning disabled, got %v", fields)
 		}
 
 		// Test with Qwen3 model and reasoning enabled
-		fields, _ = router.buildReasoningRequestFields("qwen3-model", true, "test-category")
+		fields, _ = testRouter.buildReasoningRequestFields("qwen3-model", true, "test-category")
 		if fields == nil {
 			t.Error("Expected non-nil fields for Qwen3 model with reasoning enabled")
 		}
@@ -247,7 +247,7 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 
 		// Test with unknown model (should return no fields)
-		fields, effort := router.buildReasoningRequestFields("unknown-model", true, "test-category")
+		fields, effort := testRouter.buildReasoningRequestFields("unknown-model", true, "test-category")
 		if fields != nil {
 			t.Errorf("Expected nil fields for unknown model with reasoning enabled, got %v", fields)
 		}

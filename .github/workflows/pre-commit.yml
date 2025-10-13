@@ -48,6 +48,7 @@ jobs:
           pkg-config
         npm install -g markdownlint-cli
         pip install --user yamllint codespell
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
 
     - name: Cache Rust dependencies
       uses: actions/cache@v4

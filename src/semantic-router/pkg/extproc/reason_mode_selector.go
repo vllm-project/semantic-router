@@ -62,7 +62,6 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 func (r *OpenAIRouter) getEntropyBasedReasoningModeAndCategory(query string) (bool, string, entropy.ReasoningDecision) {
 	// Use the classifier with entropy analysis
 	categoryName, confidence, reasoningDecision, err := r.Classifier.ClassifyCategoryWithEntropy(query)
-
 	if err != nil {
 		observability.Warnf("Entropy-based classification error: %v, falling back to traditional method", err)
 
@@ -158,7 +157,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	delete(requestMap, "chat_template_kwargs")
 	delete(requestMap, "reasoning_effort")
 
-	var appliedEffort string = ""
+	appliedEffort := ""
 
 	var reasoningApplied bool
 

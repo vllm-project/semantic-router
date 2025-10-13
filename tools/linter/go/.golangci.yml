@@ -1,0 +1,166 @@
+version: "2"
+
+run:
+  timeout: "5m"
+
+linters:
+
+  # enable specific linters
+  enable:
+    - bodyclose      # checks that HTTP response body is closed properly to prevent resource leaks
+    - copyloopvar    # detects improper loop variable usage in closures (fixed in Go 1.22+)
+    - depguard       # checks for disallowed package dependencies
+    - errorlint      # finds common mistakes in error handling like wrapping and type assertions
+    - gocritic       # provides extensive code quality checks for performance, style, and diagnostics
+    - gosec          # security checker that inspects code for common security problems
+    - importas       # enforces consistent import aliases for specific packages
+    - misspell       # finds commonly misspelled English words in code
+    - revive         # fast, configurable, extensible Go linter (successor to golint)
+    - staticcheck    # advanced static analysis tool that detects bugs, performance issues, and simplifications
+    - testifylint    # checks for best practices when using the testify testing framework
+    - unconvert      # removes unnecessary type conversions
+  
+  settings:
+    depguard:
+      rules:
+        Main:
+          deny:
+            - pkg: github.com/gogo/protobuf
+              desc: gogo/protobuf is deprecated, use golang/protobuf
+            # - pkg: gopkg.in/yaml.v2
+            #  desc: use sigs.k8s.io/yaml instead
+            # - pkg: gopkg.in/yaml.v3
+            #   desc: use sigs.k8s.io/yaml instead
+            - pkg: k8s.io/utils/pointer
+              desc: use k8s.io/utils/ptr instead
+    # skip some errors from linters
+    gocritic:
+      disabled-checks:
+        - ifElseChain  # Allow if-else chains for better readability in some cases
+    gosec:
+      excludes:
+        - G114  # Allow http.ListenAndServe without timeout for internal services
+        - G306  # Allow 0644 file permissions in test files
+        - G402  # Allow flexible TLS config for development
+        - G404  # Allow math/rand for non-cryptographic purposes
+        - G501  # Allow MD5 for non-security checksums (cache keys)
+        - G401  # Allow MD5 usage in cache implementation
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+    importas:
+      # go module alias configuration.
+      alias:
+        - pkg: sigs.k8s.io/gateway-api/apis/v1
+          alias: gwapiv1
+      no-unaliased: true
+      no-extra-aliases: false
+    revive:
+      rules:
+        - name: dot-imports
+          disabled: true  # Allow dot imports in test files (Ginkgo/Gomega style)
+        - name: exported
+          arguments:
+            - "checkPrivateReceivers"
+            - "disableStutteringCheck"  # Allow stuttering names in some contexts
+        - name: unused-parameter
+          disabled: true  # Allow unused parameters for interface implementations
+        - name: receiver-naming
+          disabled: true  # Allow flexible receiver naming
+        - name: empty-block
+          disabled: true  # Allow empty blocks for documentation purposes
+        - name: indent-error-flow
+          disabled: true  # Allow flexible error flow style
+    testifylint:
+      enable:
+        - bool-compare
+        - compares
+        - empty
+        - error-is-as
+        - error-nil
+        - expected-actual
+        - len
+        - suite-dont-use-pkg
+        - suite-extra-assert-call
+      disable:
+        - float-compare
+        - go-require
+        - require-error  # Allow assert.NoError in addition to require.NoError
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - godot
+        path: api
+      - linters:
+          - staticcheck
+        text: "SA1019:"
+      - linters:
+          - staticcheck
+        text: "SA1012:"  # Allow nil context in test files
+      - linters:
+          - staticcheck
+        text: "SA5011"  # Allow possible nil pointer dereference in test assertions
+        path: "_test\\.go$"
+      - linters:
+          - bodyclose
+        path: test/e2e
+      - linters:
+          - gosec
+        text: "G306:"
+        path: "_test\\.go$"
+      - linters:
+          - revive
+        text: "dot-imports:"
+        path: "_test\\.go$"
+      - linters:
+          - revive
+        text: "unused-parameter:"
+      - linters:
+          - revive
+        text: "receiver-naming:"
+      - linters:
+          - revive
+        text: "indent-error-flow:"
+      - linters:
+          - revive
+        text: "empty-block:"
+      - linters:
+          - revive
+        text: "exported.*stutters"
+      - linters:
+          - testifylint
+        text: "require-error:"
+      - linters:
+          - gocritic
+        text: "ifElseChain:"
+    paths:
+      - examples$
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  # enable gofumpt and gci for formatting
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/vllm-project/semantic-router)
+  exclusions:
+    generated: lax
+    paths:
+      - examples$
+      - zz_generated
+  

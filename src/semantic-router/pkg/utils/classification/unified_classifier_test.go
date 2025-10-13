@@ -274,8 +274,10 @@ func BenchmarkUnifiedClassifier_SingleVsBatch(b *testing.B) {
 }
 
 // Global classifier instance for integration tests to avoid repeated initialization
-var globalTestClassifier *UnifiedClassifier
-var globalTestClassifierOnce sync.Once
+var (
+	globalTestClassifier     *UnifiedClassifier
+	globalTestClassifierOnce sync.Once
+)
 
 // getTestClassifier returns a shared classifier instance for all integration tests
 func getTestClassifier(t *testing.T) *UnifiedClassifier {

@@ -23,17 +23,17 @@ type MockCategoryInference struct {
 	classifyWithProbsError  error
 }
 
-func (m *MockCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
+func (m *MockCategoryInference) Classify(_ string) (candle_binding.ClassResult, error) {
 	return m.classifyResult, m.classifyError
 }
 
-func (m *MockCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+func (m *MockCategoryInference) ClassifyWithProbabilities(_ string) (candle_binding.ClassResultWithProbs, error) {
 	return m.classifyWithProbsResult, m.classifyWithProbsError
 }
 
 type MockCategoryInitializer struct{ InitError error }
 
-func (m *MockCategoryInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+func (m *MockCategoryInitializer) Init(_ string, useCPU bool, numClasses ...int) error {
 	return m.InitError
 }
 
@@ -390,7 +390,6 @@ var _ = Describe("category classification and model selection", func() {
 		)
 
 		Describe("select best model internal", func() {
-
 			It("should select best model without filter", func() {
 				cat := &config.Category{
 					Name: "test",
@@ -489,7 +488,7 @@ type MockJailbreakInitializer struct {
 	InitError error
 }
 
-func (m *MockJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+func (m *MockJailbreakInitializer) Init(_ string, useCPU bool, numClasses ...int) error {
 	return m.InitError
 }
 
@@ -697,7 +696,7 @@ var _ = Describe("jailbreak detection", func() {
 
 type MockPIIInitializer struct{ InitError error }
 
-func (m *MockPIIInitializer) Init(modelID string, useCPU bool) error { return m.InitError }
+func (m *MockPIIInitializer) Init(_ string, useCPU bool) error { return m.InitError }
 
 type MockPIIInferenceResponse struct {
 	classifyTokensResult candle_binding.TokenClassificationResult
@@ -718,7 +717,7 @@ func (m *MockPIIInference) setMockResponse(text string, entities []candle_bindin
 	}
 }
 
-func (m *MockPIIInference) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+func (m *MockPIIInference) ClassifyTokens(text string, _ string) (candle_binding.TokenClassificationResult, error) {
 	if response, exists := m.responseMap[text]; exists {
 		return response.classifyTokensResult, response.classifyTokensError
 	}
@@ -1034,7 +1033,6 @@ var _ = Describe("get models for category", func() {
 })
 
 func TestUpdateBestModel(t *testing.T) {
-
 	classifier := &Classifier{}
 
 	bestScore := 0.5
@@ -1052,7 +1050,6 @@ func TestUpdateBestModel(t *testing.T) {
 }
 
 func TestForEachModelScore(t *testing.T) {
-
 	c := &Classifier{}
 	cat := &config.Category{
 		ModelScores: []config.ModelScore{

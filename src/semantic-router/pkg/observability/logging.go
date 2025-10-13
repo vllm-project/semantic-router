@@ -112,6 +112,7 @@ func getenvDefault(k, d string) string {
 	}
 	return v
 }
+
 func parseBool(s string) bool {
 	s = strings.TrimSpace(strings.ToLower(s))
 	return s == "1" || s == "true" || s == "yes" || s == "on"
