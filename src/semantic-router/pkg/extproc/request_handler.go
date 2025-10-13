@@ -553,8 +553,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
 				// Check rag for this category
-				// ragStrategy, categoryName := r.getRagStrategy()
-				// observability.Info
+				ragDecision := r.getRAGDecision() // true or false
+				observability.Infof("Category '%s' has RAG Decision '%s'", categoryName, ragDecision)
 				// metrics stuff
 
 				// Track VSR decision information
