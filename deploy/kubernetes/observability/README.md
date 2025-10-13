@@ -10,6 +10,9 @@ This guide adds a production-ready Prometheus + Grafana stack to the existing Se
 |--------------|---------|-----------|
 | Prometheus   | Scrapes Semantic Router metrics and stores them with persistent retention | `prometheus/` (`rbac.yaml`, `configmap.yaml`, `deployment.yaml`, `pvc.yaml`, `service.yaml`)|
 | Grafana      | Visualizes metrics using the bundled LLM Router dashboard and a pre-configured Prometheus datasource | `grafana/` (`secret.yaml`, `configmap-*.yaml`, `deployment.yaml`, `pvc.yaml`, `service.yaml`)|
+| Dashboard    | Unified UI that links Router, Prometheus, and embeds Grafana; reads Router config | `dashboard/` (`configmap.yaml`, `deployment.yaml`, `service.yaml`)|
+| Open WebUI | Playground UI for interacting with the router via a Manifold Pipeline | `openwebui/` (`deployment.yaml`, `service.yaml`)|
+| Pipelines | Executes the `vllm_semantic_router_pipe.py` manifold for Open WebUI | `pipelines/deployment.yaml` (includes a ConfigMap with the pipeline code) |
 | Ingress (optional) | Exposes the UIs outside the cluster | `ingress.yaml`|
 | Dashboard provisioning | Automatically loads `deploy/llm-router-dashboard.json` into Grafana | `grafana/configmap-dashboard.yaml`|
 
@@ -110,7 +113,7 @@ Verify pods:
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-You should see `prometheus-...` and `grafana-...` pods in `Running` state.
+You should see `prometheus-...`, `grafana-...`, and `semantic-router-dashboard-...` pods in `Running` state.
 
 ### 5.3. Integration with the core deployment
 
@@ -133,9 +136,11 @@ You should see `prometheus-...` and `grafana-...` pods in `Running` state.
   ```bash
   kubectl port-forward svc/prometheus 9090:9090 -n vllm-semantic-router-system
   kubectl port-forward svc/grafana 3000:3000 -n vllm-semantic-router-system
+  kubectl port-forward svc/semantic-router-dashboard 8700:80 -n vllm-semantic-router-system
+  kubectl port-forward svc/openwebui 3001:8080 -n vllm-semantic-router-system
   ```
 
-  Prometheus → http://localhost:9090, Grafana → http://localhost:3000
+  Prometheus → http://localhost:9090, Grafana → http://localhost:3000, Dashboard → http://localhost:8700, Open WebUI → http://localhost:3001
 
 - **Ingress (production)** – Customize `ingress.yaml` with real domains, TLS secrets, and your ingress class before applying. Replace `*.example.com` and configure HTTPS certificates via cert-manager or your provider.
 
@@ -145,6 +150,7 @@ You should see `prometheus-...` and `grafana-...` pods in `Running` state.
 2. Query `rate(llm_model_completion_tokens_total[5m])` – should return data after traffic.
 3. Open Grafana, log in with the admin credentials, and confirm the **LLM Router Metrics** dashboard exists under the *Semantic Router* folder.
 4. Generate traffic to Semantic Router (classification or routing requests). Key panels should start populating:
+5.Playground: open Open WebUI (port-forward or ingress), select the `vllm-semantic-router/auto` model (from the Manifold pipeline), and send prompts. The Dashboard Monitoring page should reflect traffic, and the pipeline will display VSR decision headers inline.
    - Prompt Category counts
    - Token usage rate per model
    - Routing modifications between models
