@@ -457,7 +457,7 @@ def main():
                 logger.warning("Cannot safely resume. Starting a fresh training run.")
                 args.resume = False
                 checkpoint_to_load = None
-                task_configs = {} 
+                task_configs = {}
             else:
                 logger.info("Loaded model configuration from checkpoint.")
                 
