@@ -20,6 +20,14 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0 0.5rem;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+  cursor: pointer;
+}
+
+.brand:hover {
+  background-color: var(--color-bg-tertiary);
 }
 
 .logo {
@@ -78,9 +86,68 @@
   white-space: nowrap;
 }
 
+/* Sub Navigation (Configuration sections) - Match parent nav style */
+.subNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  padding-left: 1.75rem;
+}
+
+.subNavLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.subNavLink:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.subNavLinkActive {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.subNavLinkActive:hover {
+  background-color: var(--color-primary-dark);
+  color: white;
+}
+
+.subNavIcon {
+  font-size: 1rem;
+  line-height: 1;
+  width: 1.25rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.subNavText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sidebarFooter {
   margin-top: auto;
   padding: 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .themeToggle {
@@ -88,10 +155,31 @@
   font-size: 1.25rem;
   border-radius: var(--radius-md);
   transition: background-color var(--transition-fast);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text);
 }
 
 .themeToggle:hover {
   background-color: var(--color-bg-tertiary);
+}
+
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text);
 }
 
 .main {

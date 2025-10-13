@@ -6,8 +6,10 @@ export type ConfigSection =
   | 'prompt-guard'
   | 'similarity-cache'
   | 'intelligent-routing'
+  | 'topology'
   | 'tools-selection'
   | 'observability'
+  | 'classification-api'
 
 interface ConfigNavProps {
   activeSection: ConfigSection
@@ -18,39 +20,51 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
   const sections = [
     {
       id: 'models' as ConfigSection,
-      icon: '🔌',
-      title: 'Models & Endpoints',
-      description: 'Model configurations and backend endpoints'
+      icon: '🤖',
+      title: 'Models',
+      description: 'User defined models and endpoints'
     },
     {
       id: 'prompt-guard' as ConfigSection,
       icon: '🛡️',
       title: 'Prompt Guard',
-      description: 'PII and jailbreak detection'
+      description: 'PII and jailbreak ModernBERT detection'
     },
     {
       id: 'similarity-cache' as ConfigSection,
       icon: '⚡',
       title: 'Similarity Cache',
-      description: 'Semantic caching configuration'
+      description: 'Similarity BERT configuration'
     },
     {
       id: 'intelligent-routing' as ConfigSection,
-      icon: '📊',
+      icon: '🧠',
       title: 'Intelligent Routing',
-      description: 'Categories and reasoning configuration'
+      description: 'Classify BERT, categories & reasoning'
+    },
+    {
+      id: 'topology' as ConfigSection,
+      icon: '🗺️',
+      title: 'Topology',
+      description: 'Visualize routing chain-of-thought'
     },
     {
       id: 'tools-selection' as ConfigSection,
       icon: '🔧',
       title: 'Tools Selection',
-      description: 'Tool auto-selection settings'
+      description: 'Tools configuration and database'
     },
     {
       id: 'observability' as ConfigSection,
-      icon: '📈',
+      icon: '📊',
       title: 'Observability',
-      description: 'Metrics and monitoring'
+      description: 'Tracing and metrics'
+    },
+    {
+      id: 'classification-api' as ConfigSection,
+      icon: '🔌',
+      title: 'Classification API',
+      description: 'Batch classification settings'
     }
   ]
 

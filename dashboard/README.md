@@ -1,4 +1,4 @@
-# Semantic Router Modern Dashboard
+# Semantic Router Dashboard
 
 Unified dashboard that brings together Configuration Management, an Interactive Playground, and Real-time Monitoring & Observability. It provides a single entry point across local, Docker Compose, and Kubernetes deployments.
 
@@ -12,8 +12,8 @@ Unified dashboard that brings together Configuration Management, an Interactive 
 ## What’s already in this repo (reused)
 
 - Prometheus + Grafana
-  - Docker Compose services in `docker-compose.yml` (ports: Prometheus 9090, Grafana 3000)
-  - Local observability in `docker-compose.obs.yml` (host network)
+  - Docker Compose services in `deploy/docker-compose/docker-compose.yml` (Prometheus 9090, Grafana 3000)
+  - Local observability in `tools/observability/docker-compose.obs.yml` (host network)
   - K8s manifests under `deploy/kubernetes/observability/{prometheus,grafana}`
   - Provisioned datasource and dashboard in `tools/observability/`
 - Router metrics and API
@@ -21,7 +21,6 @@ Unified dashboard that brings together Configuration Management, an Interactive 
   - Classification API on `:8080` with endpoints like `GET /api/v1`, `GET /config/classification`
 - Open WebUI integration
   - Pipe in `tools/openwebui-pipe/vllm_semantic_router_pipe.py`
-  - Doc in `website/docs/tutorials/observability/open-webui-integration.md`
 
 These are sufficient to embed and proxy—no need to duplicate core functionality.
 
@@ -38,8 +37,9 @@ Modern SPA built with:
 
 Pages:
 
+- **Landing** (`/`): Intro landing with animated terminal demo and quick links
 - **Monitoring** (`/monitoring`): Grafana dashboard embedding with custom path input
-- **Config** (`/config`): Real-time configuration viewer with multiple endpoints
+- **Config** (`/config`): Real-time configuration viewer with non-persistent edit demo (see note)
 - **Playground** (`/playground`): Open WebUI interface for testing
 
 Features:
@@ -48,6 +48,13 @@ Features:
 - 📱 Responsive design
 - ⚡ Fast navigation with React Router
 - 🎨 Modern UI inspired by vLLM website design
+
+Config edit demo (frontend only):
+
+- The Config page includes edit/add modals to showcase how configuration could be managed.
+- Current backend is read-only for config: it exposes `GET /api/router/config/all` only.
+- Demo save targets `POST /api/router/config/update` (not implemented by default). You can wire this endpoint in the backend to persist changes, or keep the edits as a UI mock.
+- Tools DB panel attempts to load `/api/tools-db` for `tools_db.json`. Add a backend route or static file handler to serve this if you want it live.
 
 ### Backend (Go HTTP Server)
 
@@ -58,6 +65,7 @@ Features:
   - `GET /embedded/openwebui/*` → Open WebUI (optional)
   - `GET /api/router/*` → Router Classification API (`:8080`)
   - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
+  - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (read-only)
   - `GET /healthz` → Health check endpoint
 - Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
 - SPA routing support: serves `index.html` for all non-asset routes
@@ -73,6 +81,7 @@ dashboard/
 │   │   │   ├── Layout.tsx          # Main layout with header/nav
 │   │   │   └── Layout.module.css
 │   │   ├── pages/                  # Page components
+│   │   │   ├── LandingPage.tsx     # Welcome page with terminal demo
 │   │   │   ├── MonitoringPage.tsx  # Grafana iframe with path control
 │   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
 │   │   │   ├── PlaygroundPage.tsx  # Open WebUI iframe
@@ -90,10 +99,9 @@ dashboard/
 │   ├── go.mod                      # Go module (minimal dependencies)
 │   └── Dockerfile                  # Multi-stage build (Node + Go + Alpine)
 ├── deploy/
-│   ├── docker/                      # Docker Compose overlay (deprecated)
-│   └── kubernetes/                  # K8s manifests (Service/Ingress/ConfigMap)
+│   └── kubernetes/                  # K8s manifests (Deployment/Service/ConfigMap)
 ├── README.md                        # This file
-└── RISKS.md                         # Security considerations
+└── (no RISKS.md)                    # Security considerations are documented inline for now
 ```
 
 ## Environment-agnostic configuration
@@ -108,7 +116,7 @@ Required env vars (with sensible defaults per environment):
 - `TARGET_ROUTER_API_URL` (router `:8080`)
 - `TARGET_ROUTER_METRICS_URL` (router `:9190/metrics`)
 - `TARGET_OPENWEBUI_URL` (optional; enable playground tab only if present)
-- `ALLOW_IFRAME_EMBED` (default: true; backend will remove/override frame-busting headers)
+Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.
 
 Recommended upstream settings for embedding:
 
@@ -117,16 +125,16 @@ Recommended upstream settings for embedding:
 
 ## URL strategy (stable, user-facing)
 
-- Dashboard Home: `http://<host>:8700/`
+- Dashboard Home (Landing): `http://<host>:8700/`
 - Monitoring tab: iframe `src="/embedded/grafana/d/<dashboard-uid>?kiosk&theme=light"`
-- Config tab: frontend fetch `GET /api/router/config/classification`
+- Config tab: frontend fetch `GET /api/router/config/all` (demo edit modals; see note above)
 - Playground tab: iframe `src="/embedded/openwebui/"` (rendered only if `TARGET_OPENWEBUI_URL` is set)
 
 ## Deployment matrix
 
 1) Local dev (router and observability on host)
 
-- Use `docker-compose.obs.yml` to start Prometheus (9090) and Grafana (3000) on host network
+- Use `tools/observability/docker-compose.obs.yml` to start Prometheus (9090) and Grafana (3000) on host network
 - Start dashboard backend locally (port 8700)
 - Env examples:
   - `TARGET_GRAFANA_URL=http://localhost:3000`
@@ -137,8 +145,7 @@ Recommended upstream settings for embedding:
 
 2) Docker Compose (all-in-one)
 
-- Reuse services defined in root `docker-compose.yml`
-- Add dashboard and optional Open WebUI services in `dashboard/deploy/docker/compose.yml`
+- Reuse services defined in `deploy/docker-compose/docker-compose.yml` (Dashboard included by default)
 - Env examples (inside compose network):
   - `TARGET_GRAFANA_URL=http://grafana:3000`
   - `TARGET_PROMETHEUS_URL=http://prometheus:9090`
@@ -170,37 +177,21 @@ Recommended upstream settings for embedding:
 - New integrations: add target env vars and a new `/embedded/<service>` route in backend proxy
 - Metrics aggregation: add `/api/metrics` in backend to produce derived KPIs from Prometheus
 
-## Implementation milestones
+## Implementation notes
 
-1) MVP (this PR)
-
-- Scaffold `dashboard/` (this README)
-- Backend: Go server with reverse proxies for `/embedded/*` and `/api/router/*`
-- Frontend: minimal SPA with three tabs and iframes + JSON viewer
-- Compose overlay: `dashboard/deploy/docker/compose.yml` to launch dashboard with existing stack
-
-2) K8s manifests
-
-- Deployment + Service + ConfigMap with env vars; optional Ingress
-- Document `kubectl port-forward` for dev
-
-3) Auth hardening and polish
-
-- Env toggles for anonymous/off
-- OIDC enablement behind a flag
-- Metrics summary endpoint
+— Backend: Go server with reverse proxies for `/embedded/*` and `/api/router/*`, plus `/api/router/config/all`
+— Frontend: SPA with three tabs and iframes + structured config viewer
+— K8s manifests: Deployment + Service + ConfigMap; optional Ingress (add per cluster)
+— Future: OIDC, per-route RBAC, metrics summary endpoint
 
 ## Quick Start
 
-### Method 1: One-click Start with Docker Compose (Recommended)
+### Method 1: Start with Docker Compose (Recommended)
 
 The Dashboard is integrated into the main Compose stack, requiring no extra configuration:
 
 ```bash
-# Run from the project root directory
-make docker-compose-up
-
-# Or use docker compose directly
+# From the project root directory
 docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 ```
 
@@ -215,33 +206,25 @@ After startup, access:
 When developing the Dashboard code locally:
 
 ```bash
-# 1. Start the local Observability stack
-make o11y-local
-# Or
+# 1) Start Observability locally (Prometheus + Grafana on host network)
 docker compose -f tools/observability/docker-compose.obs.yml up -d
 
-# 2. Start the Router (in another terminal)
-cd src/semantic-router
-go run cmd/main.go -config ../../config/config.yaml
-
-# 3. Install frontend dependencies
+# 2) Install frontend dependencies and run Vite dev server
 cd dashboard/frontend
 npm install
-
-# 4. Start the frontend dev server (with HMR)
 npm run dev
-# Vite will start on http://localhost:3001 with proxy to backend
+# Vite runs at http://localhost:3001 and proxies /api and /embedded to http://localhost:8700
 
-# 5. Start the Dashboard backend (in another terminal)
+# 3) Start the Dashboard backend in another terminal
 cd dashboard/backend
 export TARGET_GRAFANA_URL=http://localhost:3000
 export TARGET_PROMETHEUS_URL=http://localhost:9090
 export TARGET_ROUTER_API_URL=http://localhost:8080
 export TARGET_ROUTER_METRICS_URL=http://localhost:9190/metrics
-go run main.go -port=8700 -static=../frontend/dist
+export ROUTER_CONFIG_PATH=../../config/config.yaml
+go run main.go -port=8700 -static=../frontend/dist -config=$ROUTER_CONFIG_PATH
 
-# For development, use the Vite dev server at http://localhost:3001
-# For production preview, build first: cd frontend && npm run build
+# Tip: If your router runs inside Docker Compose, point TARGET_* to the container hostnames instead.
 ```
 
 ### Method 3: Rebuild Dashboard Only
@@ -263,8 +246,8 @@ docker logs -f semantic-router-dashboard
 
 ### Docker Compose Integration Notes
 
-- The Dashboard service is integrated as a **default service** in `deploy/docker-compose/docker-compose.yml`.
-- No additional overlay files are needed; `make docker-compose-up` will automatically start all services.
+- The Dashboard service is integrated as a default service in `deploy/docker-compose/docker-compose.yml`.
+- No additional overlay files are needed; the compose file will start all services.
 - The Dashboard depends on the `semantic-router` (for health checks), `grafana`, and `prometheus` services.
 
 ### Dockerfile Build
@@ -289,6 +272,8 @@ Grafana is already configured for embedding in `deploy/docker-compose/docker-com
 
 The Dashboard reverse proxy will automatically clean up `X-Frame-Options` and adjust CSP headers to ensure the iframe loads correctly.
 
+Default dashboard path in Monitoring tab: `/d/llm-router-metrics/llm-router-metrics`.
+
 ### Health Check
 
 The Dashboard provides a `/healthz` endpoint for container health checks:
@@ -298,7 +283,57 @@ curl http://localhost:8700/healthz
 # Returns: {"status":"healthy","service":"semantic-router-dashboard"}
 ```
 
+### Kubernetes deployment
+
+The manifest at `dashboard/deploy/kubernetes/deployment.yaml` includes:
+
+- Deployment with args `-port=8700 -static=/app/frontend -config=/app/config/config.yaml`
+- Service (ClusterIP) exposing port 80 → container port 8700
+- ConfigMap `semantic-router-dashboard-config` for upstream targets (`TARGET_*` env)
+- ConfigMap `semantic-router-config` to provide a minimal `config.yaml` (replace with your real one)
+
+Quick start:
+
+```bash
+# Set your namespace and apply
+kubectl create ns vllm-semantic-router-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n vllm-semantic-router-system apply -f dashboard/deploy/kubernetes/deployment.yaml
+
+# Port-forward for local testing
+kubectl -n vllm-semantic-router-system port-forward svc/semantic-router-dashboard 8700:80
+# Open http://localhost:8700
+```
+
+Notes:
+
+- Edit `semantic-router-dashboard-config` in the YAML to match your in-cluster service DNS names and namespace.
+- Replace `semantic-router-config` content with your actual `config.yaml` or mount a Secret/ConfigMap you already manage.
+- To expose externally, add an Ingress or Service of type LoadBalancer according to your cluster.
+
+Optional Ingress example (Nginx Ingress):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: semantic-router-dashboard
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: dashboard.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: semantic-router-dashboard
+                port:
+                  number: 80
+```
+
 ## Notes
 
-- The website/ (Docusaurus) remains for documentation. The dashboard is a runtime operator/try-it surface, not docs.
-- We’ll keep upstream services untouched and do all UX unification at the proxy + SPA layer.
+- The dashboard is a runtime operator/try-it surface, not docs. See repository docs for broader guides.
+- Upstream services remain untouched; UX unification happens at the proxy + SPA layer.
