@@ -343,8 +343,7 @@ class MultitaskTrainer:
         torch.save(state, latest_checkpoint_path)
         logger.info(f"Checkpoint saved for step {global_step} at {latest_checkpoint_path}")
 
-    def train(self, train_samples, val_samples, label_mappings, num_epochs=3, batch_size=16, learning_rate=2e-5, 
-              checkpoint_dir='checkpoints', resume=False, save_steps=500, checkpoint_to_load=None):
+    def train(self, train_samples, val_samples, label_mappings, num_epochs=3, batch_size=16, learning_rate=2e-5,checkpoint_dir='checkpoints', resume=False, save_steps=500, checkpoint_to_load=None):
         train_dataset = MultitaskDataset(train_samples, self.tokenizer)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataset = MultitaskDataset(val_samples, self.tokenizer)
