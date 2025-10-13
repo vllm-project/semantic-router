@@ -34,7 +34,6 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"
     port: 8000
-    models: ["deepseek-v31", "qwen3-30b", "openai/gpt-oss-20b"]  # Must match --served-model-name
     weight: 1
 
 # Reasoning family configurations (how to express reasoning for a family)

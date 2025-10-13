@@ -6,10 +6,11 @@ import (
 	"io"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 // Process implements the ext_proc calls
@@ -25,7 +26,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		req, err := stream.Recv()
 		if err != nil {
 			// Handle EOF - this indicates the client has closed the stream gracefully
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				observability.Infof("Stream ended gracefully")
 				return nil
 			}

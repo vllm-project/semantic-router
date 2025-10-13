@@ -329,13 +329,14 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 				}
 
 				// Validate the specific parameter based on model type
-				if tc.model == "deepseek-v31" || tc.model == "ds-1.5b" {
+				switch tc.model {
+				case "deepseek-v31", "ds-1.5b":
 					if thinkingValue, exists := kwargs["thinking"]; !exists {
 						t.Fatalf("Expected 'thinking' parameter in chat_template_kwargs for DeepSeek model")
 					} else if thinkingValue != true {
 						t.Fatalf("Expected 'thinking' to be true, got %v", thinkingValue)
 					}
-				} else if tc.model == "qwen3-7b" {
+				case "qwen3-7b":
 					if thinkingValue, exists := kwargs["enable_thinking"]; !exists {
 						t.Fatalf("Expected 'enable_thinking' parameter in chat_template_kwargs for Qwen3 model")
 					} else if thinkingValue != true {

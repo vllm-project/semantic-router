@@ -159,10 +159,13 @@ Configure your LLM servers:
 vllm_endpoints:
   - name: "my_endpoint"
     address: "127.0.0.1"  # Your server IP - MUST be IP address format
-    port: 8000                # Your server port
-    models:
-      - "llama2-7b"          # Model name - must match vLLM --served-model-name
-    weight: 1                 # Load balancing weight
+    port: 8000            # Your server port
+    weight: 1             # Load balancing weight
+
+# Model configuration - maps models to endpoints
+model_config:
+  "llama2-7b":            # Model name - must match vLLM --served-model-name
+    preferred_endpoints: ["my_endpoint"]
 ```
 
 #### Address Format Requirements
@@ -204,11 +207,12 @@ The model names in the `models` array must **exactly match** the `--served-model
 # vLLM server command:
 vllm serve meta-llama/Llama-2-7b-hf --served-model-name llama2-7b
 
-# config.yaml must use the same name:
-vllm_endpoints:
-  - models: ["llama2-7b"]  # ✅ Matches --served-model-name
-
+# config.yaml must reference the model in model_config:
 model_config:
+  "llama2-7b":  # ✅ Matches --served-model-name
+    preferred_endpoints: ["your-endpoint"]
+
+vllm_endpoints:
   "llama2-7b":             # ✅ Matches --served-model-name
     # ... configuration
 ```
@@ -683,12 +687,10 @@ vllm_endpoints:
   - name: "math_endpoint"
     address: "192.168.1.10"  # Math server IP
     port: 8000
-    models: ["math-model"]
     weight: 1
   - name: "general_endpoint"
     address: "192.168.1.20"  # General server IP
     port: 8000
-    models: ["general-model"]
     weight: 1
 
 categories:
@@ -711,12 +713,10 @@ vllm_endpoints:
   - name: "endpoint1"
     address: "192.168.1.30"  # Primary server IP
     port: 8000
-    models: ["my-model"]
     weight: 2              # Higher weight = more traffic
   - name: "endpoint2"
     address: "192.168.1.31"  # Secondary server IP
     port: 8000
-    models: ["my-model"]
     weight: 1
 ```
 

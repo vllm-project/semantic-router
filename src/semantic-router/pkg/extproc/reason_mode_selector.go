@@ -62,7 +62,6 @@ func (r *OpenAIRouter) getReasoningModeAndCategory(query string) (bool, string) 
 func (r *OpenAIRouter) getEntropyBasedReasoningModeAndCategory(query string) (bool, string, entropy.ReasoningDecision) {
 	// Use the classifier with entropy analysis
 	categoryName, confidence, reasoningDecision, err := r.Classifier.ClassifyCategoryWithEntropy(query)
-
 	if err != nil {
 		observability.Warnf("Entropy-based classification error: %v, falling back to traditional method", err)
 
@@ -124,7 +123,7 @@ func (r *OpenAIRouter) buildReasoningRequestFields(model string, useReasoning bo
 		}
 		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
 	case "reasoning_effort":
-		effort := r.getReasoningEffort(categoryName)
+		effort := r.getReasoningEffort(categoryName, model)
 		return map[string]interface{}{"reasoning_effort": effort}, effort
 	default:
 		// Unknown reasoning syntax type - don't apply anything
@@ -158,7 +157,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	delete(requestMap, "chat_template_kwargs")
 	delete(requestMap, "reasoning_effort")
 
-	var appliedEffort string = ""
+	appliedEffort := ""
 
 	var reasoningApplied bool
 
@@ -302,19 +301,25 @@ func (r *OpenAIRouter) LogReasoningConfigurationSummary() {
 	observability.Infof("Reasoning mode summary: %d/%d categories have reasoning enabled (based on best model)", enabledCount, len(r.Config.Categories))
 }
 
-// getReasoningEffort returns the reasoning effort level for a given category
-func (r *OpenAIRouter) getReasoningEffort(categoryName string) string {
+// getReasoningEffort returns the reasoning effort level for a given category and model
+func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string) string {
 	// Handle case where Config is nil (e.g., in tests)
 	if r.Config == nil {
 		return "medium"
 	}
 
-	// Find the category configuration
+	// Find the category and model configuration
 	for _, category := range r.Config.Categories {
 		if category.Name == categoryName {
-			// Use category-specific effort if configured
-			if category.ReasoningEffort != "" {
-				return category.ReasoningEffort
+			// Find the specific model in the category's model scores
+			for _, modelScore := range category.ModelScores {
+				if modelScore.Model == modelName {
+					// Use model-specific effort if configured
+					if modelScore.ReasoningEffort != "" {
+						return modelScore.ReasoningEffort
+					}
+					break
+				}
 			}
 			break
 		}

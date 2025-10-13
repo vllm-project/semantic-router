@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp"

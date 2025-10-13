@@ -244,18 +244,48 @@ h1, h2, h3, h4, h5, h6 {
   transition: color 0.3s ease;
 }
 
-h1 {
+/* Temporarily disable global h1 gradient effect to fix publications page issue */
+/* h1 {
   background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-green));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+} */
+
+/* Publications page title exception - multiple selectors ensure override */
+.publications-page h1,
+.publications-page .title,
+.title_ruWM,
+.container_hzh_ h1 {
+  background: none !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: #b8860b !important;
+  background-clip: unset !important;
+  color: #b8860b !important;
 }
 
-[data-theme='dark'] h1 {
+/* Temporarily disable dark theme global h1 gradient effect to fix publications page issue */
+/* [data-theme='dark'] h1 {
   background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-orange));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+} */
+
+/* Publications page dark theme title exception - multiple selectors ensure override */
+[data-theme='dark'] .publications-page h1,
+[data-theme='dark'] .publications-page .title,
+[data-theme='dark'] .title_ruWM,
+[data-theme='dark'] .container_hzh_ h1 {
+  background: none !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: #ffd700 !important;
+  background-clip: unset !important;
+  color: #ffd700 !important;
 }
 
 h2 {

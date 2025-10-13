@@ -46,9 +46,9 @@ func TestInMemoryCacheIntegration(t *testing.T) {
 
 		// Step 3: Access first entry multiple times to increase its frequency
 		for range 2 {
-			responseBody, found, err := cache.FindSimilar("test-model", "Hello world")
-			if err != nil {
-				t.Logf("FindSimilar failed (expected due to high threshold): %v", err)
+			responseBody, found, findErr := cache.FindSimilar("test-model", "Hello world")
+			if findErr != nil {
+				t.Logf("FindSimilar failed (expected due to high threshold): %v", findErr)
 			}
 			if !found {
 				t.Errorf("Expected to find similar entry for first query")

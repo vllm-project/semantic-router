@@ -199,14 +199,12 @@ func CreateTestConfig() *config.RouterConfig {
 				Name:    "test-endpoint1",
 				Address: "127.0.0.1",
 				Port:    8000,
-				Models:  []string{"model-a", "model-b"},
 				Weight:  1,
 			},
 			{
 				Name:    "test-endpoint2",
 				Address: "127.0.0.1",
 				Port:    8001,
-				Models:  []string{"model-b"},
 				Weight:  2,
 			},
 		},
@@ -227,8 +225,8 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 	}
 
 	// Initialize the BERT model for similarity search
-	if err := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); err != nil {
-		return nil, fmt.Errorf("failed to initialize BERT model: %w", err)
+	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
 	// Create semantic cache

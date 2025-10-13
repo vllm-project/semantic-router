@@ -2,6 +2,7 @@ package extproc
 
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 

@@ -6,6 +6,7 @@ export type ConfigSection =
   | 'prompt-guard'
   | 'similarity-cache'
   | 'intelligent-routing'
+  | 'topology'
   | 'tools-selection'
   | 'observability'
   | 'classification-api'
@@ -40,6 +41,12 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       icon: '🧠',
       title: 'Intelligent Routing',
       description: 'Classify BERT, categories & reasoning'
+    },
+    {
+      id: 'topology' as ConfigSection,
+      icon: '🗺️',
+      title: 'Topology',
+      description: 'Visualize routing chain-of-thought'
     },
     {
       id: 'tools-selection' as ConfigSection,

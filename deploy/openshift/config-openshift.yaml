@@ -32,14 +32,10 @@ vllm_endpoints:
   - name: "model-a-endpoint"
     address: "127.0.0.1"  # localhost in same pod
     port: 8000
-    models:
-      - "Model-A"
     weight: 1
   - name: "model-b-endpoint"
     address: "127.0.0.1"  # localhost in same pod
     port: 8001
-    models:
-      - "Model-B"
     weight: 1
 
 model_config:

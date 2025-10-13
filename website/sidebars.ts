@@ -87,7 +87,9 @@ const sidebars: SidebarsConfig = {
           label: 'Observability',
           items: [
             'tutorials/observability/overview',
-            'tutorials/observability/observability',
+            'tutorials/observability/metrics',
+            'tutorials/observability/distributed-tracing',
+            'tutorials/observability/open-webui-integration',
           ],
         },
       ],

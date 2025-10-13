@@ -222,10 +222,6 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
             for model, acc in sorted(models.items(), key=lambda x: x[1], reverse=True)
             if model.split(":")[0] != "auto"
         ]
-        # Build the model_scores list
-        model_scores = [
-            {"model": model, "score": float(acc)} for model, acc in ranked_models
-        ]
         # Get reasoning settings for the category
         reasoning_settings = category_reasoning.get(
             category.lower(),
@@ -235,13 +231,22 @@ def generate_config_yaml(category_accuracies, similarity_threshold):
                 "reasoning_effort": "low",
             },
         )
-        # Add category to config with reasoning settings
-        config["categories"].append(
-            {
-                "name": category,
+        # Build the model_scores list with reasoning settings applied to each model
+        model_scores = []
+        for model, acc in ranked_models:
+            model_score = {
+                "model": model,
+                "score": float(acc),
                 "use_reasoning": reasoning_settings["use_reasoning"],
                 "reasoning_description": reasoning_settings["reasoning_description"],
                 "reasoning_effort": reasoning_settings["reasoning_effort"],
+            }
+            model_scores.append(model_score)
+
+        # Add category to config
+        config["categories"].append(
+            {
+                "name": category,
                 "model_scores": model_scores,
             }
         )

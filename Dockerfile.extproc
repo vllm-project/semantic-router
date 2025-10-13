@@ -57,16 +57,10 @@ FROM golang:1.24 AS go-builder
 
 WORKDIR /app
 
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOSUMDB=sum.golang.google.cn
-
 # Copy Go module files first for better layer caching
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
-
-RUN cd src/semantic-router && go mod download && \
-    cd /app/candle-binding && go mod download
 
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/

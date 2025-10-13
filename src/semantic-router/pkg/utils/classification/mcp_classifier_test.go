@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp"
 )
