@@ -174,7 +174,7 @@ graph TD
 
 4. **Storage Layer**
    * **Semantic Cache Storage** — Milvus uses persistent volumes for embeddings and responses.
-   * **KV‑cache Storage** — GPU memory for hot cache; system memory or NVMe for warm/cold cache. LMCache can offload and share KV‑cache across instances with multi-tier storage hierachy.
+   * **KV‑cache Storage** — GPU memory for hot cache; system memory or NVMe for warm/cold cache. LMCache can offload and share KV‑cache across instances with multi-tier storage hierarchy.
 
 ### 4.3 Request Flow
 
