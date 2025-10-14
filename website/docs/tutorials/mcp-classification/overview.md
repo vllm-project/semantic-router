@@ -196,12 +196,14 @@ classifier:
 The repository includes two reference implementations in `examples/mcp-classifier-server/`:
 
 ### 1. Regex-Based (`server.py`)
+
 - Simple pattern matching
 - Fast prototyping (less than 5ms classification)
 - Easy to understand and modify
 - No ML dependencies required
 
 ### 2. Embedding-Based (`server_embedding.py`)
+
 - Qwen3-Embedding-0.6B model
 - FAISS vector search for semantic similarity
 - High accuracy semantic classification
