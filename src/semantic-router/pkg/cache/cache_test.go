@@ -576,6 +576,30 @@ development:
 			Expect(stats.HitRatio).To(Equal(0.5))
 		})
 
+		It("should skip expired entries during similarity search", func() {
+			ttlCache := cache.NewInMemoryCache(cache.InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: 0.1,
+				MaxEntries:          10,
+				TTLSeconds:          1,
+			})
+			defer ttlCache.Close()
+
+			err := ttlCache.AddEntry("ttl-request-id", "ttl-model", "time-sensitive query", []byte("request"), []byte("response"))
+			Expect(err).NotTo(HaveOccurred())
+
+			time.Sleep(1100 * time.Millisecond)
+
+			response, found, err := ttlCache.FindSimilar("ttl-model", "time-sensitive query")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse())
+			Expect(response).To(BeNil())
+
+			stats := ttlCache.GetStats()
+			Expect(stats.HitCount).To(Equal(int64(0)))
+			Expect(stats.MissCount).To(Equal(int64(1)))
+		})
+
 		It("should handle error when updating non-existent pending request", func() {
 			err := inMemoryCache.UpdateWithResponse("non-existent-query", []byte("response"))
 			Expect(err).To(HaveOccurred())
