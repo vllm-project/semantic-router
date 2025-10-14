@@ -56,14 +56,14 @@ This guide provides step-by-step instructions for deploying the vLLM Semantic Ro
 
 ```bash
 # Core (router + envoy)
-docker compose up --build
+docker compose -f deploy/docker-compose/docker-compose.yml up --build
 
 # Detached (recommended once OK)
-docker compose up -d --build
+docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 
 # Include mock vLLM + testing profile (points router to mock endpoint)
 CONFIG_FILE=/app/config/config.testing.yaml \
-  docker compose --profile testing up --build
+  docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
 ```
 
 ### Verify
@@ -87,7 +87,7 @@ docker compose logs -f semantic-router
 docker compose exec semantic-router bash
 
 # Recreate after config change
-docker compose up -d --build
+docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 
 # Stop and clean up containers
 docker compose down
