@@ -2,7 +2,7 @@ services:
 
   # Semantic Router External Processor Service
   semantic-router:
-    image: semantic-router-extproc:dev
+    image: ghcr.io/vllm-project/semantic-router/semantic-router:latest
     container_name: semantic-router
     ports:
       - "50051:50051"
