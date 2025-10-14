@@ -313,6 +313,62 @@
   display: block;
 }
 
+/* Toggle Visibility Button for Address Masking */
+.toggleVisibilityButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.toggleVisibilityButton:hover {
+  opacity: 1;
+}
+
+/* Pricing Display Styles */
+.pricingContainer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.pricingItem {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.pricingLabel {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.pricingValue {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+}
+
+.pricingUnit {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+
+.pricingDivider {
+  color: var(--color-border);
+  font-weight: 300;
+}
+
 /* Section Styles */
 .section {
   background-color: var(--color-bg-secondary);
@@ -488,6 +544,28 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.875rem;
+}
+
+.endpointDetails .configRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.endpointDetails .configRow:last-child {
+  border-bottom: none;
+}
+
+.endpointDetails .configLabel {
+  min-width: 100px;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.endpointDetails .configValue {
+  font-size: 0.8rem;
 }
 
 .modelTags {
@@ -840,11 +918,11 @@
   padding: 1rem 1.25rem;
 }
 
-/* Model Config Grid */
+/* Model Config List - Changed from Grid to List for better scalability */
 .modelConfigGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
 }
 
 .modelConfigCard {
@@ -858,24 +936,55 @@
 .modelConfigCard:hover {
   border-color: var(--color-primary);
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
-  transform: translateY(-2px);
+}
+
+.modelConfigCard:last-child {
+  margin-bottom: 0;
 }
 
 .modelConfigHeader {
-  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0.875rem;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
   border-bottom: 1px solid var(--color-border);
 }
 
 .modelConfigName {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--color-text);
   font-family: var(--font-mono);
 }
 
 .modelConfigBody {
-  padding: 1rem 1.25rem;
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.modelConfigBody .configRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.modelConfigBody .configRow:last-child {
+  border-bottom: none;
+}
+
+.modelConfigBody .configLabel {
+  min-width: 160px;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.modelConfigBody .configValue {
+  font-size: 0.8rem;
 }
 
 .endpointTags {

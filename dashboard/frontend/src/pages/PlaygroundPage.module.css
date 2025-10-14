@@ -2,8 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 1rem;
-  gap: 1rem;
+  padding: 0;
   overflow: hidden;
 }
 
@@ -88,8 +87,6 @@
 .iframeContainer {
   flex: 1;
   background-color: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
   overflow: hidden;
   display: flex;
   align-items: center;

@@ -170,6 +170,18 @@ const formatThreshold = (value: number): string => {
   return `${Math.round(value * 100)}%`
 }
 
+// Helper function to mask address for security
+const maskAddress = (address: string): string => {
+  if (address.length <= 8) {
+    return '•'.repeat(address.length)
+  }
+  // Show first 3 and last 3 characters, mask the middle
+  const start = address.substring(0, 3)
+  const end = address.substring(address.length - 3)
+  const middleLength = address.length - 6
+  return `${start}${'•'.repeat(middleLength)}${end}`
+}
+
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -180,6 +192,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const [toolsData, setToolsData] = useState<Tool[]>([])
   const [toolsLoading, setToolsLoading] = useState(false)
   const [toolsError, setToolsError] = useState<string | null>(null)
+
+  // Endpoint address visibility state (for security masking)
+  const [visibleAddresses, setVisibleAddresses] = useState<Set<number>>(new Set())
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -373,7 +388,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               <div className={styles.endpointDetails}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>🌐 Address</span>
-                  <span className={styles.configValue}>{endpoint.address}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className={styles.configValue}>
+                      {visibleAddresses.has(index) ? endpoint.address : maskAddress(endpoint.address)}
+                    </span>
+                    <button
+                      className={styles.toggleVisibilityButton}
+                      onClick={() => {
+                        const newVisible = new Set(visibleAddresses)
+                        if (newVisible.has(index)) {
+                          newVisible.delete(index)
+                        } else {
+                          newVisible.add(index)
+                        }
+                        setVisibleAddresses(newVisible)
+                      }}
+                      title={visibleAddresses.has(index) ? 'Hide address' : 'Show address'}
+                    >
+                      {visibleAddresses.has(index) ? '👁️' : '👁️‍🗨️'}
+                    </button>
+                  </div>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>🔌 Port</span>
@@ -691,13 +725,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   {modelConfig.pricing && (
                     <div className={styles.configRow}>
                       <span className={styles.configLabel}>💰 Pricing</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <span className={styles.configValue}>
-                          Prompt: {modelConfig.pricing.prompt_per_1m?.toFixed(2) || '0.00'} {modelConfig.pricing.currency || 'USD'}/1M tokens
-                        </span>
-                        <span className={styles.configValue}>
-                          Completion: {modelConfig.pricing.completion_per_1m?.toFixed(2) || '0.00'} {modelConfig.pricing.currency || 'USD'}/1M tokens
-                        </span>
+                      <div className={styles.pricingContainer}>
+                        <div className={styles.pricingItem}>
+                          <span className={styles.pricingLabel}>Prompt</span>
+                          <span className={styles.pricingValue}>
+                            {modelConfig.pricing.prompt_per_1m?.toFixed(2) || '0.00'}
+                          </span>
+                          <span className={styles.pricingUnit}>
+                            {modelConfig.pricing.currency || 'USD'}/1M
+                          </span>
+                        </div>
+                        <div className={styles.pricingDivider}>|</div>
+                        <div className={styles.pricingItem}>
+                          <span className={styles.pricingLabel}>Completion</span>
+                          <span className={styles.pricingValue}>
+                            {modelConfig.pricing.completion_per_1m?.toFixed(2) || '0.00'}
+                          </span>
+                          <span className={styles.pricingUnit}>
+                            {modelConfig.pricing.currency || 'USD'}/1M
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}

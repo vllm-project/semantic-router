@@ -8,7 +8,7 @@
 [![Crates.io](https://img.shields.io/crates/v/candle-semantic-router.svg)](https://crates.io/crates/candle-semantic-router)
 ![Test And Build](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
 
-**📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/installation) | 📣 [Blog](https://vllm-semantic-router.com/blog/) | 📖 [API Reference](https://vllm-semantic-router.com/docs/api/router/)**
+**📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/installation) | 📣 [Blog](https://vllm-semantic-router.com/blog/) | 📖 [Publications](https://vllm-semantic-router.com/publications/)**
 
 ![code](./website/static/img/code.png)
 
@@ -64,19 +64,21 @@ Cache the semantic representation of the prompt so as to reduce the number of pr
 
 ### Distributed Tracing 🔍
 
-Comprehensive observability with OpenTelemetry distributed tracing provides fine-grained visibility into the request processing pipeline:
-
-- **Request Flow Tracing**: Track requests through classification, security checks, caching, and routing
-- **Performance Analysis**: Identify bottlenecks with detailed timing for each operation
-- **Security Monitoring**: Trace PII detection and jailbreak prevention operations
-- **Routing Decisions**: Understand why specific models were selected
-- **OpenTelemetry Standard**: Industry-standard tracing with support for Jaeger, Tempo, and other OTLP backends
+Comprehensive observability with OpenTelemetry distributed tracing provides fine-grained visibility into the request processing pipeline.
 
 ### Open WebUI Integration 💬
 
 To view the ***Chain-Of-Thought*** of the vLLM-SR's decision-making process, we have integrated with Open WebUI.
 
 ![code](./website/static/img/chat.png)
+
+## Quick Start 🚀
+
+```bash
+make docker-compose-up
+```
+
+For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
 
 ## Documentation 📖
 

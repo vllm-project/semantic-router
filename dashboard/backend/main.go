@@ -161,6 +161,10 @@ func newReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		r.URL.Path = p
 		r.Host = targetURL.Host
 
+		// Set Origin header to match the target URL for Grafana embedding
+		// This is required for Grafana to accept the iframe embedding
+		r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
+
 		// Optionally forward Authorization header
 		if !forwardAuth {
 			r.Header.Del("Authorization")

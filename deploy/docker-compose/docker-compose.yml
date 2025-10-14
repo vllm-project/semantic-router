@@ -29,7 +29,7 @@ services:
       - "8801:8801"  # Main proxy port
       - "19000:19000"  # Admin interface
     volumes:
-      - ../../config/envoy-docker.yaml:/etc/envoy/envoy.yaml:ro
+      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro
     command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
     depends_on:
       semantic-router:
@@ -67,13 +67,11 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
-      - ../../tools/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./addons/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.retention.time=15d
-    environment:
-      - ROUTER_TARGET=semantic-router:9190
     ports:
       - "9090:9090"
     networks:
@@ -86,22 +84,13 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - PROMETHEUS_URL=prometheus:9090
-      - GF_SECURITY_ALLOW_EMBEDDING=true
-      - GF_SECURITY_COOKIE_SAMESITE=lax
-      # Configure for subpath serving through dashboard proxy
-      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
-      - GF_SERVER_SERVE_FROM_SUB_PATH=false
-      # Enable anonymous access for iframe embedding
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-      # Disable login requirement for embedding
-      - GF_AUTH_DISABLE_LOGIN_FORM=false
     ports:
       - "3000:3000"
     volumes:
-      - ../../tools/observability/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
-      - ../../tools/observability/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
-      - ../../tools/observability/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
+      - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
       - grafana-data:/var/lib/grafana
     networks:
       - semantic-network
@@ -139,7 +128,7 @@ services:
       # Persistent pipelines storage (auto-loaded on start)
       - openwebui-pipelines:/app/pipelines
       # Mount our vLLM Semantic Router pipeline
-      - ../../tools/openwebui-pipe/vllm_semantic_router_pipe.py:/app/pipelines/vllm_semantic_router_pipe.py:ro
+      - ./addons/vllm_semantic_router_pipe.py:/app/pipelines/vllm_semantic_router_pipe.py:ro
     networks:
       - semantic-network
 

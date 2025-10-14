@@ -1,0 +1,31 @@
+# Prometheus configuration for semantic-router observability
+#
+# This configuration works for both:
+#   - Docker Compose (all services in containers)
+#
+# The target address is controlled by environment variable:
+#   - Compose mode: ROUTER_TARGET=semantic-router:9190
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Semantic Router metrics
+  - job_name: semantic-router
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["semantic-router:9190"]
+        labels:
+          service: semantic-router
+          environment: docker
+
+  # Optional: Envoy proxy metrics
+  # Uncomment if Envoy is running
+  - job_name: envoy
+    metrics_path: /stats/prometheus
+    static_configs:
+      - targets: ["envoy-proxy:19000"]
+        labels:
+          service: envoy
+          environment: docker
