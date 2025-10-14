@@ -9,7 +9,6 @@ scrape_configs:
   - job_name: semantic-router
     metrics_path: /metrics
     static_configs:
-      # Local: localhost:9190 / Compose: semantic-router:9190
       - targets: ["prometheus:9190"]
         labels:
           service: semantic-router
