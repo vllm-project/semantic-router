@@ -189,19 +189,23 @@ classifier:
 ## Next Steps
 
 - [Protocol Specification](./protocol.md) - Detailed MCP protocol for classification
-- [Implementation Guide](./implementation.md) - Build your own MCP classifier
-- [Embedding Classifier Example](./embedding-classifier.md) - Production-ready example
+- [Example Servers](https://github.com/vllm-project/semantic-router/tree/main/examples/mcp-classifier-server) - Reference implementations
 
 ## Example Servers
 
-The repository includes two reference implementations:
+The repository includes two reference implementations in `examples/mcp-classifier-server/`:
 
-1. **Regex-Based**
-   - Simple pattern matching
-   - Fast prototyping
-   - Less than 5ms classification
+### 1. Regex-Based (`server.py`)
+- Simple pattern matching
+- Fast prototyping (less than 5ms classification)
+- Easy to understand and modify
+- No ML dependencies required
 
-2. **Embedding-Based**
-   - Qwen3-Embedding-0.6B model
-   - FAISS vector search
-   - High accuracy semantic classification
+### 2. Embedding-Based (`server_embedding.py`)
+- Qwen3-Embedding-0.6B model
+- FAISS vector search for semantic similarity
+- High accuracy semantic classification
+- Production-ready with device selection (CPU/GPU)
+- Includes 95 training examples
+
+Both servers implement the same MCP protocol and can be used interchangeably.
