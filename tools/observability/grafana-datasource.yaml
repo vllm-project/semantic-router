@@ -7,7 +7,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://${PROMETHEUS_URL:-localhost:9090}
+    url: http://prometheus:9090 # Compose: prometheus:9090 / Local: localhost:9090
     isDefault: true
     editable: true
     jsonData:
