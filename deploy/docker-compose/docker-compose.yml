@@ -72,8 +72,6 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.retention.time=15d
-    environment:
-      - ROUTER_TARGET=semantic-router:9190
     ports:
       - "9090:9090"
     networks:
@@ -85,7 +83,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
-      - PROMETHEUS_URL=prometheus:9090
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_SECURITY_COOKIE_SAMESITE=lax
       # Configure for subpath serving through dashboard proxy
