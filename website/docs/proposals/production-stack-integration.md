@@ -3,7 +3,7 @@
 
 ## 1. Overview
 
-The goal of this document is to outline a comprehensive integration strategy between **vLLM Semantic Router** and the **vLLM Production Stack**.  The vLLM Production Stack is a cloud‑native reference system for deploying vLLM at scale.  It provides several deployment ways that spins up vLLM servers, a request router and an observability stack.  The request router can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing.  The Semantic Router adds a **system‑intelligence layer** that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.  
+The goal of this document is to outline a comprehensive integration strategy between **vLLM Semantic Router** and the **vLLM Production Stack**.  The vLLM Production Stack is a cloud‑native reference system for deploying vLLM at scale.  It provides several deployment ways that spin up vLLM servers, a request router and an observability stack.  The request router can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing.  The Semantic Router adds a **system‑intelligence layer** that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.  
 
 By combining these two systems we obtain a unified inference stack.  Semantic routing ensures that each request is answered by the best possible model. Production‑Stack routing maximizes infrastructure and inference efficiency, and exposes rich metrics.  Together they provide:
 
@@ -55,7 +55,7 @@ The two systems target different layers of the inference stack:
 
 #### Semantic Router – Request Intelligence Layer
 
-* Understands the user’s intent via multi‑signal classification, combining keyword matching, embedding similarity and  classification.
+* Understands the user’s intent via multi‑signal classification, combining keyword matching, embedding similarity, and LLM-based classification.
 * Selects the best‑performing model and optional tools based on domain‑specific scores.
 * Enriches the request by injecting system prompts and adding routing metadata headers.
 * Performs security filtering (PII and jailbreak detection) and semantic caching.
@@ -108,7 +108,7 @@ Primary goals of the integration are:
 1. **Separation of concerns** – Keep semantic intelligence decoupled from infrastructure optimization.  The Semantic Router focuses on understanding and enriching requests, while the Production‑Stack router handles worker selection and scheduling.
 2. **API‑driven integration** – Use Envoy’s external processing (ExtProc) gRPC API or HTTP header injection to integrate the Semantic Router with the Production‑Stack gateway and router.  This avoids modifying the internals of either system.
 3. **Fail‑safe design** – If the Semantic Router is unavailable or returns an error, the gateway forwards the original request to the Production‑Stack router (bypassing semantic processing).  The Production‑Stack router defaults to the user‑specified model or round‑robin logic.
-5. **Kubernetes‑native** – Leverage Helm charts/CRD for reproducible deployments.
+4. **Kubernetes‑native** – Leverage Helm charts/CRD for reproducible deployments.
 
 ### 4.2 System Architecture
 
@@ -230,7 +230,7 @@ sequenceDiagram
 3. **Semantic Router processing** — The Semantic Router executes the following pipeline:
    * **Security filtering** — Run PII and jailbreak detection; block or redact prompts if the probability exceeds thresholds.
    * **Semantic cache lookup** — Generate a MiniLM embedding and search Milvus for similar queries. On a hit, return the cached response immediately.
-   * **Fusion routing (multi‑signal classification)** — Apply keyword matching (fast path), embedding similarity (concept search) and ModernBERT classification. Choose the signal with highest confidence and assign a category.
+   * **Multi‑signal classification** — Apply keyword matching (fast path), embedding similarity (concept search) and ModernBERT classification. Choose the signal with highest confidence and assign a category.
    * **Model & tool selection** — Look up model scores for the category and choose the best model. Select relevant tools and reasoning mode (on/off) based on the query.
    * **Request enrichment** — Inject system prompts, update the `model` field to the selected model, add routing headers (e.g., `X‑VSR‑Category`, `X‑VSR‑Model`, `X‑VSR‑Reasoning`) and forward to Envoy.
 4. **Envoy forwards enriched request** — Envoy forwards the enriched request to the Production‑Stack router (vllm‑router service).  The router is unaware of the semantic modifications and treats it as a normal request for the specified model.
