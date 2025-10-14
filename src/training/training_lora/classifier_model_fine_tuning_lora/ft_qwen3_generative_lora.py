@@ -73,6 +73,7 @@ from common_lora_utils import (
     clear_gpu_memory,
     get_device_info,
     log_memory_usage,
+    set_gpu_device,
     setup_logging,
 )
 
@@ -340,10 +341,11 @@ def main(
     logger.info("Starting Qwen3 Generative Classification Fine-tuning")
     logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
 
-    # GPU selection
-    if gpu_id is not None:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        logger.info(f"Set CUDA_VISIBLE_DEVICES={gpu_id}")
+    # GPU selection using utility function
+    device_str, selected_gpu = set_gpu_device(
+        gpu_id=gpu_id, auto_select=(gpu_id is None)
+    )
+    logger.info(f"Using device: {device_str} (GPU {selected_gpu})")
 
     clear_gpu_memory()
     log_memory_usage("Pre-training")
@@ -375,9 +377,8 @@ def main(
         low_cpu_mem_usage=True,
     )
 
-    # Move to GPU
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = model.to(device)
+    # Move to GPU using device from set_gpu_device utility
+    model = model.to(device_str)
 
     # Prepare model for training
     model.config.use_cache = False  # Required for training
@@ -428,9 +429,9 @@ def main(
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
-        per_device_train_batch_size=1,  # Minimal batch size to fit in memory
-        per_device_eval_batch_size=1,
-        gradient_accumulation_steps=16,  # Effective batch size = 1 * 16 = 16
+        per_device_train_batch_size=4,  # Increased batch size for better GPU utilization
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=4,  # Effective batch size = 4 * 4 = 16
         learning_rate=learning_rate,
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
@@ -684,10 +685,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Set CUDA device early
-    if args.gpu_id is not None:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
-        print(f"INFO: Set CUDA_VISIBLE_DEVICES={args.gpu_id}")
+    # GPU device selection is handled in main() and demo_inference() functions
+    # using the set_gpu_device() utility function for consistency
 
     if args.mode == "train":
         main(
