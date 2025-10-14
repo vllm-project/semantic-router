@@ -1,0 +1,90 @@
+# Quickstart configuration tuned for a single-node developer setup.
+# Keeps routing options minimal while remaining compatible with the default assets
+# shipped by `make download-models`.
+
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: false
+  backend_type: "memory"
+
+prompt_guard:
+  enabled: false
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    threshold: 0.6
+    use_cpu: true
+    use_modernbert: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+vllm_endpoints:
+  - name: "local-vllm"
+    address: "127.0.0.1"
+    port: 8000
+    models:
+      - "openai/gpt-oss-20b"
+    weight: 1
+
+model_config:
+  "openai/gpt-oss-20b":
+    preferred_endpoints: ["local-vllm"]
+    reasoning_family: "gpt-oss"
+    pii_policy:
+      allow_by_default: true
+
+categories:
+  - name: general
+    system_prompt: "You are a helpful and knowledgeable assistant. Provide concise, accurate answers."
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
+
+  - name: reasoning
+    system_prompt: "You explain your reasoning with clear numbered steps before giving a final answer."
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.6
+        use_reasoning: true
+
+  - name: safety
+    system_prompt: "You prioritize safe completions and refuse harmful requests."
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.5
+        use_reasoning: false
+
+default_model: openai/gpt-oss-20b
+
+reasoning_families:
+  gpt-oss:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+
+api:
+  batch_classification:
+    metrics:
+      enabled: false
+
+# Tool auto-selection is available but disabled for quickstart.
+tools:
+  enabled: false
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
