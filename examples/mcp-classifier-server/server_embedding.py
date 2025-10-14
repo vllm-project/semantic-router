@@ -592,9 +592,14 @@ async def main_http(port: int = 8091, device: str = "auto"):
                 init_result = {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
-                        "tools": {},
+                        "tools": {},  # We support tools
+                        # Note: We don't support resources or prompts
                     },
-                    "serverInfo": {"name": "embedding-classifier", "version": "1.0.0"},
+                    "serverInfo": {
+                        "name": "embedding-classifier",
+                        "version": "1.0.0",
+                        "description": "Embedding-based text classification with semantic similarity",
+                    },
                 }
 
                 if request.path.startswith("/mcp/") and request.path != "/mcp":
@@ -648,13 +653,38 @@ async def main_http(port: int = 8091, device: str = "auto"):
                 result = {"jsonrpc": "2.0", "id": request_id, "result": {}}
                 return web.json_response(result)
 
+            # Handle unsupported but valid MCP methods gracefully
+            elif method in [
+                "resources/list",
+                "resources/read",
+                "prompts/list",
+                "prompts/get",
+            ]:
+                # These are valid MCP methods but not implemented in this server
+                # Return empty results instead of error for better compatibility
+                logger.debug(
+                    f"Unsupported method called: {method} (returning empty result)"
+                )
+
+                if method == "resources/list":
+                    result_data = {"resources": []}
+                elif method == "prompts/list":
+                    result_data = {"prompts": []}
+                else:
+                    result_data = {}
+
+                result = {"jsonrpc": "2.0", "id": request_id, "result": result_data}
+                return web.json_response(result)
+
             else:
+                # Unknown method - return error with HTTP 200 (per JSON-RPC spec)
+                logger.warning(f"Unknown method called: {method}")
                 error = {
                     "jsonrpc": "2.0",
                     "id": request_id,
                     "error": {"code": -32601, "message": f"Method not found: {method}"},
                 }
-                return web.json_response(error, status=404)
+                return web.json_response(error)
 
         except Exception as e:
             logger.error(f"Error handling request: {e}", exc_info=True)
@@ -667,7 +697,8 @@ async def main_http(port: int = 8091, device: str = "auto"):
                 ),
                 "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
             }
-            return web.json_response(error, status=500)
+            # Per JSON-RPC 2.0 spec, return HTTP 200 even for errors
+            return web.json_response(error)
 
     async def health_check(request):
         """Health check endpoint."""
