@@ -1,0 +1,15 @@
+# Requirements for Generative Model-Based MCP Classification Server
+# server_generative.py
+
+# Core dependencies
+torch>=2.0.0
+transformers>=4.30.0
+peft>=0.4.0
+huggingface_hub>=0.16.0
+
+# MCP SDK
+mcp>=0.1.0
+
+# HTTP mode (optional)
+aiohttp>=3.8.0
+
