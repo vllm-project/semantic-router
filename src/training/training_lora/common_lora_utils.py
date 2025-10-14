@@ -266,53 +266,6 @@ def set_gpu_device(
         return "cuda:0", 0
 
 
-def get_device_info() -> Tuple[str, Dict]:
-    """
-    Get device information and capabilities.
-
-    DEPRECATED: Use set_gpu_device() and get_all_gpu_info() for better multi-GPU support.
-
-    Returns:
-        Tuple of (device_name, device_info_dict)
-    """
-    device_info = {}
-
-    if torch.cuda.is_available():
-        device = "cuda"
-        current_device = torch.cuda.current_device()
-        device_info = {
-            "name": torch.cuda.get_device_name(current_device),
-            "cuda_version": torch.version.cuda,
-            "total_memory_gb": torch.cuda.get_device_properties(
-                current_device
-            ).total_memory
-            / 1024**3,
-            "available_memory_gb": (
-                torch.cuda.get_device_properties(current_device).total_memory
-                - torch.cuda.memory_allocated(current_device)
-            )
-            / 1024**3,
-        }
-        logger.info(f"GPU detected: {device_info['name']}")
-        logger.info(f"CUDA version: {device_info['cuda_version']}")
-        logger.info(f"Total GPU memory: {device_info['total_memory_gb']:.1f} GB")
-        logger.info(
-            f"Available GPU memory: {device_info['available_memory_gb']:.1f} GB"
-        )
-    else:
-        device = "cpu"
-        device_info = {
-            "name": "CPU",
-            "cores": os.cpu_count(),
-        }
-        logger.warning(
-            "No GPU detected. Using CPU. For better performance, ensure CUDA is installed."
-        )
-        logger.info(f"CPU cores: {device_info['cores']}")
-
-    return device, device_info
-
-
 def clear_gpu_memory():
     """Clear GPU memory cache."""
     if torch.cuda.is_available():

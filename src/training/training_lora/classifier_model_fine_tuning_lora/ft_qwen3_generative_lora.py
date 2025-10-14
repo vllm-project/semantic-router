@@ -79,7 +79,6 @@ if _parent_dir not in sys.path:
 
 from common_lora_utils import (
     clear_gpu_memory,
-    get_device_info,
     log_memory_usage,
     set_gpu_device,
     setup_logging,
@@ -316,14 +315,26 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
 
     predictions, labels = eval_pred
 
-    # predictions shape: (batch_size, seq_len, vocab_size)
+    # predictions shape: (batch_size, seq_len, vocab_size) or (batch_size, seq_len)
     # labels shape: (batch_size, seq_len)
 
-    # Get predicted tokens (argmax over vocabulary)
+    # Ensure predictions is a numpy array
+    if not isinstance(predictions, np.ndarray):
+        predictions = np.array(predictions)
+
+    # Get predicted tokens (argmax over vocabulary if logits, otherwise use as-is)
     if len(predictions.shape) == 3:
+        # Logits shape: apply argmax to get token IDs
         pred_tokens = np.argmax(predictions, axis=-1)
-    else:
+    elif len(predictions.shape) == 2:
+        # Already token IDs
         pred_tokens = predictions
+    else:
+        # Unexpected shape, flatten or return zero metrics
+        logger.warning(
+            f"Unexpected predictions shape: {predictions.shape}. Returning zero metrics."
+        )
+        return {"token_accuracy": 0.0}
 
     # Only evaluate non-padding positions (labels != -100)
     mask = labels != -100
@@ -349,6 +360,7 @@ def main(
     batch_size: int = 4,  # Configurable batch size (adjust based on GPU memory)
     learning_rate: float = 3e-4,  # Higher LR for small model
     max_samples_per_category: int = 150,  # Samples per category for balanced dataset
+    num_workers: int = 0,  # Number of dataloader workers (0=single process, 2-4 for multiprocessing)
     output_dir: str = None,
     gpu_id: Optional[int] = None,
 ):
@@ -466,7 +478,7 @@ def main(
         lr_scheduler_type="cosine",
         fp16=False,  # Disable fp16 to avoid gradient issues
         gradient_checkpointing=False,  # Disable to avoid gradient issues
-        dataloader_num_workers=0,
+        dataloader_num_workers=num_workers,  # Configurable workers (0=single process, 2-4=multiprocessing)
         remove_unused_columns=False,  # Keep all columns
         max_grad_norm=1.0,  # Gradient clipping for stability
         optim="adamw_torch",  # Use PyTorch AdamW
@@ -723,6 +735,12 @@ if __name__ == "__main__":
         default=150,
         help="Maximum samples per category for balanced training (default: 150 per category = ~2100 total with 14 categories)",
     )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="Number of dataloader workers (0=single process for debugging, 2-4=multiprocessing for better performance)",
+    )
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--gpu-id", type=int, default=None)
     parser.add_argument(
@@ -747,6 +765,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
             max_samples_per_category=args.max_samples_per_category,
+            num_workers=args.num_workers,
             output_dir=args.output_dir,
             gpu_id=args.gpu_id,
         )

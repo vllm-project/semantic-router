@@ -92,7 +92,6 @@ from common_lora_utils import (
     create_lora_config,
     find_free_gpu,
     get_all_gpu_info,
-    get_device_info,
     log_memory_usage,
     resolve_model_path,
     set_gpu_device,

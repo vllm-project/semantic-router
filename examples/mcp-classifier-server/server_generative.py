@@ -47,7 +47,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, TypedDict
 
 import torch
 import torch.nn.functional as F
@@ -63,6 +63,21 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+# Type definitions for better type safety
+# Note: We use dict[str, Any] for ClassificationResult because the key "class"
+# is a reserved Python keyword, making it difficult to use with TypedDict.
+# The structure is documented here:
+#
+# ClassificationResult = {
+#     "class": int,              # Category index (0-13 for MMLU-Pro)
+#     "confidence": float,        # Classification confidence (0.0-1.0)
+#     "model": str,              # Recommended model (e.g., "openai/gpt-oss-20b")
+#     "use_reasoning": bool,     # Whether to enable reasoning
+#     "probabilities": list[float],  # Optional: full distribution (with_probabilities=True)
+#     "entropy": float,          # Optional: Shannon entropy (with_probabilities=True)
+# }
 
 # Category definitions with system prompts (matching MMLU-Pro categories)
 CATEGORY_CONFIG = {
@@ -451,15 +466,15 @@ A:"""
 
         return result
 
-    def _calculate_entropy(self, probabilities: list[float]) -> float:
+    def _calculate_entropy(self, probabilities: Sequence[float]) -> float:
         """
         Calculate Shannon entropy of the probability distribution.
 
         Args:
-            probabilities: List of probability values
+            probabilities: Sequence of probability values (list, tuple, numpy array, etc.)
 
         Returns:
-            Entropy value
+            Entropy value (in bits)
         """
         entropy = 0.0
         for p in probabilities:
