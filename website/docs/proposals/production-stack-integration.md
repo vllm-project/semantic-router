@@ -3,12 +3,12 @@
 
 ## 1. Overview
 
-The goal of this document is to outline a comprehensive integration strategy between **vLLM Semantic Router** and the **vLLM Production Stack**.  The vLLM Production Stack is a cloud‑native reference system for deploying vLLM at scale.  It provides several deployment ways that spin up vLLM servers, a request router and an observability stack.  The request router can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing.  The Semantic Router adds a **system‑intelligence layer** that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.  
+The goal of this document is to outline a comprehensive integration strategy between **vLLM Semantic Router** and the **vLLM Production Stack**.  The vLLM Production Stack is a cloud‑native reference system for deploying vLLM at scale.  It provides several deployment ways that spin up vLLM servers, a request router and an observability stack.  The request router can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing with LMCache native support.  The Semantic Router adds a **system‑intelligence layer** that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.  
 
 By combining these two systems we obtain a unified inference stack.  Semantic routing ensures that each request is answered by the best possible model. Production‑Stack routing maximizes infrastructure and inference efficiency, and exposes rich metrics.  Together they provide:
 
 * **System‑level intelligence** — understand the user’s intent, choose the right model, inject appropriate system prompts and pre‑filter tools.
-* **Infrastructure efficiency** — scale from a single instance to a distributed vLLM deployment without changing application code, routing traffic across multiple models with token‑level optimization.
+* **Infrastructure efficiency** — scale from a single instance to a distributed vLLM deployment without changing application code, routing traffic across multiple models with token‑level optimization and LMCache native support.
 * **Security and compliance** — block PII and jailbreak prompts before they reach the model.
 * **Observability** — monitor requests, latency and GPU usage through the Production‑Stack’s Grafana dashboard and trace semantic‑router decisions.
 
@@ -22,7 +22,7 @@ The vLLM Production Stack provides the building blocks for serving large langua
 
 | Capability | Description |
 | --- | --- |
-| **Distributed deployment** | Deploy multiple vLLM instances and scale from single‑instance to multi‑instance clusters without changing application code. |
+| **Distributed deployment** | Deploy multiple vLLM instances with LMCache native support and scale from single‑instance to multi‑instance clusters without changing application code. |
 | **Request router** | Routes requests to different models and instances, supports different kinds of routing logic including disaggregated-prefill, KVCache-aware, prefix-aware, session and round-robin based routing. |
 | **Service discovery & fault tolerance** | Uses Kubernetes API for automatic discovery and removes failed nodes from the pool. | 
 | **Observability** | Provides a Grafana dashboard to display latency distributions, time‑to‑first‑token, number of running or pending requests and GPU KV‑cache usage. |
@@ -62,7 +62,7 @@ The two systems target different layers of the inference stack:
 
 #### Production Stack – Infrastructure Optimization Layer
 
-* Improve inference efficiency using round‑robin, session‑based, prefix‑aware routing, KVCache-aware and disaggregated-prefill routing.
+* Improve inference efficiency with LMCache native support using round‑robin, session‑based, prefix‑aware routing, KVCache-aware and disaggregated-prefill routing.
 * Offloads KV‑cache to CPU memory and remote storage (via LMCache) and supports KV‑cache aware routing strategies.
 * Scales horizontally via Kubernetes and exposes metrics and traces for monitoring.
 
