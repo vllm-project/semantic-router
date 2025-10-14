@@ -181,7 +181,7 @@ classifier:
 
 ### ⚠️ Consider Alternatives When:
 
-- You need absolute minimum latency (<5ms)
+- You need absolute minimum latency (under 5ms)
 - You have static categories that never change
 - You want the simplest possible setup
 - You don't need external classification logic
