@@ -1,13 +1,40 @@
 # MCP Classification Server
 
-Example MCP server that provides text classification with intelligent routing for the semantic router.
+Example MCP servers that provide text classification with intelligent routing for the semantic router.
 
-## Features
+## 📦 Two Implementations
+
+This directory contains **two MCP classification servers**:
+
+### 1. **Regex-Based Server** (`server.py`)
+
+- ✅ **Simple & Fast** - Pattern matching with regex
+- ✅ **Lightweight** - ~10MB memory, <5ms per query
+- ✅ **No Dependencies** - Just MCP SDK
+- 📝 **Best For**: Prototyping, simple rules, low-latency requirements
+
+### 2. **Embedding-Based Server** (`server_embedding.py`) 🆕
+
+- ✅ **High Accuracy** - Semantic understanding with Qwen3-Embedding-0.6B
+- ✅ **RAG-Style** - FAISS vector database with similarity search
+- ✅ **Flexible** - Handles paraphrases, synonyms, variations
+- 📝 **Best For**: Production use, high-accuracy requirements
+
+**Choose based on your needs:**
+
+- **Quick start / Testing?** → Use `server.py` (regex-based)
+- **Production / Accuracy?** → Use `server_embedding.py` (embedding-based)
+
+---
+
+## Regex-Based Server (`server.py`)
+
+### Features
 
 - **Dynamic Categories**: Loaded from MCP server at runtime via `list_categories`
 - **Per-Category System Prompts**: Each category has its own specialized system prompt for LLM context
 - **Intelligent Routing**: Returns `model` and `use_reasoning` in classification response  
-- **Regex-Based**: Simple pattern matching (replace with ML models for production)
+- **Regex-Based**: Simple pattern matching (fast but limited)
 - **Dual Transport**: Supports both HTTP and stdio
 
 ## Categories
@@ -164,6 +191,36 @@ if systemPrompt, ok := classifier.GetCategorySystemPrompt(category); ok {
 }
 ```
 
-## License
+---
 
-MIT
+## Embedding-Based Server (`server_embedding.py`)
+
+For **production use with high accuracy**, see the embedding-based server:
+
+### Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements_embedding.txt
+
+# Start server (HTTP mode on port 8090)
+python3 server_embedding.py --http --port 8090
+```
+
+### Features
+
+- **Qwen3-Embedding-0.6B** model with 1024-dimensional embeddings
+- **FAISS vector database** for fast similarity search
+- **RAG-style classification** using 95 training examples
+- **Same MCP protocol** as regex server (drop-in replacement)
+- **Higher accuracy** - Understands semantic meaning, not just patterns
+
+### Comparison
+
+| Feature | Regex (`server.py`) | Embedding (`server_embedding.py`) |
+|---------|---------------------|-----------------------------------|
+| **Accuracy** | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Speed** | ~1-5ms | ~50-100ms |
+| **Memory** | ~10MB | ~600MB |
+| **Setup** | Simple | Requires model |
+| **Best For** | Prototyping | Production |

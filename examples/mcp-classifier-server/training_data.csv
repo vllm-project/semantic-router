@@ -1,0 +1,97 @@
+category,text,description
+math,What is the derivative of x squared?,Calculus question about derivatives
+math,Calculate 15 multiplied by 23,Basic arithmetic calculation
+math,Solve the equation 2x + 5 = 15 for x,Linear equation solving
+math,What is the integral of sin(x)?,Integration problem
+math,Find the area of a circle with radius 5,Geometry problem
+math,What is the probability of rolling a 6 on a die?,Probability question
+math,Calculate the mean of 10 20 30 40 50,Statistics calculation
+math,What is the value of log base 10 of 100?,Logarithm question
+math,Solve this matrix multiplication problem,Linear algebra question
+math,What is the sum of angles in a triangle?,Geometry fundamentals
+math,Find the roots of the quadratic equation x^2 - 5x + 6 = 0,Quadratic equations
+math,What is the Pythagorean theorem?,Mathematical theorem
+math,Calculate the standard deviation of this dataset,Statistical analysis
+math,What is a complex number?,Mathematical concepts
+math,Explain the concept of limits in calculus,Calculus fundamentals
+science,What is photosynthesis?,Biology question
+science,Explain Newton's laws of motion,Physics fundamentals
+science,What is the structure of an atom?,Chemistry basics
+science,How does DNA replication work?,Molecular biology
+science,What causes gravity?,Physics question
+science,Explain the water cycle,Earth science
+science,What is the periodic table?,Chemistry fundamentals
+science,How do cells divide?,Biology process
+science,What is evolution by natural selection?,Evolutionary biology
+science,Explain the concept of energy conservation,Physics principle
+science,What are the properties of acids and bases?,Chemistry concepts
+science,How does the human immune system work?,Biology and health
+science,What is plate tectonics?,Geology question
+science,Explain the Big Bang theory,Cosmology and astronomy
+science,What is an ecosystem?,Ecology question
+science,How do vaccines work?,Immunology and medicine
+science,What is entropy in thermodynamics?,Physics concept
+science,Explain photosynthesis in plants,Botany and biology
+science,What are chemical bonds?,Chemistry fundamentals
+science,How does the brain process information?,Neuroscience question
+technology,What is machine learning?,AI and ML concepts
+technology,How does the internet work?,Networking basics
+technology,Explain what an API is,Software development
+technology,What is cloud computing?,Modern technology infrastructure
+technology,How do neural networks work?,Deep learning concepts
+technology,What is the difference between Python and Java?,Programming languages
+technology,Explain database normalization,Database design
+technology,What is version control with Git?,Software development tools
+technology,How does encryption work?,Cybersecurity basics
+technology,What is a REST API?,Web development concepts
+technology,Explain object-oriented programming,Programming paradigms
+technology,What is Docker and containerization?,DevOps technology
+technology,How do web servers work?,Internet infrastructure
+technology,What is blockchain technology?,Distributed systems
+technology,Explain the concept of algorithms,Computer science fundamentals
+technology,What is responsive web design?,Frontend development
+technology,How does a compiler work?,Computer science concepts
+technology,What is agile software development?,Software engineering methodology
+technology,Explain microservices architecture,Software architecture
+technology,What is continuous integration and deployment?,DevOps practices
+history,What caused World War I?,20th century history
+history,Who was Julius Caesar?,Ancient Rome history
+history,Explain the Renaissance period,European history
+history,What was the Industrial Revolution?,Economic and social history
+history,When did the American Revolution occur?,American history
+history,What was the significance of the Silk Road?,Ancient trade history
+history,Who were the pharaohs of ancient Egypt?,Ancient civilization
+history,Explain the French Revolution,18th century European history
+history,What was the Cold War?,20th century geopolitical history
+history,Who was Genghis Khan?,Medieval Asian history
+history,What happened during the Bronze Age?,Prehistoric history
+history,Explain the fall of the Roman Empire,Ancient history
+history,What was the significance of the Magna Carta?,Medieval English history
+history,Who was Alexander the Great?,Ancient Greek history
+history,What caused the Great Depression?,Economic history
+history,Explain the Civil Rights Movement,20th century American history
+history,What was the Ottoman Empire?,Middle Eastern history
+history,Who discovered America?,Age of Exploration
+history,What happened during the Viking Age?,Medieval Scandinavian history
+history,Explain the Cultural Revolution in China,20th century Asian history
+general,What is the capital of France?,Geography question
+general,How do I make a good cup of coffee?,Everyday skills
+general,What are some tips for public speaking?,Communication skills
+general,How can I improve my time management?,Personal development
+general,What is mindfulness meditation?,Mental health and wellness
+general,How do I write a good resume?,Career advice
+general,What are some healthy eating habits?,Nutrition and health
+general,How can I learn a new language effectively?,Education and learning
+general,What is the meaning of life?,Philosophical question
+general,How do I take care of a houseplant?,Home and gardening
+general,What are the benefits of exercise?,Health and fitness
+general,How do I make new friends as an adult?,Social relationships
+general,What is emotional intelligence?,Psychology and personal development
+general,How can I reduce stress?,Mental health
+general,What are some good books to read?,Literature and entertainment
+general,How do I start investing?,Personal finance
+general,What is work-life balance?,Career and lifestyle
+general,How do I improve my sleep quality?,Health and wellness
+general,What are some creative hobbies to try?,Arts and crafts
+general,How can I be more environmentally friendly?,Sustainability and lifestyle
+
