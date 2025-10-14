@@ -71,7 +71,12 @@ from transformers import (
 )
 
 # Import common LoRA utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Note: Using sys.path for standalone script compatibility.
+# For package installations, use: from semantic_router.training.common_lora_utils import ...
+_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
 from common_lora_utils import (
     clear_gpu_memory,
     get_device_info,
@@ -435,8 +440,9 @@ def main(
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,  # Configurable via parameter
         per_device_eval_batch_size=batch_size,
-        gradient_accumulation_steps=16
-        // batch_size,  # Maintain effective batch size of 16
+        gradient_accumulation_steps=max(
+            1, 16 // batch_size
+        ),  # Maintain effective batch size of 16, minimum 1
         learning_rate=learning_rate,
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
@@ -589,7 +595,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
                 use_fp16 = (
                     compute_capability[0] >= 7
                 )  # Volta and newer support efficient FP16
-            except:
+            except Exception:
                 use_fp16 = False
 
         base_model = AutoModelForCausalLM.from_pretrained(
