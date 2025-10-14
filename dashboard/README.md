@@ -200,6 +200,11 @@ After startup, access:
 - **Dashboard**: http://localhost:8700
 - **Grafana** (direct access): http://localhost:3000 (admin/admin)
 - **Prometheus** (direct access): http://localhost:9090
+- **OpenWeb UI** (direct access): http://localhost:3001
+
+Note:
+
+- In **Admin Panel > settings > pipelines** set `Vsr Base Url`: http://envoy:8801
 
 ### Method 2: Local Development Mode
 
