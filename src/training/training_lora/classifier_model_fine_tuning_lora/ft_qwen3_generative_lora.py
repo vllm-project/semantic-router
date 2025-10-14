@@ -16,8 +16,8 @@ Fine-tunes Qwen3-0.6B as an instruction-following model to GENERATE category lab
    causal language model!
 
 Usage:
-    # Train with recommended parameters
-    python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16 --max-samples 2000
+    # Train with recommended parameters (150 samples per category = ~2100 total)
+    python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16 --max-samples-per-category 150
 
     # Test with specific GPU
     python ft_qwen3_generative_lora.py --mode train --epochs 8 --gpu-id 2
@@ -25,8 +25,8 @@ Usage:
     # Adjust batch size based on GPU memory (default: 4)
     python ft_qwen3_generative_lora.py --mode train --batch-size 8 --epochs 5
 
-    # Quick test
-    python ft_qwen3_generative_lora.py --mode train --epochs 1 --max-samples 50
+    # Quick test (10 samples per category = ~140 total)
+    python ft_qwen3_generative_lora.py --mode train --epochs 1 --max-samples-per-category 10
 
     # Inference
     python ft_qwen3_generative_lora.py --mode test --model-path qwen3_generative_classifier
@@ -147,8 +147,13 @@ class MMLU_Dataset:
         self.label2id = {}
         self.id2label = {}
 
-    def load_huggingface_dataset(self, max_samples=1000):
-        """Load the MMLU-Pro dataset from HuggingFace with balanced sampling."""
+    def load_huggingface_dataset(self, max_samples_per_category=150):
+        """Load the MMLU-Pro dataset from HuggingFace with balanced sampling.
+
+        Args:
+            max_samples_per_category: Maximum number of samples to take from each category.
+                                     Default: 150 per category (14 categories = ~2100 total)
+        """
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
@@ -169,14 +174,12 @@ class MMLU_Dataset:
 
             logger.info(f"Available categories: {sorted(category_samples.keys())}")
 
-            # Calculate samples per category for balanced sampling
+            # Use samples per category directly
             available_required_categories = [
                 cat for cat in REQUIRED_CATEGORIES if cat in category_samples
             ]
 
-            target_samples_per_category = max_samples // len(
-                available_required_categories
-            )
+            target_samples_per_category = max_samples_per_category
 
             # Collect balanced samples
             filtered_texts = []
@@ -202,9 +205,13 @@ class MMLU_Dataset:
             logger.error(f"Error loading dataset: {e}")
             raise
 
-    def prepare_datasets(self, max_samples=1000):
-        """Prepare train/validation/test datasets."""
-        texts, labels = self.load_huggingface_dataset(max_samples)
+    def prepare_datasets(self, max_samples_per_category=150):
+        """Prepare train/validation/test datasets.
+
+        Args:
+            max_samples_per_category: Maximum samples per category (default: 150)
+        """
+        texts, labels = self.load_huggingface_dataset(max_samples_per_category)
 
         # Create label mapping
         unique_labels = sorted(list(set(labels)))
@@ -341,11 +348,16 @@ def main(
     num_epochs: int = 8,  # More epochs for 0.6B
     batch_size: int = 4,  # Configurable batch size (adjust based on GPU memory)
     learning_rate: float = 3e-4,  # Higher LR for small model
-    max_samples: int = 2000,
+    max_samples_per_category: int = 150,  # Samples per category for balanced dataset
     output_dir: str = None,
     gpu_id: Optional[int] = None,
 ):
-    """Main training function for generative Qwen3 classification."""
+    """Main training function for generative Qwen3 classification.
+
+    Args:
+        max_samples_per_category: Maximum samples per category (default: 150).
+                                 With 14 categories, this gives ~2100 total samples.
+    """
     logger.info("Starting Qwen3 Generative Classification Fine-tuning")
     logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
 
@@ -360,7 +372,7 @@ def main(
 
     # Load dataset
     dataset_loader = MMLU_Dataset()
-    datasets = dataset_loader.prepare_datasets(max_samples)
+    datasets = dataset_loader.prepare_datasets(max_samples_per_category)
 
     train_texts, train_labels = datasets["train"]
     val_texts, val_labels = datasets["validation"]
@@ -706,7 +718,10 @@ if __name__ == "__main__":
         "--learning-rate", type=float, default=3e-4, help="Learning rate"
     )
     parser.add_argument(
-        "--max-samples", type=int, default=2000, help="Maximum training samples"
+        "--max-samples-per-category",
+        type=int,
+        default=150,
+        help="Maximum samples per category for balanced training (default: 150 per category = ~2100 total with 14 categories)",
     )
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--gpu-id", type=int, default=None)
@@ -731,7 +746,7 @@ if __name__ == "__main__":
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
-            max_samples=args.max_samples,
+            max_samples_per_category=args.max_samples_per_category,
             output_dir=args.output_dir,
             gpu_id=args.gpu_id,
         )
