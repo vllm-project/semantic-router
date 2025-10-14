@@ -22,6 +22,9 @@ Usage:
     # Test with specific GPU
     python ft_qwen3_generative_lora.py --mode train --epochs 8 --gpu-id 2
 
+    # Adjust batch size based on GPU memory (default: 4)
+    python ft_qwen3_generative_lora.py --mode train --batch-size 8 --epochs 5
+
     # Quick test
     python ft_qwen3_generative_lora.py --mode train --epochs 1 --max-samples 50
 
@@ -331,7 +334,7 @@ def main(
     lora_alpha: int = 32,
     lora_dropout: float = 0.05,  # Lower dropout for small model
     num_epochs: int = 8,  # More epochs for 0.6B
-    batch_size: int = 4,  # Smaller batch for generation
+    batch_size: int = 4,  # Configurable batch size (adjust based on GPU memory)
     learning_rate: float = 3e-4,  # Higher LR for small model
     max_samples: int = 2000,
     output_dir: str = None,
@@ -426,12 +429,14 @@ def main(
     )
 
     # Training arguments (optimized for memory and stability)
+    # Note: batch_size is configurable via function parameter
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
-        per_device_train_batch_size=4,  # Increased batch size for better GPU utilization
-        per_device_eval_batch_size=4,
-        gradient_accumulation_steps=4,  # Effective batch size = 4 * 4 = 16
+        per_device_train_batch_size=batch_size,  # Configurable via parameter
+        per_device_eval_batch_size=batch_size,
+        gradient_accumulation_steps=16
+        // batch_size,  # Maintain effective batch size of 16
         learning_rate=learning_rate,
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
@@ -574,10 +579,22 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        # Load base model
+        # Load base model with appropriate dtype
+        # Check for GPU capability and use float16 only if supported
+        use_fp16 = False
+        if torch.cuda.is_available():
+            # Check if GPU supports efficient float16 (compute capability >= 7.0)
+            try:
+                compute_capability = torch.cuda.get_device_capability()
+                use_fp16 = (
+                    compute_capability[0] >= 7
+                )  # Volta and newer support efficient FP16
+            except:
+                use_fp16 = False
+
         base_model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            torch_dtype=torch.float16 if use_fp16 else torch.float32,
             device_map="auto" if torch.cuda.is_available() else None,
             trust_remote_code=True,
         )
@@ -667,13 +684,24 @@ if __name__ == "__main__":
         default="Qwen/Qwen3-0.6B",
         help="Qwen3 model name (default: Qwen/Qwen3-0.6B)",
     )
-    parser.add_argument("--lora-rank", type=int, default=16)
-    parser.add_argument("--lora-alpha", type=int, default=32)
-    parser.add_argument("--lora-dropout", type=float, default=0.05)
-    parser.add_argument("--epochs", type=int, default=8)
-    parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--max-samples", type=int, default=2000)
+    parser.add_argument("--lora-rank", type=int, default=16, help="LoRA rank")
+    parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout")
+    parser.add_argument(
+        "--epochs", type=int, default=8, help="Number of training epochs"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=4,
+        help="Per-device batch size (adjust based on GPU memory: 1-2 for small GPUs, 4-8 for medium, 8-16 for large). Gradient accumulation auto-adjusts to maintain effective batch size of 16.",
+    )
+    parser.add_argument(
+        "--learning-rate", type=float, default=3e-4, help="Learning rate"
+    )
+    parser.add_argument(
+        "--max-samples", type=int, default=2000, help="Maximum training samples"
+    )
     parser.add_argument("--output-dir", type=str, default=None)
     parser.add_argument("--gpu-id", type=int, default=None)
     parser.add_argument(
