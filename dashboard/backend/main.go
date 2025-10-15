@@ -271,6 +271,7 @@ func main() {
 	routerAPI := flag.String("router_api", env("TARGET_ROUTER_API_URL", "http://localhost:8080"), "Router API base URL")
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
 	openwebuiURL := flag.String("openwebui", env("TARGET_OPENWEBUI_URL", ""), "Open WebUI base URL")
+	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
 
 	flag.Parse()
 
@@ -382,6 +383,31 @@ func main() {
 		log.Printf("Warning: Prometheus URL not configured")
 	}
 
+	// Jaeger proxy (optional) - expose full UI under /embedded/jaeger and its static assets under /static/
+	if *jaegerURL != "" {
+		jp, err := newReverseProxy(*jaegerURL, "/embedded/jaeger", false)
+		if err != nil {
+			log.Fatalf("jaeger proxy error: %v", err)
+		}
+		// Jaeger UI (root UI under /embedded/jaeger)
+		mux.Handle("/embedded/jaeger", jp)
+		mux.Handle("/embedded/jaeger/", jp)
+
+		// Jaeger static assets are typically served under /static/* from the same origin
+		// Provide a passthrough proxy without prefix stripping
+		jStatic, _ := newReverseProxy(*jaegerURL, "", false)
+		mux.Handle("/static/", jStatic)
+
+		log.Printf("Jaeger proxy configured: %s; static assets proxied at /static/", *jaegerURL)
+	} else {
+		mux.HandleFunc("/embedded/jaeger/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"Jaeger not configured","message":"TARGET_JAEGER_URL environment variable is not set"}`))
+		})
+		log.Printf("Info: Jaeger URL not configured (optional)")
+	}
+
 	// Open WebUI proxy (optional)
 	if *openwebuiURL != "" {
 		op, err := newReverseProxy(*openwebuiURL, "/embedded/openwebui", true)
@@ -400,6 +426,24 @@ func main() {
 		log.Printf("Info: Open WebUI not configured (optional)")
 	}
 
+	// Jaeger proxy (optional)
+	if *jaegerURL != "" {
+		jp, err := newReverseProxy(*jaegerURL, "/embedded/jaeger", false)
+		if err != nil {
+			log.Fatalf("jaeger proxy error: %v", err)
+		}
+		mux.Handle("/embedded/jaeger", jp)
+		mux.Handle("/embedded/jaeger/", jp)
+		log.Printf("Jaeger proxy configured: %s", *jaegerURL)
+	} else {
+		mux.HandleFunc("/embedded/jaeger/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"Jaeger not configured","message":"TARGET_JAEGER_URL environment variable is not set"}`))
+		})
+		log.Printf("Info: Jaeger URL not configured (optional)")
+	}
+
 	addr := ":" + *port
 	log.Printf("Semantic Router Dashboard listening on %s", addr)
 	log.Printf("Static dir: %s", *staticDir)
@@ -408,6 +452,9 @@ func main() {
 	}
 	if *promURL != "" {
 		log.Printf("Prometheus: %s → /embedded/prometheus/", *promURL)
+	}
+	if *jaegerURL != "" {
+		log.Printf("Jaeger: %s → /embedded/jaeger/", *jaegerURL)
 	}
 	if *openwebuiURL != "" {
 		log.Printf("OpenWebUI: %s → /embedded/openwebui/", *openwebuiURL)

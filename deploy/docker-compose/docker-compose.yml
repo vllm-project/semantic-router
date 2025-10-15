@@ -1,19 +1,8 @@
 services:
-  # Jaeger for distributed tracing (OTLP gRPC + UI)
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: jaeger
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "16686:16686" # Web UI
-    networks:
-      - semantic-network
 
   # Semantic Router External Processor Service
   semantic-router:
-    image: ghcr.io/vllm-project/semantic-router/extproc:latest
+    image: semantic-router-extproc:dev
     container_name: semantic-router
     ports:
       - "50051:50051"
@@ -79,6 +68,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+
+  # Jaeger for distributed tracing (OTLP gRPC + UI)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "16686:16686" # Web UI
+    networks:
+      - semantic-network
 
   # Prometheus and Grafana for observability
   prometheus:
@@ -178,7 +179,7 @@ services:
   # Semantic Router Dashboard
   dashboard:
     # Use pre-built image from GHCR, fallback to local build for development
-    image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
+    # image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
     build:
       context: ../../
       dockerfile: dashboard/backend/Dockerfile
@@ -188,6 +189,7 @@ services:
       - DASHBOARD_PORT=8700
       - TARGET_GRAFANA_URL=http://grafana:3000
       - TARGET_PROMETHEUS_URL=http://prometheus:9090
+      - TARGET_JAEGER_URL=http://jaeger:16686
       - TARGET_ROUTER_API_URL=http://semantic-router:8080
       - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
       - TARGET_OPENWEBUI_URL=http://openwebui:8080

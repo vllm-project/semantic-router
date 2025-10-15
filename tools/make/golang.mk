@@ -8,7 +8,22 @@
 go-lint:
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint for src/semantic-router..."
-	@cd src/semantic-router/ && golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
+	@set -e; \
+	BIN=$$(command -v golangci-lint || true); \
+	if [ -z "$$BIN" ] && [ -x "/snap/bin/golangci-lint" ]; then BIN="/snap/bin/golangci-lint"; fi; \
+	if [ -z "$$BIN" ]; then \
+		if command -v go >/dev/null 2>&1; then \
+			echo "Installing golangci-lint via 'go install'..."; \
+			GOPATH_DIR=$$(go env GOPATH); \
+			BIN="$$GOPATH_DIR/bin/golangci-lint"; \
+			go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0; \
+		else \
+			echo "ERROR: golangci-lint not found. Add /snap/bin to PATH or install via 'go install'." >&2; \
+			echo "Hint: export PATH=\$$PATH:/snap/bin" >&2; \
+			exit 127; \
+		fi; \
+	fi; \
+	cd src/semantic-router/ && "$$BIN" run ./... --config ../../tools/linter/go/.golangci.yml
 	@echo "✅ src/semantic-router go module lint passed"
 
 # golangci-lint fix for Go modules
@@ -16,7 +31,22 @@ go-lint:
 go-lint-fix:
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint fix for src/semantic-router..."
-	@cd src/semantic-router/ && golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
+	@set -e; \
+	BIN=$$(command -v golangci-lint || true); \
+	if [ -z "$$BIN" ] && [ -x "/snap/bin/golangci-lint" ]; then BIN="/snap/bin/golangci-lint"; fi; \
+	if [ -z "$$BIN" ]; then \
+		if command -v go >/dev/null 2>&1; then \
+			echo "Installing golangci-lint via 'go install'..."; \
+			GOPATH_DIR=$$(go env GOPATH); \
+			BIN="$$GOPATH_DIR/bin/golangci-lint"; \
+			go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0; \
+		else \
+			echo "ERROR: golangci-lint not found. Add /snap/bin to PATH or install via 'go install'." >&2; \
+			echo "Hint: export PATH=\$$PATH:/snap/bin" >&2; \
+			exit 127; \
+		fi; \
+	fi; \
+	cd src/semantic-router/ && "$$BIN" run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "✅ src/semantic-router go module lint fix applied"
 
 # Run go vet for all Go modules
