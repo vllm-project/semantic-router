@@ -97,6 +97,15 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Use Cases',
+      items: [
+        'use-cases/index',
+        'use-cases/multi-provider-routing',
+        'use-cases/keyword-based-routing',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Proposals',
       items: [
         'proposals/prompt-classification-routing',
