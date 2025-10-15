@@ -74,9 +74,20 @@ To view the ***Chain-Of-Thought*** of the vLLM-SR's decision-making process, we 
 
 ## Quick Start 🚀
 
+Get up and running in seconds with our interactive setup script:
+
 ```bash
-make docker-compose-up
+bash ./scripts/quickstart.sh
 ```
+
+This command will:
+
+- 🔍 Check all prerequisites automatically
+- 📦 Install HuggingFace CLI if needed
+- 📥 Download all required AI models (~1.5GB)
+- 🐳 Start all Docker services
+- ⏳ Wait for services to become healthy
+- 🌐 Show you all the endpoints and next steps
 
 For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
 

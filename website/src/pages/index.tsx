@@ -8,6 +8,7 @@ import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
 import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground'
 import AIChipAnimation from '@site/src/components/AIChipAnimation'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
+import YouTubeSection from '@site/src/components/YouTubeSection'
 
 import styles from './index.module.css'
 
@@ -148,6 +149,13 @@ const Home: React.FC = () => {
           <div className={styles.connectionLines}>
             <div className={`${styles.connectionLine} ${styles.connectionLine4}`}></div>
             <div className={`${styles.connectionLine} ${styles.connectionLine5}`}></div>
+          </div>
+        </div>
+        <YouTubeSection />
+        <div className={styles.connectionSection}>
+          <div className={styles.connectionLines}>
+            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
+            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
           </div>
         </div>
         <HomepageFeatures />

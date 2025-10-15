@@ -93,6 +93,7 @@ docker-push-llm-katan:
 
 # Docker compose build flag logic
 # Usage: make docker-compose-up REBUILD=1  (forces image rebuild)
+REBUILD ?=
 BUILD_FLAG=$(if $(REBUILD),--build,)
 
 # Docker compose shortcuts (no rebuild by default)

@@ -91,9 +91,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_lora_utils import (
     clear_gpu_memory,
     create_lora_config,
-    get_device_info,
     log_memory_usage,
     resolve_model_path,
+    set_gpu_device,
     setup_logging,
     validate_lora_config,
 )
@@ -640,7 +640,7 @@ def main(
     logger.info("Starting Enhanced LoRA PII Detection Training")
 
     # Device configuration and memory management
-    device, device_info = get_device_info()
+    device, _ = set_gpu_device(gpu_id=None, auto_select=True)
     clear_gpu_memory()
     log_memory_usage("Pre-training")
 
