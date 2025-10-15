@@ -206,7 +206,7 @@ train_specialist() {
 
 TOTAL_MODELS=6
 COMPLETED_MODELS=0
-FAILED_MODELS=0
+FAILED_MODELS_COUNT=0
 
 # Track which models succeeded/failed
 declare -a SUCCESSFUL_MODELS
@@ -233,7 +233,7 @@ if train_specialist \
     ((COMPLETED_MODELS++))
 else
     FAILED_MODELS+=("math-reasoner")
-    ((FAILED_MODELS++))
+    ((FAILED_MODELS_COUNT++))
 fi
 
 # ============================================================================
@@ -251,7 +251,7 @@ if train_specialist \
     ((COMPLETED_MODELS++))
 else
     FAILED_MODELS+=("science-expert")
-    ((FAILED_MODELS++))
+    ((FAILED_MODELS_COUNT++))
 fi
 
 # ============================================================================
@@ -269,7 +269,7 @@ if train_specialist \
     ((COMPLETED_MODELS++))
 else
     FAILED_MODELS+=("social-sciences")
-    ((FAILED_MODELS++))
+    ((FAILED_MODELS_COUNT++))
 fi
 
 # ============================================================================
@@ -287,7 +287,7 @@ if train_specialist \
     ((COMPLETED_MODELS++))
 else
     FAILED_MODELS+=("humanities")
-    ((FAILED_MODELS++))
+    ((FAILED_MODELS_COUNT++))
 fi
 
 # ============================================================================
@@ -309,7 +309,7 @@ if train_specialist \
     ((COMPLETED_MODELS++))
 else
     FAILED_MODELS+=("law")
-    ((FAILED_MODELS++))
+    ((FAILED_MODELS_COUNT++))
 fi
 
 # ============================================================================
@@ -327,7 +327,7 @@ if train_specialist \
     ((COMPLETED_MODELS++))
 else
     FAILED_MODELS+=("generalist")
-    ((FAILED_MODELS++))
+    ((FAILED_MODELS_COUNT++))
 fi
 
 # ============================================================================
@@ -356,7 +356,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo "Total models: $TOTAL_MODELS"
 echo "Completed successfully: $COMPLETED_MODELS"
-echo "Failed: $FAILED_MODELS"
+echo "Failed: $FAILED_MODELS_COUNT"
 echo ""
 
 if [ ${#SUCCESSFUL_MODELS[@]} -gt 0 ]; then
@@ -433,7 +433,7 @@ Configuration:
 Results:
 - Total models: $TOTAL_MODELS
 - Completed: $COMPLETED_MODELS
-- Failed: $FAILED_MODELS
+- Failed: $FAILED_MODELS_COUNT
 
 Successful models:
 $(printf '%s\n' "${SUCCESSFUL_MODELS[@]}" | sed 's/^/  - /')
@@ -462,7 +462,7 @@ echo "Summary saved to: $SUMMARY_FILE"
 echo ""
 
 # Exit with appropriate code
-if [ $FAILED_MODELS -eq 0 ]; then
+if [ $FAILED_MODELS_COUNT -eq 0 ]; then
     echo "✅ All models trained successfully!"
     echo ""
     exit 0
