@@ -130,8 +130,24 @@ docker-compose-rebuild-llm-katan: docker-compose-up-llm-katan
 
 docker-compose-down:
 	@$(LOG_TARGET)
-	@echo "Stopping docker-compose services..."
+	@echo "Stopping all docker-compose services (including profiled) and removing orphans..."
+	# Stop profiled services explicitly (if they were started)
+	@docker compose --profile llm-katan down --remove-orphans || true
+	@docker compose --profile testing down --remove-orphans || true
+	# Finally stop the base stack
+	@docker compose down --remove-orphans
+
+# Stop only core services (leave profiled services like llm-katan/testing running)
+docker-compose-down-core:
+	@$(LOG_TARGET)
+	@echo "Stopping core services only (no profiles; keeps llm-katan/testing if running)..."
 	@docker compose down
+
+# Stop only llm-katan profiled services
+docker-compose-down-llm-katan:
+	@$(LOG_TARGET)
+	@echo "Stopping llm-katan profiled services..."
+	@docker compose --profile llm-katan down
 
 # Help target for Docker commands
 docker-help:
@@ -152,7 +168,9 @@ docker-help:
 	@echo "  docker-compose-rebuild               - Force rebuild then start"
 	@echo "  docker-compose-rebuild-testing       - Force rebuild (testing profile)"
 	@echo "  docker-compose-rebuild-llm-katan     - Force rebuild (llm-katan profile)"
-	@echo "  docker-compose-down                  - Stop docker-compose services"
+	@echo "  docker-compose-down                  - Stop ALL services (base + profiled) and remove orphans"
+	@echo "  docker-compose-down-core             - Stop core services only (keeps profiled running)"
+	@echo "  docker-compose-down-llm-katan        - Stop only llm-katan profiled services"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  DOCKER_REGISTRY - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
