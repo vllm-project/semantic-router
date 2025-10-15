@@ -1,4 +1,15 @@
 services:
+  # Jaeger for distributed tracing (OTLP gRPC + UI)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "16686:16686" # Web UI
+    networks:
+      - semantic-network
 
   # Semantic Router External Processor Service
   semantic-router:
@@ -11,7 +22,11 @@ services:
       - ../../models:/app/models:ro
     environment:
       - LD_LIBRARY_PATH=/app/lib
+      # Use main config by default; override via CONFIG_FILE if needed
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
+      # Optional informational envs (router reads YAML for tracing config)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=vllm-semantic-router
     networks:
       - semantic-network
     healthcheck:
@@ -89,6 +104,7 @@ services:
     volumes:
       - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./addons/grafana-datasource-jaeger.yaml:/etc/grafana/provisioning/datasources/datasource_jaeger.yaml:ro
       - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
       - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
       - grafana-data:/var/lib/grafana
