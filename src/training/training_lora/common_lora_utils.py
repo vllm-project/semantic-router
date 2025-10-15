@@ -121,46 +121,149 @@ def validate_lora_config(lora_config: Dict) -> Dict:
     return validated_config
 
 
-def get_device_info() -> Tuple[str, Dict]:
+def get_all_gpu_info() -> List[Dict]:
     """
-    Get device information and capabilities.
+    Get information about all available GPUs.
 
     Returns:
-        Tuple of (device_name, device_info_dict)
+        List of dictionaries with GPU information
     """
-    device_info = {}
+    if not torch.cuda.is_available():
+        return []
 
-    if torch.cuda.is_available():
-        device = "cuda"
-        device_info = {
-            "name": torch.cuda.get_device_name(0),
-            "cuda_version": torch.version.cuda,
-            "total_memory_gb": torch.cuda.get_device_properties(0).total_memory
-            / 1024**3,
-            "available_memory_gb": (
-                torch.cuda.get_device_properties(0).total_memory
-                - torch.cuda.memory_allocated()
+    gpu_info = []
+    num_gpus = torch.cuda.device_count()
+
+    for gpu_id in range(num_gpus):
+        try:
+            props = torch.cuda.get_device_properties(gpu_id)
+            total_memory = props.total_memory / 1024**3  # Convert to GB
+
+            # Get current memory usage
+            torch.cuda.set_device(gpu_id)
+            allocated = torch.cuda.memory_allocated(gpu_id) / 1024**3
+            reserved = torch.cuda.memory_reserved(gpu_id) / 1024**3
+            free_memory = total_memory - reserved
+
+            gpu_info.append(
+                {
+                    "id": gpu_id,
+                    "name": torch.cuda.get_device_name(gpu_id),
+                    "total_memory_gb": total_memory,
+                    "allocated_memory_gb": allocated,
+                    "reserved_memory_gb": reserved,
+                    "free_memory_gb": free_memory,
+                    "utilization_percent": (reserved / total_memory) * 100,
+                }
             )
-            / 1024**3,
-        }
-        logger.info(f"GPU detected: {device_info['name']}")
-        logger.info(f"CUDA version: {device_info['cuda_version']}")
-        logger.info(f"Total GPU memory: {device_info['total_memory_gb']:.1f} GB")
-        logger.info(
-            f"Available GPU memory: {device_info['available_memory_gb']:.1f} GB"
-        )
-    else:
-        device = "cpu"
-        device_info = {
-            "name": "CPU",
-            "cores": os.cpu_count(),
-        }
-        logger.warning(
-            "No GPU detected. Using CPU. For better performance, ensure CUDA is installed."
-        )
-        logger.info(f"CPU cores: {device_info['cores']}")
+        except Exception as e:
+            logger.warning(f"Could not get info for GPU {gpu_id}: {e}")
+            continue
 
-    return device, device_info
+    return gpu_info
+
+
+def find_free_gpu(min_free_memory_gb: float = 2.0) -> Optional[int]:
+    """
+    Find the GPU with the most free memory.
+
+    Args:
+        min_free_memory_gb: Minimum free memory required (in GB)
+
+    Returns:
+        GPU ID with most free memory, or None if no suitable GPU found
+    """
+    gpu_info = get_all_gpu_info()
+
+    if not gpu_info:
+        logger.warning("No GPUs available")
+        return None
+
+    # Sort by free memory (descending)
+    gpu_info.sort(key=lambda x: x["free_memory_gb"], reverse=True)
+
+    # Log all GPUs
+    logger.info(f"Found {len(gpu_info)} GPU(s):")
+    for gpu in gpu_info:
+        logger.info(
+            f"  GPU {gpu['id']}: {gpu['name']} - "
+            f"{gpu['free_memory_gb']:.2f}GB free / {gpu['total_memory_gb']:.2f}GB total "
+            f"({gpu['utilization_percent']:.1f}% utilized)"
+        )
+
+    # Find best GPU
+    best_gpu = gpu_info[0]
+
+    if best_gpu["free_memory_gb"] < min_free_memory_gb:
+        logger.warning(
+            f"Best GPU {best_gpu['id']} only has {best_gpu['free_memory_gb']:.2f}GB free, "
+            f"but {min_free_memory_gb}GB required"
+        )
+        return None
+
+    logger.info(
+        f"Selected GPU {best_gpu['id']} with {best_gpu['free_memory_gb']:.2f}GB free"
+    )
+    return best_gpu["id"]
+
+
+def set_gpu_device(
+    gpu_id: Optional[int] = None, auto_select: bool = True
+) -> Tuple[str, int]:
+    """
+    Set the GPU device to use for training.
+
+    Args:
+        gpu_id: Specific GPU ID to use (0-based), or None for auto-selection
+        auto_select: If True, automatically select best GPU when gpu_id is None
+
+    Returns:
+        Tuple of (device_string, gpu_id)
+    """
+    if not torch.cuda.is_available():
+        logger.warning("No CUDA available, using CPU")
+        return "cpu", -1
+
+    if gpu_id is not None:
+        # Use specified GPU
+        if gpu_id < 0 or gpu_id >= torch.cuda.device_count():
+            raise ValueError(
+                f"Invalid GPU ID {gpu_id}. Available GPUs: 0-{torch.cuda.device_count()-1}"
+            )
+
+        torch.cuda.set_device(gpu_id)
+        logger.info(
+            f"Using specified GPU {gpu_id}: {torch.cuda.get_device_name(gpu_id)}"
+        )
+
+        # Log memory info
+        props = torch.cuda.get_device_properties(gpu_id)
+        total_gb = props.total_memory / 1024**3
+        free_gb = (props.total_memory - torch.cuda.memory_reserved(gpu_id)) / 1024**3
+        logger.info(
+            f"GPU {gpu_id} memory: {free_gb:.2f}GB free / {total_gb:.2f}GB total"
+        )
+
+        return f"cuda:{gpu_id}", gpu_id
+
+    elif auto_select:
+        # Auto-select best GPU
+        best_gpu_id = find_free_gpu()
+
+        if best_gpu_id is None:
+            logger.warning("No suitable GPU found, using CPU")
+            return "cpu", -1
+
+        torch.cuda.set_device(best_gpu_id)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(best_gpu_id)
+
+        return f"cuda:{best_gpu_id}", best_gpu_id
+
+    else:
+        # Use default GPU 0
+        torch.cuda.set_device(0)
+        logger.info(f"Using default GPU 0: {torch.cuda.get_device_name(0)}")
+        return "cuda:0", 0
 
 
 def clear_gpu_memory():
