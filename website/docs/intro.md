@@ -14,10 +14,11 @@ An intelligent **Mixture-of-Models (MoM)** router that acts as an Envoy External
 ## 🚀 Key Features
 
 ### 🎯 **Auto-selection of Models**
+
 Intelligently routes requests to specialized models based on semantic understanding:
 
 - **Math queries** → Math-specialized models
-- **Creative writing** → Creative-specialized models  
+- **Creative writing** → Creative-specialized models
 - **Code generation** → Code-specialized models
 - **General queries** → Balanced general-purpose models
 
@@ -99,21 +100,25 @@ The router provides comprehensive monitoring through:
 ## 🔗 Quick Links
 
 - [**Installation**](installation/installation.md) - Setup and installation guide
-- [**Overview**](overview/semantic-router-overview.md) - Deep dive into semantic routing concepts  
+- [**Overview**](overview/semantic-router-overview.md) - Deep dive into semantic routing concepts
 - [**Architecture**](overview/architecture/system-architecture.md) - Technical architecture and design
 - [**Model Training**](training/training-overview.md) - How classification models are trained
+- [**Dashboard**](overview/dashboard.md) - Unified UI for config, monitoring, topology, and playground
 
 ## 📚 Documentation Structure
 
 This documentation is organized into the following sections:
 
 ### 🎯 [Overview](overview/semantic-router-overview.md)
+
 Learn about semantic routing concepts, mixture of models, and how this compares to other routing approaches like RouteLLM and GPT-5's router architecture.
 
 ### 🏗️ [Architecture](overview/architecture/system-architecture.md)
+
 Understand the system design, Envoy ExtProc integration, and how the router communicates with backend models.
 
 ### 🤖 [Model Training](training/training-overview.md)
+
 Explore how classification models are trained, what datasets are used, and the purpose of each model type.
 
 ## 🤝 Contributing
