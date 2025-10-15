@@ -39,22 +39,27 @@ Pages:
 
 - **Landing** (`/`): Intro landing with animated terminal demo and quick links
 - **Monitoring** (`/monitoring`): Grafana dashboard embedding with custom path input
-- **Config** (`/config`): Real-time configuration viewer with non-persistent edit demo (see note)
+- **Config** (`/config`): Real-time configuration viewer with editable panels and save support
+- **Topology** (`/topology`): Visual topology of request flow and model selection using React Flow
 - **Playground** (`/playground`): Open WebUI interface for testing
 
 Features:
 
-- 🌓 Dark/Light theme toggle with localStorage persistence
-- 📱 Responsive design
+- 🌓 Dark/Light theme toggle with localStorage persistence (default: light)
+- � Collapsible sidebar with quick section navigation (Models, Prompt Guard, Similarity Cache, Intelligent Routing, Topology, Tools Selection, Observability, Classification API)
+- �📱 Responsive design
 - ⚡ Fast navigation with React Router
 - 🎨 Modern UI inspired by vLLM website design
+- 🗺️ Topology visualization powered by React Flow
 
-Config edit demo (frontend only):
+Config editing:
 
-- The Config page includes edit/add modals to showcase how configuration could be managed.
-- Current backend is read-only for config: it exposes `GET /api/router/config/all` only.
-- Demo save targets `POST /api/router/config/update` (not implemented by default). You can wire this endpoint in the backend to persist changes, or keep the edits as a UI mock.
-- Tools DB panel attempts to load `/api/tools-db` for `tools_db.json`. Add a backend route or static file handler to serve this if you want it live.
+- The Config page includes edit/add modals for multiple sections (Models, Endpoints, Prompt Guard, Similarity Cache, Categories, Reasoning Families, Tools, Observability, Batch Classification API).
+- Backend supports read/write operations:
+  - `GET /api/router/config/all` returns the current config (YAML parsed and served as JSON).
+  - `POST /api/router/config/update` updates the config file on disk (writes YAML). Requires the process to have write permission to the specified config path.
+- Tools DB panel loads `/api/tools-db`, which serves `tools_db.json` from the same directory as your config file.
+- Note for containers/Kubernetes: if the config is mounted from a read-only ConfigMap, updates won’t persist. Mount a writable volume or manage config externally if you need persistence.
 
 ### Backend (Go HTTP Server)
 
@@ -65,11 +70,18 @@ Config edit demo (frontend only):
   - `GET /embedded/openwebui/*` → Open WebUI (optional)
   - `GET /api/router/*` → Router Classification API (`:8080`)
   - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
-  - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (read-only)
+  - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (parsed from YAML)
+  - `POST /api/router/config/update` → Updates your `config.yaml` (writes YAML)
+  - `GET /api/tools-db` → Returns `tools_db.json` next to your config
   - `GET /healthz` → Health check endpoint
 - Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
 - SPA routing support: serves `index.html` for all non-asset routes
 - Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
+
+Smart API routing:
+
+- Requests to `/api/router/*` go to the Router API with Authorization forwarded.
+- Other `/api/*` requests (e.g., Grafana’s API) are proxied to Grafana when configured.
 
 ## Directory Layout
 
@@ -98,10 +110,8 @@ dashboard/
 │   ├── main.go                     # Proxy routes & static file server
 │   ├── go.mod                      # Go module (minimal dependencies)
 │   └── Dockerfile                  # Multi-stage build (Node + Go + Alpine)
-├── deploy/
-│   └── kubernetes/                  # K8s manifests (Deployment/Service/ConfigMap)
 ├── README.md                        # This file
-└── (no RISKS.md)                    # Security considerations are documented inline for now
+└── (K8s/Compose manifests live under the repository-level `deploy/` folder)
 ```
 
 ## Environment-agnostic configuration
@@ -116,7 +126,10 @@ Required env vars (with sensible defaults per environment):
 - `TARGET_ROUTER_API_URL` (router `:8080`)
 - `TARGET_ROUTER_METRICS_URL` (router `:9190/metrics`)
 - `TARGET_OPENWEBUI_URL` (optional; enable playground tab only if present)
-Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.
+  Optional:
+- `ROUTER_CONFIG_PATH` (default: `../../config/config.yaml`) — path to the router config file used by the config APIs and Tools DB.
+- `DASHBOARD_STATIC_DIR` — override static assets directory (defaults to `../frontend`).
+  Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.
 
 Recommended upstream settings for embedding:
 
@@ -128,11 +141,12 @@ Recommended upstream settings for embedding:
 - Dashboard Home (Landing): `http://<host>:8700/`
 - Monitoring tab: iframe `src="/embedded/grafana/d/<dashboard-uid>?kiosk&theme=light"`
 - Config tab: frontend fetch `GET /api/router/config/all` (demo edit modals; see note above)
+- Topology tab: client fetch of `GET /api/router/config/all` to render the flow graph
 - Playground tab: iframe `src="/embedded/openwebui/"` (rendered only if `TARGET_OPENWEBUI_URL` is set)
 
 ## Deployment matrix
 
-1) Local dev (router and observability on host)
+1. Local dev (router and observability on host)
 
 - Use `tools/observability/docker-compose.obs.yml` to start Prometheus (9090) and Grafana (3000) on host network
 - Start dashboard backend locally (port 8700)
@@ -143,7 +157,7 @@ Recommended upstream settings for embedding:
   - `TARGET_ROUTER_METRICS_URL=http://localhost:9190/metrics`
   - `TARGET_OPENWEBUI_URL=http://localhost:3001` (if running)
 
-2) Docker Compose (all-in-one)
+2. Docker Compose (all-in-one)
 
 - Reuse services defined in `deploy/docker-compose/docker-compose.yml` (Dashboard included by default)
 - Env examples (inside compose network):
@@ -153,10 +167,10 @@ Recommended upstream settings for embedding:
   - `TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics`
   - `TARGET_OPENWEBUI_URL=http://openwebui:8080` (if included)
 
-3) Kubernetes
+3. Kubernetes
 
-- Install/confirm Prometheus and Grafana via existing manifests in `deploy/kubernetes/observability`
-- Deploy dashboard in `dashboard/deploy/kubernetes/`
+- Install/confirm Prometheus and Grafana via existing manifests in `deploy/kubernetes/observability` (repository root)
+- Deploy the dashboard via manifests under the repository-level `deploy/kubernetes/` (or create one similar to the Compose setup)
 - Configure the dashboard Deployment with in-cluster URLs:
   - `TARGET_GRAFANA_URL=http://grafana.<ns>.svc.cluster.local:3000`
   - `TARGET_PROMETHEUS_URL=http://prometheus.<ns>.svc.cluster.local:9090`
@@ -171,10 +185,15 @@ Recommended upstream settings for embedding:
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only
 - Future: OIDC login on dashboard, session cookie, and per-route RBAC; signed proxy sessions to Grafana/Open WebUI
 
+Write access warning for config updates:
+
+- The `POST /api/router/config/update` endpoint writes to the mounted config path. In Docker/K8s this may be read-only if sourced from a ConfigMap. Use a writable volume, bind-mount, or external configuration service if you need runtime persistence.
+
 ## Extensibility
 
 - New panels: add tabs/components to `frontend/`
 - New integrations: add target env vars and a new `/embedded/<service>` route in backend proxy
+- Topology: customize nodes/edges in `TopologyPage.tsx` (React Flow)
 - Metrics aggregation: add `/api/metrics` in backend to produce derived KPIs from Prometheus
 
 ## Implementation notes
@@ -213,7 +232,7 @@ docker compose -f tools/observability/docker-compose.obs.yml up -d
 cd dashboard/frontend
 npm install
 npm run dev
-# Vite runs at http://localhost:3001 and proxies /api and /embedded to http://localhost:8700
+# Vite runs at http://localhost:3001 and proxies /api, /embedded and /healthz to http://localhost:8700
 
 # 3) Start the Dashboard backend in another terminal
 cd dashboard/backend
@@ -285,19 +304,19 @@ curl http://localhost:8700/healthz
 
 ### Kubernetes deployment
 
-The manifest at `dashboard/deploy/kubernetes/deployment.yaml` includes:
+Example deployment notes (adapt these to your cluster setup):
 
-- Deployment with args `-port=8700 -static=/app/frontend -config=/app/config/config.yaml`
+- Deployment using args `-port=8700 -static=/app/frontend -config=/app/config/config.yaml`
 - Service (ClusterIP) exposing port 80 → container port 8700
-- ConfigMap `semantic-router-dashboard-config` for upstream targets (`TARGET_*` env)
-- ConfigMap `semantic-router-config` to provide a minimal `config.yaml` (replace with your real one)
+- ConfigMap/Secret for upstream targets (`TARGET_*` env) and your router config file
 
 Quick start:
 
 ```bash
 # Set your namespace and apply
 kubectl create ns vllm-semantic-router-system --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n vllm-semantic-router-system apply -f dashboard/deploy/kubernetes/deployment.yaml
+# Apply your manifests under deploy/kubernetes/
+kubectl -n vllm-semantic-router-system apply -f deploy/kubernetes/
 
 # Port-forward for local testing
 kubectl -n vllm-semantic-router-system port-forward svc/semantic-router-dashboard 8700:80
@@ -306,8 +325,8 @@ kubectl -n vllm-semantic-router-system port-forward svc/semantic-router-dashboar
 
 Notes:
 
-- Edit `semantic-router-dashboard-config` in the YAML to match your in-cluster service DNS names and namespace.
-- Replace `semantic-router-config` content with your actual `config.yaml` or mount a Secret/ConfigMap you already manage.
+- Configure environment variables to match your in-cluster service DNS names and namespace.
+- Mount your actual `config.yaml` via ConfigMap/Secret or a writable volume if you need runtime changes.
 - To expose externally, add an Ingress or Service of type LoadBalancer according to your cluster.
 
 Optional Ingress example (Nginx Ingress):

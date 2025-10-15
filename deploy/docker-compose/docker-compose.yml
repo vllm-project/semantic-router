@@ -20,6 +20,7 @@ services:
     volumes:
       - ../../config:/app/config:ro
       - ../../models:/app/models:ro
+      - ~/.cache/huggingface:/root/.cache/huggingface
     environment:
       - LD_LIBRARY_PATH=/app/lib
       # Use main config by default; override via CONFIG_FILE if needed
@@ -27,6 +28,8 @@ services:
       # Optional informational envs (router reads YAML for tracing config)
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - OTEL_SERVICE_NAME=vllm-semantic-router
+      - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
+      - HF_HUB_ENABLE_HF_TRANSFER=1
     networks:
       - semantic-network
     healthcheck:
@@ -150,18 +153,27 @@ services:
 
   # LLM Katan service for testing
   llm-katan:
-    build:
-      context: ../../e2e-tests/llm-katan
-      dockerfile: Dockerfile
+    image: ${LLM_KATAN_IMAGE:-ghcr.io/vllm-project/semantic-router/llm-katan:latest}
     container_name: llm-katan
     profiles: ["testing", "llm-katan"]
     ports:
-      - "8002:8000"
+      - "8002:8002"
     environment:
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+    volumes:
+      - ../../models:/app/models:ro
+      - hf-cache:/home/llmkatan/.cache/huggingface
     networks:
-      - semantic-network
-    command: ["llm-katan", "--model", "Qwen/Qwen3-0.6B", "--host", "0.0.0.0", "--port", "8000"]
+      semantic-network:
+        ipv4_address: 172.28.0.20
+    command: ["llm-katan", "--model", "/app/models/Qwen/Qwen3-0.6B", "--served-model-name", "qwen3", "--host", "0.0.0.0", "--port", "8002"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Semantic Router Dashboard
   dashboard:
@@ -218,3 +230,4 @@ volumes:
   grafana-data:
   openwebui-data:
   openwebui-pipelines:
+  hf-cache:

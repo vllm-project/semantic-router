@@ -62,6 +62,10 @@ RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
 
+# Pre-download modules to fail fast if mirrors are unreachable
+RUN cd src/semantic-router && go mod download && \
+    cd /app/candle-binding && go mod download
+
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
 

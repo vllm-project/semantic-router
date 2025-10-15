@@ -12,11 +12,20 @@ docs-lint-fix: docs-install
 
 markdown-lint:
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules --ignore dashboard/frontend/node_modules
+	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+		--ignore node_modules \
+		--ignore website/node_modules \
+		--ignore dashboard/frontend/node_modules \
+		--ignore models
 
 markdown-lint-fix:
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" --ignore node_modules --ignore website/node_modules --ignore dashboard/frontend/node_modules --fix
+	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+		--ignore node_modules \
+		--ignore website/node_modules \
+		--ignore dashboard/frontend/node_modules \
+		--ignore models \
+		--fix
 
 yaml-lint:
 	@$(LOG_TARGET)

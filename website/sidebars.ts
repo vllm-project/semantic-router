@@ -21,6 +21,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'overview/semantic-router-overview',
         'overview/mixture-of-models',
+        'overview/dashboard',
         {
           type: 'category',
           label: 'Architecture',

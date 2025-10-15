@@ -91,6 +91,36 @@ This command will:
 
 For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
 
+### What This Starts By Default
+
+`make docker-compose-up` now launches the full stack including a lightweight local OpenAI-compatible model server powered by **llm-katan** (serving the small model `Qwen/Qwen3-0.6B` under the alias `qwen3`). The semantic router is configured to route classification & default generations to this local endpoint out-of-the-box. This gives you an entirely self-contained experience (no external API keys required) while still letting you add remote / larger models later.
+
+### Core Mode (Without Local Model)
+
+If you only want the core semantic-router + Envoy + observability stack (and will point to external OpenAI-compatible endpoints yourself):
+
+```bash
+make docker-compose-up-core
+```
+
+### Prerequisite Model Download (Speeds Up First Run)
+
+The existing model bootstrap targets now also pre-download the small llm-katan model so the first `docker-compose-up` avoids an on-demand Hugging Face fetch.
+
+Minimal set (fast):
+
+```bash
+make models-download-minimal
+```
+
+Full set:
+
+```bash
+make models-download
+```
+
+Both create a stamp file once `Qwen/Qwen3-0.6B` is present to keep subsequent runs idempotent.
+
 ## Documentation 📖
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
