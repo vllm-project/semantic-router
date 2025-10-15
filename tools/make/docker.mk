@@ -100,17 +100,17 @@ BUILD_FLAG=$(if $(REBUILD),--build,)
 docker-compose-up:
 	@$(LOG_TARGET)
 	@echo "Starting services with docker-compose (REBUILD=$(REBUILD))..."
-	@docker compose -f deploy/docker-compose/docker-compose.yml up -d $(BUILD_FLAG)
+	@docker compose up -d $(BUILD_FLAG)
 
 docker-compose-up-testing:
 	@$(LOG_TARGET)
 	@echo "Starting services with testing profile (REBUILD=$(REBUILD))..."
-	@docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up -d $(BUILD_FLAG)
+	@docker compose --profile testing up -d $(BUILD_FLAG)
 
 docker-compose-up-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Starting services with llm-katan profile (REBUILD=$(REBUILD))..."
-	@docker compose -f deploy/docker-compose/docker-compose.yml --profile llm-katan up -d $(BUILD_FLAG)
+	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
 
 # Explicit rebuild targets for convenience
 docker-compose-rebuild: REBUILD=1
