@@ -99,8 +99,8 @@ BUILD_FLAG=$(if $(REBUILD),--build,)
 # Docker compose shortcuts (no rebuild by default)
 docker-compose-up:
 	@$(LOG_TARGET)
-	@echo "Starting services with docker-compose (REBUILD=$(REBUILD))..."
-	@docker compose up -d $(BUILD_FLAG)
+	@echo "Starting services with docker-compose (default includes llm-katan) (REBUILD=$(REBUILD))..."
+	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
 
 docker-compose-up-testing:
 	@$(LOG_TARGET)
@@ -111,6 +111,12 @@ docker-compose-up-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Starting services with llm-katan profile (REBUILD=$(REBUILD))..."
 	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
+
+# Start core services only (closer to production; excludes llm-katan)
+docker-compose-up-core:
+	@$(LOG_TARGET)
+	@echo "Starting core services (no llm-katan) (REBUILD=$(REBUILD))..."
+	@docker compose up -d $(BUILD_FLAG)
 
 # Explicit rebuild targets for convenience
 docker-compose-rebuild: REBUILD=1
@@ -139,7 +145,8 @@ docker-help:
 	@echo "  docker-run-llm-katan      - Run llm-katan Docker image locally"
 	@echo "  docker-run-llm-katan-custom SERVED_NAME=name - Run with custom served model name"
 	@echo "  docker-clean              - Clean up Docker images"
-	@echo "  docker-compose-up                    - Start services (add REBUILD=1 to rebuild)"
+	@echo "  docker-compose-up                    - Start services (default includes llm-katan; REBUILD=1 to rebuild)"
+	@echo "  docker-compose-up-core               - Start core services only (no llm-katan)"
 	@echo "  docker-compose-up-testing            - Start with testing profile (REBUILD=1 optional)"
 	@echo "  docker-compose-up-llm-katan          - Start with llm-katan profile (REBUILD=1 optional)"
 	@echo "  docker-compose-rebuild               - Force rebuild then start"

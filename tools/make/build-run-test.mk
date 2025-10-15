@@ -113,50 +113,10 @@ start-llm-katan:
 	@echo "Press Ctrl+C to stop servers"
 	@./e2e-tests/start-llm-katan.sh
 
-# Legacy: Start mock vLLM servers for testing (foreground mode for development)
-start-mock-vllm:
-	@echo "Starting mock vLLM servers in foreground mode..."
-	@echo "Press Ctrl+C to stop servers"
-	@./e2e-tests/start-mock-servers.sh
-
-# Start real vLLM servers for testing
-start-vllm:
-	@echo "Starting real vLLM servers..."
-	@./e2e-tests/start-vllm-servers.sh
-
-# Stop real vLLM servers
-stop-vllm:
-	@echo "Stopping real vLLM servers..."
-	@./e2e-tests/stop-vllm-servers.sh
-
 # Run e2e tests with LLM Katan (lightweight real models)
 test-e2e-vllm:
 	@echo "Running e2e tests with LLM Katan servers..."
 	@echo "⚠️  Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
 	@python3 e2e-tests/run_all_tests.py
 
-# Legacy: Run e2e tests with mock vLLM (assumes mock servers already running)
-test-e2e-mock:
-	@echo "Running e2e tests with mock vLLM servers..."
-	@echo "⚠️  Note: Make sure mock servers are running with 'make start-mock-vllm'"
-	@python3 e2e-tests/run_all_tests.py --mock
-
-# Run e2e tests with real vLLM (assumes real servers already running)
-test-e2e-real:
-	@echo "Running e2e tests with real vLLM servers..."
-	@echo "⚠️  Note: Make sure real vLLM servers are running with 'make start-vllm'"
-	@python3 e2e-tests/run_all_tests.py --real
-
-
-# Note: Automated tests not supported with foreground-only mock servers
-# Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
-
-# Full automated test with cleanup (for CI/CD)
-test-e2e-real-automated: start-vllm
-	@echo "Running automated e2e tests with real vLLM servers..."
-	@sleep 5
-	@python3 e2e-tests/run_all_tests.py --real || ($(MAKE) stop-vllm && exit 1)
-	@$(MAKE) stop-vllm
-
-# Run all e2e tests (LLM Katan, mock and real)
-test-e2e-all: test-e2e-vllm test-e2e-mock test-e2e-real
+# Note: Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
