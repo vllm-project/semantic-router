@@ -137,7 +137,7 @@ func Example_complexExpressions() {
 		Rules: []Rule{
 			{
 				Name:      "multi-signal-consensus",
-				Condition: "keyword.kubernetes.matched && keyword.security.matched && similarity.infrastructure.score > 0.8 && bert.category.value == \"computer science\"",
+				Condition: "keyword.kubernetes.matched && keyword.security.matched && similarity.infrastructure.score > 0.8 && bert.category.value == 'computer science'",
 				Action:    ActionRoute,
 				Priority:  50,
 				Models:    []string{"k8s-security-expert"},
