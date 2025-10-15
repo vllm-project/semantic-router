@@ -597,8 +597,8 @@ def evaluate_model_on_samples(
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=150,
-                temperature=0.1,
+                max_new_tokens=256,
+                temperature=0,
                 do_sample=False,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=[
@@ -1158,8 +1158,8 @@ def demo_inference(
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    max_new_tokens=200,
-                    temperature=0.1,
+                    max_new_tokens=256,
+                    temperature=0,
                     do_sample=False,
                     pad_token_id=tokenizer.pad_token_id,
                     eos_token_id=[
