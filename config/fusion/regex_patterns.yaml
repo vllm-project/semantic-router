@@ -1,0 +1,59 @@
+# Regex Patterns Configuration
+# Defines regular expression patterns for security scanning and structured data detection
+
+patterns:
+  # PII Detection Patterns
+  - name: "ssn"
+    description: "Social Security Number (XXX-XX-XXXX format)"
+    pattern: '\b\d{3}-\d{2}-\d{4}\b'
+    action: "block"
+  
+  - name: "credit-card"
+    description: "Credit card number (various formats)"
+    pattern: '\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'
+    action: "block"
+  
+  - name: "email-with-password"
+    description: "Email and password in the same query (potential credential leak)"
+    pattern: '(?i)(email|username).*password|password.*(?:email|username)'
+    action: "block"
+  
+  # Security Pattern Detection
+  - name: "cve-id"
+    description: "CVE (Common Vulnerabilities and Exposures) identifier"
+    pattern: 'CVE-\d{4}-\d{4,7}'
+    action: "route"
+    models:
+      - "security-expert"
+  
+  - name: "ip-address"
+    description: "IPv4 address pattern"
+    pattern: '\b(?:\d{1,3}\.){3}\d{1,3}\b'
+    action: "log"
+  
+  - name: "aws-access-key"
+    description: "AWS Access Key ID pattern"
+    pattern: '(?i)(?:AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[0-9A-Z]{16}'
+    action: "block"
+  
+  # Structured Data Detection
+  - name: "url"
+    description: "URL pattern"
+    pattern: 'https?://[^\s]+'
+    action: "log"
+  
+  - name: "github-issue"
+    description: "GitHub issue reference (e.g., #123)"
+    pattern: '#\d{1,5}\b'
+    action: "log"
+  
+  # Code Pattern Detection
+  - name: "sql-injection-attempt"
+    description: "Potential SQL injection pattern"
+    pattern: "(?i)(?:union.*select|select.*from.*where|insert.*into|delete.*from|drop.*table|'.*or.*'.*=.*')"
+    action: "block"
+  
+  - name: "command-injection"
+    description: "Potential command injection pattern"
+    pattern: '(?:;|\||`|&|\$\(|\${).*(?:rm|cat|ls|wget|curl|bash|sh)'
+    action: "block"

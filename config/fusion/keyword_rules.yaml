@@ -1,0 +1,106 @@
+# Keyword Rules Configuration
+# Defines keyword matching rules for deterministic routing
+
+rules:
+  # Infrastructure and DevOps keywords
+  - name: "kubernetes-infrastructure"
+    description: "Kubernetes and container orchestration terms"
+    keywords:
+      - "kubernetes"
+      - "k8s"
+      - "kubectl"
+      - "helm"
+      - "pod"
+      - "deployment"
+      - "service mesh"
+      - "istio"
+      - "kustomize"
+    operator: "OR"  # Match if ANY keyword is found
+    case_sensitive: false
+  
+  - name: "docker"
+    description: "Docker and containerization terms"
+    keywords:
+      - "docker"
+      - "container"
+      - "dockerfile"
+      - "docker-compose"
+      - "docker image"
+      - "docker container"
+    operator: "OR"
+    case_sensitive: false
+  
+  # Database keywords
+  - name: "database"
+    description: "Database and SQL terms"
+    keywords:
+      - "database"
+      - "sql"
+      - "mysql"
+      - "postgresql"
+      - "mongodb"
+      - "redis"
+      - "query optimization"
+      - "index"
+      - "transaction"
+    operator: "OR"
+    case_sensitive: false
+  
+  # Security keywords
+  - name: "security"
+    description: "Security and cybersecurity terms"
+    keywords:
+      - "security"
+      - "vulnerability"
+      - "exploit"
+      - "firewall"
+      - "encryption"
+      - "authentication"
+      - "authorization"
+      - "penetration test"
+    operator: "OR"
+    case_sensitive: false
+  
+  # Programming keywords
+  - name: "programming"
+    description: "Programming and software development terms"
+    keywords:
+      - "code"
+      - "function"
+      - "class"
+      - "algorithm"
+      - "debug"
+      - "refactor"
+      - "unit test"
+      - "programming"
+    operator: "OR"
+    case_sensitive: false
+  
+  # Mathematics keywords
+  - name: "mathematics"
+    description: "Mathematics and computation terms"
+    keywords:
+      - "calculus"
+      - "derivative"
+      - "integral"
+      - "matrix"
+      - "algebra"
+      - "geometry"
+      - "probability"
+      - "statistics"
+    operator: "OR"
+    case_sensitive: false
+  
+  # Performance keywords
+  - name: "performance"
+    description: "Performance optimization terms"
+    keywords:
+      - "performance"
+      - "optimization"
+      - "latency"
+      - "throughput"
+      - "bottleneck"
+      - "profiling"
+      - "benchmark"
+    operator: "OR"
+    case_sensitive: false

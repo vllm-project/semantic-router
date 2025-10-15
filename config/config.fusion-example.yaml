@@ -1,0 +1,169 @@
+# Example Router Configuration with Signal Fusion Engine
+# This is a complete example showing how to integrate the fusion engine
+
+# Standard BERT model configuration (existing)
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# Classifier configuration (existing)
+classifier:
+  category_model:
+    model_id: "models/classifier_modernbert-base_model"
+    threshold: 0.5
+    use_cpu: true
+    use_modernbert: true
+    category_mapping_path: "models/classifier_modernbert-base_model/category_mapping.json"
+  
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_model"
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_model/pii_type_mapping.json"
+
+# Prompt guard configuration (existing)
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+# ============================================================
+# NEW: Content Scanning and Signal Fusion Configuration
+# ============================================================
+
+content_scanning:
+  # Enable the fusion engine
+  enabled: true
+  
+  # Default action when no rules match
+  # Options: "fallthrough" (use BERT), "block"
+  default_action: "fallthrough"
+  
+  # Enable audit logging for policy decisions
+  audit_logging: true
+  
+  # Signal provider configurations
+  providers:
+    # Keyword matching provider (in-tree, low latency)
+    keyword:
+      enabled: true
+      rules_path: "config/fusion/keyword_rules.yaml"
+    
+    # Regex scanning provider (in-tree, low latency)
+    regex:
+      enabled: true
+      patterns_path: "config/fusion/regex_patterns.yaml"
+      engine: "re2"  # Options: "re2" (recommended), "stdlib"
+    
+    # Embedding similarity provider (in-tree or MCP)
+    similarity:
+      enabled: true
+      concepts_path: "config/fusion/similarity_concepts.yaml"
+      default_threshold: 0.75
+  
+  # Fusion policy - combines all signals into routing decisions
+  fusion_policy:
+    # Option 1: Load rules from external file (recommended for production)
+    rules_path: "config/fusion/policy_rules.yaml"
+    
+    # Option 2: Inline rules (good for simple configurations)
+    # rules:
+    #   - name: "block-pii"
+    #     condition: "regex.ssn.matched || regex.credit-card.matched"
+    #     action: "block"
+    #     priority: 200
+    #     message: "PII detected"
+    #   
+    #   - name: "route-k8s"
+    #     condition: "keyword.kubernetes-infrastructure.matched && similarity.infrastructure.score > 0.75"
+    #     action: "route"
+    #     priority: 150
+    #     models: ["k8s-expert", "devops-model"]
+    #   
+    #   - name: "default"
+    #     condition: "!regex.ssn.matched"
+    #     action: "fallthrough"
+    #     priority: 0
+
+# ============================================================
+# Standard Router Configuration (existing)
+# ============================================================
+
+# Categories for routing (existing)
+categories:
+  - name: "computer science"
+    model_scores:
+      qwen-2.5:3b-instruct: 0.78
+      tinyllama-1.1b-chat: 0.65
+    use_reasoning: true
+    reasoning_effort: "medium"
+  
+  - name: "math"
+    model_scores:
+      qwen-2.5:3b-instruct: 0.85
+      tinyllama-1.1b-chat: 0.45
+    use_reasoning: true
+    reasoning_effort: "high"
+  
+  - name: "business"
+    model_scores:
+      qwen-2.5:3b-instruct: 0.72
+      tinyllama-1.1b-chat: 0.68
+    use_reasoning: false
+    reasoning_effort: "low"
+
+# Default model
+default_model: "qwen-2.5:3b-instruct"
+
+# Default reasoning effort
+default_reasoning_effort: "medium"
+
+# vLLM Endpoints
+vllm_endpoints:
+  - name: "qwen-endpoint"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+    health_check_path: "/health"
+
+# Semantic cache configuration
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+
+# Tools configuration
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+# API configuration
+api:
+  batch_classification:
+    metrics:
+      enabled: true
+      sample_rate: 1.0
+
+# Observability configuration
+observability:
+  tracing:
+    enabled: false
+    provider: "opentelemetry"
+    exporter:
+      type: "otlp"
+      endpoint: "localhost:4317"
+      insecure: true
+    sampling:
+      type: "always_on"
+    resource:
+      service_name: "semantic-router"
+      deployment_environment: "development"
