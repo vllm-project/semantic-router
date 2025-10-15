@@ -126,11 +126,11 @@ except ImportError as e:
 logger = setup_logging()
 
 # Training dataset mapping for each specialist model
-# NOTE: GSM8K and MATH are free-form datasets (no multiple-choice) - not compatible
+# NOTE: Supports both multiple-choice (ARC, SciQ, etc.) and free-form (GSM8K, MATH) datasets
 TRAINING_DATASETS = {
     "math-reasoner": {
-        "datasets": ["arc"],  # ARC has reasoning/STEM questions
-        "description": "Reasoning and STEM problems",
+        "datasets": ["gsm8k", "math", "arc"],  # Math word problems + reasoning
+        "description": "Mathematical reasoning and STEM problems",
         "target_mmlu_categories": ["math", "physics", "engineering"],
     },
     "science-expert": {
@@ -155,11 +155,12 @@ TRAINING_DATASETS = {
     },
     "generalist": {
         "datasets": [
+            "gsm8k",
             "arc",
             "commonsenseqa",
             "truthfulqa",
-        ],  # Removed GSM8K (no options)
-        "description": "Mixed domains",
+        ],  # Mixed multiple-choice and free-form
+        "description": "Mixed domains (catch-all specialist)",
         "target_mmlu_categories": ["health", "other"],
     },
 }
@@ -294,34 +295,40 @@ def convert_bench_question_to_training_format(question_obj, dataset_name: str) -
         Dict with question, options, answer (as text), category, cot_content
         Returns None if the sample is invalid
     """
-    # Validate that we have options
-    if not question_obj.options or len(question_obj.options) < 2:
-        logger.warning(
-            f"Skipping {dataset_name} question {question_obj.question_id}: "
-            f"insufficient options ({len(question_obj.options) if question_obj.options else 0})"
-        )
-        return None
+    # Check if this is a free-form question (no multiple choice options)
+    has_options = question_obj.options and len(question_obj.options) >= 2
 
-    # Convert answer to actual text
-    try:
-        answer_text = convert_answer_to_text(
-            question_obj.correct_answer, question_obj.options
+    if has_options:
+        # Multiple-choice format: Convert answer to actual text
+        try:
+            answer_text = convert_answer_to_text(
+                question_obj.correct_answer, question_obj.options
+            )
+        except Exception as e:
+            logger.warning(
+                f"Skipping {dataset_name} question {question_obj.question_id}: "
+                f"failed to convert answer: {e}"
+            )
+            return None
+    else:
+        # Free-form format: Use answer as-is (GSM8K, MATH)
+        answer_text = str(question_obj.correct_answer)
+        logger.debug(
+            f"Free-form question from {dataset_name}: "
+            f"{question_obj.question_id} (no multiple-choice options)"
         )
-    except Exception as e:
-        logger.warning(
-            f"Skipping {dataset_name} question {question_obj.question_id}: "
-            f"failed to convert answer: {e}"
-        )
-        return None
 
     return {
         "question": question_obj.question,
-        "options": question_obj.options,
+        "options": (
+            question_obj.options if has_options else []
+        ),  # Empty list for free-form
         "answer": answer_text,  # Now always actual text, not letter/index
         "category": question_obj.category,
         "cot_content": question_obj.cot_content,
         "source_dataset": dataset_name,
         "question_id": question_obj.question_id,
+        "is_free_form": not has_options,  # Flag to indicate answer format
     }
 
 
@@ -513,9 +520,11 @@ def format_instruction(
     Uses Qwen3's ChatML format with special tokens to separate user input from assistant output.
     This ensures the model only trains on generating the answer, not the question.
 
+    Supports both multiple-choice (with options) and free-form (without options) formats.
+
     Args:
         question: The question text
-        options: List of answer options
+        options: List of answer options (empty list for free-form questions)
         answer: The correct answer TEXT (actual option content) or None for inference
         cot_content: Optional chain-of-thought reasoning from source dataset
         use_cot: Whether to use Chain-of-Thought format
@@ -524,31 +533,53 @@ def format_instruction(
         List of message dicts with 'role' and 'content' keys
         Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
     """
-    options_text = format_options(options)
-    instruction = COT_INSTRUCTION_TEMPLATE.format(
-        question=question, options=options_text
-    )
+    # Determine if this is multiple-choice or free-form
+    is_multiple_choice = options and len(options) >= 2
+
+    if is_multiple_choice:
+        # Multiple-choice format
+        options_text = format_options(options)
+        instruction = COT_INSTRUCTION_TEMPLATE.format(
+            question=question, options=options_text
+        )
+    else:
+        # Free-form format (GSM8K, MATH, etc.)
+        instruction = f"""You are an expert problem solver. Solve the following problem step by step, showing your reasoning clearly.
+
+Problem: {question}
+
+Instructions:
+1. Read the problem carefully and identify what is being asked
+2. Break down the problem into steps
+3. Solve step by step, showing your calculations and reasoning
+4. End with "The answer is [your_final_answer]"
+
+For example, if the answer is 42, write: "The answer is 42\""""
 
     # User message (the question/instruction)
     messages = [{"role": "user", "content": instruction}]
 
     if answer is not None:
-        # Find which option matches the answer text to get the letter
-        answer_letter = None
-        answer_lower = answer.lower().strip()
-        for i, option in enumerate(options):
-            if option.lower().strip() == answer_lower:
-                answer_letter = chr(
-                    65 + i
-                )  # Convert index to letter (0->A, 1->B, etc.)
-                break
+        if is_multiple_choice:
+            # Find which option matches the answer text to get the letter
+            answer_letter = None
+            answer_lower = answer.lower().strip()
+            for i, option in enumerate(options):
+                if option.lower().strip() == answer_lower:
+                    answer_letter = chr(
+                        65 + i
+                    )  # Convert index to letter (0->A, 1->B, etc.)
+                    break
 
-        # If no exact match, still format but without letter
-        if answer_letter is None:
-            formatted_answer = f"The answer is {answer}"
-            logger.warning(f"Could not find letter for answer: {answer}")
+            # If no exact match, still format but without letter
+            if answer_letter is None:
+                formatted_answer = f"The answer is {answer}"
+                logger.warning(f"Could not find letter for answer: {answer}")
+            else:
+                formatted_answer = f"The answer is {answer_letter}) {answer}"
         else:
-            formatted_answer = f"The answer is {answer_letter}) {answer}"
+            # Free-form answer (no letter)
+            formatted_answer = f"The answer is {answer}"
 
         # Assistant message (the answer)
         if use_cot and cot_content:
@@ -592,8 +623,9 @@ def create_solver_dataset(
 
         # Apply chat template to add special tokens
         # add_generation_prompt=False because we already have the assistant response
+        # enable_thinking=False to train model for direct problem-solving without reasoning tokens
         formatted_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False
+            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
         )
         formatted_examples.append(formatted_text)
 
@@ -761,8 +793,9 @@ def evaluate_model_on_mmlu_pro(
 
         # Apply chat template with generation prompt
         # This adds <|im_start|>assistant\n at the end to prompt the model to respond
+        # enable_thinking=False for direct answer generation without reasoning tokens
         prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
 
         inputs = tokenizer(

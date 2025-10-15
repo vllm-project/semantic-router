@@ -448,8 +448,9 @@ def create_solver_dataset(
 
         # Apply chat template to add special tokens
         # add_generation_prompt=False because we already have the assistant response
+        # enable_thinking=False to train model for direct problem-solving without reasoning tokens
         formatted_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False
+            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
         )
         formatted_examples.append(formatted_text)
 
@@ -586,8 +587,9 @@ def evaluate_model_on_samples(
 
         # Apply chat template with generation prompt
         # This adds <|im_start|>assistant\n at the end to prompt the model to respond
+        # enable_thinking=False for direct answer generation without reasoning tokens
         prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
 
         inputs = tokenizer(
@@ -1147,8 +1149,12 @@ def demo_inference(
             )
 
             # Apply chat template with generation prompt
+            # enable_thinking=False for direct answer generation without reasoning tokens
             prompt = tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
             )
 
             inputs = tokenizer(

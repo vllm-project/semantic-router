@@ -226,14 +226,14 @@ if train_specialist \
     "math-reasoner" \
     "$EPOCHS" \
     "$SAMPLES_PER_DATASET" \
-    "Quantitative STEM reasoning" \
-    "GSM8K (7.5K) + MATH (12.5K)" \
+    "Mathematical reasoning and STEM problems" \
+    "GSM8K (free-form) + MATH (free-form) + ARC (multiple-choice)" \
     "math, physics, engineering"; then
     SUCCESSFUL_MODELS+=("math-reasoner")
-    ((COMPLETED_MODELS++))
+    COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
 else
     FAILED_MODELS+=("math-reasoner")
-    ((FAILED_MODELS_COUNT++))
+    FAILED_MODELS_COUNT=$((FAILED_MODELS_COUNT + 1))
 fi
 
 # ============================================================================
@@ -248,10 +248,10 @@ if train_specialist \
     "ARC (1.2K) + OpenBookQA (500) + SciQ (1K)" \
     "biology, chemistry, computer science"; then
     SUCCESSFUL_MODELS+=("science-expert")
-    ((COMPLETED_MODELS++))
+    COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
 else
     FAILED_MODELS+=("science-expert")
-    ((FAILED_MODELS_COUNT++))
+    FAILED_MODELS_COUNT=$((FAILED_MODELS_COUNT + 1))
 fi
 
 # ============================================================================
@@ -266,10 +266,10 @@ if train_specialist \
     "CommonsenseQA (1.2K) + StrategyQA (2.3K)" \
     "psychology, economics, business"; then
     SUCCESSFUL_MODELS+=("social-sciences")
-    ((COMPLETED_MODELS++))
+    COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
 else
     FAILED_MODELS+=("social-sciences")
-    ((FAILED_MODELS_COUNT++))
+    FAILED_MODELS_COUNT=$((FAILED_MODELS_COUNT + 1))
 fi
 
 # ============================================================================
@@ -284,10 +284,10 @@ if train_specialist \
     "TruthfulQA (817)" \
     "history, philosophy"; then
     SUCCESSFUL_MODELS+=("humanities")
-    ((COMPLETED_MODELS++))
+    COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
 else
     FAILED_MODELS+=("humanities")
-    ((FAILED_MODELS_COUNT++))
+    FAILED_MODELS_COUNT=$((FAILED_MODELS_COUNT + 1))
 fi
 
 # ============================================================================
@@ -306,10 +306,10 @@ if train_specialist \
     "MMLU validation (law only)" \
     "law"; then
     SUCCESSFUL_MODELS+=("law")
-    ((COMPLETED_MODELS++))
+    COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
 else
     FAILED_MODELS+=("law")
-    ((FAILED_MODELS_COUNT++))
+    FAILED_MODELS_COUNT=$((FAILED_MODELS_COUNT + 1))
 fi
 
 # ============================================================================
@@ -320,14 +320,14 @@ if train_specialist \
     "generalist" \
     "$EPOCHS" \
     "$SAMPLES_PER_DATASET" \
-    "Mixed domains (catch-all)" \
-    "GSM8K + ARC + CommonsenseQA + TruthfulQA" \
+    "Mixed domains (catch-all specialist)" \
+    "GSM8K (free-form) + ARC + CommonsenseQA + TruthfulQA" \
     "health, other"; then
     SUCCESSFUL_MODELS+=("generalist")
-    ((COMPLETED_MODELS++))
+    COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
 else
     FAILED_MODELS+=("generalist")
-    ((FAILED_MODELS_COUNT++))
+    FAILED_MODELS_COUNT=$((FAILED_MODELS_COUNT + 1))
 fi
 
 # ============================================================================

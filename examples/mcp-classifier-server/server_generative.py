@@ -402,8 +402,9 @@ A:"""
 
         # Apply chat template with generation prompt
         # This adds <|im_start|>assistant\n at the end to prompt the model to respond
+        # Disable thinking mode for direct classification output (Qwen3 is a thinking model)
         prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
 
         return prompt

@@ -296,8 +296,9 @@ def create_generative_dataset(
 
         # Apply chat template to add special tokens
         # add_generation_prompt=False because we already have the assistant response
+        # Disable thinking mode to train model for direct classification
         formatted_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False
+            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
         )
         formatted_examples.append(formatted_text)
 
@@ -539,7 +540,7 @@ def main(
     model.eval()
 
     # Use validation data for testing
-    num_test_samples = min(20, len(val_texts))  # Test on 20 samples
+    num_test_samples = min(200, len(val_texts))  # Test on 200 samples
     correct = 0
     total = 0
 
@@ -554,8 +555,9 @@ def main(
 
         # Apply chat template with generation prompt
         # This adds <|im_start|>assistant\n to prompt the model to respond
+        # Disable thinking mode for direct classification output
         prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
 
         inputs = tokenizer(
@@ -578,6 +580,11 @@ def main(
         # Decode only the generated part (skip the input prompt)
         generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
         generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+        # Remove thinking tokens that Qwen3 generates
+        generated_text = (
+            generated_text.replace("<think>", "").replace("</think>", "").strip()
+        )
 
         # With chat template, model generates just the category directly
         # Clean up answer (take first line, remove punctuation at end)
@@ -679,8 +686,12 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
             messages = format_instruction(example, category=None)
 
             # Apply chat template with generation prompt
+            # Disable thinking mode for direct classification output
             prompt = tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
             )
 
             inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -701,6 +712,11 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
             # Decode only the generated part (skip the input prompt)
             generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
             generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+            # Remove thinking tokens that Qwen3 generates
+            generated_text = (
+                generated_text.replace("<think>", "").replace("</think>", "").strip()
+            )
 
             # With chat template, model generates just the category directly
             # Clean up and match against known categories
