@@ -443,7 +443,7 @@ impl TraditionalModernBertClassifier {
             truncation_direction: tokenizers::TruncationDirection::Right,
             pad_token_id: config.pad_token_id,
             pad_token: "[PAD]".to_string(),
-            model_type: crate::core::tokenization::ModelType::ModernBERT,
+            tokenization_strategy: crate::core::tokenization::TokenizationStrategy::ModernBERT,
             token_data_type: crate::core::tokenization::TokenDataType::U32,
         };
 
