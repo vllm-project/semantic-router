@@ -187,19 +187,28 @@ class MMLU_Dataset:
                 cat for cat in REQUIRED_CATEGORIES if cat in category_samples
             ]
 
-            target_samples_per_category = max_samples_per_category
+            # IMPORTANT: Validate and adjust target samples to ensure all categories have enough data
+            # Find the minimum available samples across all categories
+            min_available_samples = min(
+                len(category_samples[cat]) for cat in available_required_categories
+            )
 
-            # Collect balanced samples
+            # Use the smaller of: requested max_samples_per_category OR minimum available samples
+            target_samples_per_category = min(max_samples_per_category, min_available_samples)
+
+            logger.info(f"Requested samples per category: {max_samples_per_category}")
+            logger.info(f"Minimum available samples across categories: {min_available_samples}")
+            logger.info(f"Actual samples per category (adjusted): {target_samples_per_category}")
+
+            # Collect balanced samples - now all categories will have EXACTLY the same number
             filtered_texts = []
             filtered_labels = []
             category_counts = {}
 
             for category in available_required_categories:
                 if category in category_samples:
-                    samples_to_take = min(
-                        target_samples_per_category, len(category_samples[category])
-                    )
-                    category_texts = category_samples[category][:samples_to_take]
+                    # Now all categories take exactly target_samples_per_category samples
+                    category_texts = category_samples[category][:target_samples_per_category]
                     filtered_texts.extend(category_texts)
                     filtered_labels.extend([category] * len(category_texts))
                     category_counts[category] = len(category_texts)
