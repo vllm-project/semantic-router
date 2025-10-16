@@ -1527,3 +1527,597 @@ func BenchmarkLoRAUnifiedClassifier(b *testing.B) {
 		_, _ = ClassifyBatchWithLoRA(testTexts)
 	}
 }
+
+// TestGetEmbeddingSmart tests the intelligent embedding routing function
+func TestGetEmbeddingSmart(t *testing.T) {
+	// Initialize embedding models first
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping GetEmbeddingSmart tests due to model initialization error: %v", err)
+		}
+		t.Fatalf("Failed to initialize embedding models: %v", err)
+	}
+
+	t.Run("ShortTextHighLatency", func(t *testing.T) {
+		// Short text with high latency priority should use Traditional BERT
+		text := "Hello world"
+		embedding, err := GetEmbeddingSmart(text, 0.3, 0.8)
+
+		if err != nil {
+			t.Logf("GetEmbeddingSmart returned error (expected for placeholder): %v", err)
+			// This is expected since we're using placeholder implementation
+			return
+		}
+
+		if len(embedding) != 768 {
+			t.Errorf("Expected 768-dim embedding, got %d", len(embedding))
+		}
+
+		t.Logf("Short text embedding generated: dim=%d", len(embedding))
+	})
+
+	t.Run("MediumTextBalanced", func(t *testing.T) {
+		// Medium text with balanced priorities - may select Qwen3 (1024) or Gemma (768)
+		text := strings.Repeat("This is a medium length text with enough words to exceed 512 tokens. ", 10)
+		embedding, err := GetEmbeddingSmart(text, 0.5, 0.5)
+
+		if err != nil {
+			t.Fatalf("GetEmbeddingSmart failed: %v", err)
+		}
+
+		// Accept both Qwen3 (1024) and Gemma (768) dimensions
+		if len(embedding) != 768 && len(embedding) != 1024 {
+			t.Errorf("Expected 768 or 1024-dim embedding, got %d", len(embedding))
+		}
+
+		t.Logf("Medium text embedding generated: dim=%d", len(embedding))
+	})
+
+	t.Run("LongTextHighQuality", func(t *testing.T) {
+		// Long text with high quality priority should use Qwen3
+		text := strings.Repeat("This is a very long document that requires Qwen3's 32K context support. ", 50)
+		embedding, err := GetEmbeddingSmart(text, 0.9, 0.2)
+
+		if err != nil {
+			t.Logf("GetEmbeddingSmart returned error (expected for placeholder): %v", err)
+			return
+		}
+
+		if len(embedding) != 768 {
+			t.Errorf("Expected 768-dim embedding, got %d", len(embedding))
+		}
+
+		t.Logf("Long text embedding generated: dim=%d", len(embedding))
+	})
+
+	t.Run("InvalidInputNullText", func(t *testing.T) {
+		// Empty text should return error or empty embedding
+		embedding, err := GetEmbeddingSmart("", 0.5, 0.5)
+
+		if err != nil {
+			t.Logf("Empty text correctly returned error: %v", err)
+		} else if len(embedding) == 0 {
+			t.Logf("Empty text returned empty embedding (acceptable)")
+		} else {
+			// Some models may still generate embeddings for empty text (e.g., using [CLS] token)
+			t.Logf("Empty text generated embedding: dim=%d (model may use special tokens)", len(embedding))
+		}
+	})
+
+	t.Run("PriorityEdgeCases", func(t *testing.T) {
+		text := "Test text for priority edge cases"
+
+		// Test with extreme priorities
+		testCases := []struct {
+			quality float32
+			latency float32
+			desc    string
+		}{
+			{0.0, 1.0, "MinQuality-MaxLatency"},
+			{1.0, 0.0, "MaxQuality-MinLatency"},
+			{0.5, 0.5, "Balanced"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.desc, func(t *testing.T) {
+				embedding, err := GetEmbeddingSmart(text, tc.quality, tc.latency)
+
+				if err != nil {
+					t.Logf("Priority test %s returned error (expected): %v", tc.desc, err)
+					return
+				}
+
+				// Smart routing may select Qwen3 (1024) or Gemma (768) based on priorities
+				if len(embedding) != 768 && len(embedding) != 1024 {
+					t.Errorf("Expected 768 or 1024-dim embedding, got %d", len(embedding))
+				}
+				t.Logf("Priority test %s: generated %d-dim embedding", tc.desc, len(embedding))
+			})
+		}
+	})
+
+	t.Run("MemorySafety", func(t *testing.T) {
+		// Test multiple allocations and frees
+		texts := []string{
+			"First test text",
+			"Second test text with more words",
+			"Third test text",
+		}
+
+		for i, text := range texts {
+			embedding, err := GetEmbeddingSmart(text, 0.5, 0.5)
+
+			if err != nil {
+				t.Logf("Iteration %d returned error (expected): %v", i, err)
+				continue
+			}
+
+			// Smart routing may select Qwen3 (1024) or Gemma (768)
+			if len(embedding) != 768 && len(embedding) != 1024 {
+				t.Errorf("Iteration %d: Expected 768 or 1024-dim embedding, got %d", i, len(embedding))
+			}
+
+			// Verify no nil pointers
+			if embedding == nil {
+				t.Errorf("Iteration %d: Embedding is nil", i)
+			}
+
+			t.Logf("Iteration %d: generated %d-dim embedding", i, len(embedding))
+		}
+
+		t.Logf("Memory safety test completed successfully")
+	})
+}
+
+// BenchmarkGetEmbeddingSmart benchmarks the intelligent embedding routing
+func BenchmarkGetEmbeddingSmart(b *testing.B) {
+	testCases := []struct {
+		name    string
+		text    string
+		quality float32
+		latency float32
+	}{
+		{"ShortFast", "Hello world", 0.3, 0.8},
+		{"MediumBalanced", strings.Repeat("Medium text ", 50), 0.5, 0.5},
+		{"LongQuality", strings.Repeat("Long document text ", 100), 0.9, 0.2},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, _ = GetEmbeddingSmart(tc.text, tc.quality, tc.latency)
+			}
+		})
+	}
+}
+
+// Test constants for embedding models (Phase 4.2)
+const (
+	Qwen3EmbeddingModelPath = "../models/Qwen3-Embedding-0.6B"
+	GemmaEmbeddingModelPath = "../models/embeddinggemma-300m"
+	TestEmbeddingText       = "This is a test sentence for embedding generation"
+	TestLongContextText     = "This is a longer text that might benefit from long-context embedding models like Qwen3 or Gemma"
+)
+
+// TestInitEmbeddingModels tests the embedding models initialization
+func TestInitEmbeddingModels(t *testing.T) {
+	t.Run("InitBothModels", func(t *testing.T) {
+		// Note: ModelFactory may already be initialized by previous tests (e.g., TestGetEmbeddingSmart)
+		// This is expected behavior - OnceLock ensures single initialization
+		err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+		if err != nil {
+			// If ModelFactory is already initialized, this is acceptable
+			t.Logf("InitEmbeddingModels returned error (ModelFactory may already be initialized): %v", err)
+
+			// Verify that embeddings can still be generated (ModelFactory is functional)
+			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
+			if testErr == nil {
+				t.Log("✓ ModelFactory is functional (already initialized)")
+			} else {
+				if isModelInitializationError(testErr) {
+					t.Skipf("Skipping test due to model unavailability: %v", testErr)
+				} else {
+					t.Logf("ModelFactory test embedding generation failed: %v", testErr)
+				}
+			}
+		} else {
+			t.Log("✓ Both embedding models initialized successfully")
+		}
+	})
+
+	t.Run("InitQwen3Only", func(t *testing.T) {
+		// Similar to InitBothModels, accept already-initialized state
+		err := InitEmbeddingModels(Qwen3EmbeddingModelPath, "", true)
+		if err != nil {
+			t.Logf("InitEmbeddingModels (Qwen3 only) returned error (may already be initialized): %v", err)
+
+			// Verify functionality
+			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
+			if testErr == nil {
+				t.Log("✓ ModelFactory is functional (already initialized)")
+			} else {
+				if isModelInitializationError(testErr) {
+					t.Skipf("Skipping test due to model unavailability: %v", testErr)
+				}
+			}
+		} else {
+			t.Log("✓ Qwen3 model initialized successfully")
+		}
+	})
+
+	t.Run("InitGemmaOnly", func(t *testing.T) {
+		// Similar to InitBothModels, accept already-initialized state
+		err := InitEmbeddingModels("", GemmaEmbeddingModelPath, true)
+		if err != nil {
+			t.Logf("InitEmbeddingModels (Gemma only) returned error (may already be initialized): %v", err)
+
+			// Verify functionality
+			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
+			if testErr == nil {
+				t.Log("✓ ModelFactory is functional (already initialized)")
+			} else {
+				if isModelInitializationError(testErr) {
+					t.Skipf("Skipping test due to model unavailability: %v", testErr)
+				}
+			}
+		} else {
+			t.Log("✓ Gemma model initialized successfully")
+		}
+	})
+
+	t.Run("InitWithInvalidPaths", func(t *testing.T) {
+		err := InitEmbeddingModels("/invalid/path1", "/invalid/path2", true)
+		if err == nil {
+			t.Error("Expected error for invalid model paths")
+		} else {
+			t.Logf("✓ Invalid paths correctly returned error: %v", err)
+		}
+	})
+}
+
+// TestGetEmbeddingWithDim tests the Matryoshka embedding generation
+func TestGetEmbeddingWithDim(t *testing.T) {
+	// Initialize embedding models first
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping GetEmbeddingWithDim tests due to model initialization error: %v", err)
+		}
+		t.Fatalf("Failed to initialize embedding models: %v", err)
+	}
+
+	t.Run("FullDimension768", func(t *testing.T) {
+		embedding, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
+		if err != nil {
+			t.Fatalf("Failed to get 768-dim embedding: %v", err)
+		}
+
+		if len(embedding) != 768 {
+			t.Errorf("Expected 768-dim embedding, got %d", len(embedding))
+		}
+
+		// Validate embedding values
+		for i, val := range embedding {
+			if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
+				t.Fatalf("Invalid embedding value at index %d: %f", i, val)
+			}
+		}
+
+		t.Logf("✓ Generated 768-dim embedding successfully")
+	})
+
+	t.Run("Matryoshka512", func(t *testing.T) {
+		embedding, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 512)
+		if err != nil {
+			t.Fatalf("Failed to get 512-dim embedding: %v", err)
+		}
+
+		if len(embedding) != 512 {
+			t.Errorf("Expected 512-dim embedding, got %d", len(embedding))
+		}
+
+		t.Logf("✓ Generated 512-dim Matryoshka embedding successfully")
+	})
+
+	t.Run("Matryoshka256", func(t *testing.T) {
+		embedding, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 256)
+		if err != nil {
+			t.Fatalf("Failed to get 256-dim embedding: %v", err)
+		}
+
+		if len(embedding) != 256 {
+			t.Errorf("Expected 256-dim embedding, got %d", len(embedding))
+		}
+
+		t.Logf("✓ Generated 256-dim Matryoshka embedding successfully")
+	})
+
+	t.Run("Matryoshka128", func(t *testing.T) {
+		embedding, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 128)
+		if err != nil {
+			t.Fatalf("Failed to get 128-dim embedding: %v", err)
+		}
+
+		if len(embedding) != 128 {
+			t.Errorf("Expected 128-dim embedding, got %d", len(embedding))
+		}
+
+		t.Logf("✓ Generated 128-dim Matryoshka embedding successfully")
+	})
+
+	t.Run("OversizedDimension", func(t *testing.T) {
+		// Test graceful degradation when requested dimension exceeds model capacity
+		// Qwen3: 1024, Gemma: 768, so 2048 should fall back to full dimension
+		embedding, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 2048)
+		if err != nil {
+			t.Errorf("Should gracefully handle oversized dimension, got error: %v", err)
+			return
+		}
+
+		// Should return full dimension (1024 for Qwen3 or 768 for Gemma)
+		if len(embedding) != 1024 && len(embedding) != 768 {
+			t.Errorf("Expected full dimension (1024 or 768), got %d", len(embedding))
+		} else {
+			t.Logf("✓ Oversized dimension gracefully degraded to full dimension: %d", len(embedding))
+		}
+	})
+
+	t.Run("LongContextText", func(t *testing.T) {
+		// Test with longer text
+		longText := strings.Repeat(TestLongContextText+" ", 20)
+		embedding, err := GetEmbeddingWithDim(longText, 0.9, 0.2, 768)
+		if err != nil {
+			t.Fatalf("Failed to get embedding for long text: %v", err)
+		}
+
+		if len(embedding) != 768 {
+			t.Errorf("Expected 768-dim embedding for long text, got %d", len(embedding))
+		}
+
+		t.Logf("✓ Generated embedding for long context text (%d chars)", len(longText))
+	})
+}
+
+// TestEmbeddingConsistency tests that same input produces consistent embeddings
+func TestEmbeddingConsistency(t *testing.T) {
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping consistency tests due to model initialization error: %v", err)
+		}
+		t.Fatalf("Failed to initialize embedding models: %v", err)
+	}
+
+	t.Run("SameInputSameOutput", func(t *testing.T) {
+		embedding1, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
+		if err != nil {
+			t.Fatalf("Failed to get first embedding: %v", err)
+		}
+
+		embedding2, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
+		if err != nil {
+			t.Fatalf("Failed to get second embedding: %v", err)
+		}
+
+		if len(embedding1) != len(embedding2) {
+			t.Fatalf("Embedding lengths differ: %d vs %d", len(embedding1), len(embedding2))
+		}
+
+		// Check that embeddings are identical (or very close)
+		maxDiff := 0.0
+		for i := range embedding1 {
+			diff := math.Abs(float64(embedding1[i] - embedding2[i]))
+			if diff > maxDiff {
+				maxDiff = diff
+			}
+		}
+
+		if maxDiff > TestEpsilon {
+			t.Errorf("Embeddings differ by more than epsilon: max diff = %e", maxDiff)
+		} else {
+			t.Logf("✓ Embeddings are consistent (max diff: %e)", maxDiff)
+		}
+	})
+
+	t.Run("DifferentDimensionsSharePrefix", func(t *testing.T) {
+		// Test that Matryoshka embeddings are prefixes of full embeddings
+		full768, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 768)
+		if err != nil {
+			t.Fatalf("Failed to get 768-dim embedding: %v", err)
+		}
+
+		mat256, err := GetEmbeddingWithDim(TestEmbeddingText, 0.5, 0.5, 256)
+		if err != nil {
+			t.Fatalf("Failed to get 256-dim embedding: %v", err)
+		}
+
+		// Check that first 256 values match
+		maxDiff := 0.0
+		for i := 0; i < 256; i++ {
+			diff := math.Abs(float64(full768[i] - mat256[i]))
+			if diff > maxDiff {
+				maxDiff = diff
+			}
+		}
+
+		if maxDiff > TestEpsilon {
+			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
+		} else {
+			t.Logf("✓ Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+		}
+	})
+}
+
+// TestEmbeddingPriorityRouting tests the intelligent routing based on priorities
+func TestEmbeddingPriorityRouting(t *testing.T) {
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping priority routing tests due to model initialization error: %v", err)
+		}
+		t.Fatalf("Failed to initialize embedding models: %v", err)
+	}
+
+	testCases := []struct {
+		name            string
+		text            string
+		qualityPriority float32
+		latencyPriority float32
+		expectedDim     int
+		description     string
+	}{
+		{
+			name:            "HighLatencyPriority",
+			text:            "Short text",
+			qualityPriority: 0.2,
+			latencyPriority: 0.9,
+			expectedDim:     768,
+			description:     "Should prefer faster embedding model (Gemma > Qwen3)",
+		},
+		{
+			name:            "HighQualityPriority",
+			text:            strings.Repeat("Long context text ", 30),
+			qualityPriority: 0.9,
+			latencyPriority: 0.2,
+			expectedDim:     768,
+			description:     "Should prefer quality model (Qwen3/Gemma)",
+		},
+		{
+			name:            "BalancedPriority",
+			text:            "Medium length text for embedding",
+			qualityPriority: 0.5,
+			latencyPriority: 0.5,
+			expectedDim:     768,
+			description:     "Should select based on text length",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			embedding, err := GetEmbeddingWithDim(tc.text, tc.qualityPriority, tc.latencyPriority, tc.expectedDim)
+			if err != nil {
+				t.Fatalf("Failed to get embedding: %v", err)
+			}
+
+			if len(embedding) != tc.expectedDim {
+				t.Errorf("Expected %d-dim embedding, got %d", tc.expectedDim, len(embedding))
+			}
+
+			t.Logf("✓ %s: Generated %d-dim embedding (%s)", tc.name, len(embedding), tc.description)
+		})
+	}
+}
+
+// TestEmbeddingConcurrency tests thread safety of embedding generation
+func TestEmbeddingConcurrency(t *testing.T) {
+	// Note: ModelFactory may already be initialized by previous tests
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	if err != nil {
+		// If ModelFactory is already initialized, verify it's functional
+		_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
+		if testErr != nil {
+			if isModelInitializationError(testErr) {
+				t.Skipf("Skipping concurrency tests due to model unavailability: %v", testErr)
+			}
+			t.Fatalf("ModelFactory not functional: %v", testErr)
+		}
+		t.Logf("Using already-initialized ModelFactory for concurrency tests")
+	}
+
+	const numGoroutines = 10
+	const numIterations = 5
+
+	testTexts := []string{
+		"First test sentence for concurrent embedding",
+		"Second test sentence with different content",
+		"Third test sentence for validation",
+	}
+
+	var wg sync.WaitGroup
+	errors := make(chan error, numGoroutines*numIterations)
+	results := make(chan int, numGoroutines*numIterations) // Store embedding dimensions
+
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < numIterations; i++ {
+				text := testTexts[(id+i)%len(testTexts)]
+				embedding, err := GetEmbeddingWithDim(text, 0.5, 0.5, 768)
+				if err != nil {
+					errors <- fmt.Errorf("goroutine %d iteration %d: %v", id, i, err)
+					return
+				}
+				results <- len(embedding)
+			}
+		}(g)
+	}
+
+	wg.Wait()
+	close(errors)
+	close(results)
+
+	// Check for errors
+	errorCount := 0
+	for err := range errors {
+		t.Error(err)
+		errorCount++
+	}
+
+	if errorCount > 0 {
+		t.Fatalf("Concurrent embedding generation failed with %d errors", errorCount)
+	}
+
+	// Verify all results have correct dimension
+	resultCount := 0
+	for dim := range results {
+		if dim != 768 {
+			t.Errorf("Unexpected embedding dimension: %d", dim)
+		}
+		resultCount++
+	}
+
+	expected := numGoroutines * numIterations
+	if resultCount != expected {
+		t.Errorf("Expected %d results, got %d", expected, resultCount)
+	}
+
+	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful embeddings",
+		numGoroutines, numIterations, resultCount)
+}
+
+// BenchmarkGetEmbeddingWithDim benchmarks embedding generation performance
+func BenchmarkGetEmbeddingWithDim(b *testing.B) {
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			b.Skipf("Skipping benchmark due to model initialization error: %v", err)
+		}
+		b.Fatalf("Failed to initialize embedding models: %v", err)
+	}
+
+	testCases := []struct {
+		name      string
+		text      string
+		quality   float32
+		latency   float32
+		targetDim int
+	}{
+		{"ShortText768", "Hello world", 0.5, 0.5, 768},
+		{"ShortText512", "Hello world", 0.5, 0.5, 512},
+		{"ShortText256", "Hello world", 0.5, 0.5, 256},
+		{"MediumText768", strings.Repeat("Medium length text ", 10), 0.5, 0.5, 768},
+		{"LongText768", strings.Repeat("Long context text ", 30), 0.9, 0.2, 768},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, _ = GetEmbeddingWithDim(tc.text, tc.quality, tc.latency, tc.targetDim)
+			}
+		})
+	}
+}

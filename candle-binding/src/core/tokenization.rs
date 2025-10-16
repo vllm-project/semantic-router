@@ -20,15 +20,21 @@ pub enum TokenizationMode {
     LoRA,
 }
 
-/// Model type for tokenization strategy selection
+/// Tokenization strategy enumeration
+///
+/// Renamed from ModelType to avoid confusion with the main ModelType enum.
+/// This enum determines the tokenization strategy (padding, token type, etc.)
+/// independent of the actual model architecture.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ModelType {
-    /// Traditional BERT models
+pub enum TokenizationStrategy {
+    /// Traditional BERT models (I32 tokens, standard padding)
     BERT,
-    /// ModernBERT models
+    /// ModernBERT models (U32 tokens, optimized padding)
     ModernBERT,
-    /// LoRA-enabled models
+    /// LoRA-enabled models (I32 tokens, LoRA-specific handling)
     LoRA,
+    /// Long-context embedding models (varies by model)
+    LongContextEmbedding,
 }
 
 /// Data type for token IDs
@@ -55,8 +61,8 @@ pub struct TokenizationConfig {
     pub pad_token_id: u32,
     /// Padding token string
     pub pad_token: String,
-    /// Model type for strategy selection
-    pub model_type: ModelType,
+    /// Tokenization strategy for this model
+    pub tokenization_strategy: TokenizationStrategy,
     /// Expected token data type
     pub token_data_type: TokenDataType,
 }
@@ -70,7 +76,7 @@ impl Default for TokenizationConfig {
             truncation_direction: TruncationDirection::Right,
             pad_token_id: 0,
             pad_token: "[PAD]".to_string(),
-            model_type: ModelType::BERT,
+            tokenization_strategy: TokenizationStrategy::BERT,
             token_data_type: TokenDataType::I32,
         }
     }
@@ -175,18 +181,22 @@ impl UnifiedTokenizer {
     ///
     /// ## Arguments
     /// * `tokenizer_path` - Path to tokenizer.json file
-    /// * `model_type` - Model type for configuration
+    /// * `tokenization_strategy` - Tokenization strategy for this model
     /// * `device` - Computing device
     ///
     /// ## Returns
     /// * `Result<Self>` - Initialized unified tokenizer
-    pub fn from_file(tokenizer_path: &str, model_type: ModelType, device: Device) -> Result<Self> {
+    pub fn from_file(
+        tokenizer_path: &str,
+        tokenization_strategy: TokenizationStrategy,
+        device: Device,
+    ) -> Result<Self> {
         let tokenizer = Tokenizer::from_file(tokenizer_path).map_err(E::msg)?;
 
         let config = TokenizationConfig {
-            model_type,
-            token_data_type: match model_type {
-                ModelType::ModernBERT => TokenDataType::U32,
+            tokenization_strategy,
+            token_data_type: match tokenization_strategy {
+                TokenizationStrategy::ModernBERT => TokenDataType::U32,
                 _ => TokenDataType::I32,
             },
             ..Default::default()
@@ -322,9 +332,9 @@ impl UnifiedTokenizer {
 
 impl DualPathTokenizer for UnifiedTokenizer {
     fn tokenize(&self, text: &str) -> Result<TokenizationResult> {
-        let mode = match self.config.model_type {
-            ModelType::ModernBERT => TokenizationMode::ModernBertBatch,
-            ModelType::LoRA => TokenizationMode::LoRA,
+        let mode = match self.config.tokenization_strategy {
+            TokenizationStrategy::ModernBERT => TokenizationMode::ModernBertBatch,
+            TokenizationStrategy::LoRA => TokenizationMode::LoRA,
             _ => TokenizationMode::Single,
         };
 
@@ -349,8 +359,8 @@ impl DualPathTokenizer for UnifiedTokenizer {
     }
 
     fn tokenize_batch(&self, texts: &[&str]) -> Result<BatchTokenizationResult> {
-        let mode = match self.config.model_type {
-            ModelType::ModernBERT => TokenizationMode::ModernBertBatch,
+        let mode = match self.config.tokenization_strategy {
+            TokenizationStrategy::ModernBERT => TokenizationMode::ModernBertBatch,
             _ => TokenizationMode::Batch,
         };
 
@@ -385,7 +395,7 @@ impl DualPathTokenizer for UnifiedTokenizer {
         texts: &[&str],
         prefer_lora: bool,
     ) -> Result<BatchTokenizationResult> {
-        if prefer_lora && self.config.model_type == ModelType::LoRA {
+        if prefer_lora && self.config.tokenization_strategy == TokenizationStrategy::LoRA {
             // Use LoRA-optimized batch processing
             let tokenizer = self.configure_for_mode(TokenizationMode::LoRA)?;
             let encodings = tokenizer
@@ -404,7 +414,10 @@ impl DualPathTokenizer for UnifiedTokenizer {
 
     fn supports_parallel(&self) -> bool {
         // LoRA models support parallel tokenization
-        matches!(self.config.model_type, ModelType::LoRA)
+        matches!(
+            self.config.tokenization_strategy,
+            TokenizationStrategy::LoRA
+        )
     }
 
     fn create_tensors(&self, result: &TokenizationResult) -> Result<(Tensor, Tensor)> {
@@ -416,36 +429,36 @@ impl DualPathTokenizer for UnifiedTokenizer {
     }
 }
 
-/// Create tokenizer for specific model type
+/// Create tokenizer for specific tokenization strategy
 ///
 /// ## Arguments
 /// * `tokenizer_path` - Path to tokenizer.json file
-/// * `model_type` - Model type (BERT, ModernBERT, LoRA)
+/// * `tokenization_strategy` - Tokenization strategy (BERT, ModernBERT, LoRA, etc.)
 /// * `device` - Computing device
 ///
 /// ## Returns
 /// * `Result<Box<dyn DualPathTokenizer>>` - Boxed tokenizer implementing dual-path interface
 pub fn create_tokenizer(
     tokenizer_path: &str,
-    model_type: ModelType,
+    tokenization_strategy: TokenizationStrategy,
     device: Device,
 ) -> Result<Box<dyn DualPathTokenizer>> {
-    let tokenizer = UnifiedTokenizer::from_file(tokenizer_path, model_type, device)?;
+    let tokenizer = UnifiedTokenizer::from_file(tokenizer_path, tokenization_strategy, device)?;
     Ok(Box::new(tokenizer))
 }
 
-/// Utility function to detect model type from tokenizer configuration
-pub fn detect_model_type(tokenizer_path: &str) -> Result<ModelType> {
+/// Utility function to detect tokenization strategy from tokenizer configuration
+pub fn detect_tokenization_strategy(tokenizer_path: &str) -> Result<TokenizationStrategy> {
     let tokenizer = Tokenizer::from_file(tokenizer_path).map_err(E::msg)?;
 
-    // Try to detect model type from tokenizer properties
-    // This is a heuristic approach - in practice, you'd pass model type explicitly
+    // Try to detect tokenization strategy from tokenizer properties
+    // This is a heuristic approach - in practice, you'd pass strategy explicitly
     let vocab_size = tokenizer.get_vocab_size(false);
 
     if vocab_size > 50000 {
-        Ok(ModelType::ModernBERT)
+        Ok(TokenizationStrategy::ModernBERT)
     } else {
-        Ok(ModelType::BERT)
+        Ok(TokenizationStrategy::BERT)
     }
 }
 
@@ -529,7 +542,7 @@ pub fn create_bert_compatibility_tokenizer(
     device: Device,
 ) -> Result<Box<dyn DualPathTokenizer>> {
     let config = TokenizationConfig {
-        model_type: ModelType::BERT,
+        tokenization_strategy: TokenizationStrategy::BERT,
         token_data_type: TokenDataType::I32,
         ..Default::default()
     };
@@ -544,7 +557,7 @@ pub fn create_modernbert_compatibility_tokenizer(
     device: Device,
 ) -> Result<Box<dyn DualPathTokenizer>> {
     let config = TokenizationConfig {
-        model_type: ModelType::ModernBERT,
+        tokenization_strategy: TokenizationStrategy::ModernBERT,
         token_data_type: TokenDataType::U32,
         ..Default::default()
     };
@@ -559,7 +572,7 @@ pub fn create_lora_compatibility_tokenizer(
     device: Device,
 ) -> Result<Box<dyn DualPathTokenizer>> {
     let config = TokenizationConfig {
-        model_type: ModelType::LoRA,
+        tokenization_strategy: TokenizationStrategy::LoRA,
         token_data_type: TokenDataType::U32, // LoRA typically uses u32
         ..Default::default()
     };
