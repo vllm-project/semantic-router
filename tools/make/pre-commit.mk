@@ -23,6 +23,15 @@ precommit-check: ## Run pre-commit checks on all relevant files
 		echo "No Go, Rust, JavaScript, Markdown, Yaml, or Python files found to check"; \
 	fi
 
+# Run pre-commit hooks in a Docker container,
+# and you can exec container to run bash for debug.
+# export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
+# docker run --rm -it \
+#     -v $(pwd):/app \
+#     -w /app \
+#     --name precommit-container ${PRECOMMIT_CONTAINER} \
+#     bash
+# and then, run `pre-commit install && pre-commit run --all-files` command
 precommit-local: ## Run pre-commit hooks in a Docker/Podman container
 	@if command -v docker > /dev/null 2>&1; then \
 		CONTAINER_CMD=docker; \
