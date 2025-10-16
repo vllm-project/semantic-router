@@ -46,26 +46,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
     <div className={styles.container}>
       <aside className={`${styles.sidebar} ${sidebarCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.brandContainer}>
-          <button
-            className={styles.collapseButton}
-            onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {sidebarCollapsed ? (
-              // 折叠状态：箭头向右
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14 10L18 10M18 10L16 8M18 10L16 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 5H10M2 10H10M2 15H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            ) : (
-              // 展开状态：箭头向左
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 10L2 10M2 10L4 8M2 10L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M10 5H18M10 10H18M10 15H18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            )}
-          </button>
           <NavLink to="/" className={styles.brand}>
             <img src="/vllm.png" alt="vLLM" className={styles.logo} />
             {!sidebarCollapsed && <span className={styles.brandText}>Semantic Router</span>}
@@ -144,20 +124,47 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         </nav>
         <div className={styles.sidebarFooter}>
           <button
-            className={styles.themeToggle}
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            title="Toggle theme"
+            className={styles.collapseButton}
+            onClick={toggleSidebar}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {theme === 'light' ? '🌙' : '☀️'}
+            {sidebarCollapsed ? (
+              // Collapsed state: arrow pointing right
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14 10L18 10M18 10L16 8M18 10L16 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 5H10M2 10H10M2 15H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              // Expanded state: arrow pointing left
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 10L2 10M2 10L4 8M2 10L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 5H18M10 10H18M10 15H18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            )}
           </button>
-          {!sidebarCollapsed && (
-            <>
+        </div>
+      </aside>
+      <main className={styles.main}>
+        <header className={styles.header}>
+          <div className={styles.headerContent}>
+            <div className={styles.headerLeft}>
+              <span className={styles.headerBrand}>Semantic Router</span>
+            </div>
+            <div className={styles.headerRight}>
+              <button
+                className={styles.headerIconButton}
+                onClick={toggleTheme}
+                aria-label="Toggle theme"
+                title="Toggle theme"
+              >
+                {theme === 'light' ? '🌙' : '☀️'}
+              </button>
               <a
                 href="https://github.com/vllm-project/semantic-router"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={styles.iconButton}
+                className={styles.headerIconButton}
                 aria-label="GitHub"
                 title="GitHub Repository"
               >
@@ -169,7 +176,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 href="https://vllm-semantic-router.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className={styles.iconButton}
+                className={styles.headerIconButton}
                 aria-label="Documentation"
                 title="Documentation"
               >
@@ -177,31 +184,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                 </svg>
-              </a>
-            </>
-          )}
-        </div>
-      </aside>
-      <main className={styles.main}>
-        <header className={styles.header}>
-          <div className={styles.headerContent}>
-            <div className={styles.headerLeft}></div>
-            <div className={styles.headerRight}>
-              <a
-                href="https://vllm-semantic-router.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.headerLink}
-              >
-                Docs
-              </a>
-              <a
-                href="https://github.com/vllm-project/semantic-router"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.headerLink}
-              >
-                GitHub
               </a>
             </div>
           </div>

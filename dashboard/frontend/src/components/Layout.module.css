@@ -25,39 +25,11 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0 0.25rem;
-  flex-direction: column;
+  justify-content: center;
 }
 
 .sidebarCollapsed .brandContainer {
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.collapseButton {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 6px;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  transition: all var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.collapseButton:hover {
-  background-color: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-
-.collapseButton svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
 }
 
 .brand {
@@ -228,39 +200,34 @@
   padding: 0 0.5rem;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
 }
 
-.themeToggle {
-  padding: 0.5rem;
-  font-size: 1.25rem;
-  border-radius: var(--radius-md);
-  transition: background-color var(--transition-fast);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text);
-}
-
-.themeToggle:hover {
-  background-color: var(--color-bg-tertiary);
-}
-
-.iconButton {
+.collapseButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  background: transparent;
+  border: none;
   border-radius: var(--radius-md);
-  transition: background-color var(--transition-fast);
-  color: var(--color-text-secondary);
-  text-decoration: none;
   cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
 }
 
-.iconButton:hover {
+.collapseButton:hover {
   background-color: var(--color-bg-tertiary);
   color: var(--color-text);
+}
+
+.collapseButton svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .main {
@@ -292,22 +259,35 @@
   flex: 1;
 }
 
+.headerBrand {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
-.headerLink {
+.headerIconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  font-size: 1.25rem;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  background: transparent;
+  border: none;
+  cursor: pointer;
   color: var(--color-text-secondary);
   text-decoration: none;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  transition: color var(--transition-fast);
-  white-space: nowrap;
 }
 
-.headerLink:hover {
+.headerIconButton:hover {
+  background-color: var(--color-bg-tertiary);
   color: var(--color-text);
 }
 
