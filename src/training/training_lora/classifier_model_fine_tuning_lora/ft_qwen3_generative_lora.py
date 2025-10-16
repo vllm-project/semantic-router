@@ -294,7 +294,7 @@ def format_instruction(question: str, category: str = None) -> List[Dict[str, st
 
 
 def create_generative_dataset(
-    texts: List[str], labels: List[str], tokenizer, max_length=512
+    texts: List[str], labels: List[str], tokenizer, max_length=512, enable_thinking: bool = True
 ):
     """
     Create dataset in chat format for proper instruction fine-tuning.
@@ -305,6 +305,13 @@ def create_generative_dataset(
     - Model trains ONLY on the category name (1-2 tokens), not the instruction (200+ tokens)
     - Training is 100x more focused: 100% signal vs 0.4% signal in old format!
     - Inference format matches training format exactly
+
+    Args:
+        texts: List of question texts
+        labels: List of category labels
+        tokenizer: Tokenizer instance
+        max_length: Maximum sequence length (default: 512)
+        enable_thinking: Enable Qwen3's thinking mode during training (default: True)
     """
     formatted_examples = []
 
@@ -314,9 +321,8 @@ def create_generative_dataset(
 
         # Apply chat template to add special tokens
         # add_generation_prompt=False because we already have the assistant response
-        # Disable thinking mode to train model for direct classification
         formatted_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
+            messages, tokenize=False, add_generation_prompt=False, enable_thinking=enable_thinking
         )
         formatted_examples.append(formatted_text)
 
@@ -401,14 +407,17 @@ def main(
     output_dir: str = None,
     gpu_id: Optional[int] = None,
     early_stopping_patience: int = 3,  # NEW: Stop training if validation loss doesn't improve
+    enable_thinking: bool = True,  # Enable Qwen3's thinking mode during training (default: True)
 ):
     """Main training function for generative Qwen3 classification.
 
     Args:
         max_samples_per_category: Maximum samples per category (default: 150).
                                  With 14 categories, this gives ~2100 total samples.
+        enable_thinking: Enable Qwen3's thinking mode during training (default: True).
     """
     logger.info("Starting Qwen3 Generative Classification Fine-tuning")
+    logger.info(f"Enable thinking mode: {enable_thinking}")
     logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
 
     # GPU selection using utility function
@@ -478,8 +487,8 @@ def main(
 
     # Prepare datasets in generative format
     logger.info("Formatting dataset for instruction-following...")
-    train_dataset = create_generative_dataset(train_texts, train_labels, tokenizer)
-    val_dataset = create_generative_dataset(val_texts, val_labels, tokenizer)
+    train_dataset = create_generative_dataset(train_texts, train_labels, tokenizer, enable_thinking=enable_thinking)
+    val_dataset = create_generative_dataset(val_texts, val_labels, tokenizer, enable_thinking=enable_thinking)
 
     logger.info(f"Example training input:")
     logger.info(tokenizer.decode(train_dataset[0]["input_ids"][:100]))
@@ -1189,6 +1198,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             gpu_id=args.gpu_id,
             early_stopping_patience=args.early_stopping_patience,
+            enable_thinking=args.enable_thinking,
         )
     elif args.mode == "validate":
         validate_model(
