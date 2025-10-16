@@ -341,11 +341,25 @@ func main() {
 		log.Printf("Warning: Grafana URL not configured")
 	}
 
-	// Smart /api/ router: route to Router API or Grafana API based on path
+	// Jaeger API proxy (needs to be set up early for the smart router below)
+	var jaegerAPIProxy *httputil.ReverseProxy
+	if *jaegerURL != "" {
+		// Create proxy for Jaeger API (no prefix stripping for /api/*)
+		jaegerAPIProxy, _ = newReverseProxy(*jaegerURL, "", false)
+	}
+
+	// Smart /api/ router: route to Router API, Jaeger API, or Grafana API based on path
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		// If path starts with /api/router/, use Router API proxy
 		if strings.HasPrefix(r.URL.Path, "/api/router/") && routerAPIProxy != nil {
 			routerAPIProxy.ServeHTTP(w, r)
+			return
+		}
+		// If path is Jaeger API (services, traces, operations, etc.), use Jaeger proxy
+		if jaegerAPIProxy != nil && (strings.HasPrefix(r.URL.Path, "/api/services") ||
+			strings.HasPrefix(r.URL.Path, "/api/traces") ||
+			strings.HasPrefix(r.URL.Path, "/api/operations")) {
+			jaegerAPIProxy.ServeHTTP(w, r)
 			return
 		}
 		// Otherwise, if Grafana is configured, proxy to Grafana API
@@ -424,24 +438,6 @@ func main() {
 			w.Write([]byte(`{"error":"Open WebUI not configured","message":"TARGET_OPENWEBUI_URL environment variable is not set or empty"}`))
 		})
 		log.Printf("Info: Open WebUI not configured (optional)")
-	}
-
-	// Jaeger proxy (optional)
-	if *jaegerURL != "" {
-		jp, err := newReverseProxy(*jaegerURL, "/embedded/jaeger", false)
-		if err != nil {
-			log.Fatalf("jaeger proxy error: %v", err)
-		}
-		mux.Handle("/embedded/jaeger", jp)
-		mux.Handle("/embedded/jaeger/", jp)
-		log.Printf("Jaeger proxy configured: %s", *jaegerURL)
-	} else {
-		mux.HandleFunc("/embedded/jaeger/", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"error":"Jaeger not configured","message":"TARGET_JAEGER_URL environment variable is not set"}`))
-		})
-		log.Printf("Info: Jaeger URL not configured (optional)")
 	}
 
 	addr := ":" + *port

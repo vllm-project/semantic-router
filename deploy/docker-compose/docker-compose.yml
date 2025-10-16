@@ -2,7 +2,7 @@ services:
 
   # Semantic Router External Processor Service
   semantic-router:
-    image: semantic-router-extproc:dev
+    image: ghcr.io/vllm-project/semantic-router/extproc:latest
     container_name: semantic-router
     ports:
       - "50051:50051"
@@ -76,7 +76,7 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "4317:4317"   # OTLP gRPC
+      - "4318:4317"   # OTLP gRPC (mapped to 4318 on host to avoid conflicts)
       - "16686:16686" # Web UI
     networks:
       - semantic-network
