@@ -64,6 +64,7 @@ jobs:
           key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
           restore-keys: |
             ${{ runner.os }}-models-v1-
+        continue-on-error: true # Don't fail the job if caching fails
 
       - name: Check go mod tidy
         run: make check-go-mod-tidy
