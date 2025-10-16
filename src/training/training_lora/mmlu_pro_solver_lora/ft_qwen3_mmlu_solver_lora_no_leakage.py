@@ -967,9 +967,10 @@ def evaluate_model_on_mmlu_pro(
     max_samples: int = None,
     phase_name: str = "MMLU-Pro Evaluation",
     max_new_tokens: int = 256,
+    batch_size: int = 8,
 ) -> Dict:
     """
-    Evaluate model on MMLU-Pro test samples.
+    Evaluate model on MMLU-Pro test samples with batched inference.
 
     Args:
         model: The model to evaluate
@@ -979,6 +980,7 @@ def evaluate_model_on_mmlu_pro(
         max_samples: Maximum number of samples to evaluate
         phase_name: Name of evaluation phase
         max_new_tokens: Maximum number of tokens to generate per answer
+        batch_size: Batch size for inference
 
     Returns:
         Dictionary with accuracy metrics
@@ -995,33 +997,59 @@ def evaluate_model_on_mmlu_pro(
 
     logger.info(f"\n{'=' * 80}")
     logger.info(f"{phase_name}: Testing on {len(test_samples)} MMLU-Pro samples")
+    logger.info(f"Batch size: {batch_size}")
     logger.info(f"{'=' * 80}")
 
-    for i, sample in enumerate(test_samples):
-        question = sample["question"]
-        options = sample["options"]
-        true_answer_key = sample[
-            "answer"
-        ]  # This is letter format like "A" for MMLU-Pro
-        category = sample["category"]
-
-        # Convert true answer from letter to text for consistent comparison
-        true_answer_text = convert_answer_to_text(true_answer_key, options)
-
-        # Format prompt using chat template
-        messages = format_instruction(question, options, answer=None, use_cot=use_cot)
-
-        # Apply chat template with generation prompt
-        # This adds <|im_start|>assistant\n at the end to prompt the model to respond
-        # enable_thinking=False for direct answer generation without reasoning tokens
-        prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
-        )
-
+    # Process in batches
+    num_batches = (len(test_samples) + batch_size - 1) // batch_size
+    
+    import time
+    for batch_idx in range(num_batches):
+        batch_start = batch_idx * batch_size
+        batch_end = min(batch_start + batch_size, len(test_samples))
+        batch_samples = test_samples[batch_start:batch_end]
+        
+        batch_start_time = time.time()
+        logger.info(f"⚙️  Processing batch {batch_idx + 1}/{num_batches} (samples {batch_start + 1}-{batch_end})...")
+        
+        # Prepare batch data
+        batch_prompts = []
+        batch_true_answers = []
+        batch_categories = []
+        batch_options = []
+        batch_questions = []
+        
+        for sample in batch_samples:
+            question = sample["question"]
+            options = sample["options"]
+            true_answer_key = sample["answer"]
+            category = sample["category"]
+            
+            # Convert true answer from letter to text
+            true_answer_text = convert_answer_to_text(true_answer_key, options)
+            
+            # Format prompt using chat template
+            messages = format_instruction(question, options, answer=None, use_cot=use_cot)
+            prompt = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+            )
+            
+            batch_prompts.append(prompt)
+            batch_true_answers.append(true_answer_text)
+            batch_categories.append(category)
+            batch_options.append(options)
+            batch_questions.append(question)
+        
+        # Tokenize batch with padding
         inputs = tokenizer(
-            prompt, return_tensors="pt", max_length=1024, truncation=True
+            batch_prompts, 
+            return_tensors="pt", 
+            padding=True,
+            max_length=1024, 
+            truncation=True
         ).to(model.device)
-
+        
+        # Generate for batch
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -1034,69 +1062,78 @@ def evaluate_model_on_mmlu_pro(
                     tokenizer.convert_tokens_to_ids("<|im_end|>"),
                 ],
             )
-
-        # Decode only the generated part (skip the input prompt)
-        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
-        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        predicted_answer_text = extract_answer_text(generated_text, options, question)
-
-        # Compare answer texts (case-insensitive, stripped)
-        is_correct = (
-            predicted_answer_text.lower().strip() == true_answer_text.lower().strip()
-        )
-        if is_correct:
-            correct += 1
-        total += 1
-
-        # Track per-category stats
-        if category not in category_stats:
-            category_stats[category] = {"correct": 0, "total": 0}
-        category_stats[category]["total"] += 1
-        if is_correct:
-            category_stats[category]["correct"] += 1
-
-        predictions.append(
-            {
-                "question": question[:100],
-                "true_answer": true_answer_text,  # Store as text
-                "predicted_answer": predicted_answer_text,  # Store as text
-                "correct": is_correct,
-                "category": category,
-            }
-        )
-
-        # Log first 5 examples
-        if i < 5:
-            logger.info(f"\n[{i+1}/{len(test_samples)}] Category: {category}")
-            logger.info(f"Question: {question[:100]}...")
-            logger.info(f"True Answer: {true_answer_text}")
-            logger.info(f"Predicted: {predicted_answer_text}")
-            logger.info(f"{'✓ CORRECT' if is_correct else '✗ WRONG'}")
-
-        # Progress updates
-        if (i + 1) % 10 == 0:
-            current_acc = (correct / total * 100) if total > 0 else 0
-            logger.info(
-                f"Progress: {i+1}/{len(test_samples)} - Accuracy: {current_acc:.1f}%"
+        
+        # Process each result in the batch
+        for i, (output, input_len) in enumerate(zip(outputs, inputs["input_ids"])):
+            # Decode only the generated part (skip the input prompt)
+            generated_ids = output[len(input_len):]
+            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+            predicted_answer_text = extract_answer_text(
+                generated_text, batch_options[i], batch_questions[i]
             )
+            
+            # Compare answer texts
+            is_correct = (
+                predicted_answer_text.lower().strip() == batch_true_answers[i].lower().strip()
+            )
+            if is_correct:
+                correct += 1
+            total += 1
+            
+            # Track per-category stats
+            category = batch_categories[i]
+            if category not in category_stats:
+                category_stats[category] = {"correct": 0, "total": 0}
+            category_stats[category]["total"] += 1
+            if is_correct:
+                category_stats[category]["correct"] += 1
+            
+            predictions.append(
+                {
+                    "question": batch_questions[i][:100],
+                    "true_answer": batch_true_answers[i],
+                    "predicted_answer": predicted_answer_text,
+                    "correct": is_correct,
+                    "category": category,
+                }
+            )
+            
+            # Log first 5 examples
+            sample_idx = batch_start + i
+            if sample_idx < 5:
+                logger.info(f"\n[{sample_idx+1}/{len(test_samples)}] Category: {category}")
+                logger.info(f"Question: {batch_questions[i][:100]}...")
+                logger.info(f"True Answer: {batch_true_answers[i]}")
+                logger.info(f"Predicted: {predicted_answer_text}")
+                logger.info(f"{'✓ CORRECT' if is_correct else '✗ WRONG'}")
+        
+        # Batch completion with timing
+        batch_time = time.time() - batch_start_time
+        current_acc = (correct / total * 100) if total > 0 else 0
+        logger.info(
+            f"✓ Batch {batch_idx + 1}/{num_batches} completed in {batch_time:.1f}s | "
+            f"Progress: {batch_end}/{len(test_samples)} ({batch_end / len(test_samples) * 100:.0f}%) | "
+            f"Accuracy: {current_acc:.1f}%"
+        )
 
-    accuracy = (correct / total * 100) if total > 0 else 0
+    accuracy = (correct / total) if total > 0 else 0  # Return as fraction, not percentage
 
     # Print summary
     logger.info(f"\n{'=' * 80}")
     logger.info(f"{phase_name} Results:")
     logger.info(f"{'=' * 80}")
-    logger.info(f"Overall Accuracy: {correct}/{total} = {accuracy:.2f}%")
+    logger.info(f"Overall Accuracy: {correct}/{total} = {accuracy:.2%}")
     logger.info(f"\nPer-Category Accuracy:")
     for cat in sorted(category_stats.keys()):
-        cat_acc = category_stats[cat]["correct"] / category_stats[cat]["total"] * 100
+        cat_acc = category_stats[cat]["correct"] / category_stats[cat]["total"]
         logger.info(
-            f"  {cat}: {category_stats[cat]['correct']}/{category_stats[cat]['total']} = {cat_acc:.2f}%"
+            f"  {cat}: {category_stats[cat]['correct']}/{category_stats[cat]['total']} = {cat_acc:.2%}"
         )
     logger.info(f"{'=' * 80}\n")
 
     return {
-        "overall_accuracy": accuracy,
+        "accuracy": accuracy,
+        "overall_accuracy": accuracy,  # Keep for backwards compatibility
         "correct": correct,
         "total": total,
         "category_stats": category_stats,
@@ -1491,6 +1528,7 @@ def main(
         max_samples=50,
         phase_name="BASELINE (Untrained)",
         max_new_tokens=max_new_tokens,
+        batch_size=8,
     )
     
     # Clean up baseline model to free memory
@@ -1517,6 +1555,7 @@ def main(
         max_samples=50,
         phase_name="POST-TRAINING (Trained on External Data)",
         max_new_tokens=max_new_tokens,
+        batch_size=8,
     )
 
     # COMPARISON
@@ -1621,6 +1660,12 @@ if __name__ == "__main__":
     parser.add_argument("--use-cot", action="store_true", default=True)
     parser.add_argument("--no-cot", action="store_false", dest="use_cot")
     parser.add_argument(
+        "--max-tokens-test",
+        type=int,
+        default=None,
+        help="Override max_new_tokens for BASELINE evaluation only (trained model always uses full tokens from config). Use 256-512 for faster baseline testing.",
+    )
+    parser.add_argument(
         "--clear-cache",
         action="store_true",
         default=False,
@@ -1637,6 +1682,33 @@ if __name__ == "__main__":
             shutil.rmtree(CACHE_DIR)
             CACHE_DIR.mkdir(exist_ok=True)
             logger.info("✅ Cache cleared")
+
+    # Helper functions for test mode
+    def load_tokenizer(model_name: str):
+        """Load tokenizer from HuggingFace."""
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        # Use left-padding for batched inference with decoder-only models
+        tokenizer.padding_side = 'left'
+        return tokenizer
+    
+    def load_base_model(model_name: str, device_str: str):
+        """Load base model and move to device."""
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+        )
+        model = model.to(device_str)
+        return model
+    
+    def load_lora_model(base_model, lora_path: str, device_str: str):
+        """Load LoRA adapter on top of base model."""
+        model = PeftModel.from_pretrained(base_model, lora_path)
+        model = model.to(device_str)
+        return model
 
     if args.mode == "train":
         main(
@@ -1655,5 +1727,139 @@ if __name__ == "__main__":
             use_cot=args.use_cot,
         )
     elif args.mode == "test":
-        # TODO: Implement standalone test mode
-        logger.info("Test mode not yet implemented for this script")
+        # Test mode: Evaluate trained model on MMLU-Pro
+        logger.info("=" * 80)
+        logger.info("TEST MODE: Evaluating trained model on MMLU-Pro")
+        logger.info("=" * 80)
+        
+        # Get model configuration
+        if args.model_type not in TRAINING_DATASETS:
+            raise ValueError(f"Unknown model type: {args.model_type}")
+        
+        config = TRAINING_DATASETS[args.model_type]
+        target_categories = config["target_mmlu_categories"]
+        max_new_tokens_full = config.get("max_new_tokens", 256)  # Full tokens for trained model
+        
+        # For baseline, use override if specified (for faster testing)
+        max_new_tokens_baseline = args.max_tokens_test if args.max_tokens_test is not None else max_new_tokens_full
+        
+        if args.max_tokens_test is not None:
+            logger.info(f"⚡ Using {args.max_tokens_test} tokens for baseline, {max_new_tokens_full} tokens for trained model")
+        
+        logger.info(f"Model type: {args.model_type}")
+        logger.info(f"Target categories: {target_categories}")
+        logger.info(f"Baseline max tokens: {max_new_tokens_baseline}")
+        logger.info(f"Trained model max tokens: {max_new_tokens_full}")
+        
+        # Set GPU device
+        if args.gpu_id is not None:
+            device_str, selected_gpu = set_gpu_device(
+                gpu_id=args.gpu_id, auto_select=False
+            )
+            logger.info(f"Using device: {device_str} (GPU {selected_gpu})")
+        else:
+            device_str = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Using device: {device_str}")
+        
+        clear_gpu_memory()
+        
+        # Load MMLU-Pro test data
+        logger.info("\n" + "🎯" * 40)
+        logger.info("LOADING MMLU-PRO TEST DATA")
+        logger.info("🎯" * 40)
+        test_samples = load_mmlu_pro_test_data(
+            target_categories=target_categories,
+            max_samples=30,  # 30 samples per category for faster testing
+        )
+        logger.info(f"Loaded {len(test_samples)} MMLU-Pro test samples")
+        
+        # Determine model path
+        if args.output_dir:
+            model_path = args.output_dir
+        else:
+            # Use default path
+            model_path = f"qwen3_mmlu_{args.model_type}_no_leakage_r{args.lora_rank}"
+        
+        logger.info(f"\nModel path: {model_path}")
+        
+        # Check if model exists
+        if not os.path.exists(model_path):
+            logger.error(f"❌ Model not found at: {model_path}")
+            logger.error("Please train the model first using --mode train")
+            sys.exit(1)
+        
+        # Load tokenizer
+        logger.info("\nLoading tokenizer...")
+        tokenizer = load_tokenizer(args.model)
+        
+        # Evaluate baseline model
+        logger.info("\n" + "📊" * 40)
+        logger.info("STEP 1/2: BASELINE EVALUATION (Untrained Model)")
+        logger.info("📊" * 40)
+        
+        logger.info(f"Loading base model: {args.model}")
+        base_model = load_base_model(args.model, device_str)
+        
+        baseline_results = evaluate_model_on_mmlu_pro(
+            model=base_model,
+            tokenizer=tokenizer,
+            test_samples=test_samples,
+            use_cot=args.use_cot,
+            phase_name="Baseline (Untrained)",
+            max_new_tokens=max_new_tokens_baseline,  # Can use shorter tokens for baseline
+            batch_size=8,
+        )
+        
+        logger.info(f"✓ Baseline accuracy: {baseline_results['accuracy']:.1%}")
+        
+        # Free baseline model memory
+        del base_model
+        clear_gpu_memory()
+        
+        # Evaluate trained model
+        logger.info("\n" + "📊" * 40)
+        logger.info("STEP 2/2: TRAINED MODEL EVALUATION")
+        logger.info("📊" * 40)
+        
+        logger.info(f"Loading trained model from: {model_path}")
+        base_model = load_base_model(args.model, device_str)
+        trained_model = load_lora_model(
+            base_model=base_model,
+            lora_path=model_path,
+            device_str=device_str,
+        )
+        
+        trained_results = evaluate_model_on_mmlu_pro(
+            model=trained_model,
+            tokenizer=tokenizer,
+            test_samples=test_samples,
+            use_cot=args.use_cot,
+            phase_name="Trained Model",
+            max_new_tokens=max_new_tokens_full,  # Use full tokens for trained model (needs CoT space)
+            batch_size=8,
+        )
+        
+        logger.info(f"✓ Trained accuracy: {trained_results['accuracy']:.1%}")
+        
+        # Report comparison
+        logger.info("\n" + "=" * 80)
+        logger.info("📊 EVALUATION RESULTS COMPARISON")
+        logger.info("=" * 80)
+        logger.info(f"Baseline (Untrained): {baseline_results['accuracy']:.1%}")
+        logger.info(f"Trained Model:        {trained_results['accuracy']:.1%}")
+        logger.info(f"Improvement:          {(trained_results['accuracy'] - baseline_results['accuracy']):+.1%}")
+        logger.info("=" * 80)
+        
+        # Save results
+        comparison = {
+            "model_type": args.model_type,
+            "model_path": model_path,
+            "baseline": baseline_results,
+            "trained": trained_results,
+            "improvement": trained_results['accuracy'] - baseline_results['accuracy'],
+        }
+        
+        results_file = os.path.join(model_path, "evaluation_results.json")
+        with open(results_file, "w") as f:
+            json.dump(comparison, f, indent=2)
+        logger.info(f"\n✓ Results saved to: {results_file}")
