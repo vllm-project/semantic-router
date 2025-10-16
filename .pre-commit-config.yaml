@@ -79,22 +79,15 @@ repos:
         pass_filenames: false
 
   # Python specific hooks
-  # isort must run before black
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: ["--profile", "black", "--line-length", "88"]
-        files: \.py$
-        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)
-
+  # Using only Black for Python formatting (simpler, no conflicts)
   - repo: https://github.com/psf/black
     rev: 25.1.0
     hooks:
       - id: black
         language_version: python3
         files: \.py$
-        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)
+        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)
+        
 # Commented out flake8 - only reports issues, doesn't auto-fix
 # -   repo: https://github.com/PyCQA/flake8
 #     rev: 7.3.0
