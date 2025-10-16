@@ -154,6 +154,7 @@ router:
   # Baseline scores for path evaluation
   lora_baseline_score: 0.8
   traditional_baseline_score: 0.7
+  embedding_baseline_score: 0.75
   # Success rate calculation threshold
   success_confidence_threshold: 0.8
   # Large batch size threshold for parallel processing
@@ -227,6 +228,15 @@ api:
       duration_buckets:
         [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
       size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+# Embedding Models Configuration
+# These models provide intelligent embedding generation with automatic routing:
+# - Qwen3-Embedding-0.6B: Up to 32K context, high quality, 
+# - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+embedding_models:
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/embeddinggemma-300m"
+  use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
 # Observability Configuration
 observability:

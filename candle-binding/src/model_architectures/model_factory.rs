@@ -13,11 +13,17 @@ use crate::model_architectures::lora::{LoRABertClassifier, LoRAMultiTaskResult};
 use crate::model_architectures::routing::{DualPathRouter, ProcessingRequirements};
 use crate::model_architectures::traditional::TraditionalBertClassifier;
 use crate::model_architectures::traits::{
-    FineTuningType, LoRACapable, ModelType, TaskType, TraditionalModel,
+    FineTuningType, LoRACapable, ModelType, PoolingMethod, TaskType, TraditionalModel,
 };
 use crate::model_architectures::unified_interface::{
     ConfigurableModel, CoreModel, PathSpecialization,
 };
+//Import embedding models
+use crate::model_architectures::embedding::{
+    GemmaEmbeddingConfig, GemmaEmbeddingModel, Qwen3EmbeddingModel,
+};
+use candle_nn::VarBuilder;
+use tokenizers::Tokenizer;
 
 /// Model factory configuration
 #[derive(Debug, Clone)]
@@ -58,6 +64,10 @@ pub enum DualPathModel {
     Traditional(TraditionalBertClassifier),
     /// LoRA model instance
     LoRA(LoRABertClassifier),
+    /// Qwen3 embedding model
+    Qwen3Embedding,
+    /// Gemma embedding model
+    GemmaEmbedding,
 }
 
 /// Intelligent model factory for dual-path architecture
@@ -66,6 +76,18 @@ pub struct ModelFactory {
     traditional_models: HashMap<String, TraditionalBertClassifier>,
     /// Available LoRA models
     lora_models: HashMap<String, LoRABertClassifier>,
+    /// Qwen3 embedding model
+    qwen3_embedding_model: Option<Qwen3EmbeddingModel>,
+    /// Qwen3 tokenizer
+    qwen3_tokenizer: Option<Tokenizer>,
+    /// Qwen3 model path
+    qwen3_model_path: Option<String>,
+    /// Gemma embedding model
+    gemma_embedding_model: Option<GemmaEmbeddingModel>,
+    /// Gemma tokenizer
+    gemma_tokenizer: Option<Tokenizer>,
+    /// Gemma model path
+    gemma_model_path: Option<String>,
     /// Intelligent router for path selection
     router: DualPathRouter,
     /// Computing device
@@ -79,6 +101,12 @@ impl ModelFactory {
             device,
             traditional_models: HashMap::new(),
             lora_models: HashMap::new(),
+            qwen3_embedding_model: None,
+            qwen3_tokenizer: None,
+            qwen3_model_path: None,
+            gemma_embedding_model: None,
+            gemma_tokenizer: None,
+            gemma_model_path: None,
             router: DualPathRouter::new(PathSelectionStrategy::Automatic),
         }
     }
@@ -112,6 +140,73 @@ impl ModelFactory {
         Ok(())
     }
 
+    /// Register Qwen3 embedding model
+    pub fn register_qwen3_embedding_model(&mut self, model_path: &str) -> Result<()> {
+        // Load model
+        let model = Qwen3EmbeddingModel::load(model_path, &self.device)
+            .map_err(|e| E::msg(format!("Failed to load Qwen3 model: {:?}", e)))?;
+
+        // Load tokenizer
+        let tokenizer_path = format!("{}/tokenizer.json", model_path);
+        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+            E::msg(format!(
+                "Failed to load Qwen3 tokenizer from {}: {:?}",
+                tokenizer_path, e
+            ))
+        })?;
+
+        self.qwen3_embedding_model = Some(model);
+        self.qwen3_tokenizer = Some(tokenizer);
+        self.qwen3_model_path = Some(model_path.to_string());
+
+        println!(
+            "INFO: Qwen3 model and tokenizer loaded successfully from {}",
+            model_path
+        );
+        Ok(())
+    }
+
+    /// Register Gemma embedding model
+    pub fn register_gemma_embedding_model(&mut self, model_path: &str) -> Result<()> {
+        // Load config
+        let config = GemmaEmbeddingConfig::from_pretrained(model_path)
+            .map_err(|e| E::msg(format!("Failed to load Gemma config: {:?}", e)))?;
+
+        // Build VarBuilder
+        let safetensors_path = format!("{}/model.safetensors", model_path);
+        let vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(
+                &[safetensors_path.clone()],
+                candle_core::DType::F32,
+                &self.device,
+            )
+            .map_err(|e| E::msg(format!("Failed to load safetensors: {:?}", e)))?
+        };
+
+        // Load model
+        let model = GemmaEmbeddingModel::load(model_path, &config, vb)
+            .map_err(|e| E::msg(format!("Failed to load Gemma model: {:?}", e)))?;
+
+        // Load tokenizer
+        let tokenizer_path = format!("{}/tokenizer.json", model_path);
+        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+            E::msg(format!(
+                "Failed to load Gemma tokenizer from {}: {:?}",
+                tokenizer_path, e
+            ))
+        })?;
+
+        self.gemma_embedding_model = Some(model);
+        self.gemma_tokenizer = Some(tokenizer);
+        self.gemma_model_path = Some(model_path.to_string());
+
+        println!(
+            "INFO: Gemma model and tokenizer loaded successfully from {}",
+            model_path
+        );
+        Ok(())
+    }
+
     /// Create a dual-path model instance with intelligent routing
     pub fn create_dual_path_model(
         &self,
@@ -141,6 +236,28 @@ impl ModelFactory {
                     Err(E::msg("No LoRA model available"))
                 }
             }
+            ModelType::Qwen3Embedding => {
+                // Direct routing to Qwen3 embedding model
+                if self.qwen3_embedding_model.is_some() {
+                    Ok(DualPathModel::Qwen3Embedding)
+                } else {
+                    Err(E::msg(
+                        "Qwen3 embedding model not loaded. \
+                         Please call init_embedding_models() with a valid Qwen3 model path.",
+                    ))
+                }
+            }
+            ModelType::GemmaEmbedding => {
+                //  Direct routing to Gemma embedding model
+                if self.gemma_embedding_model.is_some() {
+                    Ok(DualPathModel::GemmaEmbedding)
+                } else {
+                    Err(E::msg(
+                        "Gemma embedding model not loaded. \
+                         Please call init_embedding_models() with a valid Gemma model path.",
+                    ))
+                }
+            }
         }
     }
 
@@ -152,6 +269,36 @@ impl ModelFactory {
     /// Get available LoRA models
     pub fn list_lora_models(&self) -> Vec<&String> {
         self.lora_models.keys().collect()
+    }
+
+    /// Get Qwen3 embedding model reference
+    pub fn get_qwen3_model(&self) -> Option<&Qwen3EmbeddingModel> {
+        self.qwen3_embedding_model.as_ref()
+    }
+
+    /// Get Qwen3 tokenizer reference
+    pub fn get_qwen3_tokenizer(&self) -> Option<&Tokenizer> {
+        self.qwen3_tokenizer.as_ref()
+    }
+
+    /// Get Gemma embedding model reference
+    pub fn get_gemma_model(&self) -> Option<&GemmaEmbeddingModel> {
+        self.gemma_embedding_model.as_ref()
+    }
+
+    /// Get Gemma tokenizer reference
+    pub fn get_gemma_tokenizer(&self) -> Option<&Tokenizer> {
+        self.gemma_tokenizer.as_ref()
+    }
+
+    /// Get Qwen3 model path
+    pub fn get_qwen3_model_path(&self) -> Option<&str> {
+        self.qwen3_model_path.as_deref()
+    }
+
+    /// Get Gemma model path
+    pub fn get_gemma_model_path(&self) -> Option<&str> {
+        self.gemma_model_path.as_deref()
     }
 
     /// Check if factory supports both paths
@@ -193,12 +340,14 @@ fn create_lora_model_reference(_model: &LoRABertClassifier) -> Result<LoRABertCl
     ))
 }
 
-// Implement LoRACapable trait for DualPathModel (3.2.2 requirement)
+// Implement LoRACapable for DualPathModel
 impl LoRACapable for DualPathModel {
     fn get_lora_rank(&self) -> usize {
         match self {
             DualPathModel::Traditional(_) => 0, // Traditional models don't have LoRA rank
             DualPathModel::LoRA(model) => model.get_lora_rank(),
+            //Embedding models don't have LoRA rank
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => 0,
         }
     }
 
@@ -206,6 +355,8 @@ impl LoRACapable for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => vec![], // Traditional models don't have task adapters
             DualPathModel::LoRA(model) => model.get_task_adapters(),
+            // Embedding models don't have task adapters
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => vec![],
         }
     }
 
@@ -213,6 +364,8 @@ impl LoRACapable for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => false,
             DualPathModel::LoRA(model) => model.supports_multi_task_parallel(),
+            //Embedding models don't support parallel multi-task
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => false,
         }
     }
 }
@@ -225,6 +378,8 @@ impl TraditionalModel for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => FineTuningType::Full, // Traditional models use full fine-tuning
             DualPathModel::LoRA(_) => FineTuningType::LayerWise, // LoRA uses layer-wise adaptation
+            //Embedding models use full fine-tuning
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => FineTuningType::Full,
         }
     }
 
@@ -236,6 +391,8 @@ impl TraditionalModel for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => true, // Traditional BERT models have classification heads
             DualPathModel::LoRA(_) => true,        // LoRA models support classification
+            //Embedding models don't have classification heads
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => false,
         }
     }
 
@@ -243,6 +400,8 @@ impl TraditionalModel for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => false, // Traditional BERT is for sequence classification
             DualPathModel::LoRA(_) => false,        // Not implemented yet
+            //Embedding models don't have token classification heads
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => false,
         }
     }
 
@@ -267,6 +426,13 @@ impl TraditionalModel for DualPathModel {
                     <LoRABertClassifier as CoreModel>::forward(model, input_ids, attention_mask)?;
                 Ok(ModelOutput::LoRA { result })
             }
+            //Embedding models don't support sequential_forward (classification)
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => {
+                Err(candle_core::Error::Msg(
+                    "Embedding models don't support classification (sequential_forward)"
+                        .to_string(),
+                ))
+            }
         }
     }
 
@@ -275,13 +441,49 @@ impl TraditionalModel for DualPathModel {
     }
 }
 
-/// Unified output type for dual-path models
+/// Embedding model output
+///
+/// Represents the output from an embedding model, containing the generated
+/// embedding vector and metadata about the pooling method used.
+#[derive(Debug, Clone)]
+pub struct EmbeddingOutput {
+    /// The generated embedding tensor
+    ///
+    /// Shape: `[batch_size, embedding_dim]` or `[batch_size, target_dim]` for Matryoshka
+    pub embedding: candle_core::Tensor,
+
+    /// Dimension of the embedding
+    ///
+    /// This is the actual dimension of the returned embedding, which may be
+    /// less than the model's full dimension if Matryoshka truncation was applied.
+    ///
+    /// ## Examples
+    /// - Full dimension: 768
+    /// - Matryoshka dimensions: 512, 256, 128
+    pub dim: usize,
+
+    /// Pooling method used to generate this embedding
+    ///
+    /// ## Values
+    /// - `PoolingMethod::LastToken`: Qwen3-style last token pooling
+    /// - `PoolingMethod::Mean`: BERT/Gemma-style mean pooling
+    /// - `PoolingMethod::CLS`: Original BERT CLS token
+    pub pooling_method: PoolingMethod,
+}
+
+/// Unified output type for multi-path models
+///
+/// Extended from dual-path (Traditional, LoRA) to support embedding models.
 #[derive(Debug, Clone)]
 pub enum ModelOutput {
     /// Traditional model output
     Traditional { class: usize, confidence: f32 },
     /// LoRA model output
     LoRA { result: LoRAMultiTaskResult },
+    /// Embedding model output
+    ///
+    /// Used by long-context embedding models like Qwen3 and GemmaEmbedding.
+    Embedding { output: EmbeddingOutput },
 }
 
 impl std::fmt::Debug for DualPathModel {
@@ -289,6 +491,13 @@ impl std::fmt::Debug for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => f.debug_struct("DualPathModel::Traditional").finish(),
             DualPathModel::LoRA(_) => f.debug_struct("DualPathModel::LoRA").finish(),
+            // Embedding models
+            DualPathModel::Qwen3Embedding => {
+                f.debug_struct("DualPathModel::Qwen3Embedding").finish()
+            }
+            DualPathModel::GemmaEmbedding => {
+                f.debug_struct("DualPathModel::GemmaEmbedding").finish()
+            }
         }
     }
 }
@@ -307,6 +516,9 @@ impl CoreModel for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => ModelType::Traditional,
             DualPathModel::LoRA(_) => ModelType::LoRA,
+            //Precise embedding model types
+            DualPathModel::Qwen3Embedding => ModelType::Qwen3Embedding,
+            DualPathModel::GemmaEmbedding => ModelType::GemmaEmbedding,
         }
     }
 
@@ -329,6 +541,13 @@ impl CoreModel for DualPathModel {
                 let result =
                     <LoRABertClassifier as CoreModel>::forward(model, input_ids, attention_mask)?;
                 Ok(ModelOutput::LoRA { result })
+            }
+            //Embedding models don't support classification via CoreModel::forward
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => {
+                Err(candle_core::Error::Msg(
+                    "Embedding models don't support classification (CoreModel::forward)"
+                        .to_string(),
+                ))
             }
         }
     }
@@ -353,6 +572,8 @@ impl PathSpecialization for DualPathModel {
             DualPathModel::LoRA(model) => {
                 <LoRABertClassifier as PathSpecialization>::supports_parallel(model)
             }
+            // Embedding models support parallel processing
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => true,
         }
     }
 
@@ -365,6 +586,8 @@ impl PathSpecialization for DualPathModel {
             DualPathModel::LoRA(model) => {
                 <LoRABertClassifier as PathSpecialization>::get_confidence_threshold(model)
             }
+            //Embedding models don't have classification confidence threshold
+            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => 0.0,
         }
     }
 
@@ -372,6 +595,9 @@ impl PathSpecialization for DualPathModel {
         match self {
             DualPathModel::Traditional(_) => 16, // Conservative for traditional
             DualPathModel::LoRA(_) => 32,        // Efficient for LoRA
+            //Embedding models can handle larger batches
+            DualPathModel::Qwen3Embedding => 64, // Qwen3 supports 32K context
+            DualPathModel::GemmaEmbedding => 48, // Gemma is smaller, faster
         }
     }
 }

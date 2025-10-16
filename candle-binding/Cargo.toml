@@ -9,11 +9,21 @@ license = "MIT OR Apache-2.0"
 name = "candle_semantic_router"
 crate-type = ["staticlib", "cdylib"]
 
+[features]
+default = []
+# Flash Attention 2 support (requires CUDA and compatible GPU)
+# Enable with: cargo build --features flash-attn
+# Note: Requires CUDA Compute Capability >= 8.0 (Ampere or newer)
+flash-attn = ["candle-flash-attn"]
+
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
 candle-core = "0.8.4"
 candle-nn = "0.8.4"
 candle-transformers = "0.8.4"
+# Flash Attention 2 (optional, requires CUDA)
+# Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
+candle-flash-attn = { version = "0.8.4", optional = true }
 tokenizers = { version = "0.21.0", features = ["http"] }
 hf-hub = "0.4.1"
 safetensors = "0.4.1"
