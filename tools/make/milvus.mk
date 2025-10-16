@@ -2,10 +2,11 @@
 # = Everything For milvus   =
 # ======== milvus.mk ========
 
+##@ Milvus
+
 # Milvus container management
-start-milvus:
+start-milvus: ## Start Milvus container for testing
 	@$(LOG_TARGET)
-	@echo "Starting Milvus container for testing with $(CONTAINER_RUNTIME)..."
 	@mkdir -p /tmp/milvus-data
 	@$(CONTAINER_RUNTIME) run -d \
 		--name milvus-semantic-cache \
@@ -24,19 +25,17 @@ start-milvus:
 	@sleep 15
 	@echo "Milvus should be available at localhost:19530"
 
-stop-milvus:
+stop-milvus: ## Stop and remove Milvus container
 	@$(LOG_TARGET)
-	@echo "Stopping Milvus container..."
 	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache || true
 	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache || true
 	@sudo rm -rf /tmp/milvus-data || true
 	@echo "Milvus container stopped and removed"
 
-restart-milvus: stop-milvus start-milvus
+restart-milvus: stop-milvus start-milvus ## Restart Milvus container
 
-milvus-status:
+milvus-status: ## Show status of Milvus container
 	@$(LOG_TARGET)
-	@echo "Checking Milvus container status..."
 	@if $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q milvus-semantic-cache; then \
 		echo "Milvus container is running:"; \
 		$(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
@@ -45,7 +44,7 @@ milvus-status:
 		echo "Run 'make start-milvus' to start it"; \
 	fi
 
-clean-milvus: stop-milvus
+clean-milvus: stop-milvus ## Clean up Milvus data
 	@$(LOG_TARGET)
 	@echo "Cleaning up Milvus data..."
 	@sudo rm -rf milvus-data || rm -rf milvus-data

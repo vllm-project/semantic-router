@@ -16,8 +16,10 @@ NC := \033[0m # No Color
 
 .PHONY: create-cluster delete-cluster cluster-info deploy undeploy load-image test-deployment test-api port-forward-api port-forward-grpc
 
+##@ Kubernetes
+
 # Create kind cluster with optimized configuration
-create-cluster:
+create-cluster: ## Create a kind cluster with optimized configuration
 	@echo "$(BLUE)[INFO]$(NC) Creating kind cluster: $(KIND_CLUSTER_NAME)"
 	@if kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
 		echo "$(YELLOW)[WARNING]$(NC) Cluster $(KIND_CLUSTER_NAME) already exists"; \
@@ -38,7 +40,7 @@ create-cluster:
 	@echo "$(GREEN)[SUCCESS]$(NC) Cluster is ready"
 
 # Delete kind cluster
-delete-cluster:
+delete-cluster: ## Delete the kind cluster
 	@echo "$(BLUE)[INFO]$(NC) Deleting kind cluster: $(KIND_CLUSTER_NAME)"
 	@if kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
 		kind delete cluster --name $(KIND_CLUSTER_NAME); \
@@ -48,7 +50,7 @@ delete-cluster:
 	fi
 
 # Show cluster information
-cluster-info:
+cluster-info: ## Show cluster information and resource usage
 	@echo "$(BLUE)[INFO]$(NC) Cluster information:"
 	@kubectl cluster-info --context kind-$(KIND_CLUSTER_NAME) || echo "$(RED)[ERROR]$(NC) Cluster not accessible"
 	@echo "$(BLUE)[INFO]$(NC) Node information:"
@@ -57,7 +59,7 @@ cluster-info:
 	@kubectl describe nodes | grep -A 10 "Allocated resources:" || echo "$(YELLOW)[WARNING]$(NC) Cannot get resource info"
 
 # Deploy semantic-router to the cluster
-deploy:
+deploy: ## Deploy semantic-router to the cluster
 	@echo "$(BLUE)[INFO]$(NC) Deploying semantic-router to cluster"
 	@echo "$(BLUE)[INFO]$(NC) Applying Kubernetes manifests..."
 	@kubectl apply -k deploy/kubernetes/
@@ -71,13 +73,13 @@ deploy:
 	@kubectl get services -n $(KUBE_NAMESPACE)
 
 # Remove semantic-router from the cluster
-undeploy:
+undeploy: ## Remove semantic-router from the cluster
 	@echo "$(BLUE)[INFO]$(NC) Removing semantic-router from cluster"
 	@kubectl delete -k deploy/kubernetes/ --ignore-not-found=true
 	@echo "$(GREEN)[SUCCESS]$(NC) Undeployment completed"
 
 # Load Docker image into kind cluster
-load-image:
+load-image: ## Load Docker image into kind cluster
 	@echo "$(BLUE)[INFO]$(NC) Loading Docker image into kind cluster"
 	@if ! kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
 		echo "$(RED)[ERROR]$(NC) Cluster $(KIND_CLUSTER_NAME) does not exist"; \
@@ -89,7 +91,7 @@ load-image:
 	@echo "$(GREEN)[SUCCESS]$(NC) Image loaded successfully"
 
 # Test the deployment
-test-deployment:
+test-deployment: ## Test the deployment
 	@echo "$(BLUE)[INFO]$(NC) Testing semantic-router deployment"
 	@echo "$(BLUE)[INFO]$(NC) Checking pod status..."
 	@kubectl get pods -n $(KUBE_NAMESPACE) -o wide
@@ -102,7 +104,7 @@ test-deployment:
 	@echo "$(GREEN)[SUCCESS]$(NC) Deployment test completed"
 
 # Test the Classification API
-test-api:
+test-api: ## Test the Classification API
 	@echo "$(BLUE)[INFO]$(NC) Testing Classification API"
 	@echo "$(BLUE)[INFO]$(NC) Testing health endpoint..."
 	@curl -s -f http://localhost:8080/health || (echo "$(RED)[ERROR]$(NC) Health check failed. Is port-forward running?" && exit 1)
@@ -115,7 +117,7 @@ test-api:
 	@echo "$(GREEN)[SUCCESS]$(NC) API test completed"
 
 # Port forward Classification API (8080)
-port-forward-api:
+port-forward-api: ## Port forward Classification API (8080)
 	@echo "$(BLUE)[INFO]$(NC) Port forwarding Classification API (8080)"
 	@echo "$(YELLOW)[INFO]$(NC) Access API at: http://localhost:8080"
 	@echo "$(YELLOW)[INFO]$(NC) Health check: curl http://localhost:8080/health"
@@ -123,26 +125,26 @@ port-forward-api:
 	@kubectl port-forward -n $(KUBE_NAMESPACE) svc/semantic-router 8080:8080
 
 # Port forward gRPC API (50051)
-port-forward-grpc:
+port-forward-grpc: ## Port forward gRPC API (50051)
 	@echo "$(BLUE)[INFO]$(NC) Port forwarding gRPC API (50051)"
 	@echo "$(YELLOW)[INFO]$(NC) Access gRPC API at: localhost:50051"
 	@echo "$(YELLOW)[INFO]$(NC) Press Ctrl+C to stop port forwarding"
 	@kubectl port-forward -n $(KUBE_NAMESPACE) svc/semantic-router 50051:50051
 
 # Port forward metrics (9190)
-port-forward-metrics:
+port-forward-metrics: ## Port forward Prometheus metrics (9190)
 	@echo "$(BLUE)[INFO]$(NC) Port forwarding Prometheus metrics (9190)"
 	@echo "$(YELLOW)[INFO]$(NC) Access metrics at: http://localhost:9190/metrics"
 	@echo "$(YELLOW)[INFO]$(NC) Press Ctrl+C to stop port forwarding"
 	@kubectl port-forward -n $(KUBE_NAMESPACE) svc/semantic-router-metrics 9190:9190
 
 # Show logs
-logs:
+logs: ## Show semantic-router logs
 	@echo "$(BLUE)[INFO]$(NC) Showing semantic-router logs"
 	@kubectl logs -n $(KUBE_NAMESPACE) -l app=semantic-router -f
 
 # Show deployment status
-status:
+status: ## Show deployment status
 	@echo "$(BLUE)[INFO]$(NC) Semantic Router deployment status"
 	@echo "$(BLUE)[INFO]$(NC) Pods:"
 	@kubectl get pods -n $(KUBE_NAMESPACE) -o wide || echo "$(RED)[ERROR]$(NC) Cannot get pods"
@@ -152,7 +154,7 @@ status:
 	@kubectl get pvc -n $(KUBE_NAMESPACE) || echo "$(RED)[ERROR]$(NC) Cannot get PVC"
 
 # Complete setup: create cluster and deploy
-setup: create-cluster deploy
+setup: create-cluster deploy ## Complete setup: create cluster and deploy
 	@echo "$(GREEN)[SUCCESS]$(NC) Complete setup finished!"
 	@echo "$(BLUE)[INFO]$(NC) Next steps:"
 	@echo "  - Test deployment: make test-deployment"
@@ -161,7 +163,7 @@ setup: create-cluster deploy
 	@echo "  - View logs: make logs"
 
 # Complete cleanup: undeploy and delete cluster
-cleanup: undeploy delete-cluster
+cleanup: undeploy delete-cluster ## Complete cleanup: undeploy and delete cluster
 	@echo "$(GREEN)[SUCCESS]$(NC) Complete cleanup finished!"
 
 # Help target

@@ -2,6 +2,8 @@
 # = Docker build and management =
 # ======== docker.mk ========
 
+##@ Docker
+
 # Docker image tags
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
@@ -13,36 +15,34 @@ export COMPOSE_FILE ?= deploy/docker-compose/docker-compose.yml
 export COMPOSE_PROJECT_NAME ?= semantic-router
 
 # Build all Docker images
-docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
-	@$(LOG_TARGET)
-	@echo "All Docker images built successfully"
+docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit ## Build all Docker images
 
 # Build extproc Docker image
-docker-build-extproc:
+docker-build-extproc: ## Build extproc Docker image
 	@$(LOG_TARGET)
 	@echo "Building extproc Docker image..."
 	@$(CONTAINER_RUNTIME) build -f Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
 
 # Build llm-katan Docker image
-docker-build-llm-katan:
+docker-build-llm-katan: ## Build llm-katan Docker image
 	@$(LOG_TARGET)
 	@echo "Building llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) build -f e2e-tests/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e-tests/llm-katan/
 
 # Build dashboard Docker image
-docker-build-dashboard:
+docker-build-dashboard: ## Build dashboard Docker image
 	@$(LOG_TARGET)
 	@echo "Building dashboard Docker image..."
 	@$(CONTAINER_RUNTIME) build -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
 
 # Build precommit Docker image
-docker-build-precommit:
+docker-build-precommit: ## Build precommit Docker image
 	@$(LOG_TARGET)
 	@echo "Building precommit Docker image..."
 	@$(CONTAINER_RUNTIME) build -f Dockerfile.precommit -t $(DOCKER_REGISTRY)/precommit:$(DOCKER_TAG) .
 
 # Test llm-katan Docker image locally
-docker-test-llm-katan:
+docker-test-llm-katan: ## Test llm-katan Docker image locally
 	@$(LOG_TARGET)
 	@echo "Testing llm-katan Docker image..."
 	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
