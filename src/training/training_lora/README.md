@@ -2,11 +2,21 @@
 
 ## 📖 Overview
 
-This directory contains **LoRA (Low-Rank Adaptation)** training scripts for fine-tuning transformer models on three classification tasks:
+This directory contains **LoRA (Low-Rank Adaptation)** training scripts for fine-tuning transformer models on multiple tasks:
+
+### Classification Tasks
 
 - **Intent Classification** (`classifier_model_fine_tuning_lora/`)
 - **PII Detection** (`pii_model_fine_tuning_lora/`)  
 - **Security Detection** (`prompt_guard_fine_tuning_lora/`)
+
+### Problem Solving Tasks
+
+- **MMLU-Pro Specialized Solvers** (`mmlu_pro_solver_lora/`) ⭐ NEW!
+  - Fine-tune Qwen3-0.6B models to solve graduate-level academic problems
+  - 6 specialized experts (math, science, humanities, law, etc.)
+  - Chain-of-Thought reasoning with baseline comparison
+  - Expected: 40-60% accuracy (vs 10% random baseline)
 
 ## 🧠 What is LoRA?
 
@@ -60,22 +70,30 @@ Our LoRA implementation supports three transformer architectures:
 src/training/training_lora/
 ├── README.md                           # This file
 ├── common_lora_utils.py               # Shared utilities
+│
 ├── classifier_model_fine_tuning_lora/ # Intent Classification
 │   ├── ft_linear_lora.py             # Training script
+│   ├── ft_qwen3_generative_lora.py   # Category classifier
 │   ├── ft_linear_lora_verifier.go    # Go verification
 │   ├── train_cpu_optimized.sh        # Training automation
 │   └── go.mod
+│
 ├── pii_model_fine_tuning_lora/        # PII Detection
 │   ├── pii_bert_finetuning_lora.py   # Training script
 │   ├── pii_bert_finetuning_lora_verifier.go # Go verification
 │   ├── train_cpu_optimized.sh        # Training automation
 │   ├── presidio_synth_dataset_v2.json # Training data
 │   └── go.mod
-└── prompt_guard_fine_tuning_lora/     # Security Detection
-    ├── jailbreak_bert_finetuning_lora.py # Training script
-    ├── jailbreak_bert_finetuning_lora_verifier.go # Go verification
-    ├── train_cpu_optimized.sh        # Training automation
-    └── go.mod
+│
+├── prompt_guard_fine_tuning_lora/     # Security Detection
+│   ├── jailbreak_bert_finetuning_lora.py # Training script
+│   ├── jailbreak_bert_finetuning_lora_verifier.go # Go verification
+│   ├── train_cpu_optimized.sh        # Training automation
+│   └── go.mod
+│
+└── mmlu_pro_solver_lora/              # ⭐ MMLU-Pro Problem Solvers
+    ├── ft_qwen3_mmlu_solver_lora[_no_leakage].py  # Main training script, _no_leakage version has no MMLU-Pro data leakage
+    └── train_all_specialists[_no_leakage].sh       # Batch training, _no_leakage version has no MMLU-Pro data leakage
 ```
 
 ## 🚀 Quick Start

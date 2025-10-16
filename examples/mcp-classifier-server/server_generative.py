@@ -378,18 +378,36 @@ class GenerativeClassifier:
         )
 
     def _format_instruction(self, question: str) -> str:
-        """Format a question using the instruction template."""
+        """
+        Format a question using the instruction template with chat format.
+
+        Uses Qwen3's ChatML format to match the training format.
+        Returns the formatted prompt string ready for tokenization.
+        """
+        # Build the instruction content
         if self.instruction_template:
-            return self.instruction_template.format(question=question)
+            instruction_content = self.instruction_template.format(question=question)
         else:
             # Fallback template
-            return f"""You are an expert academic classifier. Classify the following question into exactly ONE category. Respond with ONLY the category name.
+            instruction_content = f"""You are an expert academic classifier. Classify the following question into exactly ONE category. Respond with ONLY the category name.
 
 Categories: {', '.join(self.category_names)}
 
 Now classify this question:
 Q: {question}
 A:"""
+
+        # Format as chat messages (user message only, for classification)
+        messages = [{"role": "user", "content": instruction_content}]
+
+        # Apply chat template with generation prompt
+        # This adds <|im_start|>assistant\n at the end to prompt the model to respond
+        # Disable thinking mode for direct classification output (Qwen3 is a thinking model)
+        prompt = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+
+        return prompt
 
     def classify(self, text: str, with_probabilities: bool = False) -> dict[str, Any]:
         """
