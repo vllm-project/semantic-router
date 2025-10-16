@@ -16,7 +16,7 @@ This directory contains **three MCP classification servers**:
 ### 2. **Embedding-Based Server** (`server_embedding.py`)
 
 - ✅ **High Accuracy** - Semantic understanding with Qwen3-Embedding-0.6B
-- ✅ **RAG-Style** - FAISS vector database with similarity search
+- ✅ **RAG-Style** - Milvus vector database with similarity search
 - ✅ **Flexible** - Handles paraphrases, synonyms, variations
 - 📝 **Best For**: Production use when you have good training examples
 
@@ -220,7 +220,7 @@ python3 server_embedding.py --http --port 8090
 ### Features
 
 - **Qwen3-Embedding-0.6B** model with 1024-dimensional embeddings
-- **FAISS vector database** for fast similarity search
+- **Milvus vector database** for fast similarity search 
 - **RAG-style classification** using 95 training examples
 - **Same MCP protocol** as regex server (drop-in replacement)
 - **Higher accuracy** - Understands semantic meaning, not just patterns

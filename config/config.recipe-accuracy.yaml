@@ -13,7 +13,7 @@
 # - Jailbreak protection enabled
 
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.7  # Higher threshold for better precision
   use_cpu: true
 

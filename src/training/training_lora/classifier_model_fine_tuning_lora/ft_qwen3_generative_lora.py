@@ -53,13 +53,7 @@ from typing import Dict, List, Optional
 
 import torch
 from datasets import Dataset, load_dataset
-from peft import (
-    LoraConfig,
-    PeftConfig,
-    PeftModel,
-    TaskType,
-    get_peft_model,
-)
+from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from transformers import (

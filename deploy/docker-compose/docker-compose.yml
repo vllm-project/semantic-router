@@ -12,7 +12,11 @@ services:
       - ~/.cache/huggingface:/root/.cache/huggingface
     environment:
       - LD_LIBRARY_PATH=/app/lib
+      # Use main config by default; override via CONFIG_FILE if needed
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
+      # Optional informational envs (router reads YAML for tracing config)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=vllm-semantic-router
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
     networks:
@@ -65,6 +69,18 @@ services:
       retries: 5
       start_period: 5s
 
+  # Jaeger for distributed tracing (OTLP gRPC + UI)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "4318:4317"   # OTLP gRPC (mapped to 4318 on host to avoid conflicts)
+      - "16686:16686" # Web UI
+    networks:
+      - semantic-network
+
   # Prometheus and Grafana for observability
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -92,6 +108,7 @@ services:
     volumes:
       - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./addons/grafana-datasource-jaeger.yaml:/etc/grafana/provisioning/datasources/datasource_jaeger.yaml:ro
       - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
       - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
       - grafana-data:/var/lib/grafana
@@ -162,7 +179,7 @@ services:
   # Semantic Router Dashboard
   dashboard:
     # Use pre-built image from GHCR, fallback to local build for development
-    image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
+    # image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
     build:
       context: ../../
       dockerfile: dashboard/backend/Dockerfile
@@ -172,6 +189,7 @@ services:
       - DASHBOARD_PORT=8700
       - TARGET_GRAFANA_URL=http://grafana:3000
       - TARGET_PROMETHEUS_URL=http://prometheus:9090
+      - TARGET_JAEGER_URL=http://jaeger:16686
       - TARGET_ROUTER_API_URL=http://semantic-router:8080
       - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
       - TARGET_OPENWEBUI_URL=http://openwebui:8080
