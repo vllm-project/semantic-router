@@ -58,7 +58,8 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+import math
 
 import torch
 from datasets import Dataset, load_dataset
@@ -113,6 +114,36 @@ REQUIRED_CATEGORIES = [
     "physics",
     "psychology",
 ]
+
+# -------- NEW: canonicalization & synonyms --------
+_CANONICAL = {
+    "biology":"biology","bio":"biology",
+    "business":"business","biz":"business",
+    "chemistry":"chemistry","chem":"chemistry",
+    "computer science":"computer science","cs":"computer science","comp sci":"computer science","computer sciences":"computer science",
+    "economics":"economics","econ":"economics",
+    "engineering":"engineering","eng":"engineering",
+    "health":"health","medicine":"health","medical":"health",
+    "history":"history","hist":"history",
+    "law":"law","legal":"law","legal studies":"law",
+    "math":"math","mathematics":"math",
+    "philosophy":"philosophy","phi":"philosophy",
+    "physics":"physics","phys":"physics",
+    "psychology":"psychology","psych":"psychology",
+    "other":"other","misc":"other","general knowledge":"other",
+}
+
+def normalize_category_text(text: str) -> str:
+    """Normalize category text to canonical form."""
+    t = (text or "").strip().strip(".,!?;:").lower()
+    # 只取前两词，覆盖 "computer science" 这类多词标签
+    parts = t.split()
+    if len(parts) >= 2:
+        t2 = " ".join(parts[:2])
+        return _CANONICAL.get(t2, _CANONICAL.get(parts[0], t))
+    if parts:
+        return _CANONICAL.get(parts[0], parts[0])
+    return t
 
 # Instruction template for classification (improved with examples)
 INSTRUCTION_TEMPLATE = """You are an expert academic classifier. Classify the following question into exactly ONE category. Respond with ONLY the category name.
@@ -337,6 +368,62 @@ def create_generative_dataset(
             "labels": encodings["input_ids"],  # Standard causal LM format
         }
     )
+
+
+# -------- NEW: candidate log-likelihood scoring (LLM-as-a-Classifier) --------
+@torch.no_grad()
+def _candidate_loglikelihood(
+    model, tokenizer, prompt_ids: torch.LongTensor, label_text: str
+) -> float:
+    """
+    Return sum log p(label_tokens | prompt). Works on a single batch=1 example.
+    """
+    # Append label tokens to prompt; we evaluate logits over the label span
+    label_ids = tokenizer(label_text, add_special_tokens=False, return_tensors="pt")["input_ids"].to(model.device)
+    # Avoid empty label
+    if label_ids.numel() == 0:
+        return -1e9
+    input_ids = torch.cat([prompt_ids, label_ids], dim=1)
+    outputs = model(input_ids=input_ids)
+    # logits shape: [1, seq_len, vocab]
+    logits = outputs.logits[:, :-1, :].float()
+    target = input_ids[:, 1:]
+    # Only label positions contribute
+    start = prompt_ids.shape[1] - 1  # because of shift
+    end = target.shape[1]
+    label_slice = slice(start, end)
+    logprobs = torch.log_softmax(logits[:, label_slice, :], dim=-1)
+    token_ll = logprobs.gather(-1, target[:, label_slice].unsqueeze(-1)).squeeze(-1)
+    return token_ll.sum().item()
+
+@torch.no_grad()
+def score_candidates_with_llm(
+    model, tokenizer, question: str, categories: List[str], enable_thinking: bool = False
+) -> Tuple[str, Dict[str, float]]:
+    """
+    Build ChatML prompt (no thinking), then score each candidate by sum log-likelihood.
+    Returns (pred_label, prob_dict_after_softmax).
+    """
+    messages = format_instruction(question, category=None)
+    # Ensure thinking is OFF for strict classification prompt
+    prompt = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+    )
+    prompt_ids = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)["input_ids"].to(model.device)
+    scores = []
+    for cat in categories:
+        # score normalized canonical text only
+        cat_text = cat.lower()
+        scores.append(_candidate_loglikelihood(model, tokenizer, prompt_ids, cat_text))
+    # softmax over scores
+    mx = max(scores)
+    exps = [math.exp(s - mx) for s in scores]
+    Z = sum(exps)
+    probs = [e / Z for e in exps]
+    idx = int(torch.tensor(probs).argmax().item())
+    pred = categories[idx]
+    prob_dict = {c: float(p) for c, p in zip(categories, probs)}
+    return pred, prob_dict
 
 
 def compute_metrics_generative(eval_pred, tokenizer, label2id):
@@ -673,7 +760,9 @@ def validate_model(
     max_samples_per_category: int = 150,
     num_val_samples: Optional[int] = None,
     gpu_id: Optional[int] = None,
-    enable_thinking: bool = True,
+    enable_thinking: bool = False,            # DEFAULT CHANGED: disable thinking
+    use_candidate_scoring: bool = True,       # NEW: LLM-as-a-Classifier
+    normalize_output: bool = True,            # NEW: canonicalize outputs
 ):
     """
     Validate a trained model on the full validation set.
@@ -684,7 +773,9 @@ def validate_model(
         max_samples_per_category: Maximum samples per category for dataset loading
         num_val_samples: Number of validation samples to test (None = all)
         gpu_id: GPU ID to use (None = auto-select)
-        enable_thinking: Enable Qwen3's thinking mode during generation (default: True)
+        enable_thinking: Enable Qwen3's thinking mode during generation (default: False)
+        use_candidate_scoring: Use LLM-as-a-Classifier scoring (default: True)
+        normalize_output: Normalize output categories (default: True)
     """
     logger.info("=" * 80)
     logger.info("VALIDATION MODE: Testing trained model on validation set")
@@ -769,6 +860,7 @@ def validate_model(
         logger.info("\n" + "=" * 80)
         logger.info(f"Running validation on {len(val_texts)} samples...")
         logger.info(f"Enable thinking mode: {enable_thinking}")
+        logger.info(f"Use candidate scoring: {use_candidate_scoring}")
         logger.info("=" * 80)
 
         correct = 0
@@ -778,78 +870,42 @@ def validate_model(
         predictions_log = []
 
         for i, (question, true_category) in enumerate(zip(val_texts, val_labels)):
-            # Format using chat template
-            messages = format_instruction(question, category=None)
-
-            # Apply chat template with enable_thinking parameter
-            try:
-                prompt = tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                    enable_thinking=enable_thinking,
+            # ---- NEW path: candidate scoring (preferred) ----
+            if use_candidate_scoring:
+                pred, prob_dict = score_candidates_with_llm(
+                    model, tokenizer, question, REQUIRED_CATEGORIES, enable_thinking=False
                 )
-            except Exception as e:
-                logger.warning(f"Chat template failed, using fallback: {e}")
-                # Fallback to simple format
-                prompt = f"Question: {question}\nCategory:"
-
-            inputs = tokenizer(
-                prompt, return_tensors="pt", max_length=512, truncation=True
-            ).to(model.device)
-
-            # Generate prediction
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=50 if enable_thinking else 10,  # More tokens if thinking is enabled
-                    do_sample=False,  # Greedy decoding for evaluation
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=[
-                        tokenizer.eos_token_id,
-                        tokenizer.convert_tokens_to_ids("<|im_end|>"),
-                    ],
-                )
-
-            # Decode only the generated part (skip the input prompt)
-            generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
-            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-            # Remove thinking tokens if present
-            if enable_thinking:
-                # Extract content after </think> tag
-                if "</think>" in generated_text:
-                    generated_text = generated_text.split("</think>")[-1].strip()
-                # Also remove any remaining <think> tags
-                generated_text = generated_text.replace("<think>", "").replace("</think>", "").strip()
-
-            # Extract the category
-            if "A:" in generated_text:
-                answer_text = generated_text.split("A:")[-1].strip()
-            elif "Category:" in generated_text:
-                answer_text = generated_text.split("Category:")[-1].strip()
+                predicted_category = pred
+                # Log top predictions
+                if (i < 5) or (i >= len(val_texts) - 5) or ((i+1) % 50 == 0):
+                    top2 = sorted(prob_dict.items(), key=lambda x: x[1], reverse=True)[:2]
+                    top1_label, top1_p = top2[0]
+                    top2_label, top2_p = (top2[1] if len(top2) > 1 else (None, 0.0))
+                    logger.info(f"[{i+1}/{len(val_texts)}] top1={top1_label} p={top1_p:.3f} | top2={top2_label} p={top2_p:.3f}")
             else:
-                answer_text = generated_text
+                # ---- Legacy generate path (now strictly greedy, short) ----
+                messages = format_instruction(question, category=None)
+                try:
+                    prompt = tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True, enable_thinking=enable_thinking,
+                    )
+                except Exception as e:
+                    logger.warning(f"Chat template failed, using fallback: {e}")
+                    prompt = f"Question: {question}\nCategory:"
+                inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True).to(model.device)
+                outputs = model.generate(
+                    **inputs, max_new_tokens=2, do_sample=False,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|im_end|>")],
+                )
+                gen_ids = outputs[0][inputs["input_ids"].shape[1]:]
+                generated_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+                answer_text = generated_text.split("\n")[0]
+                predicted_category = answer_text
 
-            # Clean up answer
-            answer_text = answer_text.split("\n")[0].strip().strip(".,!?;:").lower()
-
-            # Match against known categories
-            predicted_category = "unknown"
-            for category in REQUIRED_CATEGORIES:
-                if answer_text.startswith(category.lower()):
-                    predicted_category = category.lower()
-                    break
-
-            # If no match, take first 2 words (for "computer science" etc)
-            if predicted_category == "unknown" and answer_text:
-                words = answer_text.split()
-                if len(words) >= 2:
-                    predicted_category = " ".join(words[:2])
-                elif len(words) == 1:
-                    predicted_category = words[0]
-                else:
-                    predicted_category = answer_text
+            # normalize output
+            if normalize_output:
+                predicted_category = normalize_category_text(predicted_category)
 
             # Check correctness
             is_correct = predicted_category == true_category.lower()
@@ -944,16 +1000,25 @@ def validate_model(
         raise
 
 
-def demo_inference(model_path: str, model_name: Optional[str] = None, enable_thinking: bool = True):
+def demo_inference(
+    model_path: str,
+    model_name: Optional[str] = None,
+    enable_thinking: bool = False,          # DEFAULT CHANGED
+    use_candidate_scoring: bool = True,
+    normalize_output: bool = True,
+):
     """Demonstrate inference with trained generative model.
 
     Args:
         model_path: Path to the saved model
         model_name: Base model name (default: None = auto-detect)
-        enable_thinking: Enable Qwen3's thinking mode during generation (default: True)
+        enable_thinking: Enable Qwen3's thinking mode during generation (default: False)
+        use_candidate_scoring: Use LLM-as-a-Classifier scoring (default: True)
+        normalize_output: Normalize output categories (default: True)
     """
     logger.info(f"Loading generative Qwen3 model from: {model_path}")
     logger.info(f"Enable thinking mode: {enable_thinking}")
+    logger.info(f"Use candidate scoring: {use_candidate_scoring}")
 
     try:
         # Auto-detect base model from adapter config if not specified
@@ -1028,65 +1093,22 @@ def demo_inference(model_path: str, model_name: Optional[str] = None, enable_thi
         total = 0
 
         for example in test_examples:
-            # Format using chat template
-            messages = format_instruction(example, category=None)
-
-            # Apply chat template with generation prompt
-            prompt = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-                enable_thinking=enable_thinking,
-            )
-
-            inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-
-            with torch.no_grad():
-                outputs = model.generate(
-                    **inputs,
-                    max_new_tokens=50 if enable_thinking else 10,  # More tokens if thinking is enabled
-                    do_sample=False,  # Use greedy decoding for consistent results
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=[
-                        tokenizer.eos_token_id,
-                        tokenizer.convert_tokens_to_ids("<|im_end|>"),
-                    ],
-                )
-
-            # Decode only the generated part (skip the input prompt)
-            generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
-            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-            # Remove thinking tokens if present
-            if enable_thinking:
-                # Extract content after </think> tag
-                if "</think>" in generated_text:
-                    generated_text = generated_text.split("</think>")[-1].strip()
-                # Also remove any remaining <think> tags
-                generated_text = generated_text.replace("<think>", "").replace("</think>", "").strip()
-
-            # With chat template, model generates just the category directly
-            # Clean up and match against known categories
-            answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
-
-            category = "unknown"
-            for cat in REQUIRED_CATEGORIES:
-                if answer_text.startswith(cat.lower()):
-                    category = cat
-                    break
-
-            # If no match, take first 2 words
-            if category == "unknown" and answer_text:
-                words = answer_text.split()
-                category = (
-                    " ".join(words[:2])
-                    if len(words) >= 2
-                    else words[0] if words else "unknown"
-                )
-
-            print(f"\nQuestion: {example}")
-            print(f"Generated: {generated_text[:50]}...")
-            print(f"Predicted Category: {category}")
+            if use_candidate_scoring:
+                cat, prob = score_candidates_with_llm(model, tokenizer, example, REQUIRED_CATEGORIES, enable_thinking=False)
+                category = normalize_category_text(cat) if normalize_output else cat
+                print(f"\nQuestion: {example}")
+                print(f"Predicted (LLM-as-classifier): {category} | top-p={max(prob.values()):.3f}")
+            else:
+                messages = format_instruction(example, category=None)
+                prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=enable_thinking)
+                inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+                outputs = model.generate(**inputs, max_new_tokens=2, do_sample=False, pad_token_id=tokenizer.pad_token_id,
+                                         eos_token_id=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|im_end|>")])
+                gen_ids = outputs[0][inputs["input_ids"].shape[1]:]
+                generated_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+                category = normalize_category_text(generated_text) if normalize_output else generated_text
+                print(f"\nQuestion: {example}")
+                print(f"Predicted: {category}")
             print("-" * 80)
 
     except Exception as e:
@@ -1157,11 +1179,12 @@ if __name__ == "__main__":
         default=None,
         help="Number of validation samples to test (None = all samples). Only used in validate mode.",
     )
+    # default: thinking OFF
     parser.add_argument(
         "--enable-thinking",
         action="store_true",
-        default=True,
-        help="Enable Qwen3's thinking mode during generation (default: True). Use --no-enable-thinking to disable.",
+        default=False,
+        help="Enable thinking mode during generation (default: False).",
     )
     parser.add_argument(
         "--no-enable-thinking",
@@ -1169,6 +1192,11 @@ if __name__ == "__main__":
         action="store_false",
         help="Disable Qwen3's thinking mode during generation.",
     )
+    # NEW knobs
+    parser.add_argument("--no-candidate-scoring", dest="use_candidate_scoring", action="store_false", help="Disable candidate log-likelihood scoring.")
+    parser.add_argument("--use-candidate-scoring", dest="use_candidate_scoring", action="store_true", default=True, help="Enable candidate scoring (default).")
+    parser.add_argument("--no-normalize-output", dest="normalize_output", action="store_false", help="Disable output normalization.")
+    parser.add_argument("--normalize-output", dest="normalize_output", action="store_true", default=True, help="Enable output normalization (default).")
 
     args = parser.parse_args()
 
@@ -1198,6 +1226,14 @@ if __name__ == "__main__":
             num_val_samples=args.num_val_samples,
             gpu_id=args.gpu_id,
             enable_thinking=args.enable_thinking,
+            use_candidate_scoring=args.use_candidate_scoring,
+            normalize_output=args.normalize_output,
         )
     elif args.mode == "test":
-        demo_inference(args.model_path, args.model, enable_thinking=args.enable_thinking)
+        demo_inference(
+            args.model_path,
+            args.model,
+            enable_thinking=args.enable_thinking,
+            use_candidate_scoring=args.use_candidate_scoring,
+            normalize_output=args.normalize_output,
+        )
