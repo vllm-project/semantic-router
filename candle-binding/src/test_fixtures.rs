@@ -9,11 +9,16 @@ pub mod fixtures {
         intent_lora::IntentLoRAClassifier, pii_lora::PIILoRAClassifier,
         security_lora::SecurityLoRAClassifier,
     };
+    use crate::model_architectures::embedding::gemma3_model::Gemma3Model;
+    use crate::model_architectures::embedding::gemma_embedding::{
+        GemmaEmbeddingConfig, GemmaEmbeddingModel,
+    };
+    use crate::model_architectures::embedding::qwen3_embedding::Qwen3EmbeddingModel;
     use crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier;
     use crate::model_architectures::{
         config::{
-            DevicePreference, DualPathConfig, GlobalConfig, LoRAAdapterPaths, LoRAConfig,
-            OptimizationLevel, PathSelectionStrategy, TraditionalConfig,
+            DevicePreference, DualPathConfig, EmbeddingConfig, GlobalConfig, LoRAAdapterPaths,
+            LoRAConfig, OptimizationLevel, PathSelectionStrategy, TraditionalConfig,
         },
         model_factory::{LoRAModelConfig, ModelFactoryConfig, TraditionalModelConfig},
         traits::TaskType,
@@ -40,7 +45,14 @@ pub mod fixtures {
     pub const LORA_PII_BERT: &str = "lora_pii_detector_bert-base-uncased_model";
     pub const LORA_JAILBREAK_BERT: &str = "lora_jailbreak_classifier_bert-base-uncased_model";
 
+    /// Embedding model paths
+    pub const QWEN3_EMBEDDING_0_6B: &str = "Qwen3-Embedding-0.6B";
+    pub const GEMMA_EMBEDDING_300M: &str = "embeddinggemma-300m";
+
     /// Global model cache for sharing loaded models across tests
+    ///
+    /// Note: Embedding models (Qwen3, etc.) are NOT loaded here.
+    /// Use dedicated fixtures like `qwen3_model_only()` for embedding tests.
     pub struct ModelCache {
         // LoRA Models
         pub intent_classifier: Option<Arc<IntentLoRAClassifier>>,
@@ -68,8 +80,11 @@ pub mod fixtures {
         }
 
         /// Load all models into cache (called once at test suite start)
+        ///
+        /// Note: This only loads LoRA and Traditional models.
+        /// Embedding models are loaded via dedicated fixtures (e.g., `qwen3_model_only()`).
         pub fn load_all_models(&mut self) {
-            println!("Loading all models into cache for test optimization...");
+            println!("Loading LoRA and Traditional models into cache...");
 
             // Load LoRA Models
             self.load_lora_models();
@@ -271,6 +286,9 @@ pub mod fixtures {
         ) -> Option<Arc<TraditionalModernBertClassifier>> {
             self.traditional_security_classifier.clone()
         }
+
+        // get_qwen3_embedding_model() has been removed.
+        // Use the dedicated `qwen3_model_only()` fixture instead.
     }
 
     /// Global model cache for sharing loaded models across tests
@@ -366,7 +384,212 @@ pub mod fixtures {
         cache_guard.get_traditional_security_classifier()
     }
 
-    /// Device fixture - CPU for consistent testing
+    /// Lightweight Qwen3-only cache
+    ///
+    /// This fixture is optimized for Qwen3-specific tests and only loads
+    /// the Qwen3-Embedding model, avoiding the overhead of loading LoRA
+    /// and Traditional models. Use this for Qwen3 validation/embedding tests.
+    static QWEN3_ONLY_CACHE: OnceLock<Arc<Qwen3EmbeddingModel>> = OnceLock::new();
+
+    /// Lightweight Gemma3Model-only cache (Transformer backbone only)
+    ///
+    /// This cache is for Gemma3 backbone tests that don't need the full
+    /// GemmaEmbeddingModel with Dense Bottleneck.
+    static GEMMA3_MODEL_ONLY_CACHE: OnceLock<Arc<Gemma3Model>> = OnceLock::new();
+
+    /// Lightweight GemmaEmbeddingModel cache (complete embedding model)
+    ///
+    /// This cache includes the full pipeline: Gemma3 backbone + Dense Bottleneck.
+    /// Use this for complete Gemma embedding validation tests.
+    static GEMMA_EMBEDDING_MODEL_CACHE: OnceLock<Arc<GemmaEmbeddingModel>> = OnceLock::new();
+
+    /// Lightweight Qwen3 Embedding model fixture (only loads Qwen3, not other models)
+    ///
+    /// Uses dynamic device selection (GPU if available, otherwise CPU)
+    #[fixture]
+    pub fn qwen3_model_only() -> Arc<Qwen3EmbeddingModel> {
+        // Check if model is already cached
+        if let Some(cached) = QWEN3_ONLY_CACHE.get() {
+            println!("🔄 Using cached Qwen3-Embedding model (no reload)");
+            return cached.clone();
+        }
+
+        // Load model for the first time
+        println!("📦 Loading Qwen3-Embedding model for the first time...");
+        let start = std::time::Instant::now();
+
+        let model = QWEN3_ONLY_CACHE
+            .get_or_init(|| {
+                let qwen3_path = format!("{}/{}", MODELS_BASE_PATH, QWEN3_EMBEDDING_0_6B);
+                let device = test_device(); // Dynamic GPU/CPU selection
+                match Qwen3EmbeddingModel::load(&qwen3_path, &device) {
+                    Ok(model) => Arc::new(model),
+                    Err(e) => {
+                        panic!("Failed to load Qwen3-Embedding-0.6B: {}", e);
+                    }
+                }
+            })
+            .clone();
+
+        let elapsed = start.elapsed();
+        println!(
+            "✅ Qwen3-Embedding-0.6B loaded successfully in {:.2}s",
+            elapsed.as_secs_f64()
+        );
+        model
+    }
+
+    /// Lightweight Gemma3 Transformer backbone fixture (only loads Gemma3Model, no Dense Bottleneck)
+    ///
+    /// Uses dynamic device selection (GPU if available, otherwise CPU)
+    #[fixture]
+    pub fn gemma3_model_only() -> Arc<Gemma3Model> {
+        // Check if model is already cached
+        if let Some(cached) = GEMMA3_MODEL_ONLY_CACHE.get() {
+            println!("🔄 Using cached Gemma3Model (no reload)");
+            return cached.clone();
+        }
+
+        // Load model for the first time
+        println!("📦 Loading Gemma3Model (Transformer backbone) for the first time...");
+        let start = std::time::Instant::now();
+
+        let model = GEMMA3_MODEL_ONLY_CACHE
+            .get_or_init(|| {
+                use candle_nn::VarBuilder;
+
+                let gemma_path = format!("{}/{}", MODELS_BASE_PATH, GEMMA_EMBEDDING_300M);
+                let device = test_device(); // Dynamic GPU/CPU selection
+
+                // Load config
+                let config = match GemmaEmbeddingConfig::from_pretrained(&gemma_path) {
+                    Ok(cfg) => cfg,
+                    Err(e) => panic!("Failed to load Gemma config: {}", e),
+                };
+
+                // Load weights with safetensors
+                let safetensors_path = format!("{}/model.safetensors", gemma_path);
+                let vb = match unsafe {
+                    VarBuilder::from_mmaped_safetensors(
+                        &[safetensors_path.as_str()],
+                        candle_core::DType::F32,
+                        &device,
+                    )
+                } {
+                    Ok(vb) => vb,
+                    Err(e) => panic!("Failed to load Gemma weights: {}", e),
+                };
+
+                // Load Gemma3 backbone only
+                // Note: Safetensors weights are stored without "model." prefix
+                match Gemma3Model::load(vb, &config) {
+                    Ok(model) => Arc::new(model),
+                    Err(e) => panic!("Failed to load Gemma3Model: {}", e),
+                }
+            })
+            .clone();
+
+        let elapsed = start.elapsed();
+        println!(
+            "✅ Gemma3Model loaded successfully in {:.2}s",
+            elapsed.as_secs_f64()
+        );
+        model
+    }
+
+    /// Complete GemmaEmbedding model fixture (Gemma3 + Dense Bottleneck)
+    ///
+    /// Uses dynamic device selection (GPU if available, otherwise CPU)
+    #[fixture]
+    pub fn gemma_embedding_model() -> Arc<GemmaEmbeddingModel> {
+        // Check if model is already cached
+        if let Some(cached) = GEMMA_EMBEDDING_MODEL_CACHE.get() {
+            println!("🔄 Using cached GemmaEmbeddingModel (no reload)");
+            return cached.clone();
+        }
+
+        // Load model for the first time
+        println!("📦 Loading GemmaEmbeddingModel (complete pipeline) for the first time...");
+        let start = std::time::Instant::now();
+
+        let model = GEMMA_EMBEDDING_MODEL_CACHE
+            .get_or_init(|| {
+                use candle_nn::VarBuilder;
+
+                let gemma_path = format!("{}/{}", MODELS_BASE_PATH, GEMMA_EMBEDDING_300M);
+                let device = test_device(); // Dynamic GPU/CPU selection
+
+                // Load config
+                let config = match GemmaEmbeddingConfig::from_pretrained(&gemma_path) {
+                    Ok(cfg) => cfg,
+                    Err(e) => panic!("Failed to load Gemma config: {}", e),
+                };
+
+                // Create VarBuilder
+                let safetensors_path = format!("{}/model.safetensors", gemma_path);
+                let vb = match unsafe {
+                    VarBuilder::from_mmaped_safetensors(
+                        &[safetensors_path.as_str()],
+                        candle_core::DType::F32,
+                        &device,
+                    )
+                } {
+                    Ok(vb) => vb,
+                    Err(e) => panic!("Failed to load Gemma weights: {}", e),
+                };
+
+                // Load model
+                match GemmaEmbeddingModel::load(&gemma_path, &config, vb) {
+                    Ok(model) => Arc::new(model),
+                    Err(e) => panic!("Failed to load GemmaEmbeddingModel: {}", e),
+                }
+            })
+            .clone();
+
+        let elapsed = start.elapsed();
+        println!(
+            "✅ GemmaEmbeddingModel loaded successfully in {:.2}s",
+            elapsed.as_secs_f64()
+        );
+        model
+    }
+
+    /// Get test device (GPU if available, otherwise CPU)
+    ///
+    /// Priority:
+    /// 1. CUDA GPU (if available)
+    /// 2. Metal GPU (if available, macOS)
+    /// 3. CPU (fallback)
+    pub fn test_device() -> Device {
+        // Try CUDA first
+        if let Ok(device) = Device::cuda_if_available(0) {
+            if !matches!(device, Device::Cpu) {
+                println!("✅ Using CUDA GPU for testing");
+                return device;
+            }
+        }
+
+        // Try Metal (macOS)
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(device) = Device::new_metal(0) {
+                println!("✅ Using Metal GPU for testing");
+                return device;
+            }
+        }
+
+        // Fallback to CPU
+        println!("ℹ️  Using CPU for testing (no GPU available)");
+        Device::Cpu
+    }
+
+    /// Device fixture - dynamically selects GPU or CPU
+    #[fixture]
+    pub fn device() -> Device {
+        test_device()
+    }
+
+    /// Legacy CPU device fixture (for backward compatibility)
     #[fixture]
     pub fn cpu_device() -> Device {
         Device::Cpu
@@ -471,6 +694,7 @@ pub mod fixtures {
         DualPathConfig {
             traditional: traditional_config,
             lora: lora_config,
+            embedding: EmbeddingConfig::default(),
             global: global_config,
         }
     }

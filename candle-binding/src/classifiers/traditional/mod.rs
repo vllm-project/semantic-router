@@ -13,7 +13,7 @@ pub mod modernbert_classifier;
 pub use batch_processor::*;
 pub use modernbert_classifier::*;
 
-// Test modules (only compiled in test builds)
+// Test modules
 #[cfg(test)]
 pub mod batch_processor_test;
 #[cfg(test)]

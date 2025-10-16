@@ -29,6 +29,12 @@ pub struct EmbeddingResult {
     pub data: *mut f32,
     pub length: i32,
     pub error: bool,
+    /// Model type used: 0=Qwen3Embedding, 1=GemmaEmbedding, -1=Unknown/Error
+    pub model_type: i32,
+    /// Sequence length (in tokens)
+    pub sequence_length: i32,
+    /// Processing time in milliseconds
+    pub processing_time_ms: f32,
 }
 
 /// Tokenization result structure (matches Go C struct)
@@ -41,7 +47,17 @@ pub struct TokenizationResult {
     pub error: bool,
 }
 
-/// Similarity result for single comparison
+/// Embedding similarity result for two texts
+#[repr(C)]
+#[derive(Debug)]
+pub struct EmbeddingSimilarityResult {
+    pub similarity: f32,
+    pub model_type: i32, // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    pub processing_time_ms: f32,
+    pub error: bool,
+}
+
+/// Similarity result for single comparison (batch)
 #[repr(C)]
 #[derive(Debug)]
 pub struct SimilarityResult {
@@ -50,7 +66,7 @@ pub struct SimilarityResult {
     pub text: *mut c_char,
 }
 
-/// Multiple similarity results
+/// Multiple similarity results (batch)
 #[repr(C)]
 #[derive(Debug)]
 pub struct SimilarityResults {
@@ -272,6 +288,51 @@ impl Default for EmbeddingResult {
             data: std::ptr::null_mut(),
             length: 0,
             error: true,
+            model_type: -1,
+            sequence_length: 0,
+            processing_time_ms: 0.0,
+        }
+    }
+}
+
+impl Default for EmbeddingSimilarityResult {
+    fn default() -> Self {
+        Self {
+            similarity: -1.0,
+            model_type: -1,
+            processing_time_ms: 0.0,
+            error: true,
+        }
+    }
+}
+
+/// A single match result in batch similarity matching
+#[repr(C)]
+#[derive(Debug)]
+pub struct SimilarityMatch {
+    pub index: i32,      // Index of the candidate in the input array
+    pub similarity: f32, // Cosine similarity score
+}
+
+/// Result of batch similarity matching
+#[repr(C)]
+#[derive(Debug)]
+pub struct BatchSimilarityResult {
+    pub matches: *mut SimilarityMatch, // Array of top-k matches, sorted by similarity (descending)
+    pub num_matches: i32,              // Number of matches returned (≤ top_k)
+    pub model_type: i32,               // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    pub processing_time_ms: f32,       // Processing time in milliseconds
+    pub error: bool,                   // Whether an error occurred
+}
+
+impl Default for BatchSimilarityResult {
+    fn default() -> Self {
+        Self {
+            matches: std::ptr::null_mut(),
+            num_matches: 0,
+            model_type: -1,
+            processing_time_ms: 0.0,
+            error: true,
         }
     }
 }
@@ -308,6 +369,48 @@ impl Default for UnifiedBatchResult {
             batch_size: 0,
             error: false,
             error_message: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// Single embedding model information
+#[repr(C)]
+#[derive(Debug)]
+pub struct EmbeddingModelInfo {
+    pub model_name: *mut c_char,  // "qwen3" or "gemma"
+    pub is_loaded: bool,          // Whether the model is loaded
+    pub max_sequence_length: i32, // Maximum sequence length
+    pub default_dimension: i32,   // Default embedding dimension
+    pub model_path: *mut c_char,  // Model path (can be null if not loaded)
+}
+
+impl Default for EmbeddingModelInfo {
+    fn default() -> Self {
+        Self {
+            model_name: std::ptr::null_mut(),
+            is_loaded: false,
+            max_sequence_length: 0,
+            default_dimension: 0,
+            model_path: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// Result of embedding models information query
+#[repr(C)]
+#[derive(Debug)]
+pub struct EmbeddingModelsInfoResult {
+    pub models: *mut EmbeddingModelInfo, // Array of model info
+    pub num_models: i32,                 // Number of models
+    pub error: bool,                     // Whether an error occurred
+}
+
+impl Default for EmbeddingModelsInfoResult {
+    fn default() -> Self {
+        Self {
+            models: std::ptr::null_mut(),
+            num_models: 0,
+            error: true,
         }
     }
 }

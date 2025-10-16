@@ -19,6 +19,9 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
                     data: std::ptr::null_mut(),
                     length: 0,
                     error: true,
+                    model_type: -1,
+                    sequence_length: 0,
+                    processing_time_ms: 0.0,
                 }
             }
         }
@@ -33,6 +36,9 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
                 data: std::ptr::null_mut(),
                 length: 0,
                 error: true,
+                model_type: -1,
+                sequence_length: 0,
+                processing_time_ms: 0.0,
             };
         }
     };
@@ -56,12 +62,18 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
                                 data,
                                 length,
                                 error: false,
+                                model_type: -1, // BERT model (not Qwen3/Gemma)
+                                sequence_length: 0,
+                                processing_time_ms: 0.0,
                             }
                         }
                         Err(_) => EmbeddingResult {
                             data: std::ptr::null_mut(),
                             length: 0,
                             error: true,
+                            model_type: -1,
+                            sequence_length: 0,
+                            processing_time_ms: 0.0,
                         },
                     }
                 }
@@ -69,6 +81,9 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
                     data: std::ptr::null_mut(),
                     length: 0,
                     error: true,
+                    model_type: -1,
+                    sequence_length: 0,
+                    processing_time_ms: 0.0,
                 },
             }
         }
@@ -78,6 +93,9 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
                 data: std::ptr::null_mut(),
                 length: 0,
                 error: true,
+                model_type: -1,
+                sequence_length: 0,
+                processing_time_ms: 0.0,
             }
         }
     }

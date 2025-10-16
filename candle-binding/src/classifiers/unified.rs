@@ -28,6 +28,62 @@ pub struct LoRAClassificationOutput {
     pub parallel_efficiency: f32,
 }
 
+/// Embedding requirements for intelligent model selection
+///
+/// This structure encapsulates the requirements for generating embeddings,
+/// allowing the router to intelligently select the most appropriate embedding
+/// model (Traditional BERT, GemmaEmbedding, or Qwen3-Embedding) based on:
+/// - Sequence length (short, medium, or long sequences)
+/// - Quality vs. latency trade-off
+/// - Optional target dimension for Matryoshka embeddings
+///
+/// ## Example
+/// ```rust,ignore
+/// let requirements = EmbeddingRequirements {
+///     sequence_length: 1024,
+///     quality_priority: 0.8,      // High quality
+///     latency_priority: 0.3,      // Low latency requirement
+///     target_dimension: Some(512), // Matryoshka dimension
+/// };
+/// let model_type = classifier.select_embedding_model(&requirements)?;
+/// ```
+#[derive(Debug, Clone)]
+pub struct EmbeddingRequirements {
+    /// Sequence length in tokens
+    ///
+    /// This determines which model can handle the input:
+    /// - 0-512: Short sequences (all models)
+    /// - 513-2048: Medium sequences (Gemma, Qwen3)
+    /// - 2049-32768: Long sequences (only Qwen3)
+    /// - >32768: Exceeds maximum supported length
+    pub sequence_length: usize,
+
+    /// Quality priority (0.0-1.0)
+    ///
+    /// Higher values prioritize embedding quality over speed.
+    /// - 0.0-0.3: Latency-focused (prefer Traditional BERT)
+    /// - 0.4-0.7: Balanced (prefer GemmaEmbedding)
+    /// - 0.8-1.0: Quality-focused (prefer Qwen3)
+    pub quality_priority: f32,
+
+    /// Latency priority (0.0-1.0)
+    ///
+    /// Higher values prioritize speed over quality.
+    /// - 0.0-0.3: Quality-focused
+    /// - 0.4-0.7: Balanced
+    /// - 0.8-1.0: Latency-focused (prefer Traditional BERT)
+    pub latency_priority: f32,
+
+    /// Target embedding dimension for Matryoshka truncation
+    ///
+    /// If specified, the router will prefer models supporting this dimension:
+    /// - `None`: Use full dimension (768)
+    /// - `Some(512)`: Prefer models with 512-dim support (GemmaEmbedding)
+    /// - `Some(256)`: Prefer models with 256-dim support (GemmaEmbedding)
+    /// - `Some(128)`: Prefer models with 128-dim support (GemmaEmbedding)
+    pub target_dimension: Option<usize>,
+}
+
 /// Traditional model manager for unified classifier
 #[derive(Debug)]
 pub struct TraditionalModelManager {
@@ -300,6 +356,14 @@ pub struct UnifiedPerformanceStats {
     /// Path switching metrics
     pub path_switches: u64,
     pub last_path_used: Option<ModelType>,
+    /// Embedding model performance metrics
+    pub qwen3_usage: u64,
+    pub qwen3_total_time_ms: f32,
+    pub gemma_usage: u64,
+    pub gemma_total_time_ms: f32,
+    pub embedding_total_requests: u64,
+    pub avg_qwen3_sequence_length: f32,
+    pub avg_gemma_sequence_length: f32,
 }
 
 impl DualPathUnifiedClassifier {
@@ -430,6 +494,19 @@ impl DualPathUnifiedClassifier {
             }
             ModelType::Traditional => {
                 self.classify_with_traditional_path_optimized(texts, tasks, start_time)
+            }
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                // Embedding models (Qwen3/Gemma) are NOT for classification
+                // They generate embeddings, not class predictions
+                return Err(UnifiedClassifierError::ProcessingError(
+                    format!(
+                        "Embedding model {:?} does not support classification tasks. \
+                         Embedding models are designed for embedding generation, not class prediction. \
+                         Use classify_intelligent() with Traditional or LoRA models for classification tasks, \
+                         or use get_embedding_with_requirements() method for embedding generation.",
+                        selected_path
+                    )
+                ));
             }
         };
 
@@ -652,7 +729,7 @@ impl DualPathUnifiedClassifier {
         }
     }
 
-    /// date performance statistics for optimization
+    /// Update performance statistics for optimization
     fn update_performance_stats(
         &mut self,
         path_used: ModelType,
@@ -666,6 +743,56 @@ impl DualPathUnifiedClassifier {
             ModelType::Traditional => {
                 self.performance_stats.traditional_total_time += result.total_processing_time_ms;
                 self.performance_stats.traditional_request_count += 1;
+            }
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                // Embedding models don't participate in classification
+                // Performance tracking is handled separately via update_embedding_stats()
+                // This branch should not be reached in normal operation
+            }
+        }
+    }
+
+    /// Update embedding model performance statistics
+    ///
+    /// Tracks latency, throughput, and sequence length distribution for embedding models.
+    ///
+    /// ## Parameters
+    /// - `model_type`: The embedding model used (Qwen3 or Gemma)
+    /// - `processing_time_ms`: Time taken to generate the embedding
+    /// - `sequence_length`: Length of the input sequence
+    pub fn update_embedding_stats(
+        &mut self,
+        model_type: ModelType,
+        processing_time_ms: f32,
+        sequence_length: usize,
+    ) {
+        self.performance_stats.embedding_total_requests += 1;
+
+        match model_type {
+            ModelType::Qwen3Embedding => {
+                self.performance_stats.qwen3_usage += 1;
+                self.performance_stats.qwen3_total_time_ms += processing_time_ms;
+
+                // Update average sequence length (incremental average)
+                let n = self.performance_stats.qwen3_usage as f32;
+                self.performance_stats.avg_qwen3_sequence_length =
+                    (self.performance_stats.avg_qwen3_sequence_length * (n - 1.0)
+                        + sequence_length as f32)
+                        / n;
+            }
+            ModelType::GemmaEmbedding => {
+                self.performance_stats.gemma_usage += 1;
+                self.performance_stats.gemma_total_time_ms += processing_time_ms;
+
+                // Update average sequence length (incremental average)
+                let n = self.performance_stats.gemma_usage as f32;
+                self.performance_stats.avg_gemma_sequence_length =
+                    (self.performance_stats.avg_gemma_sequence_length * (n - 1.0)
+                        + sequence_length as f32)
+                        / n;
+            }
+            _ => {
+                // Not an embedding model, ignore
             }
         }
     }
@@ -746,6 +873,154 @@ impl DualPathUnifiedClassifier {
         ))
     }
 
+    /// Select the most appropriate embedding model based on requirements
+    ///
+    /// This method implements intelligent routing logic that considers:
+    /// 1. **Sequence length**: Different models support different maximum lengths
+    /// 2. **Quality vs. latency trade-off**: Balance between embedding quality and speed
+    /// 3. **Matryoshka support**: Prefer models that support target dimensions
+    ///
+    /// ## Routing Logic
+    ///
+    /// ### Short Sequences (0-512 tokens)
+    /// - **High latency priority (>0.7)**: GemmaEmbedding (fastest, ~20ms)
+    /// - **High quality priority (≤0.7)**: Qwen3Embedding (better quality, ~30ms)
+    ///
+    /// ### Medium Sequences (513-2048 tokens)
+    /// - Always route to GemmaEmbedding (optimal: 8K context window, good speed)
+    ///
+    /// ### Long Sequences (2049-32768 tokens)
+    /// - Always route to Qwen3Embedding (only model supporting 32K context)
+    ///
+    /// ### Ultra-long Sequences (>32768 tokens)
+    /// - Returns error (exceeds maximum supported length)
+    ///
+    /// ## Arguments
+    /// - `requirements`: Embedding generation requirements
+    ///
+    /// ## Returns
+    /// - `Ok(ModelType)`: The selected model type (Qwen3Embedding or GemmaEmbedding)
+    /// - `Err`: If sequence length exceeds maximum or other validation fails
+    ///
+    /// ## Example
+    /// ```rust,ignore
+    /// // Short sequence with high latency priority -> GemmaEmbedding
+    /// let requirements = EmbeddingRequirements {
+    ///     sequence_length: 256,
+    ///     quality_priority: 0.5,
+    ///     latency_priority: 0.9,
+    ///     target_dimension: None,
+    /// };
+    /// let model = classifier.select_embedding_model(&requirements)?;
+    /// assert_eq!(model, ModelType::GemmaEmbedding);
+    ///
+    /// // Long sequence -> Qwen3Embedding (only option)
+    /// let requirements = EmbeddingRequirements {
+    ///     sequence_length: 4096,
+    ///     quality_priority: 0.8,
+    ///     latency_priority: 0.3,
+    ///     target_dimension: None,
+    /// };
+    /// let model = classifier.select_embedding_model(&requirements)?;
+    /// assert_eq!(model, ModelType::Qwen3Embedding);
+    /// ```
+    pub fn select_embedding_model(
+        &self,
+        requirements: &EmbeddingRequirements,
+    ) -> Result<ModelType, UnifiedClassifierError> {
+        // Validate sequence length
+        if requirements.sequence_length > 32768 {
+            return Err(UnifiedClassifierError::ProcessingError(format!(
+                "Sequence length {} exceeds maximum supported length of 32K tokens. \
+                     Consider splitting the input into smaller chunks.",
+                requirements.sequence_length
+            )));
+        }
+
+        // Intelligent routing based on sequence length and priority
+        let model_type = match requirements.sequence_length {
+            // Short sequences (0-512 tokens)
+            // Decision based on latency vs quality priority
+            0..=512 => {
+                if requirements.quality_priority > 0.7 {
+                    // High quality priority -> Choose Qwen3 (better quality)
+                    // - Inference time: ~30ms
+                    // - Last token pooling (better for instructions)
+                    // - Larger hidden size (1024 vs 768)
+                    ModelType::Qwen3Embedding
+                } else if requirements.latency_priority > 0.7 {
+                    // High latency priority (> 0.7) -> Choose Gemma (faster)
+                    // - Inference time: ~20ms
+                    // - Mean pooling + Dense bottleneck
+                    // - Good quality despite smaller size
+                    ModelType::GemmaEmbedding
+                } else {
+                    // Balanced or quality-favoring (latency <= 0.7) -> Choose Qwen3
+                    // Default to Qwen3 for better quality when priorities are balanced
+                    ModelType::Qwen3Embedding
+                }
+            }
+
+            // Medium sequences (513-2048 tokens)
+            // Gemma is optimal: sufficient context window (8K), good speed
+            513..=2048 => {
+                // GemmaEmbedding is optimal for this range
+                // - Supports up to 8K context (plenty of headroom)
+                // - Good balance of speed (~50ms) and quality
+                // - Dense bottleneck provides high-quality embeddings
+                // - Matryoshka support for flexible dimensions
+                ModelType::GemmaEmbedding
+            }
+
+            // Long sequences (2049-32768 tokens)
+            // Only Qwen3 supports this range
+            2049..=32768 => {
+                // Only Qwen3Embedding supports sequences this long
+                // - Maximum 32K context window
+                // - Last token pooling for long contexts
+                // - Optimized for long-range dependencies
+                ModelType::Qwen3Embedding
+            }
+
+            // This should never be reached due to validation above,
+            // but added for exhaustiveness
+            _ => {
+                return Err(UnifiedClassifierError::ProcessingError(format!(
+                    "Invalid sequence length: {}. Must be > 0 and <= 32768.",
+                    requirements.sequence_length
+                )));
+            }
+        };
+
+        // Consider Matryoshka dimension requirements
+        // If target_dimension is < 768, Gemma might be more efficient
+        let model_type = if let Some(target_dim) = requirements.target_dimension {
+            if target_dim < 768 && requirements.latency_priority > 0.5 {
+                // For smaller dimensions with latency priority, prefer Gemma
+                // Gemma supports Matryoshka representation learning (768/512/256/128)
+                ModelType::GemmaEmbedding
+            } else {
+                model_type
+            }
+        } else {
+            model_type
+        };
+
+        // Log routing decision for monitoring
+        if self.config.embedding.enable_performance_tracking {
+            println!(
+                "[Embedding Router] Model {:?} selected for seq_len={} (quality={:.2}, latency={:.2}, target_dim={:?})",
+                model_type,
+                requirements.sequence_length,
+                requirements.quality_priority,
+                requirements.latency_priority,
+                requirements.target_dimension
+            );
+        }
+
+        Ok(model_type)
+    }
+
     /// Calculate performance improvement over baseline
     fn calculate_performance_improvement(&self, processing_time: f32, path_used: ModelType) -> f32 {
         match path_used {
@@ -766,6 +1041,12 @@ impl DualPathUnifiedClassifier {
             }
             ModelType::Traditional => {
                 // Traditional is the baseline
+                0.0
+            }
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                // Embedding models don't participate in classification performance tracking
+                // Their metrics (latency, throughput) are tracked separately via update_embedding_stats()
+                // Performance comparison is not meaningful in classification context
                 0.0
             }
         }
@@ -793,6 +1074,14 @@ impl Default for UnifiedPerformanceStats {
             lora_request_count: 0,
             path_switches: 0,
             last_path_used: None,
+            // Embedding model metrics
+            qwen3_usage: 0,
+            qwen3_total_time_ms: 0.0,
+            gemma_usage: 0,
+            gemma_total_time_ms: 0.0,
+            embedding_total_requests: 0,
+            avg_qwen3_sequence_length: 0.0,
+            avg_gemma_sequence_length: 0.0,
         }
     }
 }
