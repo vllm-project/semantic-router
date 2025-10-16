@@ -109,6 +109,16 @@ type RouterConfig struct {
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
 
+	// Embedding models configuration (Phase 4: Long-context embedding support)
+	EmbeddingModels struct {
+		// Path to Qwen3-Embedding-0.6B model directory
+		Qwen3ModelPath string `yaml:"qwen3_model_path"`
+		// Path to EmbeddingGemma-300M model directory
+		GemmaModelPath string `yaml:"gemma_model_path"`
+		// Use CPU for inference (default: true, auto-detect GPU if available)
+		UseCPU bool `yaml:"use_cpu"`
+	} `yaml:"embedding_models"`
+
 	// Observability configuration for tracing, metrics, and logging
 	Observability ObservabilityConfig `yaml:"observability"`
 

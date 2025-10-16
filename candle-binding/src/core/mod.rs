@@ -25,10 +25,9 @@ pub use unified_error::{
 pub use tokenization::{
     create_bert_compatibility_tokenizer, create_c_tokenization_error,
     create_lora_compatibility_tokenizer, create_modernbert_compatibility_tokenizer,
-    create_tokenizer, detect_model_type, tokenization_result_to_c, tokenize_text_compat,
-    BatchTokenizationResult, CTokenizationResult, DualPathTokenizer,
-    ModelType as TokenizerModelType, TokenDataType, TokenizationConfig, TokenizationResult,
-    UnifiedTokenizer,
+    create_tokenizer, detect_tokenization_strategy, tokenization_result_to_c, tokenize_text_compat,
+    BatchTokenizationResult, CTokenizationResult, DualPathTokenizer, TokenDataType,
+    TokenizationConfig, TokenizationResult, TokenizationStrategy, UnifiedTokenizer,
 };
 
 // Test modules (only compiled in test builds)

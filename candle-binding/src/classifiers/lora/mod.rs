@@ -15,7 +15,7 @@ pub use parallel_engine::*;
 pub use pii_lora::*;
 pub use security_lora::*;
 
-// Test modules (only compiled in test builds)
+// Test modules
 #[cfg(test)]
 pub mod intent_lora_test;
 #[cfg(test)]

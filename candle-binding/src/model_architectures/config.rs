@@ -16,6 +16,8 @@ pub struct DualPathConfig {
     pub traditional: TraditionalConfig,
     /// LoRA model configuration
     pub lora: LoRAConfig,
+    /// Embedding model configuration
+    pub embedding: EmbeddingConfig,
     /// Global settings
     pub global: GlobalConfig,
 }
@@ -63,6 +65,19 @@ pub struct LoRAAdapterPaths {
     pub pii: Option<PathBuf>,
     /// Security detection adapter
     pub security: Option<PathBuf>,
+}
+
+/// Embedding model configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingConfig {
+    /// Batch size for Qwen3 embedding model
+    pub qwen3_batch_size: usize,
+    /// Batch size for Gemma embedding model
+    pub gemma_batch_size: usize,
+    /// Maximum sequence length for embeddings
+    pub max_sequence_length: usize,
+    /// Enable performance monitoring for embedding models
+    pub enable_performance_tracking: bool,
 }
 
 /// Global configuration settings
@@ -131,6 +146,7 @@ impl Default for DualPathConfig {
         Self {
             traditional: TraditionalConfig::default(),
             lora: LoRAConfig::default(),
+            embedding: EmbeddingConfig::default(),
             global: GlobalConfig::default(),
         }
     }
@@ -172,6 +188,21 @@ impl Default for LoRAAdapterPaths {
     }
 }
 
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            // Qwen3: larger model, smaller batch size for memory efficiency
+            qwen3_batch_size: 8,
+            // Gemma: smaller model, can handle larger batches
+            gemma_batch_size: 16,
+            // Maximum sequence length: 32K for Qwen3, 8K for Gemma
+            max_sequence_length: 32768,
+            // Enable performance tracking by default
+            enable_performance_tracking: true,
+        }
+    }
+}
+
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
@@ -193,6 +224,11 @@ impl DualPathConfig {
             }
             ModelType::LoRA => {
                 config.global.path_selection = PathSelectionStrategy::AlwaysLoRA;
+            }
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                //   Embedding models use automatic selection
+                // Selection is handled by UnifiedClassifier::select_embedding_model()
+                config.global.path_selection = PathSelectionStrategy::Automatic;
             }
         }
         config
@@ -245,6 +281,8 @@ impl DualPathConfig {
         match model_type {
             ModelType::Traditional => self.traditional.batch_size,
             ModelType::LoRA => self.lora.parallel_batch_size,
+            ModelType::Qwen3Embedding => self.embedding.qwen3_batch_size,
+            ModelType::GemmaEmbedding => self.embedding.gemma_batch_size,
         }
     }
 
@@ -253,6 +291,12 @@ impl DualPathConfig {
         match model_type {
             ModelType::Traditional => self.traditional.confidence_threshold,
             ModelType::LoRA => self.lora.confidence_threshold,
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                //  Embedding models don't produce classification confidence
+                // Embeddings are vector representations, not classification predictions
+                // Return 0.0 as embeddings don't have confidence scores
+                0.0
+            }
         }
     }
 }

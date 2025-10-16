@@ -215,9 +215,13 @@ impl DualPathRouter {
         model_type: ModelType,
         requirements: &ProcessingRequirements,
     ) -> f32 {
+        // Calculate base score for model type
         let base_score = match model_type {
-            ModelType::LoRA => self.router_config.lora_baseline_score, // LoRA baseline: high performance
-            ModelType::Traditional => self.router_config.traditional_baseline_score, // Traditional baseline: high reliability
+            ModelType::LoRA => self.router_config.lora_baseline_score,
+            ModelType::Traditional => self.router_config.traditional_baseline_score,
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                self.router_config.embedding_baseline_score
+            }
         };
 
         let mut score = base_score;
@@ -265,6 +269,31 @@ impl DualPathRouter {
                     score += 0.2;
                 }
             }
+            ModelType::Qwen3Embedding => {
+                // Qwen3 excels at long context (up to 32K)
+                // Adjust score based on sequence length (estimated from batch size * avg tokens)
+                let estimated_seq_len = requirements.batch_size * 128; // Conservative estimate
+                if estimated_seq_len > 2048 {
+                    score += 0.3; // Strong advantage for very long context (only Qwen3 supports)
+                } else if estimated_seq_len > 512 {
+                    score += 0.15; // Moderate advantage for long context
+                }
+                // Qwen3 provides high quality embeddings
+                if requirements.priority == ProcessingPriority::Accuracy {
+                    score += 0.2;
+                }
+            }
+            ModelType::GemmaEmbedding => {
+                //Gemma excels at short-to-medium context (up to 8K) with speed
+                let estimated_seq_len = requirements.batch_size * 128;
+                if estimated_seq_len <= 2048 {
+                    score += 0.15; // Advantage for short-to-medium context
+                }
+                // Gemma is faster (good for latency-sensitive applications)
+                if requirements.priority == ProcessingPriority::Latency {
+                    score += 0.25;
+                }
+            }
         }
 
         score.max(0.0).min(1.0)
@@ -292,6 +321,18 @@ impl DualPathRouter {
                     success_rate: self.router_config.traditional_default_success_rate,
                     total_executions: 0,
                 },
+                ModelType::Qwen3Embedding => PathMetrics {
+                    avg_execution_time: Duration::from_millis(30), // ~30ms for short sequences
+                    avg_confidence: 0.8,
+                    success_rate: 0.95,
+                    total_executions: 0,
+                },
+                ModelType::GemmaEmbedding => PathMetrics {
+                    avg_execution_time: Duration::from_millis(20), // ~20ms for short sequences
+                    avg_confidence: 0.75,
+                    success_rate: 0.95,
+                    total_executions: 0,
+                },
             })
     }
 
@@ -303,6 +344,11 @@ impl DualPathRouter {
             }
             ModelType::Traditional => {
                 self.strategy = PathSelectionStrategy::AlwaysTraditional;
+            }
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+                // FUTURE ENHANCEMENT: Optional support for manual embedding model preference
+                // Current implementation: Intelligent automatic selection via UnifiedClassifier
+                // This provides optimal quality-latency balance based on user priorities
             }
         }
     }

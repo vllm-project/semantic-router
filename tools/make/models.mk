@@ -99,3 +99,9 @@ download-models-full: ## Download all models used in local development and docs
 	@if [ ! -f "models/lora_jailbreak_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_modernbert-base_model" ]; then \
 		hf download LLM-Semantic-Router/lora_jailbreak_classifier_modernbert-base_model --local-dir models/lora_jailbreak_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_modernbert-base_model/.downloaded; \
 	fi
+	@if [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
+		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
+	fi
+	@if [ ! -d "models/embeddinggemma-300m" ]; then \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m; \
+	fi

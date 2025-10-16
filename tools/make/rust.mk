@@ -2,13 +2,13 @@
 # = Everything For rust   =
 # ======== rust.mk ========
 
-# Test Rust unit tests
+# Test Rust unit tests (with release optimization for performance)
 test-rust: rust
 	@$(LOG_TARGET)
-	@echo "Running Rust unit tests"
-	@cd candle-binding && cargo test --lib -- --nocapture
+	@echo "Running Rust unit tests (release mode)"
+	@cd candle-binding && cargo test --release --lib -- --nocapture
 
-# Test specific Rust module
+# Test specific Rust module (with release optimization for performance)
 #   Example: make test-rust-module MODULE=classifiers::lora::pii_lora_test
 #   Example: make test-rust-module MODULE=classifiers::lora::pii_lora_test::test_pii_lora_pii_lora_classifier_new
 test-rust-module: rust
@@ -18,8 +18,8 @@ test-rust-module: rust
 		echo "Example: make test-rust-module MODULE=core::similarity_test"; \
 		exit 1; \
 	fi
-	@echo "Running Rust tests for module: $(MODULE)"
-	@cd candle-binding && cargo test $(MODULE) --lib -- --nocapture
+	@echo "Running Rust tests for module: $(MODULE) (release mode)"
+	@cd candle-binding && cargo test --release $(MODULE) --lib -- --nocapture
 
 # Test the Rust library (conditionally use rust-ci in CI environments)
 test-binding: $(if $(CI),rust-ci,rust) ## Run Go tests with the Rust static library

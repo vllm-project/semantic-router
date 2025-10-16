@@ -83,6 +83,7 @@ pub enum ModelErrorType {
     Tokenizer,
     Classifier,
     Similarity,
+    Embedding, // For Qwen3/Gemma embedding models
 }
 
 impl fmt::Display for UnifiedError {

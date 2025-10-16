@@ -524,6 +524,7 @@ pub struct RouterConfig {
     pub low_latency_threshold_ms: u64,  // For low latency requirement detection
     pub lora_baseline_score: f32,       // LoRA path baseline score
     pub traditional_baseline_score: f32, // Traditional path baseline score
+    pub embedding_baseline_score: f32,  // Embedding model (Qwen3/Gemma) baseline score
     pub success_confidence_threshold: f32, // Success rate calculation threshold
     pub large_batch_threshold: usize,   // Large batch size threshold
     pub lora_default_execution_time_ms: u64, // LoRA default execution time
@@ -564,6 +565,7 @@ impl Default for RouterConfig {
             low_latency_threshold_ms: 2000,
             lora_baseline_score: 0.8,
             traditional_baseline_score: 0.7,
+            embedding_baseline_score: 0.75, // Higher quality than Traditional, versatile
             success_confidence_threshold: 0.8,
             large_batch_threshold: 4,
             lora_default_execution_time_ms: 1345,
@@ -638,6 +640,14 @@ impl GlobalConfigLoader {
         {
             if let Ok(score) = value.parse::<f32>() {
                 router_config.traditional_baseline_score = score;
+            }
+        }
+
+        if let Some(value) =
+            Self::extract_yaml_value(&config_str, &["router", "embedding_baseline_score"])
+        {
+            if let Ok(score) = value.parse::<f32>() {
+                router_config.embedding_baseline_score = score;
             }
         }
 

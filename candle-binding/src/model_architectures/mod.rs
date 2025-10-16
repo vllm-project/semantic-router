@@ -2,8 +2,9 @@
 
 #![allow(dead_code)]
 
+pub mod embedding;
 pub mod lora;
-pub mod traditional;
+pub mod traditional; // NEW: Embedding models (Qwen3, Gemma)
 
 // Core model modules
 pub mod config;
@@ -13,7 +14,14 @@ pub mod traits;
 pub mod unified_interface;
 
 // Re-export types from traits module
-pub use traits::{FineTuningType, ModelType, TaskType};
+pub use traits::{
+    EmbeddingPathSpecialization, // Embedding path specialization
+    FineTuningType,
+    LongContextEmbeddingCapable,
+    ModelType,
+    PoolingMethod,
+    TaskType,
+};
 
 // Re-export unified interface (new simplified traits)
 pub use unified_interface::{
@@ -27,9 +35,18 @@ pub use routing::{DualPathRouter, ProcessingRequirements};
 pub use config::PathSelectionStrategy;
 
 // Re-export model factory functionality
-pub use model_factory::{DualPathModel, ModelFactory, ModelFactoryConfig, ModelOutput};
+pub use model_factory::{
+    DualPathModel,
+    EmbeddingOutput, // Embedding model output
+    ModelFactory,
+    ModelFactoryConfig,
+    ModelOutput,
+};
 
-// Test modules (only compiled in test builds)
+// Re-export embedding module pooling functions
+pub use embedding::pooling::{cls_pool, last_token_pool, mean_pool};
+
+// Test modules
 #[cfg(test)]
 pub mod model_factory_test;
 #[cfg(test)]
