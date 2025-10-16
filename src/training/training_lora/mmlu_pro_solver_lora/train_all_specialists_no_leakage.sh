@@ -30,9 +30,6 @@ LORA_RANK=32
 OUTPUT_BASE_DIR="models_no_leakage"
 LOG_DIR="training_logs_no_leakage"
 
-# Virtual environment
-VENV_PATH="/home/ubuntu/rootfs/semantic-router.bak/.venv"
-
 # Training script
 TRAINING_SCRIPT="ft_qwen3_mmlu_solver_lora_no_leakage.py"
 
@@ -47,12 +44,12 @@ cat << 'EOF'
 ╚══════════════════════════════════════════════════════════════════╝
 
 Training 6 specialized models using external datasets:
-  1. Math Reasoner    (GSM8K + MATH)
+  1. Math Reasoner    (ARC)
   2. Science Expert   (ARC + OpenBookQA + SciQ)
   3. Social Sciences  (CommonsenseQA + StrategyQA)
   4. Humanities       (TruthfulQA)
   5. Law              (MMLU-train law only)
-  6. Generalist       (Mixed datasets)
+  6. Generalist       (ARC + CommonsenseQA + TruthfulQA)
 
 Testing on: MMLU-Pro (held-out benchmark)
 Data Leakage: ✅ NONE (completely separate datasets!)
@@ -82,12 +79,6 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # Create directories
 mkdir -p "$OUTPUT_BASE_DIR"
 mkdir -p "$LOG_DIR"
-
-# Activate virtual environment
-echo "Activating virtual environment..."
-source "$VENV_PATH/bin/activate"
-echo "✓ Virtual environment activated"
-echo ""
 
 # Check if training script exists
 if [ ! -f "$TRAINING_SCRIPT" ]; then
@@ -226,8 +217,8 @@ if train_specialist \
     "math-reasoner" \
     "$EPOCHS" \
     "$SAMPLES_PER_DATASET" \
-    "Mathematical reasoning and STEM problems" \
-    "GSM8K (free-form) + MATH (free-form) + ARC (multiple-choice)" \
+    "STEM reasoning and problem-solving" \
+    "ARC (AI2 Reasoning Challenge)" \
     "math, physics, engineering"; then
     SUCCESSFUL_MODELS+=("math-reasoner")
     COMPLETED_MODELS=$((COMPLETED_MODELS + 1))
@@ -321,7 +312,7 @@ if train_specialist \
     "$EPOCHS" \
     "$SAMPLES_PER_DATASET" \
     "Mixed domains (catch-all specialist)" \
-    "GSM8K (free-form) + ARC + CommonsenseQA + TruthfulQA" \
+    "ARC + CommonsenseQA + TruthfulQA" \
     "health, other"; then
     SUCCESSFUL_MODELS+=("generalist")
     COMPLETED_MODELS=$((COMPLETED_MODELS + 1))

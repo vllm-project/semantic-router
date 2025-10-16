@@ -565,6 +565,12 @@ def evaluate_model_on_samples(
     if max_samples is not None and len(samples) > max_samples:
         samples = samples[:max_samples]
 
+    # Log question IDs for verification that same questions are used
+    logger.info(f"{phase_name} - Using {len(samples)} test samples")
+    logger.info(
+        f"{phase_name} - Sample question hashes: {[hash(s['question'][:50]) for s in samples[:5]]}"
+    )
+
     model.eval()
 
     correct = 0
@@ -844,7 +850,7 @@ def main(
         tokenizer=tokenizer,
         samples=test_samples,
         use_cot=use_cot,
-        max_samples=50,  # Limit to 50 samples for faster baseline
+        max_samples=200,  # Increased for more stable results
         phase_name="BASELINE (Pre-training)",
     )
 
@@ -948,7 +954,7 @@ def main(
         tokenizer=tokenizer,
         samples=test_samples,
         use_cot=use_cot,
-        max_samples=50,  # Same as baseline
+        max_samples=200,  # Same as baseline - increased for more stable results
         phase_name="POST-TRAINING (After Fine-tuning)",
     )
 
