@@ -324,50 +324,56 @@ def format_instruction(question: str, category: str = None) -> List[Dict[str, st
     return messages
 
 
-def create_generative_dataset(
-    texts: List[str], labels: List[str], tokenizer, max_length=512
-):
-    """
-    Create dataset in chat format for proper instruction fine-tuning.
+def create_generative_dataset(texts: List[str], labels: List[str], tokenizer, max_length=512):
+    input_ids_list, attn_masks, label_ids_list = [], [], []
 
-    Uses tokenizer.apply_chat_template() to format messages with special tokens.
-    This ensures:
-    - User input (instruction) and assistant output (category) are properly separated
-    - Model trains ONLY on the category name (1-2 tokens), not the instruction (200+ tokens)
-    - Training is 100x more focused: 100% signal vs 0.4% signal in old format!
-    - Inference format matches training format exactly
-    """
-    formatted_examples = []
-
-    for text, label in zip(texts, labels):
-        # Get messages (user instruction + assistant category)
-        messages = format_instruction(text, label)
-
-        # Apply chat template to add special tokens
-        # add_generation_prompt=False because we already have the assistant response
-        # Disable thinking mode to train model for direct classification
-        formatted_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
+    for q, cat in zip(texts, labels):
+        # 1) 只构建 user 提示，要求“生成”
+        user_only = [{"role": "user", "content": INSTRUCTION_TEMPLATE.format(question=q)}]
+        # apply_chat_template with tokenize=True returns a list of token IDs directly
+        prompt_ids = tokenizer.apply_chat_template(
+            user_only, tokenize=True, add_generation_prompt=True, enable_thinking=False,
+            return_tensors=None
         )
-        formatted_examples.append(formatted_text)
 
-    # Tokenize
-    encodings = tokenizer(
-        formatted_examples,
-        truncation=True,
-        padding="max_length",
-        max_length=max_length,
-        return_tensors="pt",
-    )
+        # 2) 构建标签（类别名 + eos）
+        cat_ids = tokenizer(cat, add_special_tokens=False)["input_ids"] + [tokenizer.eos_token_id]
 
-    # For causal LM, labels = input_ids (shifted internally by model)
-    return Dataset.from_dict(
-        {
-            "input_ids": encodings["input_ids"],
-            "attention_mask": encodings["attention_mask"],
-            "labels": encodings["input_ids"],  # Standard causal LM format
-        }
-    )
+        # 3) 拼接 & 生成 labels 掩码（prompt 段 -100）
+        ids = prompt_ids + cat_ids
+        if len(ids) > max_length:
+            # 只在左侧截断 prompt，确保标签不被截断
+            cut = max_length - len(cat_ids)
+            if cut <= 0:
+                # 极端情况：max_length 太小；至少保证标签可见
+                ids = cat_ids[-max_length:]
+                prompt_len = 0
+            else:
+                ids = ids[-max_length:]
+                prompt_len = min(cut, len(prompt_ids))
+        else:
+            prompt_len = len(prompt_ids)
+
+        labels_ids = [-100] * prompt_len + ids[prompt_len:]
+        attn = [1] * len(ids)
+
+        # pad 到 max_length
+        pad_len = max_length - len(ids)
+        if pad_len > 0:
+            ids += [tokenizer.pad_token_id] * pad_len
+            labels_ids += [-100] * pad_len
+            attn += [0] * pad_len
+
+        input_ids_list.append(ids)
+        label_ids_list.append(labels_ids)
+        attn_masks.append(attn)
+
+    return Dataset.from_dict({
+        "input_ids": input_ids_list,
+        "attention_mask": attn_masks,
+        "labels": label_ids_list,  # 仅“助手段落”参与 loss
+    })
+
 
 
 # -------- NEW: candidate log-likelihood scoring (LLM-as-a-Classifier) --------
@@ -688,7 +694,7 @@ def main(
             try:
                 outputs = model.generate(
                     **inputs,
-                    max_new_tokens=10,
+                    max_new_tokens=2,
                     do_sample=False,  # Greedy decoding for evaluation
                     pad_token_id=tokenizer.pad_token_id,
                     eos_token_id=[
