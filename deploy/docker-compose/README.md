@@ -134,4 +134,14 @@ All services join the `semantic-network` bridge network with a fixed subnet to m
 ## Related Stacks
 
 - Local observability only: `tools/observability/docker-compose.obs.yml`
-- Tracing stack: `tools/tracing/docker-compose.tracing.yaml`
+- Tracing stack (standalone, dev): `tools/tracing/docker-compose.tracing.yaml`
+
+## Tracing & Grafana
+
+- Jaeger UI: http://localhost:16686
+- Grafana: http://localhost:3000 (admin/admin)
+  - Prometheus datasource (default) for metrics
+  - Jaeger datasource for exploring traces (search service `vllm-semantic-router`)
+
+By default, the router container uses `config/config.tracing.yaml` (enabled tracing, exporter to Jaeger).
+Override with `CONFIG_FILE=/app/config/config.yaml` if you don’t want tracing.

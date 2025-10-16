@@ -28,6 +28,9 @@ download-models-minimal:
 	@if [ ! -f "models/Qwen/Qwen3-0.6B/.downloaded" ] || [ ! -d "models/Qwen/Qwen3-0.6B" ]; then \
 		hf download Qwen/Qwen3-0.6B --local-dir models/Qwen/Qwen3-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen/Qwen3-0.6B/.downloaded; \
 	fi
+	@if [ ! -f "models/all-MiniLM-L12-v2/.downloaded" ] || [ ! -d "models/all-MiniLM-L12-v2" ]; then \
+		hf download sentence-transformers/all-MiniLM-L12-v2 --local-dir models/all-MiniLM-L12-v2 && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/all-MiniLM-L12-v2/.downloaded; \
+	fi
 	@if [ ! -f "models/category_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/category_classifier_modernbert-base_model" ]; then \
 		hf download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir models/category_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/category_classifier_modernbert-base_model/.downloaded; \
 	fi
@@ -48,6 +51,9 @@ download-models-full:
 	# Pre-download tiny LLM for llm-katan (optional but speeds up first start)
 	@if [ ! -f "models/Qwen/Qwen3-0.6B/.downloaded" ] || [ ! -d "models/Qwen/Qwen3-0.6B" ]; then \
 		hf download Qwen/Qwen3-0.6B --local-dir models/Qwen/Qwen3-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen/Qwen3-0.6B/.downloaded; \
+	fi
+	@if [ ! -f "models/all-MiniLM-L12-v2/.downloaded" ] || [ ! -d "models/all-MiniLM-L12-v2" ]; then \
+		hf download sentence-transformers/all-MiniLM-L12-v2 --local-dir models/all-MiniLM-L12-v2 && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/all-MiniLM-L12-v2/.downloaded; \
 	fi
 	@if [ ! -f "models/category_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/category_classifier_modernbert-base_model" ]; then \
 		hf download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir models/category_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/category_classifier_modernbert-base_model/.downloaded; \
