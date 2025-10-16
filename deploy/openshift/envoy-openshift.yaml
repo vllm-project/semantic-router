@@ -1,7 +1,7 @@
 # OpenShift-specific Envoy configuration
-# This config uses static clusters instead of ORIGINAL_DST to work with Kubernetes networking
-# The main difference from config/envoy.yaml is the use of static clusters for math_specialist_cluster
-# and coding_specialist_cluster that point to localhost ports 8000 and 8001 respectively.
+# This config uses ORIGINAL_DST cluster with header-based destination selection
+# The semantic router sets the x-gateway-destination-endpoint header which Envoy uses
+# to dynamically route to the correct vLLM endpoint (port 8000 or 8001)
 static_resources:
   listeners:
   - name: listener_0
@@ -48,29 +48,11 @@ static_resources:
                 route:
                   cluster: semantic_router_cluster
                   timeout: 300s
-              # Route to Model-A for Model-A requests
-              - match:
-                  prefix: "/"
-                  headers:
-                  - name: "x-gateway-destination-endpoint"
-                    exact_match: "127.0.0.1:8000"
-                route:
-                  cluster: model_a_cluster
-                  timeout: 300s
-              # Route to Model-B for Model-B requests
-              - match:
-                  prefix: "/"
-                  headers:
-                  - name: "x-gateway-destination-endpoint"
-                    exact_match: "127.0.0.1:8001"
-                route:
-                  cluster: model_b_cluster
-                  timeout: 300s
-              # Default route to Model-B (fallback)
+              # Dynamic route - destination determined by x-gateway-destination-endpoint header
               - match:
                   prefix: "/"
                 route:
-                  cluster: model_b_cluster
+                  cluster: vllm_dynamic_cluster
                   timeout: 300s
           http_filters:
           - name: envoy.filters.http.ext_proc
@@ -147,42 +129,16 @@ static_resources:
         explicit_http_config:
           http_protocol_options: {}
 
-  # Static cluster for Model-A (OpenShift-specific)
-  - name: model_a_cluster
+  # Dynamic vLLM cluster using ORIGINAL_DST with header-based destination
+  # The semantic router sets x-gateway-destination-endpoint header to specify the target
+  - name: vllm_dynamic_cluster
     connect_timeout: 300s
     per_connection_buffer_limit_bytes: 52428800
-    type: STATIC
-    lb_policy: ROUND_ROBIN
-    load_assignment:
-      cluster_name: model_a_cluster
-      endpoints:
-      - lb_endpoints:
-        - endpoint:
-            address:
-              socket_address:
-                address: 127.0.0.1
-                port_value: 8000
-    typed_extension_protocol_options:
-      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
-        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
-        explicit_http_config:
-          http_protocol_options: {}
-
-  # Static cluster for Model-B (OpenShift-specific)
-  - name: model_b_cluster
-    connect_timeout: 300s
-    per_connection_buffer_limit_bytes: 52428800
-    type: STATIC
-    lb_policy: ROUND_ROBIN
-    load_assignment:
-      cluster_name: model_b_cluster
-      endpoints:
-      - lb_endpoints:
-        - endpoint:
-            address:
-              socket_address:
-                address: 127.0.0.1
-                port_value: 8001
+    type: ORIGINAL_DST
+    lb_policy: CLUSTER_PROVIDED
+    original_dst_lb_config:
+      use_http_header: true
+      http_header_name: "x-gateway-destination-endpoint"
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions

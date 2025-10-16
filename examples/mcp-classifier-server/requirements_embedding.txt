@@ -6,7 +6,7 @@ mcp>=1.0.0
 # Embedding and Vector Search
 transformers>=4.30.0
 torch>=2.0.0
-faiss-cpu>=1.7.4  # Use faiss-gpu if you have GPU support
+pymilvus>=2.5.0
 
 # HTTP server support (optional, for HTTP mode)
 aiohttp>=3.9.0

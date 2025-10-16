@@ -34,7 +34,7 @@ The screenshot below shows the LLM Router dashboard in Grafana.
 
 ![LLM Router Dashboard](./website/static/img/grafana_screenshot.png)
 
-The router is implemented in two ways: 
+The router is implemented in two ways:
 
 - Golang (with Rust FFI based on the [candle](https://github.com/huggingface/candle) rust ML framework)
 - Python
@@ -138,6 +138,19 @@ The documentation includes:
 ## Community 👋
 
 For questions, feedback, or to contribute, please join `#semantic-router` channel in vLLM Slack.
+
+### Community Meetings 📅
+
+We host bi-weekly community meetings to sync up with contributors across different time zones:
+
+- **First Tuesday of the month**: 9:00-10:00 AM EST (accommodates US EST and Asia Pacific contributors)
+  - **Zoom Link**: [https://nyu.zoom.us/j/95065349917](https://nyu.zoom.us/j/95065349917)
+  - **Calendar Invite**: [https://calendar.app.google/EeP6xDgCpxte6d1eA](https://calendar.app.google/EeP6xDgCpxte6d1eA)
+- **Third Tuesday of the month**: 1:00-2:00 PM EST (accommodates US EST and California contributors)
+  - **Zoom Link**: [https://nyu.zoom.us/j/98861585086](https://nyu.zoom.us/j/98861585086)
+  - **Calendar Invite**: [https://calendar.app.google/oYsmt1Pu46o4gFuP8](https://calendar.app.google/oYsmt1Pu46o4gFuP8)
+
+Join us to discuss the latest developments, share ideas, and collaborate on the project!
 
 ## Citation
 

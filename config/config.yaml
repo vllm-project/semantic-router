@@ -1,5 +1,5 @@
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
 
@@ -32,13 +32,13 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
+    address: "172.28.0.20" # Static IPv4 of llm-katan within docker compose network
     port: 8002
     weight: 1
 
 model_config:
   "qwen3":
-    reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
+    reasoning_family: "qwen3" # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true

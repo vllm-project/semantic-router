@@ -5,12 +5,12 @@ on:
   workflow_call:
     inputs:
       tag_suffix:
-        description: 'Custom tag suffix for the Docker image'
+        description: "Custom tag suffix for the Docker image"
         required: false
         type: string
-        default: ''
+        default: ""
       is_nightly:
-        description: 'Whether this is a nightly build'
+        description: "Whether this is a nightly build"
         required: false
         type: boolean
         default: false
@@ -20,7 +20,7 @@ on:
         type: boolean
         default: true
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
     paths:
       - ".github/workflows/docker-publish.yml"
@@ -42,16 +42,32 @@ jobs:
         # Multi-architecture build strategy:
         # - AMD64: Native build on ubuntu-latest (fast)
         # - ARM64: Cross-compilation on ubuntu-latest (faster than emulation)
-#        arch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64"]') || fromJSON('["amd64", "arm64"]') }}
+        #        arch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64"]') || fromJSON('["amd64", "arm64"]') }}
         arch: ["amd64", "arm64"]
       fail-fast: false
 
     steps:
+      - name: Free up disk space
+        run: |
+          echo "Before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          echo "After cleanup:"
+          df -h
+
       - name: Check out the repo
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
 
       - name: Set up QEMU for cross-compilation
         if: matrix.arch == 'arm64'
@@ -172,6 +188,14 @@ jobs:
             fi
           fi
 
+      - name: Additional cleanup for llm-katan (large Python packages)
+        if: matrix.image == 'llm-katan'
+        run: |
+          echo "Freeing up more space for llm-katan build..."
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          df -h
+
       - name: Build and push ${{ matrix.image }} Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -182,10 +206,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}
-          cache-from: |
-            type=gha
-            type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=${{ github.event_name == 'pull_request' && '8' || '16' }}

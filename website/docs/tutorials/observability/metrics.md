@@ -76,10 +76,10 @@ All services in Docker containers.
 
 ```bash
 # Start full stack (includes observability)
-docker compose up --build
+docker compose -f deploy/docker-compose/docker-compose.yml up --build
 
 # Or with testing profile
-docker compose --profile testing up --build
+docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
 ```
 
 **Access:**

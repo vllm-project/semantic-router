@@ -95,6 +95,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/news',
+          label: 'News',
+          position: 'left',
+        },
+        {
           type: 'dropdown',
           label: 'Community',
           position: 'right',
