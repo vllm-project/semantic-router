@@ -7,12 +7,15 @@ use std::time::{Duration, Instant};
 
 use crate::model_architectures::traits::{ModelType, TaskType};
 
-/// Shared memory pool for dual-path optimization
+/// Multi-path memory pool for dynamic model type support
+///
+/// Refactored from DualPathMemoryPool to support multiple model types dynamically.
+/// Now uses a HashMap<ModelType, ...> instead of separate traditional_pools and lora_pools.
 pub struct DualPathMemoryPool {
-    /// Traditional model memory allocations
-    traditional_pools: Arc<RwLock<HashMap<String, TensorPool>>>,
-    /// LoRA model memory allocations
-    lora_pools: Arc<RwLock<HashMap<String, TensorPool>>>,
+    /// Dynamic model-specific memory pools
+    /// Maps ModelType (Traditional, LoRA, LongContextEmbedding) to their tensor pools
+    model_pools: Arc<RwLock<HashMap<ModelType, Arc<RwLock<HashMap<String, TensorPool>>>>>>,
+
     /// Shared cross-path memory pool
     shared_pool: Arc<Mutex<SharedTensorPool>>,
     /// Memory usage tracker
@@ -142,16 +145,34 @@ pub struct SharedPoolStats {
 }
 
 impl DualPathMemoryPool {
-    /// Create a new dual-path memory pool
+    /// Create a new multi-path memory pool
+    ///
+    /// Initializes dynamic model pools for Traditional, LoRA, and LongContextEmbedding models.
     pub fn new(device: Device, config: MemoryPoolConfig) -> Self {
         println!(
-            "Initializing DualPathMemoryPool with {}MB limit",
-            config.max_pool_size_mb * 2 + config.max_shared_pool_size_mb
+            "Initializing Multi-Path MemoryPool with {}MB limit per model type",
+            config.max_pool_size_mb
+        );
+
+        // Initialize model_pools with all known ModelType variants
+        let mut model_pools_map = HashMap::new();
+        model_pools_map.insert(
+            ModelType::Traditional,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
+        model_pools_map.insert(ModelType::LoRA, Arc::new(RwLock::new(HashMap::new())));
+        // Add both Qwen3 and Gemma embedding model pools
+        model_pools_map.insert(
+            ModelType::Qwen3Embedding,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
+        model_pools_map.insert(
+            ModelType::GemmaEmbedding,
+            Arc::new(RwLock::new(HashMap::new())),
         );
 
         Self {
-            traditional_pools: Arc::new(RwLock::new(HashMap::new())),
-            lora_pools: Arc::new(RwLock::new(HashMap::new())),
+            model_pools: Arc::new(RwLock::new(model_pools_map)),
             shared_pool: Arc::new(Mutex::new(SharedTensorPool::new(
                 config.max_shared_pool_size_mb,
             ))),
@@ -228,16 +249,18 @@ impl DualPathMemoryPool {
     }
 
     /// Try to get tensor from model-specific pool
+    ///
+    /// Now uses dynamic model_pools HashMap instead of hardcoded fields.
     fn try_get_from_model_pool(
         &self,
         tensor_key: &TensorKey,
         model_type: ModelType,
     ) -> Option<Tensor> {
-        let pools = match model_type {
-            ModelType::Traditional => &self.traditional_pools,
-            ModelType::LoRA => &self.lora_pools,
-        };
+        // Get the model-specific pools from the dynamic HashMap
+        let model_pools = self.model_pools.read().unwrap();
+        let pools = model_pools.get(&model_type)?;
 
+        // Try to get tensor from the pool
         let pools_read = pools.read().unwrap();
         if let Some(pool) = pools_read.get(&tensor_key.usage_hint) {
             if let Some(tensors) = pool.available_tensors.get(tensor_key) {
@@ -262,18 +285,24 @@ impl DualPathMemoryPool {
     }
 
     /// Add tensor to model-specific pool
+    ///
+    /// Now uses dynamic model_pools HashMap, supporting all ModelType variants including LongContextEmbedding.
     fn add_to_model_pool(&self, tensor: Tensor, tensor_key: TensorKey, model_type: ModelType) {
-        let pools = match model_type {
-            ModelType::Traditional => &self.traditional_pools,
-            ModelType::LoRA => &self.lora_pools,
-        };
+        // Get or create the model-specific pools
+        let model_pools = self.model_pools.read().unwrap();
 
-        let mut pools_write = pools.write().unwrap();
-        let pool = pools_write
-            .entry(tensor_key.usage_hint.clone())
-            .or_insert_with(|| TensorPool::new());
+        // Get the pools for this specific model type
+        if let Some(pools) = model_pools.get(&model_type) {
+            let mut pools_write = pools.write().unwrap();
+            let pool = pools_write
+                .entry(tensor_key.usage_hint.clone())
+                .or_insert_with(|| TensorPool::new());
 
-        pool.add_tensor(tensor_key, tensor);
+            pool.add_tensor(tensor_key, tensor);
+        } else {
+            // This should not happen if all ModelType variants are initialized in new()
+            eprintln!("Warning: No pool found for model type {:?}", model_type);
+        }
     }
 
     /// Determine if tensor should be shared between paths
@@ -361,13 +390,16 @@ impl DualPathMemoryPool {
             freed_memory_mb += memory;
         }
 
-        // Cleanup model-specific pools
-        for pools in [&self.traditional_pools, &self.lora_pools] {
-            let mut pools_write = pools.write().unwrap();
-            for pool in pools_write.values_mut() {
-                let (count, memory) = pool.cleanup_old_tensors();
-                cleaned_count += count;
-                freed_memory_mb += memory;
+        // Cleanup all model-specific pools (Traditional, LoRA, LongContextEmbedding)
+        {
+            let model_pools = self.model_pools.read().unwrap();
+            for (_model_type, pools) in model_pools.iter() {
+                let mut pools_write = pools.write().unwrap();
+                for pool in pools_write.values_mut() {
+                    let (count, memory) = pool.cleanup_old_tensors();
+                    cleaned_count += count;
+                    freed_memory_mb += memory;
+                }
             }
         }
 

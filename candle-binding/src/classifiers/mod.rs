@@ -7,9 +7,8 @@ pub mod traditional;
 
 pub mod unified;
 
-// Test modules (only compiled in test builds)
-#[cfg(test)]
-pub mod unified_test;
+// Re-export key types from unified module
+pub use unified::{DualPathUnifiedClassifier, EmbeddingRequirements, UnifiedClassifierError};
 
 /// Classification task types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,3 +44,7 @@ pub struct TaskResult {
     /// Confidence score
     pub confidence: f32,
 }
+
+// Test modules
+#[cfg(test)]
+pub mod unified_test;

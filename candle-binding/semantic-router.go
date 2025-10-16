@@ -80,7 +80,49 @@ typedef struct {
     float* data;
     int length;
     bool error;
+    int model_type;           // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    int sequence_length;      // Sequence length in tokens
+    float processing_time_ms; // Processing time in milliseconds
 } EmbeddingResult;
+
+// Embedding similarity result structure
+typedef struct {
+    float similarity;         // Cosine similarity score (-1.0 to 1.0)
+    int model_type;           // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    float processing_time_ms; // Processing time in milliseconds
+    bool error;               // Whether an error occurred
+} EmbeddingSimilarityResult;
+
+// Batch similarity match structure
+typedef struct {
+    int index;        // Index of the candidate in the input array
+    float similarity; // Cosine similarity score
+} SimilarityMatch;
+
+// Batch similarity result structure
+typedef struct {
+    SimilarityMatch* matches; // Array of top-k matches, sorted by similarity (descending)
+    int num_matches;          // Number of matches returned (≤ top_k)
+    int model_type;           // 0=Qwen3, 1=Gemma, -1=Unknown/Error
+    float processing_time_ms; // Processing time in milliseconds
+    bool error;               // Whether an error occurred
+} BatchSimilarityResult;
+
+// Single embedding model information
+typedef struct {
+    char* model_name;          // "qwen3" or "gemma"
+    bool is_loaded;            // Whether the model is loaded
+    int max_sequence_length;   // Maximum sequence length
+    int default_dimension;     // Default embedding dimension
+    char* model_path;          // Model path (can be null if not loaded)
+} EmbeddingModelInfo;
+
+// Embedding models information result
+typedef struct {
+    EmbeddingModelInfo* models; // Array of model info
+    int num_models;             // Number of models
+    bool error;                 // Whether an error occurred
+} EmbeddingModelsInfoResult;
 
 // Tokenization result structure
 typedef struct {
@@ -120,6 +162,15 @@ typedef struct {
 
 extern SimilarityResult find_most_similar(const char* query, const char** candidates, int num_candidates, int max_length);
 extern EmbeddingResult get_text_embedding(const char* text, int max_length);
+extern int get_embedding_smart(const char* text, float quality_priority, float latency_priority, EmbeddingResult* result);
+extern int get_embedding_with_dim(const char* text, float quality_priority, float latency_priority, int target_dim, EmbeddingResult* result);
+extern int get_embedding_with_model_type(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
+extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
+extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
+extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
+extern void free_batch_similarity_result(BatchSimilarityResult* result);
+extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
@@ -396,6 +447,396 @@ func GetEmbeddingDefault(text string) ([]float32, error) {
 	return GetEmbedding(text, 512)
 }
 
+// EmbeddingOutput represents the complete embedding generation result with metadata
+type EmbeddingOutput struct {
+	Embedding        []float32 // The embedding vector
+	ModelType        string    // Model used: "qwen3", "gemma", or "unknown"
+	SequenceLength   int       // Sequence length in tokens
+	ProcessingTimeMs float32   // Processing time in milliseconds
+}
+
+// GetEmbeddingSmart intelligently selects the optimal embedding model based on requirements
+//
+// This function automatically routes between Traditional, Gemma, and Qwen3 models based on:
+// - Text length (estimated sequence length)
+// - Quality priority (0.0-1.0): Higher values prefer better quality models
+// - Latency priority (0.0-1.0): Higher values prefer faster models
+//
+// Routing logic:
+// - Short texts (0-512 tokens) + high latency priority (>0.7) → Traditional BERT
+// - Medium texts (513-2048 tokens) → GemmaEmbedding (balanced)
+// - Long texts (2049-32768 tokens) → Qwen3 (32K context support)
+// - Texts >32768 tokens → Returns error
+//
+// Parameters:
+//   - text: Input text to embed
+//   - qualityPriority: Quality importance (0.0-1.0)
+//   - latencyPriority: Speed importance (0.0-1.0)
+//
+// Returns:
+//   - []float32: 768-dimensional embedding vector
+//   - error: Non-nil if embedding generation fails
+//
+// Example:
+//
+//	// High quality for long document
+//	embedding, err := GetEmbeddingSmart("long document text...", 0.9, 0.2)
+//
+//	// Fast embedding for short query
+//	embedding, err := GetEmbeddingSmart("quick search", 0.3, 0.9)
+//
+//	// Balanced for medium text
+//	embedding, err := GetEmbeddingSmart("medium article", 0.5, 0.5)
+func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([]float32, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.EmbeddingResult
+	status := C.get_embedding_smart(
+		cText,
+		C.float(qualityPriority),
+		C.float(latencyPriority),
+		&result,
+	)
+
+	// Check status code (0 = success, 1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to generate smart embedding (status: %d)", status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("embedding generation returned error")
+	}
+
+	// Convert the C array to a Go slice
+	length := int(result.length)
+	if length == 0 {
+		return nil, fmt.Errorf("embedding generation returned zero-length result")
+	}
+
+	embedding := make([]float32, length)
+
+	// Create a slice that refers to the C array
+	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
+
+	// Copy and convert each value
+	for i := 0; i < length; i++ {
+		embedding[i] = float32(cFloats[i])
+	}
+
+	// Free the memory allocated in Rust
+	C.free_embedding(result.data, result.length)
+
+	return embedding, nil
+}
+
+// InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models.
+//
+// This function must be called before using GetEmbeddingWithDim for Qwen3/Gemma models.
+//
+// Parameters:
+//   - qwen3ModelPath: Path to Qwen3 model directory (or empty string "" to skip)
+//   - gemmaModelPath: Path to Gemma model directory (or empty string "" to skip)
+//   - useCPU: If true, use CPU for inference; if false, use GPU if available
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	// Load both models on GPU
+//	err := InitEmbeddingModels(
+//	    "/path/to/qwen3-0.6B",
+//	    "/path/to/embeddinggemma-300m",
+//	    false,
+//	)
+//
+//	// Load only Gemma on CPU
+//	err := InitEmbeddingModels("", "/path/to/embeddinggemma-300m", true)
+func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) error {
+	var cQwen3Path *C.char
+	var cGemmaPath *C.char
+
+	// Convert paths to C strings (NULL if empty)
+	if qwen3ModelPath != "" {
+		cQwen3Path = C.CString(qwen3ModelPath)
+		defer C.free(unsafe.Pointer(cQwen3Path))
+	}
+
+	if gemmaModelPath != "" {
+		cGemmaPath = C.CString(gemmaModelPath)
+		defer C.free(unsafe.Pointer(cGemmaPath))
+	}
+
+	success := C.init_embedding_models(
+		cQwen3Path,
+		cGemmaPath,
+		C.bool(useCPU),
+	)
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize embedding models")
+	}
+
+	log.Printf("INFO: Embedding models initialized successfully")
+	if qwen3ModelPath != "" {
+		log.Printf("  - Qwen3: %s", qwen3ModelPath)
+	}
+	if gemmaModelPath != "" {
+		log.Printf("  - Gemma: %s", gemmaModelPath)
+	}
+
+	return nil
+}
+
+// GetEmbeddingWithDim generates an embedding with intelligent model selection and Matryoshka dimension support.
+//
+// This function automatically selects between Qwen3/Gemma based on text length and quality/latency priorities,
+// and supports Matryoshka Representation Learning for flexible embedding dimensions.
+//
+// Matryoshka dimensions: 768 (full), 512, 256, 128
+//
+// Parameters:
+//   - text: Input text to generate embedding for
+//   - qualityPriority: Quality priority [0.0-1.0] (0.0=fastest, 1.0=highest quality)
+//   - latencyPriority: Latency priority [0.0-1.0] (0.0=slowest, 1.0=lowest latency)
+//   - targetDim: Target embedding dimension (768/512/256/128, or 0 for full dimension)
+//
+// Returns:
+//   - []float32: Embedding vector of the requested dimension
+//   - error: Non-nil if embedding generation fails
+//
+// Example:
+//
+//	// High quality, full dimension (768)
+//	embedding, err := GetEmbeddingWithDim("long document", 0.9, 0.2, 768)
+//
+//	// Fast, compact embedding (128)
+//	embedding, err := GetEmbeddingWithDim("quick search", 0.3, 0.9, 128)
+//
+//	// Auto dimension (uses full 768)
+//	embedding, err := GetEmbeddingWithDim("medium text", 0.5, 0.5, 0)
+func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.EmbeddingResult
+	status := C.get_embedding_with_dim(
+		cText,
+		C.float(qualityPriority),
+		C.float(latencyPriority),
+		C.int(targetDim),
+		&result,
+	)
+
+	// Check status code (0 = success, 1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to generate embedding with dim (status: %d)", status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("embedding generation returned error")
+	}
+
+	// Convert the C array to a Go slice
+	length := int(result.length)
+	if length == 0 {
+		return nil, fmt.Errorf("embedding generation returned zero-length result")
+	}
+
+	embedding := make([]float32, length)
+
+	// Create a slice that refers to the C array
+	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
+
+	// Copy and convert each value
+	for i := 0; i < length; i++ {
+		embedding[i] = float32(cFloats[i])
+	}
+
+	// Free the memory allocated in Rust
+	C.free_embedding(result.data, result.length)
+
+	return embedding, nil
+}
+
+// GetEmbeddingWithMetadata generates an embedding with full metadata from Rust layer
+//
+// This function returns complete information about the embedding generation:
+// - The embedding vector itself
+// - Which model was actually used (qwen3 or gemma)
+// - Sequence length in tokens
+// - Processing time in milliseconds
+//
+// This avoids the need for Go to re-implement Rust's routing logic.
+//
+// Parameters:
+// - text: Input text to embed
+// - qualityPriority: Quality priority (0.0-1.0), higher values favor quality
+// - latencyPriority: Latency priority (0.0-1.0), higher values favor speed
+// - targetDim: Target dimension (128/256/512/768/1024), 0 for auto
+//
+// Returns:
+// - EmbeddingOutput with full metadata
+// - error if generation failed
+//
+// Example:
+//
+//	output, err := GetEmbeddingWithMetadata("Hello world", 0.5, 0.5, 768)
+//	fmt.Printf("Used model: %s, took %.2fms\n", output.ModelType, output.ProcessingTimeMs)
+func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.EmbeddingResult
+	status := C.get_embedding_with_dim(
+		cText,
+		C.float(qualityPriority),
+		C.float(latencyPriority),
+		C.int(targetDim),
+		&result,
+	)
+
+	// Check status code (0 = success, 1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to generate embedding with metadata (status: %d)", status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("embedding generation returned error")
+	}
+
+	// Convert the C array to a Go slice
+	length := int(result.length)
+	if length == 0 {
+		return nil, fmt.Errorf("embedding generation returned zero-length result")
+	}
+
+	embedding := make([]float32, length)
+
+	// Create a slice that refers to the C array
+	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
+
+	// Copy and convert each value
+	for i := 0; i < length; i++ {
+		embedding[i] = float32(cFloats[i])
+	}
+
+	// Free the memory allocated in Rust
+	C.free_embedding(result.data, result.length)
+
+	// Convert model_type to string
+	var modelType string
+	switch int(result.model_type) {
+	case 0:
+		modelType = "qwen3"
+	case 1:
+		modelType = "gemma"
+	default:
+		modelType = "unknown"
+	}
+
+	return &EmbeddingOutput{
+		Embedding:        embedding,
+		ModelType:        modelType,
+		SequenceLength:   int(result.sequence_length),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// GetEmbeddingWithModelType generates an embedding with a manually specified model type.
+//
+// This function bypasses the automatic routing logic and directly uses the specified model.
+// Useful when you explicitly want to use a specific embedding model (Qwen3 or Gemma).
+//
+// Parameters:
+// - text: Input text to generate embedding for
+// - modelType: "qwen3" or "gemma" (or "0" for Qwen3, "1" for Gemma)
+// - targetDim: Target dimension (768, 512, 256, or 128)
+//
+// Returns:
+// - EmbeddingOutput with full metadata
+// - error if generation failed or invalid model type
+//
+// Example:
+//
+//	// Force use of Gemma model
+//	output, err := GetEmbeddingWithModelType("Hello world", "gemma", 768)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Printf("Used model: %s\n", output.ModelType)
+func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	// Validate model type (only accept "qwen3" or "gemma")
+	if modelType != "qwen3" && modelType != "gemma" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3' or 'gemma')", modelType)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	var result C.EmbeddingResult
+	status := C.get_embedding_with_model_type(
+		cText,
+		cModelType,
+		C.int(targetDim),
+		&result,
+	)
+
+	// Check status code (0 = success, -1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to generate embedding with model type %s (status: %d)", modelType, status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("embedding generation returned error for model type %s", modelType)
+	}
+
+	// Convert the C array to a Go slice
+	length := int(result.length)
+	if length == 0 {
+		return nil, fmt.Errorf("embedding generation returned zero-length result")
+	}
+
+	embedding := make([]float32, length)
+
+	// Create a slice that refers to the C array
+	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
+
+	// Copy and convert each value
+	for i := 0; i < length; i++ {
+		embedding[i] = float32(cFloats[i])
+	}
+
+	// Free the memory allocated in Rust
+	C.free_embedding(result.data, result.length)
+
+	// Convert model_type to string
+	var actualModelType string
+	switch int(result.model_type) {
+	case 0:
+		actualModelType = "qwen3"
+	case 1:
+		actualModelType = "gemma"
+	default:
+		actualModelType = "unknown"
+	}
+
+	return &EmbeddingOutput{
+		Embedding:        embedding,
+		ModelType:        actualModelType,
+		SequenceLength:   int(result.sequence_length),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
 // CalculateSimilarity calculates the similarity between two texts with maxLength parameter
 func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
 	if !modelInitialized {
@@ -416,6 +857,261 @@ func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
 // CalculateSimilarityDefault calculates the similarity between two texts with default max length (512)
 func CalculateSimilarityDefault(text1, text2 string) float32 {
 	return CalculateSimilarity(text1, text2, 512)
+}
+
+// SimilarityOutput represents the result of embedding similarity calculation
+type SimilarityOutput struct {
+	Similarity       float32 // Cosine similarity score (-1.0 to 1.0)
+	ModelType        string  // Model used: "qwen3", "gemma", or "unknown"
+	ProcessingTimeMs float32 // Processing time in milliseconds
+}
+
+// CalculateEmbeddingSimilarity calculates cosine similarity between two texts using embedding models
+//
+// This function:
+// 1. Generates embeddings for both texts using the specified model (or auto-routing)
+// 2. Calculates cosine similarity between the embeddings
+// 3. Returns similarity score along with metadata
+//
+// Parameters:
+// - text1, text2: The two texts to compare
+// - modelType: "auto" (intelligent routing), "qwen3", or "gemma"
+// - targetDim: Target embedding dimension (0 for default, or 768/512/256/128 for Matryoshka)
+//
+// Returns:
+// - *SimilarityOutput: Contains similarity score, model used, and processing time
+// - error: If embedding generation or similarity calculation fails
+//
+// Example:
+//
+//	// Auto model selection with full dimension
+//	result, err := CalculateEmbeddingSimilarity("Hello world", "Hi there", "auto", 0)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Similarity: %.4f (model: %s, took: %.2fms)\n",
+//	    result.Similarity, result.ModelType, result.ProcessingTimeMs)
+//
+//	// Use Gemma with 512-dim Matryoshka
+//	result, err = CalculateEmbeddingSimilarity("text1", "text2", "gemma", 512)
+func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	// Validate model type
+	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
+	}
+
+	cText1 := C.CString(text1)
+	defer C.free(unsafe.Pointer(cText1))
+
+	cText2 := C.CString(text2)
+	defer C.free(unsafe.Pointer(cText2))
+
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	var result C.EmbeddingSimilarityResult
+	status := C.calculate_embedding_similarity(
+		cText1,
+		cText2,
+		cModelType,
+		C.int(targetDim),
+		&result,
+	)
+
+	// Check status code (0 = success, -1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to calculate similarity (status: %d)", status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("similarity calculation returned error")
+	}
+
+	// Convert model_type to string
+	var actualModelType string
+	switch int(result.model_type) {
+	case 0:
+		actualModelType = "qwen3"
+	case 1:
+		actualModelType = "gemma"
+	default:
+		actualModelType = "unknown"
+	}
+
+	return &SimilarityOutput{
+		Similarity:       float32(result.similarity),
+		ModelType:        actualModelType,
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// BatchSimilarityMatch represents a single match in batch similarity matching
+type BatchSimilarityMatch struct {
+	Index      int     // Index of the candidate in the input array
+	Similarity float32 // Cosine similarity score
+}
+
+// BatchSimilarityOutput holds the result of batch similarity matching
+type BatchSimilarityOutput struct {
+	Matches          []BatchSimilarityMatch // Top-k matches, sorted by similarity (descending)
+	ModelType        string                 // Model used: "qwen3", "gemma", or "unknown"
+	ProcessingTimeMs float32                // Processing time in milliseconds
+}
+
+// CalculateSimilarityBatch finds top-k most similar candidates for a query using TRUE BATCH PROCESSING
+//
+// This function uses a single forward pass to generate all embeddings, making it
+// ~N times faster than calling CalculateEmbeddingSimilarity in a loop (N = num_candidates).
+//
+// Parameters:
+//   - query: The query text
+//   - candidates: Array of candidate texts
+//   - topK: Maximum number of matches to return (0 = return all, sorted by similarity)
+//   - modelType: "auto", "qwen3", or "gemma"
+//   - targetDim: Target dimension (0 for default, or 768/512/256/128 for Matryoshka)
+//
+// Returns:
+//   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
+//   - error: Error message if operation failed
+func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
+	// Validate model type
+	if modelType != "auto" && modelType != "qwen3" && modelType != "gemma" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'auto', 'qwen3', or 'gemma')", modelType)
+	}
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("candidates array cannot be empty")
+	}
+
+	// Convert query to C string
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+
+	// Convert model type to C string
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	// Convert candidates to C string array
+	cCandidates := make([]*C.char, len(candidates))
+	for i, candidate := range candidates {
+		cCandidates[i] = C.CString(candidate)
+		defer C.free(unsafe.Pointer(cCandidates[i]))
+	}
+
+	var result C.BatchSimilarityResult
+	status := C.calculate_similarity_batch(
+		cQuery,
+		(**C.char)(unsafe.Pointer(&cCandidates[0])),
+		C.int(len(candidates)),
+		C.int(topK),
+		cModelType,
+		C.int(targetDim),
+		&result,
+	)
+
+	// Check status code (0 = success, -1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to calculate batch similarity (status: %d)", status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("batch similarity calculation returned error")
+	}
+
+	// Convert matches to Go slice
+	numMatches := int(result.num_matches)
+	matches := make([]BatchSimilarityMatch, numMatches)
+
+	if numMatches > 0 && result.matches != nil {
+		matchesSlice := (*[1 << 30]C.SimilarityMatch)(unsafe.Pointer(result.matches))[:numMatches:numMatches]
+		for i := 0; i < numMatches; i++ {
+			matches[i] = BatchSimilarityMatch{
+				Index:      int(matchesSlice[i].index),
+				Similarity: float32(matchesSlice[i].similarity),
+			}
+		}
+	}
+
+	// Free the result
+	C.free_batch_similarity_result(&result)
+
+	// Convert model_type to string
+	var actualModelType string
+	switch int(result.model_type) {
+	case 0:
+		actualModelType = "qwen3"
+	case 1:
+		actualModelType = "gemma"
+	default:
+		actualModelType = "unknown"
+	}
+
+	return &BatchSimilarityOutput{
+		Matches:          matches,
+		ModelType:        actualModelType,
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// ModelInfo represents information about a single embedding model
+type ModelInfo struct {
+	ModelName         string // "qwen3" or "gemma"
+	IsLoaded          bool   // Whether the model is loaded
+	MaxSequenceLength int    // Maximum sequence length
+	DefaultDimension  int    // Default embedding dimension
+	ModelPath         string // Model path
+}
+
+// ModelsInfoOutput holds information about all embedding models
+type ModelsInfoOutput struct {
+	Models []ModelInfo // Array of model information
+}
+
+// GetEmbeddingModelsInfo retrieves information about all loaded embedding models
+//
+// Returns:
+//   - ModelsInfoOutput: Information about available embedding models
+//   - error: Error message if operation failed
+func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
+	var result C.EmbeddingModelsInfoResult
+	status := C.get_embedding_models_info(&result)
+
+	// Check status code (0 = success, -1 = error)
+	if status != 0 {
+		return nil, fmt.Errorf("failed to get embedding models info (status: %d)", status)
+	}
+
+	// Check error flag
+	if bool(result.error) {
+		return nil, fmt.Errorf("embedding models info query returned error")
+	}
+
+	// Convert models to Go slice
+	numModels := int(result.num_models)
+	models := make([]ModelInfo, numModels)
+
+	if numModels > 0 && result.models != nil {
+		modelsSlice := (*[1 << 30]C.EmbeddingModelInfo)(unsafe.Pointer(result.models))[:numModels:numModels]
+		for i := 0; i < numModels; i++ {
+			modelInfo := modelsSlice[i]
+			models[i] = ModelInfo{
+				ModelName:         C.GoString(modelInfo.model_name),
+				IsLoaded:          bool(modelInfo.is_loaded),
+				MaxSequenceLength: int(modelInfo.max_sequence_length),
+				DefaultDimension:  int(modelInfo.default_dimension),
+				ModelPath:         C.GoString(modelInfo.model_path),
+			}
+		}
+	}
+
+	// Free the result
+	C.free_embedding_models_info(&result)
+
+	return &ModelsInfoOutput{
+		Models: models,
+	}, nil
 }
 
 // FindMostSimilar finds the most similar text from a list of candidates with maxLength parameter
