@@ -1,15 +1,15 @@
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
 
 semantic_cache:
   enabled: true
-  backend_type: "memory"  # Options: "memory" or "milvus"
+  backend_type: "memory" # Options: "memory" or "milvus"
   similarity_threshold: 0.8
-  max_entries: 1000  # Only applies to memory backend
+  max_entries: 1000 # Only applies to memory backend
   ttl_seconds: 3600
-  eviction_policy: "fifo"  
+  eviction_policy: "fifo"
 
 tools:
   enabled: true
@@ -32,13 +32,13 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "127.0.0.1"  # IPv4 address - REQUIRED format
-    port: 8000
+    address: "127.0.0.1" # llm-katan sidecar or local backend
+    port: 8002
     weight: 1
 
 model_config:
-  "openai/gpt-oss-20b":
-    reasoning_family: "gpt-oss"  # This model uses GPT-OSS reasoning syntax
+  "qwen3":
+    reasoning_family: "qwen3" # Match docker-compose default model name
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true
@@ -62,76 +62,76 @@ classifier:
 categories:
   - name: business
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.7
-        use_reasoning: false  # Business performs better without reasoning
+        use_reasoning: false # Business performs better without reasoning
   - name: law
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.4
         use_reasoning: false
   - name: psychology
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.6
         use_reasoning: false
   - name: biology
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.9
         use_reasoning: false
   - name: chemistry
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.6
-        use_reasoning: true  # Enable reasoning for complex chemistry
+        use_reasoning: true # Enable reasoning for complex chemistry
   - name: history
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.7
         use_reasoning: false
   - name: other
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.7
         use_reasoning: false
   - name: health
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.5
         use_reasoning: false
   - name: economics
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 1.0
         use_reasoning: false
   - name: math
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 1.0
-        use_reasoning: true  # Enable reasoning for complex math
+        use_reasoning: true # Enable reasoning for complex math
   - name: physics
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.7
-        use_reasoning: true  # Enable reasoning for physics
+        use_reasoning: true # Enable reasoning for physics
   - name: computer science
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.6
         use_reasoning: false
   - name: philosophy
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.5
         use_reasoning: false
   - name: engineering
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: qwen3
         score: 0.7
         use_reasoning: false
 
-default_model: openai/gpt-oss-20b
+default_model: qwen3
 
 # Reasoning family configurations
 reasoning_families:
@@ -164,5 +164,6 @@ api:
       detailed_goroutine_tracking: true
       high_resolution_timing: false
       sample_rate: 1.0
-      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      duration_buckets:
+        [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
       size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
