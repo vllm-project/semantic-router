@@ -1,18 +1,17 @@
 //! Parallel LoRA processing engine
 //!
 //! Enables parallel execution of Intent||PII||Security classification tasks
-//! Using thread-based parallelism instead of async/await
+//! Using rayon for efficient data parallelism
 
 use crate::classifiers::lora::{
     intent_lora::{IntentLoRAClassifier, IntentResult},
     pii_lora::{PIILoRAClassifier, PIIResult},
     security_lora::{SecurityLoRAClassifier, SecurityResult},
 };
-use crate::core::{concurrency_error, ModelErrorType, UnifiedError};
+use crate::core::{ModelErrorType, UnifiedError};
 use crate::model_error;
 use candle_core::{Device, Result};
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::sync::Arc;
 
 /// Parallel LoRA processing engine
 pub struct ParallelLoRAEngine {
@@ -77,97 +76,30 @@ impl ParallelLoRAEngine {
         })
     }
 
-    /// Parallel classification across all three tasks
+    /// Parallel classification across all three tasks using rayon
+    ///
+    /// # Performance
+    /// - Uses rayon::join for parallel execution (no Arc<Mutex> overhead)
+    /// - Simplified code: ~70 lines reduced to ~20 lines
+    /// - No lock contention or synchronization overhead
     pub fn parallel_classify(&self, texts: &[&str]) -> Result<ParallelResult> {
-        let texts_owned: Vec<String> = texts.iter().map(|s| s.to_string()).collect();
+        // Execute all three classifiers in parallel using rayon::join
+        // Each task runs independently without shared mutable state
+        let ((intent_results, pii_results), security_results) = rayon::join(
+            || {
+                rayon::join(
+                    || self.intent_classifier.batch_classify(texts),
+                    || self.pii_classifier.batch_detect(texts),
+                )
+            },
+            || self.security_classifier.batch_detect(texts),
+        );
 
-        // Create shared results
-        let intent_results = Arc::new(Mutex::new(Vec::new()));
-        let pii_results = Arc::new(Mutex::new(Vec::new()));
-        let security_results = Arc::new(Mutex::new(Vec::new()));
-
-        let handles = vec![
-            self.spawn_intent_task(texts_owned.clone(), Arc::clone(&intent_results)),
-            self.spawn_pii_task(texts_owned.clone(), Arc::clone(&pii_results)),
-            self.spawn_security_task(texts_owned, Arc::clone(&security_results)),
-        ];
-
-        // Wait for all threads to complete
-        for handle in handles {
-            handle.join().map_err(|_| {
-                let unified_err = concurrency_error(
-                    "thread join",
-                    "Failed to join parallel classification thread",
-                );
-                candle_core::Error::from(unified_err)
-            })?;
-        }
-
+        // Propagate errors from any task
         Ok(ParallelResult {
-            intent_results: Arc::try_unwrap(intent_results)
-                .unwrap()
-                .into_inner()
-                .unwrap(),
-            pii_results: Arc::try_unwrap(pii_results).unwrap().into_inner().unwrap(),
-            security_results: Arc::try_unwrap(security_results)
-                .unwrap()
-                .into_inner()
-                .unwrap(),
-        })
-    }
-
-    fn spawn_intent_task(
-        &self,
-        texts: Vec<String>,
-        results: Arc<Mutex<Vec<IntentResult>>>,
-    ) -> thread::JoinHandle<()> {
-        let classifier = Arc::clone(&self.intent_classifier);
-        thread::spawn(move || {
-            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
-            match classifier.batch_classify(&text_refs) {
-                Ok(task_results) => {
-                    let mut guard = results.lock().unwrap();
-                    *guard = task_results;
-                }
-                Err(e) => {
-                    eprintln!("Intent classification failed: {}", e);
-                }
-            }
-        })
-    }
-
-    fn spawn_pii_task(
-        &self,
-        texts: Vec<String>,
-        results: Arc<Mutex<Vec<PIIResult>>>,
-    ) -> thread::JoinHandle<()> {
-        let classifier = Arc::clone(&self.pii_classifier);
-        thread::spawn(move || {
-            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
-            if let Ok(task_results) = classifier.batch_detect(&text_refs) {
-                let mut guard = results.lock().unwrap();
-                *guard = task_results;
-            }
-        })
-    }
-
-    fn spawn_security_task(
-        &self,
-        texts: Vec<String>,
-        results: Arc<Mutex<Vec<SecurityResult>>>,
-    ) -> thread::JoinHandle<()> {
-        let classifier = Arc::clone(&self.security_classifier);
-        thread::spawn(move || {
-            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
-            match classifier.batch_detect(&text_refs) {
-                Ok(task_results) => {
-                    let mut guard = results.lock().unwrap();
-                    *guard = task_results;
-                }
-                Err(e) => {
-                    eprintln!("Security classification failed: {}", e);
-                }
-            }
+            intent_results: intent_results?,
+            pii_results: pii_results?,
+            security_results: security_results?,
         })
     }
 }
