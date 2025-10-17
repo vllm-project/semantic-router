@@ -35,7 +35,12 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 ## Step 2: Deploy vLLM Semantic Router
 
-Configure the semantic router by editing `deploy/kubernetes/config.yaml`. This file contains the vLLM configuration, including model config, endpoints, and policies.
+Configure the semantic router by editing `deploy/kubernetes/config.yaml`. This file contains the vLLM configuration, including model config, endpoints, and policies. The repository provides two Kustomize overlays similar to docker-compose profiles:
+
+- core (default): only the semantic-router
+  - Path: `deploy/kubernetes/overlays/core` (root `deploy/kubernetes/` points here by default)
+- llm-katan: semantic-router + an llm-katan sidecar listening on 8002 and serving model name `qwen3`
+  - Path: `deploy/kubernetes/overlays/llm-katan`
 
 Important notes before you apply manifests:
 
@@ -43,11 +48,15 @@ Important notes before you apply manifests:
 - The PVC in `deploy/kubernetes/pvc.yaml` uses `storageClassName: standard`. On some clouds or local clusters, the default StorageClass name may differ (e.g., `standard-rwo`, `gp2`, or a provisioner like local-path). Adjust as needed.
 - Default PVC size is 30Gi. Size it to at least 2–3x of your total model footprint to leave room for indexes and updates.
 - The initContainer downloads several models from Hugging Face on first run and writes them into the PVC. Ensure outbound egress to Hugging Face is allowed and there is at least ~6–8 GiB free space for the models specified.
+- Per mode, the init container downloads differ:
+  - core: classifiers + the embedding model `sentence-transformers/all-MiniLM-L12-v2` into `/app/models/all-MiniLM-L12-v2`.
+  - llm-katan: everything in core, plus `Qwen/Qwen3-0.6B` into `/app/models/Qwen/Qwen3-0.6B`.
+- The default `config.yaml` points to `qwen3` at `127.0.0.1:8002`, which matches the llm-katan overlay. If you use core (no sidecar), either change `vllm_endpoints` to your actual backend Service IP:Port, or deploy the llm-katan overlay.
 
-Deploy the semantic router service with all required components:
+Deploy the semantic router service with all required components (core mode by default):
 
-```bash
-# Deploy semantic router using Kustomize
+````bash
+# Deploy semantic router (core mode)
 kubectl apply -k deploy/kubernetes/
 
 # Wait for deployment to be ready (this may take several minutes for model downloads)
@@ -55,7 +64,14 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 
 # Verify deployment status
 kubectl get pods -n vllm-semantic-router-system
-```
+
+To run with the llm-katan overlay instead:
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/llm-katan
+````
+
+````
 
 ## Step 3: Install Envoy Gateway
 
@@ -70,7 +86,7 @@ helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
 
 # Wait for Envoy Gateway to be ready
 kubectl wait --timeout=300s -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
-```
+````
 
 ## Step 4: Install Envoy AI Gateway
 
