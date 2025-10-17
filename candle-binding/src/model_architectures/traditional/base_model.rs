@@ -8,6 +8,7 @@ use crate::model_architectures::traits::TraditionalModel;
 use crate::model_error;
 use candle_core::{DType, Device, IndexOp, Module, Result, Tensor};
 use candle_nn::{embedding, layer_norm, linear, Embedding, LayerNorm, Linear, VarBuilder};
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 /// Abstract base class for traditional models
@@ -115,19 +116,20 @@ impl BaseTraditionalModel {
     }
 
     /// Batch processing for multiple inputs
+    ///
+    /// Uses rayon for parallel processing of independent forward passes.
+    /// Thread-safe since forward() only reads model weights without modification.
     pub fn forward_batch(
         &self,
         input_batch: &[Tensor],
         attention_batch: &[Tensor],
     ) -> Result<Vec<Tensor>> {
-        let mut results = Vec::with_capacity(input_batch.len());
-
-        for (input_ids, attention_mask) in input_batch.iter().zip(attention_batch.iter()) {
-            let output = self.forward(input_ids, attention_mask)?;
-            results.push(output);
-        }
-
-        Ok(results)
+        // Parallel processing of batch items
+        input_batch
+            .par_iter()
+            .zip(attention_batch.par_iter())
+            .map(|(input_ids, attention_mask)| self.forward(input_ids, attention_mask))
+            .collect()
     }
 
     // Pooling strategies

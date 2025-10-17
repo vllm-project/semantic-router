@@ -158,13 +158,19 @@ impl PIILoRAClassifier {
         })
     }
 
-    /// Parallel PII detection for multiple texts
+    /// Parallel PII detection for multiple texts using rayon
+    ///
+    /// # Performance
+    /// - Uses rayon for parallel processing across available CPU cores
+    /// - Efficient for batch sizes > 10
+    /// - No lock contention during inference
     pub fn parallel_detect(&self, texts: &[&str]) -> Result<Vec<PIIResult>> {
-        let mut results = Vec::new();
-        for text in texts {
-            results.push(self.detect_pii(text)?);
-        }
-        Ok(results)
+        use rayon::prelude::*;
+
+        texts
+            .par_iter()
+            .map(|text| self.detect_pii(text))
+            .collect::<Result<Vec<_>>>()
     }
 
     /// Batch PII detection for multiple texts

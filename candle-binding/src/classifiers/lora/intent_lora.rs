@@ -113,11 +113,18 @@ impl IntentLoRAClassifier {
         })
     }
 
-    /// Parallel classification for multiple texts
+    /// Parallel classification for multiple texts using rayon
+    ///
+    /// # Performance
+    /// - Uses rayon for parallel processing across available CPU cores
+    /// - Efficient for batch sizes > 10
+    /// - No lock contention during inference
     pub fn parallel_classify(&self, texts: &[&str]) -> Result<Vec<IntentResult>> {
-        // Process each text using real model inference
+        use rayon::prelude::*;
+
+        // Process each text using real model inference in parallel
         texts
-            .iter()
+            .par_iter()
             .map(|text| self.classify_intent(text))
             .collect()
     }
