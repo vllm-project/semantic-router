@@ -7,7 +7,7 @@ This directory contains Kubernetes manifests for deploying the Semantic Router u
 The deployment consists of:
 
 - **ConfigMap**: Contains `config.yaml` and `tools_db.json` configuration files
-- **PersistentVolumeClaim**: 10Gi storage for model files
+- **PersistentVolumeClaim**: 30Gi storage for model files (adjust based on models you enable)
 - **Deployment**:
   - **Init Container**: Downloads/copies model files to persistent volume
   - **Main Container**: Runs the semantic router service
@@ -29,11 +29,11 @@ The deployment consists of:
 kubectl apply -k deploy/kubernetes/
 
 # Check deployment status
-kubectl get pods -l app=semantic-router -n semantic-router
-kubectl get services -l app=semantic-router -n semantic-router
+kubectl get pods -l app=semantic-router -n vllm-semantic-router-system
+kubectl get services -l app=semantic-router -n vllm-semantic-router-system
 
 # View logs
-kubectl logs -l app=semantic-router -n semantic-router -f
+kubectl logs -l app=semantic-router -n vllm-semantic-router-system -f
 ```
 
 ### Kind (Kubernetes in Docker) Deployment
@@ -86,20 +86,20 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 kubectl apply -k deploy/kubernetes/
 
 # Wait for deployment to be ready
-kubectl wait --for=condition=Available deployment/semantic-router -n semantic-router --timeout=600s
+kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semantic-router-system --timeout=600s
 ```
 
 **Step 3: Check deployment status**
 
 ```bash
 # Check pods
-kubectl get pods -n semantic-router -o wide
+kubectl get pods -n vllm-semantic-router-system -o wide
 
 # Check services
-kubectl get services -n semantic-router
+kubectl get services -n vllm-semantic-router-system
 
 # View logs
-kubectl logs -l app=semantic-router -n semantic-router -f
+kubectl logs -l app=semantic-router -n vllm-semantic-router-system -f
 ```
 
 #### Resource Requirements for Kind
@@ -137,13 +137,13 @@ Or using kubectl directly:
 
 ```bash
 # Access Classification API (HTTP REST)
-kubectl port-forward -n semantic-router svc/semantic-router 8080:8080
+kubectl port-forward -n vllm-semantic-router-system svc/semantic-router 8080:8080
 
 # Access gRPC API
-kubectl port-forward -n semantic-router svc/semantic-router 50051:50051
+kubectl port-forward -n vllm-semantic-router-system svc/semantic-router 50051:50051
 
 # Access metrics
-kubectl port-forward -n semantic-router svc/semantic-router-metrics 9190:9190
+kubectl port-forward -n vllm-semantic-router-system svc/semantic-router-metrics 9190:9190
 ```
 
 #### Testing the Deployment
@@ -194,6 +194,11 @@ kubectl delete -k deploy/kubernetes/
 # Delete the kind cluster
 kind delete cluster --name semantic-router-cluster
 ```
+
+## Notes on dependencies
+
+- Gateway API Inference Extension CRDs are required only when using the Envoy AI Gateway integration in `deploy/kubernetes/ai-gateway/`. Follow the installation steps in `website/docs/installation/kubernetes.md` if you plan to use the gateway path.
+- The core kustomize deployment in this folder does not install Envoy Gateway or AI Gateway; those are optional components documented separately.
 
 ## Make Commands Reference
 
@@ -292,6 +297,11 @@ kubectl top pods -n semantic-router
 
 # Adjust resource limits in deployment.yaml if needed
 ```
+
+### Storage sizing
+
+- The default PVC is 30Gi. If the enabled models are small, you can reduce it; otherwise reserve at least 2–3x the total model size.
+- If your cluster's default StorageClass isn't named `standard`, change `storageClassName` in `pvc.yaml` accordingly or remove the field to use the default class.
 
 ### Resource Optimization
 
