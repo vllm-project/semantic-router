@@ -88,10 +88,9 @@ from sklearn.model_selection import train_test_split
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
-    Trainer,
     TrainingArguments,
 )
+from trl import SFTTrainer
 
 # Import bench dataset implementations
 try:
@@ -110,6 +109,9 @@ try:
     from vllm_semantic_router_bench.dataset_implementations.openbookqa_dataset import (
         OpenBookQADataset,
     )
+    from vllm_semantic_router_bench.dataset_implementations.openmathrreasoning_dataset import (
+        OpenMathReasoningDataset,
+    )
     from vllm_semantic_router_bench.dataset_implementations.sciq_dataset import (
         SciQDataset,
     )
@@ -118,9 +120,6 @@ try:
     )
     from vllm_semantic_router_bench.dataset_implementations.truthfulqa_dataset import (
         TruthfulQADataset,
-    )
-    from vllm_semantic_router_bench.dataset_implementations.openmathrreasoning_dataset import (
-        OpenMathReasoningDataset,
     )
 except ImportError as e:
     print(f"Warning: Could not import some dataset implementations: {e}")
@@ -138,7 +137,9 @@ CACHE_DIR.mkdir(exist_ok=True)
 # NOTE: Supports both multiple-choice (ARC, SciQ, etc.) and free-form (GSM8K, MATH) datasets
 TRAINING_DATASETS = {
     "math-reasoner": {
-        "datasets": ["openmathrreasoning"],  # NVIDIA's high-quality math with detailed CoT
+        "datasets": [
+            "openmathrreasoning"
+        ],  # NVIDIA's high-quality math with detailed CoT
         "description": "Advanced math problem-solving with chain-of-thought reasoning",
         "target_mmlu_categories": ["math", "physics", "engineering"],
         "max_length": 3584,  # Optimized for multi-GPU with batch_size=2 + BF16
@@ -207,19 +208,19 @@ def get_dataset_cache_key(
 ) -> str:
     """
     Generate a unique cache key for a dataset configuration.
-    
+
     Returns a hash that changes only when the dataset config changes.
     """
     config_str = f"{model_type}_{model_name}_{max_samples_per_dataset}_{max_length}_{use_cot}_{filter_long_sequences}"
     # Add dataset sources
     datasets = TRAINING_DATASETS[model_type]["datasets"]
     config_str += f"_{'_'.join(sorted(datasets))}"
-    
+
     # Include max_cot_char_length if present (affects data filtering)
     max_cot_length = TRAINING_DATASETS[model_type].get("max_cot_char_length")
     if max_cot_length:
         config_str += f"_cot{max_cot_length}"
-    
+
     # Create hash
     cache_key = hashlib.md5(config_str.encode()).hexdigest()
     return cache_key
@@ -234,7 +235,7 @@ def save_cached_datasets(
 ):
     """Save processed datasets to cache."""
     cache_file = CACHE_DIR / f"dataset_{cache_key}.pkl"
-    
+
     try:
         cache_data = {
             "train_samples": train_samples,
@@ -242,10 +243,10 @@ def save_cached_datasets(
             "train_dataset": train_dataset,
             "val_dataset": val_dataset,
         }
-        
+
         with open(cache_file, "wb") as f:
             pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
-        
+
         logger.info(f"💾 Cached dataset saved: {cache_file}")
         logger.info(f"   Size: {cache_file.stat().st_size / 1024 / 1024:.1f} MB")
         return True
@@ -257,22 +258,22 @@ def save_cached_datasets(
 def load_cached_datasets(cache_key: str):
     """Load processed datasets from cache if available."""
     cache_file = CACHE_DIR / f"dataset_{cache_key}.pkl"
-    
+
     if not cache_file.exists():
         return None
-    
+
     try:
         logger.info(f"📦 Found cached dataset: {cache_file}")
         logger.info(f"   Size: {cache_file.stat().st_size / 1024 / 1024:.1f} MB")
         logger.info(f"   Loading from cache...")
-        
+
         with open(cache_file, "rb") as f:
             cache_data = pickle.load(f)
-        
+
         logger.info(f"   ✅ Cache loaded successfully!")
         logger.info(f"   Train samples: {len(cache_data['train_samples'])}")
         logger.info(f"   Val samples: {len(cache_data['val_samples'])}")
-        
+
         return cache_data
     except Exception as e:
         logger.warning(f"Failed to load cache: {e}")
@@ -296,10 +297,10 @@ def get_qwen3_target_modules() -> List[str]:
 def get_token_sizes_for_model_type(model_type: str) -> Tuple[int, int]:
     """
     Get appropriate token sizes for training and inference based on model type.
-    
+
     Args:
         model_type: Type of specialist model
-        
+
     Returns:
         Tuple of (max_length for training, max_new_tokens for inference)
     """
@@ -309,24 +310,28 @@ def get_token_sizes_for_model_type(model_type: str) -> Tuple[int, int]:
     return max_length, max_new_tokens
 
 
-def get_training_config_for_model_type(model_type: str, default_batch_size: int = 2) -> Dict:
+def get_training_config_for_model_type(
+    model_type: str, default_batch_size: int = 2
+) -> Dict:
     """
     Get training configuration (batch size, gradient accumulation) for model type.
-    
+
     Args:
         model_type: Type of specialist model
         default_batch_size: Default batch size if not specified in config
-        
+
     Returns:
         Dict with batch_size and gradient_accumulation_steps
     """
     config = TRAINING_DATASETS.get(model_type, {})
     batch_size = config.get("batch_size", default_batch_size)
-    
+
     # Calculate gradient accumulation to maintain effective batch size of ~8-16
     default_grad_accum = max(1, 8 // default_batch_size)
-    gradient_accumulation_steps = config.get("gradient_accumulation_steps", default_grad_accum)
-    
+    gradient_accumulation_steps = config.get(
+        "gradient_accumulation_steps", default_grad_accum
+    )
+
     return {
         "batch_size": batch_size,
         "gradient_accumulation_steps": gradient_accumulation_steps,
@@ -493,7 +498,7 @@ def load_training_data_for_model_type(
 
     config = TRAINING_DATASETS[model_type]
     dataset_names = config["datasets"]
-    
+
     # Apply multiplier if specified (for datasets that will be heavily filtered)
     samples_multiplier = config.get("max_samples_multiplier", 1)
     actual_samples_to_load = max_samples_per_dataset * samples_multiplier
@@ -502,7 +507,7 @@ def load_training_data_for_model_type(
     logger.info(f"  Description: {config['description']}")
     logger.info(f"  Source datasets: {dataset_names}")
     logger.info(f"  Target MMLU categories: {config['target_mmlu_categories']}")
-    
+
     if samples_multiplier > 1:
         logger.info(f"  📊 Loading {samples_multiplier}x more samples for filtering")
         logger.info(f"     Requested: {max_samples_per_dataset} per dataset")
@@ -531,11 +536,11 @@ def load_training_data_for_model_type(
                 "samples_per_category": actual_samples_to_load,
                 "seed": seed,
             }
-            
+
             # Add max_cot_length for datasets that support it
             if "max_cot_char_length" in config and dataset_name == "openmathrreasoning":
                 load_kwargs["max_cot_length"] = config["max_cot_char_length"]
-            
+
             questions, dataset_info = dataset_impl.load_dataset(**load_kwargs)
 
             # Convert to our format (filter out None samples)
@@ -758,21 +763,20 @@ def create_solver_dataset(
     filter_long_sequences=True,
 ):
     """
-    Create dataset in chat format for proper instruction fine-tuning.
+    Create dataset in conversational format for TRL's SFTTrainer.
 
-    Uses tokenizer.apply_chat_template() to format messages with special tokens.
-    This ensures:
+    Returns a dataset with 'messages' field that SFTTrainer will automatically handle.
+    SFTTrainer ensures:
     - User input and assistant output are properly separated
     - Model trains ONLY on the assistant's response (not the question)
     - Inference format matches training format
-    
+
     Args:
         filter_long_sequences: If True, filter out samples that exceed max_length
                               to avoid training on truncated CoT reasoning
     """
-    formatted_examples = []
+    dataset_samples = []
     token_lengths = []
-    filtered_samples = []
 
     for sample in samples:
         # Get messages (user + assistant)
@@ -784,28 +788,29 @@ def create_solver_dataset(
             use_cot=use_cot,
         )
 
-        # Apply chat template to add special tokens
-        # add_generation_prompt=False because we already have the assistant response
-        # enable_thinking=False to train model for direct problem-solving without reasoning tokens
-        formatted_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
-        )
-        
-        # Track token length (before truncation) for diagnostics
-        tokens = tokenizer(formatted_text, truncation=False)
-        token_length = len(tokens["input_ids"])
-        token_lengths.append(token_length)
-        
-        # Filter out samples that are too long (if enabled)
-        if filter_long_sequences and token_length > max_length:
-            continue  # Skip this sample
-        
-        formatted_examples.append(formatted_text)
-        filtered_samples.append(sample)
+        # Track token length for diagnostics (optional filtering)
+        if filter_long_sequences or True:  # Always check for stats
+            formatted_text = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False,
+                enable_thinking=False,
+            )
+            tokens = tokenizer(formatted_text, truncation=False)
+            token_length = len(tokens["input_ids"])
+            token_lengths.append(token_length)
+
+            # Filter out samples that are too long (if enabled)
+            if filter_long_sequences and token_length > max_length:
+                continue  # Skip this sample
+
+        # Store in TRL format (messages field)
+        dataset_samples.append({"messages": messages})
 
     # Log token length statistics
     if token_lengths:
         import numpy as np
+
         token_array = np.array(token_lengths)
         logger.info(f"\n📊 Token Length Statistics:")
         logger.info(f"  Total samples analyzed: {len(token_array)}")
@@ -815,54 +820,46 @@ def create_solver_dataset(
         logger.info(f"  Median: {np.median(token_array):.1f} tokens")
         logger.info(f"  95th percentile: {np.percentile(token_array, 95):.1f} tokens")
         logger.info(f"  Max length for training: {max_length} tokens")
-        
+
         num_exceeds = np.sum(token_array > max_length)
         exceed_pct = (num_exceeds / len(token_array)) * 100
-        
+
         if filter_long_sequences:
-            num_kept = len(formatted_examples)
+            num_kept = len(dataset_samples)
             kept_pct = (num_kept / len(token_array)) * 100
-            logger.info(f"  📌 Samples KEPT (fit in max_length): {num_kept}/{len(token_array)} ({kept_pct:.1f}%)")
-            logger.info(f"  🗑️  Samples FILTERED (too long): {num_exceeds}/{len(token_array)} ({exceed_pct:.1f}%)")
-            
+            logger.info(
+                f"  📌 Samples KEPT (fit in max_length): {num_kept}/{len(token_array)} ({kept_pct:.1f}%)"
+            )
+            logger.info(
+                f"  🗑️  Samples FILTERED (too long): {num_exceeds}/{len(token_array)} ({exceed_pct:.1f}%)"
+            )
+
             if num_kept == 0:
                 logger.error(f"  ❌ ERROR: No samples fit in max_length={max_length}!")
                 logger.error(f"  Consider increasing max_length or disabling filtering")
             elif kept_pct < 20:
                 logger.warning(f"  ⚠️  WARNING: Only {kept_pct:.1f}% of samples kept!")
-                logger.warning(f"  Consider increasing max_length to keep more training data")
+                logger.warning(
+                    f"  Consider increasing max_length to keep more training data"
+                )
         else:
-            logger.info(f"  ⚠️  Samples that will be TRUNCATED: {num_exceeds}/{len(token_array)} ({exceed_pct:.1f}%)")
+            logger.info(
+                f"  ⚠️  Samples that will be TRUNCATED: {num_exceeds}/{len(token_array)} ({exceed_pct:.1f}%)"
+            )
             if exceed_pct > 10:
-                logger.warning(f"  ⚠️  WARNING: {exceed_pct:.1f}% of samples will be truncated!")
+                logger.warning(
+                    f"  ⚠️  WARNING: {exceed_pct:.1f}% of samples will be truncated!"
+                )
                 logger.warning(f"  Consider enabling filter_long_sequences=True")
         logger.info("")
 
-    # Tokenize (only the kept samples if filtering is enabled)
-    if len(formatted_examples) == 0:
-        logger.error("No samples to tokenize! Cannot create dataset.")
-        # Return empty dataset
-        return Dataset.from_dict({
-            "input_ids": torch.empty((0, max_length), dtype=torch.long),
-            "attention_mask": torch.empty((0, max_length), dtype=torch.long),
-            "labels": torch.empty((0, max_length), dtype=torch.long),
-        })
-    
-    encodings = tokenizer(
-        formatted_examples,
-        truncation=True,
-        padding="max_length",
-        max_length=max_length,
-        return_tensors="pt",
-    )
+    if len(dataset_samples) == 0:
+        logger.error("No samples to create dataset! Cannot proceed.")
+        # Return empty dataset with messages field
+        return Dataset.from_dict({"messages": []})
 
-    return Dataset.from_dict(
-        {
-            "input_ids": encodings["input_ids"],
-            "attention_mask": encodings["attention_mask"],
-            "labels": encodings["input_ids"],
-        }
-    )
+    # Create HuggingFace Dataset from list of dicts
+    return Dataset.from_list(dataset_samples)
 
 
 def extract_answer_text(
@@ -1002,53 +999,61 @@ def evaluate_model_on_mmlu_pro(
 
     # Process in batches
     num_batches = (len(test_samples) + batch_size - 1) // batch_size
-    
+
     import time
+
     for batch_idx in range(num_batches):
         batch_start = batch_idx * batch_size
         batch_end = min(batch_start + batch_size, len(test_samples))
         batch_samples = test_samples[batch_start:batch_end]
-        
+
         batch_start_time = time.time()
-        logger.info(f"⚙️  Processing batch {batch_idx + 1}/{num_batches} (samples {batch_start + 1}-{batch_end})...")
-        
+        logger.info(
+            f"⚙️  Processing batch {batch_idx + 1}/{num_batches} (samples {batch_start + 1}-{batch_end})..."
+        )
+
         # Prepare batch data
         batch_prompts = []
         batch_true_answers = []
         batch_categories = []
         batch_options = []
         batch_questions = []
-        
+
         for sample in batch_samples:
             question = sample["question"]
             options = sample["options"]
             true_answer_key = sample["answer"]
             category = sample["category"]
-            
+
             # Convert true answer from letter to text
             true_answer_text = convert_answer_to_text(true_answer_key, options)
-            
+
             # Format prompt using chat template
-            messages = format_instruction(question, options, answer=None, use_cot=use_cot)
-            prompt = tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+            messages = format_instruction(
+                question, options, answer=None, use_cot=use_cot
             )
-            
+            prompt = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+
             batch_prompts.append(prompt)
             batch_true_answers.append(true_answer_text)
             batch_categories.append(category)
             batch_options.append(options)
             batch_questions.append(question)
-        
+
         # Tokenize batch with padding
         inputs = tokenizer(
-            batch_prompts, 
-            return_tensors="pt", 
+            batch_prompts,
+            return_tensors="pt",
             padding=True,
-            max_length=1024, 
-            truncation=True
+            max_length=1024,
+            truncation=True,
         ).to(model.device)
-        
+
         # Generate for batch
         with torch.no_grad():
             outputs = model.generate(
@@ -1062,24 +1067,25 @@ def evaluate_model_on_mmlu_pro(
                     tokenizer.convert_tokens_to_ids("<|im_end|>"),
                 ],
             )
-        
+
         # Process each result in the batch
         for i, (output, input_len) in enumerate(zip(outputs, inputs["input_ids"])):
             # Decode only the generated part (skip the input prompt)
-            generated_ids = output[len(input_len):]
+            generated_ids = output[len(input_len) :]
             generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
             predicted_answer_text = extract_answer_text(
                 generated_text, batch_options[i], batch_questions[i]
             )
-            
+
             # Compare answer texts
             is_correct = (
-                predicted_answer_text.lower().strip() == batch_true_answers[i].lower().strip()
+                predicted_answer_text.lower().strip()
+                == batch_true_answers[i].lower().strip()
             )
             if is_correct:
                 correct += 1
             total += 1
-            
+
             # Track per-category stats
             category = batch_categories[i]
             if category not in category_stats:
@@ -1087,7 +1093,7 @@ def evaluate_model_on_mmlu_pro(
             category_stats[category]["total"] += 1
             if is_correct:
                 category_stats[category]["correct"] += 1
-            
+
             predictions.append(
                 {
                     "question": batch_questions[i][:100],
@@ -1097,16 +1103,18 @@ def evaluate_model_on_mmlu_pro(
                     "category": category,
                 }
             )
-            
+
             # Log first 5 examples
             sample_idx = batch_start + i
             if sample_idx < 5:
-                logger.info(f"\n[{sample_idx+1}/{len(test_samples)}] Category: {category}")
+                logger.info(
+                    f"\n[{sample_idx+1}/{len(test_samples)}] Category: {category}"
+                )
                 logger.info(f"Question: {batch_questions[i][:100]}...")
                 logger.info(f"True Answer: {batch_true_answers[i]}")
                 logger.info(f"Predicted: {predicted_answer_text}")
                 logger.info(f"{'✓ CORRECT' if is_correct else '✗ WRONG'}")
-        
+
         # Batch completion with timing
         batch_time = time.time() - batch_start_time
         current_acc = (correct / total * 100) if total > 0 else 0
@@ -1116,7 +1124,9 @@ def evaluate_model_on_mmlu_pro(
             f"Accuracy: {current_acc:.1f}%"
         )
 
-    accuracy = (correct / total) if total > 0 else 0  # Return as fraction, not percentage
+    accuracy = (
+        (correct / total) if total > 0 else 0
+    )  # Return as fraction, not percentage
 
     # Print summary
     logger.info(f"\n{'=' * 80}")
@@ -1165,43 +1175,60 @@ def main(
     logger.info(
         f"Testing on: MMLU-Pro {TRAINING_DATASETS[model_type]['target_mmlu_categories']}"
     )
-    
+
     # Get appropriate token sizes for this model type
     max_length, max_new_tokens = get_token_sizes_for_model_type(model_type)
-    
+
     # Get training config (may override batch_size from args for memory efficiency)
-    training_config = get_training_config_for_model_type(model_type, default_batch_size=batch_size)
+    training_config = get_training_config_for_model_type(
+        model_type, default_batch_size=batch_size
+    )
     actual_batch_size = training_config["batch_size"]
     actual_grad_accum = training_config["gradient_accumulation_steps"]
-    
+
     if actual_batch_size != batch_size:
-        logger.info(f"⚙️  Overriding batch_size: {batch_size} → {actual_batch_size} (for memory efficiency)")
-        logger.info(f"   Gradient accumulation: {actual_grad_accum} (effective batch size: {actual_batch_size * actual_grad_accum})")
-    
-    logger.info(f"Token sizes: max_length={max_length}, max_new_tokens={max_new_tokens}")
-    logger.info(f"Batch size: {actual_batch_size}, Gradient accumulation: {actual_grad_accum}")
-    
+        logger.info(
+            f"⚙️  Overriding batch_size: {batch_size} → {actual_batch_size} (for memory efficiency)"
+        )
+        logger.info(
+            f"   Gradient accumulation: {actual_grad_accum} (effective batch size: {actual_batch_size * actual_grad_accum})"
+        )
+
+    logger.info(
+        f"Token sizes: max_length={max_length}, max_new_tokens={max_new_tokens}"
+    )
+    logger.info(
+        f"Batch size: {actual_batch_size}, Gradient accumulation: {actual_grad_accum}"
+    )
+
     # Enable gradient checkpointing for long sequences to save memory
     use_gradient_checkpointing = max_length > 2048
     if use_gradient_checkpointing:
         logger.info(f"⚙️  Enabling gradient checkpointing (sequence length > 2048)")
         logger.info(f"   This trades compute for memory to handle longer sequences")
-    
+
     logger.info("=" * 80)
 
     # GPU selection - use all GPUs if gpu_id is None
     if gpu_id is None:
         # Use all available GPUs - Trainer automatically uses DistributedDataParallel (DDP)
         import torch
+
         num_gpus = torch.cuda.device_count()
-        logger.info(f"🚀 Multi-GPU Training: Using ALL {num_gpus} GPUs with DDP + BF16!")
+        logger.info(
+            f"🚀 Multi-GPU Training: Using ALL {num_gpus} GPUs with DDP + BF16!"
+        )
         logger.info(f"   GPUs: {', '.join([f'cuda:{i}' for i in range(num_gpus)])}")
         logger.info(f"   Mixed Precision: BF16 (saves ~30-40% memory)")
-        logger.info(f"   Per-device batch: {actual_batch_size}, Gradient accum: {actual_grad_accum}")
-        logger.info(f"   Effective batch = {actual_batch_size} × {actual_grad_accum} × {num_gpus} = {actual_batch_size * actual_grad_accum * num_gpus}")
+        logger.info(
+            f"   Per-device batch: {actual_batch_size}, Gradient accum: {actual_grad_accum}"
+        )
+        logger.info(
+            f"   Effective batch = {actual_batch_size} × {actual_grad_accum} × {num_gpus} = {actual_batch_size * actual_grad_accum * num_gpus}"
+        )
         device_str = "cuda"
         selected_gpu = "all"
-        
+
         # Clear all GPU caches
         for i in range(num_gpus):
             torch.cuda.set_device(i)
@@ -1209,31 +1236,31 @@ def main(
         torch.cuda.set_device(0)  # Reset to GPU 0
     else:
         # Use single GPU
-        device_str, selected_gpu = set_gpu_device(
-            gpu_id=gpu_id, auto_select=False
-        )
+        device_str, selected_gpu = set_gpu_device(gpu_id=gpu_id, auto_select=False)
         logger.info(f"Using device: {device_str} (GPU {selected_gpu})")
         clear_gpu_memory()
-    
+
     log_memory_usage("Pre-training")
 
     # Check cache first
     logger.info("\n" + "🔍" * 40)
     logger.info("CHECKING DATASET CACHE")
     logger.info("🔍" * 40)
-    
+
     cache_key = get_dataset_cache_key(
         model_type=model_type,
         model_name=model_name,
         max_samples_per_dataset=max_samples_per_dataset,
         max_length=max_length,
         use_cot=use_cot,
-        filter_long_sequences=TRAINING_DATASETS[model_type].get("filter_long_sequences", False),
+        filter_long_sequences=TRAINING_DATASETS[model_type].get(
+            "filter_long_sequences", False
+        ),
     )
     logger.info(f"Cache key: {cache_key}")
-    
+
     cached_data = load_cached_datasets(cache_key)
-    
+
     if cached_data is not None:
         # Use cached data
         logger.info("✅ Using cached dataset - skipping data loading and processing!")
@@ -1241,13 +1268,13 @@ def main(
         val_samples = cached_data["val_samples"]
         train_dataset = cached_data["train_dataset"]
         val_dataset = cached_data["val_dataset"]
-        
+
         logger.info(f"Training samples: {len(train_samples)}")
         logger.info(f"Validation samples: {len(val_samples)}")
     else:
         # Load and process data (no cache available)
         logger.info("❌ No cache found - loading and processing data...")
-        
+
         # Load TRAINING data from external datasets
         logger.info("\n" + "📚" * 40)
         logger.info("LOADING TRAINING DATA (External Datasets)")
@@ -1329,10 +1356,12 @@ def main(
         logger.info(f"User Message:")
         logger.info(f"  {messages[0]['content'][:300]}...")
         logger.info(f"\nAssistant Message (includes full CoT solution):")
-        assistant_msg = messages[1]['content']
+        assistant_msg = messages[1]["content"]
         if len(assistant_msg) > 500:
             logger.info(f"  {assistant_msg[:250]}...")
-            logger.info(f"  ... [solution continues for {len(assistant_msg)} characters] ...")
+            logger.info(
+                f"  ... [solution continues for {len(assistant_msg)} characters] ..."
+            )
             logger.info(f"  ...{assistant_msg[-250:]}")
         else:
             logger.info(f"  {assistant_msg}")
@@ -1381,13 +1410,9 @@ def main(
 
     model = model.to(device_str)
     model.config.use_cache = False  # Disable KV cache for training
-    
-    # Enable gradient checkpointing on base model before applying LoRA
-    if use_gradient_checkpointing:
-        model.gradient_checkpointing_enable()
-        logger.info("✓ Gradient checkpointing enabled on base model")
 
-    # Apply LoRA
+    # Prepare LoRA config for SFTTrainer
+    # SFTTrainer will apply LoRA and handle gradient checkpointing automatically
     target_modules = get_qwen3_target_modules()
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
@@ -1399,31 +1424,39 @@ def main(
         bias="none",
     )
 
-    model = get_peft_model(model, peft_config)
-    
-    # Enable input gradients for gradient checkpointing with LoRA
-    if use_gradient_checkpointing:
-        model.enable_input_require_grads()
-        logger.info("✓ Input gradients enabled for gradient checkpointing")
-    
-    model.print_trainable_parameters()
-    
+    logger.info(
+        f"✓ LoRA config prepared: r={lora_rank}, alpha={lora_alpha}, dropout={lora_dropout}"
+    )
+    logger.info(f"  Target modules: {target_modules}")
+
     # Prepare training datasets (or use cached versions)
     if cached_data is None:
         # Need to format and tokenize data
         logger.info("Formatting training data...")
-        filter_long_sequences = TRAINING_DATASETS[model_type].get("filter_long_sequences", False)
-        
+        filter_long_sequences = TRAINING_DATASETS[model_type].get(
+            "filter_long_sequences", False
+        )
+
         train_dataset = create_solver_dataset(
-            train_samples, tokenizer, max_length=max_length, use_cot=use_cot, filter_long_sequences=filter_long_sequences
+            train_samples,
+            tokenizer,
+            max_length=max_length,
+            use_cot=use_cot,
+            filter_long_sequences=filter_long_sequences,
         )
         val_dataset = create_solver_dataset(
-            val_samples, tokenizer, max_length=max_length, use_cot=use_cot, filter_long_sequences=filter_long_sequences
+            val_samples,
+            tokenizer,
+            max_length=max_length,
+            use_cot=use_cot,
+            filter_long_sequences=filter_long_sequences,
         )
-        
+
         # Save to cache for next time
         logger.info("\n💾 Saving processed dataset to cache...")
-        save_cached_datasets(cache_key, train_samples, val_samples, train_dataset, val_dataset)
+        save_cached_datasets(
+            cache_key, train_samples, val_samples, train_dataset, val_dataset
+        )
     else:
         logger.info("✅ Using cached tokenized datasets - ready to train!")
 
@@ -1432,11 +1465,8 @@ def main(
         output_dir = f"qwen3_mmlu_{model_type}_no_leakage_r{lora_rank}"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Data collator
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-
-    # Training arguments
-    # Note: Trainer automatically uses DistributedDataParallel (DDP) for multi-GPU training
+    # Training arguments using TrainingArguments
+    # Note: SFTTrainer automatically uses DistributedDataParallel (DDP) for multi-GPU training
     # DDP is much more memory-efficient than DataParallel - no manual wrapping needed!
     # BF16 mixed precision saves ~30-40% memory, enabling larger batches on multi-GPU
     training_args = TrainingArguments(
@@ -1458,23 +1488,38 @@ def main(
         lr_scheduler_type="cosine",
         bf16=True,  # BF16 mixed precision for memory efficiency (L4 GPUs support BF16)
         fp16=False,
-        gradient_checkpointing=use_gradient_checkpointing,  # Trainer handles this correctly with DDP
-        gradient_checkpointing_kwargs={"use_reentrant": False} if use_gradient_checkpointing else None,
+        gradient_checkpointing=use_gradient_checkpointing,  # SFTTrainer handles this correctly with DDP
+        gradient_checkpointing_kwargs=(
+            {"use_reentrant": False} if use_gradient_checkpointing else None
+        ),
         dataloader_num_workers=num_workers,
         remove_unused_columns=False,
         max_grad_norm=1.0,
         optim="adamw_torch",
-        prediction_loss_only=True,
     )
 
-    # Create trainer
-    trainer = Trainer(
+    # Create SFTTrainer
+    # SFTTrainer automatically:
+    # 1. Applies chat template to messages
+    # 2. Masks prompt tokens (only trains on assistant response)
+    # 3. Handles special tokens correctly
+    # 4. Applies LoRA adapters
+    # 5. Handles gradient checkpointing with LoRA
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=data_collator,
+        processing_class=tokenizer,  # TRL 0.24.0 uses processing_class instead of tokenizer
+        peft_config=peft_config,  # SFTTrainer will apply LoRA
+        max_seq_length=max_length,  # Maximum sequence length for training
+        dataset_text_field="messages",  # Field name for conversational data
+        packing=False,  # Don't pack multiple examples together (we want proper boundaries)
     )
+
+    # Print trainable parameters after SFTTrainer applies LoRA
+    logger.info("\n📊 Trainable Parameters:")
+    trainer.model.print_trainable_parameters()
 
     logger.info("\n" + "🚀" * 40)
     logger.info("STARTING TRAINING (on External Datasets)")
@@ -1515,11 +1560,11 @@ def main(
         low_cpu_mem_usage=True,
     ).to(eval_device)
     base_model_for_baseline.eval()
-    
+
     logger.info("\n" + "🔍" * 40)
     logger.info("BASELINE EVALUATION (Untrained Model)")
     logger.info("🔍" * 40)
-    
+
     baseline_results = evaluate_model_on_mmlu_pro(
         model=base_model_for_baseline,
         tokenizer=tokenizer,
@@ -1530,20 +1575,20 @@ def main(
         max_new_tokens=max_new_tokens,
         batch_size=8,
     )
-    
+
     # Clean up baseline model to free memory
     del base_model_for_baseline
     clear_gpu_memory()
     logger.info("✓ Baseline model unloaded\n")
-    
+
     # Second: Evaluate trained model
     logger.info("📊 Step 2/2: Evaluating trained model...")
     logger.info("\n" + "🎯" * 40)
     logger.info("POST-TRAINING EVALUATION (Trained Model)")
     logger.info("🎯" * 40)
-    
+
     # If model was wrapped in DataParallel, unwrap it for evaluation
-    eval_model = model.module if hasattr(model, 'module') else model
+    eval_model = model.module if hasattr(model, "module") else model
     eval_model = eval_model.to(eval_device)
     eval_model.eval()
 
@@ -1663,7 +1708,7 @@ if __name__ == "__main__":
         "--max-tokens-test",
         type=int,
         default=None,
-        help="Override max_new_tokens for BASELINE evaluation only (trained model always uses full tokens from config). Use 256-512 for faster baseline testing.",
+        help="Override max_new_tokens for test mode (both baseline and trained model). Default uses model config (e.g., 1536 for math-reasoner). Use lower for faster testing or higher to avoid truncation.",
     )
     parser.add_argument(
         "--clear-cache",
@@ -1673,10 +1718,11 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    
+
     # Handle cache clearing
     if args.clear_cache:
         import shutil
+
         if CACHE_DIR.exists():
             logger.info(f"🗑️  Clearing cache directory: {CACHE_DIR}")
             shutil.rmtree(CACHE_DIR)
@@ -1691,9 +1737,9 @@ if __name__ == "__main__":
             tokenizer.pad_token = tokenizer.eos_token
             tokenizer.pad_token_id = tokenizer.eos_token_id
         # Use left-padding for batched inference with decoder-only models
-        tokenizer.padding_side = 'left'
+        tokenizer.padding_side = "left"
         return tokenizer
-    
+
     def load_base_model(model_name: str, device_str: str):
         """Load base model and move to device."""
         model = AutoModelForCausalLM.from_pretrained(
@@ -1703,7 +1749,7 @@ if __name__ == "__main__":
         )
         model = model.to(device_str)
         return model
-    
+
     def load_lora_model(base_model, lora_path: str, device_str: str):
         """Load LoRA adapter on top of base model."""
         model = PeftModel.from_pretrained(base_model, lora_path)
@@ -1731,26 +1777,28 @@ if __name__ == "__main__":
         logger.info("=" * 80)
         logger.info("TEST MODE: Evaluating trained model on MMLU-Pro")
         logger.info("=" * 80)
-        
+
         # Get model configuration
         if args.model_type not in TRAINING_DATASETS:
             raise ValueError(f"Unknown model type: {args.model_type}")
-        
+
         config = TRAINING_DATASETS[args.model_type]
         target_categories = config["target_mmlu_categories"]
-        max_new_tokens_full = config.get("max_new_tokens", 256)  # Full tokens for trained model
-        
-        # For baseline, use override if specified (for faster testing)
-        max_new_tokens_baseline = args.max_tokens_test if args.max_tokens_test is not None else max_new_tokens_full
-        
+        max_new_tokens_default = config.get("max_new_tokens", 256)
+
+        # Override with CLI option if specified
         if args.max_tokens_test is not None:
-            logger.info(f"⚡ Using {args.max_tokens_test} tokens for baseline, {max_new_tokens_full} tokens for trained model")
-        
+            max_new_tokens = args.max_tokens_test
+            logger.info(
+                f"⚡ Overriding max_new_tokens: {max_new_tokens_default} → {max_new_tokens}"
+            )
+        else:
+            max_new_tokens = max_new_tokens_default
+
         logger.info(f"Model type: {args.model_type}")
         logger.info(f"Target categories: {target_categories}")
-        logger.info(f"Baseline max tokens: {max_new_tokens_baseline}")
-        logger.info(f"Trained model max tokens: {max_new_tokens_full}")
-        
+        logger.info(f"Max new tokens (both models): {max_new_tokens}")
+
         # Set GPU device
         if args.gpu_id is not None:
             device_str, selected_gpu = set_gpu_device(
@@ -1760,9 +1808,9 @@ if __name__ == "__main__":
         else:
             device_str = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Using device: {device_str}")
-        
+
         clear_gpu_memory()
-        
+
         # Load MMLU-Pro test data
         logger.info("\n" + "🎯" * 40)
         logger.info("LOADING MMLU-PRO TEST DATA")
@@ -1772,55 +1820,55 @@ if __name__ == "__main__":
             max_samples=30,  # 30 samples per category for faster testing
         )
         logger.info(f"Loaded {len(test_samples)} MMLU-Pro test samples")
-        
+
         # Determine model path
         if args.output_dir:
             model_path = args.output_dir
         else:
             # Use default path
             model_path = f"qwen3_mmlu_{args.model_type}_no_leakage_r{args.lora_rank}"
-        
+
         logger.info(f"\nModel path: {model_path}")
-        
+
         # Check if model exists
         if not os.path.exists(model_path):
             logger.error(f"❌ Model not found at: {model_path}")
             logger.error("Please train the model first using --mode train")
             sys.exit(1)
-        
+
         # Load tokenizer
         logger.info("\nLoading tokenizer...")
         tokenizer = load_tokenizer(args.model)
-        
+
         # Evaluate baseline model
         logger.info("\n" + "📊" * 40)
         logger.info("STEP 1/2: BASELINE EVALUATION (Untrained Model)")
         logger.info("📊" * 40)
-        
+
         logger.info(f"Loading base model: {args.model}")
         base_model = load_base_model(args.model, device_str)
-        
+
         baseline_results = evaluate_model_on_mmlu_pro(
             model=base_model,
             tokenizer=tokenizer,
             test_samples=test_samples,
             use_cot=args.use_cot,
             phase_name="Baseline (Untrained)",
-            max_new_tokens=max_new_tokens_baseline,  # Can use shorter tokens for baseline
+            max_new_tokens=max_new_tokens,
             batch_size=8,
         )
-        
+
         logger.info(f"✓ Baseline accuracy: {baseline_results['accuracy']:.1%}")
-        
+
         # Free baseline model memory
         del base_model
         clear_gpu_memory()
-        
+
         # Evaluate trained model
         logger.info("\n" + "📊" * 40)
         logger.info("STEP 2/2: TRAINED MODEL EVALUATION")
         logger.info("📊" * 40)
-        
+
         logger.info(f"Loading trained model from: {model_path}")
         base_model = load_base_model(args.model, device_str)
         trained_model = load_lora_model(
@@ -1828,37 +1876,39 @@ if __name__ == "__main__":
             lora_path=model_path,
             device_str=device_str,
         )
-        
+
         trained_results = evaluate_model_on_mmlu_pro(
             model=trained_model,
             tokenizer=tokenizer,
             test_samples=test_samples,
             use_cot=args.use_cot,
             phase_name="Trained Model",
-            max_new_tokens=max_new_tokens_full,  # Use full tokens for trained model (needs CoT space)
+            max_new_tokens=max_new_tokens,
             batch_size=8,
         )
-        
+
         logger.info(f"✓ Trained accuracy: {trained_results['accuracy']:.1%}")
-        
+
         # Report comparison
         logger.info("\n" + "=" * 80)
         logger.info("📊 EVALUATION RESULTS COMPARISON")
         logger.info("=" * 80)
         logger.info(f"Baseline (Untrained): {baseline_results['accuracy']:.1%}")
         logger.info(f"Trained Model:        {trained_results['accuracy']:.1%}")
-        logger.info(f"Improvement:          {(trained_results['accuracy'] - baseline_results['accuracy']):+.1%}")
+        logger.info(
+            f"Improvement:          {(trained_results['accuracy'] - baseline_results['accuracy']):+.1%}"
+        )
         logger.info("=" * 80)
-        
+
         # Save results
         comparison = {
             "model_type": args.model_type,
             "model_path": model_path,
             "baseline": baseline_results,
             "trained": trained_results,
-            "improvement": trained_results['accuracy'] - baseline_results['accuracy'],
+            "improvement": trained_results["accuracy"] - baseline_results["accuracy"],
         }
-        
+
         results_file = os.path.join(model_path, "evaluation_results.json")
         with open(results_file, "w") as f:
             json.dump(comparison, f, indent=2)

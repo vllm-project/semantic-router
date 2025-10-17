@@ -41,7 +41,7 @@ class OpenMathReasoningDataset(DatasetInterface):
     def _load_raw_dataset(self, max_examples: int = 10000):
         """
         Load raw OpenMathReasoning dataset from Hugging Face.
-        
+
         Args:
             max_examples: Maximum number of examples to load (default: 10000)
                          This prevents loading all 3.2M rows unnecessarily.
@@ -53,13 +53,11 @@ class OpenMathReasoningDataset(DatasetInterface):
         # This way we only fetch the examples we actually need
         print(f"Loading OpenMathReasoning: {max_examples} examples (out of 3.2M total)")
         print(f"  Using streaming mode to avoid downloading full dataset...")
-        
+
         dataset_stream = load_dataset(
-            "nvidia/OpenMathReasoning", 
-            split="cot", 
-            streaming=True
+            "nvidia/OpenMathReasoning", split="cot", streaming=True
         )
-        
+
         # Take only the first max_examples from the stream
         examples = []
         for i, example in enumerate(dataset_stream):
@@ -67,8 +65,8 @@ class OpenMathReasoningDataset(DatasetInterface):
                 break
             examples.append(example)
             if (i + 1) % 1000 == 0:
-                print(f"  Loaded {i + 1}/{max_examples} examples...", end='\r')
-        
+                print(f"  Loaded {i + 1}/{max_examples} examples...", end="\r")
+
         print(f"\n  ✓ Loaded {len(examples)} examples (streamed, not cached)")
         self._dataset_cache = pd.DataFrame(examples)
         return self._dataset_cache
@@ -98,7 +96,7 @@ class OpenMathReasoningDataset(DatasetInterface):
     ) -> Tuple[List[Question], DatasetInfo]:
         """
         Load OpenMathReasoning dataset with optional filtering and sampling.
-        
+
         Args:
             categories: Filter by problem types
             samples_per_category: Number of samples per category
@@ -112,22 +110,28 @@ class OpenMathReasoningDataset(DatasetInterface):
             # If filtering by length, load more samples to compensate
             buffer_factor = 15 if max_cot_length else 3
             estimated_needed = samples_per_category * 3 * buffer_factor
-            max_to_load = min(estimated_needed, 100000)  # Cap at 100k for length filtering
+            max_to_load = min(
+                estimated_needed, 100000
+            )  # Cap at 100k for length filtering
         else:
             # Load more if no limit specified
             max_to_load = 50000  # Still cap to avoid loading all 3.2M
-        
+
         df = self._load_raw_dataset(max_examples=max_to_load)
         available_categories = self._get_categories(max_examples=max_to_load)
-        
+
         # Filter by CoT length if specified (for memory-efficient training)
         if max_cot_length:
-            print(f"\n  📏 Filtering samples by CoT length (max: {max_cot_length} chars)")
+            print(
+                f"\n  📏 Filtering samples by CoT length (max: {max_cot_length} chars)"
+            )
             original_count = len(df)
-            df['cot_length'] = df['generated_solution'].str.len()
-            df = df[df['cot_length'] <= max_cot_length]
-            print(f"  ✓ Kept {len(df)}/{original_count} samples ({len(df)/original_count*100:.1f}%) after length filtering")
-            
+            df["cot_length"] = df["generated_solution"].str.len()
+            df = df[df["cot_length"] <= max_cot_length]
+            print(
+                f"  ✓ Kept {len(df)}/{original_count} samples ({len(df)/original_count*100:.1f}%) after length filtering"
+            )
+
             # Print distribution stats
             if len(df) > 0:
                 print(f"  📊 CoT Length Stats (filtered):")
@@ -161,7 +165,7 @@ class OpenMathReasoningDataset(DatasetInterface):
                 if sample_size > 0:
                     sampled_df = category_df.sample(n=sample_size, random_state=seed)
                     sampled_dfs.append(sampled_df)
-            
+
             if sampled_dfs:
                 df = pd.concat(sampled_dfs, ignore_index=True)
             else:
@@ -174,10 +178,10 @@ class OpenMathReasoningDataset(DatasetInterface):
             solution_text = row["generated_solution"]
             expected_answer = row.get("expected_answer", "")
             problem_type = row.get("problem_type", "default")
-            
+
             # Clean the answer if needed
             correct_answer = str(expected_answer).strip()
-            
+
             question = Question(
                 question_id=f"openmr_{len(questions)}",
                 question=problem_text,
@@ -238,4 +242,3 @@ For example: The answer is 42"""
 
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")
-
