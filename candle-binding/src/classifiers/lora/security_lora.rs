@@ -132,10 +132,20 @@ impl SecurityLoRAClassifier {
         })
     }
 
-    /// Parallel security detection for multiple texts
+    /// Parallel security detection for multiple texts using rayon
+    ///
+    /// # Performance
+    /// - Uses rayon for parallel processing across available CPU cores
+    /// - Efficient for batch sizes > 10
+    /// - No lock contention during inference
     pub fn parallel_detect(&self, texts: &[&str]) -> Result<Vec<SecurityResult>> {
-        // Process each text using real model inference
-        texts.iter().map(|text| self.detect_threats(text)).collect()
+        use rayon::prelude::*;
+
+        // Process each text using real model inference in parallel
+        texts
+            .par_iter()
+            .map(|text| self.detect_threats(text))
+            .collect()
     }
 
     /// Batch security detection for multiple texts (optimized)

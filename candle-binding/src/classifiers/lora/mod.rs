@@ -19,6 +19,8 @@ pub use security_lora::*;
 #[cfg(test)]
 pub mod intent_lora_test;
 #[cfg(test)]
+pub mod parallel_engine_test;
+#[cfg(test)]
 pub mod pii_lora_test;
 #[cfg(test)]
 pub mod security_lora_test;
