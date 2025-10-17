@@ -2,6 +2,8 @@
 
 This directory contains Kubernetes manifests for deploying the Semantic Router using Kustomize.
 
+By default, the base kustomization deploys a Pod with an `llm-katan` sidecar so that the default config (qwen3 on 127.0.0.1:8002) works out-of-the-box. If you prefer to run without the sidecar, replace `deployment.with-llm-katan.yaml` with `deployment.yaml` in `kustomization.yaml`.
+
 ## Architecture
 
 The deployment consists of:
@@ -318,6 +320,7 @@ Edit the `resources` section in `deployment.yaml` accordingly.
 ### Kubernetes Manifests (`deploy/kubernetes/`)
 
 - `deployment.yaml` - Main application deployment with optimized resource settings
+- `deployment.with-llm-katan.yaml` - Optional variant including an llm-katan sidecar listening on 8002 (works with default config pointing to qwen3 at 127.0.0.1:8002)
 - `service.yaml` - Services for gRPC, HTTP API, and metrics
 - `pvc.yaml` - Persistent volume claim for model storage
 - `namespace.yaml` - Dedicated namespace for the application
@@ -326,6 +329,21 @@ Edit the `resources` section in `deployment.yaml` accordingly.
 - `kustomization.yaml` - Kustomize configuration for easy deployment
 
 ### Development Tools
+
+## Optional: run with llm-katan sidecar
+
+To mimic the docker-compose default setup, you can deploy a variant that runs an `llm-katan` sidecar inside the same Pod. The provided `deployment.with-llm-katan.yaml` exposes llm-katan on `0.0.0.0:8002` and serves the model name `qwen3`.
+
+Notes:
+
+- Ensure the Qwen model content is available at `/app/models/Qwen/Qwen3-0.6B` in the PVC. You can pre-populate the PV or customize the init container to fetch from an internal source.
+- The default Kubernetes `config.yaml` has been aligned to use `qwen3` and endpoint `127.0.0.1:8002`, so it will work out-of-the-box with this sidecar.
+
+Apply the sidecar variant instead of the default deployment:
+
+```bash
+kubectl apply -n vllm-semantic-router-system -f deploy/kubernetes/deployment.with-llm-katan.yaml
+```
 
 - `tools/kind/kind-config.yaml` - Kind cluster configuration for local development
 - `tools/make/kube.mk` - Make targets for Kubernetes operations
