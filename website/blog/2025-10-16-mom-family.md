@@ -71,13 +71,20 @@ As vLLM-SR adoption grew, we encountered more diverse scenarios and requirements
 
 ### The MoM Architecture: Best of Both Worlds
 
-Our **Mixture-of-Models** approach combines encoder and decoder strengths:
+**Mixture-of-Models (MoM)** is both a philosophy and an architecture:
+
+1. **Backend LLM Architecture** — Route requests to the optimal downstream model (GPT-4, Claude, Llama, etc.)
+2. **Router Internal Design** — The router itself uses multiple specialized models working together
+
+Our MoM approach combines encoder and decoder strengths:
 
 - ⚡ **Encoders** — Fast classification (sub-10ms latency) for high-throughput scenarios
 - 🧠 **Decoders** — Explainable decisions with reasoning for transparency
 - 🎯 **Domain Agents** — Expert routing with specialized knowledge
 
 This hybrid architecture lets you choose the right tool for each job: speed when you need it, reasoning when it matters.
+
+**Key Insight**: Just as vLLM-SR routes to different backend LLMs, the router itself is powered by a mixture of specialized models—each optimized for specific routing tasks (security, similarity, intent classification, domain expertise).
 
 ## The MoM Model Family
 
@@ -137,15 +144,30 @@ Specialized small language models for domain-specific routing:
 
 ## How vLLM-SR Uses MoM
 
-vLLM-SR's routing pipeline leverages MoM models at multiple stages:
+MoM operates at **two levels** in vLLM-SR:
+
+### Level 1: Router Internal Architecture (MoM Inside)
+
+The router itself is a mixture of specialized models working together in a pipeline:
 
 1. **Security Check** → `mom-jailbreak-flash` and `mom-pii-flash` filter malicious/sensitive requests
 2. **Intent Classification** → `mom-brain-*` models (flash/pro/max) determine query type and routing decisions
 3. **Similarity Search** → `mom-similarity-flash` finds semantically similar routes
 4. **Domain Routing** → `mom-expert-*` models route specialized queries to optimal downstream models
-5. **Cost Optimization** → Simple queries → lightweight models; complex queries → premium models
 
-This achieves **2x+ cost reduction** while maintaining quality, similar to [RouteLLM](https://arxiv.org/abs/2406.18665).
+Each stage uses the **right model for the right task**: fast encoders for security checks, reasoning decoders for complex decisions, domain experts for specialized queries.
+
+### Level 2: Backend LLM Orchestration (MoM Outside)
+
+The router then directs requests to the optimal backend LLM:
+
+- **Simple queries** → Lightweight models (Llama 3.2, Qwen 2.5)
+- **Complex queries** → Premium models (GPT-4, Claude 3.5)
+- **Domain-specific** → Specialized models (Code Llama, Mistral Math)
+
+This dual-level MoM architecture achieves **2x+ cost reduction** while maintaining quality, similar to [RouteLLM](https://arxiv.org/abs/2406.18665).
+
+**The Philosophy**: Mixture-of-Models all the way down—from the router's internal decision-making to the backend LLM selection.
 
 ## What's Next: Exploring Frontier Techniques
 
