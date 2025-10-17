@@ -2,15 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../namespace.yaml
-  - ../pvc.yaml
-  - ../service.yaml
+  - ./namespace.yaml
+  - ./pvc.yaml
+  - ./service.yaml
 
 configMapGenerator:
   - name: semantic-router-config
     files:
-      - ../config.yaml
-      - ../tools_db.json
+      - ./config.yaml
+      - ./tools_db.json
 
 namespace: vllm-semantic-router-system
 
