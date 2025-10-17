@@ -1579,8 +1579,8 @@ fn test_qwen3_output_consistency_all_cases(qwen3_model_only: Arc<Qwen3EmbeddingM
                 .tokenization
                 .attention_mask
                 .iter()
-                .map(|&x| x as u8)
-                .collect::<Vec<u8>>(),
+                .map(|&x| x as u32)
+                .collect::<Vec<u32>>(),
             (1, reference.tokenization.attention_mask.len()),
             &device,
         )
@@ -1714,8 +1714,8 @@ fn test_qwen3_short_text_no_instruction(qwen3_model_only: Arc<Qwen3EmbeddingMode
             .tokenization
             .attention_mask
             .iter()
-            .map(|&x| x as u8)
-            .collect::<Vec<u8>>(),
+            .map(|&x| x as u32)
+            .collect::<Vec<u32>>(),
         (1, reference.tokenization.attention_mask.len()),
         &device,
     )
@@ -1795,8 +1795,8 @@ fn test_qwen3_with_instruction(qwen3_model_only: Arc<Qwen3EmbeddingModel>) {
             .tokenization
             .attention_mask
             .iter()
-            .map(|&x| x as u8)
-            .collect::<Vec<u8>>(),
+            .map(|&x| x as u32)
+            .collect::<Vec<u32>>(),
         (1, reference.tokenization.attention_mask.len()),
         &device,
     )
@@ -1849,8 +1849,8 @@ fn test_qwen3_long_text(qwen3_model_only: Arc<Qwen3EmbeddingModel>) {
             .tokenization
             .attention_mask
             .iter()
-            .map(|&x| x as u8)
-            .collect::<Vec<u8>>(),
+            .map(|&x| x as u32)
+            .collect::<Vec<u32>>(),
         (1, reference.tokenization.attention_mask.len()),
         &device,
     )

@@ -7,6 +7,7 @@ use candle_core::{DType, Device, IndexOp, Tensor};
 use candle_nn::{Linear, Module, VarBuilder};
 use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::{api::sync::Api, Repo, RepoType};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
 use tokenizers::Tokenizer;
@@ -326,9 +327,9 @@ impl LoRABertClassifier {
 
     /// Batch multi-task classification
     pub fn classify_batch_multi_task(&self, texts: &[&str]) -> Result<Vec<LoRAMultiTaskResult>> {
-        // For now, process sequentially. In future, implement true batch processing
+        // Rayon parallel processing for multi-task classification
         texts
-            .iter()
+            .par_iter()
             .map(|text| self.classify_multi_task(text))
             .collect()
     }
