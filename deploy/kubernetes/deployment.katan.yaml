@@ -63,11 +63,23 @@ spec:
                 echo "PII token classifier model already exists, skipping..."
               fi
 
+              # Download embedding model all-MiniLM-L12-v2
+              if [ ! -d "all-MiniLM-L12-v2" ]; then
+                echo "Downloading all-MiniLM-L12-v2 embedding model..."
+                huggingface-cli download sentence-transformers/all-MiniLM-L12-v2 --local-dir all-MiniLM-L12-v2
+              else
+                echo "all-MiniLM-L12-v2 already exists, skipping..."
+              fi
+
               # Optional: Prepare Qwen model directory for llm-katan sidecar
               # NOTE: Provide the model content under /app/models/Qwen/Qwen3-0.6B via pre-populated PV
               # or customize the following block to fetch from your internal artifact store.
               if [ ! -d "Qwen/Qwen3-0.6B" ]; then
-                echo "Qwen3-0.6B directory not found. Please pre-populate /app/models/Qwen/Qwen3-0.6B in the PVC or customize init script to download it."
+                echo "Downloading Qwen/Qwen3-0.6B for llm-katan..."
+                mkdir -p Qwen
+                huggingface-cli download Qwen/Qwen3-0.6B --local-dir Qwen/Qwen3-0.6B || echo "Warning: Qwen3-0.6B download failed; ensure offline pre-population if needed."
+              else
+                echo "Qwen/Qwen3-0.6B already exists, skipping..."
               fi
 
               echo "Model directory listing:" && ls -la /app/models/
