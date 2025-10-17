@@ -37,6 +37,13 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 Configure the semantic router by editing `deploy/kubernetes/config.yaml`. This file contains the vLLM configuration, including model config, endpoints, and policies.
 
+Important notes before you apply manifests:
+
+- `vllm_endpoints.address` must be an IP address (not hostname) reachable from inside the cluster. If your LLM backends run as K8s Services, use the ClusterIP (for example `10.96.0.10`) and set `port` accordingly. Do not include protocol or path.
+- The PVC in `deploy/kubernetes/pvc.yaml` uses `storageClassName: standard`. On some clouds or local clusters, the default StorageClass name may differ (e.g., `standard-rwo`, `gp2`, or a provisioner like local-path). Adjust as needed.
+- Default PVC size is 30Gi. Size it to at least 2–3x of your total model footprint to leave room for indexes and updates.
+- The initContainer downloads several models from Hugging Face on first run and writes them into the PVC. Ensure outbound egress to Hugging Face is allowed and there is at least ~6–8 GiB free space for the models specified.
+
 Deploy the semantic router service with all required components:
 
 ```bash
@@ -135,26 +142,28 @@ Expected output should show the inference pool in `Accepted` state:
 ```yaml
 status:
   parent:
-  - conditions:
-    - lastTransitionTime: "2025-09-27T09:27:32Z"
-      message: 'InferencePool has been Accepted by controller ai-gateway-controller:
-        InferencePool reconciled successfully'
-      observedGeneration: 1
-      reason: Accepted
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: "2025-09-27T09:27:32Z"
-      message: 'Reference resolution by controller ai-gateway-controller: All references
-        resolved successfully'
-      observedGeneration: 1
-      reason: ResolvedRefs
-      status: "True"
-      type: ResolvedRefs
-    parentRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: vllm-semantic-router
-      namespace: vllm-semantic-router-system
+    - conditions:
+        - lastTransitionTime: "2025-09-27T09:27:32Z"
+          message:
+            "InferencePool has been Accepted by controller ai-gateway-controller:
+            InferencePool reconciled successfully"
+          observedGeneration: 1
+          reason: Accepted
+          status: "True"
+          type: Accepted
+        - lastTransitionTime: "2025-09-27T09:27:32Z"
+          message:
+            "Reference resolution by controller ai-gateway-controller: All references
+            resolved successfully"
+          observedGeneration: 1
+          reason: ResolvedRefs
+          status: "True"
+          type: ResolvedRefs
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: vllm-semantic-router
+        namespace: vllm-semantic-router-system
 ```
 
 ## Testing the Deployment
