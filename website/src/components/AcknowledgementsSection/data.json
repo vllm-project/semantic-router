@@ -10,7 +10,7 @@
       "description": "A high-throughput and memory-efficient inference and serving engine for LLMs"
     },{
       "id": "huggingFace-candle",
-      "name": "HuggingFace Candle",
+      "name": "HuggingFace",
       "logo": "/img/acknowledgements/huggingface-logo.svg",
       "url": "https://github.com/huggingface/candle",
       "description": "Minimalist ML framework for Rust"
