@@ -1,8 +1,9 @@
 # Semantic Router Kubernetes Deployment
 
-This directory contains Kubernetes manifests for deploying the Semantic Router using Kustomize.
+This directory contains Kubernetes manifests for deploying the Semantic Router using Kustomize. It provides two modes similar to docker-compose profiles:
 
-By default, the base kustomization deploys a Pod with an `llm-katan` sidecar so that the default config (qwen3 on 127.0.0.1:8002) works out-of-the-box. If you prefer to run without the sidecar, replace `deployment.with-llm-katan.yaml` with `deployment.yaml` in `kustomization.yaml`.
+- core: only the semantic-router (no llm-katan)
+- llm-katan: semantic-router plus an llm-katan sidecar listening on 8002 (served model name `qwen3`)
 
 ## Architecture
 
@@ -319,31 +320,42 @@ Edit the `resources` section in `deployment.yaml` accordingly.
 
 ### Kubernetes Manifests (`deploy/kubernetes/`)
 
-- `deployment.yaml` - Main application deployment with optimized resource settings
-- `deployment.with-llm-katan.yaml` - Optional variant including an llm-katan sidecar listening on 8002 (works with default config pointing to qwen3 at 127.0.0.1:8002)
-- `service.yaml` - Services for gRPC, HTTP API, and metrics
+- `base/` - Shared resources (Namespace, PVC, Service, ConfigMap)
+- `overlays/core/` - Core deployment (no llm-katan)
+- `overlays/llm-katan/` - Deployment with llm-katan sidecar
+- `deployment.yaml` - Plain deployment (used by core overlay)
+- `deployment.katan.yaml` - Sidecar deployment (used by llm-katan overlay)
+- `service.yaml` - gRPC, HTTP API, and metrics services
 - `pvc.yaml` - Persistent volume claim for model storage
 - `namespace.yaml` - Dedicated namespace for the application
-- `config.yaml` - Application configuration
+- `config.yaml` - Application configuration (defaults to qwen3 @ 127.0.0.1:8002)
 - `tools_db.json` - Tools database for semantic routing
-- `kustomization.yaml` - Kustomize configuration for easy deployment
+- `kustomization.yaml` - Root entry (defaults to core overlay)
 
 ### Development Tools
 
-## Optional: run with llm-katan sidecar
+## Choose a mode: core or llm-katan
 
-To mimic the docker-compose default setup, you can deploy a variant that runs an `llm-katan` sidecar inside the same Pod. The provided `deployment.with-llm-katan.yaml` exposes llm-katan on `0.0.0.0:8002` and serves the model name `qwen3`.
+- Core mode (default root points here):
 
-Notes:
+  ```bash
+  kubectl apply -k deploy/kubernetes
+  # or explicitly
+  kubectl apply -k deploy/kubernetes/overlays/core
+  ```
 
-- Ensure the Qwen model content is available at `/app/models/Qwen/Qwen3-0.6B` in the PVC. You can pre-populate the PV or customize the init container to fetch from an internal source.
-- The default Kubernetes `config.yaml` has been aligned to use `qwen3` and endpoint `127.0.0.1:8002`, so it will work out-of-the-box with this sidecar.
+- llm-katan mode:
 
-Apply the sidecar variant instead of the default deployment:
+  ```bash
+  kubectl apply -k deploy/kubernetes/overlays/llm-katan
+  ```
 
-```bash
-kubectl apply -n vllm-semantic-router-system -f deploy/kubernetes/deployment.with-llm-katan.yaml
-```
+Notes for llm-katan:
+
+Notes for llm-katan:
+
+- The init container will attempt to download `Qwen/Qwen3-0.6B` into `/app/models/Qwen/Qwen3-0.6B` and the embedding model `sentence-transformers/all-MiniLM-L12-v2` into `/app/models/all-MiniLM-L12-v2`. In restricted networks, these downloads may fail—pre-populate the PV or point the init script to your internal artifact store as needed.
+- The default Kubernetes `config.yaml` has been aligned to use `qwen3` and endpoint `127.0.0.1:8002`.
 
 - `tools/kind/kind-config.yaml` - Kind cluster configuration for local development
 - `tools/make/kube.mk` - Make targets for Kubernetes operations
