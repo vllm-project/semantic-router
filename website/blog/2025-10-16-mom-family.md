@@ -19,26 +19,26 @@ vLLM-SR solves a critical problem: **how to route LLM requests to the right mode
 
 A quick overview of all MoM models:
 
-| Category | Model | Size | Base Model | Latency | Purpose |
-|----------|-------|------|------------|---------|---------|
-| **🧠 Intelligent Routing** | mom-brain-flash | Flash | ModernBERT | &lt;10ms | Ultra-fast intent classification |
-| | mom-brain-pro | Pro | Qwen 0.6B | ~30-50ms | Balanced routing with reasoning |
-| | mom-brain-max | Max | Qwen 1.7B | ~50-100ms | Maximum accuracy for complex decisions |
-| **🔍 Similarity Search** | mom-similarity-flash | Flash | ModernBERT | &lt;10ms | Semantic similarity matching |
-| **🔒 Prompt Guardian** | mom-jailbreak-flash | Flash | ModernBERT | &lt;10ms | Jailbreak/attack detection |
-| | mom-pii-flash | Flash | ModernBERT | &lt;10ms | PII detection & privacy protection |
-| **🎯 SLM Experts** | mom-expert-math-flash | Flash | Qwen 0.6B | ~30-50ms | Backend math problem solver |
-| | mom-expert-science-flash | Flash | Qwen 0.6B | ~30-50ms | Backend science problem solver |
-| | mom-expert-social-flash | Flash | Qwen 0.6B | ~30-50ms | Backend social sciences solver |
-| | mom-expert-humanities-flash | Flash | Qwen 0.6B | ~30-50ms | Backend humanities solver |
-| | mom-expert-law-flash | Flash | Qwen 0.6B | ~30-50ms | Backend law problem solver |
-| | mom-expert-generalist-flash | Flash | Qwen 0.6B | ~30-50ms | Backend generalist solver |
+| Category | Model | Size | Architecture | Base Model | Purpose |
+|----------|-------|------|--------------|------------|---------|
+| **🧠 Intelligent Routing** | mom-brain-flash | Flash | Encoder | ModernBERT | Ultra-fast intent classification |
+| | mom-brain-pro | Pro | Decoder | Qwen3 0.6B | Balanced routing with reasoning |
+| | mom-brain-max | Max | Decoder | Qwen3 1.7B | Maximum accuracy for complex decisions |
+| **🔍 Similarity Search** | mom-similarity-flash | Flash | Encoder | ModernBERT | Semantic similarity matching |
+| **🔒 Prompt Guardian** | mom-jailbreak-flash | Flash | Encoder | ModernBERT | Jailbreak/attack detection |
+| | mom-pii-flash | Flash | Encoder | ModernBERT | PII detection & privacy protection |
+| **🎯 SLM Experts** | mom-expert-math-flash | Flash | Decoder | Qwen3 0.6B | Backend math problem solver |
+| | mom-expert-science-flash | Flash | Decoder | Qwen3 0.6B | Backend science problem solver |
+| | mom-expert-social-flash | Flash | Decoder | Qwen3 0.6B | Backend social sciences solver |
+| | mom-expert-humanities-flash | Flash | Decoder | Qwen3 0.6B | Backend humanities solver |
+| | mom-expert-law-flash | Flash | Decoder | Qwen3 0.6B | Backend law problem solver |
+| | mom-expert-generalist-flash | Flash | Decoder | Qwen3 0.6B | Backend generalist solver |
 
 **Key Insights:**
 
 - **4 Categories**: 3 for routing (Intelligent Routing, Similarity Search, Prompt Guardian) + 1 for backend problem solving (SLM Experts)
 - **ModernBERT** (encoder-only) → Sub-10ms latency for high-throughput routing
-- **Qwen** (decoder-only) → Explainable routing decisions + domain-specific problem solving
+- **Qwen3** (decoder-only) → Explainable routing decisions + domain-specific problem solving
 - **Flash** models achieve 10,000+ QPS on commodity hardware
 - **SLM Experts** are not routers—they are specialized backend models that solve domain-specific problems
 
@@ -83,9 +83,9 @@ As vLLM-SR adoption grew, we encountered more diverse scenarios and requirements
 
 Our MoM approach combines encoder and decoder strengths:
 
-- ⚡ **Encoders** — Fast classification (sub-10ms latency) for high-throughput scenarios
-- 🧠 **Decoders** — Explainable decisions with reasoning for transparency
-- 🎯 **Domain Agents** — Expert routing with specialized knowledge
+- ⚡ **Encoders (ModernBERT)** — Fast classification (sub-10ms latency) for high-throughput scenarios
+- 🧠 **Decoders (Qwen3)** — Explainable decisions with reasoning for transparency
+- 🎯 **Domain Agents (Qwen3)** — Expert problem solving with specialized knowledge
 
 This hybrid architecture lets you choose the right tool for each job: speed when you need it, reasoning when it matters.
 
@@ -102,10 +102,10 @@ Smart routing models with three size variants:
 | Model | Size | Base Model | Purpose |
 |-------|------|------------|---------|
 | **mom-brain-flash** | Flash | ModernBERT | Ultra-fast intent classification (sub-10ms latency) |
-| **mom-brain-pro** | Pro | Qwen 0.6B | Balanced performance with reasoning capabilities |
-| **mom-brain-max** | Max | Qwen 1.7B | Maximum accuracy for complex routing decisions |
+| **mom-brain-pro** | Pro | Qwen3 0.6B | Balanced performance with reasoning capabilities |
+| **mom-brain-max** | Max | Qwen3 1.7B | Maximum accuracy for complex routing decisions |
 
-**Architecture**: Flash is based on ModernBERT (encoder-only), while Pro and Max are based on Qwen 0.6B and 1.7B (decoder-only) models.
+**Architecture**: Flash is based on ModernBERT (encoder-only), while Pro and Max are based on Qwen3 0.6B and 1.7B (decoder-only) models.
 
 ### 🔍 Similarity Search
 
@@ -134,14 +134,14 @@ Specialized small language models deployed as **backend problem solvers**:
 
 | Model | Size | Base Model | Domain | Training Data |
 |-------|------|------------|--------|---------------|
-| **mom-expert-math-flash** | Flash | Qwen 0.6B | Mathematics | GSM8K, MATH |
-| **mom-expert-science-flash** | Flash | Qwen 0.6B | Science | ARC-Challenge, OpenBookQA, SciQ |
-| **mom-expert-social-flash** | Flash | Qwen 0.6B | Social Sciences | CommonsenseQA, StrategyQA |
-| **mom-expert-humanities-flash** | Flash | Qwen 0.6B | Humanities | TruthfulQA, MMLU-train subset |
-| **mom-expert-law-flash** | Flash | Qwen 0.6B | Law | MMLU-train law subset + specialized sources |
-| **mom-expert-generalist-flash** | Flash | Qwen 0.6B | Generalist | Mixed from above domains |
+| **mom-expert-math-flash** | Flash | Qwen3 0.6B | Mathematics | GSM8K, MATH |
+| **mom-expert-science-flash** | Flash | Qwen3 0.6B | Science | ARC-Challenge, OpenBookQA, SciQ |
+| **mom-expert-social-flash** | Flash | Qwen3 0.6B | Social Sciences | CommonsenseQA, StrategyQA |
+| **mom-expert-humanities-flash** | Flash | Qwen3 0.6B | Humanities | TruthfulQA, MMLU-train subset |
+| **mom-expert-law-flash** | Flash | Qwen3 0.6B | Law | MMLU-train law subset + specialized sources |
+| **mom-expert-generalist-flash** | Flash | Qwen3 0.6B | Generalist | Mixed from above domains |
 
-**Architecture**: All based on Qwen 0.6B (decoder-only) for domain-specific problem solving. Currently only Flash variants are available.
+**Architecture**: All based on Qwen3 0.6B (decoder-only) for domain-specific problem solving. Currently only Flash variants are available.
 
 **Purpose**: These models are **not routers**—they are deployed as backend LLMs to solve domain-specific problems. They form part of the Mixture-of-Models backend architecture that vLLM-SR routes to.
 
@@ -173,17 +173,17 @@ The router then directs requests to the optimal backend LLM from a mixture of mo
 
 **General-Purpose LLMs**:
 
-- **Simple queries** → Lightweight models (Llama 3.2, Qwen 2.5)
+- **Simple queries** → Lightweight models (Llama 3.2, Qwen3 2.5)
 - **Complex queries** → Premium models (GPT-4, Claude 3.5)
 
 **Domain-Specific SLM Experts** (`mom-expert-*`):
 
-- **Math problems** → `mom-expert-math-flash` (trained on GSM8K, MATH)
-- **Science questions** → `mom-expert-science-flash` (trained on ARC, SciQ)
-- **Social sciences** → `mom-expert-social-flash` (CommonsenseQA, StrategyQA)
-- **Humanities** → `mom-expert-humanities-flash` (TruthfulQA, MMLU)
-- **Legal queries** → `mom-expert-law-flash` (MMLU law + specialized sources)
-- **General tasks** → `mom-expert-generalist-flash` (mixed training)
+- **Math problems** → `mom-expert-math-flash` (Qwen3 0.6B trained on GSM8K, MATH)
+- **Science questions** → `mom-expert-science-flash` (Qwen3 0.6B trained on ARC, SciQ)
+- **Social sciences** → `mom-expert-social-flash` (Qwen3 0.6B on CommonsenseQA, StrategyQA)
+- **Humanities** → `mom-expert-humanities-flash` (Qwen3 0.6B on TruthfulQA, MMLU)
+- **Legal queries** → `mom-expert-law-flash` (Qwen3 0.6B on MMLU law + specialized sources)
+- **General tasks** → `mom-expert-generalist-flash` (Qwen3 0.6B on mixed training)
 
 This dual-level MoM architecture achieves **2x+ cost reduction** while maintaining quality, similar to [RouteLLM](https://arxiv.org/abs/2406.18665).
 
@@ -243,16 +243,16 @@ mom-expert-{domain}-{size}
 
 ### Three Size Variants
 
-- **flash**: ModernBERT-based (for brain/similarity/guardian) or Qwen 0.6B (for experts) — fastest, sub-10ms latency
-- **pro**: Qwen 0.6B (for brain) — balanced performance with reasoning
-- **max**: Qwen 1.7B (for brain) — maximum accuracy and capabilities
+- **flash**: ModernBERT-based (for brain/similarity/guardian) or Qwen3 0.6B (for experts) — fastest, sub-10ms latency
+- **pro**: Qwen3 0.6B (for brain) — balanced performance with reasoning
+- **max**: Qwen3 1.7B (for brain) — maximum accuracy and capabilities
 
 ### Architecture Summary
 
-- **Intelligent Routing**: Flash (ModernBERT) + Pro/Max (Qwen 0.6B/1.7B)
+- **Intelligent Routing**: Flash (ModernBERT) + Pro/Max (Qwen3 0.6B/1.7B)
 - **Similarity Search**: Flash (ModernBERT)
 - **Prompt Guardian**: Flash (ModernBERT)
-- **SLM Experts**: Flash only (Qwen 0.6B) — 6 domain specialists
+- **SLM Experts**: Flash only (Qwen3 0.6B) — 6 domain specialists
 
 ## Get Started
 
