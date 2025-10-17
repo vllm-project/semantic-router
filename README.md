@@ -21,17 +21,17 @@
 - [2025/10/16] We established the [vLLM Semantic Router Youtube Channel](https://www.youtube.com/@vLLMSemanticRouter) ✨.
 - [2025/10/15] We announced the [vLLM Semantic Router Dashboard](https://www.youtube.com/watch?v=E2IirN8PsFw) 🚀.
 - [2025/10/12] Our paper [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys 🧠.
-- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Tean 👋.
+- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team 👋.
 - [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/kubernetes/) 🌊.
 - [2025/09/15] We reached 1000 stars on GitHub! 🔥
 - [2025/09/01] We released the project officially: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html) 🚀.
 
-<details>
+<!-- <details>
 <summary>Previous News 🔥</summary>
 
 - 
 
-</details>
+</details> -->
 
 ---
 
@@ -128,6 +128,7 @@ The documentation includes:
 - **[System Architecture](https://vllm-semantic-router.com/docs/overview/architecture/system-architecture/)** - Technical deep dive
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
+- **[Dashboard](https://vllm-semantic-router.com/docs/overview/dashboard)** - vLLM Semantic Router Dashboard
 - **[Distributed Tracing](https://vllm-semantic-router.com/docs/tutorials/observability/distributed-tracing/)** - Observability and debugging guide
 
 ## Community 👋
