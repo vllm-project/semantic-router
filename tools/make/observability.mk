@@ -34,7 +34,7 @@ stop-observability: ## Stop and remove observability containers
 
 ## open-observability: Open Prometheus and Grafana in browser
 open-observability:
-open-observability: Open Prometheus and Grafana in browser
+open-observability: ## Open Prometheus and Grafana in browser
 	@echo "Opening Prometheus and Grafana..."
 	@open http://localhost:9090 2>/dev/null || xdg-open http://localhost:9090 2>/dev/null || echo "Please open http://localhost:9090"
 	@open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 2>/dev/null || echo "Please open http://localhost:3000"

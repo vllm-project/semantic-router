@@ -49,7 +49,7 @@ docker-test-llm-katan: ## Test llm-katan Docker image locally
 	@echo "\n✅ llm-katan Docker image test passed"
 
 # Run llm-katan Docker image locally
-docker-run-llm-katan: docker-build-llm-katan
+docker-run-llm-katan: docker-build-llm-katan ## Run llm-katan Docker image locally (port 8000)
 	@$(LOG_TARGET)
 	@echo "Running llm-katan Docker image on port 8000..."
 	@echo "Access the server at: http://localhost:8000"
@@ -57,7 +57,7 @@ docker-run-llm-katan: docker-build-llm-katan
 	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
 
 # Run llm-katan with custom served model name
-docker-run-llm-katan-custom:
+docker-run-llm-katan-custom: ## Run llm-katan with a custom served model name (set SERVED_NAME)
 	@$(LOG_TARGET)
 	@echo "Running llm-katan with custom served model name..."
 	@echo "Usage: make docker-run-llm-katan-custom SERVED_NAME=your-served-model-name"
@@ -70,23 +70,23 @@ docker-run-llm-katan-custom:
 		llm-katan --model "Qwen/Qwen3-0.6B" --served-model-name "$(SERVED_NAME)" --host 0.0.0.0 --port 8000
 
 # Clean up Docker images
-docker-clean:
+docker-clean: ## Remove dangling Docker images (prune)
 	@$(LOG_TARGET)
 	@echo "Cleaning up Docker images..."
 	@$(CONTAINER_RUNTIME) image prune -f
 	@echo "Docker cleanup completed"
 
 # Push Docker images (for CI/CD)
-docker-push-all: docker-push-extproc docker-push-llm-katan
+docker-push-all: docker-push-extproc docker-push-llm-katan ## Push all Docker images (for CI/CD)
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
 
-docker-push-extproc:
+docker-push-extproc: ## Push extproc Docker image
 	@$(LOG_TARGET)
 	@echo "Pushing extproc Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
 
-docker-push-llm-katan:
+docker-push-llm-katan: ## Push llm-katan Docker image
 	@$(LOG_TARGET)
 	@echo "Pushing llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
@@ -97,59 +97,59 @@ REBUILD ?=
 BUILD_FLAG=$(if $(REBUILD),--build,)
 
 # Docker compose shortcuts (no rebuild by default)
-docker-compose-up:
+docker-compose-up: ## Start services (default includes llm-katan; REBUILD=1 to rebuild)
 	@$(LOG_TARGET)
 	@echo "Starting services with docker-compose (default includes llm-katan) (REBUILD=$(REBUILD))..."
 	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
 
-docker-compose-up-testing:
+docker-compose-up-testing: ## Start services with testing profile (REBUILD=1 optional)
 	@$(LOG_TARGET)
 	@echo "Starting services with testing profile (REBUILD=$(REBUILD))..."
 	@docker compose --profile testing up -d $(BUILD_FLAG)
 
-docker-compose-up-llm-katan:
+docker-compose-up-llm-katan: ## Start services with llm-katan profile (REBUILD=1 optional)
 	@$(LOG_TARGET)
 	@echo "Starting services with llm-katan profile (REBUILD=$(REBUILD))..."
 	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
 
 # Start core services only (closer to production; excludes llm-katan)
-docker-compose-up-core:
+docker-compose-up-core: ## Start core services only (no llm-katan)
 	@$(LOG_TARGET)
 	@echo "Starting core services (no llm-katan) (REBUILD=$(REBUILD))..."
 	@docker compose up -d $(BUILD_FLAG)
 
 # Explicit rebuild targets for convenience
-docker-compose-rebuild: REBUILD=1
+docker-compose-rebuild: REBUILD=1 ## Force rebuild then start (default includes llm-katan)
 docker-compose-rebuild: docker-compose-up
 
-docker-compose-rebuild-testing: REBUILD=1
+docker-compose-rebuild-testing: REBUILD=1 ## Force rebuild then start (testing profile)
 docker-compose-rebuild-testing: docker-compose-up-testing
 
-docker-compose-rebuild-llm-katan: REBUILD=1
+docker-compose-rebuild-llm-katan: REBUILD=1 ## Force rebuild then start (llm-katan profile)
 docker-compose-rebuild-llm-katan: docker-compose-up-llm-katan
 
-docker-compose-down:
+docker-compose-down: ## Stop services (default includes llm-katan)
 	@$(LOG_TARGET)
 	@echo "Stopping docker-compose services (default includes llm-katan)..."
 	@docker compose --profile llm-katan down
 
-docker-compose-down-core:
+docker-compose-down-core: ## Stop core services only (no llm-katan)
 	@$(LOG_TARGET)
 	@echo "Stopping core services only (no llm-katan)..."
 	@docker compose down
 
-docker-compose-down-testing:
+docker-compose-down-testing: ## Stop services with testing profile
 	@$(LOG_TARGET)
 	@echo "Stopping services with testing profile..."
 	@docker compose --profile testing down
 
-docker-compose-down-llm-katan:
+docker-compose-down-llm-katan: ## Stop services with llm-katan profile
 	@$(LOG_TARGET)
 	@echo "Stopping services with llm-katan profile..."
 	@docker compose --profile llm-katan down
 
 # Help target for Docker commands
-docker-help:
+docker-help: ## Show Docker-specific help for targets and environment variables
 	@echo "Docker Make Targets:"
 	@echo "  docker-build-all          - Build all Docker images"
 	@echo "  docker-build-extproc      - Build extproc Docker image"

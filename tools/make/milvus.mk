@@ -80,7 +80,7 @@ start-milvus-ui: ## Start Attu UI to browse Milvus data
 	@sleep 3
 	@echo "Open UI: http://localhost:18000 (Milvus at host.docker.internal:19530)"
 
-stop-milvus-ui:
+stop-milvus-ui: ## Stop and remove Attu UI container
 	@$(LOG_TARGET)
 	@echo "Stopping Attu (Milvus UI) container..."
 	@$(CONTAINER_RUNTIME) stop milvus-ui || true

@@ -32,6 +32,7 @@ precommit-check: ## Run pre-commit checks on all relevant files
 #     --name precommit-container ${PRECOMMIT_CONTAINER} \
 #     bash
 # and then, run `pre-commit install && pre-commit run --all-files` command
+
 precommit-local: ## Run pre-commit hooks in a Docker/Podman container
 	@if command -v docker > /dev/null 2>&1; then \
 		CONTAINER_CMD=docker; \
