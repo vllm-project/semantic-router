@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="website/static/img/repo.png" alt="vLLM Semantic Router" width="80%"/>
+<img src="website/static/img/repo.png" alt="vLLM Semantic Router" width="60%"/>
 
 [![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://vllm-semantic-router.com)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
@@ -13,6 +13,27 @@
 ![code](./website/static/img/code.png)
 
 </div>
+
+---
+
+*Latest News* 🔥
+
+- [2025/10/16] We established the [vLLM Semantic Router Youtube Channel](https://www.youtube.com/@vLLMSemanticRouter) ✨.
+- [2025/10/15] We announced the [vLLM Semantic Router Dashboard](https://www.youtube.com/watch?v=E2IirN8PsFw) 🚀.
+- [2025/10/12] Our paper [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys 🧠.
+- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Tean 👋.
+- [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/kubernetes/) 🌊.
+- [2025/09/15] We reached 1000 stars on GitHub! 🔥
+- [2025/09/01] We released the project officially: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html) 🚀.
+
+<details>
+<summary>Previous News 🔥</summary>
+
+- 
+
+</details>
+
+---
 
 ## Innovations ✨
 
@@ -66,11 +87,15 @@ Cache the semantic representation of the prompt so as to reduce the number of pr
 
 Comprehensive observability with OpenTelemetry distributed tracing provides fine-grained visibility into the request processing pipeline.
 
-### Open WebUI Integration 💬
+### vLLM Semantic Router Dashboard 💬
 
-To view the ***Chain-Of-Thought*** of the vLLM-SR's decision-making process, we have integrated with Open WebUI.
+Watch the quick demo of the dashboard below:
 
-![code](./website/static/img/chat.png)
+<div align="center">
+<a href="https://www.youtube.com/watch?v=E2IirN8PsFw">
+  <img src="https://img.youtube.com/vi/E2IirN8PsFw/maxresdefault.jpg" alt="vLLM Semantic Router Dashboard" width="90%">
+</a>
+</div>
 
 ## Quick Start 🚀
 
@@ -90,36 +115,6 @@ This command will:
 - 🌐 Show you all the endpoints and next steps
 
 For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
-
-### What This Starts By Default
-
-`make docker-compose-up` now launches the full stack including a lightweight local OpenAI-compatible model server powered by **llm-katan** (serving the small model `Qwen/Qwen3-0.6B` under the alias `qwen3`). The semantic router is configured to route classification & default generations to this local endpoint out-of-the-box. This gives you an entirely self-contained experience (no external API keys required) while still letting you add remote / larger models later.
-
-### Core Mode (Without Local Model)
-
-If you only want the core semantic-router + Envoy + observability stack (and will point to external OpenAI-compatible endpoints yourself):
-
-```bash
-make docker-compose-up-core
-```
-
-### Prerequisite Model Download (Speeds Up First Run)
-
-The existing model bootstrap targets now also pre-download the small llm-katan model so the first `docker-compose-up` avoids an on-demand Hugging Face fetch.
-
-Minimal set (fast):
-
-```bash
-make models-download-minimal
-```
-
-Full set:
-
-```bash
-make models-download
-```
-
-Both create a stamp file once `Qwen/Qwen3-0.6B` is present to keep subsequent runs idempotent.
 
 ## Documentation 📖
 
