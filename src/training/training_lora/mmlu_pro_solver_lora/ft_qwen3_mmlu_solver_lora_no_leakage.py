@@ -1498,13 +1498,33 @@ def main(
         optim="adamw_torch",
     )
 
+    # Create formatting function for SFTTrainer
+    # This converts the messages to the proper chat format
+    def formatting_func(example):
+        """Format messages into chat template format for training."""
+        if isinstance(example, dict) and "messages" in example:
+            messages = example["messages"]
+        else:
+            messages = example
+        
+        # Apply chat template
+        # Note: truncation happens during tokenization by SFTTrainer
+        text = tokenizer.apply_chat_template(
+            messages, 
+            tokenize=False, 
+            add_generation_prompt=False,
+            enable_thinking=False,
+        )
+        return text
+    
     # Create SFTTrainer
     # SFTTrainer automatically:
-    # 1. Applies chat template to messages
-    # 2. Masks prompt tokens (only trains on assistant response)
-    # 3. Handles special tokens correctly
-    # 4. Applies LoRA adapters
-    # 5. Handles gradient checkpointing with LoRA
+    # 1. Applies formatting function to convert messages
+    # 2. Uses internal data collator with proper prompt masking
+    # 3. Tokenizes with truncation to model's max length
+    # 4. Handles special tokens correctly
+    # 5. Applies LoRA adapters
+    # 6. Handles gradient checkpointing with LoRA
     trainer = SFTTrainer(
         model=model,
         args=training_args,
@@ -1512,9 +1532,8 @@ def main(
         eval_dataset=val_dataset,
         processing_class=tokenizer,  # TRL 0.24.0 uses processing_class instead of tokenizer
         peft_config=peft_config,  # SFTTrainer will apply LoRA
-        max_seq_length=max_length,  # Maximum sequence length for training
-        dataset_text_field="messages",  # Field name for conversational data
-        packing=False,  # Don't pack multiple examples together (we want proper boundaries)
+        formatting_func=formatting_func,  # Custom formatting function
+        # Note: No data_collator - SFTTrainer uses its own with prompt masking!
     )
 
     # Print trainable parameters after SFTTrainer applies LoRA
