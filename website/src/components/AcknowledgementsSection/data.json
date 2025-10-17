@@ -41,25 +41,25 @@
     },{
       "id": "opentelemetry",
       "name": "OpenTelemetry",
-      "logo": "/img/acknowledgements/opentelemetry-logo.png",
+      "logo": "/img/acknowledgements/opentelemetry-logo.jpg",
       "url": "https://github.com/open-telemetry",
       "description": "High-quality, ubiquitous, and portable telemetry to enable effective observability"
     },{
       "id": "prometheus",
       "name": "Prometheus",
-      "logo": "/img/acknowledgements/prometheus-logo.png",
+      "logo": "/img/acknowledgements/prometheus-logo.jpg",
       "url": "https://github.com/prometheus/prometheus",
       "description": "The Prometheus monitoring system and time series database"
     },{
       "id": "grafana",
       "name": "Grafana",
-      "logo": "/img/acknowledgements/grafana-logo.png",
+      "logo": "/img/acknowledgements/grafana-logo.jpg",
       "url": "https://github.com/grafana/grafana",
       "description": "The open and composable observability and data visualization platform"
     },{
       "id": "jaeger",
       "name": "Jaeger",
-      "logo": "/img/acknowledgements/jaeger-logo.png",
+      "logo": "/img/acknowledgements/jaeger-logo.jpg",
       "url": "https://github.com/jaegertracing/jaeger",
       "description": "CNCF Jaeger, a Distributed Tracing Platform"
     }
