@@ -167,24 +167,7 @@ cleanup: undeploy delete-cluster ## Complete cleanup: undeploy and delete cluste
 	@echo "$(GREEN)[SUCCESS]$(NC) Complete cleanup finished!"
 
 # Help target
-help-kube:
-	@echo "$(BLUE)Kubernetes targets:$(NC)"
-	@echo "  create-cluster     - Create kind cluster with optimized configuration"
-	@echo "  delete-cluster     - Delete kind cluster"
-	@echo "  cluster-info       - Show cluster information and resource usage"
-	@echo "  deploy             - Deploy semantic-router to the cluster"
-	@echo "  undeploy           - Remove semantic-router from the cluster"
-	@echo "  load-image         - Load Docker image into kind cluster"
-	@echo "  test-deployment    - Test the deployment"
-	@echo "  test-api           - Test the Classification API"
-	@echo "  port-forward-api   - Port forward Classification API (8080)"
-	@echo "  port-forward-grpc  - Port forward gRPC API (50051)"
-	@echo "  port-forward-metrics - Port forward metrics (9190)"
-	@echo "  logs               - Show application logs"
-	@echo "  status             - Show deployment status"
-	@echo "  setup              - Complete setup (create-cluster + deploy)"
-	@echo "  cleanup            - Complete cleanup (undeploy + delete-cluster)"
-	@echo ""
+help-kube: ## Show Kubernetes makefile help
 	@echo "$(BLUE)Configuration variables:$(NC)"
 	@echo "  KIND_CLUSTER_NAME  - Kind cluster name (default: $(KIND_CLUSTER_NAME))"
 	@echo "  KIND_CONFIG_FILE   - Kind config file (default: $(KIND_CONFIG_FILE))"
