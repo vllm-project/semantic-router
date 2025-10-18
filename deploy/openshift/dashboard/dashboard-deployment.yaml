@@ -1,0 +1,110 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-config
+  namespace: vllm-semantic-router-system
+data:
+  DASHBOARD_PORT: "8700"
+  TARGET_GRAFANA_URL: "http://grafana:3000"
+  TARGET_PROMETHEUS_URL: "http://prometheus:9090"
+  TARGET_ROUTER_API_URL: "http://semantic-router:8080"
+  TARGET_ROUTER_METRICS_URL: "http://semantic-router:9190/metrics"
+  TARGET_OPENWEBUI_URL: "http://openwebui:3000"
+  TARGET_JAEGER_URL: "http://jaeger:16686"
+  ROUTER_CONFIG_PATH: "/app/config/config.yaml"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: vllm-semantic-router-system
+  labels:
+    app: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/dashboard-custom:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8700
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: dashboard-config
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8700
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8700
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: config
+          configMap:
+            name: semantic-router-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: vllm-semantic-router-system
+  labels:
+    app: dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8700
+      targetPort: 8700
+      protocol: TCP
+  selector:
+    app: dashboard
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: dashboard
+  namespace: vllm-semantic-router-system
+  labels:
+    app: dashboard
+spec:
+  to:
+    kind: Service
+    name: dashboard
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
