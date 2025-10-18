@@ -20,6 +20,7 @@ This guide provides step-by-step instructions for deploying the vLLM Semantic Ro
 - **Download classification models (≈1.5GB, first run only):**
 
   ```bash
+  # Tips: If you encounter this error 'hf: command not found', run 'pip install huggingface_hub'.
   make download-models
   ```
 
