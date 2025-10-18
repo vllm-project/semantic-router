@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openwebui-pipelines
+  labels:
+    app: openwebui-pipelines
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openwebui-pipelines
+  template:
+    metadata:
+      labels:
+        app: openwebui-pipelines
+    spec:
+      containers:
+        - name: pipelines
+          image: ghcr.io/open-webui/pipelines:main
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9099
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: pipelines-volume
+              mountPath: /app/pipelines
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: pipelines-volume
+          configMap:
+            name: openwebui-pipelines-config
