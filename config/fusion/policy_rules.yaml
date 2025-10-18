@@ -1,0 +1,118 @@
+# Signal Fusion Policy Rules Configuration
+# This file defines the fusion policy rules that combine signals into routing decisions
+
+rules:
+  # ============================================================
+  # PRIORITY 200: Safety Blocks
+  # These rules have the highest priority and block dangerous requests
+  # ============================================================
+  
+  - name: "block-ssn-pattern"
+    condition: "regex.ssn.matched"
+    action: "block"
+    priority: 200
+    message: "Request contains Social Security Number pattern and cannot be processed for security reasons"
+  
+  - name: "block-credit-card"
+    condition: "regex.credit-card.matched"
+    action: "block"
+    priority: 200
+    message: "Request contains credit card number pattern and cannot be processed for security reasons"
+  
+  - name: "block-combined-pii"
+    condition: "regex.ssn.matched || regex.credit-card.matched || regex.email-with-password.matched"
+    action: "block"
+    priority: 200
+    message: "PII detected - request blocked for security compliance"
+  
+  # ============================================================
+  # PRIORITY 150: High-Confidence Routing
+  # These rules route to specialized models when multiple signals agree
+  # ============================================================
+  
+  - name: "route-kubernetes-expert"
+    condition: "keyword.kubernetes-infrastructure.matched && similarity.infrastructure.score > 0.75"
+    action: "route"
+    priority: 150
+    models:
+      - "k8s-expert"
+      - "devops-model"
+  
+  - name: "route-security-expert"
+    condition: "(keyword.security.matched || regex.cve-id.matched) && bert.category.value == 'computer science'"
+    action: "route"
+    priority: 150
+    models:
+      - "security-hardened-model"
+      - "cybersecurity-specialist"
+  
+  - name: "route-database-expert"
+    condition: "keyword.database.matched && similarity.database.score > 0.8"
+    action: "route"
+    priority: 150
+    models:
+      - "db-expert"
+      - "sql-specialist"
+  
+  - name: "route-docker-expert"
+    condition: "keyword.docker.matched && (similarity.containers.score > 0.75 || bert.category.value == 'computer science')"
+    action: "route"
+    priority: 150
+    models:
+      - "docker-expert"
+      - "containerization-specialist"
+  
+  # ============================================================
+  # PRIORITY 100: Category Boosting
+  # These rules boost BERT category weights based on signal detection
+  # ============================================================
+  
+  - name: "boost-reasoning-category"
+    condition: "similarity.reasoning.score > 0.75"
+    action: "boost_category"
+    priority: 100
+    category: "reasoning"
+    boost_weight: 1.5
+  
+  - name: "boost-math-category"
+    condition: "keyword.mathematics.matched || similarity.mathematics.score > 0.7"
+    action: "boost_category"
+    priority: 100
+    category: "math"
+    boost_weight: 1.4
+  
+  - name: "boost-code-generation"
+    condition: "keyword.programming.matched && similarity.code-generation.score > 0.7"
+    action: "boost_category"
+    priority: 100
+    category: "computer science"
+    boost_weight: 1.3
+  
+  # ============================================================
+  # PRIORITY 50: Multi-Signal Consensus
+  # These rules require multiple independent signals to agree
+  # ============================================================
+  
+  - name: "consensus-k8s-security"
+    condition: "keyword.kubernetes-infrastructure.matched && keyword.security.matched && similarity.infrastructure.score > 0.8 && bert.category.value == 'computer science'"
+    action: "route"
+    priority: 50
+    models:
+      - "k8s-security-expert"
+  
+  - name: "consensus-database-performance"
+    condition: "keyword.database.matched && keyword.performance.matched && similarity.database.score > 0.75"
+    action: "route"
+    priority: 50
+    models:
+      - "db-performance-expert"
+  
+  # ============================================================
+  # PRIORITY 0: Default Fallthrough
+  # This rule catches all non-blocked requests and uses BERT
+  # ============================================================
+  
+  - name: "default-fallthrough"
+    condition: "!regex.ssn.matched && !regex.credit-card.matched"
+    action: "fallthrough"
+    priority: 0
