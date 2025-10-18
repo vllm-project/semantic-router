@@ -41,7 +41,7 @@ test-semantic-router: build-router
 
 # Test the Rust library and the Go binding
 test: ## Run all tests (Go, Rust, binding)
-test: vet go-lint check-go-mod-tidy download-models test-binding test-semantic-router
+test: vet go-lint check-go-mod-tidy download-models-minimal test-binding test-semantic-router
 
 # Clean built artifacts
 clean: ## Clean built artifacts
