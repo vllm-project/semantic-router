@@ -34,4 +34,10 @@ pub mod classify_test;
 #[cfg(test)]
 pub mod embedding_test;
 #[cfg(test)]
+pub mod init_test;
+#[cfg(test)]
 pub mod memory_safety_test;
+#[cfg(test)]
+pub mod state_manager_test;
+#[cfg(test)]
+pub mod validation_test;
