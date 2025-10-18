@@ -1683,11 +1683,27 @@ def main(
 
         # Delete trainer and model to free GPU memory for evaluation
         logger.info("🧹 Cleaning up training resources to free GPU memory...")
-        if "trainer" in locals():
+        try:
             del trainer
-        if "model" in locals():
+            logger.info("  ✓ Trainer deleted")
+        except:
+            pass
+        try:
             del model
+            logger.info("  ✓ Model deleted")
+        except:
+            pass
+
+        # Force garbage collection and GPU memory cleanup
+        import gc
+
+        gc.collect()
         clear_gpu_memory()
+
+        # Give CUDA a moment to release memory
+        import time
+
+        time.sleep(2)
         logger.info("✓ GPU memory cleared for evaluation\n")
     else:
         logger.info(
@@ -1703,7 +1719,9 @@ def main(
         model_name,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
-    ).to(eval_device)
+        torch_dtype=torch.bfloat16,  # Load in BF16 to save memory
+        device_map=eval_device,  # Directly load to device instead of .to()
+    )
     base_model_for_baseline.eval()
 
     logger.info("\n" + "🔍" * 40)
@@ -1738,11 +1756,12 @@ def main(
         model_name,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
+        torch_dtype=torch.bfloat16,  # Load in BF16 to save memory
+        device_map=eval_device,  # Directly load to device
     )
     from peft import PeftModel
 
     eval_model = PeftModel.from_pretrained(eval_base_model, output_dir)
-    eval_model = eval_model.to(eval_device)
     eval_model.eval()
 
     post_training_results = evaluate_model_on_mmlu_pro(
