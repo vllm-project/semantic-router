@@ -1,0 +1,29 @@
+# Core ML Frameworks
+torch>=2.7.1
+transformers>=4.54.0
+accelerate>=0.26.0
+
+# TRL for Supervised Fine-Tuning
+trl>=0.24.0
+
+# PEFT for LoRA adapters
+peft>=0.13.0
+
+# Dataset handling
+datasets>=2.0.0
+
+# Data processing
+numpy>=1.21.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+
+# HuggingFace utilities
+huggingface-hub>=0.10.0
+sentence-transformers>=2.2.0
+
+# System utilities
+psutil>=7.0.0
+
+# For benchmark dataset implementations
+requests>=2.25.0
+
