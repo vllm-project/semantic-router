@@ -34,4 +34,8 @@ pub use tokenization::{
 #[cfg(test)]
 pub mod config_loader_test;
 #[cfg(test)]
+pub mod similarity_test;
+#[cfg(test)]
+pub mod tokenization_test;
+#[cfg(test)]
 pub mod unified_error_test;
