@@ -2,31 +2,26 @@
 # = Everything For Golang   =
 # ======== golang.mk ========
 
-# Run go lint check for Go modules
-# Refer: https://golangci-lint.run/
-# if local run, add -v for verbose output
-go-lint:
+##@ Golang
+
+go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint for src/semantic-router..."
 	@cd src/semantic-router/ && golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
 	@echo "✅ src/semantic-router go module lint passed"
 
-# golangci-lint fix for Go modules
-# Tips: only fix src/semantic-router and some files may need manual fix.
-go-lint-fix:
+go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix)
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint fix for src/semantic-router..."
 	@cd src/semantic-router/ && golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "✅ src/semantic-router go module lint fix applied"
 
-# Run go vet for all Go modules
-vet:
+vet: ## Run go vet for all Go modules
 	@$(LOG_TARGET)
 	@cd candle-binding && go vet ./...
 	@cd src/semantic-router && go vet ./...
 
-# Check go mod tidy for all Go modules
-check-go-mod-tidy:
+check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@$(LOG_TARGET)
 	@echo "Checking go mod tidy for all Go modules..."
 	@echo "Checking candle-binding..."
@@ -44,18 +39,17 @@ check-go-mod-tidy:
 	@echo "✅ src/semantic-router go mod tidy check passed"
 	@echo "✅ All go mod tidy checks passed"
 
-# Controller-gen targets
-install-controller-gen:
+install-controller-gen: ## Install controller-gen for code generation
 	@echo "Installing controller-gen..."
 	@cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
 
-generate-crd: install-controller-gen
+generate-crd: install-controller-gen ## Generate CRD manifests using controller-gen
 	@echo "Generating CRD manifests..."
 	@cd src/semantic-router && controller-gen crd:crdVersions=v1,allowDangerousTypes=true paths=./pkg/apis/vllm.ai/v1alpha1 output:crd:artifacts:config=../../deploy/kubernetes/crds
 
-generate-deepcopy: install-controller-gen
+generate-deepcopy: install-controller-gen ## Generate deepcopy methods using controller-gen
 	@echo "Generating deepcopy methods..."
 	@cd src/semantic-router && controller-gen object:headerFile=./hack/boilerplate.go.txt paths=./pkg/apis/vllm.ai/v1alpha1
 
-generate-api: generate-deepcopy generate-crd
+generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"

@@ -2,13 +2,13 @@
 # = Everything For envoy   =
 # ======== envoy.mk ========
 
-# Prepare Envoy
-prepare-envoy:
+##@ Envoy
+
+prepare-envoy: ## Install func-e for managing Envoy versions
 	@$(LOG_TARGET)
 	curl https://func-e.io/install.sh | sudo bash -s -- -b /usr/local/bin
 
-# Run Envoy proxy
-run-envoy:
+run-envoy: ## Run Envoy proxy with the configured settings
 	@$(LOG_TARGET)
 	@echo "Checking for func-e..."
 	@if ! command -v func-e >/dev/null 2>&1; then \

@@ -1,0 +1,124 @@
+{
+  "results": [
+    {
+      "category": "math",
+      "prompt": "Is 17 a prime number?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 402,
+      "response_preview": "17 is a prime number. 17 is a prime number because it has no divisors other than 1 and itself.\nStep-by-step explanation:\n\nStep 1: Check if 17 is divis"
+    },
+    {
+      "category": "history",
+      "prompt": "What were the main causes of World War I?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 423,
+      "response_preview": "1. The assassination of Archduke Franz Ferdinand of Austria. 2. The assassination of Archduke Maximilian of Austria. 3. The assassination of Archduke "
+    },
+    {
+      "category": "history",
+      "prompt": "What was the Cold War?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 411,
+      "response_preview": "1. The Cold War was a period of political tension and rivalry between two major global powers, the United States and the Soviet Union, which were comp"
+    },
+    {
+      "category": "chemistry",
+      "prompt": "Explain oxidation and reduction",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 410,
+      "response_preview": "Oxidation and reduction are terms used to describe the transfer of electrons in a chemical reaction. Oxidation involves the loss of electrons, while r"
+    },
+    {
+      "category": "chemistry",
+      "prompt": "What are atoms made of?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 401,
+      "response_preview": "1. The atoms of matter are made up of subatomic particles, such as protons, neutrons, and electrons.\n2. Protons and neutrons are made up of quarks.\n3."
+    },
+    {
+      "category": "chemistry",
+      "prompt": "Explain chemical equilibrium",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 392,
+      "response_preview": "Chemical equilibrium is a state in which the rate of the forward and reverse reactions are equal, meaning that the concentrations of the reactants, pr"
+    },
+    {
+      "category": "psychology",
+      "prompt": "What is the nature vs nurture debate?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 421,
+      "response_preview": "The nature vs nurture debate is about whether the environment or genetic factors determine a person's development. It's not about the cause, but about"
+    },
+    {
+      "category": "psychology",
+      "prompt": "What are the stages of grief?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 407,
+      "response_preview": "The stages of grief are often described as the emotional and physical responses to loss. They include: denial, anger, bargaining, depression, acceptan"
+    },
+    {
+      "category": "health",
+      "prompt": "How to maintain a healthy lifestyle?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 408,
+      "response_preview": "1. Eat a healthy diet with balanced nutrition. 2. Get enough sleep. 3. Exercise regularly. 4. Stay socially engaged. 5. Stay away from harmful substan"
+    },
+    {
+      "category": "health",
+      "prompt": "What is a balanced diet?",
+      "routed_model": "Model-B",
+      "confidence": 1.0,
+      "success": true,
+      "processing_time_ms": 398,
+      "response_preview": "A balanced diet consists of foods that provide the body with all the necessary nutrients. It includes a variety of foods, such as fruits, vegetables, "
+    }
+  ],
+  "summary": {
+    "success_rate": 100.0,
+    "total_requests": 10,
+    "successful_requests": 10
+  },
+  "model_usage": {
+    "Model-B": 10
+  },
+  "category_stats": {
+    "math": {
+      "tested": 1,
+      "successful": 1
+    },
+    "history": {
+      "tested": 2,
+      "successful": 2
+    },
+    "chemistry": {
+      "tested": 3,
+      "successful": 3
+    },
+    "psychology": {
+      "tested": 2,
+      "successful": 2
+    },
+    "health": {
+      "tested": 2,
+      "successful": 2
+    }
+  }
+}

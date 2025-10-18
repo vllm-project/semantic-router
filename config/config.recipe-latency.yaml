@@ -13,7 +13,7 @@
 # - Minimal observability overhead
 
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.4  # Very low threshold for fast matching
   use_cpu: true
 

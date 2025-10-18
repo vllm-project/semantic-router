@@ -2,6 +2,8 @@
 # = Common function or variables for other makefiles    =
 # ====================== common.mk ======================
 
+##@ Common
+
 # Turn off .INTERMEDIATE file removal by marking all files as
 # .SECONDARY.  .INTERMEDIATE file removal is a space-saving hack from
 # a time when drives were small; on modern computers with plenty of
@@ -32,76 +34,10 @@ define errorLog
 echo "\033[0;31m==================>$1\033[0m"
 endef
 
-# Help target
+## help: Show this help info.
+.PHONY: help
 help:
-	@echo "\033[1;3;34mIntelligent Mixture-of-Models Router for Efficient LLM Inference.\033[0m\n"
-	@echo "Available targets:"
-	@echo "  Build targets:"
-	@echo "    all                     - Build everything (default)"
-	@echo "    build                   - Build Rust library and Go router"
-	@echo "    rust                    - Build only the Rust library"
-	@echo "    build-router            - Build only the Go router"
-	@echo "    clean                   - Clean build artifacts"
-	@echo ""
-	@echo "  Run targets:"
-	@echo "    run-router              - Run the router (CONFIG_FILE=config/config.yaml)"
-	@echo "    run-router-e2e          - Run the router with e2e config (config/config.e2e.yaml)"
-	@echo "    run-envoy               - Run Envoy proxy"
-	@echo ""
-	@echo "  Test targets:"
-	@echo "    test                    - Run all tests"
-	@echo "    test-binding            - Test candle-binding"
-	@echo "    test-semantic-router    - Test semantic router"
-	@echo "    test-category-classifier - Test category classifier"
-	@echo "    test-pii-classifier     - Test PII classifier"
-	@echo "    test-jailbreak-classifier - Test jailbreak classifier"
-	@echo ""
-	@echo "  E2E Test targets:"
-	@echo "    start-llm-katan         - Start LLM Katan servers for e2e tests"
-	@echo "    test-e2e-vllm           - Run e2e tests with LLM Katan servers"
-	@echo ""
-	@echo "  Milvus targets (CONTAINER_RUNTIME=docker|podman):"
-	@echo "    start-milvus            - Start Milvus container for testing"
-	@echo "    stop-milvus             - Stop and remove Milvus container"
-	@echo "    restart-milvus          - Restart Milvus container"
-	@echo "    milvus-status           - Check Milvus container status"
-	@echo "    clean-milvus            - Stop container and clean data"
-	@echo "    test-milvus-cache       - Test cache with Milvus backend"
-	@echo "    test-semantic-router-milvus - Test router with Milvus cache"
-	@echo "    start-milvus-ui         - Start Milvus UI to browse data"
-	@echo "    stop-milvus-ui          - Stop and remove Milvus UI container"
-	@echo "    Example: CONTAINER_RUNTIME=podman make start-milvus"
-	@echo ""
-	@echo "  Demo targets:"
-	@echo "    test-auto-prompt-reasoning - Test reasoning mode"
-	@echo "    test-auto-prompt-no-reasoning - Test normal mode"
-	@echo "    test-pii                - Test PII detection"
-	@echo "    test-prompt-guard       - Test jailbreak detection"
-	@echo "    test-tools              - Test tool auto-selection"
-	@echo ""
-	@echo "  Documentation targets:"
-	@echo "    docs-dev                - Start documentation dev server"
-	@echo "    docs-build              - Build documentation"
-	@echo "    docs-serve              - Serve built documentation"
-	@echo "    docs-clean              - Clean documentation artifacts"
-	@echo ""
-	@echo "  Observability targets:"
-	@echo "    run-observability       - Start observability (alias for o11y-local)"
-	@echo "    o11y-local              - Start observability in LOCAL mode"
-	@echo "    o11y-compose            - Start observability in COMPOSE mode"
-	@echo "    stop-observability      - Stop observability stack"
-	@echo "    open-observability      - Open Prometheus and Grafana in browser"
-	@echo "    o11y-status             - Check observability stack status"
-	@echo "    o11y-logs               - Show observability logs"
-	@echo "    o11y-clean              - Remove observability data volumes"
-	@echo "    (aliases: obs-local, obs-compose, obs-status, obs-logs, obs-clean)"
-	@echo ""
-	@echo "  Environment variables:"
-	@echo "    CONTAINER_RUNTIME       - Container runtime (docker|podman, default: docker)"
-	@echo "    CONFIG_FILE             - Config file path (default: config/config.yaml)"
-	@echo "    VLLM_ENDPOINT           - vLLM endpoint URL for testing"
-	@echo ""
-	@echo "  Usage examples:"
-	@echo "    make start-milvus                    # Use Docker (default)"
-	@echo "    CONTAINER_RUNTIME=podman make start-milvus  # Use Podman"
-	@echo "    CONFIG_FILE=custom.yaml make run-router     # Use custom config"
+help: ## Show help info.
+	@echo "\033[1;3;34mVllm semantic-router: Intelligent Mixture-of-Models Router for Efficient LLM Inference.\033[0m\n"
+	@echo "Usage:\n  make \033[36m<Target>\033[0m \033[36m<Option>\033[0m\n\nTargets:"
+	@awk 'BEGIN {FS = ":.*##"; printf ""} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

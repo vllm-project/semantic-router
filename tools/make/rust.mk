@@ -2,38 +2,35 @@
 # = Everything For rust   =
 # ======== rust.mk ========
 
+##@ Rust
+
 # Test the Rust library
-test-binding: rust
+test-binding: rust ## Run Go tests with the Rust static library
 	@$(LOG_TARGET)
-	@echo "Running Go tests with static library..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race
 
 # Test with the candle-binding library
-test-category-classifier: rust
+test-category-classifier: rust ## Test domain classifier with candle-binding
 	@$(LOG_TARGET)
-	@echo "Testing domain classifier with candle-binding..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/classifier_model_fine_tuning && CGO_ENABLED=1 go run test_linear_classifier.go
 
 # Test the PII classifier
-test-pii-classifier: rust
+test-pii-classifier: rust ## Test PII classifier with candle-binding
 	@$(LOG_TARGET)
-	@echo "Testing PII classifier with candle-binding..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/pii_model_fine_tuning && CGO_ENABLED=1 go run pii_classifier_verifier.go
 
 # Test the jailbreak classifier
-test-jailbreak-classifier: rust
+test-jailbreak-classifier: rust ## Test jailbreak classifier with candle-binding
 	@$(LOG_TARGET)
-	@echo "Testing jailbreak classifier with candle-binding..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
 # Build the Rust library
-rust:
+rust: ## Ensure Rust is installed and build the Rust library
 	@$(LOG_TARGET)
-	@echo "Ensuring rust is installed..."
 	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
 		echo "rustc not found, installing..."; \
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \

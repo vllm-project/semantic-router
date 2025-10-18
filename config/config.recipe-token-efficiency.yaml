@@ -13,7 +13,7 @@
 # - Larger batch sizes for efficient processing
 
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.5  # Lower threshold for faster matching
   use_cpu: true
 
