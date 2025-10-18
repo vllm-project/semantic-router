@@ -67,7 +67,7 @@ python --version
 #### Install HuggingFace CLI
 
 ```bash
-pip install huggingface_hub
+pip install huggingface_hub hf_transfer
 ```
 
 ### 3. Build the Project
