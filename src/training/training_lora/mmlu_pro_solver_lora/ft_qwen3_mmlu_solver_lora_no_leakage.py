@@ -70,6 +70,10 @@ _bench_parent_dir = os.path.join(
 if _bench_parent_dir not in sys.path:
     sys.path.insert(0, _bench_parent_dir)
 
+import dataclasses
+from typing import Dict, Sequence
+
+import torch
 from common_lora_utils import (
     clear_gpu_memory,
     log_memory_usage,
@@ -237,6 +241,9 @@ def save_cached_datasets(
     cache_file = CACHE_DIR / f"dataset_{cache_key}.pkl"
 
     try:
+        # Ensure cache directory exists
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
         cache_data = {
             "train_samples": train_samples,
             "val_samples": val_samples,
@@ -755,6 +762,82 @@ For example, if the answer is 42, write: "The answer is 42\""""
     return messages
 
 
+@dataclasses.dataclass
+class DataCollatorForCompletionOnlyLM:
+    """
+    Data collator that masks prompt tokens and trains only on completion (assistant response).
+
+    This is critical for instruction fine-tuning - we want the model to learn to GENERATE
+    answers, not to predict the questions.
+    """
+
+    tokenizer: AutoTokenizer
+    response_template: str
+    mlm: bool = False
+
+    def __call__(self, features):
+        """
+        Collate features and mask prompt tokens.
+
+        Args:
+            features: List of dicts with 'text' field (formatted with chat template)
+
+        Returns:
+            Dict with input_ids, attention_mask, and labels (with prompt tokens masked as -100)
+        """
+        # Extract texts from features
+        texts = [
+            f["text"] if isinstance(f, dict) and "text" in f else f for f in features
+        ]
+
+        # Tokenize all texts
+        batch = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=self.tokenizer.model_max_length,
+            return_tensors="pt",
+        )
+
+        # Create labels (copy of input_ids)
+        labels = batch["input_ids"].clone()
+
+        # Tokenize the response template to find where assistant response starts
+        response_token_ids = self.tokenizer.encode(
+            self.response_template, add_special_tokens=False
+        )
+
+        # For each sequence in the batch, mask everything before the response
+        for i in range(len(labels)):
+            response_token_ids_start_idx = None
+
+            # Find where response template starts in this sequence
+            for idx in range(len(labels[i]) - len(response_token_ids) + 1):
+                if (
+                    labels[i][idx : idx + len(response_token_ids)].tolist()
+                    == response_token_ids
+                ):
+                    response_token_ids_start_idx = idx + len(response_token_ids)
+                    break
+
+            if response_token_ids_start_idx is None:
+                # Response template not found - mask entire sequence
+                # This shouldn't happen if data is formatted correctly
+                logger.warning(
+                    f"Response template not found in sequence {i}. Masking entire sequence."
+                )
+                labels[i, :] = -100
+            else:
+                # Mask everything before the assistant's response
+                labels[i, :response_token_ids_start_idx] = -100
+
+                # Also mask padding tokens
+                labels[i][labels[i] == self.tokenizer.pad_token_id] = -100
+
+        batch["labels"] = labels
+        return batch
+
+
 def create_solver_dataset(
     samples: List[Dict],
     tokenizer,
@@ -1152,7 +1235,7 @@ def evaluate_model_on_mmlu_pro(
 
 
 def main(
-    model_name: str = "Qwen/Qwen3-0.6B",
+    model_name: str = "Qwen/Qwen2.5-3B-Instruct",  # Changed from 0.6B - 3B is minimum for CoT reasoning
     model_type: str = "math-reasoner",
     lora_rank: int = 32,
     lora_alpha: int = 64,
@@ -1402,13 +1485,16 @@ def main(
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
+    # Load model on CPU first - SFTTrainer will handle device placement for multi-GPU
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
+        torch_dtype=torch.bfloat16,  # Load in BF16 to save memory
     )
 
-    model = model.to(device_str)
+    # Don't move to device manually - SFTTrainer/Accelerate handles this for DDP!
+    # model = model.to(device_str)  # ← This causes all processes to load on GPU 0
     model.config.use_cache = False  # Disable KV cache for training
 
     # Prepare LoRA config for SFTTrainer
@@ -1498,33 +1584,52 @@ def main(
         optim="adamw_torch",
     )
 
-    # Create formatting function for SFTTrainer
-    # This converts the messages to the proper chat format
-    def formatting_func(example):
-        """Format messages into chat template format for training."""
-        if isinstance(example, dict) and "messages" in example:
-            messages = example["messages"]
-        else:
-            messages = example
-        
-        # Apply chat template
-        # Note: truncation happens during tokenization by SFTTrainer
+    # Pre-format the dataset by converting messages to text field
+    logger.info(
+        "📋 Pre-formatting dataset: Converting messages to text with chat template..."
+    )
+    logger.info(f"   Original dataset columns: {train_dataset.column_names}")
+
+    def apply_chat_template(example):
+        """Convert messages field to text field using chat template."""
         text = tokenizer.apply_chat_template(
-            messages, 
-            tokenize=False, 
+            example["messages"],
+            tokenize=False,
             add_generation_prompt=False,
             enable_thinking=False,
         )
-        return text
-    
-    # Create SFTTrainer
-    # SFTTrainer automatically:
-    # 1. Applies formatting function to convert messages
-    # 2. Uses internal data collator with proper prompt masking
-    # 3. Tokenizes with truncation to model's max length
-    # 4. Handles special tokens correctly
-    # 5. Applies LoRA adapters
-    # 6. Handles gradient checkpointing with LoRA
+        return {"text": text}
+
+    # Apply formatting to create "text" field
+    train_dataset = train_dataset.map(apply_chat_template, desc="Formatting train data")
+    val_dataset = val_dataset.map(
+        apply_chat_template, desc="Formatting validation data"
+    )
+
+    logger.info(f"✓ Dataset formatted with columns: {train_dataset.column_names}")
+
+    # Create data collator for completion-only training
+    # This masks ALL tokens EXCEPT the assistant's response
+    response_template = "<|im_start|>assistant\n"
+
+    logger.info(
+        f"🎭 Using DataCollatorForCompletionOnlyLM with response template: {repr(response_template)}"
+    )
+    logger.info(
+        "   This ensures model trains ONLY on assistant responses, not prompts!"
+    )
+
+    data_collator = DataCollatorForCompletionOnlyLM(
+        response_template=response_template,
+        tokenizer=tokenizer,
+        mlm=False,
+    )
+
+    # Create SFTTrainer with explicit prompt masking
+    # Since TRL 0.24.0 doesn't support dataset_text_field, we:
+    # 1. Pre-formatted dataset with "text" field (done above)
+    # 2. Use custom DataCollatorForCompletionOnlyLM for prompt masking
+    # 3. SFTTrainer will work with the "text" field automatically
     trainer = SFTTrainer(
         model=model,
         args=training_args,
@@ -1532,8 +1637,7 @@ def main(
         eval_dataset=val_dataset,
         processing_class=tokenizer,  # TRL 0.24.0 uses processing_class instead of tokenizer
         peft_config=peft_config,  # SFTTrainer will apply LoRA
-        formatting_func=formatting_func,  # Custom formatting function
-        # Note: No data_collator - SFTTrainer uses its own with prompt masking!
+        data_collator=data_collator,  # Custom collator masks prompts, trains only on completions
     )
 
     # Print trainable parameters after SFTTrainer applies LoRA
@@ -1564,10 +1668,32 @@ def main(
     logger.info(f"Model saved to: {output_dir}")
 
     # EVALUATIONS: Run both baseline and post-training together
-    logger.info("\n" + "🎯" * 40)
-    logger.info("RUNNING EVALUATIONS ON MMLU-PRO")
-    logger.info("🎯" * 40)
-    logger.info("Running both baseline (untrained) and post-training evaluations...\n")
+    # Only run evaluation on main process (rank 0) to avoid OOM
+    import accelerate
+
+    is_main_process = accelerate.PartialState().is_main_process
+
+    if is_main_process:
+        logger.info("\n" + "🎯" * 40)
+        logger.info("RUNNING EVALUATIONS ON MMLU-PRO (Main Process Only)")
+        logger.info("🎯" * 40)
+        logger.info(
+            "Running both baseline (untrained) and post-training evaluations...\n"
+        )
+
+        # Delete trainer and model to free GPU memory for evaluation
+        logger.info("🧹 Cleaning up training resources to free GPU memory...")
+        if "trainer" in locals():
+            del trainer
+        if "model" in locals():
+            del model
+        clear_gpu_memory()
+        logger.info("✓ GPU memory cleared for evaluation\n")
+    else:
+        logger.info(
+            "\n⏸️  Non-main process: Skipping evaluation (will run on rank 0 only)"
+        )
+        return  # Exit early for non-main processes
 
     # First: Reload base model for baseline (need untrained model)
     logger.info("📊 Step 1/2: Loading base model for baseline evaluation...")
@@ -1606,8 +1732,16 @@ def main(
     logger.info("POST-TRAINING EVALUATION (Trained Model)")
     logger.info("🎯" * 40)
 
-    # If model was wrapped in DataParallel, unwrap it for evaluation
-    eval_model = model.module if hasattr(model, "module") else model
+    # Load trained model from saved checkpoint
+    logger.info(f"Loading trained model from: {output_dir}")
+    eval_base_model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        trust_remote_code=True,
+        low_cpu_mem_usage=True,
+    )
+    from peft import PeftModel
+
+    eval_model = PeftModel.from_pretrained(eval_base_model, output_dir)
     eval_model = eval_model.to(eval_device)
     eval_model.eval()
 
@@ -1699,7 +1833,11 @@ if __name__ == "__main__":
         description="Qwen3 MMLU-Pro Solver - NO DATA LEAKAGE VERSION"
     )
     parser.add_argument("--mode", choices=["train", "test"], default="train")
-    parser.add_argument("--model", default="Qwen/Qwen3-0.6B")
+    parser.add_argument(
+        "--model",
+        default="Qwen/Qwen2.5-3B-Instruct",
+        help="Model size: 3B (good) or 7B (better) for CoT. 0.6B/1.5B too small. Your 4x L4 GPUs can handle up to 7B easily!",
+    )
     parser.add_argument(
         "--model-type",
         choices=list(TRAINING_DATASETS.keys()),
@@ -1734,6 +1872,18 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Clear dataset cache and regenerate (useful if data changed)",
+    )
+    parser.add_argument(
+        "--filter-category",
+        type=str,
+        default=None,
+        help="Filter test samples by category (e.g., 'math', 'physics', 'computer science'). Only for test mode.",
+    )
+    parser.add_argument(
+        "--skip-baseline",
+        action="store_true",
+        default=False,
+        help="Skip baseline evaluation and only test trained model. Only for test mode.",
     )
 
     args = parser.parse_args()
@@ -1840,6 +1990,30 @@ if __name__ == "__main__":
         )
         logger.info(f"Loaded {len(test_samples)} MMLU-Pro test samples")
 
+        # Filter by category if specified
+        if args.filter_category:
+            filter_cat_lower = args.filter_category.lower()
+            original_count = len(test_samples)
+            original_samples = (
+                test_samples.copy()
+            )  # Keep original for showing available categories
+            test_samples = [
+                s for s in test_samples if filter_cat_lower in s["category"].lower()
+            ]
+            logger.info(
+                f"🔍 Filtered by category '{args.filter_category}': {len(test_samples)}/{original_count} samples"
+            )
+
+            if len(test_samples) == 0:
+                logger.error(
+                    f"❌ No samples found for category '{args.filter_category}'"
+                )
+                logger.info("Available categories in dataset:")
+                categories = set(s["category"] for s in original_samples)
+                for cat in sorted(categories):
+                    logger.info(f"  - {cat}")
+                sys.exit(1)
+
         # Determine model path
         if args.output_dir:
             model_path = args.output_dir
@@ -1855,37 +2029,46 @@ if __name__ == "__main__":
             logger.error("Please train the model first using --mode train")
             sys.exit(1)
 
-        # Load tokenizer
+        # Load tokenizer with left-padding for generation
         logger.info("\nLoading tokenizer...")
         tokenizer = load_tokenizer(args.model)
-
-        # Evaluate baseline model
-        logger.info("\n" + "📊" * 40)
-        logger.info("STEP 1/2: BASELINE EVALUATION (Untrained Model)")
-        logger.info("📊" * 40)
-
-        logger.info(f"Loading base model: {args.model}")
-        base_model = load_base_model(args.model, device_str)
-
-        baseline_results = evaluate_model_on_mmlu_pro(
-            model=base_model,
-            tokenizer=tokenizer,
-            test_samples=test_samples,
-            use_cot=args.use_cot,
-            phase_name="Baseline (Untrained)",
-            max_new_tokens=max_new_tokens,
-            batch_size=8,
+        tokenizer.padding_side = (
+            "left"  # Required for batched generation with decoder-only models
         )
+        logger.info(f"✓ Tokenizer padding side set to: {tokenizer.padding_side}")
 
-        logger.info(f"✓ Baseline accuracy: {baseline_results['accuracy']:.1%}")
+        # Conditionally evaluate baseline model
+        baseline_results = None
+        if not args.skip_baseline:
+            logger.info("\n" + "📊" * 40)
+            logger.info("STEP 1/2: BASELINE EVALUATION (Untrained Model)")
+            logger.info("📊" * 40)
 
-        # Free baseline model memory
-        del base_model
-        clear_gpu_memory()
+            logger.info(f"Loading base model: {args.model}")
+            base_model = load_base_model(args.model, device_str)
+
+            baseline_results = evaluate_model_on_mmlu_pro(
+                model=base_model,
+                tokenizer=tokenizer,
+                test_samples=test_samples,
+                use_cot=args.use_cot,
+                phase_name="Baseline (Untrained)",
+                max_new_tokens=max_new_tokens,
+                batch_size=8,
+            )
+
+            logger.info(f"✓ Baseline accuracy: {baseline_results['accuracy']:.1%}")
+
+            # Free baseline model memory
+            del base_model
+            clear_gpu_memory()
+        else:
+            logger.info("\n⏭️  Skipping baseline evaluation (--skip-baseline flag set)")
 
         # Evaluate trained model
+        step_num = "STEP 2/2" if not args.skip_baseline else "TRAINED MODEL EVALUATION"
         logger.info("\n" + "📊" * 40)
-        logger.info("STEP 2/2: TRAINED MODEL EVALUATION")
+        logger.info(f"{step_num}: TRAINED MODEL EVALUATION")
         logger.info("📊" * 40)
 
         logger.info(f"Loading trained model from: {model_path}")
@@ -1908,25 +2091,42 @@ if __name__ == "__main__":
 
         logger.info(f"✓ Trained accuracy: {trained_results['accuracy']:.1%}")
 
-        # Report comparison
-        logger.info("\n" + "=" * 80)
-        logger.info("📊 EVALUATION RESULTS COMPARISON")
-        logger.info("=" * 80)
-        logger.info(f"Baseline (Untrained): {baseline_results['accuracy']:.1%}")
-        logger.info(f"Trained Model:        {trained_results['accuracy']:.1%}")
-        logger.info(
-            f"Improvement:          {(trained_results['accuracy'] - baseline_results['accuracy']):+.1%}"
-        )
-        logger.info("=" * 80)
+        # Report comparison (if baseline was run)
+        if baseline_results is not None:
+            logger.info("\n" + "=" * 80)
+            logger.info("📊 EVALUATION RESULTS COMPARISON")
+            logger.info("=" * 80)
+            logger.info(f"Baseline (Untrained): {baseline_results['accuracy']:.1%}")
+            logger.info(f"Trained Model:        {trained_results['accuracy']:.1%}")
+            logger.info(
+                f"Improvement:          {(trained_results['accuracy'] - baseline_results['accuracy']):+.1%}"
+            )
+            logger.info("=" * 80)
 
-        # Save results
-        comparison = {
-            "model_type": args.model_type,
-            "model_path": model_path,
-            "baseline": baseline_results,
-            "trained": trained_results,
-            "improvement": trained_results["accuracy"] - baseline_results["accuracy"],
-        }
+            # Save results with comparison
+            comparison = {
+                "model_type": args.model_type,
+                "model_path": model_path,
+                "baseline": baseline_results,
+                "trained": trained_results,
+                "improvement": trained_results["accuracy"]
+                - baseline_results["accuracy"],
+                "filter_category": args.filter_category,
+            }
+        else:
+            logger.info("\n" + "=" * 80)
+            logger.info("📊 EVALUATION RESULTS (Trained Model Only)")
+            logger.info("=" * 80)
+            logger.info(f"Trained Model: {trained_results['accuracy']:.1%}")
+            logger.info("=" * 80)
+
+            # Save results without baseline
+            comparison = {
+                "model_type": args.model_type,
+                "model_path": model_path,
+                "trained": trained_results,
+                "filter_category": args.filter_category,
+            }
 
         results_file = os.path.join(model_path, "evaluation_results.json")
         with open(results_file, "w") as f:
