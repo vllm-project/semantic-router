@@ -1,6 +1,7 @@
 //! Tests for Parallel LoRA Engine with performance benchmarks
 
 use crate::test_fixtures::fixtures::*;
+use rayon::prelude::*;
 use rstest::*;
 use serial_test::serial;
 use std::sync::Arc;
@@ -207,19 +208,14 @@ fn test_performance_concurrent_requests(
         println!("\n🔢 Testing with {} concurrent requests", num_threads);
 
         let start = Instant::now();
-        let handles: Vec<_> = (0..*num_threads)
-            .map(|_| {
-                let classifier = Arc::clone(classifier);
-                std::thread::spawn(move || classifier.classify_intent(test_text))
-            })
+
+        // Use rayon for parallel execution - simpler and more efficient
+        let results: Vec<_> = (0..*num_threads)
+            .into_par_iter()
+            .map(|_| classifier.classify_intent(test_text))
             .collect();
 
-        let mut success_count = 0;
-        for handle in handles {
-            if handle.join().is_ok() {
-                success_count += 1;
-            }
-        }
+        let success_count = results.iter().filter(|r| r.is_ok()).count();
 
         let duration = start.elapsed();
         println!(

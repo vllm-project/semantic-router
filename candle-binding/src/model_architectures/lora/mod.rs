@@ -18,3 +18,5 @@ pub use lora_adapter::*;
 // Test modules (only compiled in test builds)
 #[cfg(test)]
 pub mod bert_lora_test;
+#[cfg(test)]
+pub mod lora_adapter_test;
