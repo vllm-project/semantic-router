@@ -11,7 +11,7 @@ spec:
     - number: 50051
   selector:
     matchLabels:
-      app: vllm-semantic-router
+      app: semantic-router
   endpointPickerRef:
     name: semantic-router
     port:

@@ -1,13 +1,16 @@
 # Semantic Router Kubernetes Deployment
 
-This directory contains Kubernetes manifests for deploying the Semantic Router using Kustomize.
+This directory contains Kubernetes manifests for deploying the Semantic Router using Kustomize. It provides two modes similar to docker-compose profiles:
+
+- core: only the semantic-router (no llm-katan)
+- llm-katan: semantic-router plus an llm-katan sidecar listening on 8002 (served model name `qwen3`)
 
 ## Architecture
 
 The deployment consists of:
 
 - **ConfigMap**: Contains `config.yaml` and `tools_db.json` configuration files
-- **PersistentVolumeClaim**: 10Gi storage for model files
+- **PersistentVolumeClaim**: 30Gi storage for model files (adjust based on models you enable)
 - **Deployment**:
   - **Init Container**: Downloads/copies model files to persistent volume
   - **Main Container**: Runs the semantic router service
@@ -29,11 +32,11 @@ The deployment consists of:
 kubectl apply -k deploy/kubernetes/
 
 # Check deployment status
-kubectl get pods -l app=semantic-router -n semantic-router
-kubectl get services -l app=semantic-router -n semantic-router
+kubectl get pods -l app=semantic-router -n vllm-semantic-router-system
+kubectl get services -l app=semantic-router -n vllm-semantic-router-system
 
 # View logs
-kubectl logs -l app=semantic-router -n semantic-router -f
+kubectl logs -l app=semantic-router -n vllm-semantic-router-system -f
 ```
 
 ### Kind (Kubernetes in Docker) Deployment
@@ -86,20 +89,20 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 kubectl apply -k deploy/kubernetes/
 
 # Wait for deployment to be ready
-kubectl wait --for=condition=Available deployment/semantic-router -n semantic-router --timeout=600s
+kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semantic-router-system --timeout=600s
 ```
 
 **Step 3: Check deployment status**
 
 ```bash
 # Check pods
-kubectl get pods -n semantic-router -o wide
+kubectl get pods -n vllm-semantic-router-system -o wide
 
 # Check services
-kubectl get services -n semantic-router
+kubectl get services -n vllm-semantic-router-system
 
 # View logs
-kubectl logs -l app=semantic-router -n semantic-router -f
+kubectl logs -l app=semantic-router -n vllm-semantic-router-system -f
 ```
 
 #### Resource Requirements for Kind
@@ -137,13 +140,13 @@ Or using kubectl directly:
 
 ```bash
 # Access Classification API (HTTP REST)
-kubectl port-forward -n semantic-router svc/semantic-router 8080:8080
+kubectl port-forward -n vllm-semantic-router-system svc/semantic-router 8080:8080
 
 # Access gRPC API
-kubectl port-forward -n semantic-router svc/semantic-router 50051:50051
+kubectl port-forward -n vllm-semantic-router-system svc/semantic-router 50051:50051
 
 # Access metrics
-kubectl port-forward -n semantic-router svc/semantic-router-metrics 9190:9190
+kubectl port-forward -n vllm-semantic-router-system svc/semantic-router-metrics 9190:9190
 ```
 
 #### Testing the Deployment
@@ -194,6 +197,11 @@ kubectl delete -k deploy/kubernetes/
 # Delete the kind cluster
 kind delete cluster --name semantic-router-cluster
 ```
+
+## Notes on dependencies
+
+- Gateway API Inference Extension CRDs are required only when using the Envoy AI Gateway integration in `deploy/kubernetes/ai-gateway/`. Follow the installation steps in `website/docs/installation/kubernetes.md` if you plan to use the gateway path.
+- The core kustomize deployment in this folder does not install Envoy Gateway or AI Gateway; those are optional components documented separately.
 
 ## Make Commands Reference
 
@@ -293,6 +301,11 @@ kubectl top pods -n semantic-router
 # Adjust resource limits in deployment.yaml if needed
 ```
 
+### Storage sizing
+
+- The default PVC is 30Gi. If the enabled models are small, you can reduce it; otherwise reserve at least 2–3x the total model size.
+- If your cluster's default StorageClass isn't named `standard`, change `storageClassName` in `pvc.yaml` accordingly or remove the field to use the default class.
+
 ### Resource Optimization
 
 For different environments, you can adjust resource requirements:
@@ -307,15 +320,42 @@ Edit the `resources` section in `deployment.yaml` accordingly.
 
 ### Kubernetes Manifests (`deploy/kubernetes/`)
 
-- `deployment.yaml` - Main application deployment with optimized resource settings
-- `service.yaml` - Services for gRPC, HTTP API, and metrics
+- `base/` - Shared resources (Namespace, PVC, Service, ConfigMap)
+- `overlays/core/` - Core deployment (no llm-katan)
+- `overlays/llm-katan/` - Deployment with llm-katan sidecar
+- `deployment.yaml` - Plain deployment (used by core overlay)
+- `deployment.katan.yaml` - Sidecar deployment (used by llm-katan overlay)
+- `service.yaml` - gRPC, HTTP API, and metrics services
 - `pvc.yaml` - Persistent volume claim for model storage
 - `namespace.yaml` - Dedicated namespace for the application
-- `config.yaml` - Application configuration
+- `config.yaml` - Application configuration (defaults to qwen3 @ 127.0.0.1:8002)
 - `tools_db.json` - Tools database for semantic routing
-- `kustomization.yaml` - Kustomize configuration for easy deployment
+- `kustomization.yaml` - Root entry (defaults to core overlay)
 
 ### Development Tools
+
+## Choose a mode: core or llm-katan
+
+- Core mode (default root points here):
+
+  ```bash
+  kubectl apply -k deploy/kubernetes
+  # or explicitly
+  kubectl apply -k deploy/kubernetes/overlays/core
+  ```
+
+- llm-katan mode:
+
+  ```bash
+  kubectl apply -k deploy/kubernetes/overlays/llm-katan
+  ```
+
+Notes for llm-katan:
+
+Notes for llm-katan:
+
+- The init container will attempt to download `Qwen/Qwen3-0.6B` into `/app/models/Qwen/Qwen3-0.6B` and the embedding model `sentence-transformers/all-MiniLM-L12-v2` into `/app/models/all-MiniLM-L12-v2`. In restricted networks, these downloads may fail—pre-populate the PV or point the init script to your internal artifact store as needed.
+- The default Kubernetes `config.yaml` has been aligned to use `qwen3` and endpoint `127.0.0.1:8002`.
 
 - `tools/kind/kind-config.yaml` - Kind cluster configuration for local development
 - `tools/make/kube.mk` - Make targets for Kubernetes operations
