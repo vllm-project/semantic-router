@@ -146,10 +146,10 @@ TRAINING_DATASETS = {
         ],  # NVIDIA's high-quality math with detailed CoT
         "description": "Advanced math problem-solving with chain-of-thought reasoning",
         "target_mmlu_categories": ["math", "physics", "engineering"],
-        "max_length": 3584,  # Optimized for multi-GPU with batch_size=2 + BF16
+        "max_length": 3584,  # Optimized for multi-GPU with batch_size=1 + BF16
         "max_new_tokens": 1536,  # Matching shorter CoT for consistency
-        "batch_size": 2,  # Multi-GPU with BF16 - 2 samples per GPU
-        "gradient_accumulation_steps": 8,  # Effective batch = 2 × 8 × 4 GPUs = 64
+        "batch_size": 1,  # Reduced from 2 to avoid OOM with 3-4B models and long sequences
+        "gradient_accumulation_steps": 16,  # Effective batch = 1 × 16 × 4 GPUs = 64 (same effective batch)
         "filter_long_sequences": True,  # Filter out samples > max_length to avoid truncated CoT
         "max_cot_char_length": 12000,  # Pre-filter dataset to shorter CoT samples (~3000 tokens)
         "max_samples_multiplier": 20,  # Load 20x more to compensate for char length filtering
