@@ -721,7 +721,8 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ 
 }
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
-// It returns all models discoverable from the router configuration plus the configured auto model name.
+// It returns the configured auto model name and optionally the underlying models from config.
+// Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
 func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *http.Request) {
 	now := time.Now().Unix()
 
@@ -749,8 +750,8 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 		})
 	}
 
-	// Append underlying models from config (if available)
-	if s.config != nil {
+	// Append underlying models from config (if available and configured to include them)
+	if s.config != nil && s.config.IncludeConfigModelsInList {
 		for _, m := range s.config.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
 			if m == s.config.GetEffectiveAutoModelName() {

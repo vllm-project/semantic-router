@@ -941,7 +941,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	}
 
 	// Check if route cache should be cleared (only for auto models, non-auto models handle this in their own path)
-	if originalModel == "auto" && r.shouldClearRouteCache() {
+	// isAutoModel already determined at the beginning of this function using IsAutoModelName
+	if isAutoModel && r.shouldClearRouteCache() {
 		// Access the CommonResponse that's already created in this function
 		if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
 			response.GetRequestBody().GetResponse().ClearRouteCache = true
@@ -1142,6 +1143,7 @@ type OpenAIModelList struct {
 }
 
 // handleModelsRequest handles GET /v1/models requests and returns a direct response
+// Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
 func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
@@ -1169,8 +1171,8 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 		})
 	}
 
-	// Append underlying models from config (if available)
-	if r.Config != nil {
+	// Append underlying models from config (if available and configured to include them)
+	if r.Config != nil && r.Config.IncludeConfigModelsInList {
 		for _, m := range r.Config.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
 			if m == r.Config.GetEffectiveAutoModelName() {

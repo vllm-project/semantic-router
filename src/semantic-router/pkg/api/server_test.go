@@ -303,11 +303,12 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 }
 
 func TestOpenAIModelsEndpoint(t *testing.T) {
+	// Test with default config (IncludeConfigModelsInList = false)
 	cfg := &config.RouterConfig{
 		VLLMEndpoints: []config.VLLMEndpoint{
 			{
 				Name:    "primary",
-				Address: "127.0.0.1", // Changed from localhost to IP address
+				Address: "127.0.0.1",
 				Port:    8000,
 				Weight:  1,
 			},
@@ -320,6 +321,7 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 				PreferredEndpoints: []string{"primary"},
 			},
 		},
+		IncludeConfigModelsInList: false,
 	}
 
 	apiServer := &ClassificationAPIServer{
@@ -357,12 +359,81 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		}
 	}
 
-	// Must contain 'auto' and the configured models
-	if !got["auto"] {
-		t.Errorf("expected list to contain 'auto'")
+	// Must contain only 'MoM' (default auto model name) when IncludeConfigModelsInList is false
+	if !got["MoM"] {
+		t.Errorf("expected list to contain 'MoM', got: %v", got)
+	}
+	if len(resp.Data) != 1 {
+		t.Errorf("expected only 1 model (MoM), got %d: %v", len(resp.Data), got)
+	}
+}
+
+func TestOpenAIModelsEndpointWithConfigModels(t *testing.T) {
+	// Test with IncludeConfigModelsInList = true
+	cfg := &config.RouterConfig{
+		VLLMEndpoints: []config.VLLMEndpoint{
+			{
+				Name:    "primary",
+				Address: "127.0.0.1",
+				Port:    8000,
+				Weight:  1,
+			},
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"gpt-4o-mini": {
+				PreferredEndpoints: []string{"primary"},
+			},
+			"llama-3.1-8b-instruct": {
+				PreferredEndpoints: []string{"primary"},
+			},
+		},
+		IncludeConfigModelsInList: true,
+	}
+
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            cfg,
+	}
+
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleOpenAIModels(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rr.Code)
+	}
+
+	var resp OpenAIModelList
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if resp.Object != "list" {
+		t.Errorf("expected object 'list', got %s", resp.Object)
+	}
+
+	// Build a set for easy lookup
+	got := map[string]bool{}
+	for _, m := range resp.Data {
+		got[m.ID] = true
+		if m.Object != "model" {
+			t.Errorf("expected each item.object to be 'model', got %s", m.Object)
+		}
+		if m.Created == 0 {
+			t.Errorf("expected created timestamp to be non-zero")
+		}
+	}
+
+	// Must contain 'MoM' (default auto model name) and the configured models when IncludeConfigModelsInList is true
+	if !got["MoM"] {
+		t.Errorf("expected list to contain 'MoM', got: %v", got)
 	}
 	if !got["gpt-4o-mini"] || !got["llama-3.1-8b-instruct"] {
 		t.Errorf("expected configured models to be present, got=%v", got)
+	}
+	if len(resp.Data) != 3 {
+		t.Errorf("expected 3 models, got %d", len(resp.Data))
 	}
 }
 

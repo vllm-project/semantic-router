@@ -154,6 +154,13 @@ default_model: "qwen3"
 # Example: auto_model_name: "MoM"  # or any other name you prefer
 # auto_model_name: "MoM"
 
+# Include configured models in /v1/models list endpoint (optional, default: false)
+# When false (default): only the auto model name is returned in the /v1/models endpoint
+# When true: all models configured in model_config are also included in the /v1/models endpoint
+# This is useful for clients that need to discover all available models
+# Example: include_config_models_in_list: true
+# include_config_models_in_list: false
+
 # Reasoning family configurations
 reasoning_families:
   deepseek:

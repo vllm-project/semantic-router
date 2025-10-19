@@ -30,46 +30,71 @@ func TestHandleModelsRequest(t *testing.T) {
 				PreferredEndpoints: []string{"primary"},
 			},
 		},
+		IncludeConfigModelsInList: false, // Default: don't include configured models
 	}
 
-	router := &OpenAIRouter{
-		Config: cfg,
+	cfgWithModels := &config.RouterConfig{
+		VLLMEndpoints: []config.VLLMEndpoint{
+			{
+				Name:    "primary",
+				Address: "127.0.0.1",
+				Port:    8000,
+				Weight:  1,
+			},
+		},
+		ModelConfig: map[string]config.ModelParams{
+			"gpt-4o-mini": {
+				PreferredEndpoints: []string{"primary"},
+			},
+			"llama-3.1-8b-instruct": {
+				PreferredEndpoints: []string{"primary"},
+			},
+		},
+		IncludeConfigModelsInList: true, // Include configured models
 	}
 
 	tests := []struct {
 		name           string
+		config         *config.RouterConfig
 		path           string
 		expectedModels []string
 		expectedCount  int
 	}{
 		{
-			name:           "GET /v1/models - all models",
+			name:           "GET /v1/models - only auto model (default)",
+			config:         cfg,
 			path:           "/v1/models",
-			expectedModels: []string{"auto", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedModels: []string{"MoM"},
+			expectedCount:  1,
+		},
+		{
+			name:           "GET /v1/models - with include_config_models_in_list enabled",
+			config:         cfgWithModels,
+			path:           "/v1/models",
+			expectedModels: []string{"MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
 			expectedCount:  3,
 		},
 		{
-			name:           "GET /v1/models?model=auto - all models (no filtering implemented)",
+			name:           "GET /v1/models?model=auto - only auto model (default)",
+			config:         cfg,
 			path:           "/v1/models?model=auto",
-			expectedModels: []string{"auto", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedCount:  3,
+			expectedModels: []string{"MoM"},
+			expectedCount:  1,
 		},
 		{
-			name:           "GET /v1/models?model=gpt-4o-mini - all models (no filtering)",
-			path:           "/v1/models?model=gpt-4o-mini",
-			expectedModels: []string{"auto", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedCount:  3,
-		},
-		{
-			name:           "GET /v1/models?model= - all models (empty param)",
-			path:           "/v1/models?model=",
-			expectedModels: []string{"auto", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			name:           "GET /v1/models?model=auto - with include_config_models_in_list enabled",
+			config:         cfgWithModels,
+			path:           "/v1/models?model=auto",
+			expectedModels: []string{"MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
 			expectedCount:  3,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			router := &OpenAIRouter{
+				Config: tt.config,
+			}
 			response, err := router.handleModelsRequest(tt.path)
 			if err != nil {
 				t.Fatalf("handleModelsRequest failed: %v", err)
