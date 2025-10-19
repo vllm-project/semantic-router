@@ -359,12 +359,12 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		}
 	}
 
-	// Must contain only 'auto' when IncludeConfigModelsInList is false
-	if !got["auto"] {
-		t.Errorf("expected list to contain 'auto'")
+	// Must contain only 'MoM' (default auto model name) when IncludeConfigModelsInList is false
+	if !got["MoM"] {
+		t.Errorf("expected list to contain 'MoM', got: %v", got)
 	}
 	if len(resp.Data) != 1 {
-		t.Errorf("expected only 1 model (auto), got %d: %v", len(resp.Data), got)
+		t.Errorf("expected only 1 model (MoM), got %d: %v", len(resp.Data), got)
 	}
 }
 
@@ -425,9 +425,9 @@ func TestOpenAIModelsEndpointWithConfigModels(t *testing.T) {
 		}
 	}
 
-	// Must contain 'auto' and the configured models when IncludeConfigModelsInList is true
-	if !got["auto"] {
-		t.Errorf("expected list to contain 'auto'")
+	// Must contain 'MoM' (default auto model name) and the configured models when IncludeConfigModelsInList is true
+	if !got["MoM"] {
+		t.Errorf("expected list to contain 'MoM', got: %v", got)
 	}
 	if !got["gpt-4o-mini"] || !got["llama-3.1-8b-instruct"] {
 		t.Errorf("expected configured models to be present, got=%v", got)
