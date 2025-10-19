@@ -114,7 +114,7 @@ func main() {
 	observability.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
 	// Initialize embedding models if configured (Long-context support)
-	cfg, err := config.LoadConfig(*configPath)
+	cfg, err = config.LoadConfig(*configPath)
 	if err != nil {
 		observability.Warnf("Failed to load config for embedding models: %v", err)
 	} else if cfg.EmbeddingModels.Qwen3ModelPath != "" || cfg.EmbeddingModels.GemmaModelPath != "" {
