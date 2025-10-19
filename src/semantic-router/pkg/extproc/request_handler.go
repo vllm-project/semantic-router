@@ -941,7 +941,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	}
 
 	// Check if route cache should be cleared (only for auto models, non-auto models handle this in their own path)
-	if originalModel == "auto" && r.shouldClearRouteCache() {
+	// isAutoModel already determined at the beginning of this function using IsAutoModelName
+	if isAutoModel && r.shouldClearRouteCache() {
 		// Access the CommonResponse that's already created in this function
 		if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
 			response.GetRequestBody().GetResponse().ClearRouteCache = true
