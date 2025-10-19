@@ -15,7 +15,7 @@ The Semantic Router operates as an ExtProc server that processes HTTP requests t
   - Can proxy `GET /v1/models` to Router 8080 if you add an Envoy route; otherwise `/v1/models` at 8801 may return “no healthy upstream”.
 
 - 8080 (HTTP, Classification API)
-  - `GET /v1/models`  → OpenAI-compatible model list (includes synthetic `auto`)
+  - `GET /v1/models`  → OpenAI-compatible model list (includes synthetic `MoM`)
   - `GET /health`      → Classification API health
   - `GET /info/models` → Loaded classifier models + system info
   - `GET /info/classifier` → Classifier configuration details
@@ -54,7 +54,7 @@ The router processes standard OpenAI API requests:
 
 ### Models Endpoint
 
-Lists available models and includes a synthetic "auto" model that uses the router's intent classification to select the best underlying model per request.
+Lists available models and includes a synthetic "MoM" (Mixture of Models) model that uses the router's intent classification to select the best underlying model per request.
 
 - Endpoint: `GET /v1/models`
 - Response:
@@ -63,7 +63,7 @@ Lists available models and includes a synthetic "auto" model that uses the route
 {
   "object": "list",
   "data": [
-    { "id": "auto", "object": "model", "created": 1726890000, "owned_by": "semantic-router" },
+    { "id": "MoM", "object": "model", "created": 1726890000, "owned_by": "semantic-router" },
     { "id": "gpt-4o-mini", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" },
     { "id": "llama-3.1-8b-instruct", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" }
   ]
@@ -73,7 +73,7 @@ Lists available models and includes a synthetic "auto" model that uses the route
 Notes:
 
 - The concrete model list is sourced from your configured vLLM endpoints in `config.yaml` (see `vllm_endpoints[].models`).
-- The special `auto` model is always present and instructs the router to classify and route to the best backend model automatically.
+- The special `MoM` (Mixture of Models) model is always present and instructs the router to classify and route to the best backend model automatically. For backward compatibility, the model name `auto` is also accepted as an alias.
 
 ### Chat Completions Endpoint
 

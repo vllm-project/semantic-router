@@ -185,7 +185,7 @@ You can also send custom requests:
 curl -X POST http://localhost:8801/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [
       {"role": "user", "content": "What is the derivative of x^2?"}
     ]

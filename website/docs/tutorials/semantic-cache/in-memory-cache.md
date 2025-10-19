@@ -112,7 +112,7 @@ Send identical requests to verify cache hits:
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [{"role": "user", "content": "What is machine learning?"}]
   }'
 
@@ -120,7 +120,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto", 
+    "model": "MoM",
     "messages": [{"role": "user", "content": "What is machine learning?"}]
   }'
 
@@ -128,7 +128,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [{"role": "user", "content": "Explain machine learning concepts"}]
   }'
 ```

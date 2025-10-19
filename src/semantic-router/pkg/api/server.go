@@ -721,25 +721,39 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ 
 }
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
-// It returns all models discoverable from the router configuration plus a synthetic "auto" model.
+// It returns all models discoverable from the router configuration plus the configured auto model name.
 func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *http.Request) {
 	now := time.Now().Unix()
 
-	// Start with the special "auto" model always available from the router
-	models := []OpenAIModel{
-		{
-			ID:      "auto",
+	// Start with the configured auto model name (or default "MoM")
+	// The model list uses the actual configured name, not "auto"
+	// However, "auto" is still accepted as an alias in request handling for backward compatibility
+	models := []OpenAIModel{}
+
+	// Add the effective auto model name (configured or default "MoM")
+	if s.config != nil {
+		effectiveAutoModelName := s.config.GetEffectiveAutoModelName()
+		models = append(models, OpenAIModel{
+			ID:      effectiveAutoModelName,
 			Object:  "model",
 			Created: now,
 			OwnedBy: "semantic-router",
-		},
+		})
+	} else {
+		// Fallback if no config
+		models = append(models, OpenAIModel{
+			ID:      "MoM",
+			Object:  "model",
+			Created: now,
+			OwnedBy: "semantic-router",
+		})
 	}
 
 	// Append underlying models from config (if available)
 	if s.config != nil {
 		for _, m := range s.config.GetAllModels() {
-			// Skip if already added as "auto" (or avoid duplicates in general)
-			if m == "auto" {
+			// Skip if already added as the configured auto model name (avoid duplicates)
+			if m == s.config.GetEffectiveAutoModelName() {
 				continue
 			}
 			models = append(models, OpenAIModel{

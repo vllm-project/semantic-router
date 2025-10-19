@@ -394,16 +394,16 @@ class Pipeline:
             if self.valves.debug:
                 print(f"  Authorization: Bearer ***")
 
-        # Important: Change model in body to "auto"
-        # VSR backend only accepts model="auto", then automatically selects model based on request content
+        # Important: Change model in body to "MoM"
+        # VSR backend only accepts model="MoM" (or "auto" for backward compatibility), then automatically selects model based on request content
         request_body = body.copy()
         original_model = request_body.get("model", "N/A")
-        request_body["model"] = "auto"
+        request_body["model"] = "MoM"
 
         if self.valves.debug:
             print(f"\n🔄 Model mapping:")
             print(f"  Original model: {original_model}")
-            print(f"  Sending to VSR: auto")
+            print(f"  Sending to VSR: MoM")
 
         # Check if streaming is requested
         is_streaming = request_body.get("stream", False)
