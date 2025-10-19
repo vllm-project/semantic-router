@@ -1,0 +1,20 @@
+{
+  "categories": [
+    "biology",
+    "business",
+    "chemistry",
+    "computer science",
+    "economics",
+    "engineering",
+    "health",
+    "history",
+    "law",
+    "math",
+    "other",
+    "philosophy",
+    "physics",
+    "psychology"
+  ],
+  "num_categories": 14,
+  "description": "MMLU-Pro 14-category classification"
+}

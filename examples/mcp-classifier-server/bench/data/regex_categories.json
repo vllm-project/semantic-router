@@ -1,0 +1,27 @@
+{
+  "categories": [
+    "math",
+    "science",
+    "technology",
+    "history",
+    "general"
+  ],
+  "num_categories": 5,
+  "description": "Regex 5-category classification",
+  "mmlu_to_regex_mapping": {
+    "math": "math",
+    "history": "history",
+    "biology": "science",
+    "chemistry": "science",
+    "physics": "science",
+    "computer science": "technology",
+    "engineering": "technology",
+    "business": "general",
+    "economics": "general",
+    "health": "general",
+    "law": "general",
+    "philosophy": "general",
+    "psychology": "general",
+    "other": "general"
+  }
+}
