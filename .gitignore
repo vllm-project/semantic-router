@@ -143,3 +143,13 @@ dashboard/backend/dashboard-backend.exe
 
 # Keep old HTML backup for reference
 dashboard/frontend/index.html.old
+
+
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+
