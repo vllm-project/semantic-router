@@ -1326,7 +1326,7 @@ impl Qwen3Attention {
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        attention_mask: Option<&Tensor>,
+        _attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
         // Flash Attention 2 implementation using candle-flash-attn
         //
@@ -1363,8 +1363,8 @@ impl Qwen3Attention {
             &q_flash,
             &k_flash,
             &v_flash,
-            self.scale as f32, // softmax scaling factor
-            false,             // causal: false (Qwen3-Embedding is non-causal)
+            self.scaling as f32, // softmax scaling factor
+            false,                // causal: false (Qwen3-Embedding is non-causal)
         )
         .map_err(|e| UnifiedError::Processing {
             operation: "Flash Attention 2: flash_attn".to_string(),

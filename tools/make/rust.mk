@@ -5,8 +5,8 @@
 # Test Rust unit tests (with release optimization for performance)
 test-rust: rust
 	@$(LOG_TARGET)
-	@echo "Running Rust unit tests (release mode)"
-	@cd candle-binding && cargo test --release --lib -- --nocapture
+	@echo "Running Rust unit tests (release mode with Flash Attention 2)"
+	@cd candle-binding && cargo test --release --features flash-attn --lib -- --nocapture
 
 # Test specific Rust module (with release optimization for performance)
 #   Example: make test-rust-module MODULE=classifiers::lora::pii_lora_test
@@ -18,8 +18,8 @@ test-rust-module: rust
 		echo "Example: make test-rust-module MODULE=core::similarity_test"; \
 		exit 1; \
 	fi
-	@echo "Running Rust tests for module: $(MODULE) (release mode)"
-	@cd candle-binding && cargo test --release $(MODULE) --lib -- --nocapture
+	@echo "Running Rust tests for module: $(MODULE) (release mode with Flash Attention 2)"
+	@cd candle-binding && cargo test --release --features flash-attn $(MODULE) --lib -- --nocapture
 
 # Test the Rust library (Go binding tests)
 test-binding: rust
@@ -59,5 +59,5 @@ rust: ## Ensure Rust is installed and build the Rust library
 	if ! command -v cargo >/dev/null 2>&1; then \
 		echo "Error: cargo not found in PATH" && exit 1; \
 	fi && \
-	echo "Building Rust library..." && \
-	cd candle-binding && cargo build --release'
+	echo "Building Rust library with Flash Attention 2..." && \
+	cd candle-binding && cargo build --release --features flash-attn'
