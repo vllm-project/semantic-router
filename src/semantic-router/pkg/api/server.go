@@ -1360,6 +1360,9 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+// handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req EmbeddingRequest
@@ -1591,6 +1594,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		ProcessingTimeMs: result.ProcessingTimeMs,
 	}
 
+	observability.Infof("Calculated batch similarity: query='%s', %d candidates, top-%d matches (model: %s, took: %.2fms)",
 		req.Query, len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
