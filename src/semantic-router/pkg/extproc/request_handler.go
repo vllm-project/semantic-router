@@ -1142,6 +1142,7 @@ type OpenAIModelList struct {
 }
 
 // handleModelsRequest handles GET /v1/models requests and returns a direct response
+// Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
 func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
@@ -1169,8 +1170,8 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 		})
 	}
 
-	// Append underlying models from config (if available)
-	if r.Config != nil {
+	// Append underlying models from config (if available and configured to include them)
+	if r.Config != nil && r.Config.IncludeConfigModelsInList {
 		for _, m := range r.Config.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
 			if m == r.Config.GetEffectiveAutoModelName() {
