@@ -14,12 +14,18 @@ func StaticFileServer(staticDir string) http.Handler {
 		// Never serve index.html for API or embedded proxy routes
 		// These should be handled by their respective handlers
 		p := r.URL.Path
+		// Never serve static files for proxy routes or ChatUI API endpoints
 		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/embedded/") ||
 			strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||
-			strings.HasPrefix(p, "/avatar/") {
+			strings.HasPrefix(p, "/avatar/") || strings.HasPrefix(p, "/_app/") ||
+			strings.HasPrefix(p, "/_next/") || strings.HasPrefix(p, "/chatui/") ||
+			p == "/conversation" || strings.HasPrefix(p, "/conversations") ||
+			strings.HasPrefix(p, "/settings") || p == "/login" || p == "/logout" ||
+			strings.HasPrefix(p, "/r/") {
 			// These paths should have been handled by other handlers
 			// If we reach here, it means the proxy failed or route not found
-			http.Error(w, "Service not available", http.StatusBadGateway)
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"Route not found","message":"This path should have been handled by a proxy"}`, http.StatusBadGateway)
 			return
 		}
 

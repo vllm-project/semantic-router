@@ -115,8 +115,18 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			log.Printf("Proxying Chat UI asset: %s", r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 		})
+		// SvelteKit static assets
+		mux.HandleFunc("/_next/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI Next.js asset: %s", r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		// Common web assets
 		mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
@@ -129,14 +139,90 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			}
 			chatUIProxy.ServeHTTP(w, r)
 		})
+		mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			chatUIProxy.ServeHTTP(w, r)
+		})
 		mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
 			chatUIProxy.ServeHTTP(w, r)
 		})
+
+		// HuggingFace Chat UI API endpoints (these are NOT under /api/)
+		// These need to be proxied when the iframe makes requests
+		mux.HandleFunc("/conversation", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI conversation API: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		mux.HandleFunc("/conversations", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI conversations API: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		mux.HandleFunc("/conversations/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI conversations API: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI settings: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		mux.HandleFunc("/settings/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI settings: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI login: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI logout: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		// Shared conversation routes
+		mux.HandleFunc("/r/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI shared conversation: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+		// Chat UI assets folder (logo, images, etc.)
+		mux.HandleFunc("/chatui/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI assets: %s", r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
+
 		log.Printf("HuggingChat proxy configured: %s → /embedded/chatui/", cfg.ChatUIURL)
-		log.Printf("HuggingChat assets proxied at: /_app/, /favicon.ico, /manifest.webmanifest, /robots.txt")
+		log.Printf("HuggingChat API routes: /conversation, /conversations, /settings, /login, /logout, /r/")
+		log.Printf("HuggingChat assets proxied at: /_app/, /chatui/, /favicon.ico, /manifest.webmanifest, /robots.txt")
 	} else {
 		mux.HandleFunc("/embedded/chatui/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -151,8 +237,13 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
+
+		// Log all API requests for debugging
+		log.Printf("API request: %s %s (from: %s)", r.Method, r.URL.Path, r.Header.Get("Referer"))
+
 		// If path starts with /api/router/, use Router API proxy
 		if strings.HasPrefix(r.URL.Path, "/api/router/") && routerAPIProxy != nil {
+			log.Printf("Routing to Router API: %s", r.URL.Path)
 			routerAPIProxy.ServeHTTP(w, r)
 			return
 		}
@@ -160,21 +251,26 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		if jaegerAPIProxy != nil && (strings.HasPrefix(r.URL.Path, "/api/services") ||
 			strings.HasPrefix(r.URL.Path, "/api/traces") ||
 			strings.HasPrefix(r.URL.Path, "/api/operations")) {
+			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
 			jaegerAPIProxy.ServeHTTP(w, r)
 			return
 		}
 		// Prefer Chat UI API when available (to avoid returning HTML from other backends)
 		if chatUIProxy != nil {
+			log.Printf("Routing to Chat UI API: %s", r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 			return
 		}
 		// Otherwise, if Grafana is configured, proxy to Grafana API
 		if grafanaStaticProxy != nil {
+			log.Printf("Routing to Grafana API: %s", r.URL.Path)
 			grafanaStaticProxy.ServeHTTP(w, r)
 			return
 		}
 		// No handler available
-		http.Error(w, "Service not available", http.StatusBadGateway)
+		log.Printf("No handler available for: %s", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"error":"Service not available","message":"No API handler configured for this path"}`, http.StatusBadGateway)
 	})
 
 	// Router metrics passthrough

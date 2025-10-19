@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -18,6 +19,14 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	// Enable streaming responses (critical for SSE/ChatUI)
+	// FlushInterval = 0 means flush immediately, supporting real-time streaming
+	proxy.FlushInterval = -1 // -1 means flush immediately after each write
+
+	// Optional behavior: override Origin header to target for non-idempotent requests
+	// This helps when the upstream enforces strict Origin checking (e.g., CSRF protections)
+	overrideOrigin := strings.EqualFold(os.Getenv("PROXY_OVERRIDE_ORIGIN"), "true")
 
 	// Customize the director to rewrite the request
 	origDirector := proxy.Director
@@ -32,6 +41,23 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		}
 		r.URL.Path = p
 		r.Host = targetURL.Host
+
+		// Capture incoming Origin for downstream CORS decisions
+		incomingOrigin := r.Header.Get("Origin")
+		if overrideOrigin && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete) {
+			// Force Origin to target to satisfy upstream Origin/CSRF checks for write requests
+			r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
+		} else if incomingOrigin == "" {
+			// If no Origin present, set to target origin to avoid empty Origin edge cases
+			r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
+		}
+
+		// Forward the original Origin (prior to any override) for response CORS handling
+		if incomingOrigin != "" {
+			r.Header.Set("X-Forwarded-Origin", incomingOrigin)
+		} else {
+			r.Header.Set("X-Forwarded-Origin", targetURL.Scheme+"://"+targetURL.Host)
+		}
 
 		// Set Origin header to match the target URL for iframe embedding
 		// This is required for services like Grafana and Chat UI to accept the iframe embedding
