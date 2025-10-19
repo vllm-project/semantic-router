@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="website/static/img/repo.png" alt="vLLM Semantic Router" width="60%"/>
+<img src="website/static/img/code.png" alt="vLLM Semantic Router" width="100%"/>
 
 [![Documentation](https://img.shields.io/badge/docs-read%20the%20docs-blue)](https://vllm-semantic-router.com)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
@@ -9,8 +9,6 @@
 ![Test And Build](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
 
 **📚 [Complete Documentation](https://vllm-semantic-router.com) | 🚀 [Quick Start](https://vllm-semantic-router.com/docs/installation) | 📣 [Blog](https://vllm-semantic-router.com/blog/) | 📖 [Publications](https://vllm-semantic-router.com/publications/)**
-
-![code](./website/static/img/code.png)
 
 </div>
 
