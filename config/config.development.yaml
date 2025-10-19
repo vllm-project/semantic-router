@@ -54,6 +54,10 @@ categories:
 
 default_model: test-model
 
+# Auto model name for automatic model selection (optional)
+# Uncomment and set to customize the model name for automatic routing
+# auto_model_name: "MoM"
+
 api:
   batch_classification:
     max_batch_size: 10

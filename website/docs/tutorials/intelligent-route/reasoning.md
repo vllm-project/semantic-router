@@ -119,7 +119,7 @@ Math (reasoning should be ON and effort high)
 curl -sS http://localhost:8801/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [
       {"role": "system", "content": "You are a math teacher."},
       {"role": "user",   "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}
@@ -133,7 +133,7 @@ General (reasoning should be OFF)
 curl -sS http://localhost:8801/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [
       {"role": "system", "content": "You are a helpful assistant."},
       {"role": "user",   "content": "Who are you?"}
@@ -153,7 +153,7 @@ Example:
 curl -i http://localhost:8801/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [
       {"role": "system", "content": "You are a math teacher."},
       {"role": "user",   "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}
@@ -172,7 +172,7 @@ Quick start (router + vLLM):
 ```bash
 SAMPLES_PER_CATEGORY=25 \
 CONCURRENT_REQUESTS=4 \
-ROUTER_MODELS="auto" \
+ROUTER_MODELS="MoM" \
 VLLM_MODELS="openai/gpt-oss-20b" \
 ./bench/run_bench.sh
 ```
@@ -183,7 +183,7 @@ Router-only benchmark:
 BENCHMARK_ROUTER_ONLY=true \
 SAMPLES_PER_CATEGORY=25 \
 CONCURRENT_REQUESTS=4 \
-ROUTER_MODELS="auto" \
+ROUTER_MODELS="MoM" \
 ./bench/run_bench.sh
 ```
 

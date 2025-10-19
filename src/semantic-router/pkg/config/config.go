@@ -53,6 +53,11 @@ type RouterConfig struct {
 	// Default LLM model to use if no match is found
 	DefaultModel string `yaml:"default_model"`
 
+	// Auto model name for automatic model selection (default: "MoM")
+	// This is the model name that clients should use to trigger automatic model selection
+	// For backward compatibility, "auto" is also accepted and treated as an alias
+	AutoModelName string `yaml:"auto_model_name,omitempty"`
+
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 
@@ -478,6 +483,25 @@ func GetConfig() *RouterConfig {
 	configMu.RLock()
 	defer configMu.RUnlock()
 	return config
+}
+
+// GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
+// Returns the configured AutoModelName if set, otherwise defaults to "MoM"
+// This is the primary model name that triggers automatic routing
+func (c *RouterConfig) GetEffectiveAutoModelName() string {
+	if c.AutoModelName != "" {
+		return c.AutoModelName
+	}
+	return "MoM" // Default value
+}
+
+// IsAutoModelName checks if the given model name should trigger automatic model selection
+// Returns true if the model name is either the configured AutoModelName or "auto" (for backward compatibility)
+func (c *RouterConfig) IsAutoModelName(modelName string) bool {
+	if modelName == "auto" {
+		return true // Always support "auto" for backward compatibility
+	}
+	return modelName == c.GetEffectiveAutoModelName()
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching

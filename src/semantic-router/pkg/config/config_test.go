@@ -1665,4 +1665,92 @@ api:
 			Expect(len(metricsConfig.SizeBuckets)).To(Equal(0))
 		})
 	})
+
+	Describe("AutoModelName Configuration", func() {
+		Context("GetEffectiveAutoModelName", func() {
+			It("should return configured AutoModelName when set", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "CustomAuto",
+				}
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomAuto"))
+			})
+
+			It("should return default 'MoM' when AutoModelName is not set", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "",
+				}
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
+			})
+
+			It("should return default 'MoM' for empty RouterConfig", func() {
+				cfg := &config.RouterConfig{}
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
+			})
+		})
+
+		Context("IsAutoModelName", func() {
+			It("should recognize 'auto' as auto model name for backward compatibility", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "MoM",
+				}
+				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
+			})
+
+			It("should recognize configured AutoModelName", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "CustomAuto",
+				}
+				Expect(cfg.IsAutoModelName("CustomAuto")).To(BeTrue())
+			})
+
+			It("should recognize default 'MoM' when AutoModelName is not set", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "",
+				}
+				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
+			})
+
+			It("should not recognize other model names as auto", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "MoM",
+				}
+				Expect(cfg.IsAutoModelName("gpt-4")).To(BeFalse())
+				Expect(cfg.IsAutoModelName("claude")).To(BeFalse())
+			})
+
+			It("should support both 'auto' and configured name", func() {
+				cfg := &config.RouterConfig{
+					AutoModelName: "MoM",
+				}
+				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("other")).To(BeFalse())
+			})
+		})
+
+		Context("YAML parsing with AutoModelName", func() {
+			It("should parse AutoModelName from YAML", func() {
+				yamlContent := `
+auto_model_name: "CustomRouter"
+default_model: "test-model"
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.AutoModelName).To(Equal("CustomRouter"))
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomRouter"))
+			})
+
+			It("should handle missing AutoModelName in YAML", func() {
+				yamlContent := `
+default_model: "test-model"
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.AutoModelName).To(Equal(""))
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
+			})
+		})
+	})
 })

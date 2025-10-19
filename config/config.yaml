@@ -147,6 +147,13 @@ categories:
 
 default_model: "qwen3"
 
+# Auto model name for automatic model selection (optional)
+# This is the model name that clients should use to trigger automatic model selection
+# If not specified, defaults to "MoM" (Mixture of Models)
+# For backward compatibility, "auto" is always accepted as an alias
+# Example: auto_model_name: "MoM"  # or any other name you prefer
+# auto_model_name: "MoM"
+
 # Reasoning family configurations
 reasoning_families:
   deepseek:

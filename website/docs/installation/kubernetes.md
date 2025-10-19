@@ -195,7 +195,7 @@ Once the gateway is accessible, test the inference endpoint:
 curl -i -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "MoM",
     "messages": [
       {"role": "user", "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}
     ]

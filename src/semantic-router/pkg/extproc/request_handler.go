@@ -547,11 +547,12 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		},
 	}
 
-	// Only change the model if the original model is "auto"
+	// Only change the model if the original model is an auto model name (supports both "auto" and configured AutoModelName for backward compatibility)
 	actualModel := originalModel
 	var selectedEndpoint string
-	if originalModel == "auto" && (len(nonUserMessages) > 0 || userContent != "") {
-		observability.Infof("Using Auto Model Selection")
+	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
+	if isAutoModel && (len(nonUserMessages) > 0 || userContent != "") {
+		observability.Infof("Using Auto Model Selection (model=%s)", originalModel)
 		// Determine text to use for classification/similarity
 		var classificationText string
 		if len(userContent) > 0 {
@@ -853,7 +854,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				metrics.RecordRoutingReasonCode("auto_routing", matchedModel)
 			}
 		}
-	} else if originalModel != "auto" {
+	} else if !isAutoModel {
 		observability.Infof("Using specified model: %s", originalModel)
 		// Track VSR decision information for non-auto models
 		ctx.VSRSelectedModel = originalModel
@@ -1144,21 +1145,35 @@ type OpenAIModelList struct {
 func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
-	// Start with the special "auto" model always available from the router
-	models := []OpenAIModel{
-		{
-			ID:      "auto",
+	// Start with the configured auto model name (or default "MoM")
+	// The model list uses the actual configured name, not "auto"
+	// However, "auto" is still accepted as an alias in request handling for backward compatibility
+	models := []OpenAIModel{}
+
+	// Add the effective auto model name (configured or default "MoM")
+	if r.Config != nil {
+		effectiveAutoModelName := r.Config.GetEffectiveAutoModelName()
+		models = append(models, OpenAIModel{
+			ID:      effectiveAutoModelName,
 			Object:  "model",
 			Created: now,
 			OwnedBy: "vllm-semantic-router",
-		},
+		})
+	} else {
+		// Fallback if no config
+		models = append(models, OpenAIModel{
+			ID:      "MoM",
+			Object:  "model",
+			Created: now,
+			OwnedBy: "vllm-semantic-router",
+		})
 	}
 
 	// Append underlying models from config (if available)
 	if r.Config != nil {
 		for _, m := range r.Config.GetAllModels() {
-			// Skip if already added as "auto" (or avoid duplicates in general)
-			if m == "auto" {
+			// Skip if already added as the configured auto model name (avoid duplicates)
+			if m == r.Config.GetEffectiveAutoModelName() {
 				continue
 			}
 			models = append(models, OpenAIModel{
