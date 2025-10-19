@@ -18,9 +18,9 @@ flash-attn = ["candle-flash-attn"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = "0.8.4"
-candle-nn = "0.8.4"
-candle-transformers = "0.8.4"
+candle-core = { version = "0.8.4", features = ["cuda"] }
+candle-nn = { version = "0.8.4", features = ["cuda"] }
+candle-transformers = { version = "0.8.4", features = ["cuda"] }
 # Flash Attention 2 (optional, requires CUDA)
 # Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
 candle-flash-attn = { version = "0.8.4", optional = true }
