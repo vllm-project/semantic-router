@@ -33,6 +33,11 @@ type CacheBackend interface {
 	// Returns the cached response, match status, and any error
 	FindSimilar(model string, query string) ([]byte, bool, error)
 
+	// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+	// This allows category-specific similarity thresholds
+	// Returns the cached response, match status, and any error
+	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
+
 	// Close releases all resources held by the cache backend
 	Close() error
 

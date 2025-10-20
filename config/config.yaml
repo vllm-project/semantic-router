@@ -74,6 +74,8 @@ categories:
         use_reasoning: false
   - name: psychology
     system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.92 # High threshold for psychology - sensitive to nuances
     model_scores:
       - model: qwen3
         score: 0.6
@@ -98,12 +100,16 @@ categories:
         use_reasoning: false
   - name: other
     system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.75 # Lower threshold for general chat - less sensitive
     model_scores:
       - model: qwen3
         score: 0.7
         use_reasoning: false
   - name: health
     system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95 # High threshold for health - very sensitive to word changes
     model_scores:
       - model: qwen3
         score: 0.5

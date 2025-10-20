@@ -401,8 +401,24 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return response, nil
 	}
 
-	// Handle caching
-	if response, shouldReturn := r.handleCaching(ctx); shouldReturn {
+	// Classify the request early to determine category for cache settings
+	var categoryName string
+	if r.Config != nil && r.Config.IsAutoModelName(originalModel) && (len(nonUserMessages) > 0 || userContent != "") {
+		// Determine text to use for classification
+		var classificationText string
+		if len(userContent) > 0 {
+			classificationText = userContent
+		} else if len(nonUserMessages) > 0 {
+			classificationText = strings.Join(nonUserMessages, " ")
+		}
+		if classificationText != "" {
+			categoryName = r.findCategoryForClassification(classificationText)
+			observability.Debugf("Classified request to category: %s", categoryName)
+		}
+	}
+
+	// Handle caching with category-specific settings
+	if response, shouldReturn := r.handleCaching(ctx, categoryName); shouldReturn {
 		return response, nil
 	}
 
@@ -476,8 +492,8 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 	return nil, false
 }
 
-// handleCaching handles cache lookup and storage
-func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
+// handleCaching handles cache lookup and storage with category-specific settings
+func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	// Extract the model and query for cache lookup
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
@@ -489,20 +505,34 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
 
-	if requestQuery != "" && r.Cache.IsEnabled() {
+	// Check if caching is enabled for this category
+	cacheEnabled := r.Config.SemanticCache.Enabled
+	if categoryName != "" {
+		cacheEnabled = r.Config.IsCacheEnabledForCategory(categoryName)
+	}
+
+	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+		// Get category-specific threshold
+		threshold := r.Config.GetCacheSimilarityThreshold()
+		if categoryName != "" {
+			threshold = r.Config.GetCacheSimilarityThresholdForCategory(categoryName)
+		}
+
 		// Start cache lookup span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanCacheLookup)
 		defer span.End()
 
 		startTime := time.Now()
-		// Try to find a similar cached response
-		cachedResponse, found, cacheErr := r.Cache.FindSimilar(requestModel, requestQuery)
+		// Try to find a similar cached response using category-specific threshold
+		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
 		lookupTime := time.Since(startTime).Milliseconds()
 
 		observability.SetSpanAttributes(span,
 			attribute.String(observability.AttrCacheKey, requestQuery),
 			attribute.Bool(observability.AttrCacheHit, found),
-			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime))
+			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime),
+			attribute.String(observability.AttrCategoryName, categoryName),
+			attribute.Float64("cache.threshold", float64(threshold)))
 
 		if cacheErr != nil {
 			observability.Errorf("Error searching cache: %v", cacheErr)
@@ -515,6 +545,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 				"request_id": ctx.RequestID,
 				"model":      requestModel,
 				"query":      requestQuery,
+				"category":   categoryName,
+				"threshold":  threshold,
 			})
 			// Return immediate response from cache
 			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse)

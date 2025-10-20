@@ -591,6 +591,112 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 	return responseBody, true, nil
 }
 
+// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+	start := time.Now()
+
+	if !c.enabled {
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
+		return nil, false, nil
+	}
+	queryPreview := query
+	if len(query) > 50 {
+		queryPreview = query[:50] + "..."
+	}
+	observability.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		model, queryPreview, len(query), threshold)
+
+	// Generate semantic embedding for similarity comparison
+	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	ctx := context.Background()
+
+	// Define search parameters
+	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to create search parameters: %w", err)
+	}
+
+	// Use Milvus Search for efficient similarity search
+	searchResult, err := c.client.Search(
+		ctx,
+		c.collectionName,
+		[]string{},
+		fmt.Sprintf("model == \"%s\" && response_body != \"\"", model),
+		[]string{"response_body"},
+		[]entity.Vector{entity.FloatVector(queryEmbedding)},
+		c.config.Collection.VectorField.Name,
+		entity.MetricType(c.config.Collection.VectorField.MetricType),
+		c.config.Search.TopK,
+		searchParam,
+	)
+	if err != nil {
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
+		atomic.AddInt64(&c.missCount, 1)
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
+		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	bestScore := searchResult[0].Scores[0]
+	if bestScore < threshold {
+		atomic.AddInt64(&c.missCount, 1)
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
+			bestScore, threshold)
+		observability.LogEvent("cache_miss", map[string]interface{}{
+			"backend":         "milvus",
+			"best_similarity": bestScore,
+			"threshold":       threshold,
+			"model":           model,
+			"collection":      c.collectionName,
+		})
+		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	// Cache Hit
+	var responseBody []byte
+	responseBodyColumn, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar)
+	if ok && responseBodyColumn.Len() > 0 {
+		responseBody = []byte(responseBodyColumn.Data()[0])
+	}
+
+	if responseBody == nil {
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	atomic.AddInt64(&c.hitCount, 1)
+	observability.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+		bestScore, threshold, len(responseBody))
+	observability.LogEvent("cache_hit", map[string]interface{}{
+		"backend":    "milvus",
+		"similarity": bestScore,
+		"threshold":  threshold,
+		"model":      model,
+		"collection": c.collectionName,
+	})
+	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
+	metrics.RecordCacheHit()
+	return responseBody, true, nil
+}
+
 // Close releases all resources held by the cache
 func (c *MilvusCache) Close() error {
 	if c.client != nil {

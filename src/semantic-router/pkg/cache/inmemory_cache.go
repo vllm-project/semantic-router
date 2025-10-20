@@ -334,6 +334,133 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	return nil, false, nil
 }
 
+// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+	start := time.Now()
+
+	if !c.enabled {
+		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
+		return nil, false, nil
+	}
+	queryPreview := query
+	if len(query) > 50 {
+		queryPreview = query[:50] + "..."
+	}
+	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		model, queryPreview, len(query), threshold)
+
+	// Generate semantic embedding for similarity comparison
+	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	if err != nil {
+		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
+		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	c.mu.RLock()
+	var (
+		bestIndex      = -1
+		bestEntry      CacheEntry
+		bestSimilarity float32
+		entriesChecked int
+		expiredCount   int
+	)
+	// Capture the lookup time after acquiring the read lock so TTL checks aren't skewed by embedding work or lock wait
+	now := time.Now()
+
+	// Compare with completed entries for the same model, tracking only the best match
+	for entryIndex, entry := range c.entries {
+		// Skip incomplete entries
+		if entry.ResponseBody == nil {
+			continue
+		}
+
+		// Only consider entries for the same model
+		if entry.Model != model {
+			continue
+		}
+
+		// Skip entries that have expired before considering them
+		if c.isExpired(entry, now) {
+			expiredCount++
+			continue
+		}
+
+		// Compute semantic similarity using dot product
+		var dotProduct float32
+		for i := 0; i < len(queryEmbedding) && i < len(entry.Embedding); i++ {
+			dotProduct += queryEmbedding[i] * entry.Embedding[i]
+		}
+
+		entriesChecked++
+		if bestIndex == -1 || dotProduct > bestSimilarity {
+			bestSimilarity = dotProduct
+			bestIndex = entryIndex
+		}
+	}
+	// Snapshot the best entry before releasing the read lock
+	if bestIndex >= 0 {
+		bestEntry = c.entries[bestIndex]
+	}
+
+	// Unlock the read lock since we need the write lock to update the access info
+	c.mu.RUnlock()
+
+	// Log if any expired entries were skipped
+	if expiredCount > 0 {
+		observability.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
+			expiredCount, c.ttlSeconds)
+		observability.LogEvent("cache_expired_entries_found", map[string]interface{}{
+			"backend":       "memory",
+			"expired_count": expiredCount,
+			"ttl_seconds":   c.ttlSeconds,
+		})
+	}
+
+	// Handle case where no suitable entries exist
+	if bestIndex < 0 {
+		atomic.AddInt64(&c.missCount, 1)
+		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
+		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	// Check if the best match meets the similarity threshold
+	if bestSimilarity >= threshold {
+		atomic.AddInt64(&c.hitCount, 1)
+
+		c.mu.Lock()
+		c.updateAccessInfo(bestIndex, bestEntry)
+		c.mu.Unlock()
+
+		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+			bestSimilarity, threshold, len(bestEntry.ResponseBody))
+		observability.LogEvent("cache_hit", map[string]interface{}{
+			"backend":    "memory",
+			"similarity": bestSimilarity,
+			"threshold":  threshold,
+			"model":      model,
+		})
+		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
+		metrics.RecordCacheHit()
+		return bestEntry.ResponseBody, true, nil
+	}
+
+	atomic.AddInt64(&c.missCount, 1)
+	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
+		bestSimilarity, threshold, entriesChecked)
+	observability.LogEvent("cache_miss", map[string]interface{}{
+		"backend":         "memory",
+		"best_similarity": bestSimilarity,
+		"threshold":       threshold,
+		"model":           model,
+		"entries_checked": entriesChecked,
+	})
+	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
+	metrics.RecordCacheMiss()
+	return nil, false, nil
+}
+
 // Close releases all resources held by the cache
 func (c *InMemoryCache) Close() error {
 	c.mu.Lock()
