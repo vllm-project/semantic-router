@@ -238,23 +238,37 @@ These enterprise features will dramatically lower the barrier to entry, improve 
 
 ## Ecosystem Integration
 
-Beyond the six core pillars, we're actively exploring integrations with key platforms in the AI infrastructure ecosystem. These integrations are **work-in-progress** integrations that will expand vLLM Semantic Router's reach and interoperability:
+Beyond the six core pillars, we're actively exploring integrations with key platforms in the AI infrastructure ecosystem. These five integrations are **work-in-progress and good-to-have** features that will expand vLLM Semantic Router's reach and interoperability:
 
 ### vLLM Production Stack
 
-Deep integration with the vLLM production deployment stack, enabling seamless model serving, monitoring, and orchestration. This integration will provide native support for vLLM's advanced features like PagedAttention, continuous batching, and optimized CUDA kernels, ensuring maximum performance for production workloads.
+[vLLM Production Stack](https://docs.vllm.ai/projects/production-stack) is vLLM's reference system for Kubernetes-native cluster-wide deployment with community-driven performance optimization. It provides a reference implementation on how to build an inference stack on top of vLLM with Helm chart-based deployment.
+
+Deep integration with the vLLM Production Stack will enable seamless model serving, monitoring, and orchestration. This integration will provide native support for vLLM's advanced features like PagedAttention, continuous batching, and optimized CUDA kernels, ensuring maximum performance for production workloads.
+
+### llm-d
+
+[llm-d](https://llm-d.ai/) is a Kubernetes-native high-performance distributed LLM inference framework developed by Red Hat, Google, CoreWeave, and IBM. It provides well-lit paths for anyone to serve large generative AI models at scale with distributed inference capabilities.
+
+Integration with llm-d will bring intelligent semantic routing to Kubernetes-native distributed inference deployments. This partnership will enable llm-d users to leverage MoM models and fusion routing for efficient model selection across distributed inference clusters, optimizing resource utilization and performance in cloud-native environments.
 
 ### HuggingChat
 
-Integration with HuggingChat to bring intelligent semantic routing to conversational AI applications. This partnership will enable HuggingChat users to leverage MoM models and fusion routing capabilities, providing cost-effective and high-performance model selection for chat-based workloads.
+[HuggingChat](https://huggingface.co/chat/) is Hugging Face's open-source conversational AI platform powered by state-of-the-art open models. It democratizes access to advanced AI chat capabilities without requiring API keys or paid subscriptions.
 
-### Nvidia Dynamo
+Integration with HuggingChat will bring intelligent semantic routing to conversational AI applications. This partnership will enable HuggingChat users to leverage MoM models and fusion routing capabilities, providing cost-effective and high-performance model selection for chat-based workloads.
 
-Integration with Nvidia's Dynamo platform for GPU-accelerated inference and dynamic model optimization. This partnership will leverage Nvidia's cutting-edge hardware capabilities and optimization frameworks to deliver industry-leading latency and throughput for semantic routing operations.
+### NVIDIA Dynamo
+
+[NVIDIA Dynamo Platform](https://developer.nvidia.com/dynamo) is NVIDIA's comprehensive AI inference framework that delivers scalable, efficient inference with GPU optimization. It includes intelligent inference optimizations that boost token generation performance by over 30x per GPU.
+
+Integration with NVIDIA Dynamo will leverage cutting-edge GPU acceleration and optimization frameworks to deliver industry-leading latency and throughput for semantic routing operations. This partnership will enable seamless deployment of MoM models on NVIDIA-accelerated infrastructure with optimal performance.
 
 ### vLLM AIBrix
 
-Collaboration with vLLM AIBrix for enterprise-grade AI infrastructure management. This integration will enable unified control planes, advanced observability, and streamlined deployment workflows across hybrid and multi-cloud environments, making it easier for enterprises to adopt and scale vLLM Semantic Router.
+[vLLM AIBrix](https://github.com/vllm-project/aibrix) is an open-source, cost-efficient, and pluggable infrastructure framework for GenAI inference. It provides essential building blocks to construct scalable inference infrastructure with enterprise-grade features and one-click deployment capabilities.
+
+Collaboration with vLLM AIBrix will enable unified control planes, advanced observability, and streamlined deployment workflows across hybrid and multi-cloud environments. This integration will make it easier for enterprises to adopt and scale vLLM Semantic Router with production-ready infrastructure components.
 
 ---
 
