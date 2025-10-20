@@ -31,11 +31,11 @@ kind create cluster --name semantic-router-cluster --config tools/kind/kind-conf
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-**Note**: The kind configuration provides sufficient resources (8GB+ RAM, 4+ CPU cores) for running the semantic router and AI gateway components.
+Note: The kind configuration provides sufficient resources (8GB+ RAM, 4+ CPU cores).
 
 ## Step 2: Deploy vLLM Semantic Router
 
-Configure the semantic router by editing `deploy/kubernetes/config.yaml`. This file contains the vLLM configuration, including model config, endpoints, and policies. The repository provides two Kustomize overlays similar to docker-compose profiles:
+Edit `deploy/kubernetes/config.yaml` (models, endpoints, policies). Two overlays are provided:
 
 - core (default): only the semantic-router
   - Path: `deploy/kubernetes/overlays/core` (root `deploy/kubernetes/` points here by default)
@@ -49,18 +49,21 @@ deploy/kubernetes/
   base/
     kustomization.yaml        # base kustomize: namespace, PVC, service, deployment
     namespace.yaml            # Namespace for all resources
-    pvc.yaml                  # PVC for models (storageClass and size adjustable)
     service.yaml              # Service exposing gRPC/metrics/HTTP ports
     deployment.yaml           # Semantic Router Deployment (init downloads by default)
     config.yaml               # Router config (mounted via ConfigMap)
     tools_db.json             # Tools DB (mounted via ConfigMap)
-    pv.example.yaml           # OPTIONAL: hostPath PV example for local models
+    pv.yaml                   # OPTIONAL: hostPath PV for local models (edit path as needed)
   overlays/
     core/
       kustomization.yaml      # Uses only base
     llm-katan/
       kustomization.yaml      # Patches base to add llm-katan sidecar
       patch-llm-katan.yaml    # Strategic-merge patch injecting sidecar
+    storage/
+      kustomization.yaml      # PVC only; run once to create storage, not for day-2 updates
+      namespace.yaml          # Local copy for self-contained apply
+      pvc.yaml                # PVC definition
   kustomization.yaml          # Root points to overlays/core by default
   README.md                   # Additional notes
   namespace.yaml, pvc.yaml, service.yaml (top-level shortcuts kept for backward compat)
@@ -68,22 +71,28 @@ deploy/kubernetes/
 
 Notes:
 
-- The base deployment includes an initContainer that downloads required models on first run.
-- If your cluster has limited egress, prefer mounting local models via a PV/PVC and skip downloads:
-  - Copy `base/pv.example.yaml` to `base/pv.yaml`, apply it, and ensure `base/pvc.yaml` is bound to that PV.
-  - Mount point remains `/app/models` in the pod.
-  - See “Network Tips” for details on hostPath PV, image mirrors, and preloading images.
+- Base downloads models on first run (initContainer).
+- In restricted networks, prefer local models via PV/PVC; see Network Tips for hostPath PV, mirrors, and image preload. Mount point is `/app/models`.
 
-Important notes before you apply manifests:
+First-time apply (creates PVC):
 
-- `vllm_endpoints.address` must be an IP address (not hostname) reachable from inside the cluster. If your LLM backends run as K8s Services, use the ClusterIP (for example `10.96.0.10`) and set `port` accordingly. Do not include protocol or path.
-- The PVC in `deploy/kubernetes/pvc.yaml` uses `storageClassName: standard`. On some clouds or local clusters, the default StorageClass name may differ (e.g., `standard-rwo`, `gp2`, or a provisioner like local-path). Adjust as needed.
-- Default PVC size is 30Gi. Size it to at least 2–3x of your total model footprint to leave room for indexes and updates.
-- The initContainer downloads several models from Hugging Face on first run and writes them into the PVC. Ensure outbound egress to Hugging Face is allowed and there is at least ~6–8 GiB free space for the models specified.
-- Per mode, the init container downloads differ:
-  - core: classifiers + the embedding model `sentence-transformers/all-MiniLM-L12-v2` into `/app/models/all-MiniLM-L12-v2`.
-  - llm-katan: everything in core, plus `Qwen/Qwen3-0.6B` into `/app/models/Qwen/Qwen3-0.6B`.
-- The default `config.yaml` points to `qwen3` at `127.0.0.1:8002`, which matches the llm-katan overlay. If you use core (no sidecar), either change `vllm_endpoints` to your actual backend Service IP:Port, or deploy the llm-katan overlay.
+```bash
+kubectl apply -k deploy/kubernetes/overlays/storage
+kubectl apply -k deploy/kubernetes/overlays/core        # or overlays/llm-katan
+```
+
+Day-2 updates (do not touch PVC):
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/core        # or overlays/llm-katan
+```
+
+Important:
+
+- `vllm_endpoints.address` must be an IP reachable inside the cluster (no scheme/path).
+- PVC default size is 30Gi; adjust to model footprint. StorageClass name may differ by cluster.
+- core downloads classifiers + `all-MiniLM-L12-v2`; llm-katan also prepares `Qwen/Qwen3-0.6B`.
+- Default config uses `qwen3@127.0.0.1:8002` (matches llm-katan); if using core, update endpoints accordingly.
 
 Deploy the semantic router service with all required components (core mode by default):
 

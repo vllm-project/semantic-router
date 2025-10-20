@@ -28,8 +28,11 @@ The deployment consists of:
 
 ### Standard Kubernetes Deployment
 
+First-time apply (creates PVC via storage overlay):
+
 ```bash
-kubectl apply -k deploy/kubernetes/
+kubectl apply -k deploy/kubernetes/overlays/storage
+kubectl apply -k deploy/kubernetes/overlays/core   # or overlays/llm-katan
 
 # Check deployment status
 kubectl get pods -l app=semantic-router -n vllm-semantic-router-system
@@ -37,6 +40,12 @@ kubectl get services -l app=semantic-router -n vllm-semantic-router-system
 
 # View logs
 kubectl logs -l app=semantic-router -n vllm-semantic-router-system -f
+```
+
+Day-2 updates (do not touch PVC):
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/core   # or overlays/llm-katan
 ```
 
 ### Kind (Kubernetes in Docker) Deployment
@@ -86,6 +95,10 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 **Step 2: Deploy the application**
 
 ```bash
+# First-time storage (PVC)
+kubectl apply -k deploy/kubernetes/overlays/storage
+
+# Deploy app
 kubectl apply -k deploy/kubernetes/
 
 # Wait for deployment to be ready
@@ -298,7 +311,7 @@ kubectl logs -n semantic-router -l app=semantic-router -c model-downloader
 # Check resource usage
 kubectl top pods -n semantic-router
 
-# Adjust resource limits in deployment.yaml if needed
+# Adjust resource limits in base/deployment.yaml if needed
 ```
 
 ### Storage sizing
@@ -314,23 +327,23 @@ For different environments, you can adjust resource requirements:
 - **Testing**: 4Gi memory, 1 CPU
 - **Production**: 8Gi+ memory, 2+ CPU
 
-Edit the `resources` section in `deployment.yaml` accordingly.
+Edit the `resources` section in `base/deployment.yaml` accordingly.
 
 ## Files Overview
 
 ### Kubernetes Manifests (`deploy/kubernetes/`)
 
-- `base/` - Shared resources (Namespace, PVC, Service, ConfigMap)
-- `overlays/core/` - Core deployment (no llm-katan)
-- `overlays/llm-katan/` - Deployment with llm-katan sidecar
-- `deployment.yaml` - Plain deployment (used by core overlay)
-- `deployment.katan.yaml` - Sidecar deployment (used by llm-katan overlay)
-- `service.yaml` - gRPC, HTTP API, and metrics services
-- `pvc.yaml` - Persistent volume claim for model storage
-- `namespace.yaml` - Dedicated namespace for the application
-- `config.yaml` - Application configuration (defaults to qwen3 @ 127.0.0.1:8002)
-- `tools_db.json` - Tools database for semantic routing
-- `kustomization.yaml` - Root entry (defaults to core overlay)
+- `base/` - Shared resources (Namespace, Service, ConfigMap, Deployment)
+  - `namespace.yaml` - Dedicated namespace for the application
+  - `service.yaml` - gRPC, HTTP API, and metrics services
+  - `deployment.yaml` - App deployment (init downloads by default; imagePullPolicy IfNotPresent)
+  - `config.yaml` - Application configuration (defaults to qwen3 @ 127.0.0.1:8002)
+  - `tools_db.json` - Tools database for semantic routing
+  - `pv.yaml` - OPTIONAL hostPath PV for local models (edit path as needed)
+- `overlays/core/` - Core deployment (no llm-katan), references `base/`
+- `overlays/llm-katan/` - Adds llm-katan sidecar via local patch (no parent file references)
+- `overlays/storage/` - PVC only (self-contained `namespace.yaml` + `pvc.yaml`), run once to create storage
+- `kustomization.yaml` - Root entry (defaults to `overlays/core`)
 
 ### Development Tools
 

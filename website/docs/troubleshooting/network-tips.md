@@ -180,9 +180,42 @@ Container runtimes on Kubernetes nodes do not automatically reuse the host Docke
 
 ### 5.1 Configure containerd or CRI mirrors
 
-- For clusters backed by containerd (Kind, k3s, kubeadm), edit `/etc/containerd/config.toml` or use Kind’s `containerdConfigPatches` to add regional mirror endpoints for registries such as `docker.io`, `ghcr.io`, or `quay.io`.
+- For clusters backed by containerd (Kind, k3s, kubeadm), edit `/etc/containerd/config.toml` or use Kind’s `containerdConfigPatches` to add regional mirror endpoints for registries such as `docker.io`, `ghcr.io`, or `registry.k8s.io`.
 - Restart containerd and kubelet after changes so the new mirrors take effect.
 - Avoid pointing mirrors to loopback proxies unless every node can reach that proxy address.
+
+Example `/etc/containerd/config.toml` mirrors (China):
+
+```toml
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+    endpoint = [
+      "https://docker.m.daocloud.io",
+      "https://mirror.ccs.tencentyun.com",
+      "https://mirror.baidubce.com",
+      "https://docker.mirrors.ustc.edu.cn",
+      "https://hub-mirror.c.163.com"
+    ]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."ghcr.io"]
+    endpoint = [
+      "https://ghcr.nju.edu.cn",
+      "https://ghcr.dockerproxy.com",
+      "https://ghcr.bj.bcebos.com"
+    ]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.k8s.io"]
+    endpoint = [
+      "https://k8s.m.daocloud.io",
+      "https://mirror.ccs.tencentyun.com",
+      "https://registry.aliyuncs.com"
+    ]
+```
+
+Apply and restart:
+
+```bash
+sudo systemctl restart containerd
+sudo systemctl restart kubelet
+```
 
 ### 5.2 Preload or sideload images
 
@@ -203,74 +236,29 @@ Container runtimes on Kubernetes nodes do not automatically reuse the host Docke
 - Use `kubectl describe pod <name>` or `kubectl get events` to confirm pull errors disappear.
 - Check that services such as `semantic-router-metrics` now expose endpoints and respond via port-forward (`kubectl port-forward svc/<service> <local-port>:<service-port>`).
 
-### 5.6 Mount local models via hostPath PV (no external HF)
+### 5.6 Mount local models via PV/PVC (no external HF)
 
-When you already have models under `./models` locally, you can mount them into the Pod without any download:
+When you already have models under `./models` locally, mount them into the Pod and skip downloads:
 
-1. Create a hostPath PV and a matching PVC (example paths assume Kind; for other clusters, pick a node path visible to kubelet):
+1. Create a PV (optional; edit `deploy/kubernetes/base/pv.yaml` hostPath to your node path and apply it). If you use a dynamic StorageClass, you can skip the PV.
 
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: semantic-router-models-pv
-spec:
-  capacity:
-    storage: 50Gi
-  accessModes: ["ReadWriteOnce"]
-  storageClassName: standard
-  persistentVolumeReclaimPolicy: Retain
-  hostPath:
-    path: /tmp/hostpath-provisioner/models
-    type: DirectoryOrCreate
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: semantic-router-models
-spec:
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 30Gi
-  storageClassName: standard
-  volumeName: semantic-router-models-pv
+2. Create the PVC once via the storage overlay:
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/storage
 ```
 
-2. Copy your local models into the node path (Kind example):
+3. Copy your local models to the node path (hostPath example for kind):
 
 ```bash
 docker cp ./models semantic-router-cluster-control-plane:/tmp/hostpath-provisioner/
 ```
 
-3. Ensure the Deployment mounts the PVC at `/app/models` and set `imagePullPolicy: IfNotPresent`:
+4. Ensure the Deployment mounts the PVC at `/app/models` and set `imagePullPolicy: IfNotPresent` (already configured in `base/deployment.yaml`).
 
-```yaml
-volumes:
-  - name: models-volume
-    persistentVolumeClaim:
-      claimName: semantic-router-models
-containers:
-  - name: semantic-router
-    imagePullPolicy: IfNotPresent
-    volumeMounts:
-      - name: models-volume
-        mountPath: /app/models
-```
+5. If the PV is tied to a specific node path, pin the Pod to that node using `nodeSelector` or add tolerations if you untainted the control-plane node.
 
-4. If the PV is tied to a specific node path, schedule the Pod onto that node via `nodeSelector` or add tolerations if you untainted the control-plane node:
-
-```yaml
-spec:
-  nodeSelector:
-    kubernetes.io/hostname: semantic-router-cluster-control-plane
-  tolerations:
-    - key: "node-role.kubernetes.io/control-plane"
-      effect: "NoSchedule"
-      operator: "Exists"
-```
-
-This approach completely avoids Hugging Face downloads inside the cluster and is the most reliable in restricted networks.
+This path avoids Hugging Face downloads and is the most reliable in restricted networks.
 
 ## 6. Troubleshooting
 
