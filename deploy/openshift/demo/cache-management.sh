@@ -38,7 +38,7 @@ function check_cache_status() {
         echo -e "${CYAN}Recent cached queries:${NC}"
         oc logs -n $NAMESPACE deployment/semantic-router --tail=100 2>/dev/null | \
             grep "cache_hit" | grep -o '"query":"[^"]*"' | cut -d'"' -f4 | sort -u | tail -5 | \
-            while read query; do
+            while read -r query; do
                 echo -e "   💾 ${query}"
             done
     else
@@ -54,7 +54,7 @@ function clear_cache() {
     echo -e "${YELLOW}This will restart the semantic-router deployment to clear the in-memory cache.${NC}"
     echo -e "${YELLOW}The pod will be recreated automatically (takes ~30 seconds).${NC}"
     echo ""
-    read -p "Are you sure you want to clear the cache? (y/N): " confirm
+    read -r -p "Are you sure you want to clear the cache? (y/N): " confirm
 
     if [[ $confirm =~ ^[Yy]$ ]]; then
         echo ""

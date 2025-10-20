@@ -2,7 +2,7 @@
 
 # CPU-Optimized Training Script for Intent Classification LoRA
 # =============================================================
-# 
+#
 # This script is optimized for training on CPU without GPU memory.
 # It uses smaller models, reduced batch sizes, and CPU-friendly parameters.
 
@@ -110,25 +110,27 @@ echo "📁 Results will be saved to: $RESULTS_DIR"
 
 # Initialize summary file
 SUMMARY_FILE="$RESULTS_DIR/cpu_training_summary.txt"
-echo "Intent Classification LoRA - CPU Training Summary" > "$SUMMARY_FILE"
-echo "=================================================" >> "$SUMMARY_FILE"
-echo "Date: $(date)" >> "$SUMMARY_FILE"
-echo "Models: ${MODELS[*]}" >> "$SUMMARY_FILE"
-echo "CPU-optimized parameters: epochs=$EPOCHS, rank=$LORA_RANK, samples=$MAX_SAMPLES, batch=$BATCH_SIZE" >> "$SUMMARY_FILE"
-echo "" >> "$SUMMARY_FILE"
+{
+    echo "Intent Classification LoRA - CPU Training Summary"
+    echo "================================================="
+    echo "Date: $(date)"
+    echo "Models: ${MODELS[*]}"
+    echo "CPU-optimized parameters: epochs=$EPOCHS, rank=$LORA_RANK, samples=$MAX_SAMPLES, batch=$BATCH_SIZE"
+    echo ""
+} > "$SUMMARY_FILE"
 
 # Function to train a single model on CPU
 train_cpu_model() {
     local model_name=$1
     local start_time=$(date +%s)
-    
+
     echo ""
     echo "🚀 Training model on CPU: $model_name"
     echo "⏰ Start time: $(date)"
-    
+
     # Create model-specific log file
     local log_file="$RESULTS_DIR/${model_name}_cpu_training.log"
-    
+
     # CPU-optimized training command
     local cmd="python ft_linear_lora.py \
         --mode train \
@@ -139,39 +141,39 @@ train_cpu_model() {
         --max-samples $MAX_SAMPLES \
         --batch-size $BATCH_SIZE \
         --learning-rate $LEARNING_RATE"
-    
+
     echo "📝 Command: $cmd"
     echo "📋 Log file: $log_file"
     echo "🖥️  Training on CPU (this may take longer than GPU)..."
-    
+
     # Set environment variables to force CPU usage
     export CUDA_VISIBLE_DEVICES=""
     export OMP_NUM_THREADS=4  # Optimize CPU threads
-    
+
     # Run training and capture result
     if eval "$cmd" > "$log_file" 2>&1; then
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
         local minutes=$((duration / 60))
         local seconds=$((duration % 60))
-        
+
         echo "✅ SUCCESS: $model_name trained on CPU in ${minutes}m ${seconds}s"
         echo "$model_name: SUCCESS (${minutes}m ${seconds}s)" >> "$SUMMARY_FILE"
-               
+
         return 0
     else
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
         local minutes=$((duration / 60))
         local seconds=$((duration % 60))
-        
+
         echo "❌ FAILED: $model_name failed after ${minutes}m ${seconds}s"
         echo "$model_name: FAILED (${minutes}m ${seconds}s)" >> "$SUMMARY_FILE"
-        
+
         # Show last few lines of error log
         echo "🔍 Last 10 lines of error log:"
         tail -10 "$log_file"
-        
+
         return 1
     fi
 }
@@ -181,26 +183,26 @@ test_cpu_model() {
     local model_name=$1
     local python_model_dir="lora_intent_classifier_${model_name}_r${LORA_RANK}_model"
     local rust_model_dir="lora_intent_classifier_${model_name}_r${LORA_RANK}_model_rust"
-    
+
     echo ""
     echo "🔍 Testing model on CPU: $model_name"
-    
+
     # Test Python model first
     if [[ -d "$python_model_dir" ]]; then
         echo "  📝 Testing Python inference..."
         local python_test_log="$RESULTS_DIR/${model_name}_python_test.log"
-        
+
         # Force CPU for testing
         export CUDA_VISIBLE_DEVICES=""
         local python_cmd="python ft_linear_lora.py --mode test --model-path $python_model_dir"
-        
+
         if eval "$python_cmd" > "$python_test_log" 2>&1; then
             echo "  ✅ Python test completed"
-            
+
             # Extract key metrics
             local predictions_count=$(grep -c "Prediction:" "$python_test_log" 2>/dev/null || echo "0")
             local low_confidence=$(grep -c "confidence: 0\.[0-4]" "$python_test_log" 2>/dev/null || echo "0")
-            
+
             echo "  📊 Python Results: $predictions_count predictions made, $low_confidence low confidence predictions"
             echo "$model_name: Python Test OK ($predictions_count predictions, $low_confidence low conf)" >> "$SUMMARY_FILE"
         else
@@ -210,17 +212,17 @@ test_cpu_model() {
     else
         echo "  ⚠️  Python model directory not found: $python_model_dir"
     fi
-    
+
     # Test Go model if available
     if [[ -d "$rust_model_dir" ]]; then
         echo "  🦀 Testing Go inference..."
         local go_test_log="$RESULTS_DIR/${model_name}_go_test.log"
-        
+
         # Force CPU for testing
         export CUDA_VISIBLE_DEVICES=""
         export LD_LIBRARY_PATH="../../../../candle-binding/target/release"
         local go_cmd="go run ft_linear_lora_verifier.go -intent-model $rust_model_dir"
-        
+
         if eval "$go_cmd" > "$go_test_log" 2>&1; then
             echo "  ✅ Go test completed"
             echo "$model_name: Go Test OK" >> "$SUMMARY_FILE"
@@ -247,7 +249,7 @@ for model in "${MODELS[@]}"; do
     else
         failed_models+=("$model")
     fi
-    
+
     # Small delay between trainings
     sleep 2
 done
@@ -279,10 +281,12 @@ fi
 if [[ ${#successful_models[@]} -gt 0 ]]; then
     echo ""
     echo "🔍 Testing successful models on CPU..."
-    echo "" >> "$SUMMARY_FILE"
-    echo "CPU Testing Results:" >> "$SUMMARY_FILE"
-    echo "===================" >> "$SUMMARY_FILE"
-    
+    {
+        echo ""
+        echo "CPU Testing Results:"
+        echo "==================="
+    } >> "$SUMMARY_FILE"
+
     for model in "${successful_models[@]}"; do
         test_cpu_model "$model"
     done
@@ -304,4 +308,4 @@ echo ""
 
 # Display final summary
 echo "📊 FINAL CPU TRAINING SUMMARY:"
-cat "$SUMMARY_FILE" 
+cat "$SUMMARY_FILE"

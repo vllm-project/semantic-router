@@ -67,10 +67,10 @@ NC='\033[0m' # No Color
 # Auto-detect vLLM model if not specified
 if [[ -z "$VLLM_MODEL" ]]; then
     echo -e "${BLUE}🔍 Auto-detecting vLLM model from endpoint...${NC}"
-    
+
     # Try to fetch models from the vLLM endpoint
     VLLM_MODELS_JSON=$(curl -s "$VLLM_ENDPOINT/models" 2>/dev/null || echo "")
-    
+
     if [[ -n "$VLLM_MODELS_JSON" ]]; then
         # Extract the first model ID from the JSON response
         VLLM_MODEL=$(echo "$VLLM_MODELS_JSON" | python3 -c "
@@ -85,7 +85,7 @@ try:
 except:
     print('')
 " 2>/dev/null)
-        
+
         if [[ -n "$VLLM_MODEL" ]]; then
             echo -e "${GREEN}✅ Auto-detected vLLM model: $VLLM_MODEL${NC}"
         else
@@ -110,20 +110,20 @@ declare -A DATASET_CONFIGS=(
     ["gpqa"]=20          # 1 category × 20 = 20 samples - OUTSTANDING reasoning differentiation
     ["mmlu"]=10          # 57 subjects × 10 = 570 samples - EXCELLENT reasoning differentiation
     ["truthfulqa"]=15    # Truthfulness evaluation - some reasoning differentiation (60% → 73.3%)
-    
+
     # Mathematical reasoning datasets
     # ["math"]=15          # Competition mathematics - DISABLED: Dataset not available on HF Hub
     ["gsm8k"]=25         # Elementary math word problems - EXPECTED good reasoning differentiation
     ["aqua-rat"]=20      # Algebraic word problems with rationales - EXPECTED good differentiation
-    
+
     # Multi-step reasoning datasets
     ["drop"]=20          # Reading comprehension with discrete reasoning - EXPECTED excellent differentiation
     ["strategyqa"]=20    # Multi-step implicit reasoning - EXPECTED good differentiation
-    
+
     # Scientific reasoning datasets
     ["sciq"]=25          # Science questions requiring reasoning - EXPECTED moderate differentiation
     ["openbookqa"]=20    # Elementary science with fact reasoning - EXPECTED moderate differentiation
-    
+
     # Disabled datasets with poor reasoning differentiation:
     # ["arc-challenge"]=15 # 100% accuracy across all modes, minimal benefit
     # ["commonsenseqa"]=20 # Same accuracy across modes, small token difference
@@ -174,11 +174,11 @@ extract_and_save_metrics() {
     local mode=$2  # "router" or "vllm"
     local results_dir=$3
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     # Find the results files (handle nested directory structure)
     local summary_file=""
     local detailed_file=""
-    
+
     # Look for files in nested directories
     if [[ -d "$results_dir" ]]; then
         summary_file=$(find "$results_dir" -name "results_summary.csv" -type f | head -1)
@@ -186,7 +186,7 @@ extract_and_save_metrics() {
             detailed_file=$(find "$results_dir" -name "detailed_results.csv" -type f | head -1)
         fi
     fi
-    
+
     # Use whichever file we found
     local target_file=""
     if [[ -f "$summary_file" ]]; then
@@ -194,14 +194,14 @@ extract_and_save_metrics() {
     elif [[ -f "$detailed_file" ]]; then
         target_file="$detailed_file"
     fi
-    
+
     if [[ -n "$target_file" && -f "$target_file" ]]; then
         echo -e "${YELLOW}    📊 Extracting metrics from $target_file...${NC}"
-        
+
         # Extract overall metrics from the CSV file
         # Skip header and get the last line (overall summary) or calculate averages
-        local temp_file="/tmp/metrics_$dataset_$mode.txt"
-        
+        local temp_file="/tmp/metrics_${dataset}_${mode}.txt"
+
         # Use Python to calculate averages from the CSV
         python3 -c "
 import pandas as pd
@@ -209,7 +209,7 @@ import sys
 
 try:
     df = pd.read_csv('$target_file')
-    
+
     # Calculate overall metrics (handle different CSV formats)
     if len(df) > 0:
         # Handle accuracy column (is_correct vs accuracy)
@@ -219,7 +219,7 @@ try:
             avg_accuracy = df['accuracy'].mean()
         else:
             avg_accuracy = 0.0
-            
+
         # Handle latency column (response_time vs avg_latency_ms)
         if 'response_time' in df.columns:
             avg_latency = df['response_time'].mean() * 1000  # Convert to ms
@@ -227,7 +227,7 @@ try:
             avg_latency = df['avg_latency_ms'].mean()
         else:
             avg_latency = 0.0
-            
+
         # Handle token column (total_tokens vs avg_total_tokens)
         if 'total_tokens' in df.columns:
             avg_tokens = df['total_tokens'].mean()
@@ -235,15 +235,15 @@ try:
             avg_tokens = df['avg_total_tokens'].mean()
         else:
             avg_tokens = 0.0
-            
+
         sample_count = len(df)
-        
+
         # Determine model name
         if '$mode' == 'router':
             model_name = '$ROUTER_MODEL'
         else:
             model_name = '$VLLM_MODEL'
-        
+
         # For vLLM, we might have multiple modes (NR, NR_REASONING)
         # Check both 'mode' and 'mode_label' columns for mode information
         if '$mode' == 'vllm' and ('mode' in df.columns or 'mode_label' in df.columns):
@@ -251,7 +251,7 @@ try:
             mode_column = 'mode_label' if 'mode_label' in df.columns else 'mode'
             for mode_type in df[mode_column].unique():
                 mode_df = df[df[mode_column] == mode_type]
-                
+
                 # Recalculate metrics for this specific mode using correct column names
                 if 'is_correct' in mode_df.columns:
                     mode_accuracy = mode_df['is_correct'].mean()
@@ -259,23 +259,23 @@ try:
                     mode_accuracy = mode_df['accuracy'].mean()
                 else:
                     mode_accuracy = 0.0
-                    
+
                 if 'response_time' in mode_df.columns:
                     mode_latency = mode_df['response_time'].mean() * 1000
                 elif 'avg_latency_ms' in mode_df.columns:
                     mode_latency = mode_df['avg_latency_ms'].mean()
                 else:
                     mode_latency = 0.0
-                    
+
                 if 'total_tokens' in mode_df.columns:
                     mode_tokens = mode_df['total_tokens'].mean()
                 elif 'avg_total_tokens' in mode_df.columns:
                     mode_tokens = mode_df['avg_total_tokens'].mean()
                 else:
                     mode_tokens = 0.0
-                    
+
                 mode_samples = len(mode_df)
-                
+
                 # Map technical mode names to descriptive names
                 if mode_type == 'VLLM_NR':
                     display_mode = 'vLLM_No_Reasoning'
@@ -285,7 +285,7 @@ try:
                     display_mode = 'vLLM_CoT'
                 else:
                     display_mode = mode_type  # Use the mode_label as-is if not recognized
-                
+
                 csv_line = f'$dataset,{display_mode},{model_name},{mode_accuracy:.3f},{mode_latency:.1f},{mode_tokens:.1f},{mode_samples},$timestamp'
                 print(f'    📝 Writing to CSV: {csv_line}', file=sys.stderr)
                 print(csv_line)
@@ -295,12 +295,12 @@ try:
             print(csv_line)
     else:
         print(f'$dataset,$mode,unknown,0.000,0.0,0.0,0,$timestamp', file=sys.stderr)
-        
+
 except Exception as e:
     print(f'Error processing $target_file: {e}', file=sys.stderr)
     print(f'$dataset,$mode,unknown,0.000,0.0,0.0,0,$timestamp', file=sys.stderr)
 " | tee -a "$RESEARCH_CSV" >> "$PERSISTENT_RESEARCH_CSV"
-        
+
         echo -e "${GREEN}    ✅ Metrics saved to both timestamped and master research CSV${NC}"
     else
         echo -e "${RED}    ❌ Warning: No results files found in $results_dir${NC}"
@@ -313,9 +313,9 @@ except Exception as e:
 run_dataset_benchmark() {
     local dataset=$1
     local samples=${DATASET_CONFIGS[$dataset]}
-    
+
     echo -e "${GREEN}📊 Benchmarking $dataset dataset ($samples samples per category)...${NC}"
-    
+
     # Router benchmark (pass vLLM info for consistent token calculation)
     echo -e "${YELLOW}  🤖 Running router evaluation...${NC}"
     python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
@@ -333,7 +333,7 @@ run_dataset_benchmark() {
     # Extract and save router metrics immediately
     extract_and_save_metrics "$dataset" "Router" "$OUTPUT_BASE/router_$dataset"
 
-    # vLLM benchmark  
+    # vLLM benchmark
     echo -e "${YELLOW}  ⚡ Running vLLM evaluation...${NC}"
     python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
         --dataset "$dataset" \
@@ -345,14 +345,14 @@ run_dataset_benchmark() {
         --output-dir "$OUTPUT_BASE/vllm_$dataset" \
         --concurrent-requests "$CONCURRENT_REQUESTS" \
         --seed 42
-    
+
     # Extract and save vLLM metrics immediately
     extract_and_save_metrics "$dataset" "vllm" "$OUTPUT_BASE/vllm_$dataset"
-    
+
     # Generate updated comprehensive plots for current dataset
     echo -e "${BLUE}  📈 Updating comprehensive plots with $dataset results...${NC}"
     generate_comprehensive_plot "$dataset"
-    
+
     echo -e "${GREEN}  ✅ Completed $dataset benchmark and comprehensive plots updated${NC}"
     echo -e "${GREEN}  📈 CSV data updated in: $PERSISTENT_RESEARCH_CSV${NC}"
     echo ""
@@ -361,13 +361,13 @@ run_dataset_benchmark() {
 # Function to generate comprehensive plot with all completed datasets (called after each dataset completes)
 generate_comprehensive_plot() {
     local current_dataset=$1
-    
+
     if [[ -n "$current_dataset" ]]; then
         echo -e "${YELLOW}    📊 Generating plot for current dataset: $current_dataset...${NC}"
     else
         echo -e "${YELLOW}    📊 Generating comprehensive plot with all completed datasets...${NC}"
     fi
-    
+
     # Use the plot_comprehensive_results.py script to generate updated charts
     if [[ -f "plot_comprehensive_results.py" ]]; then
         echo -e "${BLUE}      Running comprehensive plotting script...${NC}"
@@ -376,16 +376,16 @@ generate_comprehensive_plot() {
             --csv \"$RESEARCH_CSV\" \
             --output-dir \"$OUTPUT_BASE\" \
             --model-filter \"$VLLM_MODEL\""
-        
+
         # Add dataset filter if specified
         if [[ -n "$current_dataset" ]]; then
             PLOT_CMD="$PLOT_CMD --dataset-filter \"$current_dataset\""
         fi
-        
-        eval $PLOT_CMD
-        
+
+        eval "$PLOT_CMD"
+
         echo -e "${GREEN}    ✅ Comprehensive plots updated in $OUTPUT_BASE${NC}"
-        
+
         # Print actual paths of generated charts
         if [[ -f "$OUTPUT_BASE/accuracy_comparison.png" ]]; then
             echo -e "${GREEN}    📊 Accuracy Chart: $OUTPUT_BASE/accuracy_comparison.png${NC}"
@@ -404,9 +404,9 @@ generate_comprehensive_plot() {
 # Function to generate plot for a single dataset (kept for compatibility)
 generate_dataset_plot() {
     local dataset=$1
-    
+
     echo -e "${YELLOW}    📊 Plotting $dataset results...${NC}"
-    
+
     # Find the summary.json files
     ROUTER_SUMMARY=$(find "$OUTPUT_BASE/router_$dataset" -name "summary.json" -type f | head -1)
     VLLM_SUMMARY=$(find "$OUTPUT_BASE/vllm_$dataset" -name "summary.json" -type f | head -1)
@@ -419,7 +419,7 @@ generate_dataset_plot() {
         fi
 
         echo -e "${BLUE}      Running: $PLOT_CMD${NC}"
-        eval $PLOT_CMD
+        eval "$PLOT_CMD"
         echo -e "${GREEN}    ✅ $dataset plots generated in $OUTPUT_BASE/plots_$dataset${NC}"
     else
         echo -e "${RED}    ⚠️  No vLLM summary.json found for $dataset, skipping plots${NC}"
@@ -429,7 +429,7 @@ generate_dataset_plot() {
 # Function to generate comparison plots (now just calls individual dataset plots)
 generate_plots() {
     echo -e "${BLUE}📈 Generating any remaining comparison plots...${NC}"
-    
+
     for dataset in "${!DATASET_CONFIGS[@]}"; do
         # Check if plots already exist
         if [[ ! -d "$OUTPUT_BASE/plots_$dataset" ]]; then
@@ -447,15 +447,15 @@ generate_plots() {
 # Function to generate summary report
 generate_summary() {
     echo -e "${BLUE}📋 Generating research summary...${NC}"
-    
+
     local summary_file="$OUTPUT_BASE/RESEARCH_SUMMARY.md"
-    
+
     cat > "$summary_file" << EOF
 # Multi-Dataset Benchmark Research Report
 
 **Generated:** $(date)
 **Configuration:** Router vs vLLM Direct Comparison
-**Router Model:** $ROUTER_MODEL  
+**Router Model:** $ROUTER_MODEL
 **vLLM Model:** $VLLM_MODEL
 
 ## Dataset Overview
@@ -539,7 +539,7 @@ EOF
 ## Usage Instructions
 
 1. **Review CSV files** for detailed numerical results
-2. **Examine plots** for visual comparison trends  
+2. **Examine plots** for visual comparison trends
 3. **Analyze token usage** for efficiency insights
 4. **Compare across datasets** for model capability assessment
 
@@ -572,7 +572,7 @@ for dataset in "${DATASET_ORDER[@]}"; do
         echo -e "${YELLOW}⚠️  Dataset $dataset not configured, skipping...${NC}"
         continue
     fi
-    
+
     dataset_count=$((dataset_count + 1))
     echo -e "${BLUE}🚀 Progress: Dataset $dataset_count/$total_datasets - Starting $dataset${NC}"
     run_dataset_benchmark "$dataset"
@@ -601,7 +601,7 @@ echo -e "${YELLOW}⏱️  Total Runtime:${NC} ${minutes}m ${seconds}s"
 echo ""
 echo -e "${BLUE}📋 Next Steps:${NC}"
 echo "1. 📊 **Master research data**: $PERSISTENT_RESEARCH_CSV"
-echo "2. 📊 **This run's data**: $OUTPUT_BASE/research_results.csv"  
+echo "2. 📊 **This run's data**: $OUTPUT_BASE/research_results.csv"
 echo "3. 📋 Review research summary: $OUTPUT_BASE/RESEARCH_SUMMARY.md"
 echo "4. 📈 **View comprehensive charts**:"
 if [[ -f "$OUTPUT_BASE/accuracy_comparison.png" ]]; then
