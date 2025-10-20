@@ -9,7 +9,7 @@ tags: [roadmap, release, iris, v0.1]
 
 As we approach the end of 2025, we're excited to share our Q4 2025 roadmap for vLLM Semantic Router. This quarter marks a significant milestone in our project's evolution as we prepare for our first major release: **v0.1, codename "Iris"**, expected in late 2025 to early 2026.
 
-![iris](/img/code.png)
+![iris](/img/q4.png)
 
 <!-- truncate -->
 
@@ -248,7 +248,7 @@ Deep integration with the vLLM Production Stack will enable seamless model servi
 
 ### llm-d
 
-[llm-d](https://llm-d.ai/) is a Kubernetes-native high-performance distributed LLM inference framework developed by Red Hat, Google, CoreWeave, and IBM. It provides well-lit paths for anyone to serve large generative AI models at scale with distributed inference capabilities.
+[llm-d](https://llm-d.ai/) is a Kubernetes-native high-performance distributed LLM inference framework built on vLLM. Founded by Red Hat, Google Cloud, CoreWeave, and IBM Research, with contributions from NVIDIA, Hugging Face, Intel, Lambda, and Mistral AI, llm-d provides well-lit paths for anyone to serve large generative AI models at scale with distributed inference capabilities.
 
 Integration with llm-d will bring intelligent semantic routing to Kubernetes-native distributed inference deployments. This partnership will enable llm-d users to leverage MoM models and fusion routing for efficient model selection across distributed inference clusters, optimizing resource utilization and performance in cloud-native environments.
 
@@ -260,13 +260,13 @@ Integration with HuggingChat will bring intelligent semantic routing to conversa
 
 ### NVIDIA Dynamo
 
-[NVIDIA Dynamo Platform](https://developer.nvidia.com/dynamo) is NVIDIA's comprehensive AI inference framework that delivers scalable, efficient inference with GPU optimization. It includes intelligent inference optimizations that boost token generation performance by over 30x per GPU.
+[NVIDIA Dynamo](https://developer.nvidia.com/dynamo) is NVIDIA's high-performance, low-latency inference platform that supports all major frameworks including TensorRT-LLM. It delivers scalable, efficient inference with GPU optimization and includes intelligent inference optimizations that boost token generation performance by over 30x per GPU, with support for advanced features like disaggregated serving.
 
 Integration with NVIDIA Dynamo will leverage cutting-edge GPU acceleration and optimization frameworks to deliver industry-leading latency and throughput for semantic routing operations. This partnership will enable seamless deployment of MoM models on NVIDIA-accelerated infrastructure with optimal performance.
 
 ### vLLM AIBrix
 
-[vLLM AIBrix](https://github.com/vllm-project/aibrix) is an open-source, cost-efficient, and pluggable infrastructure framework for GenAI inference. It provides essential building blocks to construct scalable inference infrastructure with enterprise-grade features and one-click deployment capabilities.
+[vLLM AIBrix](https://github.com/vllm-project/aibrix) is an open-source initiative designed to provide essential building blocks to construct scalable GenAI inference infrastructure. As a cloud-native framework, AIBrix serves as an infrastructure orchestrator and workload control plane, offering cost-efficient and pluggable components for large-scale LLM serving with simplified deployment and management.
 
 Collaboration with vLLM AIBrix will enable unified control planes, advanced observability, and streamlined deployment workflows across hybrid and multi-cloud environments. This integration will make it easier for enterprises to adopt and scale vLLM Semantic Router with production-ready infrastructure components.
 
@@ -295,6 +295,8 @@ The Iris release establishes the foundation, but our vision extends far beyond v
 - Deeper integration with the broader vLLM ecosystem
 
 Each release will carry its own mythological codename, reflecting the unique character and capabilities it brings to the project.
+
+![iris](/img/code.png)
 
 ## Get Involved
 
