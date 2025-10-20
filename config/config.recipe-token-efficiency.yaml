@@ -110,6 +110,9 @@ categories:
         use_reasoning: false
   - name: other
     system_prompt: "You are a helpful assistant. Provide concise, accurate responses."
+    # Category-level cache (optional, already enabled globally)
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.7  # Match global or slightly lower
     model_scores:
       - model: openai/gpt-oss-20b
         score: 0.7

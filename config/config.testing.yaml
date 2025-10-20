@@ -42,6 +42,9 @@ model_config:
 
 categories:
   - name: other
+    # Category-level cache settings (optional - falls back to global if not set)
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.8
     model_scores:
       - model: openai/gpt-oss-20b
         score: 0.7

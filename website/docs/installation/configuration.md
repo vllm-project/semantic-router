@@ -23,7 +23,7 @@ bert_model:
 semantic_cache:
   backend_type: "memory"  # Options: "memory" or "milvus"
   enabled: false
-  similarity_threshold: 0.8
+  similarity_threshold: 0.8  # Global default threshold
   max_entries: 1000
   ttl_seconds: 3600
   eviction_policy: "fifo"  # Options: "fifo", "lru", "lfu"
@@ -81,6 +81,9 @@ categories:
   - model: your-model
     score: 1.0
     use_reasoning: true  # Enable reasoning for math problems
+  # Optional: Category-level cache settings
+  # semantic_cache_enabled: true
+  # semantic_cache_similarity_threshold: 0.9  # Higher threshold for math
 - name: computer science
   model_scores:
   - model: your-model
@@ -91,6 +94,7 @@ categories:
   - model: your-model
     score: 0.8
     use_reasoning: false # No reasoning for general queries
+  # semantic_cache_similarity_threshold: 0.75  # Lower threshold for general queries
 
 default_model: your-model
 
@@ -457,12 +461,37 @@ Configure additional features:
 ```yaml
 # Semantic Caching
 semantic_cache:
-  enabled: true                   # Enable semantic caching
+  enabled: true                   # Enable semantic caching globally
   backend_type: "memory"          # Options: "memory" or "milvus"
-  similarity_threshold: 0.8       # Cache hit threshold
+  similarity_threshold: 0.8       # Global default cache hit threshold
   max_entries: 1000               # Maximum cache entries
   ttl_seconds: 3600               # Cache expiration time
   eviction_policy: "fifo"         # Options: "fifo", "lru", "lfu"
+
+# Category-Level Cache Configuration (New)
+# Override global cache settings for specific categories
+categories:
+  - name: health
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95  # Very strict - medical accuracy critical
+    model_scores:
+      - model: your-model
+        score: 0.5
+        use_reasoning: false
+  
+  - name: general_chat
+    semantic_cache_similarity_threshold: 0.75  # Relaxed for better cache hits
+    model_scores:
+      - model: your-model
+        score: 0.7
+        use_reasoning: false
+  
+  - name: troubleshooting
+    # No cache settings - uses global default (0.8)
+    model_scores:
+      - model: your-model
+        score: 0.7
+        use_reasoning: false
 
 # Tool Auto-Selection
 tools:
@@ -603,6 +632,112 @@ batch_size_ranges:
 - `batch_classification_size_distribution` - Batch size distribution
 
 Access metrics at: `http://localhost:9190/metrics`
+
+## Category-Level Cache Configuration
+
+**NEW**: Configure semantic cache settings at the category level for fine-grained control over caching behavior.
+
+### Why Use Category-Level Cache Settings?
+
+Different categories have different tolerance for semantic variations:
+
+- **Sensitive categories** (health, psychology, law): Small word changes can have significant meaning differences. Require high similarity thresholds (0.92-0.95).
+- **General categories** (chat, troubleshooting): Less sensitive to minor wording changes. Can use lower thresholds (0.75-0.82) for better cache hit rates.
+- **Privacy categories**: May need caching disabled entirely for compliance or security reasons.
+
+### Configuration Examples
+
+#### Example 1: Mixed Thresholds for Different Categories
+
+```yaml
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8  # Global default
+
+categories:
+  - name: health
+    system_prompt: "You are a health expert..."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95  # Very strict - "headache" vs "severe headache" = different
+    model_scores:
+      - model: your-model
+        score: 0.5
+        use_reasoning: false
+
+  - name: psychology
+    system_prompt: "You are a psychology expert..."
+    semantic_cache_similarity_threshold: 0.92  # Strict - clinical nuances matter
+    model_scores:
+      - model: your-model
+        score: 0.6
+        use_reasoning: false
+
+  - name: general_chat
+    system_prompt: "You are a helpful assistant..."
+    semantic_cache_similarity_threshold: 0.75  # Relaxed - "how's the weather" = "what's the weather"
+    model_scores:
+      - model: your-model
+        score: 0.7
+        use_reasoning: false
+
+  - name: troubleshooting
+    system_prompt: "You are a tech support expert..."
+    # No cache settings - uses global threshold of 0.8
+    model_scores:
+      - model: your-model
+        score: 0.7
+        use_reasoning: false
+```
+
+#### Example 2: Disable Cache for Sensitive Data
+
+```yaml
+categories:
+  - name: personal_data
+    system_prompt: "Handle personal information..."
+    semantic_cache_enabled: false  # Disable cache entirely for privacy
+    model_scores:
+      - model: your-model
+        score: 0.8
+        use_reasoning: false
+```
+
+### Configuration Options
+
+**Category-Level Fields:**
+
+- `semantic_cache_enabled` (optional, boolean): Enable/disable caching for this category. If not specified, inherits from global `semantic_cache.enabled`.
+- `semantic_cache_similarity_threshold` (optional, float 0.0-1.0): Minimum similarity score for cache hits in this category. If not specified, inherits from global `semantic_cache.similarity_threshold`.
+
+**Fallback Hierarchy:**
+
+1. Category-specific `semantic_cache_similarity_threshold` (if set)
+2. Global `semantic_cache.similarity_threshold` (if set)
+3. `bert_model.threshold` (final fallback)
+
+### Best Practices
+
+**Threshold Selection:**
+
+- **High precision (0.92-0.95)**: health, psychology, law, finance
+- **Medium precision (0.85-0.90)**: technical documentation, education
+- **Lower precision (0.75-0.82)**: general chat, FAQs, troubleshooting
+
+**Privacy and Compliance:**
+
+- Disable caching (`semantic_cache_enabled: false`) for categories handling:
+  - Personal identifiable information (PII)
+  - Financial data
+  - Health records
+  - Sensitive business information
+
+**Performance Tuning:**
+
+- Start with conservative (higher) thresholds
+- Monitor cache hit rates per category
+- Lower thresholds for categories with low hit rates
+- Raise thresholds for categories with incorrect cache hits
 
 ## Common Configuration Examples
 

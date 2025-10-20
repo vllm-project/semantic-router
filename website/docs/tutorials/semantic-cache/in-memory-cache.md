@@ -44,22 +44,70 @@ graph TB
 semantic_cache:
   enabled: true
   backend_type: "memory"
-  similarity_threshold: 0.8
+  similarity_threshold: 0.8       # Global default threshold
   max_entries: 1000
   ttl_seconds: 3600
   eviction_policy: "fifo"
+```
+
+### Category-Level Configuration (New)
+
+Configure cache settings per category for fine-grained control:
+
+```yaml
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8       # Global default
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+
+categories:
+  - name: health
+    system_prompt: "You are a health expert..."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95  # Very strict for medical accuracy
+    model_scores:
+      - model: your-model
+        score: 0.5
+        use_reasoning: false
+
+  - name: general_chat
+    system_prompt: "You are a helpful assistant..."
+    semantic_cache_similarity_threshold: 0.75  # Relaxed for better hit rate
+    model_scores:
+      - model: your-model
+        score: 0.7
+        use_reasoning: false
+
+  - name: troubleshooting
+    # No cache settings - uses global default (0.8)
+    model_scores:
+      - model: your-model
+        score: 0.7
+        use_reasoning: false
 ```
 
 ### Configuration Options
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable/disable semantic caching |
+| `enabled` | boolean | `false` | Enable/disable semantic caching globally |
 | `backend_type` | string | `"memory"` | Cache backend type (must be "memory") |
-| `similarity_threshold` | float | `0.8` | Minimum similarity for cache hits (0.0-1.0) |
+| `similarity_threshold` | float | `0.8` | Global minimum similarity for cache hits (0.0-1.0) |
 | `max_entries` | integer | `1000` | Maximum number of cached entries |
 | `ttl_seconds` | integer | `3600` | Time-to-live for cache entries (seconds, 0 = no expiration) |
 | `eviction_policy` | string | `"fifo"` | Eviction policy: `"fifo"`, `"lru"`, `"lfu"` |
+
+### Category-Level Configuration Options
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `semantic_cache_enabled` | boolean | (inherits global) | Enable/disable caching for this category |
+| `semantic_cache_similarity_threshold` | float | (inherits global) | Category-specific similarity threshold (0.0-1.0) |
+
+Category-level settings override global settings. If not specified, the category uses the global cache configuration.
 
 ### Environment Examples
 
