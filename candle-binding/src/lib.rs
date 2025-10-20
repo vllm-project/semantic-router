@@ -1,7 +1,7 @@
 // This file is a binding for the candle-core and candle-transformers libraries.
 // It is based on https://github.com/huggingface/candle/tree/main/candle-examples/examples/bert
 use std::collections::HashMap;
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -1887,11 +1887,11 @@ pub extern "C" fn init_unified_classifier_c(
     pii_head_path: *const c_char,
     security_head_path: *const c_char,
     intent_labels: *const *const c_char,
-    intent_labels_count: usize,
+    intent_labels_count: c_int,
     pii_labels: *const *const c_char,
-    pii_labels_count: usize,
+    pii_labels_count: c_int,
     security_labels: *const *const c_char,
-    security_labels_count: usize,
+    security_labels_count: c_int,
     use_cpu: bool,
 ) -> bool {
     let modernbert_path = unsafe {
@@ -1924,21 +1924,21 @@ pub extern "C" fn init_unified_classifier_c(
 
     // Convert C string arrays to Rust Vec<String>
     let intent_labels_vec = unsafe {
-        std::slice::from_raw_parts(intent_labels, intent_labels_count)
+        std::slice::from_raw_parts(intent_labels, intent_labels_count as usize)
             .iter()
             .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
             .collect::<Vec<String>>()
     };
 
     let pii_labels_vec = unsafe {
-        std::slice::from_raw_parts(pii_labels, pii_labels_count)
+        std::slice::from_raw_parts(pii_labels, pii_labels_count as usize)
             .iter()
             .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
             .collect::<Vec<String>>()
     };
 
     let security_labels_vec = unsafe {
-        std::slice::from_raw_parts(security_labels, security_labels_count)
+        std::slice::from_raw_parts(security_labels, security_labels_count as usize)
             .iter()
             .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
             .collect::<Vec<String>>()
