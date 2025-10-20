@@ -10,6 +10,10 @@ semantic_cache:
   max_entries: 1000 # Only applies to memory backend
   ttl_seconds: 3600
   eviction_policy: "fifo"
+  # HNSW index configuration (for memory backend only)
+  use_hnsw: true # Enable HNSW index for faster similarity search
+  hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
+  hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
 
 tools:
   enabled: true

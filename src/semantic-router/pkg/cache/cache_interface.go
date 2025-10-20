@@ -96,4 +96,13 @@ type CacheConfig struct {
 
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+	// UseHNSW enables HNSW index for faster search in memory backend
+	UseHNSW bool `yaml:"use_hnsw,omitempty"`
+
+	// HNSWM is the number of bi-directional links per node (default: 16)
+	HNSWM int `yaml:"hnsw_m,omitempty"`
+
+	// HNSWEfConstruction is the size of dynamic candidate list during construction (default: 200)
+	HNSWEfConstruction int `yaml:"hnsw_ef_construction,omitempty"`
 }
