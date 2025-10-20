@@ -13,14 +13,53 @@ spec:
       kind: ImageStreamTag
       name: llm-katan:latest
   source:
-    type: Git
-    git:
-      uri: https://github.com/sdan/llm-katan.git
-      ref: main
-    contextDir: .
+    type: Dockerfile
+    dockerfile: |
+      # vLLM model server - OpenShift compatible
+      FROM python:3.10-slim
+
+      # Install minimal system dependencies
+      RUN apt-get update && \
+          apt-get install -y --no-install-recommends \
+              git \
+              curl \
+              && rm -rf /var/lib/apt/lists/*
+
+      # Set working directory
+      WORKDIR /app
+
+      # Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.x drivers)
+      RUN pip install --no-cache-dir \
+          torch==2.1.0 \
+          --index-url https://download.pytorch.org/whl/cu121
+
+      # Install vLLM and dependencies
+      RUN pip install --no-cache-dir \
+          vllm==0.6.3.post1 \
+          transformers>=4.44.0 \
+          accelerate \
+          sentencepiece \
+          protobuf \
+          einops \
+          xformers==0.0.23
+
+      # Set environment variables for vLLM
+      ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+      ENV VLLM_LOGGING_LEVEL=INFO
+
+      # Expose vLLM port
+      EXPOSE 8000
+
+      # Create models directory
+      RUN mkdir -p /app/models
+
+      # Run as non-root user (OpenShift requirement)
+      USER 1001
+
+      # Start vLLM server
+      # Model path will be provided via command args in deployment
+      ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
   strategy:
     type: Docker
-    dockerStrategy:
-      dockerfilePath: Dockerfile
   triggers:
   - type: ConfigChange

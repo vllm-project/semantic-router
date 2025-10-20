@@ -29,16 +29,56 @@ echo ""
 echo "Step 2: Creating PersistentVolumeClaims..."
 oc apply -f "$BASE_DIR/pvcs.yaml"
 
-# Step 3: Create ConfigMaps
+# Step 3: Create Services (BEFORE ConfigMaps to get IPs)
 echo ""
-echo "Step 3: Creating ConfigMaps..."
-oc apply -f "$BASE_DIR/configmap-router.yaml"
+echo "Step 3: Creating Services..."
+oc apply -f "$BASE_DIR/services.yaml"
+
+# Wait for services to get ClusterIPs assigned
+echo "Waiting for services to get ClusterIP addresses..."
+sleep 3
+
+# Step 3.1: Get dynamically assigned ClusterIP addresses
+echo ""
+echo "Step 3.1: Getting service ClusterIP addresses..."
+MODEL_A_IP=$(oc get svc model-a -n $NAMESPACE -o jsonpath='{.spec.clusterIP}')
+MODEL_B_IP=$(oc get svc model-b -n $NAMESPACE -o jsonpath='{.spec.clusterIP}')
+
+if [ -z "$MODEL_A_IP" ] || [ -z "$MODEL_B_IP" ]; then
+    echo "ERROR: Failed to get service ClusterIP addresses"
+    echo "Model-A IP: $MODEL_A_IP"
+    echo "Model-B IP: $MODEL_B_IP"
+    exit 1
+fi
+
+echo "  Model-A ClusterIP: $MODEL_A_IP"
+echo "  Model-B ClusterIP: $MODEL_B_IP"
+
+# Step 3.2: Update ConfigMap with actual ClusterIP addresses
+echo ""
+echo "Step 3.2: Updating router ConfigMap with ClusterIP addresses..."
+
+# Create temporary copy of router config with updated IPs
+TEMP_CONFIG="/tmp/configmap-router-updated.yaml"
+cp "$BASE_DIR/configmap-router.yaml" "$TEMP_CONFIG"
+
+# Replace the hardcoded IPs with actual ClusterIPs
+# First occurrence (model-a-endpoint)
+sed -i "0,/address: \"[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\"/s//address: \"$MODEL_A_IP\"/" "$TEMP_CONFIG"
+# Second occurrence (model-b-endpoint)
+sed -i "0,/address: \"[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\"/!s/address: \"[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+\"/address: \"$MODEL_B_IP\"/" "$TEMP_CONFIG"
+
+echo "  Updated model-a-endpoint address to: $MODEL_A_IP"
+echo "  Updated model-b-endpoint address to: $MODEL_B_IP"
+
+# Step 3.3: Apply updated ConfigMaps
+echo ""
+echo "Step 3.3: Creating ConfigMaps with updated IPs..."
+oc apply -f "$TEMP_CONFIG"
 oc apply -f "$BASE_DIR/configmap-envoy.yaml"
 
-# Step 4: Create Services
-echo ""
-echo "Step 4: Creating Services..."
-oc apply -f "$BASE_DIR/services.yaml"
+# Clean up temp file
+rm -f "$TEMP_CONFIG"
 
 # Step 5: Create ImageStreams
 echo ""
