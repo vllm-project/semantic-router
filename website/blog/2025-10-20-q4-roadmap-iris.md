@@ -1,11 +1,11 @@
 ---
 slug: q4-roadmap-iris
-title: "vLLM Semantic Router Q4 2025 Roadmap: Journey to Iris"
+title: "Semantic Router Q4 2025 Roadmap: Journey to Iris"
 authors: [Xunzhuo]
 tags: [roadmap, release, iris, v0.1]
 ---
 
-# vLLM Semantic Router Q4 2025 Roadmap: Journey to Iris
+# Semantic Router Q4 2025 Roadmap: Journey to Iris
 
 As we approach the end of 2025, we're excited to share our Q4 2025 roadmap for vLLM Semantic Router. This quarter marks a significant milestone in our project's evolution as we prepare for our first major release: **v0.1, codename "Iris"**, expected in late 2025 to early 2026.
 
@@ -31,29 +31,35 @@ Our Q4 roadmap centers on six critical pillars that will transform vLLM Semantic
 
 **The Challenge**
 
-Current routing relies exclusively on ModernBERT classification for semantic understanding. While powerful, this approach has limitations: it cannot perform deterministic routing based on specific keywords, lacks pattern-based detection for safety and compliance, and misses opportunities for fast-path routing that could reduce latency from 20-30ms to 1-2ms for certain queries.
+Current routing relies exclusively on ModernBERT classification for semantic understanding. While powerful, this approach has limitations: it cannot perform deterministic routing based on specific keywords, lacks pattern-based detection for safety and compliance, and misses opportunities for specialized domain classification that could enhance routing accuracy and flexibility.
 
 **The Innovation**
 
-We're introducing a **unified content scanning and routing framework** that extends semantic routing with three complementary signal sources, all integrated through a Signal Fusion Layer:
+We're introducing a **unified content scanning and routing framework** that extends semantic routing with four complementary signal sources, all integrated through a Signal Fusion Layer:
 
-**1. Keyword-Based Routing** (~1-2ms)
+**1. Keyword-Based Routing**
 
 - Deterministic, fast Boolean logic for exact term matching
 - Route queries containing "kubernetes" or "CVE-" patterns directly to specialized models
 - Eliminate unnecessary ML inference for technology-specific queries
 
-**2. Regex Content Scanning** (~2-5ms)
+**2. Regex Content Scanning**
 
 - Pattern-based detection for safety, compliance, and structured data
 - Guaranteed blocking of PII patterns (SSN, credit cards) with no ML false negatives
 - RE2 engine with ReDoS protection for security-critical applications
 
-**3. Embedding Similarity Scanning** (~5-10ms)
+**3. Embedding Similarity Scanning**
 
 - Semantic concept detection robust to paraphrasing
 - Detect "multi-step reasoning" intent even when phrased as "explain thoroughly"
 - Reuses existing BERT embedder for zero additional model overhead
+
+**4. Domain Classification**
+
+- **In-Tree BERT Classification**: Lightweight BERT-based domain classifiers running directly in the router process for low-latency intent detection
+- **Out-of-Tree MCP Classification**: Advanced domain-specific classifiers deployed as MCP servers for specialized routing scenarios (legal, medical, financial domains)
+- Hierarchical classification with confidence scoring for multi-domain queries
 
 **Dual Execution Paths**
 
@@ -72,12 +78,14 @@ The decision-making engine that combines all signals into actionable routing dec
 
 This framework enables:
 
-- Sub-millisecond deterministic routing for technology-specific queries
+- Fast deterministic routing for technology-specific queries
 - Guaranteed compliance with safety and regulatory requirements
 - Semantic intent detection that complements BERT classification
+- Specialized domain classification for vertical-specific routing (legal, medical, financial)
+- Flexible deployment options with both in-tree and out-of-tree execution paths
 - Graceful degradation and backward compatibility with existing routing
 
-The Semantic Chain for Fusion Intelligent Routing represents a fundamental shift from pure ML-based routing to a hybrid approach that leverages the best of deterministic, pattern-based, and semantic methods.
+The Semantic Chain for Fusion Intelligent Routing represents a fundamental shift from pure ML-based routing to a hybrid approach that leverages the best of deterministic, pattern-based, semantic, and domain-specific classification methods.
 
 ### 2. Extensible Serving Architecture: Modular Candle-Binding for MoM Family
 
