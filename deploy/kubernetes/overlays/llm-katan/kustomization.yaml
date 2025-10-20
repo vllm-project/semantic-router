@@ -3,4 +3,9 @@ kind: Kustomization
 
 resources:
   - ../../base
-  - ../../deployment.katan.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: semantic-router
+    path: patch-llm-katan.yaml

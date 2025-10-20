@@ -5,6 +5,7 @@ resources:
   - ./namespace.yaml
   - ./pvc.yaml
   - ./service.yaml
+  - ./deployment.yaml
 
 configMapGenerator:
   - name: semantic-router-config
@@ -13,7 +14,3 @@ configMapGenerator:
       - ./tools_db.json
 
 namespace: vllm-semantic-router-system
-
-images:
-  - name: ghcr.io/vllm-project/semantic-router/extproc
-    newTag: latest

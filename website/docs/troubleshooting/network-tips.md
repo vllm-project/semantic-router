@@ -26,12 +26,12 @@ The router will download embedding models on first run unless you provide them l
 
 ### Option A — Use local models (no external network)
 
-1) Download the required model(s) with any reachable method (VPN/offline) into the repo’s `./models` folder. Example layout:
+1. Download the required model(s) with any reachable method (VPN/offline) into the repo’s `./models` folder. Example layout:
 
    - `models/all-MiniLM-L12-v2/`
    - `models/category_classifier_modernbert-base_model`
 
-2) In `config/config.yaml`, point to the local path. Example:
+2. In `config/config.yaml`, point to the local path. Example:
 
    ```yaml
    bert_model:
@@ -39,7 +39,7 @@ The router will download embedding models on first run unless you provide them l
      model_id: /app/models/all-MiniLM-L12-v2
    ```
 
-3) No extra env is required. `deploy/docker-compose/docker-compose.yml` already mounts `./models:/app/models:ro`.
+3. No extra env is required. `deploy/docker-compose/docker-compose.yml` already mounts `./models:/app/models:ro`.
 
 ### Option B — Use HF cache + mirror
 
@@ -53,7 +53,7 @@ services:
     environment:
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
-      - HF_ENDPOINT=https://hf-mirror.com  # example mirror endpoint (China)
+      - HF_ENDPOINT=https://hf-mirror.com # example mirror endpoint (China)
 ```
 
 Optional: pre-warm cache on the host (only if you have `huggingface_hub` installed):
@@ -70,7 +70,7 @@ PY
 
 When building `Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`. Create an override Dockerfile that enables mirrors without touching the original.
 
-1) Create `Dockerfile.extproc.cn` at repo root with this content:
+1. Create `Dockerfile.extproc.cn` at repo root with this content:
 
 ```Dockerfile
 # syntax=docker/dockerfile:1
@@ -118,7 +118,7 @@ RUN chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 ```
 
-2) Point compose to the override Dockerfile by extending `docker-compose.override.yml`:
+2. Point compose to the override Dockerfile by extending `docker-compose.override.yml`:
 
 ```yaml
 services:
@@ -131,7 +131,7 @@ services:
 
 For the optional testing profile, create an override Dockerfile to configure pip mirrors.
 
-1) Create `tools/mock-vllm/Dockerfile.cn`:
+1. Create `tools/mock-vllm/Dockerfile.cn`:
 
 ```Dockerfile
 FROM python:3.11-slim
@@ -150,7 +150,7 @@ EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-2) Extend `docker-compose.override.yml` to use the override Dockerfile for `mock-vllm`:
+2. Extend `docker-compose.override.yml` to use the override Dockerfile for `mock-vllm`:
 
 ```yaml
 services:
@@ -203,13 +203,84 @@ Container runtimes on Kubernetes nodes do not automatically reuse the host Docke
 - Use `kubectl describe pod <name>` or `kubectl get events` to confirm pull errors disappear.
 - Check that services such as `semantic-router-metrics` now expose endpoints and respond via port-forward (`kubectl port-forward svc/<service> <local-port>:<service-port>`).
 
+### 5.6 Mount local models via hostPath PV (no external HF)
+
+When you already have models under `./models` locally, you can mount them into the Pod without any download:
+
+1. Create a hostPath PV and a matching PVC (example paths assume Kind; for other clusters, pick a node path visible to kubelet):
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: semantic-router-models-pv
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /tmp/hostpath-provisioner/models
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-models
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 30Gi
+  storageClassName: standard
+  volumeName: semantic-router-models-pv
+```
+
+2. Copy your local models into the node path (Kind example):
+
+```bash
+docker cp ./models semantic-router-cluster-control-plane:/tmp/hostpath-provisioner/
+```
+
+3. Ensure the Deployment mounts the PVC at `/app/models` and set `imagePullPolicy: IfNotPresent`:
+
+```yaml
+volumes:
+  - name: models-volume
+    persistentVolumeClaim:
+      claimName: semantic-router-models
+containers:
+  - name: semantic-router
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - name: models-volume
+        mountPath: /app/models
+```
+
+4. If the PV is tied to a specific node path, schedule the Pod onto that node via `nodeSelector` or add tolerations if you untainted the control-plane node:
+
+```yaml
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: semantic-router-cluster-control-plane
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      effect: "NoSchedule"
+      operator: "Exists"
+```
+
+This approach completely avoids Hugging Face downloads inside the cluster and is the most reliable in restricted networks.
+
 ## 6. Troubleshooting
 
 - Go modules still time out:
+
   - Verify `GOPROXY` and `GOSUMDB` are present in the go-builder stage logs.
   - Try a clean build: `docker compose build --no-cache`.
 
 - HF models still download slowly:
+
   - Prefer Option A (local models).
   - Ensure the cache volume is mounted and `HF_ENDPOINT`/`HF_HUB_ENABLE_HF_TRANSFER` are set.
 

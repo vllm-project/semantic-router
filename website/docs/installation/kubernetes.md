@@ -42,6 +42,38 @@ Configure the semantic router by editing `deploy/kubernetes/config.yaml`. This f
 - llm-katan: semantic-router + an llm-katan sidecar listening on 8002 and serving model name `qwen3`
   - Path: `deploy/kubernetes/overlays/llm-katan`
 
+### Repository layout (deploy/kubernetes/)
+
+```
+deploy/kubernetes/
+  base/
+    kustomization.yaml        # base kustomize: namespace, PVC, service, deployment
+    namespace.yaml            # Namespace for all resources
+    pvc.yaml                  # PVC for models (storageClass and size adjustable)
+    service.yaml              # Service exposing gRPC/metrics/HTTP ports
+    deployment.yaml           # Semantic Router Deployment (init downloads by default)
+    config.yaml               # Router config (mounted via ConfigMap)
+    tools_db.json             # Tools DB (mounted via ConfigMap)
+    pv.example.yaml           # OPTIONAL: hostPath PV example for local models
+  overlays/
+    core/
+      kustomization.yaml      # Uses only base
+    llm-katan/
+      kustomization.yaml      # Patches base to add llm-katan sidecar
+      patch-llm-katan.yaml    # Strategic-merge patch injecting sidecar
+  kustomization.yaml          # Root points to overlays/core by default
+  README.md                   # Additional notes
+  namespace.yaml, pvc.yaml, service.yaml (top-level shortcuts kept for backward compat)
+```
+
+Notes:
+
+- The base deployment includes an initContainer that downloads required models on first run.
+- If your cluster has limited egress, prefer mounting local models via a PV/PVC and skip downloads:
+  - Copy `base/pv.example.yaml` to `base/pv.yaml`, apply it, and ensure `base/pvc.yaml` is bound to that PV.
+  - Mount point remains `/app/models` in the pod.
+  - See “Network Tips” for details on hostPath PV, image mirrors, and preloading images.
+
 Important notes before you apply manifests:
 
 - `vllm_endpoints.address` must be an IP address (not hostname) reachable from inside the cluster. If your LLM backends run as K8s Services, use the ClusterIP (for example `10.96.0.10`) and set `port` accordingly. Do not include protocol or path.
@@ -69,9 +101,9 @@ To run with the llm-katan overlay instead:
 
 ```bash
 kubectl apply -k deploy/kubernetes/overlays/llm-katan
-````
+```
 
-````
+Note: The llm-katan overlay no longer references parent files directly. It uses a local patch (`deploy/kubernetes/overlays/llm-katan/patch-llm-katan.yaml`) to inject the sidecar, avoiding kustomize parent-directory restrictions.
 
 ## Step 3: Install Envoy Gateway
 

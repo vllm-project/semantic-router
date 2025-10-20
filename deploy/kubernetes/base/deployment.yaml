@@ -28,7 +28,7 @@ spec:
               echo "Installing Hugging Face CLI..."
               pip install --no-cache-dir huggingface_hub[cli]
 
-              echo "Downloading classifier models to persistent volume..."
+              echo "Downloading models to persistent volume..."
               cd /app/models
 
               # Download category classifier model
@@ -71,18 +71,9 @@ spec:
                 echo "all-MiniLM-L12-v2 already exists, skipping..."
               fi
 
-              # Optional: Prepare Qwen model directory for llm-katan sidecar
-              # NOTE: Provide the model content under /app/models/Qwen/Qwen3-0.6B via pre-populated PV
-              # or customize the following block to fetch from your internal artifact store.
-              if [ ! -d "Qwen/Qwen3-0.6B" ]; then
-                echo "Downloading Qwen/Qwen3-0.6B for llm-katan..."
-                mkdir -p Qwen
-                huggingface-cli download Qwen/Qwen3-0.6B --local-dir Qwen/Qwen3-0.6B || echo "Warning: Qwen3-0.6B download failed; ensure offline pre-population if needed."
-              else
-                echo "Qwen/Qwen3-0.6B already exists, skipping..."
-              fi
 
-              echo "Model directory listing:" && ls -la /app/models/
+              echo "Model setup complete."
+              ls -la /app/models/
           env:
             - name: HF_HUB_CACHE
               value: /tmp/hf_cache
@@ -99,6 +90,7 @@ spec:
       containers:
         - name: semantic-router
           image: ghcr.io/vllm-project/semantic-router/extproc:latest
+          imagePullPolicy: IfNotPresent
           args: ["--secure=true"]
           securityContext:
             runAsNonRoot: false
@@ -143,35 +135,6 @@ spec:
             limits:
               memory: "6Gi"
               cpu: "2"
-        - name: llm-katan
-          image: ghcr.io/vllm-project/semantic-router/llm-katan:latest
-          imagePullPolicy: IfNotPresent
-          args:
-            [
-              "llm-katan",
-              "--model",
-              "/app/models/Qwen/Qwen3-0.6B",
-              "--served-model-name",
-              "qwen3",
-              "--host",
-              "0.0.0.0",
-              "--port",
-              "8002",
-            ]
-          ports:
-            - containerPort: 8002
-              name: katan
-              protocol: TCP
-          volumeMounts:
-            - name: models-volume
-              mountPath: /app/models
-          resources:
-            requests:
-              memory: "1Gi"
-              cpu: "500m"
-            limits:
-              memory: "2Gi"
-              cpu: "1"
       volumes:
         - name: config-volume
           configMap:
