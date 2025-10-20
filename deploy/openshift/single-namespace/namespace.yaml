@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vllm-semantic-router
+  labels:
+    name: vllm-semantic-router
+    app.kubernetes.io/name: vllm-semantic-router

@@ -1,0 +1,28 @@
+---
+# ImageStream for Semantic Router
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: semantic-router
+  namespace: vllm-semantic-router
+  labels:
+    app: semantic-router
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: router
+spec:
+  lookupPolicy:
+    local: true
+---
+# ImageStream for LLM Katan
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: llm-katan
+  namespace: vllm-semantic-router
+  labels:
+    app: llm-katan
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  lookupPolicy:
+    local: true

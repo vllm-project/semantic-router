@@ -1,0 +1,26 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: llm-katan
+  namespace: vllm-semantic-router
+  labels:
+    app: llm-katan
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: llm-katan:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/sdan/llm-katan.git
+      ref: main
+    contextDir: .
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  triggers:
+  - type: ConfigChange

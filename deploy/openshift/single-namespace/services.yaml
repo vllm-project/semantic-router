@@ -1,0 +1,92 @@
+---
+# Service for Envoy proxy (main entry point)
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-proxy
+  namespace: vllm-semantic-router
+  labels:
+    app: semantic-router
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: router
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8801
+    targetPort: 8801
+    protocol: TCP
+  - name: admin
+    port: 19000
+    targetPort: 19000
+    protocol: TCP
+  selector:
+    app: semantic-router
+---
+# Service for Semantic Router gRPC
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router
+  namespace: vllm-semantic-router
+  labels:
+    app: semantic-router
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: router
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  - name: metrics
+    port: 9190
+    targetPort: 9190
+    protocol: TCP
+  - name: classify-api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: semantic-router
+---
+# Service for Model A
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-a
+  namespace: vllm-semantic-router
+  labels:
+    app: model-a
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: model-a
+---
+# Service for Model B
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-b
+  namespace: vllm-semantic-router
+  labels:
+    app: model-b
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: model-b

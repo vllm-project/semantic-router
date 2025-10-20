@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-b
+  namespace: vllm-semantic-router
+  labels:
+    app: model-b
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-b
+  template:
+    metadata:
+      labels:
+        app: model-b
+      annotations:
+        cdi.k8s.io/model-b: k8s.device-plugin.nvidia.com/gpu=0
+    spec:
+      # GPU node selection - models need GPUs
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Equal
+        value: "True"
+        effect: NoSchedule
+      containers:
+      - name: model-b
+        image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/llm-katan:latest
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        command: ["llm-katan"]
+        args:
+        - "--model"
+        - "Qwen/Qwen2.5-1.5B"
+        - "--port"
+        - "8000"
+        - "--served-model-name"
+        - "Model-B"
+        - "--max-tokens"
+        - "512"
+        - "--temperature"
+        - "0.7"
+        - "--log-level"
+        - "INFO"
+        - "--device"
+        - "auto"
+        env:
+        - name: HF_HUB_CACHE
+          value: "/app/cache/hf"
+        - name: TRANSFORMERS_CACHE
+          value: "/app/cache/transformers"
+        - name: HF_HOME
+          value: "/app/cache/hf"
+        - name: HOME
+          value: "/tmp/home"
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /app/cache
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "1"
+            nvidia.com/gpu: "1"
+      volumes:
+      - name: cache-volume
+        persistentVolumeClaim:
+          claimName: model-b-cache

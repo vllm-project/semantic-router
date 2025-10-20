@@ -1,0 +1,38 @@
+# Exclude model files (downloaded by init container)
+models/
+
+# Exclude build artifacts (but keep release builds needed by Docker)
+candle-binding/target/debug/
+candle-binding/target/*/incremental/
+candle-binding/target/*/deps/
+candle-binding/target/*/build/
+candle-binding/target/*/examples/
+target/
+
+# Exclude cache directories
+.cache/
+__pycache__/
+*.pyc
+
+# Exclude git
+.git/
+.gitignore
+
+# Exclude docs and tests
+docs/
+website/
+e2e-tests/
+src/training/
+
+# Exclude deployment configs
+deploy/
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude temporary files
+*.log
+*.tmp
