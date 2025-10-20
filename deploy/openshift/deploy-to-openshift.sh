@@ -46,7 +46,7 @@ CLEANUP_OBSERVABILITY="false"
 log() {
     local level=$1
     shift
-    local message="$@"
+    local message="$*"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     case $level in
@@ -681,7 +681,7 @@ deploy_template() {
         param_args="$param_args -p $param"
     done
 
-    if ! oc process -f "$template_file" $param_args | oc apply -f -; then
+    if ! oc process -f "$template_file" "$param_args" | oc apply -f -; then
         log "ERROR" "Failed to process and apply template"
         exit 1
     fi
@@ -744,7 +744,7 @@ setup_port_forwarding() {
 
     # Set up port forwarding in background
     log "INFO" "Port forwarding: $PORT_FORWARD_PORTS"
-    oc port-forward "$pod_name" $PORT_FORWARD_PORTS -n "$NAMESPACE" &
+    oc port-forward "$pod_name" "$PORT_FORWARD_PORTS" -n "$NAMESPACE" &
     local pf_pid=$!
 
     # Give it a moment to establish
@@ -754,7 +754,8 @@ setup_port_forwarding() {
         log "SUCCESS" "Port forwarding established (PID: $pf_pid)"
         log "INFO" "Access endpoints at:"
         for port_mapping in $PORT_FORWARD_PORTS; do
-            local local_port=$(echo $port_mapping | cut -d: -f1)
+            local local_port
+            local_port=$(echo "$port_mapping" | cut -d: -f1)
             log "INFO" "  - localhost:$local_port"
         done
         log "INFO" "To stop port forwarding: kill $pf_pid"
