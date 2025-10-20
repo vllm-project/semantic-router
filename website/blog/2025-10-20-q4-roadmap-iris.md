@@ -1,7 +1,7 @@
 ---
 slug: q4-roadmap-iris
 title: "Semantic Router Q4 2025 Roadmap: Journey to Iris"
-authors: [Xunzhuo]
+authors: [Xunzhuo, rootfs, wangchen615, yuezhu1]
 tags: [roadmap, release, iris, v0.1]
 ---
 
