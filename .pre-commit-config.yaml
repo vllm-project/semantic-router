@@ -22,10 +22,13 @@ repos:
         language: system
         files: \.go$
 
-  - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.7.2
+  - repo: local
     hooks:
       - id: shellcheck
+        name: shellcheck
+        entry: make shellcheck
+        language: system
+        files: \.sh$
 
   - repo: local
     hooks:
