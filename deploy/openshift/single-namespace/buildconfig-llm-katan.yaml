@@ -15,7 +15,7 @@ spec:
   source:
     type: Dockerfile
     dockerfile: |
-      # vLLM model server - OpenShift compatible
+      # Optimized Dockerfile for llm-katan - OpenShift compatible
       FROM python:3.10-slim
 
       # Install minimal system dependencies
@@ -30,36 +30,36 @@ spec:
 
       # Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.x drivers)
       RUN pip install --no-cache-dir \
-          torch==2.1.0 \
-          --index-url https://download.pytorch.org/whl/cu121
+          torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-      # Install vLLM and dependencies
+      # Install llm-katan and its dependencies
       RUN pip install --no-cache-dir \
-          vllm==0.6.3.post1 \
-          transformers>=4.44.0 \
+          llm-katan \
+          transformers \
           accelerate \
-          sentencepiece \
-          protobuf \
-          einops \
-          xformers==0.0.23
+          fastapi \
+          uvicorn \
+          click \
+          pydantic \
+          numpy
 
-      # Set environment variables for vLLM
-      ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
-      ENV VLLM_LOGGING_LEVEL=INFO
+      # Set environment variables for caching
+      ENV HF_HUB_CACHE=/tmp/hf_cache
+      ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+      ENV HF_HOME=/tmp/hf_cache
 
-      # Expose vLLM port
-      EXPOSE 8000
+      # Create cache directories
+      RUN mkdir -p /tmp/hf_cache /tmp/transformers_cache
 
-      # Create models directory
-      RUN mkdir -p /app/models
+      # Expose ports
+      EXPOSE 8000 8001
 
-      # Run as non-root user (OpenShift requirement)
-      USER 1001
+      # Health check
+      HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+          CMD curl -f http://localhost:8000/health || exit 1
 
-      # Start vLLM server
-      # Model path will be provided via command args in deployment
-      ENTRYPOINT ["python", "-m", "vllm.entrypoints.openai.api_server"]
+      # Default command - this will be overridden by deployment args
+      CMD ["llm-katan", "--help"]
   strategy:
     type: Docker
-  triggers:
-  - type: ConfigChange
+  triggers: []

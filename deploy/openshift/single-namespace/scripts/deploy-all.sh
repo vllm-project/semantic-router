@@ -88,54 +88,52 @@ oc apply -f "$BASE_DIR/imagestreams.yaml"
 # Step 6: Create BuildConfigs
 echo ""
 echo "Step 6: Creating BuildConfigs..."
-oc apply -f "$BASE_DIR/buildconfig-router.yaml"
+# Note: semantic-router uses pre-built image from ghcr.io, no build needed
 oc apply -f "$BASE_DIR/buildconfig-llm-katan.yaml"
 
-# Step 7: Start builds
+# Step 7: Start llm-katan build
 echo ""
-echo "Step 7: Starting container image builds..."
-echo "This will take several minutes. Builds will run in the background."
-echo ""
-
-# Start semantic-router build from local directory
-echo "Starting semantic-router build from local source..."
-cd /home/szedan/semantic-router
-oc start-build semantic-router --from-dir=. --follow -n $NAMESPACE &
-ROUTER_BUILD_PID=$!
-
-# Start llm-katan build from GitHub
-echo "Starting llm-katan build from GitHub..."
-oc start-build llm-katan -n $NAMESPACE &
-KATAN_BUILD_PID=$!
-
-# Wait for builds to complete
-echo ""
-echo "Waiting for builds to complete..."
-echo "Router build PID: $ROUTER_BUILD_PID"
-echo "Katan build PID: $KATAN_BUILD_PID"
-echo ""
-echo "You can monitor build progress in another terminal:"
-echo "  oc logs -f bc/semantic-router -n $NAMESPACE"
-echo "  oc logs -f bc/llm-katan -n $NAMESPACE"
+echo "Step 7: Building llm-katan image..."
+echo "This will take several minutes (~5-10 min)."
 echo ""
 
-# Wait for the router build (we followed it)
-wait $ROUTER_BUILD_PID || echo "Router build finished (check status with: oc get builds -n $NAMESPACE)"
+# Start llm-katan build (inline Dockerfile, no upload needed)
+echo "Starting llm-katan build..."
+oc start-build llm-katan -n $NAMESPACE --follow
 
 # Check build status
 echo ""
 echo "Checking build status..."
 oc get builds -n $NAMESPACE
 
-# Step 8: Deploy applications
+# Step 8: Check GPU availability
 echo ""
-echo "Step 8: Deploying applications..."
+echo "Step 8: Checking GPU node availability..."
+if bash "$SCRIPT_DIR/check-gpu-status.sh" "$NAMESPACE"; then
+    echo "✓ GPU nodes are ready"
+else
+    echo "⚠️  WARNING: GPU nodes not ready. Model pods may remain in Pending state."
+    read -p "Continue anyway? (yes/no): " CONTINUE
+    if [ "$CONTINUE" != "yes" ]; then
+        echo "Deployment cancelled. Fix GPU nodes and run again."
+        exit 1
+    fi
+fi
+
+# Step 9: Deploy applications
+echo ""
+echo "Step 9: Deploying applications..."
 echo "Note: Deployments will wait for images to be available"
 oc apply -f "$BASE_DIR/deployment-router.yaml"
 oc apply -f "$BASE_DIR/deployment-model-a.yaml"
 oc apply -f "$BASE_DIR/deployment-model-b.yaml"
 
-# Step 9: Monitor deployment
+# Step 9.1: Create route for external access
+echo ""
+echo "Step 9.1: Creating external route..."
+oc apply -f "$BASE_DIR/route.yaml"
+
+# Step 10: Monitor deployment
 echo ""
 echo "========================================="
 echo "Deployment initiated!"
@@ -212,7 +210,6 @@ echo "   oc logs -f deployment/model-b -n $NAMESPACE"
 echo ""
 echo "2. Check build status:"
 echo "   oc get builds -n $NAMESPACE"
-echo "   oc logs -f build/semantic-router-1 -n $NAMESPACE"
 echo "   oc logs -f build/llm-katan-1 -n $NAMESPACE"
 echo ""
 echo "3. Expose the service (if needed):"

@@ -22,6 +22,11 @@ if [ "$CONFIRM" != "yes" ]; then
     exit 0
 fi
 
+# Ask once for complete cleanup
+read -p "Delete PVCs (persistent data) and namespace completely? (yes/no): " DELETE_COMPLETE
+DELETE_PVC="$DELETE_COMPLETE"
+DELETE_NS="$DELETE_COMPLETE"
+
 echo ""
 echo "Starting uninstall process..."
 echo ""
@@ -117,13 +122,12 @@ for imagestream in semantic-router llm-katan; do
     fi
 done
 
-# Step 7: Delete PVCs (with confirmation)
+# Step 7: Delete PVCs
 echo ""
 echo "Step 7: Deleting PersistentVolumeClaims..."
-echo "  WARNING: This will delete all persistent data including models!"
-read -p "  Delete PVCs and all data? (yes/no): " DELETE_PVC
 
 if [ "$DELETE_PVC" = "yes" ]; then
+    echo "  Deleting all PVCs and persistent data..."
     for pvc in semantic-router-models semantic-router-cache; do
         if oc get pvc $pvc -n $NAMESPACE &>/dev/null; then
             oc delete pvc $pvc -n $NAMESPACE
@@ -136,13 +140,12 @@ else
     echo "  ⊘ PVCs preserved (not deleted)"
 fi
 
-# Step 8: Delete Namespace (with confirmation)
+# Step 8: Delete Namespace
 echo ""
 echo "Step 8: Deleting Namespace..."
-echo "  WARNING: This will delete the entire namespace '$NAMESPACE'!"
-read -p "  Delete namespace? (yes/no): " DELETE_NS
 
 if [ "$DELETE_NS" = "yes" ]; then
+    echo "  Deleting namespace '$NAMESPACE'..."
     if oc get namespace $NAMESPACE &>/dev/null; then
         oc delete namespace $NAMESPACE
         echo "  ✓ Namespace '$NAMESPACE' deleted"

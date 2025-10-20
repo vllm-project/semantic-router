@@ -1,17 +1,6 @@
 ---
-# ImageStream for Semantic Router
-apiVersion: image.openshift.io/v1
-kind: ImageStream
-metadata:
-  name: semantic-router
-  namespace: vllm-semantic-router
-  labels:
-    app: semantic-router
-    app.kubernetes.io/name: vllm-semantic-router
-    app.kubernetes.io/component: router
-spec:
-  lookupPolicy:
-    local: true
+# Note: Semantic Router uses pre-built image from ghcr.io/vllm-project/semantic-router/extproc:latest
+# No ImageStream needed for semantic-router
 ---
 # ImageStream for LLM Katan
 apiVersion: image.openshift.io/v1
