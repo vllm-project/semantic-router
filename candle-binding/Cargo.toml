@@ -11,9 +11,9 @@ crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = "0.8.4"
-candle-nn = "0.8.4"
-candle-transformers = "0.8.4"
+candle-core = { version = "0.8.4", features = ["cuda"] }
+candle-nn = { version = "0.8.4", features = ["cuda"] }
+candle-transformers = { version = "0.8.4", features = ["cuda"] }
 tokenizers = { version = "0.21.0", features = ["http"] }
 hf-hub = "0.4.1"
 safetensors = "0.4.1"
