@@ -25,7 +25,7 @@ With the Iris release, we're establishing the foundation for reliable, intellige
 
 ## Q4 2025 Focus Areas
 
-Our Q4 roadmap centers on six critical pillars that will transform vLLM Semantic Router from an experimental project into a production-ready platform. These initiatives address the most pressing needs identified by our community and represent the essential groundwork for v0.1.
+Our Q4 roadmap centers on seven critical pillars that will transform vLLM Semantic Router from an experimental project into a production-ready platform. These initiatives address the most pressing needs identified by our community and represent the essential groundwork for v0.1.
 
 ### 1. Semantic Chain for Fusion Intelligent Routing
 
@@ -209,7 +209,49 @@ Responses API support positions vLLM Semantic Router at the forefront of agentic
 
 This capability is essential for vLLM Semantic Router to remain relevant as the industry shifts from simple chat completions to sophisticated, stateful, tool-augmented AI agents.
 
-### 6. Enterprise Readiness: Production Deployment Tools
+### 6. Intelligent MCP Gateway: Smart Tool Management and Selection
+
+**The Challenge**
+
+As AI agents increasingly rely on external tools and services through the Model Context Protocol (MCP), managing and selecting the right tools for each task becomes critical. Current approaches lack intelligent tool discovery, selection optimization, and centralized management, leading to inefficient tool usage and increased latency in agentic workflows.
+
+**The Innovation**
+
+We're introducing an **Intelligent MCP Gateway** that serves as a unified control plane for MCP tools with smart selection capabilities:
+
+**MCP Tool Management**
+
+- **Centralized Registry**: Unified catalog of available MCP servers and tools with metadata, capabilities, and performance characteristics
+- **Dynamic Discovery**: Automatic detection and registration of MCP servers in the cluster
+- **Health Monitoring**: Real-time health checks and availability tracking for all registered MCP tools
+- **Version Management**: Support for multiple versions of MCP tools with seamless upgrades and rollbacks
+
+**Intelligent Tool Selection**
+
+- **Semantic Matching**: Analyze user intent and task requirements to automatically select the most appropriate tools
+- **Context-Aware Routing**: Consider conversation history, user preferences, and task complexity for tool selection
+- **Performance Optimization**: Route tool requests based on latency, cost, and success rate metrics
+- **Fallback Strategies**: Automatic failover to alternative tools when primary options are unavailable
+
+**Integration with Fusion Routing**
+
+- Seamlessly integrate with the Semantic Chain for unified routing decisions
+- Combine tool selection with model selection for optimal agentic workflows
+- Support both in-tree (low-latency) and out-of-tree (MCP server) tool execution paths
+
+**Impact**
+
+The Intelligent MCP Gateway enables:
+
+- Simplified tool management for complex agentic applications
+- Reduced latency through intelligent tool selection and caching
+- Improved reliability with automatic failover and health monitoring
+- Enhanced developer experience with centralized tool discovery and configuration
+- Cost optimization by routing to the most efficient tools for each task
+
+This gateway positions vLLM Semantic Router as a comprehensive orchestration layer for modern AI agents, managing not just model selection but also the tools and services that agents rely on.
+
+### 7. Enterprise Readiness: Production Deployment Tools
 
 **The Challenge**
 
@@ -238,7 +280,7 @@ These enterprise features will dramatically lower the barrier to entry, improve 
 
 ## Ecosystem Integration
 
-Beyond the six core pillars, we're actively exploring integrations with key platforms in the AI infrastructure ecosystem. These five integrations are **work-in-progress and good-to-have** features that will expand vLLM Semantic Router's reach and interoperability:
+Beyond the seven core pillars, we're actively exploring integrations with key platforms in the AI infrastructure ecosystem. These five integrations are **work-in-progress and good-to-have** features that will expand vLLM Semantic Router's reach and interoperability:
 
 ### vLLM Production Stack
 
@@ -279,10 +321,10 @@ These ecosystem integrations represent our commitment to building an open, inter
 **v0.1 "Iris" Release (Late 2025 - Early 2026):**
 
 - All P0 priority issues resolved
-- Six foundational pillars fully implemented
+- Seven foundational pillars fully implemented
 - Comprehensive documentation and migration guides
 - Production-ready deployment tools (Helm charts, dashboard)
-- Full Responses API and Semantic Chain for Fusion Intelligent Routing support
+- Full Responses API, Intelligent MCP Gateway, and Semantic Chain for Fusion Intelligent Routing support
 - Community celebration and feedback collection
 
 ## Looking Beyond Iris
