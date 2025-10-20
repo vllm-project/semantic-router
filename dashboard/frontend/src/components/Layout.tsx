@@ -53,6 +53,17 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         </div>
         <nav className={styles.nav}>
           <NavLink
+            to="/huggingchat"
+            className={({ isActive }) =>
+              isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+            }
+            title="HuggingChat"
+          >
+            <span className={styles.navIcon}>🤗</span>
+            {!sidebarCollapsed && <span className={styles.navText}>HuggingChat</span>}
+          </NavLink>
+
+          <NavLink
             to="/playground"
             className={({ isActive }) =>
               isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
@@ -149,7 +160,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         <header className={styles.header}>
           <div className={styles.headerContent}>
             <div className={styles.headerLeft}>
-              <span className={styles.headerBrand}>Semantic Router</span>
+              <span className={styles.headerBrand}>Intelligent Router for Mixture-of-Models 🧠</span>
             </div>
             <div className={styles.headerRight}>
               <button
