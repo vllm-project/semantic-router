@@ -160,7 +160,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         <header className={styles.header}>
           <div className={styles.headerContent}>
             <div className={styles.headerLeft}>
-              <span className={styles.headerBrand}>Semantic Router</span>
+              <span className={styles.headerBrand}>Intelligent Router for Mixture-of-Models 🧠</span>
             </div>
             <div className={styles.headerRight}>
               <button

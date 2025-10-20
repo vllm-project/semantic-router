@@ -161,6 +161,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			log.Printf("Proxying Chat UI conversation API: %s %s", r.Method, r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 		})
+		// Handle /conversation/{id} for sending messages to a specific conversation
+		mux.HandleFunc("/conversation/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Chat UI conversation API: %s %s", r.Method, r.URL.Path)
+			chatUIProxy.ServeHTTP(w, r)
+		})
 		mux.HandleFunc("/conversations", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
 				return

@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -111,14 +113,66 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 
 		// Add permissive CORS headers for proxied responses
 		// This allows the frontend to make API calls through the proxy
-		if resp.Header.Get("Access-Control-Allow-Origin") == "" {
+		// Always override CORS headers to ensure iframe embedding works correctly
+
+		// Get the original request's Origin header from X-Forwarded-Origin
+		origin := resp.Request.Header.Get("X-Forwarded-Origin")
+		if origin != "" {
+			// If we have an origin, echo it back and allow credentials
+			resp.Header.Set("Access-Control-Allow-Origin", origin)
+			resp.Header.Set("Access-Control-Allow-Credentials", "true")
+			resp.Header.Set("Vary", "Origin")
+		} else {
+			// If no origin, use wildcard (but can't use credentials with wildcard)
 			resp.Header.Set("Access-Control-Allow-Origin", "*")
 		}
-		if resp.Header.Get("Access-Control-Allow-Methods") == "" {
-			resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		}
-		if resp.Header.Get("Access-Control-Allow-Headers") == "" {
-			resp.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+
+		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		resp.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
+		resp.Header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+
+		// Rewrite URLs in HTML/CSS/JS responses to fix hardcoded internal URLs
+		// This is necessary for Chat UI which may have hardcoded https://chat-ui:3000 URLs
+		contentType := resp.Header.Get("Content-Type")
+		if strings.Contains(contentType, "text/html") ||
+			strings.Contains(contentType, "text/css") ||
+			strings.Contains(contentType, "application/javascript") ||
+			strings.Contains(contentType, "text/javascript") {
+
+			// Read the response body
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Printf("Error reading response body: %v", err)
+				return err
+			}
+			resp.Body.Close()
+
+			// Replace hardcoded internal URLs with proxy paths
+			bodyStr := string(bodyBytes)
+
+			// Replace various forms of the internal URL
+			// Note: /chatui/ assets should stay as /chatui/ (not /embedded/chatui/)
+			// because the backend has a separate route for /chatui/ assets
+			replacements := map[string]string{
+				"https://chat-ui:3000/chatui/": "/chatui/",
+				"https://chat-ui:3000/chatui":  "/chatui",
+				"http://chat-ui:3000/chatui/":  "/chatui/",
+				"http://chat-ui:3000/chatui":   "/chatui",
+				"https://chat-ui:3000/":        "/embedded/chatui/",
+				"https://chat-ui:3000":         "/embedded/chatui",
+				"http://chat-ui:3000/":         "/embedded/chatui/",
+				"http://chat-ui:3000":          "/embedded/chatui",
+			}
+
+			for old, new := range replacements {
+				bodyStr = strings.ReplaceAll(bodyStr, old, new)
+			}
+
+			// Create new response body
+			newBody := []byte(bodyStr)
+			resp.Body = io.NopCloser(bytes.NewReader(newBody))
+			resp.ContentLength = int64(len(newBody))
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
 		}
 
 		return nil

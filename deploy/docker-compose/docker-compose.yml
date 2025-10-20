@@ -148,7 +148,7 @@ services:
       - MONGODB_URL=${MONGODB_URL:-mongodb://mongo:27017}
       - MONGODB_DB_NAME=${MONGODB_DB_NAME:-chat-ui}
       # Optional theming (override as needed)
-      - PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-ChatUI}
+      - PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-HuggingChat}
       - PUBLIC_APP_ASSETS=${PUBLIC_APP_ASSETS:-chatui}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
