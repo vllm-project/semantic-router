@@ -38,16 +38,19 @@ Current routing relies exclusively on ModernBERT classification for semantic und
 We're introducing a **unified content scanning and routing framework** that extends semantic routing with three complementary signal sources, all integrated through a Signal Fusion Layer:
 
 **1. Keyword-Based Routing** (~1-2ms)
+
 - Deterministic, fast Boolean logic for exact term matching
 - Route queries containing "kubernetes" or "CVE-" patterns directly to specialized models
 - Eliminate unnecessary ML inference for technology-specific queries
 
 **2. Regex Content Scanning** (~2-5ms)
+
 - Pattern-based detection for safety, compliance, and structured data
 - Guaranteed blocking of PII patterns (SSN, credit cards) with no ML false negatives
 - RE2 engine with ReDoS protection for security-critical applications
 
 **3. Embedding Similarity Scanning** (~5-10ms)
+
 - Semantic concept detection robust to paraphrasing
 - Detect "multi-step reasoning" intent even when phrased as "explain thoroughly"
 - Reuses existing BERT embedder for zero additional model overhead
@@ -60,6 +63,7 @@ We're introducing a **unified content scanning and routing framework** that exte
 **Signal Fusion Layer**
 
 The decision-making engine that combines all signals into actionable routing decisions:
+
 - **Priority-based policy evaluation**: Safety blocks (200) → Routing overrides (150) → Category boosting (100) → Consensus (50) → Default (0)
 - **Boolean expressions**: Combine multiple signals with AND, OR, NOT operators
 - **Flexible actions**: Block, route to specific models, boost category weights, or fallthrough to BERT
@@ -67,6 +71,7 @@ The decision-making engine that combines all signals into actionable routing dec
 **Impact**
 
 This framework enables:
+
 - Sub-millisecond deterministic routing for technology-specific queries
 - Guaranteed compliance with safety and regulatory requirements
 - Semantic intent detection that complements BERT classification
@@ -94,6 +99,7 @@ We're restructuring the candle-binding into an **extensible serving architecture
 **Impact**
 
 This extensible architecture enables:
+
 - **Rapid MoM Model Deployment**: Add new MoM models (mom-expert-math-flash, mom-brain-max) by implementing standard traits
 - **Efficient Multi-Model Serving**: Serve multiple MoM models simultaneously with shared infrastructure
 - **LoRA Support**: Native support for LoRA-adapted MoM experts with high-confidence routing
@@ -157,11 +163,13 @@ Add comprehensive support for the OpenAI Responses API (`/v1/responses`), enabli
 **Key Capabilities**
 
 **Stateful Conversations**
+
 - Built-in conversation state management with `previous_response_id` chaining
 - Automatic context preservation across multiple turns
 - Intelligent routing that maintains conversation context and intent classification history
 
 **Advanced Tool Orchestration**
+
 - Native support for code interpreter with container management
 - Function calling and tool execution routing
 - Image generation and editing capabilities
@@ -169,12 +177,14 @@ Add comprehensive support for the OpenAI Responses API (`/v1/responses`), enabli
 - File uploads and processing (PDFs, images, structured data)
 
 **Agentic Workflows**
+
 - Background task processing for long-running agent operations
 - Asynchronous execution with polling support for complex reasoning tasks
 - Resumable streaming with sequence tracking for dropped connections
 - Support for reasoning models (o1, o3, o4-mini) with encrypted reasoning items
 
 **Semantic Routing Integration**
+
 - Extract and classify intent from Responses API `input` field (text, messages, or mixed content)
 - Apply intelligent model selection based on conversation history and tool requirements
 - Route multi-turn conversations to models optimized for stateful interactions
@@ -183,6 +193,7 @@ Add comprehensive support for the OpenAI Responses API (`/v1/responses`), enabli
 **Impact**
 
 Responses API support positions vLLM Semantic Router at the forefront of agentic AI infrastructure:
+
 - Enable routing for modern agent frameworks and multi-turn applications
 - Support complex workflows requiring code execution, file processing, and external tool integration
 - Provide intelligent model selection for reasoning-heavy tasks and long-running operations
@@ -200,6 +211,7 @@ While vLLM Semantic Router works well for experimental deployments, production a
 
 #### Helm Chart Support
 Professional Kubernetes deployment with:
+
 - Templated manifests for all resources
 - Values-driven configuration for different environments
 - Built-in versioning and rollback capabilities
@@ -207,6 +219,7 @@ Professional Kubernetes deployment with:
 
 #### Modern Management Dashboard
 A comprehensive web-based control plane featuring:
+
 - **Visual Route Builder**: Drag-and-drop interface for creating SemanticRoute configurations
 - **Interactive Playground**: Test routing decisions, compare models, and visualize filter chains
 - **Real-time Monitoring**: Live metrics, request tracing, and health status
@@ -242,6 +255,7 @@ These ecosystem integrations represent our commitment to building an open, inter
 ## Timeline and Release Plan
 
 **v0.1 "Iris" Release (Late 2025 - Early 2026):**
+
 - All P0 priority issues resolved
 - Six foundational pillars fully implemented
 - Comprehensive documentation and migration guides
@@ -252,6 +266,7 @@ These ecosystem integrations represent our commitment to building an open, inter
 ## Looking Beyond Iris
 
 The Iris release establishes the foundation, but our vision extends far beyond v0.1. Future releases will introduce:
+
 - Advanced multi-model orchestration strategies
 - Federated routing across distributed clusters
 - Enhanced reasoning capabilities and chain-of-thought routing
@@ -273,6 +288,7 @@ Together, we're building the bridge that will connect the next generation of AI 
 ---
 
 **Follow our progress:**
+
 - GitHub: [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
 - Issues: [P0 Priority Issues](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+state%3Aopen+label%3Apriority%2FP0)
 
