@@ -779,3 +779,107 @@ td, th {
     width: 100% !important;
   }
 }
+
+/* ============================================
+   Blog Page Optimizations - Wider Content
+   ============================================ */
+
+/* Only apply blog optimizations to blog pages - use more specific selectors */
+
+/* Hide blog sidebar (left side posts list) - only on blog pages */
+[class*='blog-wrapper'] aside[class*='blogSidebar'],
+[class*='blog-wrapper'] aside.col--3,
+[class*='blog-wrapper'] .theme-blog-sidebar {
+  display: none !important;
+}
+
+/* Hide table of contents (right side) - only on blog pages, not docs */
+[class*='blog-wrapper'] .theme-doc-toc-desktop,
+[class*='blog-wrapper'] .table-of-contents,
+[class*='blog-wrapper'] div[class*='tableOfContents'],
+[class*='blog-wrapper'] div[class*='tocCollapsible'] {
+  display: none !important;
+}
+
+/* Expand blog content row to full width - only on blog pages */
+[class*='blog-wrapper'] div[class*='blogContainer'] .row,
+[class*='blog-wrapper'] .row {
+  justify-content: center !important;
+  margin: 0 auto !important;
+}
+
+/* Expand blog content column to use full width - only on blog pages */
+[class*='blog-wrapper'] .col--7,
+[class*='blog-wrapper'] div[class*='blogPostContent'] {
+  max-width: 100% !important;
+  flex: 0 0 100% !important;
+  margin: 0 auto !important;
+}
+
+/* Center blog content container - wider layout - only on blog pages */
+[class*='blog-wrapper'] .container,
+[class*='blog-wrapper'] div[class*='blogContainer'] {
+  max-width: 1600px !important;
+  margin: 0 auto !important;
+  padding: 0 3rem !important;
+}
+
+/* Blog post content - centered and wide - only on blog pages */
+[class*='blog-wrapper'] article,
+[class*='blog-wrapper'] article[class*='blogPostItem'],
+[class*='blog-wrapper'] div[class*='blogPostContent'] article {
+  min-width: 60vw !important;
+  max-width: 1400px !important;
+  margin: 2rem auto !important;
+  padding: 3rem 4rem !important;
+  display: block !important;
+}
+
+/* Blog post header - only on blog pages */
+[class*='blog-wrapper'] header[class*='blogPostHeader'] {
+  max-width: 1400px !important;
+  margin: 0 auto !important;
+}
+
+/* Blog list page optimization - only on blog pages */
+[class*='blog-wrapper'] .margin-vert--lg,
+[class*='blog-wrapper'] div[class*='blogListPage'] {
+  max-width: 1400px !important;
+  margin: 2rem auto !important;
+  width: 100% !important;
+}
+
+/* Ensure blog post items are centered - only on blog pages */
+[class*='blog-wrapper'] .blogPostItem,
+[class*='blog-wrapper'] div[class*='blogPostItem'] {
+  max-width: 1400px !important;
+  margin: 0 auto 2rem auto !important;
+}
+
+/* Center blog post content wrapper - only on blog pages */
+[class*='blog-wrapper'] div[class*='blogPostPageContent'] {
+  display: flex !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+/* Responsive adjustments for blog - only on blog pages */
+@media (max-width: 996px) {
+  [class*='blog-wrapper'] article,
+  [class*='blog-wrapper'] article[class*='blogPostItem'] {
+    min-width: auto !important;
+    padding: 2rem 1.5rem !important;
+  }
+
+  [class*='blog-wrapper'] .container,
+  [class*='blog-wrapper'] div[class*='blogContainer'] {
+    padding: 0 1rem !important;
+  }
+}
+
+@media (max-width: 768px) {
+  [class*='blog-wrapper'] article,
+  [class*='blog-wrapper'] article[class*='blogPostItem'] {
+    padding: 1.5rem 1rem !important;
+  }
+}
