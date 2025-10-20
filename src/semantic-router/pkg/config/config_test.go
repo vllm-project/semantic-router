@@ -1753,4 +1753,161 @@ default_model: "test-model"
 			})
 		})
 	})
+
+	Describe("Category-Level Cache Settings", func() {
+		Context("with category-specific cache configuration", func() {
+			It("should use category-specific cache enabled setting", func() {
+				yamlContent := `
+bert_model:
+  model_id: "test-model"
+  threshold: 0.7
+
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+
+categories:
+  - name: health
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: general
+    semantic_cache_enabled: false
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: other
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Test category-specific enabled settings
+				Expect(cfg.IsCacheEnabledForCategory("health")).To(BeTrue())
+				Expect(cfg.IsCacheEnabledForCategory("general")).To(BeFalse())
+				// "other" should fall back to global setting
+				Expect(cfg.IsCacheEnabledForCategory("other")).To(BeTrue())
+				// Unknown category should also fall back to global
+				Expect(cfg.IsCacheEnabledForCategory("unknown")).To(BeTrue())
+			})
+
+			It("should use category-specific similarity thresholds", func() {
+				yamlContent := `
+bert_model:
+  model_id: "test-model"
+  threshold: 0.7
+
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+
+categories:
+  - name: health
+    semantic_cache_similarity_threshold: 0.95
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: psychology
+    semantic_cache_similarity_threshold: 0.92
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: other
+    semantic_cache_similarity_threshold: 0.75
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: general
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Test category-specific thresholds
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("health")).To(Equal(float32(0.95)))
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("psychology")).To(Equal(float32(0.92)))
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("other")).To(Equal(float32(0.75)))
+				// "general" should fall back to global semantic_cache threshold
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("general")).To(Equal(float32(0.8)))
+				// Unknown category should also fall back
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("unknown")).To(Equal(float32(0.8)))
+			})
+
+			It("should fall back to bert threshold when semantic_cache threshold is not set", func() {
+				yamlContent := `
+bert_model:
+  model_id: "test-model"
+  threshold: 0.6
+
+semantic_cache:
+  enabled: true
+
+categories:
+  - name: test
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should fall back to bert_model.threshold
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("test")).To(Equal(float32(0.6)))
+				Expect(cfg.GetCacheSimilarityThreshold()).To(Equal(float32(0.6)))
+			})
+
+			It("should handle nil pointers for optional cache settings", func() {
+				category := config.Category{
+					Name: "test",
+					ModelScores: []config.ModelScore{
+						{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					},
+				}
+
+				cfg := &config.RouterConfig{
+					SemanticCache: struct {
+						BackendType         string   `yaml:"backend_type,omitempty"`
+						Enabled             bool     `yaml:"enabled"`
+						SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+						MaxEntries          int      `yaml:"max_entries,omitempty"`
+						TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
+						EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
+						BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
+					}{
+						Enabled:             true,
+						SimilarityThreshold: config.Float32Ptr(0.8),
+					},
+					BertModel: struct {
+						ModelID   string  `yaml:"model_id"`
+						Threshold float32 `yaml:"threshold"`
+						UseCPU    bool    `yaml:"use_cpu"`
+					}{
+						Threshold: 0.7,
+					},
+					Categories: []config.Category{category},
+				}
+
+				// Nil values should use defaults
+				Expect(cfg.IsCacheEnabledForCategory("test")).To(BeTrue())
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("test")).To(Equal(float32(0.8)))
+			})
+		})
+	})
 })

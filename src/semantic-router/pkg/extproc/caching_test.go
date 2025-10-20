@@ -250,4 +250,59 @@ var _ = Describe("Caching Functionality", func() {
 			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
 		})
 	})
+
+	Describe("Category-Specific Caching", func() {
+		It("should use category-specific cache settings", func() {
+			// Create a config with category-specific cache settings
+			cfg := CreateTestConfig()
+			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.SimilarityThreshold = config.Float32Ptr(0.8)
+
+			// Add categories with different cache settings
+			cfg.Categories = []config.Category{
+				{
+					Name: "health",
+					ModelScores: []config.ModelScore{
+						{Model: "model-a", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					},
+					SemanticCacheEnabled:             config.BoolPtr(true),
+					SemanticCacheSimilarityThreshold: config.Float32Ptr(0.95),
+				},
+				{
+					Name: "general",
+					ModelScores: []config.ModelScore{
+						{Model: "model-a", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					},
+					SemanticCacheEnabled:             config.BoolPtr(false),
+					SemanticCacheSimilarityThreshold: config.Float32Ptr(0.7),
+				},
+			}
+
+			// Verify category cache settings are correct
+			Expect(cfg.IsCacheEnabledForCategory("health")).To(BeTrue())
+			Expect(cfg.IsCacheEnabledForCategory("general")).To(BeFalse())
+			Expect(cfg.GetCacheSimilarityThresholdForCategory("health")).To(Equal(float32(0.95)))
+			Expect(cfg.GetCacheSimilarityThresholdForCategory("general")).To(Equal(float32(0.7)))
+		})
+
+		It("should fall back to global settings when category doesn't specify", func() {
+			cfg := CreateTestConfig()
+			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.SimilarityThreshold = config.Float32Ptr(0.8)
+
+			// Add category without cache settings
+			cfg.Categories = []config.Category{
+				{
+					Name: "test",
+					ModelScores: []config.ModelScore{
+						{Model: "model-a", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					},
+				},
+			}
+
+			// Should use global settings
+			Expect(cfg.IsCacheEnabledForCategory("test")).To(BeTrue())
+			Expect(cfg.GetCacheSimilarityThresholdForCategory("test")).To(Equal(float32(0.8)))
+		})
+	})
 })

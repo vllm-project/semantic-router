@@ -425,6 +425,11 @@ func BoolPtr(b bool) *bool {
 	return &b
 }
 
+// Float32Ptr returns a pointer to a float32 value (helper for tests and config)
+func Float32Ptr(f float32) *float32 {
+	return &f
+}
+
 // validateConfigStructure performs additional validation on the parsed config
 func validateConfigStructure(cfg *RouterConfig) error {
 	// Ensure all categories have at least one model with scores
