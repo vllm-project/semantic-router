@@ -11,12 +11,14 @@ precommit-check:
 	@FILES=$$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" \) \
 		! -path "./target/*" \
 		! -path "./candle-binding/target/*" \
-		! -path "./.git/*" \
-		! -path "./node_modules/*" \
-		! -path "./vendor/*" \
+    ! -path "./website/node_modules/*" \
+    ! -path "./frontend/node_modules/*" \
+    ! -path "./website/.docusaurus/*" \
 		! -path "./__pycache__/*" \
-		! -path "./site/*" \
+    ! -path "./.venv/*" \
+    ! -path "./vendor/*" \
 		! -name "*.pb.go" \
+    ! -path "./.git/*" \
 		| tr '\n' ' '); \
 	if [ -n "$$FILES" ]; then \
 		echo "Running pre-commit on files: $$FILES"; \
