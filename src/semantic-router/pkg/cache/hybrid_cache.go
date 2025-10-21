@@ -98,6 +98,9 @@ type HybridCacheOptions struct {
 
 	// Milvus settings
 	MilvusConfigPath string
+
+	// Startup settings
+	DisableRebuildOnStartup bool // Skip rebuilding HNSW index from Milvus on startup (default: false, meaning rebuild IS enabled)
 }
 
 // NewHybridCache creates a new hybrid cache instance
@@ -153,12 +156,109 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 	observability.Infof("Hybrid cache initialized: HNSW(M=%d, ef=%d), maxMemory=%d",
 		options.HNSWM, options.HNSWEfConstruction, options.MaxMemoryEntries)
 
+	// Rebuild HNSW index from Milvus on startup (enabled by default)
+	// This ensures the in-memory index is populated after a restart
+	// Set DisableRebuildOnStartup=true to skip this step (not recommended for production)
+	if !options.DisableRebuildOnStartup {
+		observability.Infof("Hybrid cache: rebuilding HNSW index from Milvus...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if err := cache.RebuildFromMilvus(ctx); err != nil {
+			observability.Warnf("Hybrid cache: failed to rebuild HNSW index from Milvus: %v", err)
+			observability.Warnf("Hybrid cache: continuing with empty HNSW index")
+			// Don't fail initialization, just log warning and continue with empty index
+		} else {
+			observability.Infof("Hybrid cache: HNSW index rebuild complete")
+		}
+	} else {
+		observability.Warnf("Hybrid cache: skipping HNSW index rebuild (DisableRebuildOnStartup=true)")
+		observability.Warnf("Hybrid cache: index will be empty until entries are added")
+	}
+
 	return cache, nil
 }
 
 // IsEnabled returns whether the cache is active
 func (h *HybridCache) IsEnabled() bool {
 	return h.enabled
+}
+
+// RebuildFromMilvus rebuilds the in-memory HNSW index from persistent Milvus storage
+// This is called on startup to recover the index after a restart
+func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
+	if !h.enabled {
+		return nil
+	}
+
+	start := time.Now()
+	observability.Infof("HybridCache.RebuildFromMilvus: starting HNSW index rebuild from Milvus")
+
+	// Query all entries from Milvus
+	requestIDs, embeddings, err := h.milvusCache.GetAllEntries(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get entries from Milvus: %w", err)
+	}
+
+	if len(requestIDs) == 0 {
+		observability.Infof("HybridCache.RebuildFromMilvus: no entries to rebuild, starting with empty index")
+		return nil
+	}
+
+	observability.Infof("HybridCache.RebuildFromMilvus: rebuilding HNSW index with %d entries", len(requestIDs))
+
+	// Lock for the entire rebuild process
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Clear existing index
+	h.embeddings = make([][]float32, 0, len(embeddings))
+	h.idMap = make(map[int]string)
+	h.hnswIndex = newHNSWIndex(h.hnswIndex.M, h.hnswIndex.efConstruction)
+
+	// Rebuild HNSW index with progress logging
+	batchSize := 1000
+	for i, embedding := range embeddings {
+		// Check memory limits
+		if len(h.embeddings) >= h.maxMemoryEntries {
+			observability.Warnf("HybridCache.RebuildFromMilvus: reached max memory entries (%d), stopping rebuild at %d/%d",
+				h.maxMemoryEntries, i, len(embeddings))
+			break
+		}
+
+		// Add to HNSW
+		entryIndex := len(h.embeddings)
+		h.embeddings = append(h.embeddings, embedding)
+		h.idMap[entryIndex] = requestIDs[i]
+		h.addNodeHybrid(entryIndex, embedding)
+
+		// Progress logging for large datasets
+		if (i+1)%batchSize == 0 {
+			elapsed := time.Since(start)
+			rate := float64(i+1) / elapsed.Seconds()
+			remaining := len(embeddings) - (i + 1)
+			eta := time.Duration(float64(remaining)/rate) * time.Second
+			observability.Infof("HybridCache.RebuildFromMilvus: progress %d/%d (%.1f%%, %.0f entries/sec, ETA: %v)",
+				i+1, len(embeddings), float64(i+1)/float64(len(embeddings))*100, rate, eta)
+		}
+	}
+
+	elapsed := time.Since(start)
+	rate := float64(len(h.embeddings)) / elapsed.Seconds()
+	observability.Infof("HybridCache.RebuildFromMilvus: rebuild complete - %d entries in %v (%.0f entries/sec)",
+		len(h.embeddings), elapsed, rate)
+
+	observability.LogEvent("hybrid_cache_rebuilt", map[string]interface{}{
+		"backend":           "hybrid",
+		"entries_loaded":    len(h.embeddings),
+		"entries_in_milvus": len(embeddings),
+		"duration_seconds":  elapsed.Seconds(),
+		"entries_per_sec":   rate,
+	})
+
+	metrics.UpdateCacheEntries("hybrid", len(h.embeddings))
+
+	return nil
 }
 
 // AddPendingRequest stores a request awaiting its response

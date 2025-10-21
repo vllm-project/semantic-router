@@ -1,13 +1,13 @@
 # Hybrid Cache: HNSW + Milvus
 
-The Hybrid Cache combines the best of both worlds: in-memory HNSW index for ultra-fast search with Milvus vector database for scalable, persistent storage.
+The Hybrid Cache combines an in-memory HNSW index for fast search with a Milvus vector database for scalable, persistent storage.
 
 ## Overview
 
 The hybrid architecture provides:
-- **O(log n) search** via in-memory HNSW index
-- **Unlimited storage** via Milvus vector database
-- **Cost efficiency** by keeping only hot data in memory
+
+- **Fast search** via in-memory HNSW index
+- **Scalable storage** via Milvus vector database
 - **Persistence** with Milvus as the source of truth
 - **Hot data caching** with local document cache
 
@@ -20,57 +20,44 @@ The hybrid architecture provides:
 │  ┌─────────────────┐      ┌──────────────────┐  │
 │  │  In-Memory      │      │   Local Cache    │  │
 │  │  HNSW Index     │◄─────┤   (Hot Data)     │  │
-│  │  (100K entries) │      │   (1K docs)      │  │
 │  └────────┬────────┘      └──────────────────┘  │
 │           │                                       │
 │           │ ID Mapping                           │
 │           ▼                                       │
 │  ┌──────────────────────────────────────────┐   │
 │  │         Milvus Vector Database           │   │
-│  │       (Millions of entries)              │   │
 │  └──────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────┘
 ```
 
 ## How It Works
 
-### 1. Write Path (AddEntry)
+### Write Path (AddEntry)
 
-```
-User Request
-    │
-    ├─► Generate Embedding (BERT)
-    │
-    ├─► Write to Milvus (persistence)
-    │
-    └─► Add to HNSW Index (if space available)
-        │
-        └─► Add to Local Cache
-```
+When adding a cache entry:
 
-### 2. Read Path (FindSimilar)
+1. Generate embedding using the configured embedding model
+2. Write entry to Milvus for persistence
+3. Add entry to in-memory HNSW index (if space is available)
+4. Add document to local cache
 
-```
-User Query
-    │
-    ├─► Generate Query Embedding
-    │
-    ├─► Search HNSW Index (10 candidates)
-    │
-    ├─► Check Local Cache (hot path)
-    │   ├─► HIT: Return immediately
-    │   └─► MISS: Continue
-    │
-    └─► Fetch from Milvus (cold path)
-        └─► Cache in Local Cache
-```
+### Read Path (FindSimilar)
 
-### 3. Memory Management
+When searching for a similar query:
 
-- **HNSW Index**: Limited to `max_memory_entries` (default: 100K)
-- **Local Cache**: Limited to `local_cache_size` (default: 1K documents)
-- **Eviction**: FIFO policy when limits reached
-- **Data Persistence**: All data remains in Milvus
+1. Generate query embedding
+2. Search HNSW index for nearest neighbors
+3. Check local cache for matching documents
+   - If found in local cache: return immediately (hot path)
+   - If not found: fetch from Milvus (cold path)
+4. Cache fetched documents in local cache for future queries
+
+### Memory Management
+
+- **HNSW Index**: Limited to a configured maximum number of entries
+- **Local Cache**: Limited to a configured number of documents
+- **Eviction**: FIFO policy when limits are reached
+- **Data Persistence**: All data remains in Milvus regardless of memory limits
 
 ## Configuration
 
@@ -122,55 +109,6 @@ milvus:
     M: 16
     efConstruction: 200
 ```
-
-## Performance Characteristics
-
-### Search Performance
-
-| Cache Size | Memory Backend | Hybrid (HNSW) | Hybrid (Local) | Improvement |
-|------------|---------------|---------------|----------------|-------------|
-| 100 entries | 0.5 ms | 0.3 ms | **0.05 ms** | 10x faster |
-| 1K entries | 2 ms | 0.4 ms | **0.05 ms** | 40x faster |
-| 10K entries | 15 ms | 0.6 ms | **0.05 ms** | 300x faster |
-| 100K entries | 150 ms | 0.8 ms | **0.05 ms** | 3000x faster |
-| 1M entries | N/A (OOM) | 1.2 ms | **0.05 ms** | ∞ |
-
-### Memory Usage
-
-| Component | Memory per Entry | 100K Entries | 1M Entries |
-|-----------|-----------------|--------------|------------|
-| Embeddings (384D) | ~1.5 KB | ~150 MB | ~1.5 GB |
-| HNSW Graph | ~0.5 KB | ~50 MB | ~500 MB |
-| Local Cache | ~2 KB | ~2 MB (1K docs) | ~2 MB |
-| **Total In-Memory** | - | ~200 MB | ~2 GB |
-
-**Milvus Storage**: Unlimited (disk-based)
-
-## Use Cases
-
-### When to Use Hybrid Cache
-
-✅ **Ideal for:**
-- Large-scale applications (>100K cache entries)
-- Production systems requiring persistence
-- Applications with hot/cold access patterns
-- Cost-sensitive deployments
-- Multi-instance deployments sharing cache
-
-### When to Use Memory Backend
-
-✅ **Ideal for:**
-- Small to medium scale (<10K entries)
-- Development and testing
-- Single-instance deployments
-- No persistence required
-
-### When to Use Milvus Backend
-
-✅ **Ideal for:**
-- Massive scale (millions of entries)
-- Complex vector search requirements
-- Applications without latency sensitivity
 
 ## Example Usage
 
@@ -239,157 +177,20 @@ stats.HitRatio      // Hit ratio (0.0 - 1.0)
 
 ```
 # Cache entries in HNSW
-semantic_cache_entries{backend="hybrid"} 95432
+semantic_cache_entries{backend="hybrid"}
 
 # Cache operations
-semantic_cache_operations_total{backend="hybrid",operation="find_similar",status="hit_local"} 12453
-semantic_cache_operations_total{backend="hybrid",operation="find_similar",status="hit_milvus"} 3421
-semantic_cache_operations_total{backend="hybrid",operation="find_similar",status="miss"} 892
+semantic_cache_operations_total{backend="hybrid",operation="find_similar",status="hit_local"}
+semantic_cache_operations_total{backend="hybrid",operation="find_similar",status="hit_milvus"}
+semantic_cache_operations_total{backend="hybrid",operation="find_similar",status="miss"}
 
 # Cache hit ratio
-semantic_cache_hit_ratio{backend="hybrid"} 0.947
+semantic_cache_hit_ratio{backend="hybrid"}
 ```
 
-## Best Practices
+## Multi-Instance Deployment
 
-### 1. Right-Size Your Memory
-
-Choose `max_memory_entries` based on your working set:
-
-```yaml
-# For 1M total entries with 10% hot data
-max_memory_entries: 100000  # 100K in HNSW
-local_cache_size: 1000      # 1K hottest documents
-```
-
-### 2. Tune HNSW Parameters
-
-Balance recall vs. speed:
-
-```yaml
-# High recall (slower build, better search)
-hnsw_m: 32
-hnsw_ef_construction: 400
-
-# Balanced (recommended)
-hnsw_m: 16
-hnsw_ef_construction: 200
-
-# Fast build (lower recall)
-hnsw_m: 8
-hnsw_ef_construction: 100
-```
-
-### 3. Monitor Hit Rates
-
-Track cache effectiveness:
-
-```bash
-# Check cache stats
-curl http://localhost:8080/metrics | grep cache
-
-# Optimal hit rates:
-# - Local cache: >80% (hot data)
-# - Milvus cache: >90% (total)
-```
-
-### 4. Adjust Similarity Threshold
-
-```yaml
-# Stricter matching (fewer false positives)
-similarity_threshold: 0.90
-
-# Balanced (recommended)
-similarity_threshold: 0.85
-
-# Looser matching (more cache hits)
-similarity_threshold: 0.80
-```
-
-## Troubleshooting
-
-### High Memory Usage
-
-**Symptom**: Memory usage exceeds expectations
-
-**Solution**:
-```yaml
-# Reduce HNSW index size
-max_memory_entries: 50000  # Instead of 100000
-
-# Reduce local cache
-local_cache_size: 500      # Instead of 1000
-
-# Use smaller HNSW M
-hnsw_m: 8                  # Instead of 16
-```
-
-### Low Hit Rate
-
-**Symptom**: Cache hit rate < 50%
-
-**Solution**:
-1. Lower similarity threshold
-2. Increase `max_memory_entries`
-3. Check Milvus connectivity
-4. Verify embedding model consistency
-
-### Slow Queries
-
-**Symptom**: Queries taking > 10ms
-
-**Solution**:
-1. Check Milvus network latency
-2. Increase `local_cache_size` for hot data
-3. Verify HNSW index health
-4. Monitor Milvus load
-
-## Migration Guide
-
-### From Memory Backend
-
-```yaml
-# Before
-semantic_cache:
-  backend_type: "memory"
-  max_entries: 10000
-
-# After
-semantic_cache:
-  backend_type: "hybrid"
-  max_memory_entries: 10000  # Keep same HNSW size
-  local_cache_size: 1000
-  backend_config_path: "config/milvus.yaml"
-```
-
-### From Milvus Backend
-
-```yaml
-# Before
-semantic_cache:
-  backend_type: "milvus"
-  backend_config_path: "config/milvus.yaml"
-
-# After
-semantic_cache:
-  backend_type: "hybrid"
-  max_memory_entries: 100000  # Add HNSW layer
-  local_cache_size: 1000      # Add local cache
-  backend_config_path: "config/milvus.yaml"  # Keep Milvus
-```
-
-## Advanced Topics
-
-### Custom Eviction Strategy
-
-Currently uses FIFO. Future versions may support:
-- LRU (Least Recently Used)
-- LFU (Least Frequently Used)
-- TTL-based eviction
-
-### Multi-Instance Deployment
-
-The hybrid cache is designed for multi-instance deployments:
+The hybrid cache supports multi-instance deployments where each instance maintains its own HNSW index and local cache, but shares Milvus for persistence and data consistency:
 
 ```
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
@@ -405,12 +206,9 @@ The hybrid cache is designed for multi-instance deployments:
                   └─────────────┘
 ```
 
-Each instance maintains its own HNSW index and local cache, but shares Milvus for persistence and data consistency.
-
 ## See Also
 
 - [In-Memory Cache Documentation](./in-memory-cache.md)
 - [Milvus Cache Documentation](./milvus-cache.md)
 - [HNSW Implementation Details](../../HNSW_IMPLEMENTATION_SUMMARY.md)
 - [Research Paper: Hybrid Architecture](../../papers/hybrid_hnsw_storage_architecture.md)
-

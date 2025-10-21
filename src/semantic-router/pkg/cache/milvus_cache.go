@@ -753,6 +753,80 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	return responseBody, true, nil
 }
 
+// GetAllEntries retrieves all entries from Milvus for HNSW index rebuilding
+// Returns slices of request_ids and embeddings for efficient bulk loading
+func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32, error) {
+	start := time.Now()
+
+	if !c.enabled {
+		return nil, nil, fmt.Errorf("milvus cache is not enabled")
+	}
+
+	observability.Infof("MilvusCache.GetAllEntries: querying all entries for HNSW rebuild")
+
+	// Query all entries with embeddings and request_ids
+	// Filter to only get entries with complete responses (not pending)
+	queryResult, err := c.client.Query(
+		ctx,
+		c.collectionName,
+		[]string{},              // Empty partitions means search all
+		"response_body != \"\"", // Only get complete entries
+		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
+	)
+
+	if err != nil {
+		observability.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
+		return nil, nil, fmt.Errorf("milvus query all failed: %w", err)
+	}
+
+	if len(queryResult) < 2 {
+		observability.Infof("MilvusCache.GetAllEntries: no entries found or incomplete result")
+		return []string{}, [][]float32{}, nil
+	}
+
+	// Extract request IDs (first column)
+	requestIDColumn, ok := queryResult[0].(*entity.ColumnVarChar)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected request_id column type: %T", queryResult[0])
+	}
+
+	// Extract embeddings (second column)
+	embeddingColumn, ok := queryResult[1].(*entity.ColumnFloatVector)
+	if !ok {
+		return nil, nil, fmt.Errorf("unexpected embedding column type: %T", queryResult[1])
+	}
+
+	if requestIDColumn.Len() != embeddingColumn.Len() {
+		return nil, nil, fmt.Errorf("column length mismatch: request_ids=%d, embeddings=%d",
+			requestIDColumn.Len(), embeddingColumn.Len())
+	}
+
+	entryCount := requestIDColumn.Len()
+	requestIDs := make([]string, entryCount)
+
+	// Extract request IDs from column
+	for i := 0; i < entryCount; i++ {
+		requestID, err := requestIDColumn.ValueByIdx(i)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get request_id at index %d: %w", i, err)
+		}
+		requestIDs[i] = requestID
+	}
+
+	// Extract embeddings directly from column data
+	embeddings := embeddingColumn.Data()
+	if len(embeddings) != entryCount {
+		return nil, nil, fmt.Errorf("embedding data length mismatch: got %d, expected %d",
+			len(embeddings), entryCount)
+	}
+
+	elapsed := time.Since(start)
+	observability.Infof("MilvusCache.GetAllEntries: loaded %d entries in %v (%.0f entries/sec)",
+		entryCount, elapsed, float64(entryCount)/elapsed.Seconds())
+
+	return requestIDs, embeddings, nil
+}
+
 // GetByID retrieves a document from Milvus by its request ID
 // This is much more efficient than FindSimilar when you already know the ID
 // Used by hybrid cache to fetch documents after local HNSW search
