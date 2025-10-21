@@ -28,8 +28,8 @@ test-jailbreak-classifier: rust ## Test jailbreak classifier with candle-binding
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
-# Build the Rust library
-rust: ## Ensure Rust is installed and build the Rust library
+# Build the Rust library (with CUDA by default)
+rust: ## Ensure Rust is installed and build the Rust library with CUDA support
 	@$(LOG_TARGET)
 	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
 		echo "rustc not found, installing..."; \
@@ -42,5 +42,22 @@ rust: ## Ensure Rust is installed and build the Rust library
 	if ! command -v cargo >/dev/null 2>&1; then \
 		echo "Error: cargo not found in PATH" && exit 1; \
 	fi && \
-	echo "Building Rust library..." && \
+	echo "Building Rust library with CUDA support..." && \
 	cd candle-binding && cargo build --release'
+
+# Build the Rust library without CUDA (for CI/CD environments)
+rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
+	@$(LOG_TARGET)
+	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
+		echo "rustc not found, installing..."; \
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
+	fi && \
+	if [ -f "$$HOME/.cargo/env" ]; then \
+		echo "Loading Rust environment from $$HOME/.cargo/env..." && \
+		. $$HOME/.cargo/env; \
+	fi && \
+	if ! command -v cargo >/dev/null 2>&1; then \
+		echo "Error: cargo not found in PATH" && exit 1; \
+	fi && \
+	echo "Building Rust library without CUDA (CPU-only)..." && \
+	cd candle-binding && cargo build --release --no-default-features'

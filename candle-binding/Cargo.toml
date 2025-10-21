@@ -9,11 +9,15 @@ license = "MIT OR Apache-2.0"
 name = "candle_semantic_router"
 crate-type = ["staticlib", "cdylib"]
 
+[features]
+default = ["cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = { version = "0.8.4", features = ["cuda"] }
-candle-nn = { version = "0.8.4", features = ["cuda"] }
-candle-transformers = { version = "0.8.4", features = ["cuda"] }
+candle-core = "0.8.4"
+candle-nn = "0.8.4"
+candle-transformers = "0.8.4"
 tokenizers = { version = "0.21.0", features = ["http"] }
 hf-hub = "0.4.1"
 safetensors = "0.4.1"
