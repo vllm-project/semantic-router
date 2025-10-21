@@ -1,6 +1,7 @@
 package cache_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,6 +175,44 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 					Expect(backend).NotTo(BeNil())
 					Expect(backend.IsEnabled()).To(BeFalse())
+				})
+			})
+
+			Context("Milvus connection timeouts", func() {
+				It("should respect connection timeout when endpoint is unreachable", func() {
+					unreachableConfigPath := filepath.Join(tempDir, "milvus-unreachable.yaml")
+					unreachableHost := "10.255.255.1" // unroutable address to simulate a hanging dial
+					unreachableConfig := fmt.Sprintf(`
+connection:
+  host: "%s"
+  port: 19530
+  database: "test_cache"
+  timeout: 1
+`, unreachableHost)
+
+					err := os.WriteFile(unreachableConfigPath, []byte(unreachableConfig), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					done := make(chan struct{})
+					var cacheErr error
+
+					go func() {
+						defer GinkgoRecover()
+						_, cacheErr = cache.NewMilvusCache(cache.MilvusCacheOptions{
+							Enabled:             true,
+							SimilarityThreshold: 0.85,
+							TTLSeconds:          60,
+							ConfigPath:          unreachableConfigPath,
+						})
+						close(done)
+					}()
+
+					Eventually(done, 2*time.Second, 100*time.Millisecond).Should(BeClosed())
+					Expect(cacheErr).To(HaveOccurred())
+					Expect(cacheErr.Error()).To(Or(
+						ContainSubstring("context deadline exceeded"),
+						ContainSubstring("timeout"),
+					))
 				})
 			})
 

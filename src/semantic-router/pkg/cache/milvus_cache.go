@@ -138,7 +138,16 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", config.Connection.Host, config.Connection.Port)
 	observability.Debugf("MilvusCache: connecting to Milvus at %s", connectionString)
-	milvusClient, err := client.NewGrpcClient(context.Background(), connectionString)
+	dialCtx := context.Background()
+	var cancel context.CancelFunc
+	if config.Connection.Timeout > 0 {
+		// If a timeout is specified, apply it to the connection context
+		timeout := time.Duration(config.Connection.Timeout) * time.Second
+		dialCtx, cancel = context.WithTimeout(dialCtx, timeout)
+		defer cancel()
+		observability.Debugf("MilvusCache: connection timeout set to %s", timeout)
+	}
+	milvusClient, err := client.NewGrpcClient(dialCtx, connectionString)
 	if err != nil {
 		observability.Debugf("MilvusCache: failed to connect: %v", err)
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
