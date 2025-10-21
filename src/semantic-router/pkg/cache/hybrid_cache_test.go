@@ -330,7 +330,7 @@ milvus:
 
 	// Second search - should hit local cache (much faster)
 	startTime := time.Now()
-	response, found, err = cache.FindSimilar("gpt-4", testQuery)
+	response, found, err := cache.FindSimilar("gpt-4", testQuery)
 	localLatency := time.Since(startTime)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
