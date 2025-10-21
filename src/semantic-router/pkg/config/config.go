@@ -295,6 +295,7 @@ type RagConfig struct {
 	DefaultStrategy string `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
 	KnowledgeBases []KnowledgeBase `yaml:"knowledge_bases,omitempty"`
 	RetrievalParams RetrievalParams `yaml:"retrieval_params,omitempty"` // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
+	RagTemplatePath string `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
 }
 
 type KnowledgeBase struct {

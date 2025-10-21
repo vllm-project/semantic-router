@@ -2,7 +2,10 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -18,6 +21,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
+)
+
+var (
+	ragTemplate     string
+	templateOnce    sync.Once
+	templateFileErr error
 )
 
 // parseOpenAIRequest parses the raw JSON using the OpenAI SDK types
@@ -159,6 +168,97 @@ func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode 
 	modifiedBody, err := json.Marshal(requestMap)
 	return modifiedBody, true, err
 }
+
+// addSystemPromptToRequestBody adds rag chunks to the last message of the messages array in the JSON request body
+// Returns the modified body, whether the system prompt was actually injected, and any error
+func addRAGChunksToRequestBody(requestBody []byte, ragChunks []string, ragTemplatePath string) ([]byte, bool, error) {
+	if len(ragChunks) == 0 {
+		return requestBody, false, nil
+	}
+
+	// Parse the JSON request body
+	var requestMap map[string]interface{}
+	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
+		return nil, false, err
+	}
+
+	// Get the messages array
+	messagesInterface, ok := requestMap["messages"]
+	if !ok {
+		return requestBody, false, nil // No messages array, return original
+	}
+
+	messages, ok := messagesInterface.([]interface{})
+	if !ok {
+		return requestBody, false, nil // Messages is not an array, return original
+	}
+
+	// TODO: Check other error cases and handle gracefully
+
+	// Find the last user message by iterating backwards
+	var lastUserMessageIndex = -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if msg, ok := messages[i].(map[string]interface{}); ok {
+			if role, ok := msg["role"].(string); ok && role == "user" {
+				lastUserMessageIndex = i
+				break
+			}
+		}
+	}
+
+	// If no user message found, return original
+	if lastUserMessageIndex == -1 {
+		return requestBody, false, nil
+	}
+
+	var finalPrompt string
+	var logMessage string
+
+	var userPrompt = messages[lastUserMessageIndex] // Is this true?
+
+	// Format the user prompt with RAG chunks
+	finalPrompt = formatUserPromptWithRAG(userPrompt.(string), ragChunks, ragTemplatePath)
+	messages[lastUserMessageIndex] = finalPrompt
+	requestMap["messages"] = messages
+	logMessage = "Modified user prompt with RAG chunks."
+	observability.Infof("%s", logMessage)
+	
+	// Marshal back to JSON
+	modifiedBody, err := json.Marshal(requestMap)
+	return modifiedBody, true, err
+
+}
+
+// loadRAGTemplate loads the RAG template from file (cached after first load)
+func loadRAGTemplate(filePath string) (string, error) {
+	templateOnce.Do(func() {
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			templateFileErr = err
+			return
+		}
+		ragTemplate = string(content)
+	})
+	return ragTemplate, templateFileErr
+}
+
+
+// formatUserPromptWithRAG formats a user prompt using the RAG template loaded from file
+func formatUserPromptWithRAG(originalQuestion string, ragChunks []string, templatePath string) string {
+	// Load template from file
+	template, err := loadRAGTemplate(templatePath)
+	// TODO:
+	// if err != nil {
+	// 	// Fallback to hardcoded template on error
+	// }
+	
+	// Join RAG chunks into context
+	contextStr := strings.Join(ragChunks, "\n\n")
+
+	// Format using the template with sprintf substitution
+	return fmt.Sprintf(template, contextStr, originalQuestion)
+}
+
 
 // extractUserAndNonUserContent extracts content from request messages
 func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
@@ -553,7 +653,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
 				// Check rag for this category
-				ragDecision := r.getRAGDecision() // true or false
+				ragDecision := r.getRAGDecision(userContent, categoryName) // true or false
 				observability.Infof("Category '%s' has RAG Decision '%s'", categoryName, ragDecision)
 				// metrics stuff
 
@@ -635,9 +735,17 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					}
 				}
 
+				// Check 2. On-Demand RAG Pipeline from Github Issue
 				// Modify the prompt with RAG
 					// 1. Retrieve the RAG chunks
 					// 2. Modify the request body with the chunks 
+				
+				if ragDecision {
+					// ragChunks := r.getRAGChunks(categoryName)
+					// mode ?
+					// modifiedBody, injected, err := addRAGChunksToRequestBody(modifiedBody, ragChunks, mode)
+				}
+				
 				
 				// Create body mutation with the modified body
 				bodyMutation := &ext_proc.BodyMutation{
