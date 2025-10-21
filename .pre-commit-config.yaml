@@ -24,6 +24,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: shellcheck
+        name: shellcheck
+        entry: make shellcheck
+        language: system
+        files: \.sh$
+
+  - repo: local
+    hooks:
       - id: golang-lint
         name: go lint
         entry: make go-lint
@@ -87,7 +95,7 @@ repos:
         language_version: python3
         files: \.py$
         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)
-        
+
 # Commented out flake8 - only reports issues, doesn't auto-fix
 # -   repo: https://github.com/PyCQA/flake8
 #     rev: 7.3.0

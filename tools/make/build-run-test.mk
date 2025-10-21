@@ -57,10 +57,9 @@ test-auto-prompt-reasoning:
 		-H "Content-Type: application/json" \
 		-d '{"model": "auto", "messages": [{"role": "system", "content": "You are a professional math teacher. Explain math concepts clearly and show step-by-step solutions to problems."}, {"role": "user", "content": "What is the derivative of f(x) = x^3 + 2x^2 - 5x + 7?"}]}'
 
-# Test tools auto-selection
-test-auto-prompt-no-reasoning: ## Test tools auto-selection no-reasoning
+test-auto-prompt-no-reasoning: ## Test Envoy extproc with a general prompt (curl)
 test-auto-prompt-no-reasoning:
-	@echo "Testing Envoy extproc with curl (Math)..."
+	@echo "Testing Envoy extproc with curl (General)..."
 	curl -X POST http://localhost:8801/v1/chat/completions \
 		-H "Content-Type: application/json" \
 		-d '{"model": "auto", "messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Who are you?"}]}'

@@ -51,10 +51,12 @@ type SystemInfo struct {
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response
 type OpenAIModel struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Created     int64  `json:"created"`
+	OwnedBy     string `json:"owned_by"`
+	Description string `json:"description,omitempty"` // Optional description for Chat UI
+	LogoURL     string `json:"logo_url,omitempty"`    // Optional logo URL for Chat UI
 	// Keeping the structure minimal; additional fields like permissions can be added later
 }
 
@@ -721,7 +723,8 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ 
 }
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
-// It returns all models discoverable from the router configuration plus the configured auto model name.
+// It returns the configured auto model name and optionally the underlying models from config.
+// Whether to include configured models is controlled by the config's IncludeConfigModelsInList setting (default: false)
 func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *http.Request) {
 	now := time.Now().Unix()
 
@@ -734,23 +737,27 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	if s.config != nil {
 		effectiveAutoModelName := s.config.GetEffectiveAutoModelName()
 		models = append(models, OpenAIModel{
-			ID:      effectiveAutoModelName,
-			Object:  "model",
-			Created: now,
-			OwnedBy: "semantic-router",
+			ID:          effectiveAutoModelName,
+			Object:      "model",
+			Created:     now,
+			OwnedBy:     "vllm-semantic-router",
+			Description: "Intelligent Router for Mixture-of-Models",
+			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
 		})
 	} else {
 		// Fallback if no config
 		models = append(models, OpenAIModel{
-			ID:      "MoM",
-			Object:  "model",
-			Created: now,
-			OwnedBy: "semantic-router",
+			ID:          "MoM",
+			Object:      "model",
+			Created:     now,
+			OwnedBy:     "vllm-semantic-router",
+			Description: "Intelligent Router for Mixture-of-Models",
+			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
 		})
 	}
 
-	// Append underlying models from config (if available)
-	if s.config != nil {
+	// Append underlying models from config (if available and configured to include them)
+	if s.config != nil && s.config.IncludeConfigModelsInList {
 		for _, m := range s.config.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
 			if m == s.config.GetEffectiveAutoModelName() {

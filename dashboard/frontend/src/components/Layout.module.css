@@ -260,9 +260,10 @@
 }
 
 .headerBrand {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  opacity: 0.7;
 }
 
 .headerRight {

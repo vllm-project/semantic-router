@@ -117,14 +117,13 @@ services:
     depends_on:
       - prometheus
 
-  # Open WebUI (optional, used by Dashboard Playground)
+  # Open WebUI (kept for feature parity and user choice)
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: openwebui
     ports:
-      - "3001:8080"
+      - "3001:8080"  # Expose Open WebUI on host 3001
     environment:
-      # Add any Open WebUI env here if needed (auth, providers, etc.)
       - WEBUI_NAME=Open WebUI
       # Route Open WebUI's OpenAI-compatible calls through Pipelines by default
       - OPENAI_API_BASE_URL=http://pipelines:9099
@@ -134,21 +133,61 @@ services:
     networks:
       - semantic-network
 
+  # Chat UI (Hugging Face) replacing Open WebUI
+  chat-ui:
+    image: ghcr.io/huggingface/chat-ui-db:latest
+    container_name: chat-ui
+    ports:
+      - "3002:3000"  # Expose Chat UI on host 3002
+    environment:
+      # Point Chat UI to Envoy's OpenAI-compatible endpoint
+      - OPENAI_BASE_URL=http://envoy-proxy:8801/v1
+      # Provide a token if your upstream requires it; for HF router use hf_xxx
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-changeme}
+      # MongoDB for persistence (use Atlas by overriding MONGODB_URL)
+      - MONGODB_URL=${MONGODB_URL:-mongodb://mongo:27017}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME:-chat-ui}
+      # Optional theming (override as needed)
+      - PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-HuggingChat}
+      - PUBLIC_APP_ASSETS=${PUBLIC_APP_ASSETS:-chatui}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      envoy:
+        condition: service_started
+      semantic-router:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - semantic-network
+
   # Open WebUI Pipelines server (executes Python pipelines)
   pipelines:
     image: ghcr.io/open-webui/pipelines:main
     container_name: pipelines
-    # Optional: expose on host for debugging
-    # ports:
-    #   - "9099:9099"
     environment:
-      # Allow pipelines to reach services running on host if ever required
       - PYTHONUNBUFFERED=1
     volumes:
       # Persistent pipelines storage (auto-loaded on start)
       - openwebui-pipelines:/app/pipelines
       # Mount our vLLM Semantic Router pipeline
       - ./addons/vllm_semantic_router_pipe.py:/app/pipelines/vllm_semantic_router_pipe.py:ro
+    networks:
+      - semantic-network
+
+  # MongoDB for Chat UI persistence (dev default; use Atlas in prod)
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
     networks:
       - semantic-network
 
@@ -193,6 +232,7 @@ services:
       - TARGET_ROUTER_API_URL=http://semantic-router:8080
       - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
       - TARGET_OPENWEBUI_URL=http://openwebui:8080
+      - TARGET_CHATUI_URL=http://chat-ui:3000
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
     volumes:
       - ../../config:/app/config:rw
@@ -206,6 +246,8 @@ services:
       grafana:
         condition: service_started
       prometheus:
+        condition: service_started
+      chat-ui:
         condition: service_started
       openwebui:
         condition: service_started
@@ -230,6 +272,7 @@ volumes:
     driver: local
   prometheus-data:
   grafana-data:
+  mongo-data:
   openwebui-data:
   openwebui-pipelines:
   hf-cache:

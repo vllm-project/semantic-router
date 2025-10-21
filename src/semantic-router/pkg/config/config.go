@@ -58,6 +58,11 @@ type RouterConfig struct {
 	// For backward compatibility, "auto" is also accepted and treated as an alias
 	AutoModelName string `yaml:"auto_model_name,omitempty"`
 
+	// Include configured models in /v1/models list endpoint (default: false)
+	// When false, only the auto model name is returned
+	// When true, all models configured in model_config are also included
+	IncludeConfigModelsInList bool `yaml:"include_config_models_in_list,omitempty"`
+
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 

@@ -129,10 +129,10 @@ train_specialist() {
     local DESCRIPTION=$4
     local TRAINING_DATA=$5
     local TEST_CATEGORIES=$6
-    
+
     local MODEL_START_TIME=$(date +%s)
     local MODEL_START_TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-    
+
     echo "╔══════════════════════════════════════════════════════════════════╗"
     echo "║  Training: $MODEL_TYPE"
     echo "╚══════════════════════════════════════════════════════════════════╝"
@@ -142,16 +142,16 @@ train_specialist() {
     echo "Test categories: $TEST_CATEGORIES"
     echo "Started: $MODEL_START_TIMESTAMP"
     echo ""
-    
+
     local OUTPUT_DIR="$OUTPUT_BASE_DIR/${MODEL_TYPE}_r${LORA_RANK}_e${MODEL_EPOCHS}_s${MODEL_SAMPLES}"
     local LOG_FILE="$LOG_DIR/${MODEL_TYPE}_training.log"
-    
+
     echo "Output: $OUTPUT_DIR"
     echo "Log: $LOG_FILE"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    
+
     # Run training
     if CUDA_VISIBLE_DEVICES=$GPU_ID python "$TRAINING_SCRIPT" \
         --mode train \
@@ -163,12 +163,12 @@ train_specialist() {
         --output-dir "$OUTPUT_DIR" \
         --gpu-id 0 \
         2>&1 | tee "$LOG_FILE"; then
-        
+
         local MODEL_END_TIME=$(date +%s)
         local MODEL_DURATION=$((MODEL_END_TIME - MODEL_START_TIME))
         local MODEL_DURATION_MIN=$((MODEL_DURATION / 60))
         local MODEL_DURATION_SEC=$((MODEL_DURATION % 60))
-        
+
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "✅ $MODEL_TYPE completed successfully!"
@@ -177,7 +177,7 @@ train_specialist() {
         echo "   Log saved to: $LOG_FILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        
+
         return 0
     else
         echo ""
@@ -186,7 +186,7 @@ train_specialist() {
         echo "   Check log file: $LOG_FILE"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
-        
+
         return 1
     fi
 }
@@ -377,7 +377,7 @@ echo ""
 # List all trained models
 if [ -d "$OUTPUT_BASE_DIR" ]; then
     echo "Trained models:"
-    ls -1 "$OUTPUT_BASE_DIR" | sed 's/^/  - /'
+    find "$OUTPUT_BASE_DIR" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sed 's/^/  - /'
     echo ""
 fi
 

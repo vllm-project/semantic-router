@@ -36,7 +36,7 @@ check_llm_katan_available() {
 # Function to check if port is already in use
 check_port() {
     local port=$1
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+    if lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1; then
         echo "Port $port is already in use"
         return 1
     fi
@@ -89,7 +89,7 @@ start_servers_foreground() {
             --temperature 0.7 \
             --log-level DEBUG &
         local pid=$!
-        PIDS+=($pid)
+        PIDS+=("$pid")
         echo "$pid" >> "$PIDS_FILE"
 
         echo "   ✅ Server started on port $port (PID: $pid)"
@@ -107,7 +107,8 @@ start_servers_foreground() {
     echo ""
     echo "🔍 You'll see request logs below as they come in..."
     echo "🛑 Press Ctrl+C to stop all servers"
-    echo "$(printf '=%.0s' {1..50})"
+    printf '=%.0s' {1..50}
+    echo ""
     echo ""
 
     # Function to cleanup on exit
