@@ -4,26 +4,26 @@
 
 ##@ Rust
 
-# Test the Rust library
-test-binding: rust ## Run Go tests with the Rust static library
+# Test the Rust library (conditionally use rust-ci in CI environments)
+test-binding: $(if $(CI),rust-ci,rust) ## Run Go tests with the Rust static library
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race
 
-# Test with the candle-binding library
-test-category-classifier: rust ## Test domain classifier with candle-binding
+# Test with the candle-binding library (conditionally use rust-ci in CI environments)
+test-category-classifier: $(if $(CI),rust-ci,rust) ## Test domain classifier with candle-binding
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/classifier_model_fine_tuning && CGO_ENABLED=1 go run test_linear_classifier.go
 
-# Test the PII classifier
-test-pii-classifier: rust ## Test PII classifier with candle-binding
+# Test the PII classifier (conditionally use rust-ci in CI environments)
+test-pii-classifier: $(if $(CI),rust-ci,rust) ## Test PII classifier with candle-binding
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/pii_model_fine_tuning && CGO_ENABLED=1 go run pii_classifier_verifier.go
 
-# Test the jailbreak classifier
-test-jailbreak-classifier: rust ## Test jailbreak classifier with candle-binding
+# Test the jailbreak classifier (conditionally use rust-ci in CI environments)
+test-jailbreak-classifier: $(if $(CI),rust-ci,rust) ## Test jailbreak classifier with candle-binding
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go

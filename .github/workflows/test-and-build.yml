@@ -86,6 +86,7 @@ jobs:
       - name: Run semantic router tests
         run: make test
         env:
+          CI: true
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
 
