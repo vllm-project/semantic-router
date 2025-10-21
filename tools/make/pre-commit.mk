@@ -3,9 +3,11 @@
 PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
 
 precommit-install: ## Install pre-commit Python package
+precommit-install:
 	pip install pre-commit
 
 precommit-check: ## Run pre-commit checks on all relevant files
+precommit-check:
 	@FILES=$$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" \) \
 		! -path "./target/*" \
 		! -path "./candle-binding/target/*" \
@@ -33,6 +35,7 @@ precommit-check: ## Run pre-commit checks on all relevant files
 #     bash
 # and then, run `pre-commit install && pre-commit run --all-files` command
 precommit-local: ## Run pre-commit hooks in a Docker/Podman container
+precommit-local:
 	@if command -v docker > /dev/null 2>&1; then \
 		CONTAINER_CMD=docker; \
 	elif command -v podman > /dev/null 2>&1; then \
