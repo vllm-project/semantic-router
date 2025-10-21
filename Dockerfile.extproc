@@ -1,5 +1,5 @@
 # Build the Rust library using Makefile
-FROM rust:1.85 AS rust-builder
+FROM rust:1.90 AS rust-builder
 
 # Install make and other build dependencies including cross-compilation tools
 RUN apt-get update && apt-get install -y \
