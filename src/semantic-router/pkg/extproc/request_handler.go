@@ -411,8 +411,10 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		} else if len(nonUserMessages) > 0 {
 			classificationText = strings.Join(nonUserMessages, " ")
 		}
-		categoryName = r.findCategoryForClassification(classificationText)
-		observability.Debugf("Classified request to category: %s", categoryName)
+		if classificationText != "" {
+			categoryName = r.findCategoryForClassification(classificationText)
+			observability.Debugf("Classified request to category: %s", categoryName)
+		}
 	}
 
 	// Handle caching with category-specific settings
