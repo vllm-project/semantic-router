@@ -92,6 +92,13 @@ type RouterConfig struct {
 
 		// Path to backend-specific configuration file
 		BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+		// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
+		// - "bert": Fast, 384-dim, good for short texts (default)
+		// - "qwen3": High quality, 1024-dim, supports 32K context
+		// - "gemma": Balanced, 768-dim, supports 8K context
+		// Default: "bert"
+		EmbeddingModel string `yaml:"embedding_model,omitempty"`
 	} `yaml:"semantic_cache"`
 
 	// Prompt guard configuration
