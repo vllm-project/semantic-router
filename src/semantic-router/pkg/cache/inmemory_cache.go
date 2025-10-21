@@ -6,6 +6,7 @@ package cache
 import (
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,7 +50,8 @@ type InMemoryCache struct {
 	evictionPolicy      EvictionPolicy
 	hnswIndex           *HNSWIndex
 	useHNSW             bool
-	hnswEfSearch        int // Search-time ef parameter
+	hnswEfSearch        int    // Search-time ef parameter
+	embeddingModel      string // "bert", "qwen3", or "gemma"
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -59,10 +61,11 @@ type InMemoryCacheOptions struct {
 	TTLSeconds          int
 	Enabled             bool
 	EvictionPolicy      EvictionPolicyType
-	UseHNSW             bool // Enable HNSW index for faster search
-	HNSWM               int  // Number of bi-directional links (default: 16)
-	HNSWEfConstruction  int  // Size of dynamic candidate list during construction (default: 200)
-	HNSWEfSearch        int  // Size of dynamic candidate list during search (default: 50)
+	UseHNSW             bool   // Enable HNSW index for faster search
+	HNSWM               int    // Number of bi-directional links (default: 16)
+	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
+	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
+	EmbeddingModel      string // "bert", "qwen3", or "gemma"
 }
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
@@ -86,6 +89,14 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		efSearch = 50 // Default value
 	}
 
+	// Set default embedding model if not specified, normalize to lowercase
+	embeddingModel := strings.ToLower(strings.TrimSpace(options.EmbeddingModel))
+	if embeddingModel == "" {
+		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
+	}
+
+	observability.Debugf("Semantic cache embedding model: %s", embeddingModel)
+
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
 		similarityThreshold: options.SimilarityThreshold,
@@ -95,6 +106,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		evictionPolicy:      evictionPolicy,
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
+		embeddingModel:      embeddingModel,
 	}
 
 	// Initialize HNSW index if enabled
@@ -119,6 +131,27 @@ func (c *InMemoryCache) IsEnabled() bool {
 	return c.enabled
 }
 
+// generateEmbedding generates an embedding using the configured model
+func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
+	// Normalize to lowercase for case-insensitive comparison
+	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
+
+	switch modelName {
+	case "qwen3", "gemma":
+		// Use GetEmbeddingWithModelType for Qwen3 or Gemma
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "bert", "":
+		// Use traditional GetEmbedding for BERT (default)
+		return candle_binding.GetEmbedding(text, 0)
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', or 'gemma')", c.embeddingModel)
+	}
+}
+
 // AddPendingRequest stores a request that is awaiting its response
 func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
 	start := time.Now()
@@ -127,8 +160,8 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 		return nil
 	}
 
-	// Generate semantic embedding for the query
-	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	// Generate semantic embedding using the configured model
+	embedding, err := c.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -219,8 +252,8 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 		return nil
 	}
 
-	// Generate semantic embedding for the query
-	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	// Generate semantic embedding using the configured model
+	embedding, err := c.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to generate embedding: %w", err)
@@ -294,8 +327,8 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
 		model, queryPreview, len(query), threshold)
 
-	// Generate semantic embedding for similarity comparison
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	// Generate semantic embedding using the configured model
+	queryEmbedding, err := c.generateEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("memory", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)

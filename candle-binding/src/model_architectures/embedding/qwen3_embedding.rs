@@ -1326,7 +1326,7 @@ impl Qwen3Attention {
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        attention_mask: Option<&Tensor>,
+        _attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
         // Flash Attention 2 implementation using candle-flash-attn
         //
@@ -1363,8 +1363,8 @@ impl Qwen3Attention {
             &q_flash,
             &k_flash,
             &v_flash,
-            self.scale as f32, // softmax scaling factor
-            false,             // causal: false (Qwen3-Embedding is non-causal)
+            self.scaling as f32, // softmax scaling factor
+            false,               // causal: false (Qwen3-Embedding is non-causal)
         )
         .map_err(|e| UnifiedError::Processing {
             operation: "Flash Attention 2: flash_attn".to_string(),
@@ -1975,15 +1975,11 @@ impl Qwen3EmbeddingModel {
         #[cfg(not(feature = "flash-attn"))]
         {
             if config.max_position_embeddings > 8192 {
-                eprintln!("⚠️  WARNING: Flash Attention 2 not enabled!");
+                eprintln!("ℹ️  Note: Using standard attention");
                 eprintln!(
-                    "   For {}K sequence length, performance may degrade:",
+                    "   Sequence length: {}K tokens",
                     config.max_position_embeddings / 1024
                 );
-                eprintln!("   - Memory usage: +40% (estimated)");
-                eprintln!("   - Inference speed: -50% (estimated)");
-                eprintln!("   Official recommendation: Compile with --features flash-attn");
-                eprintln!("   Reference: https://github.com/qwenlm/qwen3-embedding#usage");
             }
         }
 

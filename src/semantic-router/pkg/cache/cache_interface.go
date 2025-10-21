@@ -116,4 +116,8 @@ type CacheConfig struct {
 
 	// Hybrid cache specific settings
 	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
+
+	// EmbeddingModel specifies which embedding model to use
+	// Options: "bert" (default), "qwen3", "gemma"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 }
