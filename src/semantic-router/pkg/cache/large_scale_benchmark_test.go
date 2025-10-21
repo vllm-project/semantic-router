@@ -42,12 +42,13 @@ func BenchmarkLargeScale(b *testing.B) {
 	// Open CSV file for results
 	// Create benchmark_results directory if it doesn't exist
 	resultsDir := "../../benchmark_results"
-	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
 		b.Logf("Warning: Could not create results directory: %v", err)
 	}
 
 	csvFile, err := os.OpenFile(resultsDir+"/large_scale_benchmark.csv",
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+		0o644)
 	if err != nil {
 		b.Logf("Warning: Could not open CSV file: %v", err)
 	} else {
@@ -276,12 +277,12 @@ func BenchmarkScalability(b *testing.B) {
 
 	// CSV output
 	resultsDir := "../../benchmark_results"
-	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
 		b.Logf("Warning: Could not create results directory: %v", err)
 	}
 
 	csvFile, err := os.OpenFile(resultsDir+"/scalability_benchmark.csv",
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		b.Logf("Warning: Could not open CSV file: %v", err)
 	} else {
@@ -446,12 +447,12 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 
 	// CSV output
 	resultsDir := "../../benchmark_results"
-	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
 		b.Logf("Warning: Could not create results directory: %v", err)
 	}
 
 	csvFile, err := os.OpenFile(resultsDir+"/hnsw_parameter_sweep.csv",
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		b.Logf("Warning: Could not open CSV file: %v", err)
 	} else {

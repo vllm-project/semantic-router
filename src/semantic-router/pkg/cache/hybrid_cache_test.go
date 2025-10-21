@@ -58,8 +58,7 @@ milvus:
   params:
     M: 16
     efConstruction: 200
-`),
-		0644)
+`), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -156,7 +155,7 @@ milvus:
   index_type: "HNSW"
   metric_type: "IP"
 `),
-		0644)
+		0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -220,7 +219,7 @@ milvus:
   index_type: "HNSW"
   metric_type: "IP"
 `),
-		0644)
+		0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -291,7 +290,7 @@ milvus:
   index_type: "HNSW"
   metric_type: "IP"
 `),
-		0644)
+		0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -368,7 +367,7 @@ milvus:
   index_type: "HNSW"
   metric_type: "IP"
 `),
-		0644)
+		0o644)
 	if err != nil {
 		b.Fatalf("Failed to create test config: %v", err)
 	}
@@ -412,7 +411,7 @@ milvus:
   index_type: "HNSW"
   metric_type: "IP"
 `),
-		0644)
+		0o644)
 	if err != nil {
 		b.Fatalf("Failed to create test config: %v", err)
 	}

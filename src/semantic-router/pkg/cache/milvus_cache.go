@@ -846,7 +846,6 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 		fmt.Sprintf("request_id == \"%s\"", requestID),
 		[]string{"response_body"}, // Only fetch document, not embedding!
 	)
-
 	if err != nil {
 		observability.Debugf("MilvusCache.GetByID: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())

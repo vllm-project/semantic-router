@@ -184,7 +184,8 @@ func BenchmarkComprehensive(b *testing.B) {
 	// Open CSV file for results
 	csvFile, err := os.OpenFile(
 		"../../benchmark_results/benchmark_data.csv",
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+		0o644)
 	if err != nil {
 		b.Logf("Warning: Could not open CSV file: %v", err)
 	} else {
