@@ -58,3 +58,14 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 		return true
 	}
 }
+
+// getRAGChunks gets the RAG chunks which are sent to addRAGChunksToRequestBody as 'ragChunks []string'
+func (r *OpenAIRouter) getRAGChunks(categoryName string, query string) []string {
+	// TODO: Naveen, Ani K
+	// use categoryName to get the relevant knowledge base
+	// send the query to the knowledge base to get the relevant chunks
+	// may have to embed the query before querying vector db
+
+	return []string{"This is a sample RAG chunk."}
+
+}

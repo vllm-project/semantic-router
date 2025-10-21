@@ -220,13 +220,10 @@ func addRAGChunksToRequestBody(requestBody []byte, ragChunks []string, ragTempla
 	finalPrompt = formatUserPromptWithRAG(userPrompt.(string), ragChunks, ragTemplatePath)
 	messages[lastUserMessageIndex] = finalPrompt
 	requestMap["messages"] = messages
-	logMessage = "Modified user prompt with RAG chunks."
-	observability.Infof("%s", logMessage)
 	
 	// Marshal back to JSON
 	modifiedBody, err := json.Marshal(requestMap)
 	return modifiedBody, true, err
-
 }
 
 // loadRAGTemplate loads the RAG template from file (cached after first load)
@@ -740,12 +737,17 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					// 1. Retrieve the RAG chunks
 					// 2. Modify the request body with the chunks 
 				
+				var ragInjected bool;
 				if ragDecision {
-					// ragChunks := r.getRAGChunks(categoryName)
-					// mode ?
-					// modifiedBody, injected, err := addRAGChunksToRequestBody(modifiedBody, ragChunks, mode)
+					// ragChunks := r.getRAGChunks(categoryName, query) // list of chunks (strings)
+					ragChunks := []string{"Chunk 1", "Chunk 2", "Chunk 3", "Chunk 4"}
+					ragTemplatePath := r.Config.Rag.RagTemplatePath
+					modifiedBody, ragInjected, err = addRAGChunksToRequestBody(modifiedBody, ragChunks, ragTemplatePath)
 				}
-				
+				if ragInjected{
+					logMessage := "Modified user prompt with RAG chunks."
+					observability.Infof("%s", logMessage)
+				}
 				
 				// Create body mutation with the modified body
 				bodyMutation := &ext_proc.BodyMutation{
