@@ -42,7 +42,9 @@ func BenchmarkLargeScale(b *testing.B) {
 	// Open CSV file for results
 	// Create benchmark_results directory if it doesn't exist
 	resultsDir := "../../benchmark_results"
-	os.MkdirAll(resultsDir, 0755)
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+		b.Logf("Warning: Could not create results directory: %v", err)
+	}
 
 	csvFile, err := os.OpenFile(resultsDir+"/large_scale_benchmark.csv",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -274,7 +276,9 @@ func BenchmarkScalability(b *testing.B) {
 
 	// CSV output
 	resultsDir := "../../benchmark_results"
-	os.MkdirAll(resultsDir, 0755)
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+		b.Logf("Warning: Could not create results directory: %v", err)
+	}
 
 	csvFile, err := os.OpenFile(resultsDir+"/scalability_benchmark.csv",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -313,14 +317,18 @@ func BenchmarkScalability(b *testing.B) {
 					})
 
 					for i := 0; i < cacheSize; i++ {
-						cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
-							testQueries[i], []byte("req"), []byte("resp"))
+						if err := cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
+							testQueries[i], []byte("req"), []byte("resp")); err != nil {
+							b.Fatalf("AddEntry failed: %v", err)
+						}
 					}
 
 					b.ResetTimer()
 					start := time.Now()
 					for i := 0; i < b.N; i++ {
-						cache.FindSimilar("model", searchQuery)
+						if _, _, err := cache.FindSimilar("model", searchQuery); err != nil {
+							b.Fatalf("FindSimilar failed: %v", err)
+						}
 					}
 					elapsed := time.Since(start)
 
@@ -331,7 +339,9 @@ func BenchmarkScalability(b *testing.B) {
 					if csvFile != nil {
 						line := fmt.Sprintf("%d,linear,%.0f,%.3f,%.0f\n",
 							cacheSize, avgLatency, latencyMS, opsPerSec)
-						csvFile.WriteString(line)
+						if _, err := csvFile.WriteString(line); err != nil {
+							b.Logf("Warning: failed to write to CSV: %v", err)
+						}
 					}
 
 					b.ReportMetric(latencyMS, "ms/op")
@@ -351,8 +361,10 @@ func BenchmarkScalability(b *testing.B) {
 
 				buildStart := time.Now()
 				for i := 0; i < cacheSize; i++ {
-					cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
-						testQueries[i], []byte("req"), []byte("resp"))
+					if err := cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
+						testQueries[i], []byte("req"), []byte("resp")); err != nil {
+						b.Fatalf("AddEntry failed: %v", err)
+					}
 					if (i+1)%10000 == 0 {
 						b.Logf("  Built %d/%d entries", i+1, cacheSize)
 					}
@@ -362,7 +374,9 @@ func BenchmarkScalability(b *testing.B) {
 				b.ResetTimer()
 				start := time.Now()
 				for i := 0; i < b.N; i++ {
-					cache.FindSimilar("model", searchQuery)
+					if _, _, err := cache.FindSimilar("model", searchQuery); err != nil {
+						b.Fatalf("FindSimilar failed: %v", err)
+					}
 				}
 				elapsed := time.Since(start)
 
@@ -373,7 +387,9 @@ func BenchmarkScalability(b *testing.B) {
 				if csvFile != nil {
 					line := fmt.Sprintf("%d,hnsw,%.0f,%.3f,%.0f\n",
 						cacheSize, avgLatency, latencyMS, opsPerSec)
-					csvFile.WriteString(line)
+					if _, err := csvFile.WriteString(line); err != nil {
+						b.Logf("Warning: failed to write to CSV: %v", err)
+					}
 				}
 
 				b.ReportMetric(latencyMS, "ms/op")
@@ -430,7 +446,9 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 
 	// CSV output
 	resultsDir := "../../benchmark_results"
-	os.MkdirAll(resultsDir, 0755)
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+		b.Logf("Warning: Could not create results directory: %v", err)
+	}
 
 	csvFile, err := os.OpenFile(resultsDir+"/hnsw_parameter_sweep.csv",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -463,8 +481,10 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 			b.Logf("Building HNSW index: M=%d, efConstruction=200, efSearch=%d", config.m, config.efSearch)
 			buildStart := time.Now()
 			for i := 0; i < cacheSize; i++ {
-				cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
-					testQueries[i], []byte("req"), []byte("resp"))
+				if err := cache.AddEntry(fmt.Sprintf("req-%d", i), "model",
+					testQueries[i], []byte("req"), []byte("resp")); err != nil {
+					b.Fatalf("AddEntry failed: %v", err)
+				}
 				if (i+1)%10000 == 0 {
 					b.Logf("  Progress: %d/%d", i+1, cacheSize)
 				}
@@ -484,7 +504,9 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 			b.ResetTimer()
 			start := time.Now()
 			for i := 0; i < b.N; i++ {
-				cache.FindSimilar("model", searchQuery)
+				if _, _, err := cache.FindSimilar("model", searchQuery); err != nil {
+					b.Fatalf("FindSimilar failed: %v", err)
+				}
 			}
 			elapsed := time.Since(start)
 

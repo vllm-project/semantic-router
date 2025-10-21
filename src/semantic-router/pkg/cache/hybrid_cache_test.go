@@ -58,7 +58,8 @@ milvus:
   params:
     M: 16
     efConstruction: 200
-`), 0644)
+`),
+		0644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -112,7 +113,7 @@ milvus:
 	}
 
 	// Test FindSimilar with similar query (should hit)
-	response, found, err = cache.FindSimilar("gpt-4", "What's the meaning of life?")
+	_, found, err = cache.FindSimilar("gpt-4", "What's the meaning of life?")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -154,7 +155,8 @@ milvus:
   dimension: 384
   index_type: "HNSW"
   metric_type: "IP"
-`), 0644)
+`),
+		0644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -217,7 +219,8 @@ milvus:
   dimension: 384
   index_type: "HNSW"
   metric_type: "IP"
-`), 0644)
+`),
+		0644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -264,7 +267,7 @@ milvus:
 	}
 
 	// Try to find an old evicted entry (should be in Milvus)
-	_, found, err = cache.FindSimilar("gpt-4", "Query number 0")
+	_, _, err = cache.FindSimilar("gpt-4", "Query number 0")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -287,7 +290,8 @@ milvus:
   dimension: 384
   index_type: "HNSW"
   metric_type: "IP"
-`), 0644)
+`),
+		0644)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
@@ -316,7 +320,7 @@ milvus:
 	time.Sleep(100 * time.Millisecond)
 
 	// First search - should populate local cache
-	response, found, err := cache.FindSimilar("gpt-4", testQuery)
+	_, found, err := cache.FindSimilar("gpt-4", testQuery)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
@@ -363,7 +367,8 @@ milvus:
   dimension: 384
   index_type: "HNSW"
   metric_type: "IP"
-`), 0644)
+`),
+		0644)
 	if err != nil {
 		b.Fatalf("Failed to create test config: %v", err)
 	}
@@ -406,7 +411,8 @@ milvus:
   dimension: 384
   index_type: "HNSW"
   metric_type: "IP"
-`), 0644)
+`),
+		0644)
 	if err != nil {
 		b.Fatalf("Failed to create test config: %v", err)
 	}

@@ -33,7 +33,7 @@ func (c ContentLength) String() string {
 // GenerateQuery generates a query with maximum semantic diversity using hash-based randomization
 func generateQuery(length ContentLength, index int) string {
 	// Hash the index to get pseudo-random values (deterministic but well-distributed)
-	hash := uint64(index)
+	hash := uint64(index)               // #nosec G115 -- index is always positive and bounded
 	hash = hash*2654435761 + 1013904223 // Knuth's multiplicative hash
 
 	// Expanded templates for maximum diversity
@@ -119,16 +119,16 @@ func generateQuery(length ContentLength, index int) string {
 	}
 
 	// Use hash to pseudo-randomly select (but deterministic for same index)
-	templateIdx := int(hash % uint64(len(templates)))
-	hash = hash * 16807 % 2147483647 // LCG for next random
+	templateIdx := int(hash % uint64(len(templates))) // #nosec G115 -- modulo operation is bounded by array length
+	hash = hash * 16807 % 2147483647                  // LCG for next random
 
-	topic1Idx := int(hash % uint64(len(topics)))
+	topic1Idx := int(hash % uint64(len(topics))) // #nosec G115 -- modulo operation is bounded by array length
 	hash = hash * 16807 % 2147483647
 
-	topic2Idx := int(hash % uint64(len(topics)))
+	topic2Idx := int(hash % uint64(len(topics))) // #nosec G115 -- modulo operation is bounded by array length
 	hash = hash * 16807 % 2147483647
 
-	topic3Idx := int(hash % uint64(len(topics)))
+	topic3Idx := int(hash % uint64(len(topics))) // #nosec G115 -- modulo operation is bounded by array length
 	hash = hash * 16807 % 2147483647
 
 	// Build query with selected template and topics
@@ -136,7 +136,7 @@ func generateQuery(length ContentLength, index int) string {
 		topics[topic1Idx],
 		topics[topic2Idx],
 		topics[topic3Idx],
-		modifiers[int(hash%uint64(len(modifiers)))])
+		modifiers[int(hash%uint64(len(modifiers)))]) // #nosec G115 -- modulo operation is bounded by array length
 
 	// Add unique identifier to guarantee uniqueness
 	query += fmt.Sprintf(" [Request ID: REQ-%d]", index)
@@ -144,10 +144,10 @@ func generateQuery(length ContentLength, index int) string {
 	// Add extra context for longer queries
 	if length > MediumContent {
 		hash = hash * 16807 % 2147483647
-		extraTopicIdx := int(hash % uint64(len(topics)))
+		extraTopicIdx := int(hash % uint64(len(topics))) // #nosec G115 -- modulo operation is bounded by array length
 		query += fmt.Sprintf(" Also considering %s integration and %s compatibility requirements.",
 			topics[extraTopicIdx],
-			modifiers[int(hash%uint64(len(modifiers)))])
+			modifiers[int(hash%uint64(len(modifiers)))]) // #nosec G115 -- modulo operation is bounded by array length
 	}
 
 	return query
@@ -182,7 +182,8 @@ func BenchmarkComprehensive(b *testing.B) {
 	}
 
 	// Open CSV file for results
-	csvFile, err := os.OpenFile("../../benchmark_results/benchmark_data.csv",
+	csvFile, err := os.OpenFile(
+		"../../benchmark_results/benchmark_data.csv",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		b.Logf("Warning: Could not open CSV file: %v", err)

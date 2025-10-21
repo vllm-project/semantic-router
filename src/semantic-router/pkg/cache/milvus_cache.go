@@ -207,7 +207,7 @@ func loadMilvusConfig(configPath string) (*MilvusConfig, error) {
 
 	// WORKAROUND: Force development settings for benchmarks
 	// There seems to be a YAML parsing issue with sigs.k8s.io/yaml
-	if config.Development.AutoCreateCollection == false && config.Development.DropCollectionOnStartup == false {
+	if !config.Development.AutoCreateCollection && !config.Development.DropCollectionOnStartup {
 		fmt.Printf("[WARN] Development settings parsed as false, forcing to true for benchmarks\n")
 		config.Development.AutoCreateCollection = true
 		config.Development.DropCollectionOnStartup = true
@@ -773,7 +773,6 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 		"response_body != \"\"", // Only get complete entries
 		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
 	)
-
 	if err != nil {
 		observability.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
 		return nil, nil, fmt.Errorf("milvus query all failed: %w", err)
@@ -884,7 +883,7 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 
 	responseBody := []byte(responseBodyStr)
 
-	if responseBody == nil || len(responseBody) == 0 {
+	if len(responseBody) == 0 {
 		observability.Debugf("MilvusCache.GetByID: response_body is empty")
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
 		return nil, fmt.Errorf("response_body is empty for: %s", requestID)

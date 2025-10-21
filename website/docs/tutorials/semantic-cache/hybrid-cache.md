@@ -210,5 +210,3 @@ The hybrid cache supports multi-instance deployments where each instance maintai
 
 - [In-Memory Cache Documentation](./in-memory-cache.md)
 - [Milvus Cache Documentation](./milvus-cache.md)
-- [HNSW Implementation Details](../../HNSW_IMPLEMENTATION_SUMMARY.md)
-- [Research Paper: Hybrid Architecture](../../papers/hybrid_hnsw_storage_architecture.md)
