@@ -19,6 +19,11 @@ semantic_cache:
   # Combines in-memory HNSW for fast search with Milvus for scalable storage
   # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
   # backend_config_path: "config/milvus.yaml" # Path to Milvus config
+  
+  # Embedding model for semantic similarity matching
+  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  # Default: "bert" (fastest, lowest memory)
+  embedding_model: "bert"
 
 tools:
   enabled: true
