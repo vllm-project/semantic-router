@@ -4,7 +4,7 @@
 //! Provides 13 initialization functions with 100% backward compatibility.
 
 use lazy_static::lazy_static;
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, c_int, CStr};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -375,11 +375,11 @@ pub extern "C" fn init_unified_classifier_c(
     pii_head_path: *const c_char,
     security_head_path: *const c_char,
     intent_labels: *const *const c_char,
-    intent_labels_count: usize,
+    intent_labels_count: c_int,
     pii_labels: *const *const c_char,
-    pii_labels_count: usize,
+    pii_labels_count: c_int,
     security_labels: *const *const c_char,
-    security_labels_count: usize,
+    security_labels_count: c_int,
     _use_cpu: bool,
 ) -> bool {
     // Adapted from lib.rs:1180-1266
@@ -413,21 +413,21 @@ pub extern "C" fn init_unified_classifier_c(
 
     // Convert C string arrays to Rust Vec<String>
     let _intent_labels_vec = unsafe {
-        std::slice::from_raw_parts(intent_labels, intent_labels_count)
+        std::slice::from_raw_parts(intent_labels, intent_labels_count as usize)
             .iter()
             .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
             .collect::<Vec<String>>()
     };
 
     let _pii_labels_vec = unsafe {
-        std::slice::from_raw_parts(pii_labels, pii_labels_count)
+        std::slice::from_raw_parts(pii_labels, pii_labels_count as usize)
             .iter()
             .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
             .collect::<Vec<String>>()
     };
 
     let _security_labels_vec = unsafe {
-        std::slice::from_raw_parts(security_labels, security_labels_count)
+        std::slice::from_raw_parts(security_labels, security_labels_count as usize)
             .iter()
             .map(|&ptr| CStr::from_ptr(ptr).to_str().unwrap_or("").to_string())
             .collect::<Vec<String>>()
