@@ -13,14 +13,27 @@
 # Usage: ./live-demo-logs.sh
 #
 
-# Color definitions
+# Color definitions - Enhanced for better visibility
 RED='\033[0;31m'
+BRIGHT_RED='\033[1;31m'
 GREEN='\033[0;32m'
+BRIGHT_GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+BRIGHT_BLUE='\033[1;34m'
 MAGENTA='\033[0;35m'
+BRIGHT_MAGENTA='\033[1;35m'
 CYAN='\033[0;36m'
+BRIGHT_CYAN='\033[1;36m'
+WHITE='\033[1;37m'
 BOLD='\033[1m'
+# Background colors for emphasis
+BG_RED='\033[41m'
+BG_GREEN='\033[42m'
+BG_YELLOW='\033[43m'
+BG_BLUE='\033[44m'
+BG_MAGENTA='\033[45m'
+BG_CYAN='\033[46m'
 NC='\033[0m' # No Color
 
 echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════════════════════╗${NC}"
@@ -30,11 +43,12 @@ echo ""
 echo -e "${YELLOW}📡 Watching semantic-router logs in real-time...${NC}"
 echo -e "${CYAN}Press Ctrl+C to stop${NC}"
 echo ""
-echo -e "${BOLD}Legend:${NC}"
-echo -e "  ${GREEN}🔍 CLASSIFICATION${NC} - Category detection"
-echo -e "  ${BLUE}🎯 ROUTING${NC}        - Model selection"
-echo -e "  ${MAGENTA}🛡️  SECURITY${NC}      - Jailbreak/PII detection"
-echo -e "  ${CYAN}💾 CACHE${NC}          - Cache hit/miss"
+echo -e "${BOLD}Legend (Enhanced Colors for Live Demo):${NC}"
+echo -e "  ${BRIGHT_CYAN}🔍 CLASSIFIED${NC}    - Category ${BOLD}${YELLOW}NAME${NC} in bright yellow → model"
+echo -e "  ${BRIGHT_BLUE}🎯 ROUTING${NC}       - ${BG_BLUE}${WHITE}Model-A${NC} or ${BG_MAGENTA}${WHITE}Model-B${NC} selection"
+echo -e "  ${BRIGHT_GREEN}🛡️  SECURITY${NC}     - ${BOLD}${WHITE}BENIGN${NC} or ${BG_RED}${WHITE}THREAT${NC} detection"
+echo -e "  ${BG_CYAN}${WHITE}💾 CACHE HIT${NC}     - Cache hits for faster responses"
+echo -e "  ${BRIGHT_MAGENTA}🧠 REASONING${NC}     - Chain-of-thought mode enabled"
 echo -e "  ${YELLOW}📨 REQUEST${NC}       - User request content"
 echo ""
 echo -e "${BOLD}${CYAN}────────────────────────────────────────────────────────────────────────────${NC}"
@@ -66,64 +80,72 @@ oc logs -n vllm-semantic-router-system deployment/semantic-router --follow --tai
         fi
     fi
 
-    # Highlight JAILBREAK DETECTION
+    # Highlight JAILBREAK DETECTION - Enhanced with bright colors
     if echo "$line" | grep -q "BENIGN.*benign.*confidence"; then
         confidence=$(echo "$line" | grep -o 'confidence: [0-9.]*' | cut -d' ' -f2)
-        echo -e "${GREEN}🛡️  [${timestamp}] SECURITY:${NC} ${BOLD}BENIGN${NC} ${CYAN}(confidence: ${confidence})${NC}"
+        echo -e "${BRIGHT_GREEN}🛡️  [${timestamp}] SECURITY:${NC} ${BOLD}${WHITE}BENIGN${NC} ${CYAN}(confidence: ${confidence})${NC}"
     elif echo "$line" | grep -q "Jailbreak classification result"; then
         # Parse the jailbreak result - {0 0.99999964} means class 0 (benign) with confidence
         result=$(echo "$line" | grep -o '{[0-9 .]*}' | tr -d '{}')
         class=$(echo "$result" | awk '{print $1}')
         conf=$(echo "$result" | awk '{print $2}')
         if [ "$class" = "0" ]; then
-            echo -e "${GREEN}🛡️  [${timestamp}] JAILBREAK CHECK:${NC} ${BOLD}BENIGN${NC} ${CYAN}(confidence: ${conf})${NC}"
+            echo -e "${BRIGHT_GREEN}🛡️  [${timestamp}] JAILBREAK CHECK:${NC} ${BOLD}${WHITE}BENIGN${NC} ${CYAN}(confidence: ${conf})${NC}"
         else
-            echo -e "${RED}🛡️  [${timestamp}] JAILBREAK CHECK:${NC} ${BOLD}${RED}THREAT DETECTED${NC} ${YELLOW}(class: ${class}, conf: ${conf})${NC}"
+            echo -e "${BG_RED}${WHITE}🛡️  [${timestamp}] JAILBREAK CHECK: THREAT DETECTED${NC} ${YELLOW}(class: ${class}, conf: ${conf})${NC}"
         fi
     fi
 
-    # Highlight PII DETECTION
+    # Highlight PII DETECTION - Enhanced
     if echo "$line" | grep -qi "PII policy check passed\|No PII"; then
-        echo -e "${GREEN}🔒 [${timestamp}] PII:${NC} ${BOLD}No PII detected - Safe${NC}"
+        echo -e "${BRIGHT_GREEN}🔒 [${timestamp}] PII:${NC} ${BOLD}${WHITE}No PII detected - Safe${NC}"
     elif echo "$line" | grep -qi "PII.*blocked\|PII.*rejected"; then
-        echo -e "${RED}🔒 [${timestamp}] PII:${NC} ${BOLD}${RED}PII DETECTED & BLOCKED${NC}"
+        echo -e "${BG_RED}${WHITE}🔒 [${timestamp}] PII: PII DETECTED & BLOCKED${NC}"
     fi
     # Skip generic PII messages that are just informational
 
-    # Highlight MODEL ROUTING
+    # Highlight MODEL ROUTING - Enhanced with brighter colors
     if echo "$msg" | grep -qi "Routing to model"; then
         routed_model=$(echo "$msg" | grep -o 'Model-[AB]')
         if [ -n "$routed_model" ]; then
             if [ "$routed_model" == "Model-A" ]; then
-                echo -e "${BLUE}🎯 [${timestamp}] ROUTING:${NC} ${BOLD}${BLUE}${routed_model}${NC}"
+                echo -e "${BRIGHT_BLUE}🎯 [${timestamp}] ROUTING:${NC} ${BG_BLUE}${WHITE}${routed_model}${NC}"
             else
-                echo -e "${BLUE}🎯 [${timestamp}] ROUTING:${NC} ${BOLD}${MAGENTA}${routed_model}${NC}"
+                echo -e "${BRIGHT_MAGENTA}🎯 [${timestamp}] ROUTING:${NC} ${BG_MAGENTA}${WHITE}${routed_model}${NC}"
             fi
         fi
     fi
 
-    # Highlight SELECTED MODEL (with category)
+    # Highlight CLASSIFIED - Enhanced to show category in unique color, separate from score
     if echo "$msg" | grep -qi "Selected model"; then
-        category=$(echo "$msg" | grep -o 'category [a-z ]*' | sed 's/category //' | tr '[:lower:]' '[:upper:]')
+        # Extract category name (stop before "with score")
+        category=$(echo "$msg" | grep -o 'category [a-z ]*with' | sed 's/category //' | sed 's/ with$//' | tr '[:lower:]' '[:upper:]')
         selected_model=$(echo "$msg" | grep -o 'Model-[AB]')
         score=$(echo "$msg" | grep -o 'score [0-9.]*' | sed 's/score //')
         if [ -n "$selected_model" ]; then
-            echo -e "${CYAN}🔍 [${timestamp}] CLASSIFIED:${NC} ${BOLD}${MAGENTA}${category}${NC} (score: ${score}) → ${CYAN}${selected_model}${NC}"
+            # Category in bright yellow (no background), score in cyan, model with background
+            if [ "$selected_model" == "Model-A" ]; then
+                echo -e "${BRIGHT_CYAN}🔍 [${timestamp}] CLASSIFIED:${NC} ${BOLD}${YELLOW}${category}${NC} ${CYAN}WITH SCORE${NC} (score: ${BOLD}${score}${NC}) → ${BG_BLUE}${WHITE}${selected_model}${NC}"
+            else
+                echo -e "${BRIGHT_CYAN}🔍 [${timestamp}] CLASSIFIED:${NC} ${BOLD}${YELLOW}${category}${NC} ${CYAN}WITH SCORE${NC} (score: ${BOLD}${score}${NC}) → ${BG_MAGENTA}${WHITE}${selected_model}${NC}"
+            fi
         fi
     fi
 
-    # Highlight CACHE HITS
+    # Highlight CACHE HITS - Enhanced
     if echo "$line" | grep -q "cache_hit"; then
         similarity=$(echo "$line" | grep -o '"similarity":[^,]*' | cut -d':' -f2)
         query=$(echo "$line" | grep -o '"query":"[^"]*"' | cut -d'"' -f4)
         if [ -n "$query" ]; then
-            echo -e "${CYAN}💾 [${timestamp}] CACHE HIT:${NC} ${similarity} - ${query}"
+            echo -e "${BRIGHT_CYAN}💾 [${timestamp}]${NC} ${BG_CYAN}${WHITE}CACHE HIT${NC} ${BOLD}${similarity}${NC} - ${YELLOW}${query}${NC}"
         fi
     fi
 
-    # Highlight REASONING MODE
-    if echo "$line" | grep -qi "reasoning mode\|chain.of.thought"; then
-        echo -e "${MAGENTA}🧠 [${timestamp}] REASONING:${NC} ${BOLD}Chain-of-thought enabled${NC}"
+    # Highlight REASONING MODE - Enhanced (distinguish enabled vs disabled)
+    if echo "$line" | grep -qi "Applied reasoning mode.*enabled: true\|reasoning mode.*enabled"; then
+        echo -e "${BRIGHT_MAGENTA}🧠 [${timestamp}] REASONING:${NC} ${BOLD}${WHITE}Chain-of-thought enabled${NC}"
+    elif echo "$line" | grep -qi "Reasoning mode disabled"; then
+        echo -e "${CYAN}🧠 [${timestamp}] REASONING:${NC} Chain-of-thought disabled"
     fi
 
     # Highlight ERRORS
