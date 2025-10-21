@@ -212,13 +212,16 @@ func addRAGChunksToRequestBody(requestBody []byte, ragChunks []string, ragTempla
 	}
 
 	var finalPrompt string
-	var logMessage string
 
-	var userPrompt = messages[lastUserMessageIndex] // Is this true?
+	userMessage := messages[lastUserMessageIndex].(map[string]interface{})
+	userPrompt := userMessage["content"].(string)
 
 	// Format the user prompt with RAG chunks
-	finalPrompt = formatUserPromptWithRAG(userPrompt.(string), ragChunks, ragTemplatePath)
-	messages[lastUserMessageIndex] = finalPrompt
+	finalPrompt = formatUserPromptWithRAG(userPrompt, ragChunks, ragTemplatePath)
+	userMessage["content"] = finalPrompt
+	messages[lastUserMessageIndex] = userMessage
+	observability.Infof("RAG formatted prompt: %s", finalPrompt)
+
 	requestMap["messages"] = messages
 	
 	// Marshal back to JSON
@@ -245,9 +248,9 @@ func formatUserPromptWithRAG(originalQuestion string, ragChunks []string, templa
 	// Load template from file
 	template, err := loadRAGTemplate(templatePath)
 	// TODO:
-	// if err != nil {
-	// 	// Fallback to hardcoded template on error
-	// }
+	if err != nil {
+		observability.Infof("Failed to load the RAG template")
+	}
 	
 	// Join RAG chunks into context
 	contextStr := strings.Join(ragChunks, "\n\n")
@@ -740,7 +743,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				var ragInjected bool;
 				if ragDecision {
 					// ragChunks := r.getRAGChunks(categoryName, query) // list of chunks (strings)
-					ragChunks := []string{"Chunk 1", "Chunk 2", "Chunk 3", "Chunk 4"}
+					ragChunks := []string{"The derivative of x^2 is 2x", "Use the power rule", "The derivative is the rate of change"}
 					ragTemplatePath := r.Config.Rag.RagTemplatePath
 					modifiedBody, ragInjected, err = addRAGChunksToRequestBody(modifiedBody, ragChunks, ragTemplatePath)
 				}

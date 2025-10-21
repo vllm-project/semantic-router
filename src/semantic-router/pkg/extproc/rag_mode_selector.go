@@ -1,15 +1,8 @@
 package extproc
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
-	"google.golang.org/grpc/resolver/passthrough"
 )
 
 
@@ -42,7 +35,7 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 
 	ragStrategy :=  r.getRAGStrategy(categoryName)
 	// TODO: Handle Either RagConfig or DefaultStrategy could be empty
-	ragDefault := r.Config.RagConfig.DefaultStrategy 
+	ragDefault := r.Config.Rag.DefaultStrategy 
 
 	// If no RAG strategy is set use the default strategy
 	if ragStrategy == "" {

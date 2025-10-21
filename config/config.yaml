@@ -119,9 +119,10 @@ categories:
   - name: math
     system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
     model_scores:
-      - model: openai/gpt-oss-20b
+      - model: llama-3.2-1b
         score: 1.0
         use_reasoning: true  # Enable reasoning for complex math
+    rag_strategy: "always" # Temporary for testing
   - name: physics
     system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
     model_scores:
@@ -148,6 +149,10 @@ categories:
         use_reasoning: false
 
 default_model: openai/gpt-oss-20b
+
+rag:
+  default_strategy: "always"
+  rag_template_path: "config/rag_template.txt"
 
 # Reasoning family configurations
 reasoning_families:
