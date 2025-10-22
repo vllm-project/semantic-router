@@ -6,7 +6,7 @@ metadata:
 
 resources:
   - namespace.yaml
-  - pvc.yaml
+  - pv-models.yaml
   - deployment.yaml
   - service.yaml
 
@@ -17,10 +17,4 @@ configMapGenerator:
       - config.yaml
       - tools_db.json
 
-# Namespace for all resources
 namespace: vllm-semantic-router-system
-
-images:
-  - name: ghcr.io/vllm-project/semantic-router/extproc
-    newName: semantic-router-extproc
-    newTag: local

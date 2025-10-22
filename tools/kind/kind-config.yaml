@@ -38,6 +38,9 @@ nodes:
               quota-backend-bytes: "8589934592" # 8GB
   # Add worker node for better resource distribution (optional)
   - role: worker
+    extraMounts:
+      - hostPath: /home/jared/vllm-project/semantic-router/models
+        containerPath: /mnt/models
     kubeadmConfigPatches:
       - |
         kind: JoinConfiguration
