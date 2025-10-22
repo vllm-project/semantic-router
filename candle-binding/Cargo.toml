@@ -11,16 +11,18 @@ crate-type = ["staticlib", "cdylib"]
 
 [features]
 default = []
+# CUDA support (enables GPU acceleration)
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 # Flash Attention 2 support (requires CUDA and compatible GPU)
 # Enable with: cargo build --features flash-attn
 # Note: Requires CUDA Compute Capability >= 8.0 (Ampere or newer)
-flash-attn = ["candle-flash-attn"]
+flash-attn = ["cuda", "candle-flash-attn"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = { version = "0.8.4", features = ["cuda"] }
-candle-nn = { version = "0.8.4", features = ["cuda"] }
-candle-transformers = { version = "0.8.4", features = ["cuda"] }
+candle-core = "0.8.4"
+candle-nn = "0.8.4"
+candle-transformers = "0.8.4"
 # Flash Attention 2 (optional, requires CUDA)
 # Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
 candle-flash-attn = { version = "0.8.4", optional = true }
