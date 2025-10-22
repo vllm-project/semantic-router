@@ -39,7 +39,7 @@ nodes:
   # Add worker node for better resource distribution (optional)
   - role: worker
     extraMounts:
-      - hostPath: /home/jared/vllm-project/semantic-router/models
+      - hostPath: ${PROJECT_ROOT}/models
         containerPath: /mnt/models
     kubeadmConfigPatches:
       - |
@@ -49,3 +49,4 @@ nodes:
             system-reserved: memory=500Mi,cpu=250m
             kube-reserved: memory=500Mi,cpu=250m
             eviction-hard: memory.available<500Mi,nodefs.available<10%
+
