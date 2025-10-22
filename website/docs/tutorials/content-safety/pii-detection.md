@@ -116,10 +116,12 @@ categories:
 ```
 
 **Configuration Inheritance:**
+
 - `pii_enabled`: If not specified, inherits from global PII model configuration (enabled if `pii_model` is configured)
 - `pii_threshold`: If not specified, inherits from `classifier.pii_model.threshold`
 
 **Threshold Guidelines by Category:**
+
 - **Critical categories** (healthcare, finance, legal): 0.9-0.95 - Strict detection, fewer false positives
 - **Customer-facing** (support, sales): 0.75-0.85 - Balanced detection
 - **Internal tools** (code, testing): 0.5-0.65 - Relaxed to reduce false positives
@@ -220,24 +222,28 @@ pii_requests_masked_total 15
 Different categories have different PII sensitivity requirements:
 
 **Critical Categories (Healthcare, Finance, Legal):**
+
 - Threshold: `0.9-0.95`
 - Rationale: High precision required; false positives on medical/financial terms are costly
 - Example PII: SSN, Credit Cards, Medical Records
 - Risk if too low: Too many false positives disrupt workflows
 
 **Customer-Facing Categories (Support, Sales):**
+
 - Threshold: `0.75-0.85`
 - Rationale: Balance between catching PII and avoiding false positives
 - Example PII: Email, Phone, Names, Addresses
 - Risk if too low: Moderate false positive rate
 
 **Internal Tools (Code Generation, Development):**
+
 - Threshold: `0.5-0.65`
 - Rationale: Code/technical content often triggers false positives; lower threshold needed
 - Example PII: Variable names, test data that looks like PII
 - Risk if too high: May still flag harmless code artifacts
 
 **Public Content (Documentation, Marketing):**
+
 - Threshold: `0.6-0.75`
 - Rationale: Broader detection before publication; acceptable to review more false positives
 - Example PII: Author names, example emails, placeholder data
