@@ -688,6 +688,11 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types
 func (c *Classifier) ClassifyPII(text string) ([]string, error) {
+	return c.ClassifyPIIWithThreshold(text, c.Config.Classifier.PIIModel.Threshold)
+}
+
+// ClassifyPIIWithThreshold performs PII token classification with a custom threshold
+func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([]string, error) {
 	if !c.IsPIIEnabled() {
 		return []string{}, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -712,7 +717,7 @@ func (c *Classifier) ClassifyPII(text string) ([]string, error) {
 	// Extract unique PII types from detected entities
 	piiTypes := make(map[string]bool)
 	for _, entity := range tokenResult.Entities {
-		if entity.Confidence >= c.Config.Classifier.PIIModel.Threshold {
+		if entity.Confidence >= threshold {
 			piiTypes[entity.EntityType] = true
 			observability.Infof("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
 				entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
@@ -762,6 +767,11 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 
 // AnalyzeContentForPII performs detailed PII analysis on multiple content pieces
 func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnalysisResult, error) {
+	return c.AnalyzeContentForPIIWithThreshold(contentList, c.Config.Classifier.PIIModel.Threshold)
+}
+
+// AnalyzeContentForPIIWithThreshold performs detailed PII analysis with a custom threshold
+func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, threshold float32) (bool, []PIIAnalysisResult, error) {
 	if !c.IsPIIEnabled() {
 		return false, nil, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -790,7 +800,7 @@ func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnal
 
 		// Convert token entities to PII detections
 		for _, entity := range tokenResult.Entities {
-			if entity.Confidence >= c.Config.Classifier.PIIModel.Threshold {
+			if entity.Confidence >= threshold {
 				detection := PIIDetection{
 					EntityType: entity.EntityType,
 					Start:      entity.Start,

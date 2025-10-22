@@ -143,6 +143,7 @@ categories:
 ```
 
 **Threshold Guidelines**:
+
 - **0.8-0.95**: High-security categories (customer support, business)
 - **0.6-0.8**: Standard categories (general queries)
 - **0.4-0.6**: Technical categories (code generation, development tools)
