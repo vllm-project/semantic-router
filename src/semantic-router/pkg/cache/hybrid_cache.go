@@ -583,6 +583,129 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 	return nil, false, nil
 }
 
+// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+	start := time.Now()
+
+	if !h.enabled {
+		return nil, false, nil
+	}
+
+	queryPreview := query
+	if len(query) > 50 {
+		queryPreview = query[:50] + "..."
+	}
+	observability.Debugf("HybridCache.FindSimilarWithThreshold: searching for model='%s', query='%s', threshold=%.3f",
+		model, queryPreview, threshold)
+
+	// Generate query embedding
+	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
+	if err != nil {
+		metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "error", time.Since(start).Seconds())
+		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// Search HNSW index for candidates above similarity threshold
+	// For semantic cache, we only need the first match, so search with k=1
+	// and stop early when finding a match above threshold
+	h.mu.RLock()
+	candidates := h.searchKNNHybridWithThreshold(queryEmbedding, 1, 20, threshold)
+	h.mu.RUnlock()
+
+	// Filter by similarity threshold before fetching from Milvus
+	var qualifiedCandidates []searchResult
+	for _, candidate := range candidates {
+		if candidate.similarity >= threshold {
+			qualifiedCandidates = append(qualifiedCandidates, candidate)
+		}
+	}
+
+	// Map qualified candidates to Milvus IDs (need lock for idMap access)
+	type candidateWithID struct {
+		milvusID   string
+		similarity float32
+		index      int
+	}
+
+	h.mu.RLock()
+	candidatesWithIDs := make([]candidateWithID, 0, len(qualifiedCandidates))
+	for _, candidate := range qualifiedCandidates {
+		if milvusID, ok := h.idMap[candidate.index]; ok {
+			candidatesWithIDs = append(candidatesWithIDs, candidateWithID{
+				milvusID:   milvusID,
+				similarity: candidate.similarity,
+				index:      candidate.index,
+			})
+		}
+	}
+	h.mu.RUnlock()
+
+	if len(candidatesWithIDs) == 0 {
+		atomic.AddInt64(&h.missCount, 1)
+		if len(candidates) > 0 {
+			observability.Debugf("HybridCache.FindSimilarWithThreshold: %d candidates found but none above threshold %.3f",
+				len(candidates), threshold)
+		} else {
+			observability.Debugf("HybridCache.FindSimilarWithThreshold: no candidates found in HNSW")
+		}
+		metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	observability.Debugf("HybridCache.FindSimilarWithThreshold: HNSW returned %d candidates, %d above threshold",
+		len(candidates), len(candidatesWithIDs))
+
+	// Fetch document from Milvus for qualified candidates
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Try candidates in order (already sorted by similarity from HNSW)
+	for _, candidate := range candidatesWithIDs {
+		// Fetch document from Milvus by ID (direct lookup by primary key)
+		fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Second)
+		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID)
+		fetchCancel()
+
+		if err != nil {
+			observability.Debugf("HybridCache.FindSimilarWithThreshold: Milvus GetByID failed for %s: %v",
+				candidate.milvusID, err)
+			continue
+		}
+
+		if responseBody != nil {
+			atomic.AddInt64(&h.hitCount, 1)
+			observability.Debugf("HybridCache.FindSimilarWithThreshold: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
+				candidate.similarity, threshold)
+			observability.LogEvent("hybrid_cache_hit", map[string]interface{}{
+				"backend":    "hybrid",
+				"source":     "milvus",
+				"similarity": candidate.similarity,
+				"threshold":  threshold,
+				"model":      model,
+				"latency_ms": time.Since(start).Milliseconds(),
+			})
+			metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "hit_milvus", time.Since(start).Seconds())
+			metrics.RecordCacheHit()
+			return responseBody, true, nil
+		}
+	}
+
+	// No match found above threshold
+	atomic.AddInt64(&h.missCount, 1)
+	observability.Debugf("HybridCache.FindSimilarWithThreshold: CACHE MISS - no match above threshold")
+	observability.LogEvent("hybrid_cache_miss", map[string]interface{}{
+		"backend":    "hybrid",
+		"threshold":  threshold,
+		"model":      model,
+		"candidates": len(candidatesWithIDs),
+	})
+	metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
+	metrics.RecordCacheMiss()
+
+	return nil, false, nil
+}
+
 // Close releases all resources
 func (h *HybridCache) Close() error {
 	if !h.enabled {
