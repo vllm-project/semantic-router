@@ -260,27 +260,6 @@ pre-commit run --all-files
 - Use type hints where appropriate
 - Write docstrings for functions and classes
 
-### Documentation
-
-When contributing documentation changes:
-
-- **Accuracy First:** Ensure all claims are grounded in the source code
-- **Run Accuracy Checker:** Before submitting documentation PRs, run:
-  ```bash
-  make docs-accuracy-check-quick
-  ```
-- **Include Evidence:** Reference source files and line numbers for technical claims
-- **Update Examples:** Keep code examples synchronized with implementation
-- **Check Links:** Verify all links work using `make markdown-lint-fix docs-lint-fix`
-
-The documentation accuracy checker helps maintain quality by:
-- Discovering capabilities from the codebase
-- Identifying outdated or incorrect documentation
-- Detecting missing features that should be documented
-- Flagging hallucinated (non-existent) features
-
-See [`tools/docs-accuracy-checker-README.md`](tools/docs-accuracy-checker-README.md) for detailed information.
-
 ## Submitting Changes
 
 1. **Ensure all tests pass:**

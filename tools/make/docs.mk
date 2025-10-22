@@ -32,11 +32,3 @@ docs-lint-fix: ## Fix lint issues in documentation website source files
 	@$(LOG_TARGET)
 	cd website && npm run lint:fix
 
-docs-accuracy-check: ## Run documentation accuracy checker (epochic loop)
-	@$(LOG_TARGET)
-	python3 tools/docs-accuracy-checker.py
-
-docs-accuracy-check-quick: ## Run documentation accuracy checker with 5 epochs (quick test)
-	@$(LOG_TARGET)
-	python3 tools/docs-accuracy-checker.py --epochs 5
-

@@ -4,6 +4,14 @@
 
 ##@ Linter
 
+docs-lint: docs-install ## Lint documentation in website/
+	@$(LOG_TARGET)
+	cd website && npm run lint
+
+docs-lint-fix: docs-install ## Auto-fix documentation lint issues in website/
+	@$(LOG_TARGET)
+	cd website && npm run lint:fix
+
 markdown-lint: ## Lint all markdown files in the project
 	@$(LOG_TARGET)
 	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
