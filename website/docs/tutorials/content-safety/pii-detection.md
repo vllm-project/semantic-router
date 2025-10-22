@@ -46,10 +46,84 @@ Enable PII detection in your configuration:
 classifier:
   pii_model:
     model_id: "models/pii_classifier_modernbert-base_model"
-    threshold: 0.7                 # Detection sensitivity (0.0-1.0)
+    threshold: 0.7                 # Global detection threshold (0.0-1.0)
     use_cpu: true                  # Run on CPU
     pii_mapping_path: "config/pii_type_mapping.json"  # Path to PII type mapping
 ```
+
+### Category-Level PII Detection
+
+**New in v0.x**: Configure PII detection thresholds at the category level for fine-grained control based on category-specific requirements and consequences.
+
+```yaml
+# Global PII configuration - applies to all categories by default
+classifier:
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_model"
+    threshold: 0.7  # Global default threshold
+    use_cpu: true
+    pii_mapping_path: "config/pii_type_mapping.json"
+
+# Category-specific PII settings
+categories:
+  # Healthcare category: High threshold for critical PII
+  - name: healthcare
+    description: "Healthcare and medical queries"
+    pii_enabled: true       # Enable PII detection (default: inherits from global)
+    pii_threshold: 0.9      # Higher threshold for stricter detection
+    model_scores:
+      - model: secure-llm
+        score: 0.9
+        use_reasoning: false
+
+  # Finance category: Very high threshold for financial PII
+  - name: finance
+    description: "Financial queries"
+    pii_enabled: true
+    pii_threshold: 0.95     # Very strict for SSN, credit cards, etc.
+    model_scores:
+      - model: secure-llm
+        score: 0.9
+        use_reasoning: false
+
+  # Code generation: Lower threshold to reduce false positives
+  - name: code_generation
+    description: "Code and technical content"
+    pii_enabled: true
+    pii_threshold: 0.5      # Lower to avoid flagging code artifacts as PII
+    model_scores:
+      - model: general-llm
+        score: 0.9
+        use_reasoning: true
+
+  # Testing: Disable PII detection
+  - name: testing
+    description: "Test scenarios"
+    pii_enabled: false      # Disable for testing
+    model_scores:
+      - model: general-llm
+        score: 0.6
+        use_reasoning: false
+
+  # General: Uses global settings
+  - name: general
+    description: "General queries"
+    # pii_enabled and pii_threshold not specified - inherits global settings
+    model_scores:
+      - model: general-llm
+        score: 0.5
+        use_reasoning: false
+```
+
+**Configuration Inheritance:**
+- `pii_enabled`: If not specified, inherits from global PII model configuration (enabled if `pii_model` is configured)
+- `pii_threshold`: If not specified, inherits from `classifier.pii_model.threshold`
+
+**Threshold Guidelines by Category:**
+- **Critical categories** (healthcare, finance, legal): 0.9-0.95 - Strict detection, fewer false positives
+- **Customer-facing** (support, sales): 0.75-0.85 - Balanced detection
+- **Internal tools** (code, testing): 0.5-0.65 - Relaxed to reduce false positives
+- **Public content** (docs, marketing): 0.6-0.75 - Broader detection before publication
 
 ### Model-Specific PII Policies
 
@@ -133,12 +207,42 @@ pii_requests_masked_total 15
 - Start with `threshold: 0.7` for balanced accuracy
 - Increase to `0.8-0.9` for high-security environments
 - Decrease to `0.5-0.6` for broader detection
+- **Use category-level thresholds** for fine-grained control based on PII type consequences
+
+#### Category-Specific Threshold Guidelines
+
+Different categories have different PII sensitivity requirements:
+
+**Critical Categories (Healthcare, Finance, Legal):**
+- Threshold: `0.9-0.95`
+- Rationale: High precision required; false positives on medical/financial terms are costly
+- Example PII: SSN, Credit Cards, Medical Records
+- Risk if too low: Too many false positives disrupt workflows
+
+**Customer-Facing Categories (Support, Sales):**
+- Threshold: `0.75-0.85`
+- Rationale: Balance between catching PII and avoiding false positives
+- Example PII: Email, Phone, Names, Addresses
+- Risk if too low: Moderate false positive rate
+
+**Internal Tools (Code Generation, Development):**
+- Threshold: `0.5-0.65`
+- Rationale: Code/technical content often triggers false positives; lower threshold needed
+- Example PII: Variable names, test data that looks like PII
+- Risk if too high: May still flag harmless code artifacts
+
+**Public Content (Documentation, Marketing):**
+- Threshold: `0.6-0.75`
+- Rationale: Broader detection before publication; acceptable to review more false positives
+- Example PII: Author names, example emails, placeholder data
+- Risk if too high: May miss PII that could be published
 
 ### 2. Policy Design
 
 - Use `allow_by_default: false` for sensitive models
 - Explicitly list allowed PII types for clarity
 - Consider different policies for different use cases
+- **Combine category-level thresholds with model-level policies** for defense in depth
 
 ### 3. Action Selection
 

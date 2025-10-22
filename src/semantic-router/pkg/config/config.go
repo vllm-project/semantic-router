@@ -376,6 +376,12 @@ type Category struct {
 	// JailbreakThreshold defines the confidence threshold for jailbreak detection (0.0-1.0)
 	// If nil, uses the global threshold from PromptGuard.Threshold
 	JailbreakThreshold *float32 `yaml:"jailbreak_threshold,omitempty"`
+	// PIIEnabled controls whether PII detection is enabled for this category
+	// If nil, inherits from global PII detection enabled setting (based on classifier.pii_model configuration)
+	PIIEnabled *bool `yaml:"pii_enabled,omitempty"`
+	// PIIThreshold defines the confidence threshold for PII detection (0.0-1.0)
+	// If nil, uses the global threshold from Classifier.PIIModel.Threshold
+	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
 }
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -842,4 +848,26 @@ func (c *RouterConfig) GetJailbreakThresholdForCategory(categoryName string) flo
 	}
 	// Fall back to global threshold
 	return c.PromptGuard.Threshold
+}
+
+// IsPIIEnabledForCategory returns whether PII detection is enabled for a specific category
+// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
+func (c *RouterConfig) IsPIIEnabledForCategory(categoryName string) bool {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.PIIEnabled != nil {
+		return *category.PIIEnabled
+	}
+	// Fall back to global setting
+	return c.IsPIIClassifierEnabled()
+}
+
+// GetPIIThresholdForCategory returns the effective PII detection threshold for a category
+// Priority: category-specific > global classifier.pii_model threshold
+func (c *RouterConfig) GetPIIThresholdForCategory(categoryName string) float32 {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.PIIThreshold != nil {
+		return *category.PIIThreshold
+	}
+	// Fall back to global threshold
+	return c.Classifier.PIIModel.Threshold
 }

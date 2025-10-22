@@ -2113,4 +2113,150 @@ categories:
 			})
 		})
 	})
+
+	Describe("GetPIIThresholdForCategory", func() {
+		Context("when global threshold is set", func() {
+			It("should return global threshold for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.7)))
+			})
+
+			It("should return category-specific threshold when set", func() {
+				category := config.Category{
+					Name:         "test",
+					PIIThreshold: config.Float32Ptr(0.9),
+					ModelScores:  []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.9)))
+			})
+
+			It("should allow lower threshold override", func() {
+				category := config.Category{
+					Name:         "test",
+					PIIThreshold: config.Float32Ptr(0.5),
+					ModelScores:  []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.5)))
+			})
+
+			It("should allow higher threshold override", func() {
+				category := config.Category{
+					Name:         "test",
+					PIIThreshold: config.Float32Ptr(0.95),
+					ModelScores:  []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.95)))
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global threshold", func() {
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.8
+
+				Expect(cfg.GetPIIThresholdForCategory("nonexistent")).To(Equal(float32(0.8)))
+			})
+		})
+	})
+
+	Describe("IsPIIEnabledForCategory", func() {
+		Context("when global PII is enabled", func() {
+			It("should return true for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.ModelID = "test-model"
+				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
+
+				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeTrue())
+			})
+
+			It("should return category-specific setting when set to false", func() {
+				category := config.Category{
+					Name:        "test",
+					PIIEnabled:  config.BoolPtr(false),
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.ModelID = "test-model"
+				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
+
+				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeFalse())
+			})
+
+			It("should return category-specific setting when set to true", func() {
+				category := config.Category{
+					Name:        "test",
+					PIIEnabled:  config.BoolPtr(true),
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				// Global is disabled (no model ID)
+				cfg.Classifier.PIIModel.ModelID = ""
+
+				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeTrue())
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global setting", func() {
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{},
+				}
+				cfg.Classifier.PIIModel.ModelID = "test-model"
+				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
+
+				Expect(cfg.IsPIIEnabledForCategory("nonexistent")).To(BeTrue())
+			})
+		})
+	})
 })
