@@ -310,35 +310,32 @@ classifier:
     pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
 categories:
 - name: business
-  use_reasoning: false
-  reasoning_description: Business content is typically conversational
-  reasoning_effort: low
   model_scores:
   - model: phi4
     score: 0.2
+    use_reasoning: false  # Business doesn't need reasoning
   - model: qwen3-0.6B
     score: 0.0
+    use_reasoning: false
 - name: law
-  use_reasoning: false
-  reasoning_description: Legal content is typically explanatory
-  reasoning_effort: medium
   model_scores:
   - model: phi4
     score: 0.8
+    use_reasoning: false  # Legal content is explanatory
   - model: qwen3-0.6B
     score: 0.2
+    use_reasoning: false
 
 # Ignore some categories here
 
 - name: engineering
-  use_reasoning: true
-  reasoning_description: Engineering problems require systematic problem-solving
-  reasoning_effort: high
   model_scores:
   - model: phi4
     score: 0.6
+    use_reasoning: true  # Engineering requires problem-solving
   - model: qwen3-0.6B
     score: 0.2
+    use_reasoning: true
 default_reasoning_effort: medium
 default_model: phi4
 ```
