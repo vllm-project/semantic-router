@@ -38,7 +38,7 @@ tools:
 
 # Jailbreak protection
 prompt_guard:
-  enabled: false
+  enabled: false  # Global default - can be overridden per category
   use_modernbert: true
   model_id: "models/jailbreak_classifier_modernbert-base_model"
   threshold: 0.7
@@ -84,6 +84,8 @@ categories:
   # Optional: Category-level cache settings
   # semantic_cache_enabled: true
   # semantic_cache_similarity_threshold: 0.9  # Higher threshold for math
+  # Optional: Category-level jailbreak settings
+  # jailbreak_enabled: true  # Override global jailbreak detection
 - name: computer science
   model_scores:
   - model: your-model

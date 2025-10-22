@@ -76,7 +76,7 @@ Detect PII in the prompt, avoiding sending PII to the LLM so as to protect the p
 
 #### Prompt guard
 
-Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving.
+Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving. Can be configured globally or at the category level for fine-grained security control.
 
 ### Similarity Caching ⚡️
 

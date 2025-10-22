@@ -43,13 +43,58 @@ Enable jailbreak detection in your configuration:
 ```yaml
 # config/config.yaml
 prompt_guard:
-  enabled: true
+  enabled: true  # Global default - can be overridden per category
   model_id: "models/jailbreak_classifier_modernbert-base_model"
   threshold: 0.7                   # Detection sensitivity (0.0-1.0)
   use_cpu: true                    # Run on CPU
   use_modernbert: true             # Use ModernBERT architecture
   jailbreak_mapping_path: "config/jailbreak_type_mapping.json"  # Path to jailbreak type mapping
 ```
+
+### Category-Level Jailbreak Protection
+
+You can enable or disable jailbreak detection at the category level for fine-grained security control:
+
+```yaml
+# Global default setting
+prompt_guard:
+  enabled: true  # Default for all categories
+
+categories:
+  # High-security category - explicitly enable
+  - name: customer_support
+    jailbreak_enabled: true  # Strict protection for public-facing
+    model_scores:
+      - model: qwen3
+        score: 0.8
+
+  # Internal tool - disable for trusted environment
+  - name: code_generation
+    jailbreak_enabled: false  # Allow broader input for developers
+    model_scores:
+      - model: qwen3
+        score: 0.9
+
+  # General category - inherits global setting
+  - name: general
+    # No jailbreak_enabled specified - uses global prompt_guard.enabled
+    model_scores:
+      - model: qwen3
+        score: 0.5
+```
+
+**Category-Level Behavior**:
+
+- **When `jailbreak_enabled` is not specified**: Category inherits from global `prompt_guard.enabled`
+- **When `jailbreak_enabled: true`**: Jailbreak detection is explicitly enabled for this category
+- **When `jailbreak_enabled: false`**: Jailbreak detection is explicitly disabled for this category
+- **Category-specific setting always overrides global setting** when explicitly configured
+
+**Use Cases**:
+
+- **Enable for public-facing categories**: Customer support, business advice
+- **Disable for internal tools**: Code generation for developers, testing environments
+- **Inherit for general categories**: Use global default for most categories
 
 ## How Jailbreak Protection Works
 
@@ -134,8 +179,37 @@ security_policy_violations_total 45
 ### 4. Integration with Routing
 
 - Apply stricter protection to sensitive models
-- Use different thresholds for different categories
+- Use category-level jailbreak settings for different domains
 - Combine with PII detection for comprehensive security
+
+**Example**: Configure different jailbreak policies per category:
+
+```yaml
+prompt_guard:
+  enabled: true  # Global default
+
+categories:
+  # Strict protection for customer-facing categories
+  - name: customer_support
+    jailbreak_enabled: true
+    model_scores:
+      - model: safe-model
+        score: 0.9
+
+  # Relaxed protection for internal development
+  - name: code_generation
+    jailbreak_enabled: false  # Allow broader input
+    model_scores:
+      - model: code-model
+        score: 0.9
+
+  # Use global default for general queries
+  - name: general
+    # Inherits from prompt_guard.enabled
+    model_scores:
+      - model: general-model
+        score: 0.7
+```
 
 ## Troubleshooting
 

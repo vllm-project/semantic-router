@@ -83,6 +83,34 @@ curl -X PUT http://localhost:8080/config/system-prompts \
 
 ### Reasoning Configuration
 
+#### `jailbreak_enabled` (Optional)
+
+- **Type**: Boolean
+- **Description**: Whether to enable jailbreak detection for this category
+- **Default**: Inherits from global `prompt_guard.enabled` setting
+- **Impact**: Enables or disables jailbreak protection for this specific category
+
+```yaml
+categories:
+  - name: customer_support
+    jailbreak_enabled: true  # Explicitly enable for public-facing
+    model_scores:
+      - model: qwen3
+        score: 0.8
+
+  - name: code_generation
+    jailbreak_enabled: false  # Disable for internal tools
+    model_scores:
+      - model: qwen3
+        score: 0.9
+
+  - name: general
+    # No jailbreak_enabled - inherits from global prompt_guard.enabled
+    model_scores:
+      - model: qwen3
+        score: 0.5
+```
+
 #### `use_reasoning` (Required)
 
 - **Type**: Boolean
@@ -196,7 +224,46 @@ categories:
         score: 0.2
 ```
 
-### Example 3: Multi-Category Configuration
+### Example 3: Security-Focused Configuration (Jailbreak Protection)
+
+```yaml
+categories:
+  # High-security public-facing category
+  - name: "customer_support"
+    description: "Customer support and general inquiries"
+    jailbreak_enabled: true  # Strict jailbreak protection
+    use_reasoning: false
+    model_scores:
+      - model: "phi4"
+        score: 0.9
+      - model: "mistral-small3.1"
+        score: 0.7
+
+  # Trusted internal development category
+  - name: "code_generation"
+    description: "Internal code generation for developers"
+    jailbreak_enabled: false  # Allow broader input for trusted users
+    use_reasoning: true
+    reasoning_effort: "medium"
+    model_scores:
+      - model: "gemma3:27b"
+        score: 0.9
+      - model: "phi4"
+        score: 0.7
+
+  # General category using global default
+  - name: "general"
+    description: "General queries"
+    # jailbreak_enabled not specified - inherits from global prompt_guard.enabled
+    use_reasoning: false
+    model_scores:
+      - model: "phi4"
+        score: 0.6
+      - model: "mistral-small3.1"
+        score: 0.6
+```
+
+### Example 4: Multi-Category Configuration
 
 ```yaml
 categories:
