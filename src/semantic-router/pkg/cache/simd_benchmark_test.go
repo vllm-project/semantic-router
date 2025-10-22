@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 )
@@ -19,7 +20,7 @@ func BenchmarkDotProduct(b *testing.B) {
 			vec_b[i] = rand.Float32()
 		}
 
-		b.Run("SIMD/"+string(rune(size)), func(b *testing.B) {
+		b.Run(fmt.Sprintf("SIMD/%d", size), func(b *testing.B) {
 			b.ReportAllocs()
 			var sum float32
 			for i := 0; i < b.N; i++ {
@@ -28,7 +29,7 @@ func BenchmarkDotProduct(b *testing.B) {
 			_ = sum
 		})
 
-		b.Run("Scalar/"+string(rune(size)), func(b *testing.B) {
+		b.Run(fmt.Sprintf("Scalar/%d", size), func(b *testing.B) {
 			b.ReportAllocs()
 			var sum float32
 			for i := 0; i < b.N; i++ {

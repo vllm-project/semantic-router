@@ -205,10 +205,14 @@ func loadMilvusConfig(configPath string) (*MilvusConfig, error) {
 	fmt.Printf("[DEBUG]   Development.AutoCreateCollection: %v\n", config.Development.AutoCreateCollection)
 	fmt.Printf("[DEBUG]   Development.DropCollectionOnStartup: %v\n", config.Development.DropCollectionOnStartup)
 
-	// WORKAROUND: Force development settings for benchmarks
+	// WORKAROUND: Force development settings for benchmarks/tests only
 	// There seems to be a YAML parsing issue with sigs.k8s.io/yaml
-	if !config.Development.AutoCreateCollection && !config.Development.DropCollectionOnStartup {
-		fmt.Printf("[WARN] Development settings parsed as false, forcing to true for benchmarks\n")
+	// Only apply this workaround if SR_BENCHMARK_MODE or SR_TEST_MODE is set
+	benchmarkMode := os.Getenv("SR_BENCHMARK_MODE")
+	testMode := os.Getenv("SR_TEST_MODE")
+	if (benchmarkMode == "1" || benchmarkMode == "true" || testMode == "1" || testMode == "true") &&
+		!config.Development.AutoCreateCollection && !config.Development.DropCollectionOnStartup {
+		fmt.Printf("[WARN] Development settings parsed as false, forcing to true for benchmarks/tests\n")
 		config.Development.AutoCreateCollection = true
 		config.Development.DropCollectionOnStartup = true
 	}

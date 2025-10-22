@@ -580,9 +580,6 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 	metrics.RecordCacheOperation("hybrid", "find_similar", "miss", time.Since(start).Seconds())
 	metrics.RecordCacheMiss()
 
-	// Suppress context error to avoid noise
-	_ = ctx
-
 	return nil, false, nil
 }
 
