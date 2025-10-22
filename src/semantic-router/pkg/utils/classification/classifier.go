@@ -425,6 +425,11 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts
 func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, error) {
+	return c.CheckForJailbreakWithThreshold(text, c.Config.PromptGuard.Threshold)
+}
+
+// CheckForJailbreakWithThreshold analyzes the given text for jailbreak attempts with a custom threshold
+func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float32) (bool, string, float32, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -453,14 +458,14 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 	}
 
 	// Check if confidence meets threshold and indicates jailbreak
-	isJailbreak := result.Confidence >= c.Config.PromptGuard.Threshold && jailbreakType == "jailbreak"
+	isJailbreak := result.Confidence >= threshold && jailbreakType == "jailbreak"
 
 	if isJailbreak {
 		observability.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, threshold: %.3f)",
-			jailbreakType, result.Confidence, c.Config.PromptGuard.Threshold)
+			jailbreakType, result.Confidence, threshold)
 	} else {
 		observability.Infof("BENIGN: '%s' (confidence: %.3f, threshold: %.3f)",
-			jailbreakType, result.Confidence, c.Config.PromptGuard.Threshold)
+			jailbreakType, result.Confidence, threshold)
 	}
 
 	return isJailbreak, jailbreakType, result.Confidence, nil
@@ -468,6 +473,11 @@ func (c *Classifier) CheckForJailbreak(text string) (bool, string, float32, erro
 
 // AnalyzeContentForJailbreak analyzes multiple content pieces for jailbreak attempts
 func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []JailbreakDetection, error) {
+	return c.AnalyzeContentForJailbreakWithThreshold(contentList, c.Config.PromptGuard.Threshold)
+}
+
+// AnalyzeContentForJailbreakWithThreshold analyzes multiple content pieces for jailbreak attempts with a custom threshold
+func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []string, threshold float32) (bool, []JailbreakDetection, error) {
 	if !c.IsJailbreakEnabled() {
 		return false, nil, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -480,7 +490,7 @@ func (c *Classifier) AnalyzeContentForJailbreak(contentList []string) (bool, []J
 			continue
 		}
 
-		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreak(content)
+		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(content, threshold)
 		if err != nil {
 			observability.Errorf("Error analyzing content %d: %v", i, err)
 			continue

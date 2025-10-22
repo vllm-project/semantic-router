@@ -111,6 +111,42 @@ categories:
         score: 0.5
 ```
 
+#### `jailbreak_threshold` (Optional)
+
+- **Type**: Float (0.0-1.0)
+- **Description**: Confidence threshold for jailbreak detection
+- **Default**: Inherits from global `prompt_guard.threshold` setting
+- **Impact**: Controls sensitivity of jailbreak detection for this category
+- **Tuning**: Higher values = stricter (fewer false positives), Lower values = more sensitive (catches more attacks)
+
+```yaml
+categories:
+  - name: customer_support
+    jailbreak_enabled: true
+    jailbreak_threshold: 0.9  # Strict detection for public-facing
+    model_scores:
+      - model: qwen3
+        score: 0.8
+
+  - name: code_generation
+    jailbreak_enabled: true
+    jailbreak_threshold: 0.5  # Relaxed to reduce false positives on code
+    model_scores:
+      - model: qwen3
+        score: 0.9
+
+  - name: general
+    # No jailbreak_threshold - inherits from global prompt_guard.threshold
+    model_scores:
+      - model: qwen3
+        score: 0.5
+```
+
+**Threshold Guidelines**:
+- **0.8-0.95**: High-security categories (customer support, business)
+- **0.6-0.8**: Standard categories (general queries)
+- **0.4-0.6**: Technical categories (code generation, development tools)
+
 #### `use_reasoning` (Required)
 
 - **Type**: Boolean
@@ -228,10 +264,11 @@ categories:
 
 ```yaml
 categories:
-  # High-security public-facing category
+  # High-security public-facing category with strict threshold
   - name: "customer_support"
     description: "Customer support and general inquiries"
     jailbreak_enabled: true  # Strict jailbreak protection
+    jailbreak_threshold: 0.9  # High threshold for public-facing
     use_reasoning: false
     model_scores:
       - model: "phi4"
@@ -239,10 +276,11 @@ categories:
       - model: "mistral-small3.1"
         score: 0.7
 
-  # Trusted internal development category
+  # Technical category with relaxed threshold
   - name: "code_generation"
-    description: "Internal code generation for developers"
-    jailbreak_enabled: false  # Allow broader input for trusted users
+    description: "Code generation for developers"
+    jailbreak_enabled: true  # Keep enabled
+    jailbreak_threshold: 0.5  # Lower threshold to reduce false positives on code
     use_reasoning: true
     reasoning_effort: "medium"
     model_scores:

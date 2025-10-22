@@ -53,31 +53,35 @@ prompt_guard:
 
 ### Category-Level Jailbreak Protection
 
-You can enable or disable jailbreak detection at the category level for fine-grained security control:
+You can configure jailbreak detection at the category level for fine-grained security control, including both enabling/disabling and threshold customization:
 
 ```yaml
-# Global default setting
+# Global default settings
 prompt_guard:
   enabled: true  # Default for all categories
+  threshold: 0.7  # Default threshold for all categories
 
 categories:
-  # High-security category - explicitly enable
+  # High-security category - strict protection with high threshold
   - name: customer_support
     jailbreak_enabled: true  # Strict protection for public-facing
+    jailbreak_threshold: 0.9  # Higher threshold for stricter detection
     model_scores:
       - model: qwen3
         score: 0.8
 
-  # Internal tool - disable for trusted environment
+  # Internal tool - relaxed threshold for code/technical content
   - name: code_generation
-    jailbreak_enabled: false  # Allow broader input for developers
+    jailbreak_enabled: true  # Keep enabled but with relaxed threshold
+    jailbreak_threshold: 0.5  # Lower threshold to reduce false positives
     model_scores:
       - model: qwen3
         score: 0.9
 
-  # General category - inherits global setting
+  # General category - inherits global settings
   - name: general
-    # No jailbreak_enabled specified - uses global prompt_guard.enabled
+    # No jailbreak_enabled or jailbreak_threshold specified
+    # Uses global prompt_guard.enabled (true) and threshold (0.7)
     model_scores:
       - model: qwen3
         score: 0.5
@@ -88,13 +92,23 @@ categories:
 - **When `jailbreak_enabled` is not specified**: Category inherits from global `prompt_guard.enabled`
 - **When `jailbreak_enabled: true`**: Jailbreak detection is explicitly enabled for this category
 - **When `jailbreak_enabled: false`**: Jailbreak detection is explicitly disabled for this category
-- **Category-specific setting always overrides global setting** when explicitly configured
+- **When `jailbreak_threshold` is not specified**: Category inherits from global `prompt_guard.threshold`
+- **When `jailbreak_threshold: 0.X`**: Uses category-specific threshold (0.0-1.0)
+- **Category-specific settings always override global settings** when explicitly configured
+
+**Threshold Tuning Guide**:
+
+- **High threshold (0.8-0.95)**: Stricter detection, fewer false positives, may miss subtle attacks
+- **Medium threshold (0.6-0.8)**: Balanced detection, good for most use cases
+- **Low threshold (0.4-0.6)**: More sensitive, catches more attacks, higher false positive rate
+- **Recommended**: Start with 0.7 globally, adjust per category based on risk profile and false positive tolerance
 
 **Use Cases**:
 
-- **Enable for public-facing categories**: Customer support, business advice
-- **Disable for internal tools**: Code generation for developers, testing environments
-- **Inherit for general categories**: Use global default for most categories
+- **High-security categories (0.8-0.9 threshold)**: Customer support, business advice, public-facing APIs
+- **Technical categories (0.5-0.6 threshold)**: Code generation, developer tools (reduce false positives on technical jargon)
+- **Internal tools (0.5 threshold or disabled)**: Testing environments, trusted internal applications
+- **General categories (inherit global)**: Use global default for most categories
 
 ## How Jailbreak Protection Works
 

@@ -438,6 +438,12 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 		jailbreakEnabled = jailbreakEnabled && r.Config.IsJailbreakEnabledForCategory(categoryName)
 	}
 
+	// Get category-specific threshold
+	jailbreakThreshold := r.Config.PromptGuard.Threshold
+	if categoryName != "" && r.Config != nil {
+		jailbreakThreshold = r.Config.GetJailbreakThresholdForCategory(categoryName)
+	}
+
 	// Perform jailbreak detection on all message content
 	if jailbreakEnabled {
 		// Start jailbreak detection span
@@ -445,7 +451,7 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 		defer span.End()
 
 		startTime := time.Now()
-		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
+		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreakWithThreshold(allContent, jailbreakThreshold)
 		detectionTime := time.Since(startTime).Milliseconds()
 
 		observability.SetSpanAttributes(span,

@@ -63,6 +63,7 @@ categories:
   - name: business
     system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
     # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category
+    # jailbreak_threshold: 0.8  # Optional: Override global jailbreak threshold per category
     model_scores:
       - model: qwen3
         score: 0.7
