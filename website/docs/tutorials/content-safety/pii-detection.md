@@ -51,111 +51,81 @@ classifier:
     pii_mapping_path: "config/pii_type_mapping.json"  # Path to PII type mapping
 ```
 
-### Category-Level PII Detection
+### Model-Level PII Policies
 
-**New in v0.x**: Configure PII detection thresholds at the category level for fine-grained control based on category-specific requirements and consequences.
+**Current Implementation**: PII detection policies are configured at the **model level**, not the category level. Each model can specify which PII types it allows or blocks.
 
 ```yaml
-# Global PII configuration - applies to all categories by default
+# Global PII configuration - detection threshold applies to all categories
 classifier:
   pii_model:
-    model_id: "models/pii_classifier_modernbert-base_model"
-    threshold: 0.7  # Global default threshold
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    threshold: 0.7  # Global detection threshold
     use_cpu: true
-    pii_mapping_path: "config/pii_type_mapping.json"
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
-# Category-specific PII settings
-categories:
-  # Healthcare category: High threshold for critical PII
-  - name: healthcare
-    description: "Healthcare and medical queries"
-    pii_enabled: true       # Enable PII detection (default: inherits from global)
-    pii_threshold: 0.9      # Higher threshold for stricter detection
-    model_scores:
-      - model: secure-llm
-        score: 0.9
-        use_reasoning: false
-
-  # Finance category: Very high threshold for financial PII
-  - name: finance
-    description: "Financial queries"
-    pii_enabled: true
-    pii_threshold: 0.95     # Very strict for SSN, credit cards, etc.
-    model_scores:
-      - model: secure-llm
-        score: 0.9
-        use_reasoning: false
-
-  # Code generation: Lower threshold to reduce false positives
-  - name: code_generation
-    description: "Code and technical content"
-    pii_enabled: true
-    pii_threshold: 0.5      # Lower to avoid flagging code artifacts as PII
-    model_scores:
-      - model: general-llm
-        score: 0.9
-        use_reasoning: true
-
-  # Testing: Disable PII detection
-  - name: testing
-    description: "Test scenarios"
-    pii_enabled: false      # Disable for testing
-    model_scores:
-      - model: general-llm
-        score: 0.6
-        use_reasoning: false
-
-  # General: Uses global settings
-  - name: general
-    description: "General queries"
-    # pii_enabled and pii_threshold not specified - inherits global settings
-    model_scores:
-      - model: general-llm
-        score: 0.5
-        use_reasoning: false
-```
-
-**Configuration Inheritance:**
-
-- `pii_enabled`: If not specified, inherits from global PII model configuration (enabled if `pii_model` is configured)
-- `pii_threshold`: If not specified, inherits from `classifier.pii_model.threshold`
-
-**Threshold Guidelines by Category:**
-
-- **Critical categories** (healthcare, finance, legal): 0.9-0.95 - Strict detection, fewer false positives
-- **Customer-facing** (support, sales): 0.75-0.85 - Balanced detection
-- **Internal tools** (code, testing): 0.5-0.65 - Relaxed to reduce false positives
-- **Public content** (docs, marketing): 0.6-0.75 - Broader detection before publication
-
-### Model-Specific PII Policies
-
-Configure different PII policies for different models:
-
-```yaml
-# vLLM endpoints configuration
-vllm_endpoints:
-  - name: secure-model
-    address: "127.0.0.1"
-    port: 8080
-  - name: general-model
-    address: "127.0.0.1"
-    port: 8081
-
-# Model-specific configurations
+# Model-specific PII policies - controls what PII each model allows
 model_config:
-  secure-llm:
+  "secure-healthcare-llm":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
     pii_policy:
-      allow_by_default: false      # Block all PII by default
-      pii_types:                   # Only allow these specific types
-        - "EMAIL_ADDRESS"
-        - "GPE"
-        - "ORGANIZATION"
+      allow_by_default: false      # Block all PII by default for healthcare model
+      pii_types_allowed:           # Only allow these specific types
+        - "PERSON"                 # Patient names may be needed
+        - "GPE"                    # Geographic locations
 
-  general-llm:
+  "finance-llm":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint2"]
     pii_policy:
-      allow_by_default: true       # Allow all PII by default
-      pii_types: []                # Not used when allow_by_default is true
+      allow_by_default: false      # Block all PII by default for finance
+      pii_types_allowed: []        # Don't allow any PII types
+
+  "general-llm":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true       # Allow all PII for general model
+      # pii_types_allowed not needed when allow_by_default is true
+
+# Categories route to models based on model_scores
+categories:
+  - name: healthcare
+    system_prompt: "You are a healthcare expert..."
+    model_scores:
+      - model: secure-healthcare-llm  # This model has strict PII policy
+        score: 1.0
+        use_reasoning: false
+
+  - name: finance
+    system_prompt: "You are a finance expert..."
+    model_scores:
+      - model: finance-llm  # This model blocks all PII
+        score: 1.0
+        use_reasoning: false
+
+  - name: general
+    system_prompt: "You are a helpful assistant..."
+    model_scores:
+      - model: general-llm  # This model allows PII
+        score: 1.0
+        use_reasoning: false
 ```
+
+**How It Works:**
+
+1. **Detection**: PII classifier detects PII in the input using the global threshold (0.7)
+2. **Model Selection**: Router selects a model based on category classification
+3. **Policy Check**: Router checks if the selected model's `pii_policy` allows the detected PII types
+4. **Routing Decision**: If PII is detected and the model blocks it, the request is rejected
+
+**Configuration Options:**
+
+- `allow_by_default: true` - Model allows all PII types (default if not specified)
+- `allow_by_default: false` with `pii_types_allowed: []` - Model blocks all PII
+- `allow_by_default: false` with `pii_types_allowed: ["TYPE1", "TYPE2"]` - Model only allows specific PII types
+
 
 ## How PII Detection Works
 
@@ -175,11 +145,7 @@ PII detection is automatically integrated into the routing process. When a reque
 3. Filters out models that don't allow the detected PII types
 4. Routes to an appropriate model that can handle the PII
 
-**Note**: The current implementation uses the global PII threshold during automatic routing. To use category-specific thresholds, you can:
-
-- Configure thresholds appropriately for each category in your config
-- Access category-specific thresholds using `config.GetPIIThresholdForCategory(categoryName)` in your code
-- Call `classifier.ClassifyPIIWithThreshold(text, threshold)` with the category-specific threshold when you have category context
+**Note**: PII detection uses a global threshold (`classifier.pii_model.threshold`) for detection. PII policies are enforced at the model level via `pii_policy` configuration, which controls what types of PII each model accepts.
 
 ### Classification Endpoint
 
@@ -215,46 +181,42 @@ pii_requests_masked_total 15
 - Start with `threshold: 0.7` for balanced accuracy
 - Increase to `0.8-0.9` for high-security environments
 - Decrease to `0.5-0.6` for broader detection
-- **Use category-level thresholds** for fine-grained control based on PII type consequences
+- **Use model-level policies** to control which PII types each model can handle
 
-#### Category-Specific Threshold Guidelines
+#### PII Sensitivity Guidelines by Use Case
 
-Different categories have different PII sensitivity requirements:
+Different use cases have different PII sensitivity requirements. Configure the global detection threshold based on your most sensitive use case, then use model-level `pii_policy` to control access:
 
-**Critical Categories (Healthcare, Finance, Legal):**
+**High-Security Models (Healthcare, Finance, Legal):**
 
-- Threshold: `0.9-0.95`
-- Rationale: High precision required; false positives on medical/financial terms are costly
-- Example PII: SSN, Credit Cards, Medical Records
-- Risk if too low: Too many false positives disrupt workflows
+- Global threshold: `0.7` (standard detection)
+- Model policy: `allow_by_default: false` with specific `pii_types_allowed`
+- Rationale: Detect all PII, then selectively allow only necessary types
+- Example: Healthcare model allows `PERSON` for patient names but blocks `SSN`, `CREDIT_CARD`
+- Risk management: Model-level filtering prevents PII leakage
 
-**Customer-Facing Categories (Support, Sales):**
+**General-Purpose Models:**
 
-- Threshold: `0.75-0.85`
-- Rationale: Balance between catching PII and avoiding false positives
-- Example PII: Email, Phone, Names, Addresses
-- Risk if too low: Moderate false positive rate
+- Global threshold: `0.7` (standard detection)
+- Model policy: `allow_by_default: true` (allows all PII)
+- Rationale: General models can handle PII for broader use cases
+- Example: Support chatbots need to process customer names, emails, etc.
+- Risk management: Ensure logging and monitoring for PII usage
 
-**Internal Tools (Code Generation, Development):**
+**Restricted Models (Code, Development):**
 
-- Threshold: `0.5-0.65`
-- Rationale: Code/technical content often triggers false positives; lower threshold needed
-- Example PII: Variable names, test data that looks like PII
-- Risk if too high: May still flag harmless code artifacts
-
-**Public Content (Documentation, Marketing):**
-
-- Threshold: `0.6-0.75`
-- Rationale: Broader detection before publication; acceptable to review more false positives
-- Example PII: Author names, example emails, placeholder data
-- Risk if too high: May miss PII that could be published
+- Global threshold: `0.7` (keep standard to catch real PII)
+- Model policy: `allow_by_default: true` or specific allowed types
+- Rationale: Code artifacts may look like PII (UUIDs, test data)
+- Example: Development tools need to process code with test SSNs, example emails
+- Risk management: Use separate models for production vs development
 
 ### 2. Policy Design
 
 - Use `allow_by_default: false` for sensitive models
 - Explicitly list allowed PII types for clarity
 - Consider different policies for different use cases
-- **Combine category-level thresholds with model-level policies** for defense in depth
+- **Use strict global thresholds combined with model-level policies** for defense in depth
 
 ### 3. Action Selection
 
