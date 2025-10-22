@@ -4,7 +4,8 @@ import (
 	"context"
 
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
-	defaultef "github.com/amikos-tech/chroma-go/pkg/embeddings/default_ef"
+	"github.com/amikos-tech/chroma-go/pkg/embeddings"
+	chroma_embedding "github.com/amikos-tech/chroma-go/pkg/embeddings"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
@@ -48,27 +49,23 @@ func NewChromaVectorDb(options ChromaVectorDbOptions) (*ChromaVectorDb, error) {
 	}, nil
 }
 
-func (c *ChromaVectorDb) Query(queryText string) ([]string, error) { // Assume single query text for now
-	ef, closeef, err := defaultef.NewDefaultEmbeddingFunction()
-
-	// make sure to call this to ensure proper resource release
-	defer func() {
-		err := closeef()
-		if err != nil {
-			observability.Warnf("Error closing default embedding function: %s \n", err)
-		}
-	}()
-	if err != nil {
-		observability.Errorf("Error creatings embedding function: %s \n", err)
-		return nil, err
-	}
-
-	coll, err := c.client.GetCollection(context.Background(), c.collection, chroma.WithEmbeddingFunctionGet(ef))
+func (c *ChromaVectorDb) Query(queryText string) ([]string, error) {
+	// Use a dummy embedding function here. The Chroma client demands it even though we
+	// would actually not use it. Instead, we fetch and pass embeddings ourselves.
+	embeddingFunction := chroma_embedding.NewConsistentHashEmbeddingFunction()
+	coll, err := c.client.GetCollection(context.Background(), c.collection, chroma.WithEmbeddingFunctionGet(embeddingFunction))
 	if err != nil {
 		observability.Errorf("Error getting collection: %s \n", err)
 		return nil, err
 	}
-	qr, err := coll.Query(context.Background(), chroma.WithQueryTexts(queryText))
+	es := NewOpenAIEmbeddingService(NewOpenAIEmbeddingServiceOptions{Endpoint: "http://localhost:11434/v1/"})
+	embeddingResult, err := es.Embed(queryText, "all-minilm")
+	if err != nil {
+		observability.Errorf("Error getting embedding: %s \n", err)
+		return nil, err
+	}
+	embeddings := embeddings.NewEmbeddingFromFloat64(embeddingResult)
+	qr, err := coll.Query(context.Background(), chroma.WithQueryEmbeddings(embeddings))
 	if err != nil {
 		observability.Errorf("Error querying collection: %s \n", err)
 		return nil, err
