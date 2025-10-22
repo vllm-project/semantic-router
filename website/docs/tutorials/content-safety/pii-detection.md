@@ -173,6 +173,12 @@ PII detection is automatically integrated into the routing process. When a reque
 3. Filters out models that don't allow the detected PII types
 4. Routes to an appropriate model that can handle the PII
 
+**Note**: The current implementation uses the global PII threshold during automatic routing. To use category-specific thresholds, you can:
+
+- Configure thresholds appropriately for each category in your config
+- Access category-specific thresholds using `config.GetPIIThresholdForCategory(categoryName)` in your code
+- Call `classifier.ClassifyPIIWithThreshold(text, threshold)` with the category-specific threshold when you have category context
+
 ### Classification Endpoint
 
 You can also check PII detection directly using the classification API:
