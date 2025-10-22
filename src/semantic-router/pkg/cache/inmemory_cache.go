@@ -240,20 +240,25 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 	return nil
 }
 
-// FindSimilar searches for semantically similar cached requests
+// FindSimilar searches for semantically similar cached requests using the default threshold
 func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
+	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+}
+
+// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		observability.Debugf("InMemoryCache.FindSimilar: cache disabled")
+		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
 	queryPreview := query
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("InMemoryCache.FindSimilar: searching for model='%s', query='%s' (len=%d chars)",
-		model, queryPreview, len(query))
+	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding using the configured model
 	queryEmbedding, err := c.generateEmbedding(query)
@@ -270,7 +275,7 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 		entriesChecked int
 		expiredCount   int
 	)
-	// Capture the lookup time after acquiring the read lock so TTL checks aren’t skewed by embedding work or lock wait
+	// Capture the lookup time after acquiring the read lock so TTL checks aren't skewed by embedding work or lock wait
 	now := time.Now()
 
 	// Compare with completed entries for the same model, tracking only the best match
@@ -325,26 +330,26 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	// Handle case where no suitable entries exist
 	if bestIndex < 0 {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("InMemoryCache.FindSimilar: no entries found with responses")
+		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
 	// Check if the best match meets the similarity threshold
-	if bestSimilarity >= c.similarityThreshold {
+	if bestSimilarity >= threshold {
 		atomic.AddInt64(&c.hitCount, 1)
 
 		c.mu.Lock()
 		c.updateAccessInfo(bestIndex, bestEntry)
 		c.mu.Unlock()
 
-		observability.Debugf("InMemoryCache.FindSimilar: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-			bestSimilarity, c.similarityThreshold, len(bestEntry.ResponseBody))
+		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+			bestSimilarity, threshold, len(bestEntry.ResponseBody))
 		observability.LogEvent("cache_hit", map[string]interface{}{
 			"backend":    "memory",
 			"similarity": bestSimilarity,
-			"threshold":  c.similarityThreshold,
+			"threshold":  threshold,
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
@@ -353,12 +358,12 @@ func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, e
 	}
 
 	atomic.AddInt64(&c.missCount, 1)
-	observability.Debugf("InMemoryCache.FindSimilar: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
-		bestSimilarity, c.similarityThreshold, entriesChecked)
+	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
+		bestSimilarity, threshold, entriesChecked)
 	observability.LogEvent("cache_miss", map[string]interface{}{
 		"backend":         "memory",
 		"best_similarity": bestSimilarity,
-		"threshold":       c.similarityThreshold,
+		"threshold":       threshold,
 		"model":           model,
 		"entries_checked": entriesChecked,
 	})

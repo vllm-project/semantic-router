@@ -107,6 +107,9 @@ categories:
         score: 0.4
         use_reasoning: false
   - name: psychology
+    # Example: Strict cache threshold for psychology - clinical nuances matter
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.92
     model_scores:
       - model: "Model-A"
         score: 0.6
@@ -156,6 +159,9 @@ categories:
         score: 0.4
         use_reasoning: false
   - name: other
+    # Example: Lower threshold for general queries - better cache hit rate
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.75
     model_scores:
       - model: "Model-B"
         score: 0.8
@@ -168,6 +174,9 @@ categories:
         score: 0.6
         use_reasoning: false
   - name: health
+    # Example: Very strict cache threshold for health - word changes matter medically
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.95
     model_scores:
       - model: "Model-B"
         score: 0.8

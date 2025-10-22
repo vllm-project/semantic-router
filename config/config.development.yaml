@@ -47,6 +47,9 @@ classifier:
 categories:
   - name: test
     system_prompt: "You are a test assistant."
+    # Example: Category-level cache settings
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.85
     model_scores:
       - model: test-model
         score: 1.0

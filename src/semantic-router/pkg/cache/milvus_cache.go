@@ -496,18 +496,23 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 
 // FindSimilar searches for semantically similar cached requests
 func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, error) {
+	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+}
+
+// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		observability.Debugf("MilvusCache.FindSimilar: cache disabled")
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
 	queryPreview := query
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("MilvusCache.FindSimilar: searching for model='%s', query='%s' (len=%d chars)",
-		model, queryPreview, len(query))
+	observability.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding for similarity comparison
 	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
@@ -538,7 +543,7 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 		searchParam,
 	)
 	if err != nil {
-		observability.Debugf("MilvusCache.FindSimilar: search failed: %v", err)
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
@@ -547,21 +552,21 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("MilvusCache.FindSimilar: no entries found")
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
 	bestScore := searchResult[0].Scores[0]
-	if bestScore < c.similarityThreshold {
+	if bestScore < threshold {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("MilvusCache.FindSimilar: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
-			bestScore, c.similarityThreshold)
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
+			bestScore, threshold)
 		observability.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "milvus",
 			"best_similarity": bestScore,
-			"threshold":       c.similarityThreshold,
+			"threshold":       threshold,
 			"model":           model,
 			"collection":      c.collectionName,
 		})
@@ -578,7 +583,7 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 	}
 
 	if responseBody == nil {
-		observability.Debugf("MilvusCache.FindSimilar: cache hit but response_body is missing or not a string")
+		observability.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
@@ -586,12 +591,12 @@ func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, err
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
-	observability.Debugf("MilvusCache.FindSimilar: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-		bestScore, c.similarityThreshold, len(responseBody))
+	observability.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+		bestScore, threshold, len(responseBody))
 	observability.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "milvus",
 		"similarity": bestScore,
-		"threshold":  c.similarityThreshold,
+		"threshold":  threshold,
 		"model":      model,
 		"collection": c.collectionName,
 	})

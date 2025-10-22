@@ -381,6 +381,12 @@ type Category struct {
 	// "replace": Replace any existing system message with the category-specific prompt
 	// "insert": Prepend the category-specific prompt to the existing system message content
 	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
+	// SemanticCacheEnabled controls whether semantic caching is enabled for this category
+	// If nil, inherits from global SemanticCache.Enabled setting
+	SemanticCacheEnabled *bool `yaml:"semantic_cache_enabled,omitempty"`
+	// SemanticCacheSimilarityThreshold defines the minimum similarity score for cache hits (0.0-1.0)
+	// If nil, uses the global threshold from SemanticCache.SimilarityThreshold or BertModel.Threshold
+	SemanticCacheSimilarityThreshold *float32 `yaml:"semantic_cache_similarity_threshold,omitempty"`
 }
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -434,6 +440,11 @@ func LoadConfig(configPath string) (*RouterConfig, error) {
 // BoolPtr returns a pointer to a bool value (helper for tests and config)
 func BoolPtr(b bool) *bool {
 	return &b
+}
+
+// Float32Ptr returns a pointer to a float32 value (helper for tests and config)
+func Float32Ptr(f float32) *float32 {
+	return &f
 }
 
 // validateConfigStructure performs additional validation on the parsed config
@@ -798,4 +809,26 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 		}
 	}
 	return nil
+}
+
+// IsCacheEnabledForCategory returns whether semantic caching is enabled for a specific category
+// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
+func (c *RouterConfig) IsCacheEnabledForCategory(categoryName string) bool {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.SemanticCacheEnabled != nil {
+		return *category.SemanticCacheEnabled
+	}
+	// Fall back to global setting
+	return c.SemanticCache.Enabled
+}
+
+// GetCacheSimilarityThresholdForCategory returns the effective cache similarity threshold for a category
+// Priority: category-specific > global semantic_cache > bert_model threshold
+func (c *RouterConfig) GetCacheSimilarityThresholdForCategory(categoryName string) float32 {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.SemanticCacheSimilarityThreshold != nil {
+		return *category.SemanticCacheSimilarityThreshold
+	}
+	// Fall back to global cache threshold or bert threshold
+	return c.GetCacheSimilarityThreshold()
 }
