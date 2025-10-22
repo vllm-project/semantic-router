@@ -396,12 +396,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
-	// Perform security checks
-	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages); shouldReturn {
-		return response, nil
-	}
-
-	// Classify the request early to determine category for cache settings
+	// Classify the request early to determine category for security checks and cache settings
 	var categoryName string
 	if r.Config != nil && r.Config.IsAutoModelName(originalModel) && (len(nonUserMessages) > 0 || userContent != "") {
 		// Determine text to use for classification
@@ -417,6 +412,11 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		}
 	}
 
+	// Perform security checks with category-specific settings
+	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages, categoryName); shouldReturn {
+		return response, nil
+	}
+
 	// Handle caching with category-specific settings
 	if response, shouldReturn := r.handleCaching(ctx, categoryName); shouldReturn {
 		return response, nil
@@ -426,19 +426,32 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	return r.handleModelRouting(openAIRequest, originalModel, userContent, nonUserMessages, ctx)
 }
 
-// performSecurityChecks performs PII and jailbreak detection
-func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string) (*ext_proc.ProcessingResponse, bool) {
+// performSecurityChecks performs PII and jailbreak detection with category-specific settings
+func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
+	// Check if jailbreak detection is enabled for this category
+	jailbreakEnabled := r.Classifier.IsJailbreakEnabled()
+	if categoryName != "" && r.Config != nil {
+		// Use category-specific setting if available
+		jailbreakEnabled = jailbreakEnabled && r.Config.IsJailbreakEnabledForCategory(categoryName)
+	}
+
+	// Get category-specific threshold
+	jailbreakThreshold := r.Config.PromptGuard.Threshold
+	if categoryName != "" && r.Config != nil {
+		jailbreakThreshold = r.Config.GetJailbreakThresholdForCategory(categoryName)
+	}
+
 	// Perform jailbreak detection on all message content
-	if r.Classifier.IsJailbreakEnabled() {
+	if jailbreakEnabled {
 		// Start jailbreak detection span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanJailbreakDetection)
 		defer span.End()
 
 		startTime := time.Now()
-		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
+		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreakWithThreshold(allContent, jailbreakThreshold)
 		detectionTime := time.Since(startTime).Milliseconds()
 
 		observability.SetSpanAttributes(span,

@@ -83,6 +83,70 @@ curl -X PUT http://localhost:8080/config/system-prompts \
 
 ### Reasoning Configuration
 
+#### `jailbreak_enabled` (Optional)
+
+- **Type**: Boolean
+- **Description**: Whether to enable jailbreak detection for this category
+- **Default**: Inherits from global `prompt_guard.enabled` setting
+- **Impact**: Enables or disables jailbreak protection for this specific category
+
+```yaml
+categories:
+  - name: customer_support
+    jailbreak_enabled: true  # Explicitly enable for public-facing
+    model_scores:
+      - model: qwen3
+        score: 0.8
+
+  - name: code_generation
+    jailbreak_enabled: false  # Disable for internal tools
+    model_scores:
+      - model: qwen3
+        score: 0.9
+
+  - name: general
+    # No jailbreak_enabled - inherits from global prompt_guard.enabled
+    model_scores:
+      - model: qwen3
+        score: 0.5
+```
+
+#### `jailbreak_threshold` (Optional)
+
+- **Type**: Float (0.0-1.0)
+- **Description**: Confidence threshold for jailbreak detection
+- **Default**: Inherits from global `prompt_guard.threshold` setting
+- **Impact**: Controls sensitivity of jailbreak detection for this category
+- **Tuning**: Higher values = stricter (fewer false positives), Lower values = more sensitive (catches more attacks)
+
+```yaml
+categories:
+  - name: customer_support
+    jailbreak_enabled: true
+    jailbreak_threshold: 0.9  # Strict detection for public-facing
+    model_scores:
+      - model: qwen3
+        score: 0.8
+
+  - name: code_generation
+    jailbreak_enabled: true
+    jailbreak_threshold: 0.5  # Relaxed to reduce false positives on code
+    model_scores:
+      - model: qwen3
+        score: 0.9
+
+  - name: general
+    # No jailbreak_threshold - inherits from global prompt_guard.threshold
+    model_scores:
+      - model: qwen3
+        score: 0.5
+```
+
+**Threshold Guidelines**:
+- **0.8-0.95**: High-security categories (customer support, business)
+- **0.6-0.8**: Standard categories (general queries)
+- **0.4-0.6**: Technical categories (code generation, development tools)
+
 #### `use_reasoning` (Required)
 
 - **Type**: Boolean
@@ -196,7 +260,48 @@ categories:
         score: 0.2
 ```
 
-### Example 3: Multi-Category Configuration
+### Example 3: Security-Focused Configuration (Jailbreak Protection)
+
+```yaml
+categories:
+  # High-security public-facing category with strict threshold
+  - name: "customer_support"
+    description: "Customer support and general inquiries"
+    jailbreak_enabled: true  # Strict jailbreak protection
+    jailbreak_threshold: 0.9  # High threshold for public-facing
+    use_reasoning: false
+    model_scores:
+      - model: "phi4"
+        score: 0.9
+      - model: "mistral-small3.1"
+        score: 0.7
+
+  # Technical category with relaxed threshold
+  - name: "code_generation"
+    description: "Code generation for developers"
+    jailbreak_enabled: true  # Keep enabled
+    jailbreak_threshold: 0.5  # Lower threshold to reduce false positives on code
+    use_reasoning: true
+    reasoning_effort: "medium"
+    model_scores:
+      - model: "gemma3:27b"
+        score: 0.9
+      - model: "phi4"
+        score: 0.7
+
+  # General category using global default
+  - name: "general"
+    description: "General queries"
+    # jailbreak_enabled not specified - inherits from global prompt_guard.enabled
+    use_reasoning: false
+    model_scores:
+      - model: "phi4"
+        score: 0.6
+      - model: "mistral-small3.1"
+        score: 0.6
+```
+
+### Example 4: Multi-Category Configuration
 
 ```yaml
 categories:
