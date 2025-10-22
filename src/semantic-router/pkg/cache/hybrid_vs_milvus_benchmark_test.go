@@ -92,14 +92,15 @@ func (dcc *DatabaseCallCounter) Reset() {
 
 // getMilvusConfigPath returns the path to milvus.yaml config file
 func getMilvusConfigPath() string {
-	// Try absolute path first (for direct test execution)
-	configPath := "/home/ubuntu/rootfs/back/semantic-router.bak/config/cache/milvus.yaml"
-	if _, err := os.Stat(configPath); err == nil {
-		return configPath
+	// Check for environment variable first
+	if envPath := os.Getenv("MILVUS_CONFIG_PATH"); envPath != "" {
+		if _, err := os.Stat(envPath); err == nil {
+			return envPath
+		}
 	}
 
 	// Try relative from project root (when run via make)
-	configPath = "config/cache/milvus.yaml"
+	configPath := "config/cache/milvus.yaml"
 	if _, err := os.Stat(configPath); err == nil {
 		return configPath
 	}
@@ -126,10 +127,16 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 	}
 
 	// CSV output file - save to project benchmark_results directory
-	// Determine project root by walking up from test directory
-	projectRoot := "/home/ubuntu/rootfs/back/semantic-router.bak"
-	if envRoot := os.Getenv("PROJECT_ROOT"); envRoot != "" {
-		projectRoot = envRoot
+	// Use PROJECT_ROOT environment variable, fallback to working directory
+	projectRoot := os.Getenv("PROJECT_ROOT")
+	if projectRoot == "" {
+		// If not set, use current working directory
+		var err error
+		projectRoot, err = os.Getwd()
+		if err != nil {
+			b.Logf("Warning: Could not determine working directory: %v", err)
+			projectRoot = "."
+		}
 	}
 	resultsDir := filepath.Join(projectRoot, "benchmark_results", "hybrid_vs_milvus")
 	os.MkdirAll(resultsDir, 0755)

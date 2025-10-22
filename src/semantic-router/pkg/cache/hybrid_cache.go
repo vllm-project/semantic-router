@@ -15,6 +15,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
+const (
+	// Buffer pool limits to prevent memory bloat
+	maxVisitedMapSize     = 1000 // Maximum size for visited map before discarding buffer
+	maxCandidatesCapacity = 200  // Maximum capacity for candidates heap before discarding buffer
+	maxResultsCapacity    = 200  // Maximum capacity for results heap before discarding buffer
+	maxHNSWLayers         = 16   // Maximum number of layers in HNSW index
+)
+
 // searchBuffers holds reusable buffers for HNSW search to reduce GC pressure
 type searchBuffers struct {
 	visited    map[int]bool
@@ -48,7 +56,7 @@ func getSearchBuffers() *searchBuffers {
 // putSearchBuffers returns buffers to pool
 func putSearchBuffers(buf *searchBuffers) {
 	// Don't return to pool if buffers grew too large (avoid memory bloat)
-	if len(buf.visited) > 1000 || cap(buf.candidates.data) > 200 || cap(buf.results.data) > 200 {
+	if len(buf.visited) > maxVisitedMapSize || cap(buf.candidates.data) > maxCandidatesCapacity || cap(buf.results.data) > maxResultsCapacity {
 		return
 	}
 	searchBufferPool.Put(buf)
@@ -782,7 +790,7 @@ func (h *HybridCache) selectLevelHybrid() int {
 	// Use exponential decay to select level
 	// Most nodes at layer 0, fewer at higher layers
 	level := 0
-	for level < 16 { // Max 16 layers
+	for level < maxHNSWLayers {
 		if randFloat() > h.hnswIndex.ml {
 			break
 		}
