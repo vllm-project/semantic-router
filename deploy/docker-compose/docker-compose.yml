@@ -7,9 +7,9 @@ services:
     ports:
       - "50051:50051"
     volumes:
-      - ../../config:/app/config:ro
-      - ../../models:/app/models:ro
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ../../config:/app/config:ro,z
+      - ../../models:/app/models:ro,z
+      - ~/.cache/huggingface:/root/.cache/huggingface:z
     environment:
       - LD_LIBRARY_PATH=/app/lib
       # Use main config by default; override via CONFIG_FILE if needed
@@ -32,11 +32,13 @@ services:
   envoy:
     image: envoyproxy/envoy:v1.31.7
     container_name: envoy-proxy
+    security_opt:
+      - label=disable
     ports:
       - "8801:8801"  # Main proxy port
       - "19000:19000"  # Admin interface
     volumes:
-      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro,z
     command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
     depends_on:
       semantic-router:
@@ -44,7 +46,7 @@ services:
     networks:
       - semantic-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:19000/ready"]
+      test: ["CMD", "bash", "-c", "(echo -e 'GET /ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; timeout 2 cat <&3) 3<>/dev/tcp/localhost/19000 | grep -q LIVE"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -86,7 +88,7 @@ services:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
-      - ./addons/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./addons/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro,z
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
@@ -106,11 +108,11 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro
-      - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
-      - ./addons/grafana-datasource-jaeger.yaml:/etc/grafana/provisioning/datasources/datasource_jaeger.yaml:ro
-      - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
-      - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro,z
+      - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro,z
+      - ./addons/grafana-datasource-jaeger.yaml:/etc/grafana/provisioning/datasources/datasource_jaeger.yaml:ro,z
+      - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro,z
+      - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro,z
       - grafana-data:/var/lib/grafana
     networks:
       - semantic-network
@@ -175,9 +177,16 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       # Persistent pipelines storage (auto-loaded on start)
-      - openwebui-pipelines:/app/pipelines
-      # Mount our vLLM Semantic Router pipeline
-      - ./addons/vllm_semantic_router_pipe.py:/app/pipelines/vllm_semantic_router_pipe.py:ro
+      - type: volume
+        source: openwebui-pipelines
+        target: /app/pipelines
+        volume:
+          nocopy: true
+      # Mount our vLLM Semantic Router pipeline (read-only) into the persistent dir
+      - type: bind
+        source: ./addons/vllm_semantic_router_pipe.py
+        target: /app/pipelines/vllm_semantic_router_pipe.py
+        read_only: true
     networks:
       - semantic-network
 
@@ -202,7 +211,7 @@ services:
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
       - HF_HUB_ENABLE_HF_TRANSFER=1
     volumes:
-      - ../../models:/app/models:ro
+      - ../../models:/app/models:ro,z
       - hf-cache:/home/llmkatan/.cache/huggingface
     networks:
       semantic-network:
@@ -235,7 +244,7 @@ services:
       - TARGET_CHATUI_URL=http://chat-ui:3000
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
     volumes:
-      - ../../config:/app/config:rw
+      - ../../config:/app/config:rw,z
     ports:
       - "8700:8700"
     networks:

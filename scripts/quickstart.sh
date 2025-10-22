@@ -21,6 +21,23 @@ print_color() {
     echo -e "${color}${text}${NC}"
 }
 
+# Helper functions for common message types
+success_msg() {
+    print_color "$GREEN" "$1"
+}
+
+error_msg() {
+    print_color "$RED" "$1"
+}
+
+info_msg() {
+    print_color "$YELLOW" "$1"
+}
+
+section_header() {
+    print_color "$CYAN" "$1"
+}
+
 # Function to print with typewriter effect
 typewriter() {
     local text=$1
@@ -34,7 +51,8 @@ typewriter() {
 
 # Function to show ASCII art with animation
 show_ascii_art() {
-    clear
+    # Skip clear in CI environments (no proper terminal)
+    [ -z "${CI:-}" ] && clear || true
     echo
     echo
     print_color "$CYAN" "        ██╗   ██╗██╗     ██╗     ███╗   ███╗"
@@ -86,7 +104,7 @@ show_progress() {
 
 # Function to check prerequisites
 check_prerequisites() {
-    print_color "$YELLOW" "🔍 Checking prerequisites..."
+    info_msg "🔍 Checking prerequisites..."
     echo
 
     local missing_deps=()
@@ -112,48 +130,41 @@ check_prerequisites() {
     fi
 
     if [ ${#missing_deps[@]} -ne 0 ]; then
-        print_color "$RED" "❌ Missing dependencies: ${missing_deps[*]}"
-        print_color "$YELLOW" "Please install the missing dependencies and try again."
+        error_msg "❌ Missing dependencies: ${missing_deps[*]}"
+        info_msg "Please install the missing dependencies and try again."
         exit 1
     fi
 
-    print_color "$GREEN" "✅ All prerequisites satisfied!"
+    success_msg "✅ All prerequisites satisfied!"
     echo
 }
 
 # Function to install HuggingFace CLI if needed
 install_hf_cli() {
     if ! command -v hf &> /dev/null; then
-        print_color "$YELLOW" "📦 Installing HuggingFace CLI..."
+        info_msg "📦 Installing HuggingFace CLI..."
         pip install huggingface_hub[cli] || pip3 install huggingface_hub[cli]
-        print_color "$GREEN" "✅ HuggingFace CLI installed!"
+        success_msg "✅ HuggingFace CLI installed!"
     else
-        print_color "$GREEN" "✅ HuggingFace CLI already installed!"
+        success_msg "✅ HuggingFace CLI already installed!"
     fi
     echo
 }
 
 # Function to download models with progress
 download_models() {
-    print_color "$YELLOW" "📥 Downloading AI models..."
+    info_msg "📥 Downloading AI models..."
     echo
 
     # Use minimal model set for faster setup
     export CI_MINIMAL_MODELS=false
 
-    # Start the download process with filtered output
-    make download-models 2>&1 | grep -E "(downloading|downloaded|Downloaded|✓|✅|❌|Error|error|Failed|failed|CI_MINIMAL_MODELS|Running download-models)" | while IFS= read -r line; do
-        # Filter out verbose HuggingFace download progress
-        if [[ ! "$line" =~ (Fetching|\.safetensors|\.json|\.txt|\.bin|B/s|%|/s) ]]; then
-            # Suppress output - no information displayed
-            :
-        fi
-    done
-
-    if make download-models > /dev/null 2>&1; then
-        print_color "$GREEN" "✅ Models downloaded successfully!"
+    # Download models and save output to log (visible in real-time)
+    if make download-models 2>&1 | tee /tmp/download-models-output.log; then
+        success_msg "✅ Models downloaded successfully!"
     else
-        print_color "$RED" "❌ Failed to download models!"
+        error_msg "❌ Failed to download models!"
+        info_msg "📋 Check logs: cat /tmp/download-models-output.log"
         exit 1
     fi
     echo
@@ -161,21 +172,31 @@ download_models() {
 
 # Function to start services
 start_services() {
-    print_color "$YELLOW" "🐳 Starting Docker services..."
+    info_msg "🐳 Starting Docker services..."
     echo
 
-    # Start docker-compose services with filtered output
-    make docker-compose-up 2>&1 | grep -E "(Running docker-compose-up|Starting services|Container.*Running|Container.*Healthy|Container.*Started|✓|✅|❌|Error|error|Failed|failed)" | while IFS= read -r line; do
-        # Show only key status updates
-        if [[ "$line" =~ (Container.*Running|Container.*Healthy|Starting services|Running docker-compose-up) ]]; then
-            echo "   $line"
-        fi
-    done
-
-    if make docker-compose-up > /dev/null 2>&1; then
-        print_color "$GREEN" "✅ Services started successfully!"
+    # Start docker-compose services (runs in detached mode via Makefile)
+    # Timeout: 600 seconds (10 minutes) to allow for:
+    #   - Image pulls (semantic-router, envoy, jaeger, prometheus, grafana, openwebui, pipelines, llm-katan)
+    #   - Dashboard build from Dockerfile (Go compilation can take 5-10 minutes)
+    #   - Network/system variations
+    # Save output to log file for debugging
+    if timeout 600 make docker-compose-up 2>&1 | tee /tmp/docker-compose-output.log; then
+        success_msg "✅ Docker compose command completed!"
+        echo "   Output saved to: /tmp/docker-compose-output.log"
     else
-        print_color "$RED" "❌ Failed to start services!"
+        local exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+            error_msg "❌ Docker compose command timed out after 10 minutes!"
+            info_msg "📋 This might indicate:"
+            info_msg "   - Very slow network (image pulls)"
+            info_msg "   - System resource constraints"
+            info_msg "   - Dashboard build taking too long"
+            info_msg "📋 Check logs: cat /tmp/docker-compose-output.log"
+        else
+            error_msg "❌ Failed to start services!"
+            info_msg "📋 Check logs: cat /tmp/docker-compose-output.log"
+        fi
         exit 1
     fi
     echo
@@ -183,28 +204,61 @@ start_services() {
 
 # Function to wait for services to be healthy
 wait_for_services() {
-    # Silently wait for services to become healthy
-    local max_attempts=30
+    section_header "🔍 Checking service health..."
+    local max_attempts=60  
     local attempt=1
 
+    # List of critical services that must be healthy
+    local critical_services=("semantic-router" "envoy-proxy")
+
     while [ $attempt -le $max_attempts ]; do
-        # Check if semantic-router container is healthy
-        if docker ps --filter "name=semantic-router" --filter "health=healthy" --format "{{.Names}}" | grep -q "semantic-router" 2>/dev/null; then
-            print_color "$GREEN" "✅ All services are healthy and ready!"
+        local all_healthy=true
+        local unhealthy_services=""
+
+        # Check each critical service
+        for service in "${critical_services[@]}"; do
+            if ! docker ps --filter "name=$service" --filter "health=healthy" --format "{{.Names}}" | grep -q "$service" 2>/dev/null; then
+                all_healthy=false
+                unhealthy_services="$unhealthy_services $service"
+            fi
+        done
+
+        # Check for any exited/failed containers
+        local failed_containers=$(docker ps -a --filter "status=exited" --format "{{.Names}}" 2>/dev/null)
+        if [ -n "$failed_containers" ]; then
+            error_msg "❌ Some containers failed to start: $failed_containers"
+            info_msg "📋 Check logs with: docker compose logs $failed_containers"
+            return 1
+        fi
+
+        if [ "$all_healthy" = true ]; then
+            success_msg "✅ All critical services are healthy and ready!"
+            echo
+            # Show status of all containers
+            section_header "📊 Container Status:"
+            docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|openwebui|pipelines|llm-katan"
+            echo
             return 0
+        fi
+
+        # Show progress every 5 seconds
+        if [ $((attempt % 5)) -eq 0 ]; then
+            info_msg "⏳ Still waiting for:$unhealthy_services (attempt $attempt/$max_attempts)"
         fi
 
         sleep 2
         ((attempt++))
     done
 
-    print_color "$YELLOW" "⚠️  Services are starting but may not be fully healthy yet."
-    print_color "$WHITE" "You can check the status with: docker compose ps"
+    info_msg "⚠️  Timeout: Services are starting but not all are healthy yet."
+    print_color "$WHITE" "📋 Check status with: docker ps"
+    print_color "$WHITE" "📋 View logs with: docker compose logs -f"
+    return 1
 }
 
 # Function to show service information
 show_service_info() {
-    print_color "$CYAN" "🌐 Service Information:"
+    section_header "🌐 Service Information:"
     echo
     print_color "$WHITE" "┌─────────────────────────────────────────────────────────────┐"
     print_color "$WHITE" "│                        🎯 Endpoints                         │"
@@ -216,7 +270,7 @@ show_service_info() {
     print_color "$GREEN" "│  🌐 Open WebUI:              http://localhost:3001          │"
     print_color "$WHITE" "└─────────────────────────────────────────────────────────────┘"
     echo
-    print_color "$CYAN" "🔧 Useful Commands:"
+    section_header "🔧 Useful Commands:"
     echo
     print_color "$WHITE" "  • Check service status:     docker compose ps"
     print_color "$WHITE" "  • View logs:                docker compose logs -f"
@@ -242,16 +296,18 @@ show_completion() {
     print_color "$CYAN" "╚══════════════════════════════════════════════════════════════════════════════╝"
     echo
 
-    # Ask if user wants to open browser
-    read -p "$(print_color "$YELLOW" "Would you like to open the dashboard in your browser? (y/N): ")" -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if command -v open &> /dev/null; then
-            open http://localhost:8700
-        elif command -v xdg-open &> /dev/null; then
-            xdg-open http://localhost:8700
-        else
-            print_color "$YELLOW" "Please open http://localhost:8700 in your browser manually."
+    # Ask if user wants to open browser (skip in CI environments)
+    if [ -z "${CI:-}" ]; then
+        read -p "$(print_color "$YELLOW" "Would you like to open the dashboard in your browser? (y/N): ")" -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if command -v open &> /dev/null; then
+                open http://localhost:8700
+            elif command -v xdg-open &> /dev/null; then
+                xdg-open http://localhost:8700
+            else
+                info_msg "Please open http://localhost:8700 in your browser manually."
+            fi
         fi
     fi
 }
@@ -274,7 +330,12 @@ main() {
     start_services
 
     # Wait for services to be healthy
-    wait_for_services
+    if ! wait_for_services; then
+        error_msg "❌ Service health check failed or timed out!"
+        info_msg "📋 You can check logs with: docker compose logs"
+        info_msg "📋 Or continue manually if services are starting"
+        exit 1
+    fi
 
     # Show service information
     show_service_info
