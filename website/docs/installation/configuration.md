@@ -491,7 +491,7 @@ tools:
 
 # BERT Model for Similarity
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.6                  # Similarity threshold
   use_cpu: true                   # CPU-only inference
 

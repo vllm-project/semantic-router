@@ -271,7 +271,7 @@ see more about config at [configuration](https://vllm-semantic-router.com/docs/i
 
 ```yaml
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
 semantic_cache:

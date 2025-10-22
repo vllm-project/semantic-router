@@ -336,7 +336,7 @@ The Semantic Router leverages **four specialized deep learning models** for inte
 
 ```yaml
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
 ```
