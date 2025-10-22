@@ -15,14 +15,14 @@ The configuration file is located at `config/config.yaml`. Here's the structure 
 
 # BERT model for semantic similarity
 bert_model:
-  model_id: sentence-transformers/all-MiniLM-L12-v2
+  model_id: models/all-MiniLM-L12-v2
   threshold: 0.6
   use_cpu: true
 
 # Semantic caching
 semantic_cache:
   backend_type: "memory"  # Options: "memory" or "milvus"
-  enabled: false
+  enabled: true
   similarity_threshold: 0.8  # Global default threshold
   max_entries: 1000
   ttl_seconds: 3600
@@ -30,7 +30,7 @@ semantic_cache:
 
 # Tool auto-selection
 tools:
-  enabled: false
+  enabled: true
   top_k: 3
   similarity_threshold: 0.2
   tools_db_path: "config/tools_db.json"
@@ -38,7 +38,7 @@ tools:
 
 # Jailbreak protection
 prompt_guard:
-  enabled: false  # Global default - can be overridden per category
+  enabled: true  # Global default - can be overridden per category
   use_modernbert: true
   model_id: "models/jailbreak_classifier_modernbert-base_model"
   threshold: 0.7
@@ -330,31 +330,23 @@ categories:
 Configure how different models handle reasoning mode syntax. This allows you to add new models without code changes:
 
 ```yaml
-# Model reasoning configurations - define how different models handle reasoning syntax
-model_reasoning_configs:
-  - name: "deepseek"
-    patterns: ["deepseek", "ds-", "ds_", "ds:", "ds "]
-    reasoning_syntax:
-      type: "chat_template_kwargs"
-      parameter: "thinking"
+# Reasoning family configurations - define how different model families handle reasoning syntax
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
 
-  - name: "qwen3"
-    patterns: ["qwen3"]
-    reasoning_syntax:
-      type: "chat_template_kwargs"
-      parameter: "enable_thinking"
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
 
-  - name: "gpt-oss"
-    patterns: ["gpt-oss", "gpt_oss"]
-    reasoning_syntax:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
 
-  - name: "gpt"
-    patterns: ["gpt"]
-    reasoning_syntax:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
 
 # Global default reasoning effort level (when not specified per category)
 default_reasoning_effort: "medium"
@@ -364,46 +356,40 @@ default_reasoning_effort: "medium"
 
 **Configuration Structure:**
 
-- `name`: A unique identifier for the model family
-- `patterns`: Array of patterns to match against model names
-- `reasoning_syntax.type`: How the model expects reasoning mode to be specified
+- `name`: A unique identifier for the model family (e.g., "deepseek", "qwen3")
+- `type`: How the model expects reasoning mode to be specified
   - `"chat_template_kwargs"`: Use chat template parameters (for models like DeepSeek, Qwen3)
   - `"reasoning_effort"`: Use OpenAI-compatible reasoning_effort field (for GPT models)
-- `reasoning_syntax.parameter`: The specific parameter name the model uses
+- `parameter`: The specific parameter name the model uses
 
 **Pattern Matching:**
-The system supports both simple string patterns and regular expressions for flexible model matching:
+The system supports model family names that are matched against model configurations:
 
-- **Simple string matches**: `"deepseek"` matches any model containing "deepseek"
-- **Prefix patterns**: `"ds-"` matches models starting with "ds-" or exactly "ds"
-- **Regular expressions**: `"^gpt-4.*"` matches models starting with "gpt-4"
-- **Wildcard**: `"*"` matches all models (use for fallback configurations)
-- **Multiple patterns**: `["deepseek", "ds-", "^phi.*"]` matches any of these patterns
-
-**Regex Pattern Examples:**
-
-```yaml
-patterns:
-  - "^gpt-4.*"        # Models starting with "gpt-4"
-  - ".*-instruct$"    # Models ending with "-instruct"
-  - "phi[0-9]+"       # Models like "phi3", "phi4", etc.
-  - "^(llama|mistral)" # Models starting with "llama" or "mistral"
-```
+- **Family names**: `"deepseek"`, `"qwen3"`, `"gpt-oss"`, `"gpt"`
+- Models are assigned to families via `model_config[model_name].reasoning_family`
+- Unknown models will have no reasoning fields applied when reasoning mode is enabled
 
 **Adding New Models:**
 To support a new model family (e.g., Claude), simply add a new configuration:
 
 ```yaml
-model_reasoning_configs:
-  - name: "claude"
-    patterns: ["claude"]
-    reasoning_syntax:
-      type: "chat_template_kwargs"
-      parameter: "enable_reasoning"
+reasoning_families:
+  claude:
+    type: "chat_template_kwargs"
+    parameter: "enable_reasoning"
+```
+
+Then assign your model to the family:
+
+```yaml
+model_config:
+  "claude-3-opus":
+    reasoning_family: "claude"
+    preferred_endpoints: ["endpoint1"]
 ```
 
 **Unknown Models:**
-Models that don't match any configured pattern will have no reasoning fields applied when reasoning mode is enabled. This prevents issues with models that don't support reasoning syntax.
+Models that don't have a `reasoning_family` assigned will have no reasoning fields applied when reasoning mode is enabled. This prevents issues with models that don't support reasoning syntax.
 
 **Default Reasoning Effort:**
 Set the global default reasoning effort level used when categories don't specify their own effort level:
@@ -974,27 +960,31 @@ make test-prompt-guard               # Jailbreak protection
 
 **Model not getting reasoning fields:**
 
-- Check that the model name matches a pattern in `model_reasoning_configs`
-- Verify the pattern syntax (exact matches vs prefixes)
-- Unknown models will have no reasoning fields applied (this is by design)
+- Check that the model has a `reasoning_family` assigned in `model_config`
+- Verify the reasoning family exists in `reasoning_families` configuration
+- Unknown models (without `reasoning_family`) will have no reasoning fields applied (this is by design)
 
 **Wrong reasoning syntax applied:**
 
-- Ensure the `reasoning_syntax.type` matches your model's expected format
-- Check the `reasoning_syntax.parameter` name is correct
+- Ensure the `type` field in `reasoning_families` matches your model's expected format
+- Check the `parameter` name is correct for your model family
 - DeepSeek models typically use `chat_template_kwargs` with `"thinking"`
 - GPT models typically use `reasoning_effort`
 
 **Adding support for new models:**
 
 ```yaml
-# Add a new model configuration
-model_reasoning_configs:
-  - name: "my-new-model"
-    patterns: ["my-model"]
-    reasoning_syntax:
-      type: "chat_template_kwargs"  # or "reasoning_effort"
-      parameter: "custom_parameter"
+# Add a new reasoning family
+reasoning_families:
+  my-new-family:
+    type: "chat_template_kwargs"  # or "reasoning_effort"
+    parameter: "custom_parameter"
+
+# Assign model to the family
+model_config:
+  "my-model":
+    reasoning_family: "my-new-family"
+    preferred_endpoints: ["endpoint1"]
 ```
 
 **Testing model reasoning configuration:**
