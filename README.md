@@ -130,6 +130,26 @@ The documentation includes:
 - **[Dashboard](https://vllm-semantic-router.com/docs/overview/dashboard)** - vLLM Semantic Router Dashboard
 - **[Distributed Tracing](https://vllm-semantic-router.com/docs/tutorials/observability/distributed-tracing/)** - Observability and debugging guide
 
+### Documentation Accuracy Checker 🔍
+
+We maintain documentation quality using an automated accuracy checker that validates all claims against the source code:
+
+```bash
+# Run full check (20 epochs)
+make docs-accuracy-check
+
+# Quick validation (5 epochs)
+make docs-accuracy-check-quick
+```
+
+This tool:
+- ✅ Discovers capabilities from codebase (APIs, configs, env vars)
+- ✅ Identifies outdated, missing, or hallucinated documentation
+- ✅ Generates evidence-based fixes with source citations
+- ✅ Produces machine-readable JSON reports
+
+See [`tools/docs-accuracy-checker-README.md`](tools/docs-accuracy-checker-README.md) for detailed usage.
+
 ## Community 👋
 
 For questions, feedback, or to contribute, please join `#semantic-router` channel in vLLM Slack.

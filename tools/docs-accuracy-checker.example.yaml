@@ -1,0 +1,73 @@
+# Example Configuration for Documentation Accuracy Checker
+#
+# This file shows how to configure the documentation accuracy checker
+# for different use cases.
+
+# Basic Configuration
+# -------------------
+# Run with 20 epochs (default)
+epochs: 20
+repo_root: .
+docs_root: website
+seed: 80
+
+# Documentation File Patterns
+# ---------------------------
+# Specify which documentation files to check
+docs_globs:
+  - website/docs/**/*.md
+  - website/docs/**/*.mdx
+  - config/**/*.yml
+  - config/**/*.yaml
+
+# Exclusion Patterns
+# ------------------
+# Patterns to exclude from documentation check
+exclude_globs:
+  - "**/node_modules/**"
+  - "**/.cache/**"
+  - "**/build/**"
+  - "**/.docusaurus/**"
+
+# Build and Validation Commands
+# ------------------------------
+# Commands to run for validation
+build_cmd: "make docs-build"
+linkcheck_cmd: "make markdown-lint-fix docs-lint-fix"
+
+# Branch Configuration
+# --------------------
+primary_branch: main
+
+# ========================================
+# Example Use Cases
+# ========================================
+
+# Quick Test (5 epochs)
+# ---------------------
+# python3 tools/docs-accuracy-checker.py --epochs 5
+
+# Custom Seed for Different Partitioning
+# ---------------------------------------
+# python3 tools/docs-accuracy-checker.py --seed 42
+
+# Focus on Specific Documentation
+# --------------------------------
+# python3 tools/docs-accuracy-checker.py \
+#   --docs-globs "website/docs/api/**/*.md" \
+#   --epochs 5
+
+# Skip Build/Validation (for development)
+# ----------------------------------------
+# python3 tools/docs-accuracy-checker.py \
+#   --build-cmd "echo 'Build skipped'" \
+#   --linkcheck-cmd "echo 'Link check skipped'" \
+#   --epochs 3
+
+# Different Repository Structure
+# -------------------------------
+# python3 tools/docs-accuracy-checker.py \
+#   --repo-root /path/to/repo \
+#   --docs-root docs \
+#   --docs-globs "docs/**/*.rst" \
+#   --epochs 10
