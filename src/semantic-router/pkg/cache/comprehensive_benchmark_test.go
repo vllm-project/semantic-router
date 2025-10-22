@@ -33,8 +33,8 @@ func (c ContentLength) String() string {
 // GenerateQuery generates a query with maximum semantic diversity using hash-based randomization
 func generateQuery(length ContentLength, index int) string {
 	// Hash the index to get pseudo-random values (deterministic but well-distributed)
-	hash := uint64(index)    // #nosec G115 -- index is always positive and bounded
-	hash = hash * 2654435761 // Knuth's multiplicative hash
+	hash := uint64(index) // #nosec G115 -- index is always positive and bounded
+	hash *= 2654435761    // Knuth's multiplicative hash
 
 	// Expanded templates for maximum diversity
 	templates := []string{
