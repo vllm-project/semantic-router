@@ -1910,4 +1910,123 @@ categories:
 			})
 		})
 	})
+
+	Describe("IsJailbreakEnabledForCategory", func() {
+		Context("when global jailbreak is enabled", func() {
+			It("should return true for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
+			})
+
+			It("should return false when category explicitly disables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(false),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
+			})
+
+			It("should return true when category explicitly enables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(true),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
+			})
+		})
+
+		Context("when global jailbreak is disabled", func() {
+			It("should return false for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: false,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
+			})
+
+			It("should return true when category explicitly enables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(true),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: false,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
+			})
+
+			It("should return false when category explicitly disables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(false),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: false,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global setting", func() {
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("nonexistent")).To(BeTrue())
+			})
+		})
+	})
 })

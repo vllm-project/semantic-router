@@ -370,6 +370,9 @@ type Category struct {
 	// SemanticCacheSimilarityThreshold defines the minimum similarity score for cache hits (0.0-1.0)
 	// If nil, uses the global threshold from SemanticCache.SimilarityThreshold or BertModel.Threshold
 	SemanticCacheSimilarityThreshold *float32 `yaml:"semantic_cache_similarity_threshold,omitempty"`
+	// JailbreakEnabled controls whether jailbreak detection is enabled for this category
+	// If nil, inherits from global PromptGuard.Enabled setting
+	JailbreakEnabled *bool `yaml:"jailbreak_enabled,omitempty"`
 }
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -814,4 +817,15 @@ func (c *RouterConfig) GetCacheSimilarityThresholdForCategory(categoryName strin
 	}
 	// Fall back to global cache threshold or bert threshold
 	return c.GetCacheSimilarityThreshold()
+}
+
+// IsJailbreakEnabledForCategory returns whether jailbreak detection is enabled for a specific category
+// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
+func (c *RouterConfig) IsJailbreakEnabledForCategory(categoryName string) bool {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.JailbreakEnabled != nil {
+		return *category.JailbreakEnabled
+	}
+	// Fall back to global setting
+	return c.PromptGuard.Enabled
 }
