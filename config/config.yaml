@@ -33,12 +33,17 @@ prompt_guard:
 vllm_endpoints:
   - name: "endpoint1"
     address: "127.0.0.1"  # IPv4 address - REQUIRED format
-    port: 8000
+    port: 11434
     models:
-      - "openai/gpt-oss-20b"
+      - "llama3.2:1b"
     weight: 1
 
 model_config:
+  "llama3.2:1b":
+    reasoning_family: "none"  # This model uses GPT-OSS reasoning syntax
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
   "openai/gpt-oss-20b":
     reasoning_family: "gpt-oss"  # This model uses GPT-OSS reasoning syntax
     preferred_endpoints: ["endpoint1"]
