@@ -23,3 +23,5 @@ namespace: vllm-semantic-router-system
 images:
 - name: ghcr.io/vllm-project/semantic-router/extproc
   newTag: latest
+
+# Add this line to invoke CI test
