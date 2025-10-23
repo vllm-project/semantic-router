@@ -24,9 +24,16 @@ spec:
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: PIPELINES_DIR
+              value: "/app/pipelines"
           volumeMounts:
-            - name: pipelines-volume
+            # Writable directory for pipelines runtime
+            - name: pipelines-data
               mountPath: /app/pipelines
+            # Mount our pipeline file from ConfigMap into the writable dir
+            - name: pipelines-config
+              mountPath: /app/pipelines/vllm_semantic_router_pipe.py
+              subPath: vllm_semantic_router_pipe.py
           resources:
             requests:
               cpu: 100m
@@ -35,6 +42,8 @@ spec:
               cpu: 500m
               memory: 512Mi
       volumes:
-        - name: pipelines-volume
+        - name: pipelines-data
+          emptyDir: {}
+        - name: pipelines-config
           configMap:
             name: openwebui-pipelines-config

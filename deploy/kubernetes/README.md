@@ -1,6 +1,6 @@
 # Semantic Router Kubernetes Deployment
 
-Kustomize manifests for deploying the Semantic Router and its observability stack (Prometheus, Grafana, Dashboard, optional Open WebUI + Pipelines) on Kubernetes.
+Kustomize manifests for deploying the Semantic Router and its observability stack (Prometheus, Grafana, Dashboard, optional Open WebUI, Chat UI + Pipelines) on Kubernetes.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ The deployment consists of:
 - **Services**:
   - Main service exposing gRPC (50051), Classification API (8080), and metrics (9190)
   - Separate metrics service for monitoring (`semantic-router-metrics`)
-  - Observability services (Grafana, Prometheus, Dashboard, optional Open WebUI)
+  - Observability services (Grafana, Prometheus, Dashboard, optional Open WebUI, Chat UI)
 
 ## Ports
 
@@ -26,7 +26,7 @@ The deployment consists of:
 
 ### Deploy Core (Router)
 
-```bash
+````bash
 kubectl apply -k deploy/kubernetes/
 
 # Check deployment status
@@ -40,7 +40,7 @@ kubectl logs -l app=semantic-router -n vllm-semantic-router-system -f
 
 ```bash
 kubectl apply -k deploy/kubernetes/observability/
-```
+````
 
 Port-forward to UIs (local dev):
 
@@ -49,6 +49,7 @@ kubectl port-forward -n vllm-semantic-router-system svc/prometheus 9090:9090
 kubectl port-forward -n vllm-semantic-router-system svc/grafana 3000:3000
 kubectl port-forward -n vllm-semantic-router-system svc/semantic-router-dashboard 8700:80
 kubectl port-forward -n vllm-semantic-router-system svc/openwebui 3001:8080
+kubectl port-forward -n vllm-semantic-router-system svc/chat-ui 3002:3000
 ```
 
 Then open:
@@ -57,8 +58,9 @@ Then open:
 - Grafana → http://localhost:3000
 - Dashboard → http://localhost:8700
 - Open WebUI (Playground) → http://localhost:3001
+- Chat UI (HuggingChat) → http://localhost:3002
 
-```
+````
 
 ### Kind (Kubernetes in Docker) Deployment
 
@@ -81,7 +83,7 @@ make setup
 # Or step by step:
 make create-cluster
 make deploy
-```
+````
 
 The setup process will:
 
@@ -160,6 +162,7 @@ make port-forward-metrics
 kubectl port-forward -n vllm-semantic-router-system svc/semantic-router-dashboard 8700:80
 kubectl port-forward -n vllm-semantic-router-system svc/grafana 3000:3000
 kubectl port-forward -n vllm-semantic-router-system svc/openwebui 3001:8080
+kubectl port-forward -n vllm-semantic-router-system svc/chat-ui 3002:3000
 ```
 
 Or using kubectl directly:
@@ -179,6 +182,7 @@ kubectl port-forward -n vllm-semantic-router-system svc/prometheus 9090:9090
 kubectl port-forward -n vllm-semantic-router-system svc/grafana 3000:3000
 kubectl port-forward -n vllm-semantic-router-system svc/semantic-router-dashboard 8700:80
 kubectl port-forward -n vllm-semantic-router-system svc/openwebui 3001:8080
+kubectl port-forward -n vllm-semantic-router-system svc/chat-ui 3002:3000
 ```
 
 #### Testing the Deployment
@@ -350,6 +354,7 @@ Edit the `resources` section in `deployment.yaml` accordingly.
 - `tools_db.json` - Tools database for semantic routing
 - `kustomization.yaml` - Kustomize configuration for core deployment
 - `observability/` - Prometheus, Grafana, Dashboard, optional Open WebUI + Pipelines (with its own `kustomization.yaml`)
+  (also includes optional Chat UI)
 
 For detailed observability setup and screenshots, see `deploy/kubernetes/observability/README.md`.
 

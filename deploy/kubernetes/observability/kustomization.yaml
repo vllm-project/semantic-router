@@ -24,6 +24,8 @@ resources:
   - dashboard/service.yaml
   - pipelines/deployment.yaml
   - openwebui/deployment.yaml
+  - chat-ui/deployment.yaml
+  - mongo/deployment.yaml
   - ingress.yaml
 
 # Generate ConfigMaps from source files
@@ -34,3 +36,7 @@ configMapGenerator:
   - name: openwebui-pipelines-config
     files:
       - vllm_semantic_router_pipe.py=pipelines/vllm_semantic_router_pipe.py
+  - name: semantic-router-config
+    files:
+      - dashboard/config.yaml
+      - dashboard/tools_db.json

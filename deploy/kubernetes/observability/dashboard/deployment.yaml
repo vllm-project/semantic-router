@@ -18,7 +18,12 @@ spec:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
           imagePullPolicy: IfNotPresent
-          args: ["-port=8700", "-static=/app/frontend", "-config=/app/config/config.yaml"]
+          args:
+            [
+              "-port=8700",
+              "-static=/app/frontend",
+              "-config=/app/config/config.yaml",
+            ]
           env:
             - name: TARGET_GRAFANA_URL
               valueFrom:
@@ -45,6 +50,11 @@ spec:
                 configMapKeyRef:
                   name: semantic-router-dashboard-config
                   key: TARGET_OPENWEBUI_URL
+            - name: TARGET_CHATUI_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_CHATUI_URL
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
           ports:
