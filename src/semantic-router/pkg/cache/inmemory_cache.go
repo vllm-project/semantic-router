@@ -52,6 +52,9 @@ type InMemoryCache struct {
 	useHNSW             bool
 	hnswEfSearch        int // Search-time ef parameter
 	embeddingModel      string // "bert", "qwen3", or "gemma"
+	hnswIndex           *HNSWIndex
+	useHNSW             bool
+	hnswEfSearch        int // Search-time ef parameter
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -66,6 +69,10 @@ type InMemoryCacheOptions struct {
 	HNSWEfConstruction  int  // Size of dynamic candidate list during construction (default: 200)
 	HNSWEfSearch        int  // Size of dynamic candidate list during search (default: 50)
 	EmbeddingModel      string // "bert", "qwen3", or "gemma"
+	UseHNSW             bool   // Enable HNSW index for faster search
+	HNSWM               int    // Number of bi-directional links (default: 16)
+	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
+	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
 }
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance

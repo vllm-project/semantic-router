@@ -24,8 +24,8 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
 		// Use in-memory cache as the default backend
-		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f, UseHNSW: %t, EmbeddingModel: %s",
-			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, config.UseHNSW, config.EmbeddingModel)
+		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s, UseHNSW: %t",
+			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel, config.UseHNSW)
 
 		options := InMemoryCacheOptions{
 			Enabled:             config.Enabled,
@@ -37,6 +37,9 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			HNSWM:               config.HNSWM,
 			HNSWEfConstruction:  config.HNSWEfConstruction,
 			EmbeddingModel:      config.EmbeddingModel,
+			UseHNSW:             config.UseHNSW,
+			HNSWM:               config.HNSWM,
+			HNSWEfConstruction:  config.HNSWEfConstruction,
 		}
 		return NewInMemoryCache(options), nil
 
