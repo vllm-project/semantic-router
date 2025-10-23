@@ -44,14 +44,14 @@ jobs:
   # Step 1: Validate Kubernetes manifests
   validate-manifests:
     uses: ./.github/workflows/k8s-validate-manifests.yml
-        with:
+    with:
       kustomize_version: v5.7.1
 
   # Step 2: Run kind cluster integration test
   kind-integration-test:
     uses: ./.github/workflows/k8s-kind-integration-test.yml
     needs: validate-manifests
-        with:
+    with:
       kind_version: v0.20.0
       kustomize_version: v5.7.1
 
@@ -59,7 +59,7 @@ jobs:
   test-api-functionality:
     uses: ./.github/workflows/k8s-api-functionality-test.yml
     needs: kind-integration-test
-        with:
+    with:
       kind_version: v0.20.0
       kustomize_version: v5.7.1
 
@@ -67,14 +67,14 @@ jobs:
   test-with-custom-config:
     uses: ./.github/workflows/k8s-config-test.yml
     needs: validate-manifests
-        with:
+    with:
       kustomize_version: v5.7.1
 
   # Step 5: Run security scans
   security-scan:
     uses: ./.github/workflows/k8s-security-scan.yml
     needs: validate-manifests
-        with:
+    with:
       kustomize_version: v5.7.1
 
   # Step 6: Generate test summary
