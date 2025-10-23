@@ -37,7 +37,7 @@ func NewMilvusVectorDb(options MilvusVectorDbOptions) (*MilvusVectorDb, error) {
 	}, nil
 }
 
-// Query is a stub for now — Phase 2 will implement it
+// Query stub
 func (m *MilvusVectorDb) Query(queryText string) ([]string, error) {
 	fmt.Printf("[MilvusVectorDb] Query called with: %s\n", queryText)
 	return []string{"milvus-stub"}, nil
