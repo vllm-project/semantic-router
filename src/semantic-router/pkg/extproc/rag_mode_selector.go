@@ -42,13 +42,16 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 		ragStrategy = ragDefault
 	}
 
-	if ragStrategy == "never" {
+	switch ragStrategy {
+	case "never":
 		return false
-	} else if ragStrategy == "always" {
+	case "always":
 		return true
-	} else {
-		// TODO: Implement adaptive decision
+	case "adaptive":
+		// TODO: Implement adaptive decision: return true
 		return true
+	default:
+		return false
 	}
 }
 

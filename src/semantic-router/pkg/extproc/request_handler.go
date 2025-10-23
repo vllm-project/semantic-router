@@ -747,6 +747,13 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					ragTemplatePath := r.Config.Rag.RagTemplatePath
 					modifiedBody, ragInjected, err = addRAGChunksToRequestBody(modifiedBody, ragChunks, ragTemplatePath)
 				}
+
+				if err != nil {
+					observability.Errorf("Error adding RAG Chunks to request body: %v", err)
+					metrics.RecordRequestError(actualModel, "serialization_error")
+					return nil, status.Errorf(codes.Internal, "error adding RAG chunks: %v", err)
+				}
+
 				if ragInjected{
 					logMessage := "Modified user prompt with RAG chunks."
 					observability.Infof("%s", logMessage)
