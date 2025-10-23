@@ -118,20 +118,3 @@ rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA env
 		exit 1; \
 	fi
 	@cd candle-binding && cargo build --release --features flash-attn
-
-# Build the Rust library without CUDA (for CI/CD environments)
-rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
-	@$(LOG_TARGET)
-	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
-		echo "rustc not found, installing..."; \
-		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
-	fi && \
-	if [ -f "$$HOME/.cargo/env" ]; then \
-		echo "Loading Rust environment from $$HOME/.cargo/env..." && \
-		. $$HOME/.cargo/env; \
-	fi && \
-	if ! command -v cargo >/dev/null 2>&1; then \
-		echo "Error: cargo not found in PATH" && exit 1; \
-	fi && \
-	echo "Building Rust library without CUDA (CPU-only)..." && \
-	cd candle-binding && cargo build --release --no-default-features'

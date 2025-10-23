@@ -6,7 +6,7 @@
 
 # Build the Rust library and Golang binding
 build: ## Build the Rust library and Golang binding
-build: rust build-router
+build: $(if $(CI),rust-ci,rust) build-router
 
 # Build router (conditionally use rust-ci in CI environments)
 build-router: ## Build the router binary
@@ -40,7 +40,8 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-test: vet check-go-mod-tidy download-models test-rust test-binding test-semantic-router
+# In CI, skip test-rust (GPU tests) and only run test-binding and test-semantic-router with rust-ci
+test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
 
 # Clean built artifacts
 clean: ## Clean built artifacts
