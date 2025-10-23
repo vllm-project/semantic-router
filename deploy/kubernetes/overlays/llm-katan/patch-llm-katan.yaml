@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router
+spec:
+  template:
+    spec:
+      containers:
+        - name: semantic-router
+          imagePullPolicy: IfNotPresent
+        - name: llm-katan
+          image: ghcr.io/vllm-project/semantic-router/llm-katan:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - llm-katan
+            - --model
+            - /app/models/Qwen/Qwen3-0.6B
+            - --served-model-name
+            - qwen3
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8002"
+          ports:
+            - containerPort: 8002
+              name: katan
+              protocol: TCP
+          volumeMounts:
+            - name: models-volume
+              mountPath: /app/models

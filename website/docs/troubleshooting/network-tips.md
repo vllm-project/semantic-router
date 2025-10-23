@@ -26,12 +26,12 @@ The router will download embedding models on first run unless you provide them l
 
 ### Option A — Use local models (no external network)
 
-1) Download the required model(s) with any reachable method (VPN/offline) into the repo’s `./models` folder. Example layout:
+1. Download the required model(s) with any reachable method (VPN/offline) into the repo’s `./models` folder. Example layout:
 
    - `models/all-MiniLM-L12-v2/`
    - `models/category_classifier_modernbert-base_model`
 
-2) In `config/config.yaml`, point to the local path. Example:
+2. In `config/config.yaml`, point to the local path. Example:
 
    ```yaml
    bert_model:
@@ -39,7 +39,7 @@ The router will download embedding models on first run unless you provide them l
      model_id: /app/models/all-MiniLM-L12-v2
    ```
 
-3) No extra env is required. `deploy/docker-compose/docker-compose.yml` already mounts `./models:/app/models:ro`.
+3. No extra env is required. `deploy/docker-compose/docker-compose.yml` already mounts `./models:/app/models:ro`.
 
 ### Option B — Use HF cache + mirror
 
@@ -53,7 +53,7 @@ services:
     environment:
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
-      - HF_ENDPOINT=https://hf-mirror.com  # example mirror endpoint (China)
+      - HF_ENDPOINT=https://hf-mirror.com # example mirror endpoint (China)
 ```
 
 Optional: pre-warm cache on the host (only if you have `huggingface_hub` installed):
@@ -70,7 +70,7 @@ PY
 
 When building `Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`. Create an override Dockerfile that enables mirrors without touching the original.
 
-1) Create `Dockerfile.extproc.cn` at repo root with this content:
+1. Create `Dockerfile.extproc.cn` at repo root with this content:
 
 ```Dockerfile
 # syntax=docker/dockerfile:1
@@ -118,7 +118,7 @@ RUN chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 ```
 
-2) Point compose to the override Dockerfile by extending `docker-compose.override.yml`:
+2. Point compose to the override Dockerfile by extending `docker-compose.override.yml`:
 
 ```yaml
 services:
@@ -131,7 +131,7 @@ services:
 
 For the optional testing profile, create an override Dockerfile to configure pip mirrors.
 
-1) Create `tools/mock-vllm/Dockerfile.cn`:
+1. Create `tools/mock-vllm/Dockerfile.cn`:
 
 ```Dockerfile
 FROM python:3.11-slim
@@ -150,7 +150,7 @@ EXPOSE 8000
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-2) Extend `docker-compose.override.yml` to use the override Dockerfile for `mock-vllm`:
+2. Extend `docker-compose.override.yml` to use the override Dockerfile for `mock-vllm`:
 
 ```yaml
 services:
@@ -180,9 +180,42 @@ Container runtimes on Kubernetes nodes do not automatically reuse the host Docke
 
 ### 5.1 Configure containerd or CRI mirrors
 
-- For clusters backed by containerd (Kind, k3s, kubeadm), edit `/etc/containerd/config.toml` or use Kind’s `containerdConfigPatches` to add regional mirror endpoints for registries such as `docker.io`, `ghcr.io`, or `quay.io`.
+- For clusters backed by containerd (Kind, k3s, kubeadm), edit `/etc/containerd/config.toml` or use Kind’s `containerdConfigPatches` to add regional mirror endpoints for registries such as `docker.io`, `ghcr.io`, or `registry.k8s.io`.
 - Restart containerd and kubelet after changes so the new mirrors take effect.
 - Avoid pointing mirrors to loopback proxies unless every node can reach that proxy address.
+
+Example `/etc/containerd/config.toml` mirrors (China):
+
+```toml
+[plugins."io.containerd.grpc.v1.cri".registry.mirrors]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+    endpoint = [
+      "https://docker.m.daocloud.io",
+      "https://mirror.ccs.tencentyun.com",
+      "https://mirror.baidubce.com",
+      "https://docker.mirrors.ustc.edu.cn",
+      "https://hub-mirror.c.163.com"
+    ]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."ghcr.io"]
+    endpoint = [
+      "https://ghcr.nju.edu.cn",
+      "https://ghcr.dockerproxy.com",
+      "https://ghcr.bj.bcebos.com"
+    ]
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."registry.k8s.io"]
+    endpoint = [
+      "https://k8s.m.daocloud.io",
+      "https://mirror.ccs.tencentyun.com",
+      "https://registry.aliyuncs.com"
+    ]
+```
+
+Apply and restart:
+
+```bash
+sudo systemctl restart containerd
+sudo systemctl restart kubelet
+```
 
 ### 5.2 Preload or sideload images
 
@@ -203,13 +236,39 @@ Container runtimes on Kubernetes nodes do not automatically reuse the host Docke
 - Use `kubectl describe pod <name>` or `kubectl get events` to confirm pull errors disappear.
 - Check that services such as `semantic-router-metrics` now expose endpoints and respond via port-forward (`kubectl port-forward svc/<service> <local-port>:<service-port>`).
 
+### 5.6 Mount local models via PV/PVC (no external HF)
+
+When you already have models under `./models` locally, mount them into the Pod and skip downloads:
+
+1. Create a PV (optional; edit `deploy/kubernetes/base/pv.yaml` hostPath to your node path and apply it). If you use a dynamic StorageClass, you can skip the PV.
+
+2. Create the PVC once via the storage overlay:
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/storage
+```
+
+3. Copy your local models to the node path (hostPath example for kind):
+
+```bash
+docker cp ./models semantic-router-cluster-control-plane:/tmp/hostpath-provisioner/
+```
+
+4. Ensure the Deployment mounts the PVC at `/app/models` and set `imagePullPolicy: IfNotPresent` (already configured in `base/deployment.yaml`).
+
+5. If the PV is tied to a specific node path, pin the Pod to that node using `nodeSelector` or add tolerations if you untainted the control-plane node.
+
+This path avoids Hugging Face downloads and is the most reliable in restricted networks.
+
 ## 6. Troubleshooting
 
 - Go modules still time out:
+
   - Verify `GOPROXY` and `GOSUMDB` are present in the go-builder stage logs.
   - Try a clean build: `docker compose build --no-cache`.
 
 - HF models still download slowly:
+
   - Prefer Option A (local models).
   - Ensure the cache volume is mounted and `HF_ENDPOINT`/`HF_HUB_ENABLE_HF_TRANSFER` are set.
 

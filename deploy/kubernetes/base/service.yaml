@@ -8,14 +8,14 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 50051
-    targetPort: grpc
-    protocol: TCP
-    name: grpc
-  - port: 8080
-    targetPort: 8080
-    protocol: TCP
-    name: classify-api
+    - port: 50051
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: classify-api
   selector:
     app: semantic-router
 ---
@@ -30,9 +30,9 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 9190
-    targetPort: metrics
-    protocol: TCP
-    name: metrics
+    - port: 9190
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
   selector:
     app: semantic-router

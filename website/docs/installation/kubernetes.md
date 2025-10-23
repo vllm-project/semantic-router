@@ -31,16 +31,73 @@ kind create cluster --name semantic-router-cluster --config tools/kind/kind-conf
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-**Note**: The kind configuration provides sufficient resources (8GB+ RAM, 4+ CPU cores) for running the semantic router and AI gateway components.
+Note: The kind configuration provides sufficient resources (8GB+ RAM, 4+ CPU cores).
 
 ## Step 2: Deploy vLLM Semantic Router
 
-Configure the semantic router by editing `deploy/kubernetes/config.yaml`. This file contains the vLLM configuration, including model config, endpoints, and policies.
+Edit `deploy/kubernetes/config.yaml` (models, endpoints, policies). Two overlays are provided:
 
-Deploy the semantic router service with all required components:
+- core (default): only the semantic-router
+  - Path: `deploy/kubernetes/overlays/core` (root `deploy/kubernetes/` points here by default)
+- llm-katan: semantic-router + an llm-katan sidecar listening on 8002 and serving model name `qwen3`
+  - Path: `deploy/kubernetes/overlays/llm-katan`
+
+### Repository layout (deploy/kubernetes/)
+
+```
+deploy/kubernetes/
+  base/
+    kustomization.yaml        # base kustomize: namespace, PVC, service, deployment
+    namespace.yaml            # Namespace for all resources
+    service.yaml              # Service exposing gRPC/metrics/HTTP ports
+    deployment.yaml           # Semantic Router Deployment (init downloads by default)
+    config.yaml               # Router config (mounted via ConfigMap)
+    tools_db.json             # Tools DB (mounted via ConfigMap)
+    pv.yaml                   # OPTIONAL: hostPath PV for local models (edit path as needed)
+  overlays/
+    core/
+      kustomization.yaml      # Uses only base
+    llm-katan/
+      kustomization.yaml      # Patches base to add llm-katan sidecar
+      patch-llm-katan.yaml    # Strategic-merge patch injecting sidecar
+    storage/
+      kustomization.yaml      # PVC only; run once to create storage, not for day-2 updates
+      namespace.yaml          # Local copy for self-contained apply
+      pvc.yaml                # PVC definition
+  kustomization.yaml          # Root points to overlays/core by default
+  README.md                   # Additional notes
+  namespace.yaml, pvc.yaml, service.yaml (top-level shortcuts kept for backward compat)
+```
+
+Notes:
+
+- Base downloads models on first run (initContainer).
+- In restricted networks, prefer local models via PV/PVC; see Network Tips for hostPath PV, mirrors, and image preload. Mount point is `/app/models`.
+
+First-time apply (creates PVC):
 
 ```bash
-# Deploy semantic router using Kustomize
+kubectl apply -k deploy/kubernetes/overlays/storage
+kubectl apply -k deploy/kubernetes/overlays/core        # or overlays/llm-katan
+```
+
+Day-2 updates (do not touch PVC):
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/core        # or overlays/llm-katan
+```
+
+Important:
+
+- `vllm_endpoints.address` must be an IP reachable inside the cluster (no scheme/path).
+- PVC default size is 30Gi; adjust to model footprint. StorageClass name may differ by cluster.
+- core downloads classifiers + `all-MiniLM-L12-v2`; llm-katan also prepares `Qwen/Qwen3-0.6B`.
+- Default config uses `qwen3@127.0.0.1:8002` (matches llm-katan); if using core, update endpoints accordingly.
+
+Deploy the semantic router service with all required components (core mode by default):
+
+````bash
+# Deploy semantic router (core mode)
 kubectl apply -k deploy/kubernetes/
 
 # Wait for deployment to be ready (this may take several minutes for model downloads)
@@ -48,7 +105,14 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 
 # Verify deployment status
 kubectl get pods -n vllm-semantic-router-system
+
+To run with the llm-katan overlay instead:
+
+```bash
+kubectl apply -k deploy/kubernetes/overlays/llm-katan
 ```
+
+Note: The llm-katan overlay no longer references parent files directly. It uses a local patch (`deploy/kubernetes/overlays/llm-katan/patch-llm-katan.yaml`) to inject the sidecar, avoiding kustomize parent-directory restrictions.
 
 ## Step 3: Install Envoy Gateway
 
@@ -63,7 +127,7 @@ helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
 
 # Wait for Envoy Gateway to be ready
 kubectl wait --timeout=300s -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
-```
+````
 
 ## Step 4: Install Envoy AI Gateway
 
@@ -135,26 +199,28 @@ Expected output should show the inference pool in `Accepted` state:
 ```yaml
 status:
   parent:
-  - conditions:
-    - lastTransitionTime: "2025-09-27T09:27:32Z"
-      message: 'InferencePool has been Accepted by controller ai-gateway-controller:
-        InferencePool reconciled successfully'
-      observedGeneration: 1
-      reason: Accepted
-      status: "True"
-      type: Accepted
-    - lastTransitionTime: "2025-09-27T09:27:32Z"
-      message: 'Reference resolution by controller ai-gateway-controller: All references
-        resolved successfully'
-      observedGeneration: 1
-      reason: ResolvedRefs
-      status: "True"
-      type: ResolvedRefs
-    parentRef:
-      group: gateway.networking.k8s.io
-      kind: Gateway
-      name: vllm-semantic-router
-      namespace: vllm-semantic-router-system
+    - conditions:
+        - lastTransitionTime: "2025-09-27T09:27:32Z"
+          message:
+            "InferencePool has been Accepted by controller ai-gateway-controller:
+            InferencePool reconciled successfully"
+          observedGeneration: 1
+          reason: Accepted
+          status: "True"
+          type: Accepted
+        - lastTransitionTime: "2025-09-27T09:27:32Z"
+          message:
+            "Reference resolution by controller ai-gateway-controller: All references
+            resolved successfully"
+          observedGeneration: 1
+          reason: ResolvedRefs
+          status: "True"
+          type: ResolvedRefs
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: vllm-semantic-router
+        namespace: vllm-semantic-router-system
 ```
 
 ## Testing the Deployment
