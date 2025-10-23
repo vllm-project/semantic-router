@@ -1,0 +1,145 @@
+# Shared configuration for Kubernetes integration tests
+# This file contains common environment variables and configurations
+
+env:
+  KIND_VERSION: v0.20.0
+  KUBECTL_VERSION: v1.28.0
+  KUSTOMIZE_VERSION: v5.7.1
+  KUBE_NAMESPACE: vllm-semantic-router-system
+  CLUSTER_NAME: semantic-router-cluster
+  TEST_IMAGE_TAG: test
+  API_TEST_IMAGE_TAG: api-test
+
+# Common step configurations
+common_steps:
+  checkout:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+  install_kustomize:
+    - name: Install Kustomize
+      run: |
+        echo "Installing Kustomize ${{ env.KUSTOMIZE_VERSION }}..."
+        # Use the official installation script for better reliability
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+        kustomize version
+
+  setup_kubectl:
+    - name: Setup kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+  cleanup_disk_space:
+    - name: Free up disk space before build
+      run: |
+        echo "=== Initial disk usage ==="
+        df -h
+        echo ""
+        echo "=== Cleaning up system ==="
+        # Remove unnecessary packages and caches
+        sudo apt-get clean
+        sudo apt-get autoremove -y
+        sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /tmp/*
+        sudo rm -rf /var/tmp/*
+
+        # Clean Docker system
+        docker system prune -af --volumes
+
+        # Remove large unnecessary files/directories
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+
+        echo ""
+        echo "=== Disk usage after cleanup ==="
+        df -h
+
+  setup_docker_buildx:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+# Common kind cluster configuration
+kind_config: |
+  # kind cluster configuration for CI testing
+  kind: Cluster
+  apiVersion: kind.x-k8s.io/v1alpha4
+  name: semantic-router-cluster
+  nodes:
+    - role: control-plane
+      # Optimized for CI environment with limited resources
+      extraPortMappings:
+        - containerPort: 30080
+          hostPort: 30080
+          protocol: TCP
+      kubeadmConfigPatches:
+        - |
+          kind: InitConfiguration
+          nodeRegistration:
+            kubeletExtraArgs:
+              # Reduced resource limits for CI
+              system-reserved: memory=512Mi,cpu=250m
+              kube-reserved: memory=512Mi,cpu=250m
+              eviction-hard: memory.available<512Mi,nodefs.available<10%
+        - |
+          kind: ClusterConfiguration
+          apiServer:
+            extraArgs:
+              max-requests-inflight: "200"
+              max-mutating-requests-inflight: "100"
+          etcd:
+            local:
+              extraArgs:
+                quota-backend-bytes: "4294967296" # 4GB (reduced from 8GB)
+
+# Common kustomization overlay template
+kustomization_overlay_template: |
+  apiVersion: kustomize.config.k8s.io/v1beta1
+  kind: Kustomization
+
+  # Reference individual files to avoid circular dependency
+  resources:
+  - ../namespace.yaml
+  - ../pv-models.yaml
+  - ../deployment.yaml
+  - ../service.yaml
+
+  # Generate ConfigMap (same as base)
+  configMapGenerator:
+  - name: semantic-router-config
+    files:
+  - ../config.yaml
+  - ../tools_db.json
+
+  namespace: vllm-semantic-router-system
+
+  # Use the test image
+  images:
+  - name: ghcr.io/vllm-project/semantic-router/extproc
+    newTag: {IMAGE_TAG}
+
+  # Patch for CI - reduce resources and set imagePullPolicy
+  patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "{MEMORY_REQUEST}"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "{CPU_REQUEST}"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "{MEMORY_LIMIT}"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "{CPU_LIMIT}"
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: "IfNotPresent"
+    target:
+      kind: Deployment
+      name: semantic-router
