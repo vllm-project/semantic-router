@@ -24,14 +24,17 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
 		// Use in-memory cache as the default backend
-		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f",
-			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold)
+		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f, UseHNSW: %t",
+			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, config.UseHNSW)
 		options := InMemoryCacheOptions{
 			Enabled:             config.Enabled,
 			SimilarityThreshold: config.SimilarityThreshold,
 			MaxEntries:          config.MaxEntries,
 			TTLSeconds:          config.TTLSeconds,
 			EvictionPolicy:      config.EvictionPolicy,
+			UseHNSW:             config.UseHNSW,
+			HNSWM:               config.HNSWM,
+			HNSWEfConstruction:  config.HNSWEfConstruction,
 		}
 		return NewInMemoryCache(options), nil
 
@@ -45,6 +48,20 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			ConfigPath:          config.BackendConfigPath,
 		}
 		return NewMilvusCache(options)
+
+	case HybridCacheType:
+		observability.Debugf("Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
+			config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
+		options := HybridCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			MaxMemoryEntries:    config.MaxMemoryEntries,
+			HNSWM:               config.HNSWM,
+			HNSWEfConstruction:  config.HNSWEfConstruction,
+			MilvusConfigPath:    config.BackendConfigPath,
+		}
+		return NewHybridCache(options)
 
 	default:
 		observability.Debugf("Unsupported cache backend type: %s", config.BackendType)

@@ -5,11 +5,20 @@ bert_model:
 
 semantic_cache:
   enabled: true
-  backend_type: "memory" # Options: "memory" or "milvus"
+  backend_type: "memory" # Options: "memory", "milvus", or "hybrid"
   similarity_threshold: 0.8
   max_entries: 1000 # Only applies to memory backend
   ttl_seconds: 3600
   eviction_policy: "fifo"
+  # HNSW index configuration (for memory backend only)
+  use_hnsw: true # Enable HNSW index for faster similarity search
+  hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
+  hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
+  
+  # Hybrid cache configuration (when backend_type: "hybrid")
+  # Combines in-memory HNSW for fast search with Milvus for scalable storage
+  # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
+  # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
 tools:
   enabled: true

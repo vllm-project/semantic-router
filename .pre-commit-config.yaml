@@ -81,7 +81,7 @@ repos:
         pass_filenames: false
       - id: cargo-check
         name: cargo check
-        entry: bash -c 'cd candle-binding && cargo check'
+        entry: bash -c 'cd candle-binding && cargo check --no-default-features'
         language: system
         files: \.rs$
         pass_filenames: false
