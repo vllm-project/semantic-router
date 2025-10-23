@@ -17,10 +17,11 @@ lazy_static! {
     static ref BERT_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
     static ref BERT_PII_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
     static ref BERT_JAILBREAK_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
-    // Unified classifier for dual-path architecture
-    static ref UNIFIED_CLASSIFIER: Arc<Mutex<Option<crate::classifiers::unified::DualPathUnifiedClassifier>>> = Arc::new(Mutex::new(None));
-    // Parallel LoRA engine for high-performance classification
-    pub static ref PARALLEL_LORA_ENGINE: Arc<Mutex<Option<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>>> = Arc::new(Mutex::new(None));
+    // Unified classifier for dual-path architecture (exported for use in classify.rs)
+    pub static ref UNIFIED_CLASSIFIER: Arc<Mutex<Option<crate::classifiers::unified::DualPathUnifiedClassifier>>> = Arc::new(Mutex::new(None));
+    // Parallel LoRA engine for high-performance classification (primary path for LoRA models)
+    // Wrapped in Arc for cheap cloning and concurrent access
+    pub static ref PARALLEL_LORA_ENGINE: Arc<Mutex<Option<Arc<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>>>> = Arc::new(Mutex::new(None));
     // LoRA token classifier for token-level classification
     pub static ref LORA_TOKEN_CLASSIFIER: Arc<Mutex<Option<crate::classifiers::lora::token_lora::LoRATokenClassifier>>> = Arc::new(Mutex::new(None));
 }
@@ -719,9 +720,9 @@ pub extern "C" fn init_lora_unified_classifier(
         use_cpu,
     ) {
         Ok(engine) => {
-            // Store in global static variable
+            // Store in global static variable (wrapped in Arc for efficient cloning)
             let mut engine_guard = PARALLEL_LORA_ENGINE.lock().unwrap();
-            *engine_guard = Some(engine);
+            *engine_guard = Some(Arc::new(engine));
             true
         }
         Err(e) => {
