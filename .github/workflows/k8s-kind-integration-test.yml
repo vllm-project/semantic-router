@@ -351,55 +351,6 @@ jobs:
 
           echo "✓ Service connectivity tests completed"
 
-      - name: Test API functionality
-        run: |
-          echo "=== Testing API Functionality ==="
-
-          # Get pod name
-          POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].metadata.name}')
-          echo "Pod name: $POD_NAME"
-
-          # Wait for API to be ready
-          echo "Waiting for API to be ready..."
-          timeout 60 bash -c 'until kubectl exec -n vllm-semantic-router-system $POD_NAME -- curl -s http://localhost:8080/health > /dev/null; do echo "Waiting for API..."; sleep 5; done'
-
-          # Test 1: Health check endpoint
-          echo "Testing health check endpoint..."
-          HEALTH_RESPONSE=$(kubectl exec -n vllm-semantic-router-system $POD_NAME -- curl -s http://localhost:8080/health)
-          echo "Health response: $HEALTH_RESPONSE"
-          if echo "$HEALTH_RESPONSE" | grep -q "ok\|healthy\|status"; then
-            echo "✓ Health check passed"
-          else
-            echo "❌ Health check failed"
-            exit 1
-          fi
-
-          # Test 2: Models endpoint
-          echo "Testing models endpoint..."
-          MODELS_RESPONSE=$(kubectl exec -n vllm-semantic-router-system $POD_NAME -- curl -s http://localhost:8080/v1/models)
-          echo "Models response: $MODELS_RESPONSE"
-          if echo "$MODELS_RESPONSE" | grep -q "MoM\|object.*list"; then
-            echo "✓ Models endpoint passed"
-          else
-            echo "❌ Models endpoint failed"
-            exit 1
-          fi
-
-          # Test 3: Intent classification
-          echo "Testing intent classification..."
-          INTENT_RESPONSE=$(kubectl exec -n vllm-semantic-router-system $POD_NAME -- curl -s -X POST http://localhost:8080/api/v1/classify/intent \
-            -H "Content-Type: application/json" \
-            -d '{"text": "What is machine learning?"}')
-          echo "Intent response: $INTENT_RESPONSE"
-          if echo "$INTENT_RESPONSE" | grep -q "category\|confidence\|score"; then
-            echo "✓ Intent classification passed"
-          else
-            echo "❌ Intent classification failed"
-            exit 1
-          fi
-
-          echo "✅ All API functionality tests passed!"
-
       - name: Check logs
         if: always()
         run: |

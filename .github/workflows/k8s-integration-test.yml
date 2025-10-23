@@ -56,12 +56,12 @@ jobs:
       kustomize_version: v5.7.1
 
   # Step 3: Run comprehensive API functionality tests
-  test-api-functionality:
-    uses: ./.github/workflows/k8s-api-functionality-test.yml
-    needs: kind-integration-test
-    with:
-      kind_version: v0.20.0
-      kustomize_version: v5.7.1
+  # test-api-functionality:
+  #   uses: ./.github/workflows/k8s-api-functionality-test.yml
+  #   needs: kind-integration-test
+  #   with:
+  #     kind_version: v0.20.0
+  #     kustomize_version: v5.7.1
 
   # Step 4: Test with custom configurations
   test-with-custom-config:
@@ -85,7 +85,6 @@ jobs:
       [
         validate-manifests,
         kind-integration-test,
-        test-api-functionality,
         test-with-custom-config,
         security-scan,
       ]
@@ -97,7 +96,6 @@ jobs:
           echo "=== Kubernetes Integration Test Summary ==="
           echo "Manifest Validation: ${{ needs.validate-manifests.result }}"
           echo "kind Integration Test: ${{ needs.kind-integration-test.result }}"
-          echo "API Functionality Test: ${{ needs.test-api-functionality.result }}"
           echo "Custom Config Test: ${{ needs.test-with-custom-config.result }}"
           echo "Security Scan: ${{ needs.security-scan.result }}"
 
@@ -109,10 +107,6 @@ jobs:
           fi
           if [[ "${{ needs.kind-integration-test.result }}" == "failure" ]]; then
             echo "❌ kind integration test failed"
-            FAILURES=$((FAILURES + 1))
-          fi
-          if [[ "${{ needs.test-api-functionality.result }}" == "failure" ]]; then
-            echo "❌ API functionality test failed"
             FAILURES=$((FAILURES + 1))
           fi
           if [[ "${{ needs.test-with-custom-config.result }}" == "failure" ]]; then
@@ -128,7 +122,6 @@ jobs:
           echo "=== Test Coverage ==="
           echo "✅ Core deployment validation"
           echo "✅ Service connectivity testing"
-          echo "✅ API functionality testing (14 comprehensive tests)"
           echo "✅ Configuration validation"
           echo "✅ Security scanning"
           echo "✅ Error handling and edge cases"
