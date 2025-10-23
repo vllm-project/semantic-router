@@ -103,7 +103,8 @@ download-models-full: ## Download all models used in local development and docs
 		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
 	fi
 	@if [ ! -d "models/embeddinggemma-300m" ]; then \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m; \
+		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
 	fi
 
 # Download only LoRA and advanced embedding models (for CI after minimal tests)
@@ -124,14 +125,15 @@ download-models-lora: ## Download LoRA adapters and advanced embedding models on
 		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
 	fi
 	@if [ ! -d "models/embeddinggemma-300m" ]; then \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m; \
+		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
 	fi
 
 # Clean up minimal models to save disk space (for CI)
 clean-minimal-models: ## Remove minimal models to save disk space
 	@echo "Cleaning up minimal models to save disk space..."
-	@rm -rf models/category_classifier_modernbert-base_model
-	@rm -rf models/pii_classifier_modernbert-base_presidio_token_model
-	@rm -rf models/jailbreak_classifier_modernbert-base_model
-	@rm -rf models/pii_classifier_modernbert-base_model
+	@rm -rf models/category_classifier_modernbert-base_model || true
+	@rm -rf models/pii_classifier_modernbert-base_presidio_token_model || true
+	@rm -rf models/jailbreak_classifier_modernbert-base_model || true
+	@rm -rf models/pii_classifier_modernbert-base_model || true
 	@echo "✓ Minimal models cleaned up"
