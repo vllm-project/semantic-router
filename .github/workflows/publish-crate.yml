@@ -71,17 +71,17 @@ jobs:
           exit 1
         fi
 
-    - name: Run tests
+    - name: Run tests (CPU-only, no CUDA)
       working-directory: candle-binding
-      run: cargo test --verbose
+      run: cargo test --no-default-features --verbose
 
-    - name: Check crate
+    - name: Check crate (CPU-only, no CUDA)
       working-directory: candle-binding
-      run: cargo check --verbose
+      run: cargo check --no-default-features --verbose
 
-    - name: Build crate
+    - name: Build crate (CPU-only, no CUDA)
       working-directory: candle-binding
-      run: cargo build --release --verbose
+      run: cargo build --release --no-default-features --verbose
 
     - name: Dry run publish
       working-directory: candle-binding

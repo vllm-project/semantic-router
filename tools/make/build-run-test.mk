@@ -8,9 +8,9 @@
 build: ## Build the Rust library and Golang binding
 build: rust build-router
 
-# Build router
+# Build router (conditionally use rust-ci in CI environments)
 build-router: ## Build the router binary
-build-router: rust
+build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go

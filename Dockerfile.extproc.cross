@@ -72,29 +72,29 @@ COPY candle-binding/Cargo.loc[k] ./candle-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
 
-# Create a modified Makefile for cross-compilation
+# Create a modified Makefile for cross-compilation (CPU-only, no CUDA)
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Modifying rust.mk for ARM64 cross-compilation..."; \
-        sed -i 's/cd candle-binding && cargo build --release/cd candle-binding \&\& cargo build --release --target aarch64-unknown-linux-gnu/' tools/make/rust.mk; \
+        echo "Modifying rust.mk for ARM64 cross-compilation (CPU-only, no CUDA)..."; \
+        sed -i 's/cd candle-binding && cargo build --release/cd candle-binding \&\& cargo build --release --no-default-features --target aarch64-unknown-linux-gnu/' tools/make/rust.mk; \
         cat tools/make/rust.mk | grep "cargo build"; \
     fi
 
-# Pre-build dependencies to cache them
+# Pre-build dependencies to cache them (CPU-only, no CUDA)
 RUN cd candle-binding && \
     mkdir -p src && \
     echo "fn main() {}" > src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        cargo build --release --target aarch64-unknown-linux-gnu; \
+        cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
-        cargo build --release; \
+        cargo build --release --no-default-features; \
     fi && \
     rm -rf src
 
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
 
-# Build with cross-compilation (rebuild with actual source code)
-RUN echo "Building Rust library with actual source code..." && \
+# Build with cross-compilation (rebuild with actual source code, CPU-only, no CUDA)
+RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." && \
     echo "Current directory: $(pwd)" && \
     echo "TARGETARCH: $TARGETARCH" && \
     ls -la candle-binding/src/ && \
@@ -107,9 +107,9 @@ RUN echo "Building Rust library with actual source code..." && \
         export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc; \
         export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++; \
         export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar; \
-        cargo build --release --target aarch64-unknown-linux-gnu; \
+        cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
-        cargo build --release --target x86_64-unknown-linux-gnu; \
+        cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
     fi && \
     echo "Checking built library..." && \
     find target -name "*.so" -type f

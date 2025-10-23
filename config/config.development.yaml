@@ -14,6 +14,9 @@ semantic_cache:
   max_entries: 100
   ttl_seconds: 600
   eviction_policy: "fifo"
+  use_hnsw: true # Enable HNSW for faster search
+  hnsw_m: 16
+  hnsw_ef_construction: 200
 
 tools:
   enabled: false
