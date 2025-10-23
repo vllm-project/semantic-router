@@ -47,7 +47,9 @@ jobs:
 
       - name: Setup Kustomize
         run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          # Install kustomize using direct download (more reliable)
+          KUSTOMIZE_VERSION=${KUSTOMIZE_VERSION#v}  # Remove 'v' prefix if present
+          curl -s "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar -xz
           sudo mv kustomize /usr/local/bin/
           kustomize version
 
@@ -216,7 +218,9 @@ jobs:
 
       - name: Setup Kustomize
         run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          # Install kustomize using direct download (more reliable)
+          KUSTOMIZE_VERSION=${KUSTOMIZE_VERSION#v}  # Remove 'v' prefix if present
+          curl -s "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar -xz
           sudo mv kustomize /usr/local/bin/
 
       - name: Create temporary kustomization for testing
@@ -572,7 +576,9 @@ jobs:
 
       - name: Setup Kustomize
         run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          # Install kustomize using direct download (more reliable)
+          KUSTOMIZE_VERSION=${KUSTOMIZE_VERSION#v}  # Remove 'v' prefix if present
+          curl -s "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar -xz
           sudo mv kustomize /usr/local/bin/
 
       - name: Test kustomize with different overlays
@@ -676,7 +682,9 @@ jobs:
 
       - name: Setup Kustomize
         run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          # Install kustomize using direct download (more reliable)
+          KUSTOMIZE_VERSION=${KUSTOMIZE_VERSION#v}  # Remove 'v' prefix if present
+          curl -s "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" | tar -xz
           sudo mv kustomize /usr/local/bin/
 
       - name: Run Trivy security scan
