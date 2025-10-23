@@ -10,6 +10,9 @@ semantic_cache:
   max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
   eviction_policy: "fifo"
+  # Embedding model for semantic similarity matching
+  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  embedding_model: "bert"  # Default: BERT (fastest, lowest memory for OpenShift)
 
 tools:
   enabled: true

@@ -35,6 +35,7 @@ var _ = Describe("Caching Functionality", func() {
 			SimilarityThreshold: 0.9,
 			MaxEntries:          100,
 			TTLSeconds:          3600,
+			EmbeddingModel:      "bert",
 		}
 		cacheBackend, err := cache.NewCacheBackend(cacheConfig)
 		Expect(err).NotTo(HaveOccurred())
@@ -216,6 +217,7 @@ var _ = Describe("Caching Functionality", func() {
 				SimilarityThreshold: 0.9,
 				MaxEntries:          100,
 				TTLSeconds:          3600,
+				EmbeddingModel:      "bert",
 			}
 			cacheBackend, err := cache.NewCacheBackend(cacheConfig)
 			Expect(err).NotTo(HaveOccurred())

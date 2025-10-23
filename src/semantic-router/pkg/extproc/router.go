@@ -85,6 +85,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
+		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
 
 	// Use default backend type if not specified

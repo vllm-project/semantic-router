@@ -105,6 +105,10 @@ type CacheConfig struct {
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
+	// EmbeddingModel specifies which embedding model to use
+	// Options: "bert" (default), "qwen3", "gemma"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
 	// UseHNSW enables HNSW index for faster search in memory backend
 	UseHNSW bool `yaml:"use_hnsw,omitempty"`
 

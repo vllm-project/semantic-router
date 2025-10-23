@@ -117,6 +117,12 @@ type SemanticCacheConfig struct {
 	// +kubebuilder:default=memory
 	Backend *string `json:"backend,omitempty"`
 
+	// EmbeddingModel defines which embedding model to use for semantic similarity
+	// +optional
+	// +kubebuilder:validation:Enum=bert;qwen3;gemma
+	// +kubebuilder:default=bert
+	EmbeddingModel *string `json:"embeddingModel,omitempty"`
+
 	// BackendConfig defines backend-specific configuration
 	// +optional
 	BackendConfig map[string]string `json:"backendConfig,omitempty"`
