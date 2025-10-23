@@ -87,6 +87,7 @@ jobs:
         run: make test
         env:
           CI: true
+          CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
 
