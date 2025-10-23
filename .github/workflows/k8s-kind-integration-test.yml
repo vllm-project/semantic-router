@@ -155,30 +155,36 @@ jobs:
           sudo mv kustomize /usr/local/bin/
           kustomize version
 
-      - name: Create CI test overlay
+      - name: Prepare CI deployment
         run: |
-          # Create a simple test overlay directory
-          mkdir -p deploy/kubernetes/ci-test
-          cd deploy/kubernetes/ci-test
+          echo "Preparing CI deployment configuration..."
 
-          # Create a kustomization that references individual files instead of parent directory
+          # Create a temporary kustomization file for CI
+          cd deploy/kubernetes
+
+          # Backup original kustomization.yaml
+          cp kustomization.yaml kustomization.yaml.backup
+
+          # Create CI-specific kustomization with patches
           cat > kustomization.yaml << EOF
           apiVersion: kustomize.config.k8s.io/v1beta1
           kind: Kustomization
 
-          # Reference individual files to avoid circular dependency
-          resources:
-          - ../namespace.yaml
-          - ../pv-models.yaml
-          - ../deployment.yaml
-          - ../service.yaml
+          metadata:
+            name: semantic-router
 
-          # Generate ConfigMap (same as base)
+          resources:
+          - namespace.yaml
+          - pv-models.yaml
+          - deployment.yaml
+          - service.yaml
+
+          # Generate ConfigMap
           configMapGenerator:
           - name: semantic-router-config
             files:
-            - ../config.yaml
-            - ../tools_db.json
+            - config.yaml
+            - tools_db.json
 
           namespace: vllm-semantic-router-system
 
@@ -210,7 +216,7 @@ jobs:
               name: semantic-router
           EOF
 
-          echo "=== Generated CI test kustomization ==="
+          echo "=== Generated CI kustomization ==="
           cat kustomization.yaml
 
       - name: Pre-flight check for Hugging Face connectivity
@@ -246,7 +252,7 @@ jobs:
       - name: Deploy to kind cluster
         run: |
           echo "Deploying semantic-router to kind cluster..."
-          kustomize build deploy/kubernetes/ci-test | kubectl apply -f -
+          kustomize build deploy/kubernetes | kubectl apply -f -
 
           echo "Waiting for namespace to be active..."
           kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/vllm-semantic-router-system --timeout=60s
@@ -447,5 +453,8 @@ jobs:
           kubectl delete namespace vllm-semantic-router-system --timeout=60s || true
           echo "Cleaning up kind cluster..."
           kind delete cluster --name semantic-router-cluster || true
-          echo "Cleaning up CI test directory..."
-          rm -rf deploy/kubernetes/ci-test || true
+          echo "Restoring original kustomization..."
+          cd deploy/kubernetes
+          if [ -f kustomization.yaml.backup ]; then
+            mv kustomization.yaml.backup kustomization.yaml
+          fi

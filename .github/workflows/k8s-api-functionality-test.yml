@@ -71,28 +71,36 @@ jobs:
           sudo mv kustomize /usr/local/bin/
           kustomize version
 
-      - name: Create API test overlay
+      - name: Prepare API test deployment
         run: |
-          mkdir -p deploy/kubernetes/api-test
-          cd deploy/kubernetes/api-test
+          echo "Preparing API test deployment configuration..."
 
+          # Create a temporary kustomization file for API testing
+          cd deploy/kubernetes
+
+          # Backup original kustomization.yaml
+          cp kustomization.yaml kustomization.yaml.backup
+
+          # Create API test-specific kustomization with patches
           cat > kustomization.yaml << EOF
           apiVersion: kustomize.config.k8s.io/v1beta1
           kind: Kustomization
 
-          # Reference individual files to avoid circular dependency
-          resources:
-          - ../namespace.yaml
-          - ../pv-models.yaml
-          - ../deployment.yaml
-          - ../service.yaml
+          metadata:
+            name: semantic-router
 
-          # Generate ConfigMap (same as base)
+          resources:
+          - namespace.yaml
+          - pv-models.yaml
+          - deployment.yaml
+          - service.yaml
+
+          # Generate ConfigMap
           configMapGenerator:
           - name: semantic-router-config
             files:
-          - ../config.yaml
-          - ../tools_db.json
+            - config.yaml
+            - tools_db.json
 
           namespace: vllm-semantic-router-system
 
@@ -122,9 +130,12 @@ jobs:
               name: semantic-router
           EOF
 
+          echo "=== Generated API test kustomization ==="
+          cat kustomization.yaml
+
       - name: Deploy for API testing
         run: |
-          kustomize build deploy/kubernetes/api-test | kubectl apply -f -
+          kustomize build deploy/kubernetes | kubectl apply -f -
 
           # Wait for deployment
           kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/vllm-semantic-router-system --timeout=60s
@@ -313,4 +324,8 @@ jobs:
           echo "Cleaning up API test resources..."
           kubectl delete namespace vllm-semantic-router-system --timeout=60s || true
           kind delete cluster --name api-test-cluster || true
-          rm -rf deploy/kubernetes/api-test || true
+          echo "Restoring original kustomization..."
+          cd deploy/kubernetes
+          if [ -f kustomization.yaml.backup ]; then
+            mv kustomization.yaml.backup kustomization.yaml
+          fi
