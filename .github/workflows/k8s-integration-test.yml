@@ -233,7 +233,7 @@ jobs:
 
           # Copy resources for CI testing
           cp ../deployment.yaml ./deployment.yaml
-          cp ../pvc.yaml ./pvc.yaml
+          cp ../pv-models.yaml ./pv-models.yaml
 
           # Optimize init container for CI testing
           # 1. Update pip install to include hf_transfer for faster downloads
@@ -255,7 +255,7 @@ jobs:
 
           resources:
           - namespace.yaml
-          - pvc.yaml
+          - pv-models.yaml
           - deployment.yaml
           - service.yaml
 
