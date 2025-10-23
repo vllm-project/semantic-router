@@ -25,9 +25,8 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
         }
     };
 
-    let bert_opt = BERT_SIMILARITY.lock().unwrap();
-    let bert = match &*bert_opt {
-        Some(b) => b,
+    let bert = match BERT_SIMILARITY.get() {
+        Some(b) => b.clone(),
         None => {
             eprintln!("BERT model not initialized");
             return TokenizationResult {

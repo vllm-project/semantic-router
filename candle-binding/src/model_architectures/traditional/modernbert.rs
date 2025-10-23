@@ -11,9 +11,8 @@ use candle_nn::{ops, LayerNorm, Linear, Module, VarBuilder};
 use candle_transformers::models::modernbert::{
     ClassifierConfig, ClassifierPooling, Config, ModernBert,
 };
-use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 
 use crate::core::tokenization::DualPathTokenizer;
@@ -46,17 +45,17 @@ pub struct TraditionalModernBertTokenClassifier {
     model_path: String,
 }
 
-// Global static instances for FFI compatibility
-lazy_static! {
-    pub static ref TRADITIONAL_MODERNBERT_CLASSIFIER: Arc<Mutex<Option<TraditionalModernBertClassifier>>> =
-        Arc::new(Mutex::new(None));
-    pub static ref TRADITIONAL_MODERNBERT_PII_CLASSIFIER: Arc<Mutex<Option<TraditionalModernBertClassifier>>> =
-        Arc::new(Mutex::new(None));
-    pub static ref TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER: Arc<Mutex<Option<TraditionalModernBertClassifier>>> =
-        Arc::new(Mutex::new(None));
-    pub static ref TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER: Arc<Mutex<Option<TraditionalModernBertTokenClassifier>>> =
-        Arc::new(Mutex::new(None));
-}
+// Global static instances using OnceLock pattern for zero-cost reads after initialization
+pub static TRADITIONAL_MODERNBERT_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
+    OnceLock::new();
+pub static TRADITIONAL_MODERNBERT_PII_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
+    OnceLock::new();
+pub static TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER: OnceLock<
+    Arc<TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER: OnceLock<
+    Arc<TraditionalModernBertTokenClassifier>,
+> = OnceLock::new();
 
 // Real classifier implementations
 #[derive(Clone)]

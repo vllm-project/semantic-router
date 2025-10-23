@@ -446,16 +446,16 @@ impl std::fmt::Debug for TraditionalBertClassifier {
     }
 }
 
-// Global instances for backward compatibility with lib.rs
-lazy_static::lazy_static! {
-    /// Global Traditional BERT classifier instance
-    pub static ref TRADITIONAL_BERT_CLASSIFIER: std::sync::Arc<std::sync::Mutex<Option<TraditionalBertClassifier>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
+// Global instances using OnceLock pattern for zero-cost reads after initialization
+/// Global Traditional BERT classifier instance
+pub static TRADITIONAL_BERT_CLASSIFIER: std::sync::OnceLock<
+    std::sync::Arc<TraditionalBertClassifier>,
+> = std::sync::OnceLock::new();
 
-    /// Global Traditional BERT token classifier instance
-    pub static ref TRADITIONAL_BERT_TOKEN_CLASSIFIER: std::sync::Arc<std::sync::Mutex<Option<TraditionalBertTokenClassifier>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
-}
+/// Global Traditional BERT token classifier instance
+pub static TRADITIONAL_BERT_TOKEN_CLASSIFIER: std::sync::OnceLock<
+    std::sync::Arc<TraditionalBertTokenClassifier>,
+> = std::sync::OnceLock::new();
 
 /// Traditional BERT token classifier for token-level classification
 pub struct TraditionalBertTokenClassifier {

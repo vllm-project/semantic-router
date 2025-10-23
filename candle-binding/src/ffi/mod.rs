@@ -38,6 +38,8 @@ pub mod init_test;
 #[cfg(test)]
 pub mod memory_safety_test;
 #[cfg(test)]
+pub mod oncelock_concurrent_test;
+#[cfg(test)]
 pub mod state_manager_test;
 #[cfg(test)]
 pub mod validation_test;
