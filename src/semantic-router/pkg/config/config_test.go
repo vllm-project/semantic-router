@@ -1890,6 +1890,7 @@ categories:
 						TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
 						EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
 						BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
+						EmbeddingModel      string   `yaml:"embedding_model,omitempty"`
 					}{
 						Enabled:             true,
 						SimilarityThreshold: config.Float32Ptr(0.8),
