@@ -50,8 +50,24 @@ test-rust-flash-attn-module: rust-flash-attn
 	@echo "Running Rust Flash Attention tests for module: $(MODULE) (GPU $(TEST_GPU_DEVICE))"
 	@cd candle-binding && CUDA_VISIBLE_DEVICES=$(TEST_GPU_DEVICE) cargo test --release --features flash-attn $(MODULE) --lib -- --nocapture
 
-# Test the Rust library (conditionally use rust-ci in CI environments)
-test-binding: $(if $(CI),rust-ci,rust) ## Run Go tests with the Rust static library
+# Test the Rust library - minimal models only (conditionally use rust-ci in CI environments)
+test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal models (BERT, ModernBERT)
+	@$(LOG_TARGET)
+	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		cd candle-binding && CGO_ENABLED=1 go test -v -race \
+		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency)$$"
+
+# Test the Rust library - LoRA and advanced embedding models (conditionally use rust-ci in CI environments)
+test-binding-lora: $(if $(CI),rust-ci,rust) ## Run Go tests with LoRA and advanced embedding models
+	@$(LOG_TARGET)
+	@echo "Running candle-binding tests with LoRA and advanced embedding models..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		cd candle-binding && CGO_ENABLED=1 go test -v -race \
+		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$"
+
+# Test the Rust library - all tests (conditionally use rust-ci in CI environments)
+test-binding: $(if $(CI),rust-ci,rust) ## Run all Go tests with the Rust static library
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race

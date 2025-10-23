@@ -40,8 +40,16 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-# In CI, skip test-rust (GPU tests) and only run test-binding and test-semantic-router with rust-ci
+# In CI, split test-binding into two phases to save disk space:
+#   1. Run test-binding-minimal with minimal models
+#   2. Clean up minimal models, download LoRA/embedding models
+#   3. Run test-binding-lora
+# In local dev, run all tests together
+ifeq ($(CI),true)
+test: vet check-go-mod-tidy download-models test-binding-minimal clean-minimal-models download-models-lora test-binding-lora test-semantic-router
+else
 test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
+endif
 
 # Clean built artifacts
 clean: ## Clean built artifacts

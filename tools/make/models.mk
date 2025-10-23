@@ -105,3 +105,33 @@ download-models-full: ## Download all models used in local development and docs
 	@if [ ! -d "models/embeddinggemma-300m" ]; then \
 		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m; \
 	fi
+
+# Download only LoRA and advanced embedding models (for CI after minimal tests)
+download-models-lora:
+download-models-lora: ## Download LoRA adapters and advanced embedding models only
+	@mkdir -p models
+	@echo "Downloading LoRA adapters and advanced embedding models..."
+	@if [ ! -f "models/lora_intent_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_intent_classifier_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model --local-dir models/lora_intent_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_intent_classifier_bert-base-uncased_model/.downloaded; \
+	fi
+	@if [ ! -f "models/lora_pii_detector_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_pii_detector_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model --local-dir models/lora_pii_detector_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_pii_detector_bert-base-uncased_model/.downloaded; \
+	fi
+	@if [ ! -f "models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
+		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded; \
+	fi
+	@if [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
+		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
+	fi
+	@if [ ! -d "models/embeddinggemma-300m" ]; then \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m; \
+	fi
+
+# Clean up minimal models to save disk space (for CI)
+clean-minimal-models: ## Remove minimal models to save disk space
+	@echo "Cleaning up minimal models to save disk space..."
+	@rm -rf models/category_classifier_modernbert-base_model
+	@rm -rf models/pii_classifier_modernbert-base_presidio_token_model
+	@rm -rf models/jailbreak_classifier_modernbert-base_model
+	@rm -rf models/pii_classifier_modernbert-base_model
+	@echo "✓ Minimal models cleaned up"
