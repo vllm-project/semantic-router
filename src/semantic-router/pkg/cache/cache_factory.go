@@ -37,9 +37,6 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			HNSWM:               config.HNSWM,
 			HNSWEfConstruction:  config.HNSWEfConstruction,
 			EmbeddingModel:      config.EmbeddingModel,
-			UseHNSW:             config.UseHNSW,
-			HNSWM:               config.HNSWM,
-			HNSWEfConstruction:  config.HNSWEfConstruction,
 		}
 		return NewInMemoryCache(options), nil
 
