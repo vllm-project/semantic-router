@@ -78,7 +78,7 @@ func InitLogger(cfg Config) (*zap.Logger, error) {
 	}
 
 	if cfg.AddCaller {
-		logger = logger.WithOptions(zap.AddCaller())
+		logger = logger.WithOptions(zap.AddCaller(), zap.AddCallerSkip(1))
 	}
 
 	// Replace globals and redirect stdlib log
