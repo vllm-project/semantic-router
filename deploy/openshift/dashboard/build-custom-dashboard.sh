@@ -30,7 +30,7 @@ echo "Namespace: $NAMESPACE"
 echo ""
 echo "Logging in to OpenShift registry..."
 TOKEN=$(oc whoami -t)
-docker login -u $(oc whoami) -p $TOKEN $REGISTRY
+docker login -u "$(oc whoami)" -p "$TOKEN" "$REGISTRY"
 
 # Prepare build directory
 echo ""
@@ -95,11 +95,11 @@ fi
 echo ""
 echo "Building docker image for linux/amd64 with no cache..."
 cd $BUILD_DIR/dashboard
-docker buildx build --no-cache --platform linux/amd64 -f Dockerfile.custom -t $REGISTRY/$NAMESPACE/$IMAGE_NAME:latest --load .
+docker buildx build --no-cache --platform linux/amd64 -f Dockerfile.custom -t "$REGISTRY/$NAMESPACE/$IMAGE_NAME:latest" --load .
 
 echo ""
 echo "Pushing image to registry..."
-docker push $REGISTRY/$NAMESPACE/$IMAGE_NAME:latest
+docker push "$REGISTRY/$NAMESPACE/$IMAGE_NAME:latest"
 
 # Cleanup
 echo ""

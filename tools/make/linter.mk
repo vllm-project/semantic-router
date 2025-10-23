@@ -37,3 +37,7 @@ codespell: CODESPELL_SKIP := $(shell cat tools/linter/codespell/.codespell.skip 
 codespell: ## Check for common misspellings in code and docs
 	@$(LOG_TARGET)
 	codespell --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
+
+shellcheck: ## Lint all shell scripts in the project
+	@$(LOG_TARGET)
+	shellcheck --rcfile=tools/linter/shellcheck/.shellcheckrc $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*")

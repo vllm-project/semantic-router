@@ -87,6 +87,9 @@ categories:
         use_reasoning: true  # Enable reasoning for legal analysis
   - name: psychology
     system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+    # Category-level cache override (if global cache is enabled)
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.92  # Strict for clinical nuances
     model_scores:
       - model: openai/gpt-oss-20b
         score: 1.0
@@ -117,6 +120,9 @@ categories:
         use_reasoning: false  # Default queries don't need reasoning
   - name: health
     system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+    # Category-level cache override (if global cache is enabled)
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.95  # Very strict - medical accuracy critical
     model_scores:
       - model: openai/gpt-oss-20b
         score: 1.0

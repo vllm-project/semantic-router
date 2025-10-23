@@ -9,7 +9,7 @@ echo "=============================================="
 
 # Clean previous builds
 echo "🧹 Cleaning previous builds..."
-rm -rf build/ dist/ *.egg-info/
+rm -rf build/ dist/ ./*.egg-info/
 find vllm_semantic_router_bench/ -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 find vllm_semantic_router_bench/ -name "*.pyc" -delete 2>/dev/null || true
 

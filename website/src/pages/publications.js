@@ -29,11 +29,24 @@ const papers = [
     ],
     featured: true,
   },
+  {
+    id: 3,
+    type: 'paper',
+    title: 'Multi-Provider Extensions for Agentic AI Inference APIs',
+    authors: 'H. Chen, L. Jalil, N. Cocker',
+    venue: 'Internet Engineering Task Force (IETF) - Network Management Research Group',
+    year: '2025',
+    abstract: 'This document specifies multi-provider extensions for agentic AI inference APIs. Published: 20 October 2025. Intended Status: Informational. Expires: 23 April 2026.',
+    links: [
+      { type: 'paper', url: 'https://www.ietf.org/archive/id/draft-chen-nmrg-multi-provider-inference-api-00.html', label: '📄 Paper' },
+    ],
+    featured: true,
+  },
 ]
 
 const talks = [
   {
-    id: 3,
+    id: 4,
     type: 'talk',
     title: 'Intelligent LLM Routing: A New Paradigm for Multi-Model AI Orchestration in Kubernetes',
     speakers: 'Chen Wang, Huamin Chen',
@@ -47,7 +60,7 @@ const talks = [
     featured: true,
   },
   {
-    id: 4,
+    id: 5,
     type: 'talk',
     title: 'vLLM Semantic Router: Unlock the Power of Intelligent Routing',
     speakers: 'Xunzhuo Liu',
@@ -61,7 +74,7 @@ const talks = [
     featured: true,
   },
   {
-    id: 5,
+    id: 6,
     type: 'talk',
     title: 'AI-Powered vLLM Semantic Router',
     speakers: 'Huamin Chen',

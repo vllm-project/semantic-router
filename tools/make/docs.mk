@@ -23,3 +23,12 @@ docs-serve: docs-build ## Serve built documentation website
 docs-clean: ## Clean documentation build artifacts
 	@$(LOG_TARGET)
 	cd website && npm run clear
+
+docs-lint: ## Lint documentation website source files
+	@$(LOG_TARGET)
+	cd website && npm run lint
+
+docs-lint-fix: ## Fix lint issues in documentation website source files
+	@$(LOG_TARGET)
+	cd website && npm run lint:fix
+

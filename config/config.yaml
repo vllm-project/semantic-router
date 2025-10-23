@@ -5,7 +5,7 @@ bert_model:
 
 semantic_cache:
   enabled: true
-  backend_type: "memory" # Options: "memory" or "milvus"
+  backend_type: "memory" # Options: "memory", "milvus", or "hybrid"
   similarity_threshold: 0.8
   max_entries: 1000 # Only applies to memory backend
   ttl_seconds: 3600
@@ -14,6 +14,15 @@ semantic_cache:
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
   embedding_model: "bert"
+  # HNSW index configuration (for memory backend only)
+  use_hnsw: true # Enable HNSW index for faster similarity search
+  hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
+  hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
+  
+  # Hybrid cache configuration (when backend_type: "hybrid")
+  # Combines in-memory HNSW for fast search with Milvus for scalable storage
+  # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
+  # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
 tools:
   enabled: true
@@ -23,7 +32,7 @@ tools:
   fallback_to_empty: true
 
 prompt_guard:
-  enabled: true
+  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
   use_modernbert: true
   model_id: "models/jailbreak_classifier_modernbert-base_model"
   threshold: 0.7
@@ -66,6 +75,8 @@ classifier:
 categories:
   - name: business
     system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+    # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category
+    # jailbreak_threshold: 0.8  # Optional: Override global jailbreak threshold per category
     model_scores:
       - model: qwen3
         score: 0.7
@@ -78,6 +89,8 @@ categories:
         use_reasoning: false
   - name: psychology
     system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.92 # High threshold for psychology - sensitive to nuances
     model_scores:
       - model: qwen3
         score: 0.6
@@ -102,12 +115,16 @@ categories:
         use_reasoning: false
   - name: other
     system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.75 # Lower threshold for general chat - less sensitive
     model_scores:
       - model: qwen3
         score: 0.7
         use_reasoning: false
   - name: health
     system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95 # High threshold for health - very sensitive to word changes
     model_scores:
       - model: qwen3
         score: 0.5

@@ -1753,4 +1753,510 @@ default_model: "test-model"
 			})
 		})
 	})
+
+	Describe("Category-Level Cache Settings", func() {
+		Context("with category-specific cache configuration", func() {
+			It("should use category-specific cache enabled setting", func() {
+				yamlContent := `
+bert_model:
+  model_id: "test-model"
+  threshold: 0.7
+
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+
+categories:
+  - name: health
+    semantic_cache_enabled: true
+    semantic_cache_similarity_threshold: 0.95
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: general
+    semantic_cache_enabled: false
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: other
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Test category-specific enabled settings
+				Expect(cfg.IsCacheEnabledForCategory("health")).To(BeTrue())
+				Expect(cfg.IsCacheEnabledForCategory("general")).To(BeFalse())
+				// "other" should fall back to global setting
+				Expect(cfg.IsCacheEnabledForCategory("other")).To(BeTrue())
+				// Unknown category should also fall back to global
+				Expect(cfg.IsCacheEnabledForCategory("unknown")).To(BeTrue())
+			})
+
+			It("should use category-specific similarity thresholds", func() {
+				yamlContent := `
+bert_model:
+  model_id: "test-model"
+  threshold: 0.7
+
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+
+categories:
+  - name: health
+    semantic_cache_similarity_threshold: 0.95
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: psychology
+    semantic_cache_similarity_threshold: 0.92
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: other
+    semantic_cache_similarity_threshold: 0.75
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+  - name: general
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Test category-specific thresholds
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("health")).To(Equal(float32(0.95)))
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("psychology")).To(Equal(float32(0.92)))
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("other")).To(Equal(float32(0.75)))
+				// "general" should fall back to global semantic_cache threshold
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("general")).To(Equal(float32(0.8)))
+				// Unknown category should also fall back
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("unknown")).To(Equal(float32(0.8)))
+			})
+
+			It("should fall back to bert threshold when semantic_cache threshold is not set", func() {
+				yamlContent := `
+bert_model:
+  model_id: "test-model"
+  threshold: 0.6
+
+semantic_cache:
+  enabled: true
+
+categories:
+  - name: test
+    model_scores:
+      - model: test-model
+        score: 1.0
+        use_reasoning: false
+`
+				var cfg config.RouterConfig
+				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should fall back to bert_model.threshold
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("test")).To(Equal(float32(0.6)))
+				Expect(cfg.GetCacheSimilarityThreshold()).To(Equal(float32(0.6)))
+			})
+
+			It("should handle nil pointers for optional cache settings", func() {
+				category := config.Category{
+					Name: "test",
+					ModelScores: []config.ModelScore{
+						{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					},
+				}
+
+				cfg := &config.RouterConfig{
+					SemanticCache: struct {
+						BackendType         string   `yaml:"backend_type,omitempty"`
+						Enabled             bool     `yaml:"enabled"`
+						SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+						MaxEntries          int      `yaml:"max_entries,omitempty"`
+						TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
+						EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
+						BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
+					}{
+						Enabled:             true,
+						SimilarityThreshold: config.Float32Ptr(0.8),
+					},
+					BertModel: struct {
+						ModelID   string  `yaml:"model_id"`
+						Threshold float32 `yaml:"threshold"`
+						UseCPU    bool    `yaml:"use_cpu"`
+					}{
+						Threshold: 0.7,
+					},
+					Categories: []config.Category{category},
+				}
+
+				// Nil values should use defaults
+				Expect(cfg.IsCacheEnabledForCategory("test")).To(BeTrue())
+				Expect(cfg.GetCacheSimilarityThresholdForCategory("test")).To(Equal(float32(0.8)))
+			})
+		})
+	})
+
+	Describe("IsJailbreakEnabledForCategory", func() {
+		Context("when global jailbreak is enabled", func() {
+			It("should return true for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
+			})
+
+			It("should return false when category explicitly disables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(false),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
+			})
+
+			It("should return true when category explicitly enables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(true),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
+			})
+		})
+
+		Context("when global jailbreak is disabled", func() {
+			It("should return false for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: false,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
+			})
+
+			It("should return true when category explicitly enables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(true),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: false,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
+			})
+
+			It("should return false when category explicitly disables jailbreak", func() {
+				category := config.Category{
+					Name:             "test",
+					JailbreakEnabled: config.BoolPtr(false),
+					ModelScores:      []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: false,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global setting", func() {
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled: true,
+					},
+					Categories: []config.Category{},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForCategory("nonexistent")).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("GetJailbreakThresholdForCategory", func() {
+		Context("when global threshold is set", func() {
+			It("should return global threshold for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Threshold: 0.7,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.7)))
+			})
+
+			It("should return category-specific threshold when set", func() {
+				category := config.Category{
+					Name:               "test",
+					JailbreakThreshold: config.Float32Ptr(0.9),
+					ModelScores:        []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Threshold: 0.7,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.9)))
+			})
+
+			It("should allow lower threshold override", func() {
+				category := config.Category{
+					Name:               "test",
+					JailbreakThreshold: config.Float32Ptr(0.5),
+					ModelScores:        []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Threshold: 0.7,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.5)))
+			})
+
+			It("should allow higher threshold override", func() {
+				category := config.Category{
+					Name:               "test",
+					JailbreakThreshold: config.Float32Ptr(0.95),
+					ModelScores:        []config.ModelScore{{Model: "test", Score: 1.0}},
+				}
+
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Threshold: 0.7,
+					},
+					Categories: []config.Category{category},
+				}
+
+				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.95)))
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global threshold", func() {
+				cfg := &config.RouterConfig{
+					PromptGuard: config.PromptGuardConfig{
+						Threshold: 0.8,
+					},
+					Categories: []config.Category{},
+				}
+
+				Expect(cfg.GetJailbreakThresholdForCategory("nonexistent")).To(Equal(float32(0.8)))
+			})
+		})
+	})
+
+	Describe("GetPIIThresholdForCategory", func() {
+		Context("when global threshold is set", func() {
+			It("should return global threshold for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.7)))
+			})
+
+			It("should return category-specific threshold when set", func() {
+				category := config.Category{
+					Name:         "test",
+					PIIThreshold: config.Float32Ptr(0.9),
+					ModelScores:  []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.9)))
+			})
+
+			It("should allow lower threshold override", func() {
+				category := config.Category{
+					Name:         "test",
+					PIIThreshold: config.Float32Ptr(0.5),
+					ModelScores:  []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.5)))
+			})
+
+			It("should allow higher threshold override", func() {
+				category := config.Category{
+					Name:         "test",
+					PIIThreshold: config.Float32Ptr(0.95),
+					ModelScores:  []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.7
+
+				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.95)))
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global threshold", func() {
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{},
+				}
+				cfg.Classifier.PIIModel.Threshold = 0.8
+
+				Expect(cfg.GetPIIThresholdForCategory("nonexistent")).To(Equal(float32(0.8)))
+			})
+		})
+	})
+
+	Describe("IsPIIEnabledForCategory", func() {
+		Context("when global PII is enabled", func() {
+			It("should return true for category without explicit setting", func() {
+				category := config.Category{
+					Name:        "test",
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.ModelID = "test-model"
+				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
+
+				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeTrue())
+			})
+
+			It("should return category-specific setting when set to false", func() {
+				category := config.Category{
+					Name:        "test",
+					PIIEnabled:  config.BoolPtr(false),
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				cfg.Classifier.PIIModel.ModelID = "test-model"
+				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
+
+				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeFalse())
+			})
+
+			It("should return category-specific setting when set to true", func() {
+				category := config.Category{
+					Name:        "test",
+					PIIEnabled:  config.BoolPtr(true),
+					ModelScores: []config.ModelScore{{Model: "test", Score: 1.0, UseReasoning: config.BoolPtr(false)}},
+				}
+
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{category},
+				}
+				// Global is disabled (no model ID)
+				cfg.Classifier.PIIModel.ModelID = ""
+
+				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeTrue())
+			})
+		})
+
+		Context("when category does not exist", func() {
+			It("should fall back to global setting", func() {
+				cfg := &config.RouterConfig{
+					Classifier: config.RouterConfig{}.Classifier,
+					Categories: []config.Category{},
+				}
+				cfg.Classifier.PIIModel.ModelID = "test-model"
+				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
+
+				Expect(cfg.IsPIIEnabledForCategory("nonexistent")).To(BeTrue())
+			})
+		})
+	})
 })

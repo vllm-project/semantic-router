@@ -60,12 +60,18 @@ classifier:
 categories:
   - name: math
     system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
+    # Example: High threshold for math - precision matters
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.92
     model_scores:
       - model: openai/gpt-oss-20b
         score: 1.0
         use_reasoning: true
   - name: other
     system_prompt: "You are a helpful assistant."
+    # Example: Lower threshold for general queries - more cache hits
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.75
     model_scores:
       - model: openai/gpt-oss-20b
         score: 0.7

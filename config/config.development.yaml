@@ -14,6 +14,9 @@ semantic_cache:
   max_entries: 100
   ttl_seconds: 600
   eviction_policy: "fifo"
+  use_hnsw: true # Enable HNSW for faster search
+  hnsw_m: 16
+  hnsw_ef_construction: 200
 
 tools:
   enabled: false
@@ -47,6 +50,9 @@ classifier:
 categories:
   - name: test
     system_prompt: "You are a test assistant."
+    # Example: Category-level cache settings
+    # semantic_cache_enabled: true
+    # semantic_cache_similarity_threshold: 0.85
     model_scores:
       - model: test-model
         score: 1.0

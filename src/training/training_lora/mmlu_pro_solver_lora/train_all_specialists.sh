@@ -48,7 +48,7 @@ train_model() {
     local CUSTOM_EPOCHS=${2:-$EPOCHS}
     local CUSTOM_SAMPLES=${3:-$MAX_SAMPLES}
     local CUSTOM_LR=${4:-$LEARNING_RATE}
-    
+
     echo ""
     echo "======================================================================"
     echo "Training: $MODEL_TYPE"
@@ -57,10 +57,10 @@ train_model() {
     echo "  Samples/Category: $CUSTOM_SAMPLES"
     echo "  Learning Rate: $CUSTOM_LR"
     echo ""
-    
+
     LOG_FILE="training_logs/${MODEL_TYPE}_$(date +%Y%m%d_%H%M%S).log"
-    
-    python ft_qwen3_mmlu_solver_lora.py \
+
+    if python ft_qwen3_mmlu_solver_lora.py \
         --mode train \
         --model "$BASE_MODEL" \
         --model-type "$MODEL_TYPE" \
@@ -70,9 +70,7 @@ train_model() {
         --learning-rate "$CUSTOM_LR" \
         --max-samples-per-category "$CUSTOM_SAMPLES" \
         --gpu-id "$GPU_ID" \
-        2>&1 | tee "$LOG_FILE"
-    
-    if [ $? -eq 0 ]; then
+        2>&1 | tee "$LOG_FILE"; then
         echo ""
         echo "✓ Successfully trained $MODEL_TYPE"
         echo "  Log: $LOG_FILE"

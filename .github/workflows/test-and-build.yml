@@ -69,8 +69,8 @@ jobs:
       - name: Check go mod tidy
         run: make check-go-mod-tidy
 
-      - name: Build Rust library
-        run: make rust
+      - name: Build Rust library (CPU-only, no CUDA)
+        run: make rust-ci
 
       - name: Install HuggingFace CLI
         run: |
@@ -86,6 +86,7 @@ jobs:
       - name: Run semantic router tests
         run: make test
         env:
+          CI: true
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
 

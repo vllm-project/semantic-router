@@ -18,7 +18,7 @@ FAILURES=0
 log() {
     local level=$1
     shift
-    local message="$@"
+    local message="$*"
     case $level in
         "INFO")  echo -e "${BLUE}[INFO]${NC}  $message" ;;
         "PASS")  echo -e "${GREEN}[PASS]${NC}  $message" ;;

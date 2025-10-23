@@ -396,13 +396,29 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
-	// Perform security checks
-	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages); shouldReturn {
+	// Classify the request early to determine category for security checks and cache settings
+	var categoryName string
+	if r.Config != nil && r.Config.IsAutoModelName(originalModel) && (len(nonUserMessages) > 0 || userContent != "") {
+		// Determine text to use for classification
+		var classificationText string
+		if len(userContent) > 0 {
+			classificationText = userContent
+		} else if len(nonUserMessages) > 0 {
+			classificationText = strings.Join(nonUserMessages, " ")
+		}
+		if classificationText != "" {
+			categoryName = r.findCategoryForClassification(classificationText)
+			observability.Debugf("Classified request to category: %s", categoryName)
+		}
+	}
+
+	// Perform security checks with category-specific settings
+	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages, categoryName); shouldReturn {
 		return response, nil
 	}
 
-	// Handle caching
-	if response, shouldReturn := r.handleCaching(ctx); shouldReturn {
+	// Handle caching with category-specific settings
+	if response, shouldReturn := r.handleCaching(ctx, categoryName); shouldReturn {
 		return response, nil
 	}
 
@@ -410,19 +426,32 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	return r.handleModelRouting(openAIRequest, originalModel, userContent, nonUserMessages, ctx)
 }
 
-// performSecurityChecks performs PII and jailbreak detection
-func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string) (*ext_proc.ProcessingResponse, bool) {
+// performSecurityChecks performs PII and jailbreak detection with category-specific settings
+func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
+	// Check if jailbreak detection is enabled for this category
+	jailbreakEnabled := r.Classifier.IsJailbreakEnabled()
+	if categoryName != "" && r.Config != nil {
+		// Use category-specific setting if available
+		jailbreakEnabled = jailbreakEnabled && r.Config.IsJailbreakEnabledForCategory(categoryName)
+	}
+
+	// Get category-specific threshold
+	jailbreakThreshold := r.Config.PromptGuard.Threshold
+	if categoryName != "" && r.Config != nil {
+		jailbreakThreshold = r.Config.GetJailbreakThresholdForCategory(categoryName)
+	}
+
 	// Perform jailbreak detection on all message content
-	if r.Classifier.IsJailbreakEnabled() {
+	if jailbreakEnabled {
 		// Start jailbreak detection span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanJailbreakDetection)
 		defer span.End()
 
 		startTime := time.Now()
-		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreak(allContent)
+		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreakWithThreshold(allContent, jailbreakThreshold)
 		detectionTime := time.Since(startTime).Milliseconds()
 
 		observability.SetSpanAttributes(span,
@@ -476,8 +505,8 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 	return nil, false
 }
 
-// handleCaching handles cache lookup and storage
-func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
+// handleCaching handles cache lookup and storage with category-specific settings
+func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	// Extract the model and query for cache lookup
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
@@ -489,20 +518,34 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
 
-	if requestQuery != "" && r.Cache.IsEnabled() {
+	// Check if caching is enabled for this category
+	cacheEnabled := r.Config.SemanticCache.Enabled
+	if categoryName != "" {
+		cacheEnabled = r.Config.IsCacheEnabledForCategory(categoryName)
+	}
+
+	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+		// Get category-specific threshold
+		threshold := r.Config.GetCacheSimilarityThreshold()
+		if categoryName != "" {
+			threshold = r.Config.GetCacheSimilarityThresholdForCategory(categoryName)
+		}
+
 		// Start cache lookup span
 		spanCtx, span := observability.StartSpan(ctx.TraceContext, observability.SpanCacheLookup)
 		defer span.End()
 
 		startTime := time.Now()
-		// Try to find a similar cached response
-		cachedResponse, found, cacheErr := r.Cache.FindSimilar(requestModel, requestQuery)
+		// Try to find a similar cached response using category-specific threshold
+		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
 		lookupTime := time.Since(startTime).Milliseconds()
 
 		observability.SetSpanAttributes(span,
 			attribute.String(observability.AttrCacheKey, requestQuery),
 			attribute.Bool(observability.AttrCacheHit, found),
-			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime))
+			attribute.Int64(observability.AttrCacheLookupTimeMs, lookupTime),
+			attribute.String(observability.AttrCategoryName, categoryName),
+			attribute.Float64("cache.threshold", float64(threshold)))
 
 		if cacheErr != nil {
 			observability.Errorf("Error searching cache: %v", cacheErr)
@@ -515,6 +558,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext) (*ext_proc.ProcessingR
 				"request_id": ctx.RequestID,
 				"model":      requestModel,
 				"query":      requestQuery,
+				"category":   categoryName,
+				"threshold":  threshold,
 			})
 			// Return immediate response from cache
 			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse)
@@ -1130,10 +1175,12 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response
 type OpenAIModel struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Created     int64  `json:"created"`
+	OwnedBy     string `json:"owned_by"`
+	Description string `json:"description,omitempty"` // Optional description for Chat UI
+	LogoURL     string `json:"logo_url,omitempty"`    // Optional logo URL for Chat UI
 }
 
 // OpenAIModelList is the container for the models list response
@@ -1156,18 +1203,22 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 	if r.Config != nil {
 		effectiveAutoModelName := r.Config.GetEffectiveAutoModelName()
 		models = append(models, OpenAIModel{
-			ID:      effectiveAutoModelName,
-			Object:  "model",
-			Created: now,
-			OwnedBy: "vllm-semantic-router",
+			ID:          effectiveAutoModelName,
+			Object:      "model",
+			Created:     now,
+			OwnedBy:     "vllm-semantic-router",
+			Description: "Intelligent Router for Mixture-of-Models",
+			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
 		})
 	} else {
 		// Fallback if no config
 		models = append(models, OpenAIModel{
-			ID:      "MoM",
-			Object:  "model",
-			Created: now,
-			OwnedBy: "vllm-semantic-router",
+			ID:          "MoM",
+			Object:      "model",
+			Created:     now,
+			OwnedBy:     "vllm-semantic-router",
+			Description: "Intelligent Router for Mixture-of-Models",
+			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
 		})
 	}
 

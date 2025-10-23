@@ -97,6 +97,8 @@ jobs:
 
     - name: Run pre-commit check
       run: make precommit-check
+      env:
+        CI: true
 
     - name: Show pre-commit results
       if: failure()

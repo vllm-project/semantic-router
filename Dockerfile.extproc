@@ -30,24 +30,24 @@ COPY candle-binding/Cargo.loc[k] ./candle-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
 
-# Pre-build dependencies to cache them
+# Pre-build dependencies to cache them (CPU-only, no CUDA)
 RUN cd candle-binding && \
     mkdir -p src && \
     echo "fn main() {}" > src/lib.rs && \
-    cargo build --release && \
+    cargo build --release --no-default-features && \
     rm -rf src
 
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
 
-# Use Makefile to build the Rust library (rebuild with actual source code)
-RUN echo "Building Rust library with actual source code..." && \
+# Use Makefile to build the Rust library (rebuild with actual source code, CPU-only, no CUDA)
+RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." && \
     echo "Checking source files:" && \
     ls -la candle-binding/src/ && \
     echo "Forcing clean rebuild..." && \
     cd candle-binding && \
     cargo clean && \
-    cargo build --release && \
+    cargo build --release --no-default-features && \
     echo "Checking built library:" && \
     find target -name "*.so" -type f && \
     ls -la target/release/

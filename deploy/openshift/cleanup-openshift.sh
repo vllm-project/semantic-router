@@ -31,7 +31,7 @@ WAIT_FOR_COMPLETION="true"
 log() {
     local level=$1
     shift
-    local message="$@"
+    local message="$*"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     case $level in
@@ -281,7 +281,7 @@ confirm_cleanup() {
     esac
 
     echo ""
-    read -p "Are you sure you want to proceed? (yes/no): " confirm
+    read -r -p "Are you sure you want to proceed? (yes/no): " confirm
     if [[ "$confirm" != "yes" && "$confirm" != "y" ]]; then
         log "INFO" "Cleanup cancelled by user"
         exit 0
@@ -406,7 +406,8 @@ cleanup_port_forwarding() {
 
     # Clean up PID file if it exists
     if [[ -f "/tmp/semantic-router-port-forward.pid" ]]; then
-        local saved_pid=$(cat /tmp/semantic-router-port-forward.pid 2>/dev/null | grep -o '^[0-9]*' || true)
+        local saved_pid
+        saved_pid=$(grep -o '^[0-9]*' /tmp/semantic-router-port-forward.pid 2>/dev/null || true)
         if [[ -n "$saved_pid" ]]; then
             log "INFO" "Cleaning up saved PID file (PID: $saved_pid)"
             kill "$saved_pid" 2>/dev/null || true
