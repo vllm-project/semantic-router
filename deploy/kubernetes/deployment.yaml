@@ -97,19 +97,6 @@ spec:
           env:
             - name: HF_HUB_CACHE
               value: /tmp/hf_cache
-            # China Mirror
-            - name: HUGGINGFACE_HUB_CACHE
-              value: /tmp/hf_cache
-            - name: HUGGINGFACE_HUB_ENABLE_HF_TRANSFER
-              value: "1"
-            - name: HUGGINGFACE_HUB_DOWNLOAD_TIMEOUT
-              value: "300"
-            - name: HUGGINGFACE_HUB_PROXY_URL
-              value: "https://hf-mirror.com"
-            - name: PIP_INDEX_URL
-              value: https://pypi.tuna.tsinghua.edu.cn/simple
-            - name: NO_PROXY
-              value: localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.svc.cluster.local
           # Reduced resource requirements for init container
           resources:
             requests:

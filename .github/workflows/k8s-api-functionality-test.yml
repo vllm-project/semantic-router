@@ -112,16 +112,16 @@ jobs:
           - patch: |-
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/memory
-                value: "512Mi"
+                value: "2Gi"
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/cpu
-                value: "250m"
+                value: "500m"
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/memory
-                value: "1Gi"
+                value: "4Gi"
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/cpu
-                value: "500m"
+                value: "1"
               - op: add
                 path: /spec/template/spec/containers/0/imagePullPolicy
                 value: "IfNotPresent"
@@ -141,7 +141,7 @@ jobs:
           kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/vllm-semantic-router-system --timeout=60s
           kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/semantic-router-models -n vllm-semantic-router-system --timeout=120s
           kubectl wait --for=condition=Initialized pods -l app=semantic-router -n vllm-semantic-router-system --timeout=600s
-          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=300s
+          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=600s
 
       - name: Run comprehensive API tests
         run: |
@@ -150,9 +150,9 @@ jobs:
           POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app=semantic-router -o jsonpath='{.items[0].metadata.name}')
           echo "Pod name: $POD_NAME"
 
-          # Wait for API to be ready
+          # Wait for API to be ready (increased timeout for model loading)
           echo "Waiting for API to be ready..."
-          timeout 120 bash -c 'until kubectl exec -n vllm-semantic-router-system $POD_NAME -- curl -s http://localhost:8080/health > /dev/null 2>&1; do echo "Waiting for API..."; sleep 10; done'
+          timeout 300 bash -c 'until kubectl exec -n vllm-semantic-router-system $POD_NAME -- curl -s http://localhost:8080/health > /dev/null 2>&1; do echo "Waiting for API..."; sleep 10; done'
 
           # Test results tracking
           TESTS_PASSED=0

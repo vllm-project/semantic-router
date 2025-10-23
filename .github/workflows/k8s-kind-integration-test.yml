@@ -193,18 +193,18 @@ jobs:
           - name: ghcr.io/vllm-project/semantic-router/extproc
             newTag: test
 
-          # Patch for CI - reduce resources and set imagePullPolicy
+          # Patch for CI - adjust resources for model loading and set imagePullPolicy
           patches:
           - patch: |-
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/memory
-                value: "1Gi"
+                value: "2Gi"
               - op: replace
                 path: /spec/template/spec/containers/0/resources/requests/cpu
                 value: "500m"
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/memory
-                value: "2Gi"
+                value: "4Gi"
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/cpu
                 value: "1"
@@ -288,9 +288,9 @@ jobs:
             exit 1
           }
 
-          # Wait for main container to be ready
+          # Wait for main container to be ready (increased timeout for model loading)
           echo "Waiting for main container to be ready..."
-          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=300s || {
+          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=600s || {
             echo "❌ Pod did not become ready in time. Showing status and logs..."
             kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
             kubectl logs -n vllm-semantic-router-system -l app=semantic-router --tail=200 || true
