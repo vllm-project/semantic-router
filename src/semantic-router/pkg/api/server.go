@@ -1574,7 +1574,6 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		req.Model,
 		req.Dimension,
 	)
-
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
 			fmt.Sprintf("failed to calculate batch similarity: %v", err))
