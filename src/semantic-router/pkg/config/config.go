@@ -92,6 +92,13 @@ type RouterConfig struct {
 
 		// Path to backend-specific configuration file
 		BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+		// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
+		// - "bert": Fast, 384-dim, good for short texts (default)
+		// - "qwen3": High quality, 1024-dim, supports 32K context
+		// - "gemma": Balanced, 768-dim, supports 8K context
+		// Default: "bert"
+		EmbeddingModel string `yaml:"embedding_model,omitempty"`
 	} `yaml:"semantic_cache"`
 
 	// Prompt guard configuration
@@ -108,6 +115,16 @@ type RouterConfig struct {
 
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
+
+	// Embedding models configuration (Phase 4: Long-context embedding support)
+	EmbeddingModels struct {
+		// Path to Qwen3-Embedding-0.6B model directory
+		Qwen3ModelPath string `yaml:"qwen3_model_path"`
+		// Path to EmbeddingGemma-300M model directory
+		GemmaModelPath string `yaml:"gemma_model_path"`
+		// Use CPU for inference (default: true, auto-detect GPU if available)
+		UseCPU bool `yaml:"use_cpu"`
+	} `yaml:"embedding_models"`
 
 	// Observability configuration for tracing, metrics, and logging
 	Observability ObservabilityConfig `yaml:"observability"`

@@ -1,3 +1,6 @@
+//go:build !windows && cgo
+// +build !windows,cgo
+
 package api
 
 import (
@@ -9,6 +12,7 @@ import (
 	"runtime"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
@@ -101,6 +105,76 @@ type ClassificationOptions struct {
 	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
 	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
+}
+
+// EmbeddingRequest represents a request for embedding generation
+type EmbeddingRequest struct {
+	Texts           []string `json:"texts"`
+	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
+	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
+	SequenceLength  int      `json:"sequence_length,omitempty"`  // Optional, auto-detected if not provided
+}
+
+// EmbeddingResult represents a single embedding result
+type EmbeddingResult struct {
+	Text             string    `json:"text"`
+	Embedding        []float32 `json:"embedding"`
+	Dimension        int       `json:"dimension"`
+	ModelUsed        string    `json:"model_used"`
+	ProcessingTimeMs int64     `json:"processing_time_ms"`
+}
+
+// EmbeddingResponse represents the response from embedding generation
+type EmbeddingResponse struct {
+	Embeddings            []EmbeddingResult `json:"embeddings"`
+	TotalCount            int               `json:"total_count"`
+	TotalProcessingTimeMs int64             `json:"total_processing_time_ms"`
+	AvgProcessingTimeMs   float64           `json:"avg_processing_time_ms"`
+}
+
+// SimilarityRequest represents a request to calculate similarity between two texts
+type SimilarityRequest struct {
+	Text1           string  `json:"text1"`
+	Text2           string  `json:"text2"`
+	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
+	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+}
+
+// SimilarityResponse represents the response of a similarity calculation
+type SimilarityResponse struct {
+	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", or "unknown"
+	Similarity       float32 `json:"similarity"`         // Cosine similarity score (-1.0 to 1.0)
+	ProcessingTimeMs float32 `json:"processing_time_ms"` // Processing time in milliseconds
+}
+
+// BatchSimilarityRequest represents a request to find top-k similar candidates for a query
+type BatchSimilarityRequest struct {
+	Query           string   `json:"query"`                      // Query text
+	Candidates      []string `json:"candidates"`                 // Array of candidate texts
+	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
+	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+}
+
+// BatchSimilarityMatch represents a single match in batch similarity matching
+type BatchSimilarityMatch struct {
+	Index      int     `json:"index"`      // Index of the candidate in the input array
+	Similarity float32 `json:"similarity"` // Cosine similarity score
+	Text       string  `json:"text"`       // The matched candidate text
+}
+
+// BatchSimilarityResponse represents the response of batch similarity matching
+type BatchSimilarityResponse struct {
+	Matches          []BatchSimilarityMatch `json:"matches"`            // Top-k matches, sorted by similarity (descending)
+	TotalCandidates  int                    `json:"total_candidates"`   // Total number of candidates processed
+	ModelUsed        string                 `json:"model_used"`         // "qwen3", "gemma", or "unknown"
+	ProcessingTimeMs float32                `json:"processing_time_ms"` // Processing time in milliseconds
 }
 
 // StartClassificationAPI starts the Classification API server
@@ -200,8 +274,14 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/classify/combined", s.handleCombinedClassification)
 	mux.HandleFunc("POST /api/v1/classify/batch", s.handleBatchClassification)
 
+	// Embedding endpoints
+	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
+	mux.HandleFunc("POST /api/v1/similarity", s.handleSimilarity)
+	mux.HandleFunc("POST /api/v1/similarity/batch", s.handleBatchSimilarity)
+	mux.HandleFunc("GET /api/v1/embeddings/models", s.handleEmbeddingModelsInfo) // Only embedding models
+
 	// Information endpoints
-	mux.HandleFunc("GET /info/models", s.handleModelsInfo)
+	mux.HandleFunc("GET /info/models", s.handleModelsInfo) // All models (classification + embedding)
 	mux.HandleFunc("GET /info/classifier", s.handleClassifierInfo)
 
 	// OpenAI-compatible endpoints
@@ -706,6 +786,19 @@ func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, _ *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
+// handleEmbeddingModelsInfo handles GET /api/v1/embeddings/models
+// Returns ONLY embedding models information
+func (s *ClassificationAPIServer) handleEmbeddingModelsInfo(w http.ResponseWriter, r *http.Request) {
+	embeddingModels := s.getEmbeddingModelsInfo()
+
+	response := map[string]interface{}{
+		"models": embeddingModels,
+		"count":  len(embeddingModels),
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
 func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, _ *http.Request) {
 	if s.config == nil {
 		s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -840,6 +933,10 @@ func (s *ClassificationAPIServer) buildModelsInfoResponse() ModelsInfoResponse {
 		// Return placeholder model info
 		models = s.getPlaceholderModelsInfo()
 	}
+
+	// Add embedding models information
+	embeddingModels := s.getEmbeddingModelsInfo()
+	models = append(models, embeddingModels...)
 
 	// Get system information
 	systemInfo := s.getSystemInfo()
@@ -988,6 +1085,36 @@ func validateTaskType(taskType string) error {
 	return fmt.Errorf("invalid task_type '%s'. Supported values: %v", taskType, validTaskTypes)
 }
 
+// getEmbeddingModelsInfo returns information about loaded embedding models
+func (s *ClassificationAPIServer) getEmbeddingModelsInfo() []ModelInfo {
+	var models []ModelInfo
+
+	// Query embedding models info from Rust FFI
+	embeddingInfo, err := candle_binding.GetEmbeddingModelsInfo()
+	if err != nil {
+		observability.Warnf("Failed to get embedding models info: %v", err)
+		return models
+	}
+
+	// Convert to ModelInfo format
+	for _, model := range embeddingInfo.Models {
+		models = append(models, ModelInfo{
+			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
+			Type:      "embedding",
+			Loaded:    model.IsLoaded,
+			ModelPath: model.ModelPath,
+			Metadata: map[string]string{
+				"model_type":           model.ModelName,
+				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
+				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
+				"matryoshka_supported": "true",
+			},
+		})
+	}
+
+	return models
+}
+
 // extractRequestedResults converts unified results to batch format based on task type
 func (s *ClassificationAPIServer) extractRequestedResults(unifiedResults *services.UnifiedBatchResponse, taskType string, options *ClassificationOptions) []BatchClassificationResult {
 	// Determine the correct batch size based on task type
@@ -1092,7 +1219,6 @@ func (s *ClassificationAPIServer) calculateUnifiedStatistics(unifiedResults *ser
 	}
 }
 
-// SystemPromptInfo represents system prompt information for a category
 type SystemPromptInfo struct {
 	Category string `json:"category"`
 	Prompt   string `json:"prompt"`
@@ -1239,4 +1365,240 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+// handleEmbeddings handles embedding generation requests
+func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
+	// Parse request
+	var req EmbeddingRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Validate input
+	if len(req.Texts) == 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+		return
+	}
+
+	// Set defaults
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = 768 // Default to full dimension
+	}
+	if req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = 0.5
+		req.LatencyPriority = 0.5
+	}
+
+	// Validate dimension
+	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	if !validDimensions[req.Dimension] {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
+			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return
+	}
+
+	// Generate embeddings for each text
+	results := make([]EmbeddingResult, 0, len(req.Texts))
+	var totalProcessingTime int64
+
+	for _, text := range req.Texts {
+		var output *candle_binding.EmbeddingOutput
+		var err error
+
+		// Choose between manual model selection or automatic routing
+		if req.Model == "auto" || req.Model == "" {
+			// Automatic routing based on quality/latency priorities
+			output, err = candle_binding.GetEmbeddingWithMetadata(
+				text,
+				req.QualityPriority,
+				req.LatencyPriority,
+				req.Dimension,
+			)
+		} else {
+			// Manual model selection ("qwen3" or "gemma")
+			output, err = candle_binding.GetEmbeddingWithModelType(
+				text,
+				req.Model,
+				req.Dimension,
+			)
+		}
+
+		if err != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
+				fmt.Sprintf("failed to generate embedding: %v", err))
+			return
+		}
+
+		// Use metadata directly from Rust layer
+		processingTime := int64(output.ProcessingTimeMs)
+
+		results = append(results, EmbeddingResult{
+			Text:             text,
+			Embedding:        output.Embedding,
+			Dimension:        len(output.Embedding),
+			ModelUsed:        output.ModelType,
+			ProcessingTimeMs: processingTime,
+		})
+
+		totalProcessingTime += processingTime
+	}
+
+	// Calculate statistics
+	avgProcessingTime := float64(totalProcessingTime) / float64(len(req.Texts))
+
+	response := EmbeddingResponse{
+		Embeddings:            results,
+		TotalCount:            len(results),
+		TotalProcessingTimeMs: totalProcessingTime,
+		AvgProcessingTimeMs:   avgProcessingTime,
+	}
+
+	observability.Infof("Generated %d embeddings in %dms (avg: %.2fms)",
+		len(results), totalProcessingTime, avgProcessingTime)
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// handleSimilarity handles text similarity calculation requests
+func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+	// Parse request
+	var req SimilarityRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Validate input
+	if req.Text1 == "" || req.Text2 == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
+		return
+	}
+
+	// Set defaults
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = 768 // Default to full dimension
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = 0.5
+		req.LatencyPriority = 0.5
+	}
+
+	// Validate dimension
+	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	if !validDimensions[req.Dimension] {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
+			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return
+	}
+
+	// Calculate similarity
+	result, err := candle_binding.CalculateEmbeddingSimilarity(
+		req.Text1,
+		req.Text2,
+		req.Model,
+		req.Dimension,
+	)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
+			fmt.Sprintf("failed to calculate similarity: %v", err))
+		return
+	}
+
+	response := SimilarityResponse{
+		Similarity:       result.Similarity,
+		ModelUsed:        result.ModelType,
+		ProcessingTimeMs: result.ProcessingTimeMs,
+	}
+
+	observability.Infof("Calculated similarity: %.4f (model: %s, took: %.2fms)",
+		result.Similarity, result.ModelType, result.ProcessingTimeMs)
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// handleBatchSimilarity handles batch similarity matching requests
+func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r *http.Request) {
+	// Parse request
+	var req BatchSimilarityRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Validate input
+	if req.Query == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "query must be provided")
+		return
+	}
+	if len(req.Candidates) == 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "candidates array cannot be empty")
+		return
+	}
+
+	// Set defaults
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = 768 // Default to full dimension
+	}
+	if req.TopK == 0 {
+		req.TopK = len(req.Candidates) // Default to all candidates
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = 0.5
+		req.LatencyPriority = 0.5
+	}
+
+	// Validate dimension
+	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	if !validDimensions[req.Dimension] {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
+			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return
+	}
+
+	// Calculate batch similarity
+	result, err := candle_binding.CalculateSimilarityBatch(
+		req.Query,
+		req.Candidates,
+		req.TopK,
+		req.Model,
+		req.Dimension,
+	)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
+			fmt.Sprintf("failed to calculate batch similarity: %v", err))
+		return
+	}
+
+	// Build response with matched text included
+	matches := make([]BatchSimilarityMatch, len(result.Matches))
+	for i, match := range result.Matches {
+		matches[i] = BatchSimilarityMatch{
+			Index:      match.Index,
+			Similarity: match.Similarity,
+			Text:       req.Candidates[match.Index],
+		}
+	}
+
+	response := BatchSimilarityResponse{
+		Matches:          matches,
+		TotalCandidates:  len(req.Candidates),
+		ModelUsed:        result.ModelType,
+		ProcessingTimeMs: result.ProcessingTimeMs,
+	}
+
+	observability.Infof("Calculated batch similarity: query='%s', %d candidates, top-%d matches (model: %s, took: %.2fms)",
+		req.Query, len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
+
+	s.writeJSONResponse(w, http.StatusOK, response)
 }

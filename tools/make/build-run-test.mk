@@ -6,11 +6,11 @@
 
 # Build the Rust library and Golang binding
 build: ## Build the Rust library and Golang binding
-build: rust build-router
+build: $(if $(CI),rust-ci,rust) build-router
 
-# Build router
+# Build router (conditionally use rust-ci in CI environments)
 build-router: ## Build the router binary
-build-router: rust
+build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
@@ -40,8 +40,17 @@ test-semantic-router: build-router
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
-test: ## Run all tests (Go, Rust, binding)
-test: vet go-lint check-go-mod-tidy download-models-minimal test-binding test-semantic-router
+# In CI, split test-binding into two phases to save disk space:
+#   1. Run test-binding-minimal with minimal models
+#   2. Run test-semantic-router (also uses minimal models)
+#   3. Clean up minimal models, download LoRA/embedding models
+#   4. Run test-binding-lora
+# In local dev, run all tests together
+ifeq ($(CI),true)
+test: vet check-go-mod-tidy download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
+else
+test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
+endif
 
 # Clean built artifacts
 clean: ## Clean built artifacts

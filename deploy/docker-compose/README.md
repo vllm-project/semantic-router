@@ -4,8 +4,9 @@ This directory contains the primary `docker-compose.yml` used to run the Semanti
 
 - Envoy proxy (ExtProc integration)
 - Semantic Router (extproc)
-- Observability (Prometheus + Grafana)
+- Observability (Prometheus + Grafana + Jaeger)
 - Dashboard (unified UI: config, monitoring, topology, playground)
+- Chat UI (Hugging Face Chat UI with MongoDB)
 - Open WebUI + Pipelines (for the Playground tab)
 - Optional test services (mock-vllm, llm-katan via profiles)
 
@@ -26,16 +27,34 @@ Example mappings:
 - `semantic-router` (port: 50051 for gRPC ExtProc; has internal health on 8080)
 - `prometheus` (port: 9090)
 - `grafana` (port: 3000)
+- `jaeger` (ports: 4318, 16686)
+- `chat-ui` (port: 3002 → 3000 in-container)
+- `mongo` (no host port by default)
 - `openwebui` (port: 3001 → 8080 in-container)
 - `pipelines` (no host port by default)
 - `dashboard` (port: 8700)
 - `mock-vllm` (port: 8000; profile: testing)
-- `llm-katan` (port: 8002 → 8000; profiles: testing, llm-katan)
+- `llm-katan` (port: 8002; profiles: testing, llm-katan)
 
 ## Profiles
 
 - `testing` : enables `mock-vllm` and `llm-katan`
-- `llm-katan` : enables only `llm-katan`
+- `llm-katan` : only `llm-katan`
+
+## Services and Ports
+
+These host ports are exposed when you bring the stack up:
+
+- Dashboard: http://localhost:8700 (Semantic Router Dashboard)
+- Envoy proxy: http://localhost:8801
+- Envoy admin: http://localhost:19000
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+- Jaeger: http://localhost:16686 (tracing UI)
+- Chat UI: http://localhost:3002 (Hugging Face Chat UI)
+- Open WebUI: http://localhost:3001
+- Mock vLLM (testing profile): http://localhost:8000
+- LLM Katan (testing/llm-katan profiles): http://localhost:8002
 
 ## Quick Start
 
@@ -71,6 +90,8 @@ docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up 
 docker compose -f deploy/docker-compose/docker-compose.yml down
 ```
 
+After the stack is healthy, open the Dashboard at http://localhost:8700.
+
 ## Overrides
 
 You can place a `docker-compose.override.yml` at repo root and combine:
@@ -92,15 +113,17 @@ The `dashboard` service exposes a unified UI at http://localhost:8700 with:
 - Monitoring: iframe embed of Grafana
 - Config: `GET /api/router/config/all` and `POST /api/router/config/update` mapped to `/app/config/config.yaml`
 - Topology: visualizes routing/config
-- Playground: iframe embed of Open WebUI
+- Playground: iframe embed of Open WebUI and Chat UI
 
 Environment variables set in Compose:
 
 - `TARGET_GRAFANA_URL=http://grafana:3000`
 - `TARGET_PROMETHEUS_URL=http://prometheus:9090`
+- `TARGET_JAEGER_URL=http://jaeger:16686`
 - `TARGET_ROUTER_API_URL=http://semantic-router:8080`
 - `TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics`
 - `TARGET_OPENWEBUI_URL=http://openwebui:8080`
+- `TARGET_CHATUI_URL=http://chat-ui:3000`
 - `ROUTER_CONFIG_PATH=/app/config/config.yaml`
 
 Volumes:
@@ -111,10 +134,65 @@ Image selection:
 
 - Uses `DASHBOARD_IMAGE` if provided; otherwise builds from `dashboard/backend/Dockerfile` at `docker compose up` time.
 
+## Chat UI (Hugging Face)
+
+The `chat-ui` service provides a modern chat interface using Hugging Face's Chat UI:
+
+- **URL**: http://localhost:3002
+- **Database**: MongoDB for conversation persistence
+- **API Integration**: Routes through Envoy proxy for OpenAI-compatible API calls
+- **Configuration**:
+  - `OPENAI_BASE_URL=http://envoy-proxy:8801/v1` (routes through Envoy)
+  - `OPENAI_API_KEY` (configurable via environment variable)
+  - `MONGODB_URL=mongodb://mongo:27017` (local MongoDB by default)
+
+### Environment Variables
+
+You can customize Chat UI behavior by setting these environment variables:
+
+```bash
+# API Configuration
+export OPENAI_API_KEY="your-api-key-here"
+export MONGODB_URL="mongodb://mongo:27017"  # or Atlas URL for production
+export MONGODB_DB_NAME="chat-ui"
+
+# UI Customization
+export PUBLIC_APP_NAME="HuggingChat"
+export PUBLIC_APP_ASSETS="chatui"
+export LOG_LEVEL="info"
+```
+
 ## Open WebUI + Pipelines
 
 - `openwebui` is exposed at http://localhost:3001 (proxied via the Dashboard too)
 - `pipelines` mounts `./addons/vllm_semantic_router_pipe.py` into `/app/pipelines/` for easy integration
+
+## Observability Stack
+
+The stack includes a complete observability solution:
+
+### Prometheus
+
+- **URL**: http://localhost:9090
+- **Configuration**: `./addons/prometheus.yaml`
+- **Data Retention**: 15 days
+- **Storage**: Persistent volume `prometheus-data`
+
+### Grafana
+
+- **URL**: http://localhost:3000
+- **Credentials**: admin/admin
+- **Configuration**:
+  - Datasources: Prometheus and Jaeger
+  - Dashboard: LLM Router dashboard
+  - Storage: Persistent volume `grafana-data`
+
+### Jaeger (Distributed Tracing)
+
+- **URL**: http://localhost:16686
+- **OTLP Endpoint**: http://localhost:4318 (gRPC)
+- **Configuration**: OTLP collector enabled
+- **Integration**: Semantic Router sends traces via OTLP
 
 ## Networking
 
@@ -130,18 +208,3 @@ All services join the `semantic-network` bridge network with a fixed subnet to m
 
 - Local observability only: `tools/observability/docker-compose.obs.yml`
 - Tracing stack: `tools/tracing/docker-compose.tracing.yaml`
-
-## Related Stacks
-
-- Local observability only: `tools/observability/docker-compose.obs.yml`
-- Tracing stack (standalone, dev): `tools/tracing/docker-compose.tracing.yaml`
-
-## Tracing & Grafana
-
-- Jaeger UI: http://localhost:16686
-- Grafana: http://localhost:3000 (admin/admin)
-  - Prometheus datasource (default) for metrics
-  - Jaeger datasource for exploring traces (search service `vllm-semantic-router`)
-
-By default, the router container uses `config/config.tracing.yaml` (enabled tracing, exporter to Jaeger).
-Override with `CONFIG_FILE=/app/config/config.yaml` if you don’t want tracing.
