@@ -3,28 +3,36 @@
 //! This module contains all C FFI initialization functions for dual-path architecture.
 //! Provides 13 initialization functions with 100% backward compatibility.
 
-use lazy_static::lazy_static;
 use std::ffi::{c_char, c_int, CStr};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 
 use crate::core::similarity::BertSimilarity;
 use crate::BertClassifier;
 
-// Global state for backward compatibility
-lazy_static! {
-    pub static ref BERT_SIMILARITY: Arc<Mutex<Option<BertSimilarity>>> = Arc::new(Mutex::new(None));
-    static ref BERT_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
-    static ref BERT_PII_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
-    static ref BERT_JAILBREAK_CLASSIFIER: Arc<Mutex<Option<BertClassifier>>> = Arc::new(Mutex::new(None));
-    // Unified classifier for dual-path architecture (exported for use in classify.rs)
-    pub static ref UNIFIED_CLASSIFIER: Arc<Mutex<Option<crate::classifiers::unified::DualPathUnifiedClassifier>>> = Arc::new(Mutex::new(None));
-    // Parallel LoRA engine for high-performance classification (primary path for LoRA models)
-    // Wrapped in Arc for cheap cloning and concurrent access
-    pub static ref PARALLEL_LORA_ENGINE: Arc<Mutex<Option<Arc<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>>>> = Arc::new(Mutex::new(None));
-    // LoRA token classifier for token-level classification
-    pub static ref LORA_TOKEN_CLASSIFIER: Arc<Mutex<Option<crate::classifiers::lora::token_lora::LoRATokenClassifier>>> = Arc::new(Mutex::new(None));
-}
+// Global state using OnceLock for zero-cost reads after initialization
+// OnceLock<Arc<T>> pattern provides:
+// - Zero lock overhead on reads (atomic load only)
+// - Concurrent access via Arc cloning
+// - Thread-safe initialization guarantee
+// - No dependency on lazy_static
+pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
+static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+// Unified classifier for dual-path architecture (exported for use in classify.rs)
+pub static UNIFIED_CLASSIFIER: OnceLock<
+    Arc<crate::classifiers::unified::DualPathUnifiedClassifier>,
+> = OnceLock::new();
+// Parallel LoRA engine for high-performance classification (primary path for LoRA models)
+// Already wrapped in Arc for cheap cloning and concurrent access
+pub static PARALLEL_LORA_ENGINE: OnceLock<
+    Arc<crate::classifiers::lora::parallel_engine::ParallelLoRAEngine>,
+> = OnceLock::new();
+// LoRA token classifier for token-level classification
+pub static LORA_TOKEN_CLASSIFIER: OnceLock<
+    Arc<crate::classifiers::lora::token_lora::LoRATokenClassifier>,
+> = OnceLock::new();
 
 /// Model type detection for intelligent routing
 #[derive(Debug, Clone, PartialEq)]
@@ -128,9 +136,8 @@ pub extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu: bool) 
 
     match BertSimilarity::new(model_id, use_cpu) {
         Ok(model) => {
-            let mut bert_opt = BERT_SIMILARITY.lock().unwrap();
-            *bert_opt = Some(model);
-            true
+            // Set using OnceLock - returns false if already initialized (safe to re-call)
+            BERT_SIMILARITY.set(Arc::new(model)).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize BERT: {e}");
@@ -164,11 +171,7 @@ pub extern "C" fn init_classifier(
     }
 
     match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => {
-            let mut bert_opt = BERT_CLASSIFIER.lock().unwrap();
-            *bert_opt = Some(classifier);
-            true
-        }
+        Ok(classifier) => BERT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
         Err(e) => {
             eprintln!("Failed to initialize BERT classifier: {e}");
             false
@@ -200,11 +203,7 @@ pub extern "C" fn init_pii_classifier(
     }
 
     match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => {
-            let mut bert_opt = BERT_PII_CLASSIFIER.lock().unwrap();
-            *bert_opt = Some(classifier);
-            true
-        }
+        Ok(classifier) => BERT_PII_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
         Err(e) => {
             eprintln!("Failed to initialize BERT PII classifier: {e}");
             false
@@ -236,11 +235,7 @@ pub extern "C" fn init_jailbreak_classifier(
     }
 
     match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => {
-            let mut bert_opt = BERT_JAILBREAK_CLASSIFIER.lock().unwrap();
-            *bert_opt = Some(classifier);
-            true
-        }
+        Ok(classifier) => BERT_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
         Err(e) => {
             eprintln!("Failed to initialize BERT jailbreak classifier: {e}");
             false
@@ -264,9 +259,9 @@ pub extern "C" fn init_modernbert_classifier(model_id: *const c_char, use_cpu: b
     // Try to initialize the actual ModernBERT model using traditional architecture
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            let mut classifier_opt = crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_CLASSIFIER.lock().unwrap();
-            *classifier_opt = Some(model);
-            true
+            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_CLASSIFIER
+                .set(Arc::new(model))
+                .is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT classifier: {}", e);
@@ -291,9 +286,7 @@ pub extern "C" fn init_modernbert_pii_classifier(model_id: *const c_char, use_cp
     // Try to initialize the actual ModernBERT PII model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            let mut classifier_opt = crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_PII_CLASSIFIER.lock().unwrap();
-            *classifier_opt = Some(model);
-            true
+            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_PII_CLASSIFIER.set(Arc::new(model)).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT PII classifier: {}", e);
@@ -322,10 +315,7 @@ pub extern "C" fn init_modernbert_pii_token_classifier(
     // Create the token classifier
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new(model_id, use_cpu) {
         Ok(classifier) => {
-            // Store in global static
-            let mut global_classifier = crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.lock().unwrap();
-            *global_classifier = Some(classifier);
-            true
+            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.set(Arc::new(classifier)).is_ok()
         }
         Err(e) => {
             println!("  ERROR: Failed to initialize ModernBERT PII token classifier: {}", e);
@@ -353,9 +343,7 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
     // Try to initialize the actual ModernBERT jailbreak model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            let mut classifier_opt = crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.lock().unwrap();
-            *classifier_opt = Some(model);
-           true
+            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER.set(Arc::new(model)).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT jailbreak classifier: {}", e);
@@ -472,11 +460,7 @@ pub extern "C" fn init_unified_classifier_c(
         Ok(mut classifier) => {
             // Initialize traditional path with actual models
             match classifier.init_traditional_path() {
-                Ok(_) => {
-                    let mut guard = UNIFIED_CLASSIFIER.lock().unwrap();
-                    *guard = Some(classifier);
-                    true
-                }
+                Ok(_) => UNIFIED_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
                 Err(e) => {
                     eprintln!("Failed to initialize traditional path: {}", e);
                     false
@@ -602,12 +586,7 @@ pub extern "C" fn init_candle_bert_token_classifier(
             match crate::classifiers::lora::token_lora::LoRATokenClassifier::new(
                 model_path, use_cpu,
             ) {
-                Ok(classifier) => {
-                    // Store in global static
-                    let mut global_classifier = LORA_TOKEN_CLASSIFIER.lock().unwrap();
-                    *global_classifier = Some(classifier);
-                    true
-                }
+                Ok(classifier) => LORA_TOKEN_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
                 Err(e) => {
                     eprintln!("  ERROR: Failed to initialize LoRA token classifier: {}", e);
                     false
@@ -622,11 +601,9 @@ pub extern "C" fn init_candle_bert_token_classifier(
                 use_cpu,
             ) {
                 Ok(classifier) => {
-                    // Store in global static
-                    let mut global_classifier = crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER.lock().unwrap();
-                    *global_classifier = Some(classifier);
-
-                    true
+                    crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
+                        .set(Arc::new(classifier))
+                        .is_ok()
                 }
                 Err(e) => {
                     eprintln!(
@@ -720,10 +697,8 @@ pub extern "C" fn init_lora_unified_classifier(
         use_cpu,
     ) {
         Ok(engine) => {
-            // Store in global static variable (wrapped in Arc for efficient cloning)
-            let mut engine_guard = PARALLEL_LORA_ENGINE.lock().unwrap();
-            *engine_guard = Some(Arc::new(engine));
-            true
+            // Store in global static variable (Arc for efficient cloning during concurrent access)
+            PARALLEL_LORA_ENGINE.set(Arc::new(engine)).is_ok()
         }
         Err(e) => {
             eprintln!(

@@ -27,9 +27,8 @@ pub extern "C" fn get_text_embedding(text: *const c_char, max_length: i32) -> Em
         }
     };
 
-    let bert_opt = BERT_SIMILARITY.lock().unwrap();
-    let bert = match &*bert_opt {
-        Some(b) => b,
+    let bert = match BERT_SIMILARITY.get() {
+        Some(b) => b.clone(),
         None => {
             eprintln!("BERT model not initialized");
             return EmbeddingResult {
@@ -126,9 +125,8 @@ pub extern "C" fn calculate_similarity(
         }
     };
 
-    let bert_opt = BERT_SIMILARITY.lock().unwrap();
-    let bert = match &*bert_opt {
-        Some(b) => b,
+    let bert = match BERT_SIMILARITY.get() {
+        Some(b) => b.clone(),
         None => {
             eprintln!("BERT model not initialized");
             return -1.0;
@@ -197,9 +195,8 @@ pub extern "C" fn find_most_similar(
         result
     };
 
-    let bert_opt = BERT_SIMILARITY.lock().unwrap();
-    let bert = match &*bert_opt {
-        Some(b) => b,
+    let bert = match BERT_SIMILARITY.get() {
+        Some(b) => b.clone(),
         None => {
             eprintln!("BERT model not initialized");
             return SimilarityResult {
