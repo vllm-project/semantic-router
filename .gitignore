@@ -153,3 +153,5 @@ dashboard/frontend/index.html.old
 *.pdf binary
 *.zip binary
 
+# Kind cluster configuration
+tools/kind/kind-config.yaml

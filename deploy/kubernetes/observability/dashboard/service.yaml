@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router-dashboard
+  labels:
+    app: semantic-router-dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app: semantic-router-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

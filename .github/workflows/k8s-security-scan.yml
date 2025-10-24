@@ -1,0 +1,51 @@
+name: Security Scan
+
+on:
+  workflow_call:
+    inputs:
+      kustomize_version:
+        description: "Kustomize version to use"
+        required: false
+        type: string
+        default: "v5.7.1"
+
+jobs:
+  security-scan:
+    name: Security Scan for K8s Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Kustomize
+        run: |
+          echo "Installing Kustomize ${{ inputs.kustomize_version }}..."
+          # Use the official installation script for better reliability
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "config"
+          scan-ref: "deploy/kubernetes"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0" # Don't fail on vulnerabilities, just report
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Run Checkov scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: deploy/kubernetes
+          framework: kubernetes
+          output_format: cli
+          soft_fail: true # Don't fail the build
