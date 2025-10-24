@@ -13,7 +13,6 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
@@ -1507,7 +1506,6 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		req.Model,
 		req.Dimension,
 	)
-
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SIMILARITY_CALCULATION_FAILED",
 			fmt.Sprintf("failed to calculate similarity: %v", err))

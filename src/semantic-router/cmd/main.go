@@ -13,7 +13,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
