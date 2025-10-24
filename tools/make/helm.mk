@@ -23,7 +23,7 @@ NC ?= \033[0m
 	helm-uninstall helm-status helm-list helm-history helm-rollback helm-test \
 	helm-package helm-dev helm-prod helm-values helm-manifest \
 	helm-port-forward-api helm-port-forward-grpc helm-port-forward-metrics \
-	helm-logs helm-clean helm-setup helm-cleanup help-helm
+	helm-logs helm-clean helm-setup helm-cleanup help-helm _check-k8s
 
 helm-lint: ## Lint the Helm chart
 helm-lint:
@@ -40,9 +40,14 @@ helm-template:
 		--namespace $(HELM_NAMESPACE)
 
 helm-install: ## Install the Helm chart
-helm-install:
+helm-install: _check-k8s
 	@$(LOG_TARGET)
 	@echo "Installing Helm release: $(HELM_RELEASE_NAME)"
+	@if helm list -n $(HELM_NAMESPACE) 2>/dev/null | grep -q "^$(HELM_RELEASE_NAME)"; then \
+		echo "$(YELLOW)[WARNING]$(NC) Release $(HELM_RELEASE_NAME) already exists in namespace $(HELM_NAMESPACE)"; \
+		echo "$(BLUE)[INFO]$(NC) Use 'make helm-upgrade' to upgrade or 'make helm-uninstall' to remove it first"; \
+		exit 1; \
+	fi
 	@helm install $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
@@ -54,7 +59,7 @@ helm-install:
 	@$(MAKE) helm-status
 
 helm-upgrade: ## Upgrade the Helm release
-helm-upgrade:
+helm-upgrade: _check-k8s
 	@$(LOG_TARGET)
 	@echo "Upgrading Helm release: $(HELM_RELEASE_NAME)"
 	@helm upgrade $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
@@ -67,10 +72,12 @@ helm-upgrade:
 	@$(MAKE) helm-status
 
 helm-install-or-upgrade: ## Install or upgrade the Helm release (idempotent)
-helm-install-or-upgrade:
+helm-install-or-upgrade: _check-k8s
 	@if helm list -n $(HELM_NAMESPACE) 2>/dev/null | grep -q "^$(HELM_RELEASE_NAME)"; then \
+		echo "$(BLUE)[INFO]$(NC) Release exists, upgrading..."; \
 		$(MAKE) helm-upgrade; \
 	else \
+		echo "$(BLUE)[INFO]$(NC) Release does not exist, installing..."; \
 		$(MAKE) helm-install; \
 	fi
 
@@ -106,8 +113,13 @@ helm-rollback:
 	@$(MAKE) helm-status
 
 helm-test: ## Test the Helm release
-helm-test:
+helm-test: _check-k8s
 	@$(LOG_TARGET)
+	@if ! helm list -n $(HELM_NAMESPACE) 2>/dev/null | grep -q "^$(HELM_RELEASE_NAME)"; then \
+		echo "$(RED)[ERROR]$(NC) Release $(HELM_RELEASE_NAME) not found in namespace $(HELM_NAMESPACE)"; \
+		echo "$(BLUE)[INFO]$(NC) Please run 'make helm-install' or 'make helm-setup' first"; \
+		exit 1; \
+	fi
 	@echo "$(BLUE)[INFO]$(NC) Checking deployment status..."
 	@kubectl wait --for=condition=Available deployment/$(HELM_RELEASE_NAME) \
 		-n $(HELM_NAMESPACE) --timeout=300s || echo "$(RED)[ERROR]$(NC) Deployment not ready"
@@ -196,4 +208,19 @@ helm-cleanup:
 	@echo "$(GREEN)[SUCCESS]$(NC) Complete cleanup finished!"
 
 helm-clean: ## Alias for helm-cleanup
-helm-clean: helm-cleanup                                # Rollback to previous"
+helm-clean: helm-cleanup
+
+# Internal helper target to check if Kubernetes is available
+_check-k8s:
+	@if ! kubectl cluster-info &>/dev/null; then \
+		echo "$(RED)[ERROR]$(NC) Kubernetes cluster is not accessible"; \
+		echo "$(BLUE)[INFO]$(NC) Please ensure your Kubernetes cluster is running:"; \
+		echo "  - For local development: minikube start / kind create cluster / docker desktop"; \
+		echo "  - For remote clusters: check your kubeconfig and cluster connection"; \
+		echo ""; \
+		echo "$(YELLOW)[TIP]$(NC) You can use the following commands to start a local cluster:"; \
+		echo "  - minikube: make kube-up"; \
+		echo "  - kind: make kind-cluster-create"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)[✓]$(NC) Kubernetes cluster is accessible"
