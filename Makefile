@@ -16,6 +16,7 @@ _run:
 		-f tools/make/pre-commit.mk \
 		-f tools/make/docker.mk \
 		-f tools/make/kube.mk \
+		-f tools/make/helm.mk \
 		-f tools/make/observability.mk \
 		-f tools/make/openshift.mk \
 		$(MAKECMDGOALS)
