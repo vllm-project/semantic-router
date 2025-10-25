@@ -47,7 +47,9 @@ func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedCl
 	return service
 }
 
-// NewClassificationServiceWithAutoDiscovery creates a service with auto-discovery
+// NewClassificationServiceWithAutoDiscovery creates a service that always
+// provisions the legacy classifier (used immediately by the router/API) and,
+// if available, auto-discovers a unified classifier for batch APIs.
 func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
 	// Debug: Check current working directory
 	wd, _ := os.Getwd()
@@ -64,17 +66,14 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 			modelsPath = config.Classifier.CategoryModel.ModelID[:idx]
 		}
 	}
+	// Build the legacy classifier first; if this fails the router cannot operate.
+	legacyClassifier, lcErr := createLegacyClassifier(config)
+	if lcErr != nil {
+		return nil, fmt.Errorf("legacy classifier initialization failed: %w", lcErr)
+	}
 	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifier(modelsPath)
 	if ucErr != nil {
 		observability.Infof("Unified classifier auto-discovery failed: %v", ucErr)
-	}
-	// create legacy classifier
-	legacyClassifier, lcErr := createLegacyClassifier(config)
-	if lcErr != nil {
-		observability.Warnf("Legacy classifier initialization failed: %v", lcErr)
-	}
-	if unifiedClassifier == nil && legacyClassifier == nil {
-		observability.Warnf("No classifier initialized. Using placeholder service.")
 	}
 	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
 }
@@ -101,6 +100,7 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
+		observability.Infof("Loaded category mapping with %d categories", categoryMapping.GetCategoryCount())
 	}
 
 	// Load PII mapping
@@ -111,6 +111,7 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
+		observability.Infof("Loaded PII mapping with %d PII types", piiMapping.GetPIITypeCount())
 	}
 
 	// Load jailbreak mapping
@@ -121,6 +122,7 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
 		}
+		observability.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
 	// Create classifier
@@ -140,6 +142,11 @@ func GetGlobalClassificationService() *ClassificationService {
 // HasClassifier returns true if the service has a real classifier (not placeholder)
 func (s *ClassificationService) HasClassifier() bool {
 	return s.classifier != nil
+}
+
+// GetClassifier returns the legacy classifier instance used by the service.
+func (s *ClassificationService) GetClassifier() *classification.Classifier {
+	return s.classifier
 }
 
 // NewPlaceholderClassificationService creates a placeholder service for API-only mode

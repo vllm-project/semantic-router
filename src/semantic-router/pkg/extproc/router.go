@@ -38,36 +38,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Update global config reference for packages that rely on config.GetConfig()
 	config.ReplaceGlobalConfig(cfg)
 
-	// Load category mapping if classifier is enabled
-	var categoryMapping *classification.CategoryMapping
-	if cfg.Classifier.CategoryModel.CategoryMappingPath != "" {
-		categoryMapping, err = classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load category mapping: %w", err)
-		}
-		observability.Infof("Loaded category mapping with %d categories", categoryMapping.GetCategoryCount())
-	}
-
-	// Load PII mapping if PII classifier is enabled
-	var piiMapping *classification.PIIMapping
-	if cfg.Classifier.PIIModel.PIIMappingPath != "" {
-		piiMapping, err = classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
-		}
-		observability.Infof("Loaded PII mapping with %d PII types", piiMapping.GetPIITypeCount())
-	}
-
-	// Load jailbreak mapping if prompt guard is enabled
-	var jailbreakMapping *classification.JailbreakMapping
-	if cfg.IsPromptGuardEnabled() {
-		jailbreakMapping, err = classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
-		}
-		observability.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
-	}
-
 	// Initialize the BERT model for similarity search
 	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
@@ -130,25 +100,20 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		observability.Infof("Tools database is disabled")
 	}
 
-	// Create utility components
-	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
-
-	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create classifier: %w", err)
-	}
-
-	// Create global classification service for API access with auto-discovery
-	// This will prioritize LoRA models over legacy ModernBERT
+	// Create global classification service for API access with auto-discovery.
+	// This prioritizes LoRA models over ModernBERT and exposes the legacy
+	// classifier to both the router and API service.
 	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
 	if err != nil {
-		observability.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
-		services.NewClassificationService(classifier, cfg)
-	} else {
-		observability.Infof("Router initialization: Using auto-discovered unified classifier")
-		// The service is already set as global in NewUnifiedClassificationService
-		_ = autoSvc
+		return nil, fmt.Errorf("failed to initialize classification service: %w", err)
 	}
+	classifier := autoSvc.GetClassifier()
+	if classifier == nil {
+		return nil, fmt.Errorf("classification service did not provide a classifier")
+	}
+
+	// Create utility components
+	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
 
 	router := &OpenAIRouter{
 		Config:               cfg,
