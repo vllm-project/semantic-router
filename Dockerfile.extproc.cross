@@ -1,5 +1,5 @@
 # Cross-compilation optimized Dockerfile for ARM64
-FROM --platform=linux/amd64 rust:1.85 AS rust-cross-builder
+FROM --platform=linux/amd64 rust:1.90 AS rust-cross-builder
 
 # Install cross-compilation dependencies
 RUN dpkg --add-architecture arm64 && \
