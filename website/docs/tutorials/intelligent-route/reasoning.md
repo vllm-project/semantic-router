@@ -66,19 +66,19 @@ model_config:
     reasoning_family: "gpt-oss"
     preferred_endpoints: ["endpoint1"]
 
-# Categories: which kinds of queries require reasoning and at what effort
+# Categories: which models to use for each type of query, with per-model reasoning settings
 categories:
 - name: math
-  use_reasoning: true
-  reasoning_effort: high  # overrides default_reasoning_effort
-  reasoning_description: "Mathematical problems require step-by-step reasoning"
   model_scores:
   - model: openai/gpt-oss-20b
     score: 1.0
+    use_reasoning: true  # Enable reasoning for this model on math
   - model: deepseek-v31
     score: 0.8
+    use_reasoning: true
   - model: qwen3-30b
     score: 0.8
+    use_reasoning: true
 
 
 # A safe default when no category is confidently selected
@@ -87,11 +87,10 @@ default_model: qwen3-30b
 
 Notes
 
-- Reasoning is controlled by categories.use_reasoning and optionally categories.reasoning_effort.
-- A model only gets reasoning fields if it has a model_config.&lt;MODEL&gt;.reasoning_family that maps to a reasoning_families entry.
+- Reasoning is controlled per-model within `model_scores` using the `use_reasoning` field.
+- A model only gets reasoning fields if it has a model_config.<MODEL>.reasoning_family that maps to a reasoning_families entry.
 - DeepSeek/Qwen3 (chat_template_kwargs): the router injects chat_template_kwargs only when reasoning is enabled. When disabled, no chat_template_kwargs are added.
-- GPT/GPT-OSS (reasoning_effort): when reasoning is enabled, the router sets reasoning_effort based on the category (fallback to default_reasoning_effort). When reasoning is disabled, if the request already contains reasoning_effort and the model’s family type is reasoning_effort, the router preserves the original value; otherwise it is absent.
-- Category descriptions (for example, description and reasoning_description) are informational only today; they do not affect routing or classification.
+- GPT/GPT-OSS (reasoning_effort): when reasoning is enabled, the router sets reasoning_effort based on global `default_reasoning_effort`. When reasoning is disabled, if the request already contains reasoning_effort and the model's family type is reasoning_effort, the router preserves the original value; otherwise it is absent.
 - Categories must be from MMLU-Pro at the moment; avoid free-form categories like "general". If you want generic categories, consider opening an issue to map them to MMLU-Pro.
 
 2) Start the router

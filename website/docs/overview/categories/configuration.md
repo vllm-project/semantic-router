@@ -13,12 +13,10 @@ categories:
   - name: "category_name"
     description: "Optional description"
     system_prompt: "Category-specific system prompt"
-    use_reasoning: true|false
-    reasoning_description: "Why reasoning is needed"
-    reasoning_effort: "low|medium|high"
     model_scores:
       - model: "model_name"
         score: 0.0-1.0
+        use_reasoning: true|false  # Per-model reasoning setting
 ```
 
 ## Configuration Parameters
@@ -148,58 +146,42 @@ categories:
 - **0.6-0.8**: Standard categories (general queries)
 - **0.4-0.6**: Technical categories (code generation, development tools)
 
-#### `use_reasoning` (Required)
-
-- **Type**: Boolean
-- **Description**: Whether to enable reasoning mode for this category
-- **Default**: `false`
-- **Impact**: Enables step-by-step problem solving
-
-```yaml
-categories:
-  - name: "math"
-    use_reasoning: true  # Enable reasoning for math problems
-```
-
-#### `reasoning_description` (Optional)
-
-- **Type**: String
-- **Description**: Explanation of why reasoning is needed
-- **Purpose**: Documentation and model context
-- **Best Practice**: Provide clear justification
-
-```yaml
-categories:
-  - name: "chemistry"
-    use_reasoning: true
-    reasoning_description: "Chemical reactions require systematic analysis"
-```
-
-#### `reasoning_effort` (Optional)
-
-- **Type**: String
-- **Valid Values**: `"low"`, `"medium"`, `"high"`
-- **Default**: `"medium"`
-- **Description**: Controls the depth of reasoning
-
-```yaml
-categories:
-  - name: "math"
-    use_reasoning: true
-    reasoning_effort: "high"  # Maximum reasoning depth
-```
-
-**Reasoning Effort Levels**:
-
-- **Low**: Basic step-by-step thinking (1-3 steps)
-- **Medium**: Moderate analysis (3-7 steps)
-- **High**: Deep reasoning (7-15 steps)
-
 ### Model Scoring
 
 #### `model_scores` (Required)
 
 - **Type**: Array of model-score pairs
+- **Description**: Defines model preferences and reasoning settings for this category
+- **Purpose**: Intelligent model selection based on domain expertise
+
+```yaml
+categories:
+  - name: "math"
+    model_scores:
+      - model: "phi4"
+        score: 1.0      # Highest preference
+        use_reasoning: true  # Enable reasoning for this model on math
+      - model: "mistral-small3.1"
+        score: 0.8
+        use_reasoning: false  # No reasoning for this model
+```
+
+#### `use_reasoning` (Model-Level, Required)
+
+- **Type**: Boolean
+- **Location**: Within each `model_scores` entry
+- **Description**: Whether to enable reasoning mode for this specific model in this category
+- **Default**: `false`
+- **Impact**: Enables step-by-step problem solving for that model
+
+```yaml
+categories:
+  - name: "math"
+    model_scores:
+      - model: "phi4"
+        score: 1.0
+        use_reasoning: true  # Enable reasoning for phi4 on math problems
+```
 - **Description**: Defines model preferences for this category
 - **Purpose**: Intelligent model selection based on domain expertise
 
@@ -231,16 +213,16 @@ categories:
 categories:
   - name: "math"
     description: "Mathematical problems requiring step-by-step reasoning"
-    use_reasoning: true
-    reasoning_description: "Mathematical problems require systematic analysis"
-    reasoning_effort: "high"
     model_scores:
       - model: "phi4"
         score: 1.0
+        use_reasoning: true  # Enable reasoning for phi4 on math
       - model: "mistral-small3.1"
         score: 0.8
+        use_reasoning: true  # Enable reasoning for mistral on math
       - model: "gemma3:27b"
         score: 0.6
+        use_reasoning: false  # No reasoning for gemma on math
 ```
 
 ### Example 2: Professional Category (Reasoning Disabled)
@@ -249,16 +231,16 @@ categories:
 categories:
   - name: "business"
     description: "Business strategy and management discussions"
-    use_reasoning: false
-    reasoning_description: "Business content is typically conversational"
-    reasoning_effort: "low"
     model_scores:
       - model: "phi4"
         score: 0.8
+        use_reasoning: false  # Business doesn't need reasoning
       - model: "gemma3:27b"
         score: 0.4
+        use_reasoning: false
       - model: "mistral-small3.1"
         score: 0.2
+        use_reasoning: false
 ```
 
 ### Example 3: Security-Focused Configuration (Jailbreak Protection)
@@ -270,36 +252,38 @@ categories:
     description: "Customer support and general inquiries"
     jailbreak_enabled: true  # Strict jailbreak protection
     jailbreak_threshold: 0.9  # High threshold for public-facing
-    use_reasoning: false
     model_scores:
       - model: "phi4"
         score: 0.9
+        use_reasoning: false
       - model: "mistral-small3.1"
         score: 0.7
+        use_reasoning: false
 
   # Technical category with relaxed threshold
   - name: "code_generation"
     description: "Code generation for developers"
     jailbreak_enabled: true  # Keep enabled
     jailbreak_threshold: 0.5  # Lower threshold to reduce false positives on code
-    use_reasoning: true
-    reasoning_effort: "medium"
     model_scores:
       - model: "gemma3:27b"
         score: 0.9
+        use_reasoning: true  # Enable reasoning for code
       - model: "phi4"
         score: 0.7
+        use_reasoning: true
 
   # General category using global default
   - name: "general"
     description: "General queries"
     # jailbreak_enabled not specified - inherits from global prompt_guard.enabled
-    use_reasoning: false
     model_scores:
       - model: "phi4"
         score: 0.6
+        use_reasoning: false
       - model: "mistral-small3.1"
         score: 0.6
+        use_reasoning: false
 ```
 
 ### Example 4: Multi-Category Configuration
@@ -308,51 +292,53 @@ categories:
 categories:
   # Technical categories with reasoning
   - name: "computer science"
-    use_reasoning: true
-    reasoning_description: "Programming requires logical analysis"
-    reasoning_effort: "medium"
     model_scores:
       - model: "gemma3:27b"
         score: 0.6
+        use_reasoning: true  # Enable reasoning for coding
       - model: "mistral-small3.1"
         score: 0.6
+        use_reasoning: true
       - model: "phi4"
         score: 0.0
+        use_reasoning: false
 
   - name: "physics"
-    use_reasoning: true
-    reasoning_description: "Physics concepts need systematic thinking"
-    reasoning_effort: "medium"
     model_scores:
       - model: "gemma3:27b"
         score: 0.4
+        use_reasoning: true  # Enable reasoning for physics
       - model: "phi4"
         score: 0.4
+        use_reasoning: true
       - model: "mistral-small3.1"
         score: 0.4
+        use_reasoning: true
 
   # General categories without reasoning
   - name: "history"
-    use_reasoning: false
-    reasoning_description: "Historical content is narrative-based"
     model_scores:
       - model: "mistral-small3.1"
         score: 0.8
+        use_reasoning: false  # History is narrative-based
       - model: "phi4"
         score: 0.6
+        use_reasoning: false
       - model: "gemma3:27b"
         score: 0.4
+        use_reasoning: false
 
   - name: "other"
-    use_reasoning: false
-    reasoning_description: "General content doesn't require reasoning"
     model_scores:
       - model: "gemma3:27b"
         score: 0.8
+        use_reasoning: false  # General content doesn't need reasoning
       - model: "phi4"
         score: 0.6
+        use_reasoning: false
       - model: "mistral-small3.1"
         score: 0.6
+        use_reasoning: false
 ```
 
 ## Configuration Best Practices
@@ -393,24 +379,36 @@ categories:
 # Reasoning recommended for:
 categories:
   - name: "math"
-    use_reasoning: true
-    reasoning_effort: "high"
+    model_scores:
+      - model: "phi4"
+        score: 1.0
+        use_reasoning: true  # Enable reasoning for math
 
   - name: "computer science"
-    use_reasoning: true
-    reasoning_effort: "medium"
+    model_scores:
+      - model: "gemma3:27b"
+        score: 0.6
+        use_reasoning: true  # Enable reasoning for coding
 
   - name: "chemistry"
-    use_reasoning: true
-    reasoning_effort: "high"
+    model_scores:
+      - model: "phi4"
+        score: 0.6
+        use_reasoning: true  # Enable reasoning for chemistry
 
 # Reasoning not needed for:
 categories:
   - name: "business"
-    use_reasoning: false
+    model_scores:
+      - model: "phi4"
+        score: 0.7
+        use_reasoning: false  # Business doesn't need reasoning
 
   - name: "history"
-    use_reasoning: false
+    model_scores:
+      - model: "mistral-small3.1"
+        score: 0.7
+        use_reasoning: false  # History is narrative
 ```
 
 ### 3. Performance Tuning
@@ -421,24 +419,24 @@ categories:
 # High-performance setup (lower latency)
 categories:
   - name: "math"
-    use_reasoning: true
-    reasoning_effort: "medium"  # Reduced from "high"
     model_scores:
       - model: "phi4"
         score: 1.0
+        use_reasoning: false  # Disable reasoning for speed
       - model: "mistral-small3.1"
         score: 0.6  # Larger gap for faster selection
+        use_reasoning: false
 
 # High-accuracy setup (higher latency)
 categories:
   - name: "math"
-    use_reasoning: true
-    reasoning_effort: "high"    # Maximum reasoning
     model_scores:
       - model: "phi4"
         score: 1.0
+        use_reasoning: true  # Enable reasoning for accuracy
       - model: "mistral-small3.1"
         score: 0.9  # Close scores for better fallback
+        use_reasoning: true
 ```
 
 ## Classifier Configuration
@@ -569,11 +567,10 @@ routing_rules:
 categories:
   - name: "math"
     system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
-    use_reasoning: true
-    reasoning_effort: "high"
     model_scores:
       - model: "phi4"
         score: 1.0
+        use_reasoning: true  # Per-model reasoning setting
 ```
 
 ## Complete Configuration Example
@@ -583,31 +580,26 @@ categories:
   - name: "math"
     description: "Mathematical problems and calculations"
     system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
-    use_reasoning: true
-    reasoning_effort: "high"
     model_scores:
       - model: "openai/gpt-oss-20b"
         score: 0.9
-        use_reasoning: true
+        use_reasoning: true  # Enable reasoning for this model
 
   - name: "computer science"
     description: "Programming and software engineering"
     system_prompt: "You are a computer science expert. Provide clear, practical solutions with code examples when helpful."
-    use_reasoning: true
-    reasoning_effort: "medium"
     model_scores:
       - model: "openai/gpt-oss-20b"
         score: 0.8
-        use_reasoning: true
+        use_reasoning: true  # Enable reasoning for coding
 
   - name: "business"
     description: "Business strategy and management"
     system_prompt: "You are a professional business consultant. Provide practical, actionable advice."
-    use_reasoning: false
     model_scores:
       - model: "openai/gpt-oss-20b"
         score: 0.7
-        use_reasoning: false
+        use_reasoning: false  # Business doesn't need reasoning
 ```
 
 ## Next Steps
