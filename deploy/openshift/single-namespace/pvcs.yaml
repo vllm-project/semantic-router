@@ -1,0 +1,72 @@
+---
+# PVC for router classifier models
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-models
+  namespace: vllm-semantic-router
+  labels:
+    app: semantic-router
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: router
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3-csi
+---
+# PVC for router cache
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-cache
+  namespace: vllm-semantic-router
+  labels:
+    app: semantic-router
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: router
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3-csi
+---
+# PVC for model-a cache
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-a-cache
+  namespace: vllm-semantic-router
+  labels:
+    app: model-a
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3-csi
+---
+# PVC for model-b cache
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-b-cache
+  namespace: vllm-semantic-router
+  labels:
+    app: model-b
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: model
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3-csi

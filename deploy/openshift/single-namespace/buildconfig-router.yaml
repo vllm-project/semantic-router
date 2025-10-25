@@ -1,0 +1,20 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: semantic-router
+  namespace: vllm-semantic-router
+  labels:
+    app: semantic-router
+    app.kubernetes.io/name: vllm-semantic-router
+    app.kubernetes.io/component: router
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: semantic-router:latest
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile

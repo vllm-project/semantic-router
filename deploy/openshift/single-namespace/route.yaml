@@ -1,0 +1,22 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: envoy-proxy
+  namespace: vllm-semantic-router
+  labels:
+    app: vllm-semantic-router
+    component: envoy-proxy
+spec:
+  # OpenShift will auto-generate the hostname based on the route name and cluster domain
+  # Format: envoy-proxy-vllm-semantic-router.apps.<cluster-domain>
+  to:
+    kind: Service
+    name: envoy-proxy
+    weight: 100
+  port:
+    targetPort: 8801
+  # TLS configuration for HTTPS
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
