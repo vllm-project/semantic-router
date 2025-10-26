@@ -1,6 +1,7 @@
 package cache_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          1000,
 						TTLSeconds:          3600,
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
@@ -65,6 +67,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          1000,
 						TTLSeconds:          3600,
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
@@ -80,6 +83,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          500,
 						TTLSeconds:          1800,
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
@@ -141,6 +145,7 @@ development:
 						SimilarityThreshold: 0.85,
 						TTLSeconds:          7200,
 						BackendConfigPath:   milvusConfigPath,
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
@@ -168,12 +173,51 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						BackendConfigPath:   milvusConfigPath,
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(backend).NotTo(BeNil())
 					Expect(backend.IsEnabled()).To(BeFalse())
+				})
+			})
+
+			Context("Milvus connection timeouts", func() {
+				It("should respect connection timeout when endpoint is unreachable", func() {
+					unreachableConfigPath := filepath.Join(tempDir, "milvus-unreachable.yaml")
+					unreachableHost := "10.255.255.1" // unroutable address to simulate a hanging dial
+					unreachableConfig := fmt.Sprintf(`
+connection:
+  host: "%s"
+  port: 19530
+  database: "test_cache"
+  timeout: 1
+`, unreachableHost)
+
+					err := os.WriteFile(unreachableConfigPath, []byte(unreachableConfig), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					done := make(chan struct{})
+					var cacheErr error
+
+					go func() {
+						defer GinkgoRecover()
+						_, cacheErr = cache.NewMilvusCache(cache.MilvusCacheOptions{
+							Enabled:             true,
+							SimilarityThreshold: 0.85,
+							TTLSeconds:          60,
+							ConfigPath:          unreachableConfigPath,
+						})
+						close(done)
+					}()
+
+					Eventually(done, 2*time.Second, 100*time.Millisecond).Should(BeClosed())
+					Expect(cacheErr).To(HaveOccurred())
+					Expect(cacheErr.Error()).To(Or(
+						ContainSubstring("context deadline exceeded"),
+						ContainSubstring("timeout"),
+					))
 				})
 			})
 
@@ -184,6 +228,7 @@ development:
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
@@ -201,6 +246,7 @@ development:
 						SimilarityThreshold: -0.8, // invalid
 						MaxEntries:          10,
 						TTLSeconds:          -1, // invalid
+						EmbeddingModel:      "bert",
 					}
 
 					backend, err := cache.NewCacheBackend(config)
@@ -220,6 +266,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 					EvictionPolicy:      "lru",
 				}
 
@@ -246,6 +293,7 @@ development:
 					SimilarityThreshold: 1.5, // Invalid: > 1.0
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 				}
 
 				err := cache.ValidateCacheConfig(config)
@@ -260,6 +308,7 @@ development:
 					SimilarityThreshold: -0.1, // Invalid: < 0.0
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 				}
 
 				err := cache.ValidateCacheConfig(config)
@@ -274,6 +323,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          -1, // Invalid: negative TTL
+					EmbeddingModel:      "bert",
 				}
 
 				err := cache.ValidateCacheConfig(config)
@@ -288,6 +338,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          -1, // Invalid: negative max entries
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 				}
 
 				err := cache.ValidateCacheConfig(config)
@@ -302,6 +353,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 					EvictionPolicy:      "random", // unsupported
 				}
 
@@ -316,6 +368,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 					// BackendConfigPath is missing
 				}
 
@@ -330,6 +383,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
+					EmbeddingModel:      "bert",
 					BackendConfigPath:   "/nonexistent/milvus.yaml",
 				}
 
@@ -358,6 +412,7 @@ development:
 					SimilarityThreshold: 1.0, // Valid: maximum threshold
 					MaxEntries:          10000,
 					TTLSeconds:          86400,
+					EmbeddingModel:      "bert",
 				}
 
 				err := cache.ValidateCacheConfig(config)
@@ -416,6 +471,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
+				EmbeddingModel:      "bert",
 			}
 			inMemoryCache = cache.NewInMemoryCache(options)
 		})
@@ -442,6 +498,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
+				EmbeddingModel:      "bert",
 			}
 			disabledCache := cache.NewInMemoryCache(disabledOptions)
 			defer disabledCache.Close()
@@ -509,6 +566,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          1,
+				EmbeddingModel:      "bert",
 			})
 
 			err := inMemoryCache.AddPendingRequest("expired-request-id", "test-model", "stale query", []byte("request"))
@@ -532,6 +590,7 @@ development:
 				SimilarityThreshold: 0.99, // Very high threshold
 				MaxEntries:          100,
 				TTLSeconds:          300,
+				EmbeddingModel:      "bert",
 			}
 			highThresholdCache := cache.NewInMemoryCache(highThresholdOptions)
 			defer highThresholdCache.Close()
@@ -582,6 +641,7 @@ development:
 				SimilarityThreshold: 0.1,
 				MaxEntries:          10,
 				TTLSeconds:          1,
+				EmbeddingModel:      "bert",
 			})
 			defer ttlCache.Close()
 
@@ -621,6 +681,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
+				EmbeddingModel:      "bert",
 			}
 			disabledCache := cache.NewInMemoryCache(disabledOptions)
 			defer disabledCache.Close()
@@ -664,6 +725,7 @@ development:
 				SimilarityThreshold: 0.9,
 				MaxEntries:          2000,
 				TTLSeconds:          7200,
+				EmbeddingModel:      "bert",
 				BackendConfigPath:   "config/cache/milvus.yaml",
 			}
 

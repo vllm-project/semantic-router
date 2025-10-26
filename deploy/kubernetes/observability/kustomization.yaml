@@ -19,4 +19,24 @@ resources:
   - grafana/configmap-dashboard.yaml
   - grafana/deployment.yaml
   - grafana/service.yaml
+  - dashboard/configmap.yaml
+  - dashboard/deployment.yaml
+  - dashboard/service.yaml
+  - pipelines/deployment.yaml
+  - openwebui/deployment.yaml
+  - chat-ui/deployment.yaml
+  - mongo/deployment.yaml
   - ingress.yaml
+
+# Generate ConfigMaps from source files
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: openwebui-pipelines-config
+    files:
+      - vllm_semantic_router_pipe.py=pipelines/vllm_semantic_router_pipe.py
+  - name: semantic-router-config
+    files:
+      - dashboard/config.yaml
+      - dashboard/tools_db.json

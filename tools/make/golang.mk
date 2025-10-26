@@ -16,7 +16,7 @@ go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix
 	@cd src/semantic-router/ && golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "✅ src/semantic-router go module lint fix applied"
 
-vet: ## Run go vet for all Go modules
+vet: $(if $(CI),rust-ci,rust) ## Run go vet for all Go modules (build Rust library first)
 	@$(LOG_TARGET)
 	@cd candle-binding && go vet ./...
 	@cd src/semantic-router && go vet ./...

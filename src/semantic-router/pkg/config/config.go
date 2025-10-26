@@ -92,6 +92,13 @@ type RouterConfig struct {
 
 		// Path to backend-specific configuration file
 		BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+		// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
+		// - "bert": Fast, 384-dim, good for short texts (default)
+		// - "qwen3": High quality, 1024-dim, supports 32K context
+		// - "gemma": Balanced, 768-dim, supports 8K context
+		// Default: "bert"
+		EmbeddingModel string `yaml:"embedding_model,omitempty"`
 	} `yaml:"semantic_cache"`
 
 	// Prompt guard configuration
@@ -108,6 +115,16 @@ type RouterConfig struct {
 
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
+
+	// Embedding models configuration (Phase 4: Long-context embedding support)
+	EmbeddingModels struct {
+		// Path to Qwen3-Embedding-0.6B model directory
+		Qwen3ModelPath string `yaml:"qwen3_model_path"`
+		// Path to EmbeddingGemma-300M model directory
+		GemmaModelPath string `yaml:"gemma_model_path"`
+		// Use CPU for inference (default: true, auto-detect GPU if available)
+		UseCPU bool `yaml:"use_cpu"`
+	} `yaml:"embedding_models"`
 
 	// Observability configuration for tracing, metrics, and logging
 	Observability ObservabilityConfig `yaml:"observability"`
@@ -364,6 +381,24 @@ type Category struct {
 	// "replace": Replace any existing system message with the category-specific prompt
 	// "insert": Prepend the category-specific prompt to the existing system message content
 	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
+	// SemanticCacheEnabled controls whether semantic caching is enabled for this category
+	// If nil, inherits from global SemanticCache.Enabled setting
+	SemanticCacheEnabled *bool `yaml:"semantic_cache_enabled,omitempty"`
+	// SemanticCacheSimilarityThreshold defines the minimum similarity score for cache hits (0.0-1.0)
+	// If nil, uses the global threshold from SemanticCache.SimilarityThreshold or BertModel.Threshold
+	SemanticCacheSimilarityThreshold *float32 `yaml:"semantic_cache_similarity_threshold,omitempty"`
+	// JailbreakEnabled controls whether jailbreak detection is enabled for this category
+	// If nil, inherits from global PromptGuard.Enabled setting
+	JailbreakEnabled *bool `yaml:"jailbreak_enabled,omitempty"`
+	// JailbreakThreshold defines the confidence threshold for jailbreak detection (0.0-1.0)
+	// If nil, uses the global threshold from PromptGuard.Threshold
+	JailbreakThreshold *float32 `yaml:"jailbreak_threshold,omitempty"`
+	// PIIEnabled controls whether PII detection is enabled for this category
+	// If nil, inherits from global PII detection enabled setting (based on classifier.pii_model configuration)
+	PIIEnabled *bool `yaml:"pii_enabled,omitempty"`
+	// PIIThreshold defines the confidence threshold for PII detection (0.0-1.0)
+	// If nil, uses the global threshold from Classifier.PIIModel.Threshold
+	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
 }
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -417,6 +452,11 @@ func LoadConfig(configPath string) (*RouterConfig, error) {
 // BoolPtr returns a pointer to a bool value (helper for tests and config)
 func BoolPtr(b bool) *bool {
 	return &b
+}
+
+// Float32Ptr returns a pointer to a float32 value (helper for tests and config)
+func Float32Ptr(f float32) *float32 {
+	return &f
 }
 
 // validateConfigStructure performs additional validation on the parsed config
@@ -781,4 +821,70 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 		}
 	}
 	return nil
+}
+
+// IsCacheEnabledForCategory returns whether semantic caching is enabled for a specific category
+// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
+func (c *RouterConfig) IsCacheEnabledForCategory(categoryName string) bool {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.SemanticCacheEnabled != nil {
+		return *category.SemanticCacheEnabled
+	}
+	// Fall back to global setting
+	return c.SemanticCache.Enabled
+}
+
+// GetCacheSimilarityThresholdForCategory returns the effective cache similarity threshold for a category
+// Priority: category-specific > global semantic_cache > bert_model threshold
+func (c *RouterConfig) GetCacheSimilarityThresholdForCategory(categoryName string) float32 {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.SemanticCacheSimilarityThreshold != nil {
+		return *category.SemanticCacheSimilarityThreshold
+	}
+	// Fall back to global cache threshold or bert threshold
+	return c.GetCacheSimilarityThreshold()
+}
+
+// IsJailbreakEnabledForCategory returns whether jailbreak detection is enabled for a specific category
+// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
+func (c *RouterConfig) IsJailbreakEnabledForCategory(categoryName string) bool {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.JailbreakEnabled != nil {
+		return *category.JailbreakEnabled
+	}
+	// Fall back to global setting
+	return c.PromptGuard.Enabled
+}
+
+// GetJailbreakThresholdForCategory returns the effective jailbreak detection threshold for a category
+// Priority: category-specific > global prompt_guard threshold
+func (c *RouterConfig) GetJailbreakThresholdForCategory(categoryName string) float32 {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.JailbreakThreshold != nil {
+		return *category.JailbreakThreshold
+	}
+	// Fall back to global threshold
+	return c.PromptGuard.Threshold
+}
+
+// IsPIIEnabledForCategory returns whether PII detection is enabled for a specific category
+// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
+func (c *RouterConfig) IsPIIEnabledForCategory(categoryName string) bool {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.PIIEnabled != nil {
+		return *category.PIIEnabled
+	}
+	// Fall back to global setting
+	return c.IsPIIClassifierEnabled()
+}
+
+// GetPIIThresholdForCategory returns the effective PII detection threshold for a category
+// Priority: category-specific > global classifier.pii_model threshold
+func (c *RouterConfig) GetPIIThresholdForCategory(categoryName string) float32 {
+	category := c.GetCategoryByName(categoryName)
+	if category != nil && category.PIIThreshold != nil {
+		return *category.PIIThreshold
+	}
+	// Fall back to global threshold
+	return c.Classifier.PIIModel.Threshold
 }

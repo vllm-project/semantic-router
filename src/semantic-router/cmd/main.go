@@ -12,6 +12,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
@@ -110,6 +111,35 @@ func main() {
 	}
 
 	observability.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
+
+	// Initialize embedding models if configured (Long-context support)
+	cfg, err = config.LoadConfig(*configPath)
+	if err != nil {
+		observability.Warnf("Failed to load config for embedding models: %v", err)
+	} else if cfg.EmbeddingModels.Qwen3ModelPath != "" || cfg.EmbeddingModels.GemmaModelPath != "" {
+		observability.Infof("Initializing embedding models...")
+		observability.Infof("  Qwen3 model: %s", cfg.EmbeddingModels.Qwen3ModelPath)
+		observability.Infof("  Gemma model: %s", cfg.EmbeddingModels.GemmaModelPath)
+		observability.Infof("  Use CPU: %v", cfg.EmbeddingModels.UseCPU)
+
+		if err := candle_binding.InitEmbeddingModels(
+			cfg.EmbeddingModels.Qwen3ModelPath,
+			cfg.EmbeddingModels.GemmaModelPath,
+			cfg.EmbeddingModels.UseCPU,
+		); err != nil {
+			observability.Errorf("Failed to initialize embedding models: %v", err)
+			observability.Warnf("Embedding API endpoints will return placeholder embeddings")
+		} else {
+			observability.Infof("Embedding models initialized successfully")
+		}
+	} else {
+		observability.Infof("No embedding models configured, skipping initialization")
+		observability.Infof("To enable embedding models, add to config.yaml:")
+		observability.Infof("  embedding_models:")
+		observability.Infof("    qwen3_model_path: 'models/Qwen3-Embedding-0.6B'")
+		observability.Infof("    gemma_model_path: 'models/embeddinggemma-300m'")
+		observability.Infof("    use_cpu: true")
+	}
 
 	// Start API server if enabled
 	if *enableAPI {

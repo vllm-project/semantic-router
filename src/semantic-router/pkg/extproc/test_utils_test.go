@@ -161,12 +161,14 @@ func CreateTestConfig() *config.RouterConfig {
 			TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
 			EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
 			BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
+			EmbeddingModel      string   `yaml:"embedding_model,omitempty"`
 		}{
 			BackendType:         "memory",
 			Enabled:             false, // Disable for most tests
 			SimilarityThreshold: &[]float32{0.9}[0],
 			MaxEntries:          100,
 			EvictionPolicy:      "lru",
+			EmbeddingModel:      "bert", // Default for tests
 			TTLSeconds:          3600,
 		},
 		PromptGuard: config.PromptGuardConfig{
@@ -237,6 +239,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*extproc.OpenAIRouter, error) {
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {

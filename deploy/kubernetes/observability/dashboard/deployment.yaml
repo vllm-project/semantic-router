@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router-dashboard
+  labels:
+    app: semantic-router-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: semantic-router-dashboard
+  template:
+    metadata:
+      labels:
+        app: semantic-router-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: ghcr.io/vllm-project/semantic-router/dashboard:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            [
+              "-port=8700",
+              "-static=/app/frontend",
+              "-config=/app/config/config.yaml",
+            ]
+          env:
+            - name: TARGET_GRAFANA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_GRAFANA_URL
+            - name: TARGET_PROMETHEUS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_PROMETHEUS_URL
+            - name: TARGET_ROUTER_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_ROUTER_API_URL
+            - name: TARGET_ROUTER_METRICS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_ROUTER_METRICS_URL
+            - name: TARGET_OPENWEBUI_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_OPENWEBUI_URL
+            - name: TARGET_CHATUI_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: semantic-router-dashboard-config
+                  key: TARGET_CHATUI_URL
+            - name: ROUTER_CONFIG_PATH
+              value: /app/config/config.yaml
+          ports:
+            - name: http
+              containerPort: 8700
+          volumeMounts:
+            - name: router-config
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: router-config
+          configMap:
+            name: semantic-router-config

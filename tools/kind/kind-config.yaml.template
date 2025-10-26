@@ -1,0 +1,52 @@
+# kind cluster configuration for semantic-router deployment
+# This configuration provides sufficient resources for the semantic-router application
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: semantic-router-cluster
+nodes:
+  - role: control-plane
+    # Configure resource limits for the kind node
+    # These settings will be applied to the Docker container running the node
+    extraMounts:
+      - hostPath: /tmp/kind-semantic-router
+        containerPath: /tmp/hostpath-provisioner
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            # Increase memory and CPU limits for kubelet
+            system-reserved: memory=1Gi,cpu=500m
+            kube-reserved: memory=1Gi,cpu=500m
+            eviction-hard: memory.available<1Gi,nodefs.available<10%
+      - |
+        kind: ClusterConfiguration
+        # Configure API server with more resources
+        apiServer:
+          extraArgs:
+            # Allow more concurrent requests
+            max-requests-inflight: "400"
+            max-mutating-requests-inflight: "200"
+        # Configure etcd with more resources
+        etcd:
+          local:
+            extraArgs:
+              quota-backend-bytes: "8589934592" # 8GB
+  # Add worker node for better resource distribution (optional)
+  - role: worker
+    extraMounts:
+      - hostPath: ${PROJECT_ROOT}/models
+        containerPath: /mnt/models
+    kubeadmConfigPatches:
+      - |
+        kind: JoinConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            system-reserved: memory=500Mi,cpu=250m
+            kube-reserved: memory=500Mi,cpu=250m
+            eviction-hard: memory.available<500Mi,nodefs.available<10%
+
