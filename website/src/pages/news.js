@@ -4,6 +4,22 @@ import styles from './news.module.css'
 
 const newsArticles = [
   {
+    title: 'Inside the vLLM Semantic Router',
+    date: 'September 15, 2025',
+    source: 'Mohit Talniya - Medium',
+    description: 'A deep dive into intelligent LLM routing, exploring how the vLLM Semantic Router optimizes production-grade LLM applications by intelligently routing requests to the most suitable models.',
+    url: 'https://mohittalniya.medium.com/inside-the-vllm-semantic-router-a-deep-dive-into-intelligent-llm-routing-3e6b42e2a01d',
+    category: 'Technical Article',
+  },
+  {
+    title: 'Decoding vLLM Semantic Router',
+    date: 'October 25, 2025',
+    source: 'Priyanka Singhal Blog',
+    description: 'An in-depth technical analysis of the vLLM Semantic Router, covering its architecture, the problem of reasoning costs, and how it uses a fine-tuned ModernBERT classification model integrated with Envoy for efficient request routing.',
+    url: 'https://psinghal.me/posts/03-vllm-semantic-router/',
+    category: 'Technical Article',
+  },
+  {
     title: 'vLLM Semantic Router: Improving Efficiency in AI Reasoning',
     date: 'September 11, 2025',
     source: 'Red Hat Developer',
