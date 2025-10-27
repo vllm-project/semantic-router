@@ -14,7 +14,7 @@ const newsArticles = [
   {
     title: 'Decoding vLLM Semantic Router',
     date: 'October 25, 2025',
-    source: 'Priyanka Singhal Blog',
+    source: 'Pratyush Singhal Blog',
     description: 'An in-depth technical analysis of the vLLM Semantic Router, covering its architecture, the problem of reasoning costs, and how it uses a fine-tuned ModernBERT classification model integrated with Envoy for efficient request routing.',
     url: 'https://psinghal.me/posts/03-vllm-semantic-router/',
     category: 'Technical Article',
