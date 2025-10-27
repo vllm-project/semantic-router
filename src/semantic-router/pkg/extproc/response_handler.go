@@ -211,6 +211,27 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		return response, nil
 	}
 
+	// If this was a /v1/responses request (adapter path), remap non-stream body to Responses JSON
+	if r.Config != nil && r.Config.EnableResponsesAdapter {
+		if p, ok := ctx.Headers[":path"]; ok && strings.HasPrefix(p, "/v1/responses") {
+			mapped, err := mapChatCompletionToResponses(responseBody)
+			if err == nil {
+				// Replace upstream JSON with Responses JSON
+				v.ResponseBody.Body = mapped
+				// Ensure content-type remains application/json
+				return &ext_proc.ProcessingResponse{
+					Response: &ext_proc.ProcessingResponse_ResponseBody{
+						ResponseBody: &ext_proc.BodyResponse{
+							Response: &ext_proc.CommonResponse{
+								Status: ext_proc.CommonResponse_CONTINUE,
+							},
+						},
+					},
+				}, nil
+			}
+		}
+	}
+
 	// Parse tokens from the response JSON using OpenAI SDK types
 	var parsed openai.ChatCompletion
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {

@@ -131,6 +131,10 @@ type RouterConfig struct {
 
 	// Gateway route cache clearing
 	ClearRouteCache bool `yaml:"clear_route_cache"`
+
+	// EnableResponsesAdapter enables the compatibility shim for OpenAI Responses API (/v1/responses)
+	// When enabled, POST /v1/responses requests are adapted to legacy /v1/chat/completions.
+	EnableResponsesAdapter bool `yaml:"enable_responses_adapter"`
 }
 
 // APIConfig represents configuration for API endpoints

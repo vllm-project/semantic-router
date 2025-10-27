@@ -60,6 +60,9 @@ categories:
 
 default_model: test-model
 
+# Enable OpenAI Responses API adapter (experimental)
+enable_responses_adapter: true
+
 # Auto model name for automatic model selection (optional)
 # Uncomment and set to customize the model name for automatic routing
 # auto_model_name: "MoM"
@@ -75,31 +78,31 @@ observability:
   tracing:
     # Enable tracing for development/debugging
     enabled: true
-    
+
     # OpenTelemetry provider
     provider: "opentelemetry"
-    
+
     exporter:
       # Stdout exporter prints traces to console (great for debugging)
       type: "stdout"
-      
+
       # No endpoint needed for stdout
       # endpoint: ""
       # insecure: true
-    
+
     sampling:
       # Always sample in development to see all traces
       type: "always_on"
-      
+
       # Rate not used for always_on
       # rate: 1.0
-    
+
     resource:
       # Service name for trace identification
       service_name: "vllm-semantic-router-dev"
-      
+
       # Version for development
       service_version: "dev"
-      
+
       # Environment identifier
       deployment_environment: "development"
