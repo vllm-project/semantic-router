@@ -220,6 +220,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 							},
 						},
 					}
+					metrics.ResponsesAdapterSSEEvents.WithLabelValues("response.completed").Inc()
 					return response, nil
 				}
 
@@ -246,6 +247,13 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 							sb.WriteString("data: ")
 							sb.Write(ev)
 							sb.WriteString("\n\n")
+							// Inspect the event type for metrics
+							var et map[string]interface{}
+							if err := json.Unmarshal(ev, &et); err == nil {
+								if t, _ := et["type"].(string); t != "" {
+									metrics.ResponsesAdapterSSEEvents.WithLabelValues(t).Inc()
+								}
+							}
 						}
 						v.ResponseBody.Body = []byte(sb.String())
 					}

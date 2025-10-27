@@ -339,6 +339,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			return r.createErrorResponse(404, "Responses API not enabled"), nil
 		}
 
+		// Metrics: record that adapter is handling this request
+		metrics.ResponsesAdapterRequests.WithLabelValues("false").Inc()
+
 		// Prepare header mutation to rewrite :path to legacy chat completions
 		// Actual body mapping occurs in handleRequestBody
 		newPath := strings.Replace(path, "/v1/responses", "/v1/chat/completions", 1)
