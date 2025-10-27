@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod embedding;
+pub mod generative; // NEW: Generative/causal language models (Qwen3ForCausalLM)
 pub mod lora;
 pub mod traditional; // NEW: Embedding models (Qwen3, Gemma)
 
