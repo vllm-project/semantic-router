@@ -88,6 +88,14 @@ func mapResponsesRequestToChatCompletions(original []byte) ([]byte, error) {
 		mapped["max_tokens"] = v
 	}
 
+	// Map tools and tool_choice if present
+	if v, ok := req["tools"]; ok {
+		mapped["tools"] = v
+	}
+	if v, ok := req["tool_choice"]; ok {
+		mapped["tool_choice"] = v
+	}
+
 	return json.Marshal(mapped)
 }
 
@@ -117,23 +125,75 @@ func mapChatCompletionToResponses(chatCompletionJSON []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	content := ""
-	stopReason := "stop"
-	if len(parsed.Choices) > 0 {
-		content = parsed.Choices[0].Message.Content
-		if parsed.Choices[0].FinishReason != "" {
-			stopReason = parsed.Choices[0].FinishReason
+	// Also parse generically to inspect tool calls
+	var generic map[string]interface{}
+	_ = json.Unmarshal(chatCompletionJSON, &generic)
+
+	var output []map[string]interface{}
+	if len(parsed.Choices) > 0 && parsed.Choices[0].Message.Content != "" {
+		output = append(output, map[string]interface{}{
+			"type":    "message",
+			"role":    "assistant",
+			"content": parsed.Choices[0].Message.Content,
+		})
+	}
+
+	// Modern tool_calls
+	if chs, ok := generic["choices"].([]interface{}); ok && len(chs) > 0 {
+		if ch, ok := chs[0].(map[string]interface{}); ok {
+			if msg, ok := ch["message"].(map[string]interface{}); ok {
+				if tcs, ok := msg["tool_calls"].([]interface{}); ok {
+					for _, tci := range tcs {
+						if tc, ok := tci.(map[string]interface{}); ok {
+							name := ""
+							args := ""
+							if fn, ok := tc["function"].(map[string]interface{}); ok {
+								if n, ok := fn["name"].(string); ok {
+									name = n
+								}
+								if a, ok := fn["arguments"].(string); ok {
+									args = a
+								}
+							}
+							output = append(output, map[string]interface{}{
+								"type":      "tool_call",
+								"tool_name": name,
+								"arguments": args,
+							})
+						}
+					}
+				}
+				// Legacy function_call
+				if fc, ok := msg["function_call"].(map[string]interface{}); ok {
+					name := ""
+					args := ""
+					if n, ok := fc["name"].(string); ok {
+						name = n
+					}
+					if a, ok := fc["arguments"].(string); ok {
+						args = a
+					}
+					output = append(output, map[string]interface{}{
+						"type":      "tool_call",
+						"tool_name": name,
+						"arguments": args,
+					})
+				}
+			}
 		}
 	}
 
+	stopReason := "stop"
+	if len(parsed.Choices) > 0 && parsed.Choices[0].FinishReason != "" {
+		stopReason = parsed.Choices[0].FinishReason
+	}
+
 	out := map[string]interface{}{
-		"id":      parsed.ID,
-		"object":  "response",
-		"created": parsed.Created,
-		"model":   parsed.Model,
-		"output": []map[string]interface{}{
-			{"type": "message", "role": "assistant", "content": content},
-		},
+		"id":          parsed.ID,
+		"object":      "response",
+		"created":     parsed.Created,
+		"model":       parsed.Model,
+		"output":      output,
 		"stop_reason": stopReason,
 		"usage": map[string]int{
 			"input_tokens":  parsed.Usage.PromptTokens,
@@ -160,9 +220,10 @@ func translateSSEChunkToResponses(chunk []byte) ([][]byte, bool) {
 	created, _ := parsed["created"].(float64)
 	// Emit a created event only once per stream (handled by caller)
 
-	// Extract content delta and finish_reason
+	// Extract content delta, tool call deltas, and finish_reason
 	var deltaText string
 	var finish string
+	var toolEvents [][]byte
 	if arr, ok := parsed["choices"].([]interface{}); ok && len(arr) > 0 {
 		if ch, ok := arr[0].(map[string]interface{}); ok {
 			if fr, ok := ch["finish_reason"].(string); ok && fr != "" {
@@ -172,11 +233,45 @@ func translateSSEChunkToResponses(chunk []byte) ([][]byte, bool) {
 				if c, ok := d["content"].(string); ok {
 					deltaText = c
 				}
+				if tcs, ok := d["tool_calls"].([]interface{}); ok {
+					for _, tci := range tcs {
+						if tc, ok := tci.(map[string]interface{}); ok {
+							ev := map[string]interface{}{"type": "response.tool_calls.delta"}
+							if idx, ok := tc["index"].(float64); ok {
+								ev["index"] = int(idx)
+							}
+							if fn, ok := tc["function"].(map[string]interface{}); ok {
+								if n, ok := fn["name"].(string); ok && n != "" {
+									ev["name"] = n
+								}
+								if a, ok := fn["arguments"].(string); ok && a != "" {
+									ev["arguments_delta"] = a
+								}
+							}
+							b, _ := json.Marshal(ev)
+							toolEvents = append(toolEvents, b)
+						}
+					}
+				}
+				if fc, ok := d["function_call"].(map[string]interface{}); ok {
+					ev := map[string]interface{}{"type": "response.tool_calls.delta"}
+					if n, ok := fc["name"].(string); ok && n != "" {
+						ev["name"] = n
+					}
+					if a, ok := fc["arguments"].(string); ok && a != "" {
+						ev["arguments_delta"] = a
+					}
+					b, _ := json.Marshal(ev)
+					toolEvents = append(toolEvents, b)
+				}
 			}
 		}
 	}
 
 	var events [][]byte
+	if len(toolEvents) > 0 {
+		events = append(events, toolEvents...)
+	}
 	if deltaText != "" {
 		ev := map[string]interface{}{
 			"type":  "response.output_text.delta",
