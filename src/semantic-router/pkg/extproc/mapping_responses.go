@@ -144,3 +144,62 @@ func mapChatCompletionToResponses(chatCompletionJSON []byte) ([]byte, error) {
 
 	return json.Marshal(out)
 }
+
+// translateSSEChunkToResponses converts a single OpenAI chat.completion.chunk SSE payload
+// (the JSON after "data: ") into Responses SSE events (delta/stop). Returns empty when not applicable.
+func translateSSEChunkToResponses(chunk []byte) ([][]byte, bool) {
+	// Expect chunk JSON like {"id":"...","object":"chat.completion.chunk","created":...,"model":"...","choices":[{"index":0,"delta":{"role":"assistant","content":"..."},"finish_reason":null}]}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(chunk, &parsed); err != nil {
+		return nil, false
+	}
+	if parsed["object"] != "chat.completion.chunk" {
+		return nil, false
+	}
+
+	created, _ := parsed["created"].(float64)
+	// Emit a created event only once per stream (handled by caller)
+
+	// Extract content delta and finish_reason
+	var deltaText string
+	var finish string
+	if arr, ok := parsed["choices"].([]interface{}); ok && len(arr) > 0 {
+		if ch, ok := arr[0].(map[string]interface{}); ok {
+			if fr, ok := ch["finish_reason"].(string); ok && fr != "" {
+				finish = fr
+			}
+			if d, ok := ch["delta"].(map[string]interface{}); ok {
+				if c, ok := d["content"].(string); ok {
+					deltaText = c
+				}
+			}
+		}
+	}
+
+	var events [][]byte
+	if deltaText != "" {
+		ev := map[string]interface{}{
+			"type":  "response.output_text.delta",
+			"delta": deltaText,
+		}
+		if created > 0 {
+			ev["created"] = int64(created)
+		}
+		b, _ := json.Marshal(ev)
+		events = append(events, b)
+	}
+
+	if finish != "" {
+		ev := map[string]interface{}{
+			"type":        "response.completed",
+			"stop_reason": finish,
+		}
+		b, _ := json.Marshal(ev)
+		events = append(events, b)
+	}
+
+	if len(events) == 0 {
+		return nil, false
+	}
+	return events, true
+}

@@ -44,3 +44,11 @@ func TestMapChatCompletionToResponses_Minimal(t *testing.T) {
 		t.Fatalf("stop_reason missing")
 	}
 }
+
+func TestTranslateSSEChunkToResponses(t *testing.T) {
+	chunk := []byte(`{"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"},"finish_reason":null}]}`)
+	evs, ok := translateSSEChunkToResponses(chunk)
+	if !ok || len(evs) == 0 {
+		t.Fatalf("expected events")
+	}
+}

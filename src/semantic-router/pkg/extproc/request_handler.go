@@ -249,6 +249,9 @@ type RequestContext struct {
 	TTFTRecorded bool
 	TTFTSeconds  float64
 
+	// Responses SSE translation state
+	ResponsesStreamInit bool
+
 	// VSR decision tracking
 	VSRSelectedCategory     string // The category selected by VSR
 	VSRReasoningMode        string // "on" or "off" - whether reasoning mode was determined to be used
