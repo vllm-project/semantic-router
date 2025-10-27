@@ -728,7 +728,7 @@
       ],
       "title": "Model Completion Latency (p50/p90/p99)",
       "type": "timeseries"
-    }
+    },
     {
       "datasource": {
         "type": "prometheus",
@@ -1282,7 +1282,7 @@
       ],
       "title": "Responses Adapter SSE Events Rate",
       "type": "timeseries"
-    },
+    }
   ],
   "preload": false,
   "refresh": "10s",
