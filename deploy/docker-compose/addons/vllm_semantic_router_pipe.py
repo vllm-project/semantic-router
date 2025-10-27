@@ -35,6 +35,9 @@ class Pipeline:
         # Request timeout in seconds
         timeout: int = 300
 
+        # Prefer OpenAI Responses API instead of Chat Completions
+        use_responses_api: bool = True
+
     def __init__(self):
         # Important: type should be "manifold" instead of "pipe"
         # manifold type Pipeline will be displayed in the model list
@@ -51,6 +54,7 @@ class Pipeline:
                 "log_vsr_info": True,
                 "debug": True,
                 "timeout": 300,
+                "use_responses_api": True,
             }
         )
 
@@ -380,7 +384,10 @@ class Pipeline:
             print("=" * 80)
 
         # Prepare the request to vLLM Semantic Router
-        url = f"{self.valves.vsr_base_url}/v1/chat/completions"
+        if self.valves.use_responses_api:
+            url = f"{self.valves.vsr_base_url}/v1/responses"
+        else:
+            url = f"{self.valves.vsr_base_url}/v1/chat/completions"
 
         if self.valves.debug:
             print(f"\n📡 Sending request to: {url}")
@@ -411,6 +418,10 @@ class Pipeline:
         if self.valves.debug:
             print(f"  Streaming: {is_streaming}")
             print(f"  Timeout: {self.valves.timeout}s")
+
+        # If using Responses API for streaming, set Accept header for SSE
+        if self.valves.use_responses_api and is_streaming:
+            headers["Accept"] = "text/event-stream"
 
         try:
             if self.valves.debug:
@@ -459,7 +470,12 @@ class Pipeline:
                 if self.valves.debug:
                     print(f"\n📺 Handling streaming response...")
                 # Handle streaming response
-                return self._handle_streaming_response(response, vsr_headers)
+                if self.valves.use_responses_api:
+                    return self._handle_streaming_response_responses(
+                        response, vsr_headers
+                    )
+                else:
+                    return self._handle_streaming_response(response, vsr_headers)
             else:
                 if self.valves.debug:
                     print(f"\n📄 Handling non-streaming response...")
@@ -493,13 +509,29 @@ class Pipeline:
                         print("=" * 80 + "\n")
                     return f"{error_msg}: {str(e)}"
 
-                if self.valves.debug:
-                    print(f"  Response data keys: {list(response_data.keys())}")
-                    if "choices" in response_data:
-                        print(f"  Choices count: {len(response_data['choices'])}")
+                # Transform Responses API JSON to Chat Completions JSON if enabled
+                if self.valves.use_responses_api:
+                    response_data = self._responses_to_chat_completions(
+                        response_data, vsr_headers
+                    )
+                    if self.valves.debug:
+                        print(
+                            f"  Transformed Responses → ChatCompletions. keys: {list(response_data.keys())}"
+                        )
+                        if "choices" in response_data:
+                            print(f"  Choices count: {len(response_data['choices'])}")
+                else:
+                    if self.valves.debug:
+                        print(f"  Response data keys: {list(response_data.keys())}")
+                        if "choices" in response_data:
+                            print(f"  Choices count: {len(response_data['choices'])}")
 
-                # Add VSR info to the response if enabled
-                if self.valves.show_vsr_info and vsr_headers:
+                # Add VSR info to the response if enabled (only for Chat Completions shape)
+                if (
+                    (not self.valves.use_responses_api)
+                    and self.valves.show_vsr_info
+                    and vsr_headers
+                ):
                     vsr_info = self._format_vsr_info(vsr_headers, position="prefix")
 
                     if self.valves.debug:
@@ -539,6 +571,69 @@ class Pipeline:
                 print(f"  Exception details: {str(e)}")
                 print("=" * 80 + "\n")
             return error_msg
+
+    def _responses_to_chat_completions(self, resp: dict, vsr_headers: dict) -> dict:
+        """
+        Convert minimal OpenAI Responses JSON to legacy Chat Completions JSON
+        and inject VSR info as prefix to assistant content.
+        """
+        # Extract assistant text from output array
+        content_parts = []
+        output = resp.get("output", [])
+        if isinstance(output, list):
+            for item in output:
+                if isinstance(item, dict) and item.get("type") == "message":
+                    if item.get("role") == "assistant":
+                        text = item.get("content", "")
+                        if isinstance(text, str) and text:
+                            content_parts.append(text)
+        content = "".join(content_parts)
+
+        # Map usage
+        usage = resp.get("usage", {}) or {}
+        prompt_tokens = usage.get("input_tokens", 0)
+        completion_tokens = usage.get("output_tokens", 0)
+        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+
+        # Build Chat Completions JSON
+        chat = {
+            "id": resp.get("id", ""),
+            "object": "chat.completion",
+            "created": resp.get("created", 0),
+            "model": resp.get("model", "auto"),
+            "system_fingerprint": "vsr",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content},
+                    "logprobs": None,
+                    "finish_reason": resp.get("stop_reason", "stop"),
+                }
+            ],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+                "prompt_tokens_details": {"cached_tokens": 0},
+                "completion_tokens_details": {"reasoning_tokens": 0},
+            },
+            "token_usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+                "prompt_tokens_details": {"cached_tokens": 0},
+                "completion_tokens_details": {"reasoning_tokens": 0},
+            },
+        }
+
+        # Prepend VSR info if enabled
+        if self.valves.show_vsr_info and vsr_headers:
+            vsr_info = self._format_vsr_info(vsr_headers, position="prefix")
+            chat["choices"][0]["message"]["content"] = (
+                vsr_info + chat["choices"][0]["message"]["content"]
+            )
+
+        return chat
 
     def _handle_streaming_response(
         self, response: requests.Response, vsr_headers: dict
@@ -646,3 +741,106 @@ class Pipeline:
                     except json.JSONDecodeError:
                         # If not valid JSON, pass through as-is
                         yield f"data: {data_str}\n\n"
+
+    def _handle_streaming_response_responses(
+        self, response: requests.Response, vsr_headers: dict
+    ) -> Generator:
+        """
+        Handle SSE stream for Responses API and convert to Chat Completions chunks.
+        Inject VSR info at the first assistant content delta.
+        """
+        vsr_info_added = False
+
+        for line in response.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+
+            if not line.startswith("data: "):
+                continue
+
+            data_str = line[6:].strip()
+
+            if data_str == "[DONE]":
+                yield f"data: [DONE]\n\n"
+                if self.valves.debug:
+                    print(f"✅ Streaming completed (Responses)")
+                continue
+
+            try:
+                ev = json.loads(data_str)
+            except json.JSONDecodeError:
+                # Pass through unknown payloads
+                yield f"data: {data_str}\n\n"
+                continue
+
+            etype = ev.get("type", "")
+
+            if etype == "response.output_text.delta":
+                delta_text = ev.get("delta", "")
+                if self.valves.show_vsr_info and not vsr_info_added:
+                    vsr_info = self._format_vsr_info(vsr_headers, position="prefix")
+                    delta_text = vsr_info + (delta_text or "")
+                    vsr_info_added = True
+
+                chunk = {
+                    "id": f"chatcmpl-{ev.get('created', 0)}",
+                    "object": "chat.completion.chunk",
+                    "created": ev.get("created", 0),
+                    "model": "auto",
+                    "system_fingerprint": "vsr",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": delta_text},
+                            "logprobs": None,
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+
+            elif etype == "response.tool_calls.delta":
+                chunk = {
+                    "id": f"chatcmpl-{ev.get('created', 0)}",
+                    "object": "chat.completion.chunk",
+                    "created": ev.get("created", 0),
+                    "model": "auto",
+                    "system_fingerprint": "vsr",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "function_call": {
+                                    "name": ev.get("name", ""),
+                                    "arguments": ev.get("arguments_delta", ""),
+                                }
+                            },
+                            "logprobs": None,
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+
+            elif etype == "response.completed":
+                finish = ev.get("stop_reason", "stop")
+                chunk = {
+                    "id": "chatcmpl-end",
+                    "object": "chat.completion.chunk",
+                    "created": ev.get("created", 0),
+                    "model": "auto",
+                    "system_fingerprint": "vsr",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "logprobs": None,
+                            "finish_reason": finish,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+
+            else:
+                # Unknown event type: pass-through
+                yield f"data: {data_str}\n\n"
