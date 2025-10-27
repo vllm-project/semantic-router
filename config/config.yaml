@@ -24,7 +24,7 @@ semantic_cache:
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
   embedding_model: "bert"
-
+  
 tools:
   enabled: true
   top_k: 3
@@ -481,7 +481,7 @@ reasoning_families:
 default_reasoning_effort: high
 
 # Enable OpenAI Responses API adapter (experimental)
-enable_responses_adapter: false
+enable_responses_adapter: true
 
 # API Configuration
 api:
