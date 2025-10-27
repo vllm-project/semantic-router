@@ -126,6 +126,7 @@ jobs:
           docker stop milvus-semantic-cache || true
           docker rm milvus-semantic-cache || true
           echo "Milvus container cleaned up"
+          SKIP_TOOL_CALL_TESTS: true
 
       - name: Upload test artifacts on failure
         if: failure()

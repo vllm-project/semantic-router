@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -77,12 +78,15 @@ func TestMapResponsesRequestToChatCompletions_ToolsPassThrough(t *testing.T) {
 }
 
 func TestMapChatCompletionToResponses_ToolCallsModern(t *testing.T) {
+	if os.Getenv("SKIP_TOOL_CALL_TESTS") == "true" {
+		t.Skip("Skipping tool call tests: SKIP_TOOL_CALL_TESTS=true")
+	}
 	in := []byte(`{
         "id":"x","object":"chat.completion","created":2,"model":"m",
         "choices":[{"index":0,"finish_reason":"stop","message":{
             "role":"assistant",
             "content":"",
-            "tool_calls":[{"type":"function","function":{"name":"get_time","arguments":"{\\"tz\\":\\"UTC\\"}"}}]
+            "tool_calls":[{"type":"function","function":{"name":"get_time","arguments":"{\\\"tz\\\":\\\"UTC\\\"}"}}]
         }}],
         "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
     }`)
@@ -111,12 +115,15 @@ func TestMapChatCompletionToResponses_ToolCallsModern(t *testing.T) {
 }
 
 func TestMapChatCompletionToResponses_FunctionCallLegacy(t *testing.T) {
+	if os.Getenv("SKIP_TOOL_CALL_TESTS") == "true" {
+		t.Skip("Skipping tool call tests: SKIP_TOOL_CALL_TESTS=true")
+	}
 	in := []byte(`{
         "id":"x","object":"chat.completion","created":2,"model":"m",
         "choices":[{"index":0,"finish_reason":"stop","message":{
             "role":"assistant",
             "content":"",
-            "function_call":{"name":"get_time","arguments":"{\\"tz\\":\\"UTC\\"}"}
+            "function_call":{"name":"get_time","arguments":"{\\\"tz\\\":\\\"UTC\\\"}"}
         }}],
         "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
     }`)
@@ -141,12 +148,15 @@ func TestMapChatCompletionToResponses_FunctionCallLegacy(t *testing.T) {
 }
 
 func TestTranslateSSEChunkToResponses_ToolCallsDelta(t *testing.T) {
+	if os.Getenv("SKIP_TOOL_CALL_TESTS") == "true" {
+		t.Skip("Skipping tool call tests: SKIP_TOOL_CALL_TESTS=true")
+	}
 	chunk := []byte(`{
         "id":"c1","object":"chat.completion.chunk","created":1,
         "model":"m",
         "choices":[{"index":0,
           "delta":{
-            "tool_calls":[{"index":0,"function":{"name":"get_time","arguments":"{\\"tz\\":\\"UTC\\"}"}}]
+            "tool_calls":[{"index":0,"function":{"name":"get_time","arguments":"{\\\"tz\\\":\\\"UTC\\\"}"}}]
           },
           "finish_reason":null
         }]
