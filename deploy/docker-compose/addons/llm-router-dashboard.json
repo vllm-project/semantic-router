@@ -623,6 +623,126 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
+            "axisLabel": "Seconds",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "p50 {{model}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "p90 {{model}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "p99 {{model}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Model Completion Latency (p50/p90/p99)",
+      "type": "timeseries"
+    }
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
             "axisLabel": "Requests/sec",
             "axisPlacement": "auto",
             "barAlignment": 0,
@@ -672,7 +792,7 @@
         "x": 0,
         "y": 24
       },
-      "id": 7,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [
@@ -779,9 +899,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 48
       },
-      "id": 8,
+      "id": 9,
       "options": {
         "legend": {
           "calcs": [
@@ -883,7 +1003,7 @@
         "x": 0,
         "y": 32
       },
-      "id": 9,
+      "id": 10,
       "options": {
         "legend": {
           "calcs": [
@@ -967,7 +1087,7 @@
         "x": 12,
         "y": 32
       },
-      "id": 10,
+      "id": 11,
       "options": {
         "displayMode": "gradient",
         "legend": {
@@ -1039,7 +1159,7 @@
         "x": 0,
         "y": 40
       },
-      "id": 11,
+      "id": 12,
       "options": {
         "displayMode": "gradient",
         "legend": {
@@ -1088,119 +1208,81 @@
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
+          "color": { "mode": "palette-classic" },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "Seconds",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "axisLabel": "Requests/sec",
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "showPoints": "auto"
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
+          "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null}] },
+          "unit": "reqps"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 40
-      },
-      "id": 12,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "id": 13,
       "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max",
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "none"
-        }
+        "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
       },
-      "pluginVersion": "11.5.1",
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
-          "legendFormat": "p50 {{model}}",
+          "expr": "sum(rate(llm_responses_adapter_requests_total[5m])) by (streaming)",
+          "legendFormat": "Requests {{streaming}}",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
-          "legendFormat": "p90 {{model}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le, model))",
-          "legendFormat": "p99 {{model}}",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "Model Completion Latency (p50/p90/p99)",
+      "title": "Responses Adapter Requests Rate",
       "type": "timeseries"
-    }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Events/sec",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "showPoints": "auto"
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{"color":"green","value":null}] },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "id": 14,
+      "options": {
+        "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "editorMode": "code",
+          "expr": "sum(rate(llm_responses_adapter_sse_events_total[5m])) by (event_type)",
+          "legendFormat": "{{event_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Responses Adapter SSE Events Rate",
+      "type": "timeseries"
+    },
   ],
   "preload": false,
   "refresh": "10s",
@@ -1233,6 +1315,6 @@
   "timezone": "",
   "title": "LLM Router Metrics",
   "uid": "llm-router-metrics",
-  "version": 14,
+  "version": 15,
   "weekStart": ""
 }
