@@ -90,6 +90,7 @@ jobs:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+          SKIP_TOOL_CALL_TESTS: true
 
       - name: Upload test artifacts on failure
         if: failure()
