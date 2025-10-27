@@ -205,7 +205,54 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			}
 		}
 
-		// For streaming chunks, just continue (no token parsing or cache update)
+		// If Responses adapter is active for this request, translate SSE chunks
+		if r.Config != nil && r.Config.EnableResponsesAdapter {
+			if p, ok := ctx.Headers[":path"]; ok && strings.HasPrefix(p, "/v1/responses") {
+				body := v.ResponseBody.Body
+				// Envoy provides raw chunk bytes, typically like: "data: {json}\n\n" or "data: [DONE]\n\n"
+				b := string(body)
+				if strings.Contains(b, "[DONE]") {
+					// Emit a final response.completed if not already concluded
+					response := &ext_proc.ProcessingResponse{
+						Response: &ext_proc.ProcessingResponse_ResponseBody{
+							ResponseBody: &ext_proc.BodyResponse{
+								Response: &ext_proc.CommonResponse{Status: ext_proc.CommonResponse_CONTINUE},
+							},
+						},
+					}
+					return response, nil
+				}
+
+				// Extract JSON after "data: " prefix if present
+				idx := strings.Index(b, "data:")
+				var payload []byte
+				if idx >= 0 {
+					payload = []byte(strings.TrimSpace(b[idx+5:]))
+				} else {
+					payload = v.ResponseBody.Body
+				}
+
+				if len(payload) > 0 && payload[0] == '{' {
+					if !ctx.ResponsesStreamInit {
+						// Emit an initial created event on first chunk
+						ctx.ResponsesStreamInit = true
+						// We don't inject a new chunk here; clients will see deltas below
+					}
+					events, ok := translateSSEChunkToResponses(payload)
+					if ok && len(events) > 0 {
+						// Rebuild body as multiple SSE events in Responses format
+						var sb strings.Builder
+						for _, ev := range events {
+							sb.WriteString("data: ")
+							sb.Write(ev)
+							sb.WriteString("\n\n")
+						}
+						v.ResponseBody.Body = []byte(sb.String())
+					}
+				}
+			}
+		}
+
 		response := &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseBody{
 				ResponseBody: &ext_proc.BodyResponse{
