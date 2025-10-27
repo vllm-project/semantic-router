@@ -84,7 +84,7 @@ jobs:
         run: make download-models
 
       - name: Run semantic router tests
-        run: make test
+        run: make test --debug=v
         env:
           CI: true
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
