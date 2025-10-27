@@ -25,13 +25,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cleanup disk space (CI)
-        uses: ./.github/actions/cleanup-disk
+        uses: ./tools/github-action/cleanup-disk
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Setup Kubernetes tools
-        uses: ./.github/actions/setup-kubetools
+        uses: ./tools/github-action/setup-kubetools
         with:
           kubectl_version: v1.28.0
           kustomize_version: ${{ inputs.kustomize_version }}

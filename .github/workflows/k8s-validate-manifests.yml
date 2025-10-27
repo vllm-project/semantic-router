@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Kubernetes tools
-        uses: ./.github/actions/setup-kubetools
+        uses: ./tools/github-action/setup-kubetools
         with:
           kubectl_version: v1.28.0
           kustomize_version: ${{ inputs.kustomize_version }}
