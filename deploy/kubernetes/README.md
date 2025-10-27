@@ -363,5 +363,3 @@ For detailed observability setup and screenshots, see `deploy/kubernetes/observa
 - `tools/kind/kind-config.yaml` - Kind cluster configuration for local development
 - `tools/make/kube.mk` - Make targets for Kubernetes operations
 - `Makefile` - Root makefile including all make targets
-
-change one line to invoke CI.
