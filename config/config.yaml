@@ -480,6 +480,9 @@ reasoning_families:
 # Global default reasoning effort level
 default_reasoning_effort: high
 
+# Enable OpenAI Responses API adapter (experimental)
+enable_responses_adapter: false
+
 # API Configuration
 api:
   batch_classification:
