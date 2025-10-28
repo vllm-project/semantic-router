@@ -7,14 +7,39 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
+// preppedKeywordRule stores preprocessed keywords for efficient matching.
+type preppedKeywordRule struct {
+	Category         string
+	Operator         string
+	CaseSensitive    bool
+	OriginalKeywords []string // For logging/returning original case
+	LowerKeywords    []string // For case-insensitive matching
+}
+
 // KeywordClassifier implements keyword-based classification logic.
 type KeywordClassifier struct {
-	rules []config.KeywordRule
+	rules []preppedKeywordRule // Store preprocessed rules
 }
 
 // NewKeywordClassifier creates a new KeywordClassifier.
-func NewKeywordClassifier(rules []config.KeywordRule) *KeywordClassifier {
-	return &KeywordClassifier{rules: rules}
+func NewKeywordClassifier(cfgRules []config.KeywordRule) *KeywordClassifier {
+	preppedRules := make([]preppedKeywordRule, len(cfgRules))
+	for i, rule := range cfgRules {
+		preppedRule := preppedKeywordRule{
+			Category:         rule.Category,
+			Operator:         rule.Operator,
+			CaseSensitive:    rule.CaseSensitive,
+			OriginalKeywords: rule.Keywords,
+		}
+		if !rule.CaseSensitive {
+			preppedRule.LowerKeywords = make([]string, len(rule.Keywords))
+			for j, keyword := range rule.Keywords {
+				preppedRule.LowerKeywords[j] = strings.ToLower(keyword)
+			}
+		}
+		preppedRules[i] = preppedRule
+	}
+	return &KeywordClassifier{rules: preppedRules}
 }
 
 // Classify performs keyword-based classification on the given text.
@@ -22,15 +47,9 @@ func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
 	for _, rule := range c.rules {
 		if matched, keywords := c.matches(text, rule); matched {
 			if len(keywords) > 0 {
-				observability.Infof(
-					"Keyword-based classification matched category %q with keywords: %v",
-					rule.Category, keywords,
-				)
+				observability.Infof("Keyword-based classification matched category %q with keywords: %v", rule.Category, keywords)
 			} else {
-				observability.Infof(
-					"Keyword-based classification matched category %q with a NOR rule.",
-					rule.Category,
-				)
+				observability.Infof("Keyword-based classification matched category %q with a NOR rule.", rule.Category)
 			}
 			return rule.Category, 1.0, nil
 		}
@@ -39,63 +58,47 @@ func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
 }
 
 // matches checks if the text matches the given keyword rule.
-func (c *KeywordClassifier) matches(text string, rule config.KeywordRule) (bool, []string) {
-	// Default to case-insensitive matching if not specified
-	caseSensitive := rule.CaseSensitive
+func (c *KeywordClassifier) matches(text string, rule preppedKeywordRule) (bool, []string) {
 	var matchedKeywords []string
 
 	// Prepare text for matching
 	preparedText := text
-	if !caseSensitive {
+	if !rule.CaseSensitive {
 		preparedText = strings.ToLower(text)
+	}
+
+	// Determine which set of keywords to use
+	keywordsToMatch := rule.OriginalKeywords
+	if !rule.CaseSensitive {
+		keywordsToMatch = rule.LowerKeywords
 	}
 
 	// Check for matches based on the operator
 	switch rule.Operator {
 	case "AND":
-		for _, keyword := range rule.Keywords {
-			preparedKeyword := keyword
-			if !caseSensitive {
-				preparedKeyword = strings.ToLower(keyword)
-			}
-			if !strings.Contains(preparedText, preparedKeyword) {
+		for i, keyword := range keywordsToMatch {
+			if !strings.Contains(preparedText, keyword) {
 				return false, nil
 			}
-			matchedKeywords = append(matchedKeywords, keyword)
+			matchedKeywords = append(matchedKeywords, rule.OriginalKeywords[i]) // Append original keyword for logging
 		}
 		return true, matchedKeywords
-
 	case "OR":
-		for _, keyword := range rule.Keywords {
-			preparedKeyword := keyword
-			if !caseSensitive {
-				preparedKeyword = strings.ToLower(keyword)
-			}
-			if strings.Contains(preparedText, preparedKeyword) {
-				// For OR, we can return on the first match.
-				return true, []string{keyword}
+		for i, keyword := range keywordsToMatch {
+			if strings.Contains(preparedText, keyword) {
+				return true, []string{rule.OriginalKeywords[i]} // Append original keyword for logging
 			}
 		}
 		return false, nil
-
 	case "NOR":
-		for _, keyword := range rule.Keywords {
-			preparedKeyword := keyword
-			if !caseSensitive {
-				preparedKeyword = strings.ToLower(keyword)
-			}
-			if strings.Contains(preparedText, preparedKeyword) {
+		for _, keyword := range keywordsToMatch {
+			if strings.Contains(preparedText, keyword) {
 				return false, nil
 			}
 		}
-		// Return true with an empty slice
-		return true, matchedKeywords
-
+		return true, matchedKeywords // Return true with an empty slice
 	default:
-		observability.Warnf(
-			"KeywordClassifier: unsupported operator %q in rule for category %q. Returning no match.",
-			rule.Operator, rule.Category,
-		)
+		observability.Warnf("Unsupported keyword rule operator: %q", rule.Operator)
 		return false, nil
 	}
 }
