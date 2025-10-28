@@ -370,4 +370,3 @@ func main() {
 	fmt.Println("  • ../../candle-binding/MULTI_ADAPTER_IMPLEMENTATION.md (architecture)")
 	fmt.Println()
 }
-

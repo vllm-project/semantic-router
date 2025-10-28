@@ -31,7 +31,7 @@ use candle_core::{DType, Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokenizers::Tokenizer;
 
@@ -142,17 +142,76 @@ impl Qwen3MultiLoRAClassifier {
         };
         println!("  Using dtype: {:?}", dtype);
 
-        // Load base model weights
-        let weights_path = base_dir.join("model.safetensors");
+        // Load base model weights (support both single and sharded models)
         println!("  Loading base model weights...");
 
-        let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], dtype, device) }
-            .map_err(|e| UnifiedError::Model {
-                model_type: crate::core::ModelErrorType::Embedding,
-                operation: "load base weights".to_string(),
-                source: e.to_string(),
-                context: None,
-            })?;
+        let vb = {
+            let single_weights_path = base_dir.join("model.safetensors");
+            let index_path = base_dir.join("model.safetensors.index.json");
+
+            if single_weights_path.exists() {
+                // Single file model
+                println!("  Using single model file");
+                unsafe {
+                    VarBuilder::from_mmaped_safetensors(&[single_weights_path], dtype, device)
+                }
+            } else if index_path.exists() {
+                // Sharded model - read index to get all shard files
+                println!("  Using sharded model files");
+                let index_content =
+                    std::fs::read_to_string(&index_path).map_err(|e| UnifiedError::Model {
+                        model_type: crate::core::ModelErrorType::Embedding,
+                        operation: "read model index".to_string(),
+                        source: e.to_string(),
+                        context: None,
+                    })?;
+
+                let index: serde_json::Value =
+                    serde_json::from_str(&index_content).map_err(|e| {
+                        UnifiedError::Configuration {
+                            operation: "parse model index".to_string(),
+                            source: ConfigErrorType::ParseError(e.to_string()),
+                            context: None,
+                        }
+                    })?;
+
+                // Extract unique shard filenames from weight_map
+                let mut shard_files = std::collections::HashSet::new();
+                if let Some(weight_map) = index.get("weight_map").and_then(|v| v.as_object()) {
+                    for shard_name in weight_map.values() {
+                        if let Some(name) = shard_name.as_str() {
+                            shard_files.insert(name);
+                        }
+                    }
+                }
+
+                // Convert to sorted paths
+                let mut shard_paths: Vec<PathBuf> = shard_files
+                    .into_iter()
+                    .map(|name| base_dir.join(name))
+                    .collect();
+                shard_paths.sort();
+
+                println!("  Loading {} shard files", shard_paths.len());
+
+                unsafe { VarBuilder::from_mmaped_safetensors(&shard_paths, dtype, device) }
+            } else {
+                return Err(UnifiedError::Configuration {
+                    operation: "find model weights".to_string(),
+                    source: ConfigErrorType::FileNotFound(format!(
+                        "Neither {:?} nor {:?} found",
+                        single_weights_path, index_path
+                    )),
+                    context: None,
+                });
+            }
+        }
+        .map_err(|e| UnifiedError::Model {
+            model_type: crate::core::ModelErrorType::Embedding,
+            operation: "load base weights".to_string(),
+            source: e.to_string(),
+            context: None,
+        })?;
 
         // Build ModelForCausalLM (includes LM head)
         println!("  🏗️  Building Qwen3 model with LM head...");

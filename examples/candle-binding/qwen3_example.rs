@@ -29,24 +29,39 @@ fn print_header(title: &str) {
     println!("{}", "=".repeat(70));
 }
 
-fn demonstrate_zero_shot(classifier: &mut Qwen3MultiLoRAClassifier) -> Result<(), Box<dyn std::error::Error>> {
+fn demonstrate_zero_shot(
+    classifier: &mut Qwen3MultiLoRAClassifier,
+) -> Result<(), Box<dyn std::error::Error>> {
     print_header("ZERO-SHOT CLASSIFICATION (No Adapter Required)");
 
     let test_cases = vec![
         (
             "Sentiment Analysis",
             "This movie was absolutely fantastic! I loved every minute of it.",
-            vec!["positive".to_string(), "negative".to_string(), "neutral".to_string()],
+            vec![
+                "positive".to_string(),
+                "negative".to_string(),
+                "neutral".to_string(),
+            ],
         ),
         (
             "Topic Classification",
             "The stock market rallied today as investors reacted to positive economic data.",
-            vec!["science".to_string(), "politics".to_string(), "sports".to_string(), "business".to_string()],
+            vec![
+                "science".to_string(),
+                "politics".to_string(),
+                "sports".to_string(),
+                "business".to_string(),
+            ],
         ),
         (
             "Intent Detection",
             "What time does the store open?",
-            vec!["question".to_string(), "command".to_string(), "statement".to_string()],
+            vec![
+                "question".to_string(),
+                "command".to_string(),
+                "statement".to_string(),
+            ],
         ),
     ];
 
@@ -58,13 +73,17 @@ fn demonstrate_zero_shot(classifier: &mut Qwen3MultiLoRAClassifier) -> Result<()
 
         match classifier.classify_zero_shot(text, categories.clone()) {
             Ok(result) => {
-                println!("  ✅ Result: {} ({:.2}% confidence)",
-                    result.category, result.confidence * 100.0);
+                println!(
+                    "  ✅ Result: {} ({:.2}% confidence)",
+                    result.category,
+                    result.confidence * 100.0
+                );
 
                 // Simple accuracy check
-                if (text.contains("fantastic") && result.category == "positive") ||
-                   (text.contains("stock market") && result.category == "business") ||
-                   (text.contains("What time") && result.category == "question") {
+                if (text.contains("fantastic") && result.category == "positive")
+                    || (text.contains("stock market") && result.category == "business")
+                    || (text.contains("What time") && result.category == "question")
+                {
                     correct += 1;
                 }
             }
@@ -74,19 +93,25 @@ fn demonstrate_zero_shot(classifier: &mut Qwen3MultiLoRAClassifier) -> Result<()
         }
     }
 
-    println!("\n  Accuracy: {}/{} ({:.1}%)", correct, test_cases.len(),
-        (correct as f32 / test_cases.len() as f32) * 100.0);
+    println!(
+        "\n  Accuracy: {}/{} ({:.1}%)",
+        correct,
+        test_cases.len(),
+        (correct as f32 / test_cases.len() as f32) * 100.0
+    );
 
     Ok(())
 }
 
-fn demonstrate_multi_adapter(classifier: &mut Qwen3MultiLoRAClassifier) -> Result<(), Box<dyn std::error::Error>> {
+fn demonstrate_multi_adapter(
+    classifier: &mut Qwen3MultiLoRAClassifier,
+) -> Result<(), Box<dyn std::error::Error>> {
     print_header("MULTI-ADAPTER CLASSIFICATION");
 
     // Load adapter
     let adapter_path = "../../models/qwen3_generative_classifier_r16";
     println!("\n  Loading adapter from: {}", adapter_path);
-    
+
     classifier.load_adapter("category", adapter_path)?;
     println!("  ✅ Adapter 'category' loaded successfully");
 
@@ -106,8 +131,11 @@ fn demonstrate_multi_adapter(classifier: &mut Qwen3MultiLoRAClassifier) -> Resul
         println!("\n  [{}] Text: {}", i + 1, text);
         match classifier.classify_with_adapter(text, "category") {
             Ok(result) => {
-                println!("    ✅ Category: {} ({:.2}% confidence)",
-                    result.category, result.confidence * 100.0);
+                println!(
+                    "    ✅ Category: {} ({:.2}% confidence)",
+                    result.category,
+                    result.confidence * 100.0
+                );
             }
             Err(e) => {
                 println!("    ❌ Error: {:?}", e);
@@ -118,7 +146,9 @@ fn demonstrate_multi_adapter(classifier: &mut Qwen3MultiLoRAClassifier) -> Resul
     Ok(())
 }
 
-fn run_benchmark_evaluation(classifier: &mut Qwen3MultiLoRAClassifier) -> Result<(), Box<dyn std::error::Error>> {
+fn run_benchmark_evaluation(
+    classifier: &mut Qwen3MultiLoRAClassifier,
+) -> Result<(), Box<dyn std::error::Error>> {
     print_header("BENCHMARK DATASET EVALUATION");
 
     // Load test data
@@ -162,7 +192,12 @@ fn run_benchmark_evaluation(classifier: &mut Qwen3MultiLoRAClassifier) -> Result
     let avg_latency = duration.as_millis() / samples.len() as u128;
 
     println!("\n  📊 Results:");
-    println!("    • Accuracy: {}/{} ({:.2}%)", correct, samples.len(), accuracy);
+    println!(
+        "    • Accuracy: {}/{} ({:.2}%)",
+        correct,
+        samples.len(),
+        accuracy
+    );
     println!("    • Total time: {:?}", duration);
     println!("    • Avg latency: {}ms per sample", avg_latency);
 
@@ -175,8 +210,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╚═══════════════════════════════════════════════════════════╝");
 
     // Check for model path override
-    let base_model_path = std::env::var("BASE_MODEL_PATH")
-        .unwrap_or_else(|_| "../../models/Qwen3-0.6B".to_string());
+    let base_model_path =
+        std::env::var("BASE_MODEL_PATH").unwrap_or_else(|_| "../../models/Qwen3-0.6B".to_string());
 
     // Select device
     let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
@@ -193,7 +228,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("❌ Failed to initialize base model: {:?}", e);
             eprintln!("\n💡 Make sure the model exists at: {}", base_model_path);
             eprintln!("   You can download it with:");
-            eprintln!("   git clone https://huggingface.co/Qwen/Qwen3-0.6B {}", base_model_path);
+            eprintln!(
+                "   git clone https://huggingface.co/Qwen/Qwen3-0.6B {}",
+                base_model_path
+            );
             return Err(Box::new(e));
         }
     };
@@ -213,4 +251,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
