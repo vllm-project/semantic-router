@@ -1,0 +1,29 @@
+name: "Cleanup disk space (CI)"
+description: "Free disk space on GitHub runner and prune Docker cache"
+runs:
+  using: "composite"
+  steps:
+    - name: Free up disk space before build
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "=== Initial disk usage ==="
+        df -h || true
+        echo ""
+        echo "=== Cleaning up system ==="
+        sudo apt-get clean || true
+        sudo apt-get autoremove -y || true
+        sudo rm -rf /var/lib/apt/lists/* || true
+        sudo rm -rf /tmp/* || true
+        sudo rm -rf /var/tmp/* || true
+
+        docker system prune -af --volumes || true
+
+        sudo rm -rf /usr/share/dotnet || true
+        sudo rm -rf /usr/local/lib/android || true
+        sudo rm -rf /opt/ghc || true
+        sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+
+        echo ""
+        echo "=== Disk usage after cleanup ==="
+        df -h || true

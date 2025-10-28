@@ -1,0 +1,30 @@
+name: "Setup Kubernetes tools"
+description: "Install kubectl and kustomize with pinned versions"
+inputs:
+  kubectl_version:
+    description: "Version of kubectl to install"
+    required: false
+    default: "v1.28.0"
+  kustomize_version:
+    description: "Version of kustomize to install"
+    required: false
+    default: "v5.7.1"
+runs:
+  using: "composite"
+  steps:
+    - name: Install kubectl
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl -LO "https://dl.k8s.io/release/${{ inputs.kubectl_version }}/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        kubectl version --client
+    - name: Install kustomize
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Installing Kustomize ${{ inputs.kustomize_version }}..."
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+        kustomize version

@@ -18,13 +18,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Kustomize
-        run: |
-          echo "Installing Kustomize ${{ inputs.kustomize_version }}..."
-          # Use the official installation script for better reliability
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-          sudo mv kustomize /usr/local/bin/
-          kustomize version
+      - name: Setup Kubernetes tools
+        uses: ./tools/github-action/setup-kubetools
+        with:
+          kubectl_version: v1.28.0
+          kustomize_version: ${{ inputs.kustomize_version }}
 
       - name: Run Trivy security scan
         uses: aquasecurity/trivy-action@master
