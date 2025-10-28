@@ -1,0 +1,11 @@
+<instruction>
+Use the information provided by the human in the "document" tags below to answer the question in the "question" tags. Do not make up information to answer the question. If you do not know the answer to a question, you truthfully say that you do not know.
+<instruction>
+
+<documents>
+%s
+</documents>
+
+<question>
+%s
+</question>
