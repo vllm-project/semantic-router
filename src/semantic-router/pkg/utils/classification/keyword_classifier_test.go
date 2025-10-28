@@ -37,9 +37,11 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-1",
 		},
 		{
-			name:     "AND no match",
+			name: "AND no match",
+			// This text does not match the AND rule. It also does not contain "keyword5" or "keyword6",
+			// so the NOR rule will match as a fallback.
 			text:     "this text contains keyword1 but not the other",
-			expected: "",
+			expected: "test-category-3",
 		},
 		{
 			name:     "OR match",
@@ -47,9 +49,11 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-2",
 		},
 		{
-			name:     "OR no match",
+			name: "OR no match",
+			// This text does not match the OR rule. It also does not contain "keyword5" or "keyword6",
+			// so the NOR rule will match as a fallback.
 			text:     "this text contains nothing of interest",
-			expected: "",
+			expected: "test-category-3",
 		},
 		{
 			name:     "NOR match",
@@ -57,14 +61,18 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-3",
 		},
 		{
-			name:     "NOR no match",
+			name: "NOR no match",
+			// This text contains "keyword5", so the NOR rule will NOT match.
+			// Since no other rules match, the result should be empty.
 			text:     "this text contains keyword5",
 			expected: "",
 		},
 		{
-			name:     "Case sensitive match",
+			name: "Case sensitive no match",
+			// This text does not match the case-sensitive OR rule. It also does not contain "keyword5" or "keyword6",
+			// so the NOR rule will match as a fallback.
 			text:     "this text contains KEYWORD3",
-			expected: "",
+			expected: "test-category-3",
 		},
 	}
 
@@ -72,25 +80,12 @@ func TestKeywordClassifier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a new classifier for each test to ensure a clean slate
 			classifier := NewKeywordClassifier(rules)
-			category, _, _ := classifier.Classify(tt.text)
+			category, _, err := classifier.Classify(tt.text)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if category != tt.expected {
-				// If the category is not what we expect, we check if the NOR rule was triggered
-				if tt.expected == "" && category == "test-category-3" {
-					// we run the classification again, but this time we remove the NOR rule
-					var filteredRules []config.KeywordRule
-					for _, rule := range rules {
-						if rule.Operator != "NOR" {
-							filteredRules = append(filteredRules, rule)
-						}
-					}
-					classifier = NewKeywordClassifier(filteredRules)
-					category, _, _ = classifier.Classify(tt.text)
-					if category != tt.expected {
-						t.Errorf("expected category %s, but got %s", tt.expected, category)
-					}
-				} else {
-					t.Errorf("expected category %s, but got %s", tt.expected, category)
-				}
+				t.Errorf("expected category %q, but got %q", tt.expected, category)
 			}
 		})
 	}

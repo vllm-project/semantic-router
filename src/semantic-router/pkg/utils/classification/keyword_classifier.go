@@ -92,6 +92,10 @@ func (c *KeywordClassifier) matches(text string, rule config.KeywordRule) (bool,
 		return true, matchedKeywords
 
 	default:
+		observability.Warnf(
+			"KeywordClassifier: unsupported operator %q in rule for category %q. Returning no match.",
+			rule.Operator, rule.Category,
+		)
 		return false, nil
 	}
 }
