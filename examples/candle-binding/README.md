@@ -15,12 +15,14 @@ LD_LIBRARY_PATH=$(pwd)/target/release go run ../examples/candle-binding/qwen3_ex
 ```
 
 **Features demonstrated:**
+
 - ✅ Zero-shot classification (no adapter required)
 - ✅ Multi-LoRA adapter loading and switching
 - ✅ Benchmark dataset evaluation
 - ✅ Error handling and best practices
 
 **Expected output:**
+
 - Zero-shot: 3 test cases (sentiment, topic, intent)
 - Multi-adapter: 3 classification examples
 - Benchmark: ~71% accuracy on 70 samples
@@ -35,12 +37,14 @@ cargo run --release --example qwen3_example
 ```
 
 **Features demonstrated:**
+
 - ✅ Zero-shot classification API
 - ✅ Multi-LoRA adapter management
 - ✅ Benchmark evaluation
 - ✅ Direct Rust API usage
 
 **Expected output:**
+
 - Same functionality as Go example
 - Demonstrates native Rust API
 
@@ -72,6 +76,7 @@ result, err := ClassifyZeroShot(
 ```
 
 **Use cases:**
+
 - Sentiment analysis
 - Topic classification
 - Intent detection
@@ -91,6 +96,7 @@ result, err := ClassifyWithAdapter("What is the weather?", "category")
 ```
 
 **Use cases:**
+
 - Category classification
 - Jailbreak detection
 - Custom domain classification
@@ -117,6 +123,7 @@ for _, sample := range samples {
 ## Model Paths
 
 Examples expect models at:
+
 - **Base model**: `../../models/Qwen3-0.6B`
 - **Category adapter**: `../../models/qwen3_generative_classifier_r16`
 
@@ -252,17 +259,20 @@ git clone https://huggingface.co/Qwen/Qwen3-0.6B
 ### Error: `Adapter not found`
 
 **Solution:** Either:
+
 1. Skip adapter examples (zero-shot still works)
 2. Train or download an adapter to `../../models/qwen3_generative_classifier_r16/`
 
 ### Low accuracy (< 50%)
 
 **Possible causes:**
+
 - Using base model instead of adapter (expected for zero-shot)
 - Wrong adapter loaded
 - Model path incorrect
 
 **Solution:** Check that:
+
 ```bash
 # Adapter should have these files
 ls ../../models/qwen3_generative_classifier_r16/
@@ -272,6 +282,7 @@ ls ../../models/qwen3_generative_classifier_r16/
 ## Performance Tips
 
 1. **Use GPU**: Examples automatically use CUDA if available
+
    ```bash
    CUDA_VISIBLE_DEVICES=0 go run qwen3_example.go
    ```
@@ -285,6 +296,7 @@ ls ../../models/qwen3_generative_classifier_r16/
 ## Documentation
 
 For detailed documentation, see:
+
 - `../../candle-binding/ZERO_SHOT_CLASSIFICATION.md` - Zero-shot guide
 - `../../candle-binding/BASE_MODEL_EXPLAINED.md` - Base model concepts
 - `../../candle-binding/MULTI_ADAPTER_IMPLEMENTATION.md` - Multi-LoRA architecture
@@ -301,12 +313,14 @@ For detailed documentation, see:
 ## Contributing
 
 To add new examples:
+
 1. Add functionality to existing `qwen3_example.go` or `qwen3_example.rs`
 2. Keep examples comprehensive but focused
 3. Test on both CPU and GPU
 4. Document expected output
 
 For complex use cases, consider:
+
 - Adding unit tests to `semantic-router_test.go`
 - Creating separate benchmark in `bench/candle-binding/`
 
