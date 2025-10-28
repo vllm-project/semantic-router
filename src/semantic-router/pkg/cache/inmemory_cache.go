@@ -879,23 +879,8 @@ func (h *minHeap) pop() (int, float32) {
 	return result.index, result.dist
 }
 
-func (h *minHeap) peekDist() float32 {
-	if len(h.data) == 0 {
-		return math.MaxFloat32
-	}
-	return h.data[0].dist
-}
-
 func (h *minHeap) len() int {
 	return len(h.data)
-}
-
-func (h *minHeap) items() []int {
-	result := make([]int, len(h.data))
-	for i, item := range h.data {
-		result[i] = item.index
-	}
-	return result
 }
 
 func (h *minHeap) bubbleUp(i int) {
