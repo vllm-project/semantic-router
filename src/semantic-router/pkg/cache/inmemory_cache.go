@@ -771,8 +771,8 @@ func (h *HNSWIndex) searchKNN(queryEmbedding []float32, k, ef int, entries []Cac
 // searchLayer searches for nearest neighbors at a specific layer
 func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer int, entries []CacheEntry) []int {
 	visited := make(map[int]bool)
-	candidates := newMaxHeap()
-	results := newMinHeap()
+	candidates := newMinHeap() // set of candidates, explore closest candidate first
+	results := newMaxHeap()    // dynamic list of found nearest neighbors, track current frontier, worst distance on top
 
 	// Calculate distance to entry point
 	if entryPoint >= 0 && entryPoint < len(entries) {
@@ -785,11 +785,9 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 	for candidates.len() > 0 {
 		currentIdx, currentDist := candidates.pop()
 
-		if results.len() > 0 {
-			worstDist := results.peekDist()
-			if currentDist > worstDist {
-				break
-			}
+		// If we have enough results and the current distance is worse than the worst in results, we can stop
+		if results.len() > 0 && currentDist > results.peekDist() {
+			break
 		}
 
 		// Fast O(1) lookup using nodeIndex map
@@ -881,23 +879,8 @@ func (h *minHeap) pop() (int, float32) {
 	return result.index, result.dist
 }
 
-func (h *minHeap) peekDist() float32 {
-	if len(h.data) == 0 {
-		return math.MaxFloat32
-	}
-	return h.data[0].dist
-}
-
 func (h *minHeap) len() int {
 	return len(h.data)
-}
-
-func (h *minHeap) items() []int {
-	result := make([]int, len(h.data))
-	for i, item := range h.data {
-		result[i] = item.index
-	}
-	return result
 }
 
 func (h *minHeap) bubbleUp(i int) {
@@ -959,6 +942,21 @@ func (h *maxHeap) pop() (int, float32) {
 
 func (h *maxHeap) len() int {
 	return len(h.data)
+}
+
+func (h *maxHeap) peekDist() float32 {
+	if len(h.data) == 0 {
+		return math.MaxFloat32
+	}
+	return h.data[0].dist
+}
+
+func (h *maxHeap) items() []int {
+	result := make([]int, len(h.data))
+	for i, item := range h.data {
+		result[i] = item.index
+	}
+	return result
 }
 
 func (h *maxHeap) bubbleUp(i int) {
