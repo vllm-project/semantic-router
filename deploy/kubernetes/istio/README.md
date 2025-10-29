@@ -1,14 +1,14 @@
 # vLLM Semantic Router as ExtProc server for Istio Gateway 
 
-This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vsr with it. There are multiple topologies possible to combine Istio Gateway with vsr. This document describes one of the common topologies. 
+This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vsr with it. However there are differences between how different Envoy based Gateways process the ExtProc protocol, hence the deployment described here is different from the deployment of vsr alongwith other types of Envoy based Gateways as described in the other guides in this repo. There are multiple architecture options possible to combine Istio Gateway with vsr. This document describes one of the options.
  
 ## Architecture Overview
 
 The deployment consists of:
 
-- **vLLM Semantic Router**: Provides intelligent request routing and classification
-- **Istio Gateway**: Istio Gateway that uses an Envoy proxy under the covers
-- **Gateway API Inference Extension**: Additional control and data plane for endpoint picking that can optionally attach to the same Istio gateway as vLLM Semantic Router. 
+- **vLLM Semantic Router**: Provides intelligent request routing and processing decisions to Envoy based Gateways
+- **Istio Gateway**: Istio's implementation of Kubernetes Gateway API that uses an Envoy proxy under the covers
+- **Gateway API Inference Extension**: Additional APIs to extend the Gateway API for Inference via ExtProc servers
 - **Two instances of vLLM serving 1 model each**:  Example backend LLMs for illustrating semantic routing in this topology
 
 ## Prerequisites
@@ -43,14 +43,18 @@ $ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
 ## Step 2: Deploy LLM models service 
 
-As noted earlier in this exercise we deploy two LLMs viz. a llama3-8b model (meta-llama/Llama-3.1-8B-Instruct) and a phi4-mini model (microsoft/Phi-4-mini-instruct). In this exercise we chose to serve these models using two separate instances of the [vLLM inference server](https://docs.vllm.ai/en/latest/) running in the default namespace of the kubernetes cluster. For this exercise you may choose to use any inference server to serve these models but we have provided manifests to run these in vLLM containers as a reference.
+In this exercise we deploy two LLMs viz. a llama3-8b model (meta-llama/Llama-3.1-8B-Instruct) and a phi4-mini model (microsoft/Phi-4-mini-instruct). We serve these models using two separate instances of the [vLLM inference server](https://docs.vllm.ai/en/latest/) running in the default namespace of the kubernetes cluster. You may choose any other inference engines as long as they expose OpenAI API endpoints. First install a secret for your HuggingFace token previously stored in env variable HF_TOKEN and then deploy the models as shown below.
+
+```bash
+kubectl create secret generic hf-token --from-literal=token=$HF_TOKEN
+```
 
 ```bash
 # Create vLLM service running llama3-8b  
 kubectl apply -f deploy/kubernetes/istio/vLlama3.yaml
 ```
 
-This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state.  Similarly also deploy the second LLM (phi4-mini) and wait for several minutes until the pod is in READY state..
+This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state.  Similarly also deploy the second LLM (phi4-mini) and wait for several minutes until the pod is in READY state.
 
 ```bash
 # Create vLLM service running phi4-mini  
@@ -76,9 +80,9 @@ llama-8b                              ClusterIP      10.108.250.109   <none>    
 phi4-mini                             ClusterIP      10.97.252.33     <none>           80/TCP                         9d
 ```
 
-## Step 3: Update vsr config if needed
+## Step 3: Update vsr config
 
-The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. The example config file provided already in this repo should work f you use the same LLMs as in this exercise but you can choose to play with this config to enable or disable individual vsr features. Ensure that your vllm_endpoints in the file match the ip/ port of the llm services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features as described elsewhere in the vsr documentation. 
+The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. Ensure that the models in the config file match the models you are using and that the vllm_endpoints in the file match the ip/ port of the llm kubernetes services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features such as PromptGuard or ToolCalling. 
 
 ## Step 4: Deploy vLLM Semantic Router
 
@@ -99,7 +103,7 @@ kubectl get pods -n vllm-semantic-router-system
 
 We will use a recent build of Istio for this exercise so that we have the option of also using  the v1.0.0 GA version of the Gateway API Inference Extension  CRDs and EPP functionality.
 
-Follow the procedures described in the Gateway API [Inference Extensions documentation](https://gateway-api-inference-extension.sigs.k8s.io/guides/) to deploy the 1.28 (or newer) version of Istio Gateway, the Kubernetes Gateway API CRDs and the Gateway API Inference Extension v1.0.0. Do not install any of the HTTPRoute resources from that guide however, just use it to deploy the Istio gateway and CRDs.  If installed correctly you should see the api CRDs for gateway api and inference extension as well as pods running for the Istio gateway and Istiod using the commands shown below.
+Follow the procedures described in the Gateway API [Inference Extensions documentation](https://gateway-api-inference-extension.sigs.k8s.io/guides/) to deploy the 1.28 (or newer) version of Istio control plane, Istio Gateway, the Kubernetes Gateway API CRDs and the Gateway API Inference Extension v1.0.0. Do not install any of the HTTPRoute resources from that guide however, just use it to deploy the Istio gateway and CRDs.  If installed correctly you should see the api CRDs for gateway api and inference extension as well as pods running for the Istio gateway and Istiod using the commands shown below.
 
 ```bash
 kubectl get crds | grep gateway
