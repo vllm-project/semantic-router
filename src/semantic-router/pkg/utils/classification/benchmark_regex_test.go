@@ -31,25 +31,25 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	b.Run("Regex_AND_Match", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierRegex.Classify(testTextAndMatch)
+			_, _, _ = classifierRegex.Classify(testTextAndMatch)
 		}
 	})
 	b.Run("Regex_OR_Match", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierRegex.Classify(testTextOrMatch)
+			_, _, _ = classifierRegex.Classify(testTextOrMatch)
 		}
 	})
 	b.Run("Regex_NOR_Match", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierRegex.Classify(testTextNorMatch)
+			_, _, _ = classifierRegex.Classify(testTextNorMatch)
 		}
 	})
 	b.Run("Regex_No_Match", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierRegex.Classify(testTextNoMatch)
+			_, _, _ = classifierRegex.Classify(testTextNoMatch)
 		}
 	})
 
@@ -64,7 +64,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	b.Run("Regex_LongKeywords", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierLongKeywords.Classify("This text contains supercalifragilisticexpialidocious and other long words.")
+			_, _, _ = classifierLongKeywords.Classify("This text contains supercalifragilisticexpialidocious and other long words.")
 		}
 	})
 
@@ -79,7 +79,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	b.Run("Regex_ShortText", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierShortText.Classify("short")
+			_, _, _ = classifierShortText.Classify("short")
 		}
 	})
 
@@ -94,7 +94,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	b.Run("Regex_LongText", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierLongText.Classify(longText)
+			_, _, _ = classifierLongText.Classify(longText)
 		}
 	})
 
@@ -113,7 +113,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	b.Run("Regex_ManyKeywords", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierManyKeywords.Classify("This text contains keyword99")
+			_, _, _ = classifierManyKeywords.Classify("This text contains keyword99")
 		}
 	})
 
@@ -128,7 +128,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	b.Run("Regex_ComplexKeywords", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			classifierComplexKeywords.Classify("Please send to user.name@domain.com or check C:\\Program Files\\")
+			_, _, _ = classifierComplexKeywords.Classify("Please send to user.name@domain.com or check C:\\Program Files\\")
 		}
 	})
 }
