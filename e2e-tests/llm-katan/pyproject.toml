@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-katan"
-version = "0.1.9"
+version = "0.1.10"
 description = "LLM Katan - Lightweight LLM Server for Testing - Real tiny models with FastAPI and HuggingFace"
 readme = "README.md"
 authors = [

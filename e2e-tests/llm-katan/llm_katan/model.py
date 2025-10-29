@@ -89,6 +89,29 @@ class TransformersBackend(ModelBackend):
         if device == "cpu":
             self.model = self.model.to("cpu")
 
+            # Apply quantization for faster CPU inference (2-4x speedup)
+            if self.config.quantize:
+                logger.info("Applying int8 quantization for CPU optimization...")
+                try:
+                    self.model = torch.quantization.quantize_dynamic(
+                        self.model, {torch.nn.Linear}, dtype=torch.qint8
+                    )
+                    logger.info("✓ Quantization applied (2-4x faster inference, 4x less memory)")
+                except RuntimeError as e:
+                    if "NoQEngine" in str(e):
+                        logger.warning(
+                            "⚠️  Quantization not supported on this platform - "
+                            "continuing with full precision"
+                        )
+                        logger.info(
+                            "Note: PyTorch quantization requires specific CPU features. "
+                            "Your model will run without quantization."
+                        )
+                    else:
+                        raise
+            else:
+                logger.info("Quantization disabled - using full precision (slower)")
+
         logger.info(f"Model loaded successfully on {device}")
 
     async def generate(
@@ -103,9 +126,7 @@ class TransformersBackend(ModelBackend):
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
         max_tokens = max_tokens or self.config.max_tokens
-        temperature = (
-            temperature if temperature is not None else self.config.temperature
-        )
+        temperature = temperature if temperature is not None else self.config.temperature
 
         # Convert messages to prompt
         prompt = self._messages_to_prompt(messages)
@@ -170,9 +191,7 @@ class TransformersBackend(ModelBackend):
                     "choices": [
                         {
                             "index": 0,
-                            "delta": {
-                                "content": word + " " if i < len(words) - 1 else word
-                            },
+                            "delta": {"content": word + " " if i < len(words) - 1 else word},
                             "logprobs": None,
                             "finish_reason": None,
                         }
@@ -188,9 +207,7 @@ class TransformersBackend(ModelBackend):
                 "created": response_data["created"],
                 "model": self.config.served_model_name,
                 "system_fingerprint": "llm-katan-transformers",
-                "choices": [
-                    {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
-                ],
+                "choices": [{"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}],
                 "usage": {
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
@@ -287,9 +304,7 @@ class VLLMBackend(ModelBackend):
         from vllm.sampling_params import SamplingParams
 
         max_tokens = max_tokens or self.config.max_tokens
-        temperature = (
-            temperature if temperature is not None else self.config.temperature
-        )
+        temperature = temperature if temperature is not None else self.config.temperature
 
         # Convert messages to prompt
         prompt = self._messages_to_prompt(messages)
@@ -301,9 +316,7 @@ class VLLMBackend(ModelBackend):
 
         # Generate
         loop = asyncio.get_event_loop()
-        outputs = await loop.run_in_executor(
-            None, self.engine.generate, [prompt], sampling_params
-        )
+        outputs = await loop.run_in_executor(None, self.engine.generate, [prompt], sampling_params)
 
         output = outputs[0]
         generated_text = output.outputs[0].text.strip()
@@ -326,8 +339,7 @@ class VLLMBackend(ModelBackend):
             "usage": {
                 "prompt_tokens": len(output.prompt_token_ids),
                 "completion_tokens": len(output.outputs[0].token_ids),
-                "total_tokens": len(output.prompt_token_ids)
-                + len(output.outputs[0].token_ids),
+                "total_tokens": len(output.prompt_token_ids) + len(output.outputs[0].token_ids),
                 "prompt_tokens_details": {"cached_tokens": 0},
                 "completion_tokens_details": {"reasoning_tokens": 0},
             },
@@ -349,9 +361,7 @@ class VLLMBackend(ModelBackend):
                     "choices": [
                         {
                             "index": 0,
-                            "delta": {
-                                "content": word + " " if i < len(words) - 1 else word
-                            },
+                            "delta": {"content": word + " " if i < len(words) - 1 else word},
                             "logprobs": None,
                             "finish_reason": None,
                         }
@@ -367,14 +377,11 @@ class VLLMBackend(ModelBackend):
                 "created": response_data["created"],
                 "model": self.config.served_model_name,
                 "system_fingerprint": "llm-katan-vllm",
-                "choices": [
-                    {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
-                ],
+                "choices": [{"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}],
                 "usage": {
                     "prompt_tokens": len(output.prompt_token_ids),
                     "completion_tokens": len(output.outputs[0].token_ids),
-                    "total_tokens": len(output.prompt_token_ids)
-                    + len(output.outputs[0].token_ids),
+                    "total_tokens": len(output.prompt_token_ids) + len(output.outputs[0].token_ids),
                     "prompt_tokens_details": {"cached_tokens": 0},
                     "completion_tokens_details": {"reasoning_tokens": 0},
                 },
