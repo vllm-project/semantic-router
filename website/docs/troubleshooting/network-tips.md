@@ -75,7 +75,7 @@ When building `Dockerfile.extproc`, the Go stage may hang on `proxy.golang.org`.
 ```Dockerfile
 # syntax=docker/dockerfile:1
 
-FROM rust:1.85 AS rust-builder
+FROM rust:1.90 AS rust-builder
 RUN apt-get update && apt-get install -y make build-essential pkg-config && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY tools/make/ tools/make/
@@ -106,7 +106,7 @@ ENV CGO_ENABLED=1
 ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
 RUN mkdir -p bin && cd src/semantic-router && go build -o ../../bin/router cmd/main.go
 
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 WORKDIR /app
 COPY --from=go-builder /app/bin/router /app/extproc-server
 COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
