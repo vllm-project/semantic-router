@@ -14,7 +14,7 @@ type preppedKeywordRule struct {
 	Category          string
 	Operator          string
 	CaseSensitive     bool
-	OriginalKeywords  []string // For logging/returning original case
+	OriginalKeywords  []string         // For logging/returning original case
 	CompiledRegexpsCS []*regexp.Regexp // Compiled regex for case-sensitive
 	CompiledRegexpsCI []*regexp.Regexp // Compiled regex for case-insensitive
 }
@@ -37,9 +37,9 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 		}
 
 		preppedRule := preppedKeywordRule{
-			Category:        rule.Category,
-			Operator:        rule.Operator,
-			CaseSensitive:   rule.CaseSensitive,
+			Category:         rule.Category,
+			Operator:         rule.Operator,
+			CaseSensitive:    rule.CaseSensitive,
 			OriginalKeywords: rule.Keywords,
 		}
 
@@ -152,5 +152,3 @@ func (c *KeywordClassifier) matches(text string, rule preppedKeywordRule) (bool,
 		return false, nil, fmt.Errorf("unsupported keyword rule operator: %q", rule.Operator)
 	}
 }
-
-

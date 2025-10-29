@@ -15,8 +15,8 @@ func TestKeywordClassifier(t *testing.T) {
 		expectError bool                 // Whether NewKeywordClassifier is expected to return an error
 	}{
 		{
-			name: "AND match",
-			text: "this text contains keyword1 and keyword2",
+			name:     "AND match",
+			text:     "this text contains keyword1 and keyword2",
 			expected: "test-category-1",
 			rules: []config.KeywordRule{
 				{
@@ -32,8 +32,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "AND no match",
-			text: "this text contains keyword1 but not the other",
+			name:     "AND no match",
+			text:     "this text contains keyword1 but not the other",
 			expected: "test-category-3", // Falls through to NOR
 			rules: []config.KeywordRule{
 				{
@@ -49,8 +49,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "OR match",
-			text: "this text contains keyword3",
+			name:     "OR match",
+			text:     "this text contains keyword3",
 			expected: "test-category-2",
 			rules: []config.KeywordRule{
 				{
@@ -67,8 +67,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "OR no match",
-			text: "this text contains nothing of interest",
+			name:     "OR no match",
+			text:     "this text contains nothing of interest",
 			expected: "test-category-3", // Falls through to NOR
 			rules: []config.KeywordRule{
 				{
@@ -85,8 +85,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "NOR match",
-			text: "this text is clean",
+			name:     "NOR match",
+			text:     "this text is clean",
 			expected: "test-category-3",
 			rules: []config.KeywordRule{
 				{
@@ -97,8 +97,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "NOR no match",
-			text: "this text contains keyword5",
+			name:     "NOR no match",
+			text:     "this text contains keyword5",
 			expected: "", // Fails NOR, and no other rules match
 			rules: []config.KeywordRule{
 				{
@@ -109,8 +109,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "Case sensitive no match",
-			text: "this text contains KEYWORD3",
+			name:     "Case sensitive no match",
+			text:     "this text contains KEYWORD3",
 			expected: "test-category-3", // Fails case-sensitive OR, falls through to NOR
 			rules: []config.KeywordRule{
 				{
@@ -127,8 +127,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "Regex word boundary - partial match should not match",
-			text: "this is a secretary meeting",
+			name:     "Regex word boundary - partial match should not match",
+			text:     "this is a secretary meeting",
 			expected: "test-category-3", // "secret" rule (test-category-secret) won't match, falls through to NOR
 			rules: []config.KeywordRule{
 				{
@@ -145,8 +145,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "Regex word boundary - exact match should match",
-			text: "this is a secret meeting",
+			name:     "Regex word boundary - exact match should match",
+			text:     "this is a secret meeting",
 			expected: "test-category-secret", // Should match new "secret" rule
 			rules: []config.KeywordRule{
 				{
@@ -163,8 +163,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "Regex QuoteMeta - dot literal",
-			text: "this is version 1.0",
+			name:     "Regex QuoteMeta - dot literal",
+			text:     "this is version 1.0",
 			expected: "test-category-dot", // Should match new "1.0" rule
 			rules: []config.KeywordRule{
 				{
@@ -181,8 +181,8 @@ func TestKeywordClassifier(t *testing.T) {
 			},
 		},
 		{
-			name: "Regex QuoteMeta - asterisk literal",
-			text: "match this text with a * wildcard",
+			name:     "Regex QuoteMeta - asterisk literal",
+			text:     "match this text with a * wildcard",
 			expected: "test-category-asterisk", // Should match new "*" rule
 			rules: []config.KeywordRule{
 				{
