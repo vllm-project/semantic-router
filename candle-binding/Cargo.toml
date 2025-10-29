@@ -59,3 +59,7 @@ path = "../bench/scripts/rust/candle-binding/continuous_batch_bench.rs"
 [[bin]]
 name = "pure_batch_inference_bench"
 path = "../bench/scripts/rust/candle-binding/pure_batch_inference_bench.rs"
+
+[[bin]]
+name = "verify_batch_accuracy"
+path = "../bench/scripts/rust/candle-binding/verify_batch_accuracy.rs"

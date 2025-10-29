@@ -318,9 +318,10 @@ fn benchmark_continuous_batch(
                         successes.load(Ordering::Relaxed) + failures.load(Ordering::Relaxed);
                     let qps = total as f64 / elapsed;
                     let stats = scheduler.get_stats();
+                    let avg_batch = *stats.avg_batch_size.lock().unwrap();
                     print!(
                         "\r⏱️  Elapsed: {:.1}s | Requests: {} | QPS: {:.1} | Avg Batch: {:.1}    ",
-                        elapsed, total, qps, stats.avg_batch_size
+                        elapsed, total, qps, avg_batch
                     );
                     std::io::Write::flush(&mut std::io::stdout()).ok();
                 }
@@ -354,9 +355,18 @@ fn benchmark_continuous_batch(
     // Print scheduler stats
     let stats = scheduler.get_stats();
     println!("\n📊 Scheduler Stats:");
-    println!("  Total batches: {}", stats.total_batches);
-    println!("  Avg batch size: {:.2}", stats.avg_batch_size);
-    println!("  Avg latency: {:.1}ms", stats.avg_latency_ms);
+    println!(
+        "  Total batches: {}",
+        stats.total_batches.load(Ordering::Relaxed)
+    );
+    println!(
+        "  Avg batch size: {:.2}",
+        *stats.avg_batch_size.lock().unwrap()
+    );
+    println!(
+        "  Avg latency: {:.1}ms",
+        *stats.avg_latency_ms.lock().unwrap()
+    );
 
     println!("\n");
 

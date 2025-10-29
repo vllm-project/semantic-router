@@ -26,6 +26,7 @@ use crate::model_architectures::generative::qwen3_multi_lora_classifier::{
     MultiAdapterClassificationResult, Qwen3MultiLoRAClassifier,
 };
 use std::sync::{
+    atomic::{AtomicU64, Ordering},
     mpsc::{channel, Receiver, Sender},
     Arc, Mutex,
 };
@@ -75,14 +76,36 @@ impl Default for BatchSchedulerConfig {
 }
 
 /// Statistics for monitoring scheduler performance
-#[derive(Debug, Clone)]
+/// Uses lock-free atomic operations for high-frequency counters
+#[derive(Debug)]
 pub struct BatchSchedulerStats {
-    pub total_requests: u64,
-    pub total_batches: u64,
-    pub avg_batch_size: f64,
-    pub avg_latency_ms: f64,
-    pub max_latency_ms: f64,
-    pub queue_full_rejections: u64,
+    /// Total requests processed (lock-free atomic)
+    pub total_requests: AtomicU64,
+    /// Total batches processed (lock-free atomic)
+    pub total_batches: AtomicU64,
+    /// Average batch size (requires mutex for float arithmetic)
+    pub avg_batch_size: Mutex<f64>,
+    /// Average latency in milliseconds (requires mutex for float arithmetic)
+    pub avg_latency_ms: Mutex<f64>,
+    /// Maximum latency in microseconds (lock-free atomic, stored as integer)
+    pub max_latency_us: AtomicU64,
+    /// Queue full rejections (lock-free atomic)
+    pub queue_full_rejections: AtomicU64,
+}
+
+impl Clone for BatchSchedulerStats {
+    fn clone(&self) -> Self {
+        Self {
+            total_requests: AtomicU64::new(self.total_requests.load(Ordering::Relaxed)),
+            total_batches: AtomicU64::new(self.total_batches.load(Ordering::Relaxed)),
+            avg_batch_size: Mutex::new(*self.avg_batch_size.lock().unwrap()),
+            avg_latency_ms: Mutex::new(*self.avg_latency_ms.lock().unwrap()),
+            max_latency_us: AtomicU64::new(self.max_latency_us.load(Ordering::Relaxed)),
+            queue_full_rejections: AtomicU64::new(
+                self.queue_full_rejections.load(Ordering::Relaxed),
+            ),
+        }
+    }
 }
 
 /// Continuous Batch Scheduler
@@ -96,10 +119,10 @@ pub struct ContinuousBatchScheduler {
     config: BatchSchedulerConfig,
 
     /// Statistics (shared with scheduler thread)
-    stats: Arc<Mutex<BatchSchedulerStats>>,
+    stats: Arc<BatchSchedulerStats>,
 
-    /// Next request ID
-    next_request_id: Arc<Mutex<u64>>,
+    /// Next request ID (lock-free atomic counter)
+    next_request_id: Arc<AtomicU64>,
 
     /// Shutdown signal
     shutdown_tx: Sender<()>,
@@ -118,14 +141,14 @@ impl ContinuousBatchScheduler {
         let (request_tx, request_rx) = channel();
         let (shutdown_tx, shutdown_rx) = channel();
 
-        let stats = Arc::new(Mutex::new(BatchSchedulerStats {
-            total_requests: 0,
-            total_batches: 0,
-            avg_batch_size: 0.0,
-            avg_latency_ms: 0.0,
-            max_latency_ms: 0.0,
-            queue_full_rejections: 0,
-        }));
+        let stats = Arc::new(BatchSchedulerStats {
+            total_requests: AtomicU64::new(0),
+            total_batches: AtomicU64::new(0),
+            avg_batch_size: Mutex::new(0.0),
+            avg_latency_ms: Mutex::new(0.0),
+            max_latency_us: AtomicU64::new(0),
+            queue_full_rejections: AtomicU64::new(0),
+        });
 
         let stats_clone = Arc::clone(&stats);
         let config_clone = config.clone();
@@ -152,7 +175,7 @@ impl ContinuousBatchScheduler {
             request_tx,
             config,
             stats,
-            next_request_id: Arc::new(Mutex::new(0)),
+            next_request_id: Arc::new(AtomicU64::new(0)),
             shutdown_tx,
         }
     }
@@ -170,13 +193,8 @@ impl ContinuousBatchScheduler {
         text: String,
         adapter_name: String,
     ) -> UnifiedResult<MultiAdapterClassificationResult> {
-        // Generate unique request ID
-        let id = {
-            let mut next_id = self.next_request_id.lock().unwrap();
-            let id = *next_id;
-            *next_id += 1;
-            id
-        };
+        // Generate unique request ID (lock-free atomic increment)
+        let id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         // Create response channel
         let (response_tx, response_rx) = channel();
@@ -211,7 +229,7 @@ impl ContinuousBatchScheduler {
 
     /// Get current scheduler statistics
     pub fn get_stats(&self) -> BatchSchedulerStats {
-        self.stats.lock().unwrap().clone()
+        (*self.stats).clone()
     }
 
     /// Shutdown the scheduler gracefully
@@ -225,7 +243,7 @@ impl ContinuousBatchScheduler {
         request_rx: Receiver<ClassificationRequest>,
         shutdown_rx: Receiver<()>,
         config: BatchSchedulerConfig,
-        stats: Arc<Mutex<BatchSchedulerStats>>,
+        stats: Arc<BatchSchedulerStats>,
     ) {
         let mut pending_requests: Vec<ClassificationRequest> = Vec::new();
         let batch_timeout = Duration::from_millis(config.batch_timeout_ms);
@@ -280,14 +298,16 @@ impl ContinuousBatchScheduler {
                 // Process batch
                 Self::process_batch(&mut classifier, &mut pending_requests, &config, &stats);
 
-                // Update statistics
+                // Update statistics (lock-free for counters, minimal lock for averages)
                 let batch_duration = batch_start.elapsed();
-                let mut stats_guard = stats.lock().unwrap();
-                stats_guard.total_batches += 1;
-                stats_guard.avg_batch_size = (stats_guard.avg_batch_size
-                    * (stats_guard.total_batches - 1) as f64
+                let total_batches = stats.total_batches.fetch_add(1, Ordering::Relaxed) + 1;
+
+                // Update average batch size (requires lock for float arithmetic)
+                let mut avg_batch_size = stats.avg_batch_size.lock().unwrap();
+                *avg_batch_size = (*avg_batch_size * (total_batches - 1) as f64
                     + batch_size as f64)
-                    / stats_guard.total_batches as f64;
+                    / total_batches as f64;
+                drop(avg_batch_size);
 
                 if config.verbose {
                     println!(
@@ -307,7 +327,7 @@ impl ContinuousBatchScheduler {
         classifier: &mut Qwen3MultiLoRAClassifier,
         requests: &mut Vec<ClassificationRequest>,
         config: &BatchSchedulerConfig,
-        stats: &Arc<Mutex<BatchSchedulerStats>>,
+        stats: &Arc<BatchSchedulerStats>,
     ) {
         if requests.is_empty() {
             return;
@@ -362,6 +382,9 @@ impl ContinuousBatchScheduler {
             // Distribute results back to individual requesters
             match results {
                 Ok(batch_results) => {
+                    // Collect all latencies first
+                    let mut latencies = Vec::with_capacity(batch_size);
+
                     for (i, (req, result)) in adapter_requests
                         .into_iter()
                         .zip(batch_results.into_iter())
@@ -369,19 +392,41 @@ impl ContinuousBatchScheduler {
                     {
                         let req_start = request_starts[i];
                         let latency_ms = req_start.elapsed().as_secs_f64() * 1000.0;
-
-                        // Update statistics
-                        let mut stats_guard = stats.lock().unwrap();
-                        stats_guard.total_requests += 1;
-                        stats_guard.avg_latency_ms = (stats_guard.avg_latency_ms
-                            * (stats_guard.total_requests - 1) as f64
-                            + latency_ms)
-                            / stats_guard.total_requests as f64;
-                        stats_guard.max_latency_ms = stats_guard.max_latency_ms.max(latency_ms);
-                        drop(stats_guard);
+                        latencies.push(latency_ms);
 
                         // Send result back to caller
                         let _ = req.response_tx.send(Ok(result));
+                    }
+
+                    // Update statistics (lock-free where possible, batched)
+                    let total_requests = stats
+                        .total_requests
+                        .fetch_add(batch_size as u64, Ordering::Relaxed)
+                        + batch_size as u64;
+
+                    // Update average latency (minimal lock for float arithmetic)
+                    let total_latency_ms: f64 = latencies.iter().sum();
+                    let mut avg_latency = stats.avg_latency_ms.lock().unwrap();
+                    *avg_latency = (*avg_latency * (total_requests - batch_size as u64) as f64
+                        + total_latency_ms)
+                        / total_requests as f64;
+                    drop(avg_latency);
+
+                    // Update max latency (lock-free atomic compare-and-swap)
+                    for &latency_ms in &latencies {
+                        let latency_us = (latency_ms * 1000.0) as u64;
+                        let mut current_max = stats.max_latency_us.load(Ordering::Relaxed);
+                        while latency_us > current_max {
+                            match stats.max_latency_us.compare_exchange_weak(
+                                current_max,
+                                latency_us,
+                                Ordering::Relaxed,
+                                Ordering::Relaxed,
+                            ) {
+                                Ok(_) => break,
+                                Err(new_max) => current_max = new_max,
+                            }
+                        }
                     }
                 }
                 Err(e) => {
