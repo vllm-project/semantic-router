@@ -186,6 +186,17 @@ jobs:
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/cpu
                 value: "1"
+              - op: replace
+                path: /spec/template/spec/containers/0/readinessProbe
+                value:
+                  httpGet:
+                    path: /health
+                    port: classify-api
+                    scheme: HTTP
+                  initialDelaySeconds: 120
+                  periodSeconds: 15
+                  timeoutSeconds: 5
+                  failureThreshold: 20
               - op: add
                 path: /spec/template/spec/containers/0/imagePullPolicy
                 value: "IfNotPresent"
