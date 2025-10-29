@@ -312,7 +312,12 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add keyword classifier if configured
 	if len(cfg.KeywordRules) > 0 {
-		options = append(options, withKeywordClassifier(NewKeywordClassifier(cfg.KeywordRules)))
+		keywordClassifier, err := NewKeywordClassifier(cfg.KeywordRules)
+		if err != nil {
+			observability.Errorf("Failed to create keyword classifier: %v", err)
+			return nil, err
+		}
+		options = append(options, withKeywordClassifier(keywordClassifier))
 	}
 
 	// Add in-tree classifier if configured

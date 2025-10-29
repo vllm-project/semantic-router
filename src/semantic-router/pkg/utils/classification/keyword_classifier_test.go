@@ -26,6 +26,11 @@ func TestKeywordClassifier(t *testing.T) {
 		},
 	}
 
+	classifier, err := NewKeywordClassifier(rules)
+	if err != nil {
+		t.Fatalf("Failed to initialize KeywordClassifier: %v", err)
+	}
+
 	tests := []struct {
 		name     string
 		text     string
@@ -78,14 +83,13 @@ func TestKeywordClassifier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a new classifier for each test to ensure a clean slate
-			classifier := NewKeywordClassifier(rules)
 			category, _, err := classifier.Classify(tt.text)
 			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatalf("unexpected error from Classify: %v", err)
 			}
 			if category != tt.expected {
 				t.Errorf("expected category %q, but got %q", tt.expected, category)
+
 			}
 		})
 	}
