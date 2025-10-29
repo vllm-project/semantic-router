@@ -212,7 +212,7 @@ RUN mkdir -p bin && cd src/semantic-router && \
     fi
 
 # Final stage: copy the binary and the shared library
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 
 # Install OpenSSL runtime libraries
 RUN dnf update -y && \

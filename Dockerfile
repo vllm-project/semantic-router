@@ -1,4 +1,4 @@
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 
 RUN dnf -y update && \
     dnf -y install epel-release && \
@@ -32,7 +32,7 @@ RUN ARCH=$(uname -m) && \
     curl -OL https://github.com/envoyproxy/envoy/releases/download/v${ENVOY_VERSION}/envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} && \
     chmod +x envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} && \
     mv envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} /usr/local/bin/envoy
-    
+
 # Install Golang
 ENV GOLANG_VERSION=1.24.1
 RUN ARCH=$(uname -m) && \
