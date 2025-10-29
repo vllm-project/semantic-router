@@ -249,6 +249,9 @@ type RequestContext struct {
 	TTFTRecorded bool
 	TTFTSeconds  float64
 
+	// Responses SSE translation state
+	ResponsesStreamInit bool
+
 	// VSR decision tracking
 	VSRSelectedCategory     string // The category selected by VSR
 	VSRReasoningMode        string // "on" or "off" - whether reasoning mode was determined to be used
@@ -329,6 +332,48 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.handleModelsRequest(path)
 	}
 
+	// Responses adapter: detect POST /v1/responses and gate by feature flag
+	if method == "POST" && strings.HasPrefix(path, "/v1/responses") {
+		if r.Config == nil || !r.Config.EnableResponsesAdapter {
+			observability.Warnf("/v1/responses requested but adapter disabled")
+			return r.createErrorResponse(404, "Responses API not enabled"), nil
+		}
+
+		// Metrics: record that adapter is handling this request
+		metrics.ResponsesAdapterRequests.WithLabelValues("false").Inc()
+
+		// Prepare header mutation to rewrite :path to legacy chat completions
+		// Actual body mapping occurs in handleRequestBody
+		newPath := strings.Replace(path, "/v1/responses", "/v1/chat/completions", 1)
+
+		headerMutation := &ext_proc.HeaderMutation{
+			// Remove content-length because body will be mutated later
+			RemoveHeaders: []string{"content-length"},
+			SetHeaders: []*core.HeaderValueOption{
+				{
+					Header: &core.HeaderValue{
+						Key:      ":path",
+						RawValue: []byte(newPath),
+					},
+				},
+			},
+		}
+
+		response := &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestHeaders{
+				RequestHeaders: &ext_proc.HeadersResponse{
+					Response: &ext_proc.CommonResponse{
+						Status:         ext_proc.CommonResponse_CONTINUE,
+						HeaderMutation: headerMutation,
+					},
+				},
+			},
+		}
+
+		observability.Infof("Rewriting /v1/responses to %s (headers phase)", newPath)
+		return response, nil
+	}
+
 	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
@@ -363,13 +408,28 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.ExpectStreamingResponse = true // Set this if stream param is found
 	}
 
+	// If path was /v1/responses and adapter enabled, map request JSON to ChatCompletion
+	if r.Config != nil && r.Config.EnableResponsesAdapter {
+		if p, ok := ctx.Headers[":path"]; ok && strings.HasPrefix(p, "/v1/responses") {
+			mapped, err := mapResponsesRequestToChatCompletions(ctx.OriginalRequestBody)
+			if err != nil {
+				observability.Errorf("Responses→Chat mapping failed: %v", err)
+				metrics.RecordRequestError(ctx.RequestModel, "parse_error")
+				return r.createErrorResponse(400, "Invalid /v1/responses payload"), nil
+			}
+
+			// Replace original body with mapped body for downstream processing
+			ctx.OriginalRequestBody = mapped
+
+			// No-op for Accept header here; downstream content negotiation remains unchanged
+		}
+	}
+
 	// Parse the OpenAI request using SDK types
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
 		observability.Errorf("Error parsing OpenAI request: %v", err)
-		// Attempt to determine model for labeling (may be unknown here)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		// Count this request as well, with unknown model if necessary
 		metrics.RecordModelRequest(ctx.RequestModel)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}

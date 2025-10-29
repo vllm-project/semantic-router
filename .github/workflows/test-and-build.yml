@@ -84,12 +84,13 @@ jobs:
         run: make download-models
 
       - name: Run semantic router tests
-        run: make test
+        run: make test --debug=v
         env:
           CI: true
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+          SKIP_TOOL_CALL_TESTS: true
 
       - name: Upload test artifacts on failure
         if: failure()

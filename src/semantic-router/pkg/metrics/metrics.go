@@ -380,6 +380,24 @@ var (
 		},
 		[]string{"fallback_reason", "fallback_strategy"},
 	)
+
+	// ResponsesAdapterRequests counts requests handled via the Responses adapter
+	ResponsesAdapterRequests = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_responses_adapter_requests_total",
+			Help: "Total number of /v1/responses requests handled by the adapter",
+		},
+		[]string{"streaming"},
+	)
+
+	// ResponsesAdapterSSEEvents counts emitted Responses SSE events during translation
+	ResponsesAdapterSSEEvents = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_responses_adapter_sse_events_total",
+			Help: "Total number of Responses SSE events emitted by the adapter",
+		},
+		[]string{"event_type"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model
