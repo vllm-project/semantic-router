@@ -3,6 +3,7 @@ package classification
 import (
 	"fmt"
 	"regexp"
+	"unicode"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
@@ -47,9 +48,24 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 		preppedRule.CompiledRegexpsCI = make([]*regexp.Regexp, len(rule.Keywords))
 
 		for j, keyword := range rule.Keywords {
-			// Escape any regex special characters in the keyword and add word boundaries
-			patternCS := "\\b" + regexp.QuoteMeta(keyword) + "\\b"
-			patternCI := "(?i)\\b" + regexp.QuoteMeta(keyword) + "\\b" // (?i) for case-insensitive
+			quotedKeyword := regexp.QuoteMeta(keyword)
+			// Conditionally add word boundaries. If the keyword contains at least one word character,
+			// apply word boundaries. Otherwise, match literally without boundaries.
+			hasWordChar := false
+			for _, r := range keyword {
+				if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+					hasWordChar = true
+					break
+				}
+			}
+
+			patternCS := quotedKeyword
+			patternCI := "(?i)" + quotedKeyword
+
+			if hasWordChar {
+				patternCS = "\\b" + patternCS + "\\b"
+				patternCI = "(?i)\\b" + quotedKeyword + "\\b"
+			}
 
 			var err error
 			preppedRule.CompiledRegexpsCS[j], err = regexp.Compile(patternCS)

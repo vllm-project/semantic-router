@@ -1,10 +1,15 @@
 package classification
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+// --- Current Regex Implementation ---
+// This uses the currently modified keyword_classifier.go with regex matching.
 
 func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	rulesConfig := []config.KeywordRule{
@@ -45,6 +50,85 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			classifierRegex.Classify(testTextNoMatch)
+		}
+	})
+
+	// Scenario: Keywords with varying lengths
+	rulesConfigLongKeywords := []config.KeywordRule{
+		{Category: "long-kw", Operator: "OR", Keywords: []string{"supercalifragilisticexpialidocious", "pneumonoultramicroscopicsilicovolcanoconiosis"}, CaseSensitive: false},
+	}
+	classifierLongKeywords, err := NewKeywordClassifier(rulesConfigLongKeywords)
+	if err != nil {
+		b.Fatalf("Failed to initialize classifierLongKeywords: %v", err)
+	}
+	b.Run("Regex_LongKeywords", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			classifierLongKeywords.Classify("This text contains supercalifragilisticexpialidocious and other long words.")
+		}
+	})
+
+	// Scenario: Texts with varying lengths
+	rulesConfigShortText := []config.KeywordRule{
+		{Category: "short-text", Operator: "OR", Keywords: []string{"short"}, CaseSensitive: false},
+	}
+	classifierShortText, err := NewKeywordClassifier(rulesConfigShortText)
+	if err != nil {
+		b.Fatalf("Failed to initialize classifierShortText: %v", err)
+	}
+	b.Run("Regex_ShortText", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			classifierShortText.Classify("short")
+		}
+	})
+
+	rulesConfigLongText := []config.KeywordRule{
+		{Category: "long-text", Operator: "OR", Keywords: []string{"endword"}, CaseSensitive: false},
+	}
+	classifierLongText, err := NewKeywordClassifier(rulesConfigLongText)
+	if err != nil {
+		b.Fatalf("Failed to initialize classifierLongText: %v", err)
+	}
+	longText := strings.Repeat("word ", 1000) + "endword" // Text of ~5000 characters
+	b.Run("Regex_LongText", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			classifierLongText.Classify(longText)
+		}
+	})
+
+	// Scenario: Rules with a larger number of keywords
+	manyKeywords := make([]string, 100)
+	for i := 0; i < 100; i++ {
+		manyKeywords[i] = fmt.Sprintf("keyword%d", i)
+	}
+	rulesConfigManyKeywords := []config.KeywordRule{
+		{Category: "many-kw", Operator: "OR", Keywords: manyKeywords, CaseSensitive: false},
+	}
+	classifierManyKeywords, err := NewKeywordClassifier(rulesConfigManyKeywords)
+	if err != nil {
+		b.Fatalf("Failed to initialize classifierManyKeywords: %v", err)
+	}
+	b.Run("Regex_ManyKeywords", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			classifierManyKeywords.Classify("This text contains keyword99")
+		}
+	})
+
+	// Scenario: Keywords with many escaped characters
+	rulesConfigComplexKeywords := []config.KeywordRule{
+		{Category: "complex-kw", Operator: "OR", Keywords: []string{"user.name@domain.com", "C:\\Program Files\\"}, CaseSensitive: false},
+	}
+	classifierComplexKeywords, err := NewKeywordClassifier(rulesConfigComplexKeywords)
+	if err != nil {
+		b.Fatalf("Failed to initialize classifierComplexKeywords: %v", err)
+	}
+	b.Run("Regex_ComplexKeywords", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			classifierComplexKeywords.Classify("Please send to user.name@domain.com or check C:\\Program Files\\")
 		}
 	})
 }
