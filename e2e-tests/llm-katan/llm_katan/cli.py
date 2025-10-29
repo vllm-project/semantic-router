@@ -172,7 +172,8 @@ def main(
         import transformers  # noqa: F401
     except ImportError:
         click.echo(
-            "❌ Required dependencies missing. " "Install with: pip install transformers torch",
+            "❌ Required dependencies missing. "
+            "Install with: pip install transformers torch",
             err=True,
         )
         sys.exit(1)

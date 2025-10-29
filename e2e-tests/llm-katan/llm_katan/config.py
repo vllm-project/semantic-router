@@ -37,7 +37,9 @@ class ServerConfig:
 
         # Validate backend
         if self.backend not in ["transformers", "vllm"]:
-            raise ValueError(f"Invalid backend: {self.backend}. Must be 'transformers' or 'vllm'")
+            raise ValueError(
+                f"Invalid backend: {self.backend}. Must be 'transformers' or 'vllm'"
+            )
 
     @property
     def device_auto(self) -> str:
