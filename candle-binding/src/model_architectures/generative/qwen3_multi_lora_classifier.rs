@@ -517,7 +517,186 @@ impl Qwen3MultiLoRAClassifier {
         ))
     }
 
-    /// Classify with a specific adapter
+    /// Classify multiple texts with a specific adapter (batched inference)
+    ///
+    /// # Arguments
+    /// - `texts`: Input texts to classify
+    /// - `adapter_name`: Name of adapter to use (e.g., "category", "jailbreak")
+    ///
+    /// # Returns
+    /// Classification results for all texts
+    ///
+    /// # Example
+    /// ```ignore
+    /// let texts = vec!["What is GDP?", "How to code?"];
+    /// let results = model.classify_batch_with_adapter(&texts, "category")?;
+    /// ```
+    pub fn classify_batch_with_adapter(
+        &mut self,
+        texts: &[String],
+        adapter_name: &str,
+    ) -> UnifiedResult<Vec<MultiAdapterClassificationResult>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Get adapter
+        let adapter =
+            self.adapters
+                .get(adapter_name)
+                .ok_or_else(|| UnifiedError::Configuration {
+                    operation: "find adapter".to_string(),
+                    source: ConfigErrorType::ParseError(format!(
+                        "Adapter '{}' not found",
+                        adapter_name
+                    )),
+                    context: Some(format!("Available adapters: {:?}", self.list_adapters())),
+                })?;
+
+        // Clear KV cache before new classification
+        self.base_model.clear_kv_cache();
+
+        // Format prompts for all texts
+        let mut prompts = Vec::new();
+        for text in texts {
+            prompts.push(self.format_prompt(text, adapter_name)?);
+        }
+
+        // Tokenize all prompts
+        let mut tokenized_prompts = Vec::new();
+        let mut max_len = 0;
+
+        for prompt in &prompts {
+            let encoding = self.tokenizer.encode(prompt.as_str(), true).map_err(|e| {
+                UnifiedError::Configuration {
+                    operation: "tokenize".to_string(),
+                    source: ConfigErrorType::ParseError(e.to_string()),
+                    context: None,
+                }
+            })?;
+
+            let token_ids = encoding.get_ids().to_vec();
+            max_len = max_len.max(token_ids.len());
+            tokenized_prompts.push(token_ids);
+        }
+
+        // Pad all sequences to max_len
+        let batch_size = texts.len();
+        let mut padded_tokens = Vec::with_capacity(batch_size * max_len);
+
+        for tokens in &tokenized_prompts {
+            padded_tokens.extend_from_slice(tokens);
+            // Pad with 0s (or use proper pad_token_id if available)
+            for _ in tokens.len()..max_len {
+                padded_tokens.push(0);
+            }
+        }
+
+        // Create batched tensor [batch_size, seq_len]
+        let input_ids = Tensor::from_vec(padded_tokens, (batch_size, max_len), &self.device)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "create batched tensor".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
+
+        // Forward pass with batched input
+        let logits = self
+            .base_model
+            .forward(&input_ids, 0)
+            .map_err(|e| UnifiedError::Model {
+                model_type: crate::core::ModelErrorType::Embedding,
+                operation: "batched forward".to_string(),
+                source: e.to_string(),
+                context: None,
+            })?;
+
+        // Squeeze to [batch_size, vocab_size]
+        let logits = logits.squeeze(1).map_err(|e| UnifiedError::Processing {
+            operation: "squeeze logits".to_string(),
+            source: e.to_string(),
+            input_context: None,
+        })?;
+
+        // Process each result in the batch
+        let mut results = Vec::with_capacity(batch_size);
+
+        for batch_idx in 0..batch_size {
+            // Extract logits for this batch item
+            let last_logits = logits
+                .i(batch_idx)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "index batch".to_string(),
+                    source: e.to_string(),
+                    input_context: Some(format!("batch_idx={}", batch_idx)),
+                })?
+                .to_dtype(DType::F32)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "convert to f32".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?;
+
+            // Extract category logits
+            let mut category_logits = Vec::new();
+            for &token_id in &adapter.category_token_ids {
+                let logit = last_logits
+                    .i(token_id as usize)
+                    .map_err(|e| UnifiedError::Processing {
+                        operation: "extract logit".to_string(),
+                        source: e.to_string(),
+                        input_context: Some(format!("token_id={}", token_id)),
+                    })?
+                    .to_scalar::<f32>()
+                    .map_err(|e| UnifiedError::Processing {
+                        operation: "convert to scalar".to_string(),
+                        source: e.to_string(),
+                        input_context: None,
+                    })?;
+                category_logits.push(logit);
+            }
+
+            // Apply softmax
+            let probabilities = softmax(&category_logits);
+
+            // Find best category
+            if probabilities.is_empty() {
+                return Err(UnifiedError::Processing {
+                    operation: "find best category".to_string(),
+                    source: format!("No probabilities computed for batch item {}", batch_idx),
+                    input_context: Some(format!(
+                        "category_token_ids: {:?}",
+                        adapter.category_token_ids
+                    )),
+                });
+            }
+
+            let max_idx = probabilities
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(idx, _)| idx)
+                .ok_or_else(|| UnifiedError::Processing {
+                    operation: "find max probability".to_string(),
+                    source: "Failed to find maximum probability".to_string(),
+                    input_context: None,
+                })?;
+
+            let categories = adapter.label_mapping.categories();
+
+            results.push(MultiAdapterClassificationResult {
+                adapter_name: adapter_name.to_string(),
+                category: categories[max_idx].clone(),
+                confidence: probabilities[max_idx],
+                probabilities: probabilities.clone(),
+                all_categories: categories.clone(),
+            });
+        }
+
+        Ok(results)
+    }
+
+    /// Classify with a specific adapter (single text)
     ///
     /// # Arguments
     /// - `text`: Input text to classify

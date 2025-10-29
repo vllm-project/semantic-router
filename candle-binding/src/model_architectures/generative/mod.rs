@@ -14,9 +14,11 @@
 //! - Efficient KV cache management
 //! - Thread-safe FFI interface for Go
 
+pub mod continuous_batch_scheduler;
 pub mod qwen3_multi_lora_classifier;
 pub mod qwen3_with_lora;
 
+pub use continuous_batch_scheduler::{BatchSchedulerConfig, ContinuousBatchScheduler};
 pub use qwen3_multi_lora_classifier::{
     AdapterLabelMapping, MultiAdapterClassificationResult, Qwen3MultiLoRAClassifier,
 };
