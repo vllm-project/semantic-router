@@ -90,6 +90,11 @@ logger = logging.getLogger(__name__)
     default="INFO",
     help="Log level (default: INFO)",
 )
+@click.option(
+    "--quantize/--no-quantize",
+    default=True,
+    help="Enable int8 quantization for faster CPU inference (default: enabled)",
+)
 @click.version_option(version=__version__, prog_name="LLM Katan")
 def main(
     model: str,
@@ -101,6 +106,7 @@ def main(
     temperature: float,
     device: str,
     log_level: str,
+    quantize: bool,
 ):
     """
     LLM Katan - Lightweight LLM Server for Testing
@@ -133,6 +139,7 @@ def main(
         max_tokens=max_tokens,
         temperature=temperature,
         device=device.lower(),
+        quantize=quantize,
     )
 
     # Print startup information
@@ -141,6 +148,10 @@ def main(
     click.echo(f"   Served as: {config.served_model_name}")
     click.echo(f"   Backend: {config.backend}")
     click.echo(f"   Device: {config.device_auto}")
+    if config.device_auto == "cpu" and config.quantize:
+        click.echo(f"   Quantization: enabled (int8, ~2-4x faster)")
+    elif config.device_auto == "cpu" and not config.quantize:
+        click.echo(f"   Quantization: disabled (full precision)")
     click.echo(f"   Server: http://{config.host}:{config.port}")
     click.echo("")
 
