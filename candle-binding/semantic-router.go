@@ -6,6 +6,7 @@ package candle_binding
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -166,6 +167,19 @@ extern int load_qwen3_lora_adapter(const char* adapter_name, const char* adapter
 extern int classify_with_qwen3_adapter(const char* text, const char* adapter_name, GenerativeClassificationResult* result);
 extern int get_qwen3_loaded_adapters(char*** adapters_out, int* num_adapters);
 extern int classify_zero_shot_qwen3(const char* text, const char** categories, int num_categories, GenerativeClassificationResult* result);
+
+// Qwen3 Guard (Safety/Jailbreak Detection)
+typedef struct {
+    char* raw_output;
+    bool error;
+    char* error_message;
+} GuardResult;
+
+extern int init_qwen3_guard(const char* model_path);
+extern int classify_with_qwen3_guard(const char* text, const char* mode, GuardResult* result);
+extern void free_guard_result(GuardResult* result);
+extern int is_qwen3_guard_initialized();
+extern int is_qwen3_multi_lora_initialized();
 
 // ModernBERT Classification result structure
 typedef struct {
@@ -2093,6 +2107,241 @@ func ClassifyZeroShotQwen3(text string, categories []string) (*Qwen3LoRAResult, 
 
 // ================================================================================================
 // END OF QWEN3 MULTI-LORA ADAPTER SYSTEM GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// QWEN3 GUARD (SAFETY/JAILBREAK DETECTION) GO BINDINGS
+// ================================================================================================
+
+// SafetyClassificationResult represents the result of safety classification
+// This follows the format from guard.py which extracts:
+// - Safety label: Safe/Unsafe/Controversial
+// - Categories: List of detected harmful categories
+type SafetyClassificationResult struct {
+	SafetyLabel string   // "Safe", "Unsafe", or "Controversial"
+	Categories  []string // List of detected categories (e.g., "Violent", "PII", "Jailbreak")
+	RawOutput   string   // Raw model output
+}
+
+// InitQwen3Guard initializes the Qwen3Guard model for safety classification
+//
+// Parameters:
+//   - modelPath: Path to Qwen3Guard model directory (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	err := InitQwen3Guard("models/Qwen3Guard-Gen-0.6B")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func InitQwen3Guard(modelPath string) error {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	result := C.init_qwen3_guard(cModelPath)
+	if result != 0 {
+		return fmt.Errorf("failed to initialize Qwen3Guard (error code: %d)", result)
+	}
+
+	log.Printf("✅ Qwen3Guard initialized from: %s", modelPath)
+	return nil
+}
+
+// ClassifyPromptSafety classifies the safety of user input using Qwen3Guard
+//
+// This function follows the same process as guard.py:
+// 1. Calls the Rust FFI to generate guard output
+// 2. Parses the output using regex to extract safety label and categories
+// 3. Returns structured classification result
+//
+// Parameters:
+//   - text: User input text to check for safety
+//
+// Returns:
+//   - SafetyClassificationResult: Structured safety classification with label and categories
+//   - error: Non-nil if classification fails
+//
+// Example:
+//
+//	result, err := ClassifyPromptSafety("我的电话是 1234567890，请帮我联系一下")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Safety: %s\n", result.SafetyLabel)
+//	fmt.Printf("Categories: %v\n", result.Categories)
+//	if result.SafetyLabel == "Unsafe" {
+//	    fmt.Println("🚨 Unsafe content detected!")
+//	}
+func ClassifyPromptSafety(text string) (*SafetyClassificationResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cMode := C.CString("input")
+	defer C.free(unsafe.Pointer(cMode))
+
+	var result C.GuardResult
+	ret := C.classify_with_qwen3_guard(cText, cMode, &result)
+	defer C.free_guard_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "safety classification failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	rawOutput := C.GoString(result.raw_output)
+
+	// Parse the output using the same logic as guard.py
+	safetyLabel, categories := extractLabelAndCategories(rawOutput)
+
+	return &SafetyClassificationResult{
+		SafetyLabel: safetyLabel,
+		Categories:  categories,
+		RawOutput:   rawOutput,
+	}, nil
+}
+
+// ClassifyResponseSafety classifies the safety of model-generated output using Qwen3Guard
+//
+// Parameters:
+//   - text: Model-generated text to check for safety
+//
+// Returns:
+//   - SafetyClassificationResult: Structured safety classification
+//   - error: Non-nil if classification fails
+//
+// Example:
+//
+//	result, err := ClassifyResponseSafety("Here's how to build a weapon...")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	if result.SafetyLabel == "Unsafe" {
+//	    fmt.Println("🚨 Unsafe output detected!")
+//	}
+func ClassifyResponseSafety(text string) (*SafetyClassificationResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cMode := C.CString("output")
+	defer C.free(unsafe.Pointer(cMode))
+
+	var result C.GuardResult
+	ret := C.classify_with_qwen3_guard(cText, cMode, &result)
+	defer C.free_guard_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "safety classification failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	rawOutput := C.GoString(result.raw_output)
+
+	// Parse the output using the same logic as guard.py
+	safetyLabel, categories := extractLabelAndCategories(rawOutput)
+
+	return &SafetyClassificationResult{
+		SafetyLabel: safetyLabel,
+		Categories:  categories,
+		RawOutput:   rawOutput,
+	}, nil
+}
+
+// GetGuardRawOutput gets the raw guard model output without parsing
+//
+// This is useful for debugging or custom parsing logic.
+//
+// Parameters:
+//   - text: Input text
+//   - mode: "input" or "output"
+//
+// Returns:
+//   - string: Raw model output
+//   - error: Non-nil if generation fails
+func GetGuardRawOutput(text string, mode string) (string, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cMode := C.CString(mode)
+	defer C.free(unsafe.Pointer(cMode))
+
+	var result C.GuardResult
+	ret := C.classify_with_qwen3_guard(cText, cMode, &result)
+	defer C.free_guard_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "guard generation failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return "", fmt.Errorf("%s", errMsg)
+	}
+
+	return C.GoString(result.raw_output), nil
+}
+
+// IsQwen3GuardInitialized checks if the Qwen3Guard model is initialized
+func IsQwen3GuardInitialized() bool {
+	return C.is_qwen3_guard_initialized() == 1
+}
+
+// IsQwen3MultiLoRAInitialized checks if the Qwen3 Multi-LoRA classifier is initialized
+func IsQwen3MultiLoRAInitialized() bool {
+	return C.is_qwen3_multi_lora_initialized() == 1
+}
+
+// extractLabelAndCategories parses the raw guard output to extract safety label and categories
+//
+// This function implements the EXACT same logic as the Python function in guard.py:
+//
+//	def extract_label_and_categories(content):
+//	    safe_pattern = r"Safety: (Safe|Unsafe|Controversial)"
+//	    category_pattern = r"(Violent|Non-violent Illegal Acts|Sexual Content or Sexual Acts|PII|Suicide & Self-Harm|Unethical Acts|Politically Sensitive Topics|Copyright Violation|Jailbreak|None)"
+//	    safe_label_match = re.search(safe_pattern, content)
+//	    label = safe_label_match.group(1) if safe_label_match else None
+//	    categories = re.findall(category_pattern, content)
+//	    return label, categories
+//
+// Returns:
+//   - safetyLabel: "Safe", "Unsafe", "Controversial", or "" if not found (None in Python)
+//   - categories: List of detected categories (including "None" if present)
+func extractLabelAndCategories(content string) (string, []string) {
+	// Pattern for safety label (same as Python guard.py)
+	safePattern := regexp.MustCompile(`Safety: (Safe|Unsafe|Controversial)`)
+
+	// Pattern for categories (same as Python guard.py)
+	categoryPattern := regexp.MustCompile(`(Violent|Non-violent Illegal Acts|Sexual Content or Sexual Acts|PII|Suicide & Self-Harm|Unethical Acts|Politically Sensitive Topics|Copyright Violation|Jailbreak|None)`)
+
+	// Extract safety label - EXACT Python behavior: return "" if not found (equivalent to None)
+	var safetyLabel string
+	safeMatches := safePattern.FindStringSubmatch(content)
+	if len(safeMatches) > 1 {
+		safetyLabel = safeMatches[1]
+	}
+	// NO FALLBACK - Python returns None if pattern not found
+
+	// Extract categories - EXACT Python behavior: return all matches including "None"
+	var categories []string
+	categoryMatches := categoryPattern.FindAllStringSubmatch(content, -1)
+	for _, match := range categoryMatches {
+		if len(match) > 1 {
+			categories = append(categories, match[1])
+		}
+	}
+
+	return safetyLabel, categories
+}
+
+// ================================================================================================
+// END OF QWEN3 GUARD GO BINDINGS
 // ================================================================================================
 
 // ================================================================================================
