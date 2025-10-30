@@ -2674,29 +2674,29 @@ func TestQwen3Guard(t *testing.T) {
 					t.Fatalf("Failed to classify PII content: %v", err)
 				}
 
-			// PII can be classified as "Safe", "Controversial", or "Unsafe" depending on context
-			// Simple PII like emails/phones may be "Safe", sensitive PII like SSN may be "Controversial"
-			// This is per Qwen3Guard's safety policy
-			
-			// Check that PII category is detected when label is not Safe
-			hasPII := false
-			for _, cat := range result.Categories {
-				if cat == "PII" {
-					hasPII = true
-					break
-				}
-			}
+				// PII can be classified as "Safe", "Controversial", or "Unsafe" depending on context
+				// Simple PII like emails/phones may be "Safe", sensitive PII like SSN may be "Controversial"
+				// This is per Qwen3Guard's safety policy
 
-			// Log results (not an error - model behavior varies by PII type)
-			if result.SafetyLabel == "Safe" {
-				t.Logf("ℹ️  Simple PII classified as Safe: %s", tc.text)
-			} else if result.SafetyLabel == "Controversial" && hasPII {
-				t.Logf("✓ PII detected as Controversial: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
-			} else if result.SafetyLabel == "Unsafe" && hasPII {
-				t.Logf("✓ PII detected as Unsafe: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
-			} else {
-				t.Logf("⚠️  Unexpected classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
-			}
+				// Check that PII category is detected when label is not Safe
+				hasPII := false
+				for _, cat := range result.Categories {
+					if cat == "PII" {
+						hasPII = true
+						break
+					}
+				}
+
+				// Log results (not an error - model behavior varies by PII type)
+				if result.SafetyLabel == "Safe" {
+					t.Logf("ℹ️  Simple PII classified as Safe: %s", tc.text)
+				} else if result.SafetyLabel == "Controversial" && hasPII {
+					t.Logf("✓ PII detected as Controversial: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				} else if result.SafetyLabel == "Unsafe" && hasPII {
+					t.Logf("✓ PII detected as Unsafe: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				} else {
+					t.Logf("⚠️  Unexpected classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				}
 			})
 		}
 	})
@@ -2766,29 +2766,29 @@ func TestQwen3Guard(t *testing.T) {
 					t.Fatalf("Failed to classify jailbreak attempt: %v", err)
 				}
 
-			// Jailbreak attempts can be detected as "Unsafe" or "Controversial"
-			// Model behavior varies based on the severity and context of the jailbreak attempt
-			if result.SafetyLabel != "Unsafe" && result.SafetyLabel != "Controversial" {
-				t.Errorf("Expected 'Unsafe' or 'Controversial' for jailbreak attempt, got '%s'", result.SafetyLabel)
-				t.Logf("Text: %s", tc.text)
-				t.Logf("Raw output: %s", result.RawOutput)
-			}
-
-			// Check if Jailbreak category is detected
-			hasJailbreak := false
-			for _, cat := range result.Categories {
-				if cat == "Jailbreak" {
-					hasJailbreak = true
-					break
+				// Jailbreak attempts can be detected as "Unsafe" or "Controversial"
+				// Model behavior varies based on the severity and context of the jailbreak attempt
+				if result.SafetyLabel != "Unsafe" && result.SafetyLabel != "Controversial" {
+					t.Errorf("Expected 'Unsafe' or 'Controversial' for jailbreak attempt, got '%s'", result.SafetyLabel)
+					t.Logf("Text: %s", tc.text)
+					t.Logf("Raw output: %s", result.RawOutput)
 				}
-			}
 
-			if hasJailbreak {
-				t.Logf("✓ Jailbreak detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
-			} else {
-				// Model may categorize by intended harm rather than "Jailbreak" category
-				t.Logf("✓ Flagged as %s (categorized by intent): Categories=%v", result.SafetyLabel, result.Categories)
-			}
+				// Check if Jailbreak category is detected
+				hasJailbreak := false
+				for _, cat := range result.Categories {
+					if cat == "Jailbreak" {
+						hasJailbreak = true
+						break
+					}
+				}
+
+				if hasJailbreak {
+					t.Logf("✓ Jailbreak detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				} else {
+					// Model may categorize by intended harm rather than "Jailbreak" category
+					t.Logf("✓ Flagged as %s (categorized by intent): Categories=%v", result.SafetyLabel, result.Categories)
+				}
 			})
 		}
 	})
