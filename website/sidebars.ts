@@ -38,6 +38,7 @@ const sidebars: SidebarsConfig = {
             'overview/categories/overview',
             'overview/categories/supported-categories',
             'overview/categories/configuration',
+            'overview/categories/keyword-configuration',
             'overview/categories/technical-details',
           ],
         },

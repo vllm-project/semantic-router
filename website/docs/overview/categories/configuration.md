@@ -613,5 +613,6 @@ categories:
 ## Next Steps
 
 - [**Supported Categories**](supported-categories.md) - Review all available categories
+- [**Keyword Classifier Configuration**](keyword-configuration.md) - Learn how to configure keyword-based routing rules
 - [**Technical Details**](technical-details.md) - Understand the implementation
 - [**Category Overview**](overview.md) - Learn about the category system
