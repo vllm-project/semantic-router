@@ -46,15 +46,15 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "gpt-oss-120b-endpoint"
-    address: "172.28.0.1" # Docker gateway IP to access host machine
+    address: "192.168.48.1" # Host machine IP address
     port: 8001
     weight: 1
   - name: "qwen3-32b-endpoint"
-    address: "172.28.0.1" # Docker gateway IP to access host machine
+    address: "192.168.48.1" # Host machine IP address
     port: 8002
     weight: 1
   - name: "nemotron-super-endpoint"
-    address: "172.28.0.1" # Docker gateway IP to access host machine
+    address: "192.168.48.1" # Host machine IP address
     port: 8003
     weight: 1
 
