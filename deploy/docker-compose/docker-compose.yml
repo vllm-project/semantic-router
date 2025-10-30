@@ -19,6 +19,8 @@ services:
       - OTEL_SERVICE_NAME=vllm-semantic-router
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
+    extra_hosts:
+      - "host.docker.internal:172.28.0.1"  # Allow container to reach host LLM endpoints
     networks:
       - semantic-network
     healthcheck:
@@ -40,6 +42,8 @@ services:
     volumes:
       - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro,z
     command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
+    extra_hosts:
+      - "host.docker.internal:172.28.0.1"  # Allow container to reach host LLM endpoints
     depends_on:
       semantic-router:
         condition: service_healthy
