@@ -32,9 +32,9 @@ classifier:
 - **Type**: String
 - **Description**: Defines how multiple keywords within this rule are combined to determine a match.
 - **Valid Values**:
-    - `AND`: All keywords in the `keywords` list must be present in the input text for the rule to match.
-    - `OR`: At least one keyword from the `keywords` list must be present in the input text for the rule to match.
-    - `NOR`: None of the keywords from the `keywords` list must be present in the input text for the rule to match.
+  - `AND`: All keywords in the `keywords` list must be present in the input text for the rule to match.
+  - `OR`: At least one keyword from the `keywords` list must be present in the input text for the rule to match.
+  - `NOR`: None of the keywords from the `keywords` list must be present in the input text for the rule to match.
 - **Example**: `"OR"`, `"AND"`, `"NOR"`
 
 ### `keywords` (Required)
@@ -42,8 +42,8 @@ classifier:
 - **Type**: Array of Strings
 - **Description**: A list of strings that the classifier will search for in the input text. These strings are treated as regular expressions.
 - **Behavior**:
-    - For robustness and to allow for special characters, all keywords are automatically escaped using `regexp.QuoteMeta` before being compiled into regular expressions. This means you can use special regex characters (like `.`, `*`, `+`) as literal characters in your keywords without needing to escape them yourself in the `config.yaml`.
-    - Word boundaries (`\b`) are conditionally applied around keywords that contain word characters. This helps ensure whole-word matching where appropriate (e.g., "cat" matches "cat" but not "category"). Keywords consisting solely of non-word characters (like punctuation) will not have word boundaries applied.
+  - For robustness and to allow for special characters, all keywords are automatically escaped using `regexp.QuoteMeta` before being compiled into regular expressions. This means you can use special regex characters (like `.`, `*`, `+`) as literal characters in your keywords without needing to escape them yourself in the `config.yaml`.
+  - Word boundaries (`\b`) are conditionally applied around keywords that contain word characters. This helps ensure whole-word matching where appropriate (e.g., "cat" matches "cat" but not "category"). Keywords consisting solely of non-word characters (like punctuation) will not have word boundaries applied.
 - **Example**: `["urgent", "immediate", "asap"]`, `["SSN", "social security number"]`, `["user\\.name@domain\\.com", "C:\\Program Files\\\\"]`
 
 ### `case_sensitive` (Optional)
