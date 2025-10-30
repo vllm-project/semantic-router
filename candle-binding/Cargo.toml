@@ -51,15 +51,6 @@ async-std = { version = "1.12", features = ["attributes"] }
 name = "qwen3_example"
 path = "../examples/candle-binding/qwen3_example.rs"
 
-# Continuous Batching Benchmarks
-[[bin]]
-name = "continuous_batch_bench"
-path = "../bench/scripts/rust/candle-binding/continuous_batch_bench.rs"
-
-[[bin]]
-name = "pure_batch_inference_bench"
-path = "../bench/scripts/rust/candle-binding/pure_batch_inference_bench.rs"
-
-[[bin]]
-name = "verify_batch_accuracy"
-path = "../bench/scripts/rust/candle-binding/verify_batch_accuracy.rs"
+# Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
+# They are not included in the library build to keep it self-contained.
+# To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.
