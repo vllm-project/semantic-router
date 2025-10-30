@@ -82,7 +82,7 @@ RUN mkdir -p bin && cd src/semantic-router && \
     go build -ldflags="-w -s" -o ../../bin/router cmd/main.go
 
 # Final stage: copy the binary and the shared library
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 
 WORKDIR /app
 

@@ -1,0 +1,110 @@
+name: Quickstart Integration Test
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/quickstart.sh'
+      - 'deploy/docker-compose/**'
+      - 'config/config.yaml'
+      - 'tools/make/common.mk'
+      - 'tools/make/models.mk'
+      - 'tools/make/docker.mk'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  test-quickstart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            curl \
+            docker-compose
+
+      - name: Run quickstart script
+        id: quickstart
+        run: |
+          timeout 1200 bash scripts/quickstart.sh || {
+            exit_code=$?
+            if [ $exit_code -eq 124 ]; then
+              echo "::error::Quickstart script timed out after 20 minutes"
+            else
+              echo "::error::Quickstart script failed with exit code $exit_code"
+            fi
+            exit $exit_code
+          }
+        env:
+          CI: true
+          CI_MINIMAL_MODELS: true
+          TERM: xterm
+          HF_HUB_ENABLE_HF_TRANSFER: 1
+          HF_HUB_DISABLE_TELEMETRY: 1
+
+      - name: Test semantic routing functionality
+        run: |
+          echo "Testing semantic router with a sample query..."
+
+          response=$(curl -s -X POST http://localhost:8801/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "qwen3",
+              "messages": [{"role": "user", "content": "What is 2 + 2?"}],
+              "temperature": 0.7
+            }')
+
+          echo "Full response: $response"
+
+          # Validate response structure
+          if echo "$response" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
+            echo "✓ Semantic router successfully routed and processed the query"
+            echo "  Answer: $(echo "$response" | jq -r '.choices[0].message.content' | head -c 200)"
+          else
+            echo "::error::Semantic router failed to process query correctly"
+            echo "Response was: $response"
+            exit 1
+          fi
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Logs ==="
+          docker compose -f deploy/docker-compose/docker-compose.yml logs
+          echo "=== Container Status ==="
+          docker ps -a
+          echo "=== Semantic Router Logs ==="
+          docker logs semantic-router || true
+          echo "=== Envoy Logs ==="
+          docker logs envoy-proxy || true
+          echo "=== Dashboard Logs ==="
+          docker logs semantic-router-dashboard || true
+
+      - name: Clean up
+        if: always()
+        run: |
+          make docker-compose-down || true
+          docker system prune -af --volumes || true

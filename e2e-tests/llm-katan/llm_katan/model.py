@@ -89,6 +89,31 @@ class TransformersBackend(ModelBackend):
         if device == "cpu":
             self.model = self.model.to("cpu")
 
+            # Apply quantization for faster CPU inference (2-4x speedup)
+            if self.config.quantize:
+                logger.info("Applying int8 quantization for CPU optimization...")
+                try:
+                    self.model = torch.quantization.quantize_dynamic(
+                        self.model, {torch.nn.Linear}, dtype=torch.qint8
+                    )
+                    logger.info(
+                        "✓ Quantization applied (2-4x faster inference, 4x less memory)"
+                    )
+                except RuntimeError as e:
+                    if "NoQEngine" in str(e):
+                        logger.warning(
+                            "⚠️  Quantization not supported on this platform - "
+                            "continuing with full precision"
+                        )
+                        logger.info(
+                            "Note: PyTorch quantization requires specific CPU features. "
+                            "Your model will run without quantization."
+                        )
+                    else:
+                        raise
+            else:
+                logger.info("Quantization disabled - using full precision (slower)")
+
         logger.info(f"Model loaded successfully on {device}")
 
     async def generate(

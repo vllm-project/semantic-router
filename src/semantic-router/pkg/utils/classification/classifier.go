@@ -204,6 +204,7 @@ type Classifier struct {
 	jailbreakInference   JailbreakInference
 	piiInitializer       PIIInitializer
 	piiInference         PIIInference
+	keywordClassifier    *KeywordClassifier
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
@@ -244,6 +245,12 @@ func withPII(piiMapping *PIIMapping, piiInitializer PIIInitializer, piiInference
 		c.PIIMapping = piiMapping
 		c.piiInitializer = piiInitializer
 		c.piiInference = piiInference
+	}
+}
+
+func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
+	return func(c *Classifier) {
+		c.keywordClassifier = keywordClassifier
 	}
 }
 
@@ -303,6 +310,16 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		withPII(piiMapping, createPIIInitializer(), createPIIInference()),
 	}
 
+	// Add keyword classifier if configured
+	if len(cfg.KeywordRules) > 0 {
+		keywordClassifier, err := NewKeywordClassifier(cfg.KeywordRules)
+		if err != nil {
+			observability.Errorf("Failed to create keyword classifier: %v", err)
+			return nil, err
+		}
+		options = append(options, withKeywordClassifier(keywordClassifier))
+	}
+
 	// Add in-tree classifier if configured
 	if cfg.Classifier.CategoryModel.ModelID != "" {
 		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.Classifier.CategoryModel.UseModernBERT), createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT)))
@@ -342,6 +359,17 @@ func (c *Classifier) initializeCategoryClassifier() error {
 
 // ClassifyCategory performs category classification on the given text
 func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
+	// Try keyword classifier first
+	if c.keywordClassifier != nil {
+		category, confidence, err := c.keywordClassifier.Classify(text)
+		if err != nil {
+			return "", 0.0, err
+		}
+		if category != "" {
+			return category, confidence, nil
+		}
+	}
+
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryInTree(text)
