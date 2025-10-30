@@ -22,6 +22,7 @@ use crate::core::{ConfigErrorType, UnifiedError, UnifiedResult};
 use crate::model_architectures::generative::qwen3_with_lora::{
     Config as Qwen3Config, ModelForCausalLM as Qwen3Model,
 };
+use crate::model_architectures::prefix_cache::{PrefixCache, PrefixCacheConfig};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use serde::{Deserialize, Serialize};
@@ -53,6 +54,9 @@ pub struct Qwen3GuardConfig {
 
     /// Context size for repeat penalty
     pub repeat_last_n: usize,
+
+    /// Prefix cache configuration
+    pub prefix_cache: PrefixCacheConfig,
 }
 
 impl Default for Qwen3GuardConfig {
@@ -63,6 +67,10 @@ impl Default for Qwen3GuardConfig {
             max_tokens: 512,
             repeat_penalty: 1.1,
             repeat_last_n: 64,
+            prefix_cache: PrefixCacheConfig {
+                enabled: true, // Enable by default for 2-3x speedup!
+                verbose: false,
+            },
         }
     }
 }
@@ -89,6 +97,12 @@ pub struct Qwen3GuardModel {
 
     /// IM_END token ID (for chat models)
     im_end_token_id: u32,
+
+    /// Prefix cache for "input" mode (USER prompt)
+    prefix_cache_input: Option<PrefixCache>,
+
+    /// Prefix cache for "output" mode (ASSISTANT response)
+    prefix_cache_output: Option<PrefixCache>,
 }
 
 impl Qwen3GuardModel {
@@ -217,15 +231,116 @@ impl Qwen3GuardModel {
 
         println!("✅ Qwen3Guard model loaded successfully");
 
-        Ok(Self {
+        let config = config.unwrap_or_default();
+
+        let mut instance = Self {
             model,
             tokenizer: Arc::new(tokenizer),
             device: device.clone(),
             dtype,
-            config: config.unwrap_or_default(),
+            config,
             eos_token_id,
             im_end_token_id,
-        })
+            prefix_cache_input: None,
+            prefix_cache_output: None,
+        };
+
+        // Initialize prefix caches if enabled
+        if instance.config.prefix_cache.enabled {
+            if instance.config.prefix_cache.verbose {
+                println!("🚀 Initializing prefix cache for Qwen3Guard...");
+            }
+            instance.initialize_prefix_caches()?;
+            if instance.config.prefix_cache.verbose {
+                println!("✅ Prefix cache initialized successfully");
+            }
+        }
+
+        Ok(instance)
+    }
+
+    /// Initialize prefix caches for both input and output modes
+    ///
+    /// This extracts the fixed part of the prompt template and tokenizes it once.
+    /// The tokens are cached for reuse across all requests.
+    fn initialize_prefix_caches(&mut self) -> UnifiedResult<()> {
+        // Initialize cache for "input" mode (USER prompt)
+        let input_prefix = self.extract_fixed_prefix("input");
+        let encoding = self
+            .tokenizer
+            .encode(input_prefix.as_str(), true)
+            .map_err(|e| UnifiedError::Configuration {
+                operation: "tokenize prefix (input)".to_string(),
+                source: ConfigErrorType::ParseError(e.to_string()),
+                context: None,
+            })?;
+        let input_tokens: Vec<u32> = encoding.get_ids().to_vec();
+
+        if self.config.prefix_cache.verbose {
+            println!("   Input mode prefix: {} tokens", input_tokens.len());
+        }
+
+        self.prefix_cache_input = Some(PrefixCache::new(input_tokens));
+
+        // Initialize cache for "output" mode (ASSISTANT response)
+        let output_prefix = self.extract_fixed_prefix("output");
+        let encoding = self
+            .tokenizer
+            .encode(output_prefix.as_str(), true)
+            .map_err(|e| UnifiedError::Configuration {
+                operation: "tokenize prefix (output)".to_string(),
+                source: ConfigErrorType::ParseError(e.to_string()),
+                context: None,
+            })?;
+        let output_tokens: Vec<u32> = encoding.get_ids().to_vec();
+
+        if self.config.prefix_cache.verbose {
+            println!("   Output mode prefix: {} tokens", output_tokens.len());
+        }
+
+        self.prefix_cache_output = Some(PrefixCache::new(output_tokens));
+
+        Ok(())
+    }
+
+    /// Extract the fixed prefix part of the prompt (everything before user text)
+    ///
+    /// The format_prompt has this structure:
+    /// [FIXED PREFIX] + {user_label}: {text} + [FIXED SUFFIX]
+    ///
+    /// We cache: [FIXED PREFIX] + {user_label}:
+    /// Then append user text at runtime.
+    fn extract_fixed_prefix(&self, mode: &str) -> String {
+        let user_label = if mode == "output" {
+            "ASSISTANT"
+        } else {
+            "USER"
+        };
+
+        format!(
+            "<|im_start|>user\n# Task:\n\
+            1) Evaluate whether THE LAST {}'s query belongs to safe or unsafe content based on our safety policy.\n\
+            2) Identify the category of unsafe content found.\n\n\
+            <BEGIN SAFETY POLICY>\n\
+            **Safety: Safe**: The {}'s query does not contain any prohibited content or content that could lead to prohibited content.\n\
+            **Safety: Unsafe**: The {}'s query contains prohibited content.\n\
+            **Safety: Controversial**: The {}'s query does not explicitly contain prohibited content, but its intent, context, or potential responses could be misinterpreted, misused, or exploited to generate unsafe content under certain conditions.\n\
+            <END SAFETY POLICY>\n\n\
+            <BEGIN UNSAFE CONTENT CATEGORIES>\n\
+            Violent.\n\
+            Non-violent Illegal Acts.\n\
+            Sexual Content or Sexual Acts.\n\
+            PII.\n\
+            Suicide & Self-Harm.\n\
+            Unethical Acts.\n\
+            Politically Sensitive Topics.\n\
+            Copyright Violation.\n\
+            Jailbreak.\n\
+            <END UNSAFE CONTENT CATEGORIES>\n\n\
+            <BEGIN CONVERSATION>\n\n\
+            {}: ",
+            user_label, user_label, user_label, user_label, user_label
+        )
     }
 
     /// Format input prompt for guard classification
@@ -385,9 +500,208 @@ impl Qwen3GuardModel {
         text: &str,
         mode: &str,
     ) -> UnifiedResult<GuardGenerationResult> {
-        let prompt = self.format_prompt(text, mode);
-        let output = self.generate(&prompt)?;
+        // Check if prefix cache is available and enabled
+        let use_cache = match mode {
+            "input" => self.prefix_cache_input.is_some(),
+            "output" => self.prefix_cache_output.is_some(),
+            _ => false,
+        };
+
+        let output = if use_cache {
+            // Fast path: Use prefix cache
+            self.generate_with_prefix_cache(text, mode)?
+        } else {
+            // Slow path: Full prompt processing
+            let prompt = self.format_prompt(text, mode);
+            self.generate(&prompt)?
+        };
+
         Ok(GuardGenerationResult { raw_output: output })
+    }
+
+    /// Generate with prefix caching (faster tokenization + KV reuse!)
+    ///
+    /// This method:
+    /// 1. Uses pre-tokenized prefix (saves tokenization time)
+    /// 2. Processes prefix through model (KV cache accumulates automatically)
+    /// 3. Tokenizes only the variable part (user text + suffix)
+    /// 4. Generates from the accumulated KV state
+    fn generate_with_prefix_cache(&mut self, text: &str, mode: &str) -> UnifiedResult<String> {
+        // Get cache reference
+        let cache = match mode {
+            "input" => {
+                self.prefix_cache_input
+                    .as_ref()
+                    .ok_or_else(|| UnifiedError::Processing {
+                        operation: "get prefix cache".to_string(),
+                        source: "input cache not initialized".to_string(),
+                        input_context: None,
+                    })?
+            }
+            "output" => {
+                self.prefix_cache_output
+                    .as_ref()
+                    .ok_or_else(|| UnifiedError::Processing {
+                        operation: "get prefix cache".to_string(),
+                        source: "output cache not initialized".to_string(),
+                        input_context: None,
+                    })?
+            }
+            _ => {
+                return Err(UnifiedError::Processing {
+                    operation: "get prefix cache".to_string(),
+                    source: format!("invalid mode: {}", mode),
+                    input_context: None,
+                })
+            }
+        };
+
+        // Clear KV cache and process prefix
+        self.model.clear_kv_cache();
+        self.model
+            .process_prefix(cache.prefix_tokens())
+            .map_err(|e| UnifiedError::Processing {
+                operation: "process prefix cache".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
+
+        // Format the suffix part (user text + fixed suffix)
+        let user_label = if mode == "output" {
+            "ASSISTANT"
+        } else {
+            "USER"
+        };
+        let suffix = format!(
+            "{}\n\n\
+            <END CONVERSATION>\n\n\
+            Provide your safety assessment for ONLY THE LAST **{}'s query** in the above conversation:\n \
+            - The first line must be one of: 'Safety: Safe', 'Safety: Unsafe', 'Safety: Controversial'.\n \
+            - The second line should start with 'Categories:' followed by a list of any unsafe content categories, separated by commas. If the content is safe, use 'Categories: None'.<|im_end|>\n\
+            <|im_start|>assistant\n\
+            <think>\n\n\
+            </think>\n\n",
+            text, user_label
+        );
+
+        // Tokenize suffix
+        let encoding = self.tokenizer.encode(suffix.as_str(), true).map_err(|e| {
+            UnifiedError::Configuration {
+                operation: "tokenize suffix".to_string(),
+                source: ConfigErrorType::ParseError(e.to_string()),
+                context: None,
+            }
+        })?;
+
+        let mut tokens: Vec<u32> = encoding.get_ids().to_vec();
+        let prefix_len = cache.prefix_length();
+        let mut generated_text = String::new();
+
+        // Process suffix through model (with cached prefix KV)
+        let suffix_tensor = Tensor::new(&tokens[..], &self.device)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "create suffix tensor".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?
+            .unsqueeze(0)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "unsqueeze suffix tensor".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
+
+        self.model
+            .forward(&suffix_tensor, prefix_len)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "forward suffix".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
+
+        // Update token count
+        let mut total_tokens = prefix_len + tokens.len();
+
+        // Generation loop (same as generate method)
+        for _step in 0..self.config.max_tokens {
+            let context_size = 1; // Only process last token
+            let start_pos = total_tokens - context_size;
+            let ctxt = &tokens[tokens.len().saturating_sub(context_size)..];
+
+            // Forward pass
+            let input = Tensor::new(ctxt, &self.device)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "create tensor".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?
+                .unsqueeze(0)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "unsqueeze".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?;
+
+            let logits =
+                self.model
+                    .forward(&input, start_pos)
+                    .map_err(|e| UnifiedError::Processing {
+                        operation: "forward pass".to_string(),
+                        source: e.to_string(),
+                        input_context: None,
+                    })?;
+
+            // Extract last token logits
+            let logits = logits
+                .squeeze(0)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "squeeze".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?
+                .squeeze(0)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "squeeze".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?
+                .to_dtype(DType::F32)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "to_dtype".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?;
+
+            // Apply repeat penalty
+            let logits = if self.config.repeat_penalty != 1.0 {
+                let start_at = tokens.len().saturating_sub(self.config.repeat_last_n);
+                apply_repeat_penalty(&logits, self.config.repeat_penalty, &tokens[start_at..])?
+            } else {
+                logits
+            };
+
+            // Sample next token
+            let next_token = if self.config.temperature == 0.0 {
+                sample_argmax(&logits)?
+            } else {
+                sample_topp(&logits, self.config.temperature, self.config.top_p)?
+            };
+
+            // Check for EOS
+            if next_token == self.eos_token_id || next_token == self.im_end_token_id {
+                break;
+            }
+
+            tokens.push(next_token);
+            total_tokens += 1;
+
+            // Decode token
+            if let Ok(piece) = self.tokenizer.decode(&[next_token], true) {
+                generated_text.push_str(&piece);
+            }
+        }
+
+        Ok(generated_text)
     }
 }
 

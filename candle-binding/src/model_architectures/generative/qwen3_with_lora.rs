@@ -359,6 +359,24 @@ impl Model {
         }
     }
 
+    /// Process prefix tokens and return for caching
+    ///
+    /// This processes the prefix through the model and the KV cache is automatically
+    /// maintained. The caller can then continue with suffix tokens.
+    ///
+    /// Returns the prefix length for future reference.
+    pub fn process_prefix(&mut self, prefix_tokens: &[u32]) -> Result<usize> {
+        let prefix_len = prefix_tokens.len();
+
+        // Create tensor from prefix tokens
+        let input = Tensor::new(prefix_tokens, &self.device)?.unsqueeze(0)?;
+
+        // Forward pass (KV cache is accumulated automatically)
+        self.forward(&input, 0)?;
+
+        Ok(prefix_len)
+    }
+
     fn causal_mask(
         &self,
         b: usize,
@@ -464,6 +482,11 @@ impl ModelForCausalLM {
 
     pub fn clear_kv_cache(&mut self) {
         self.base.clear_kv_cache();
+    }
+
+    /// Process prefix tokens for caching
+    pub fn process_prefix(&mut self, prefix_tokens: &[u32]) -> Result<usize> {
+        self.base.process_prefix(prefix_tokens)
     }
 
     /// Inject LoRA adapters into the base model
