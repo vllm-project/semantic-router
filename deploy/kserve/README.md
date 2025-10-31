@@ -32,6 +32,7 @@ Client Request (OpenAI API)
 ```
 
 The deployment runs two containers in a single pod:
+
 1. **Semantic Router**: ExtProc service that performs classification and routing logic
 2. **Envoy Proxy**: HTTP proxy that integrates with the semantic router via gRPC
 
@@ -51,6 +52,7 @@ oc get inferenceservice
 ```
 
 Example output:
+
 ```
 NAME           URL                                        READY   PREV   LATEST
 granite32-8b   https://granite32-8b-your-ns.apps...      True           100
@@ -63,6 +65,7 @@ oc get inferenceservice granite32-8b -o jsonpath='{.status.components.predictor.
 ```
 
 Example output:
+
 ```
 http://granite32-8b-predictor.your-namespace.svc.cluster.local
 ```
@@ -82,6 +85,7 @@ vllm_endpoints:
 ```
 
 **Important**:
+
 - Replace `<namespace>` with your actual namespace
 - Replace `your-model` with your InferenceService name
 - Use the **internal cluster URL** format: `<service-name>-predictor.<namespace>.svc.cluster.local`
@@ -116,6 +120,7 @@ categories:
 ```
 
 **Category Scoring**:
+
 - Scores range from 0.0 to 1.0
 - Higher scores indicate better suitability for the category
 - The router selects the model with the highest score for each query category
@@ -132,6 +137,7 @@ resources:
 ```
 
 Model storage requirements:
+
 - Category classifier: ~500MB
 - PII classifier: ~500MB
 - Jailbreak classifier: ~500MB
@@ -263,6 +269,7 @@ curl http://localhost:9190/metrics
 ```
 
 Key metrics:
+
 - `semantic_router_classification_duration_seconds`: Classification latency
 - `semantic_router_cache_hit_total`: Cache hit count
 - `semantic_router_pii_detections_total`: PII detection count
@@ -307,6 +314,7 @@ oc get pvc
 ```
 
 **Common issues**:
+
 - PVC pending: No storage class available or insufficient capacity
 - ImagePullBackOff: Check image registry permissions
 - Init container failing: Network issues downloading models from HuggingFace
@@ -354,11 +362,13 @@ curl -k "https://$ROUTER_URL/v1/classify" \
 ### 503 Service Unavailable
 
 **Possible causes**:
+
 1. InferenceService is not ready
 2. Incorrect endpoint address in config
 3. Network policy blocking traffic
 
 **Solutions**:
+
 ```bash
 # Verify InferenceService is ready
 oc get inferenceservice
@@ -379,6 +389,7 @@ To add additional models:
 
 1. **Deploy InferenceService** (if not already deployed)
 2. **Update ConfigMap** (`configmap-router-config.yaml`):
+
    ```yaml
    vllm_endpoints:
      - name: "new-model-endpoint"
@@ -403,6 +414,7 @@ To add additional models:
    ```
 
 3. **Apply updated ConfigMap**:
+
    ```bash
    oc apply -f configmap-router-config.yaml
 
@@ -454,6 +466,7 @@ oc scale deployment/semantic-router-kserve --replicas=3
 Point your OpenAI client to the semantic router:
 
 **Python Example**:
+
 ```python
 from openai import OpenAI
 
@@ -471,6 +484,7 @@ print(response.choices[0].message.content)
 ```
 
 **cURL Example**:
+
 ```bash
 curl -k "https://semantic-router-your-namespace.apps.your-cluster.com/v1/chat/completions" \
   -H "Content-Type: application/json" \
@@ -507,5 +521,6 @@ oc delete serviceaccount semantic-router
 ## Support
 
 For issues and questions:
+
 - GitHub Issues: https://github.com/vllm-project/semantic-router/issues
 - Documentation: https://vllm-semantic-router.com/docs
