@@ -162,6 +162,44 @@ type BatchSimilarityRequest struct {
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
 }
 
+// KeywordSimilarityMatch represents a single match in batch similarity matching
+type KeywordSimilarityMatch struct {
+	Index               int     `json:"index"`                // Index of the candidate in the input array
+	SimilarityThreshold float32 `json:"similarity_threshold"` // threshold as matched for the cosine similarity score between query and the keyword
+	Keyword             string  `json:"text"`                 // The keyword to calculate similarity with
+}
+
+// KeywordSimilarityMatchrResponse represents a single match in batch similarity matching
+type KeywordSimilarityMatchResponse struct {
+	Index                int     `json:"index"`                 // Index of the candidate in the input array
+	SimilarityThreshold  float32 `json:"similarity_threshold"`  // threshold as matched for the cosine similarity score between query and the keyword
+	SimilarityCalculated float32 `json:"similarity_calculated"` // threshold as matched for the cosine similarity score between query and the keyword
+	Keyword              string  `json:"text"`                  // The keyword to calculate similarity with
+	Matched              bool    `json:"matched"`               // The query matched the keyword or not
+	ModelUsed            string  `json:"model_used"`            // "qwen3", "gemma", or "unknown"
+	ProcessingTimeMs     float32 `json:"processing_time_ms"`    // Processing time in milliseconds
+}
+
+// BatchEmbeddingSimilarityMatchRequest represents a request to find the similarity between a query and configurable keywords
+type BatchEmbeddingSimilarityMatchRequest struct {
+	Query                string                   `json:"query"`                      // Query text
+	Keywords             []string                 `json:"keywords"`                   // Array of keyword texts
+	Model                string                   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
+	Dimension            int                      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	SimilarityThresholds []KeywordSimilarityMatch `json:"similarity_thresholds"`      // Configurable thresholds per keyword (e.g. keyword A: 80%, keyword B: 60%)
+	AggregationMethod    string                   `json:"aggregation_method"`         // Aggregation method to pick the best matched category, support max now. Placeholder for further extension
+	QualityPriority      float32                  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	LatencyPriority      float32                  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
+}
+
+// BatchEmbeddingSimilarityMatchResponse represents a response to find the similarity between a query and configurable keywords
+type BatchEmbeddingSimilarityMatchResponse struct {
+	Query               string                           `json:"query"`                 // Query text
+	KeywordMatches      []KeywordSimilarityMatchResponse `json:"keyword_matches"`       // Array of KeywordSimilarityMatchResponse
+	AggregationMethod   string                           `json:"aggregation_method"`    // Aggregation method to pick the best matched category, support max now. Placeholder for further extension
+	BestMatchedCategory string                           `json:"best_matched_category"` // The best matched category based on the aggregation method above
+}
+
 // BatchSimilarityMatch represents a single match in batch similarity matching
 type BatchSimilarityMatch struct {
 	Index      int     `json:"index"`      // Index of the candidate in the input array
@@ -690,6 +728,12 @@ func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter,
 func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWriter, _ *http.Request) {
 	s.writeErrorResponse(w, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Combined classification not implemented yet")
 }
+
+// Placeholder funtion to fusion all the designed internal signal providers: Keyword matcher, reges scanner, embedding similarity, BERT classifier
+// func (s *ClassificationAPIServer) handleAllInTreeSinganlProviders(w http.ResponseWriter, _ *http.Request) {
+//	response, err := s.classificationSvc.handleBatchClassification(..)
+
+// }
 
 func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWriter, r *http.Request) {
 	// Record batch classification request
@@ -1599,6 +1643,120 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 
 	observability.Infof("Calculated batch similarity: query='%s', %d candidates, top-%d matches (model: %s, took: %.2fms)",
 		req.Query, len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// handleBatchInTreeSimilarityMatching handles batch embedding based similarity matching requests
+func (s *ClassificationAPIServer) handleBatchInTreeSimilarityMatching(w http.ResponseWriter, r *http.Request) {
+	// Parse request
+	var req BatchEmbeddingSimilarityMatchRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Validate input
+	if req.Query == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "query must be provided")
+		return
+	}
+	if len(req.Keywords) == 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "keyword array cannot be empty")
+		return
+	}
+
+	// Set defaults
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = 768 // Default to full dimension
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = 0.5
+		req.LatencyPriority = 0.5
+	}
+
+	// Validate dimension
+	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	if !validDimensions[req.Dimension] {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
+			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return
+	}
+
+	// Calculate batch similarity
+	result, err := candle_binding.CalculateSimilarityBatch(
+		req.Query,
+		req.Keywords,
+		0, // return scores for all the keywords
+		req.Model,
+		req.Dimension,
+	)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_FAILED",
+			fmt.Sprintf("failed to calculate batch similarity: %v", err))
+		return
+	}
+
+	// Build embedding based similarity response
+	matches := make([]KeywordSimilarityMatchResponse, len(result.Matches))
+	for i, match := range result.Matches {
+		if match.Similarity >= req.SimilarityThresholds[i].SimilarityThreshold {
+			matches[i] = KeywordSimilarityMatchResponse{
+				Index:                match.Index,
+				SimilarityThreshold:  req.SimilarityThresholds[i].SimilarityThreshold,
+				SimilarityCalculated: match.Similarity,
+				Keyword:              req.Keywords[match.Index],
+				Matched:              true,
+				ModelUsed:            result.ModelType,
+				ProcessingTimeMs:     result.ProcessingTimeMs,
+			}
+		} else {
+			matches[i] = KeywordSimilarityMatchResponse{
+				Index:                match.Index,
+				SimilarityThreshold:  req.SimilarityThresholds[i].SimilarityThreshold,
+				SimilarityCalculated: match.Similarity,
+				Keyword:              req.Keywords[match.Index],
+				Matched:              false,
+				ModelUsed:            result.ModelType,
+				ProcessingTimeMs:     result.ProcessingTimeMs,
+			}
+		}
+	}
+	// Validate input
+	if req.AggregationMethod != "" && req.AggregationMethod != "max" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Aggregation method only supports max now")
+		return
+	}
+	var aggregationMethod string
+	// Set default value
+	if req.AggregationMethod == "" {
+		aggregationMethod = "max"
+	}
+	// Support mean/max/any aggregation methods to find the best match
+	var bestMatchedCategory string
+	var bestScore float32
+	if aggregationMethod == "max" {
+		// pick the most matched category based on max of all cosine similarity scores
+		for _, match := range matches {
+			if match.SimilarityCalculated > bestScore {
+				bestScore = match.SimilarityCalculated
+				bestMatchedCategory = match.Keyword
+			}
+		}
+	}
+	// Make Response
+	response := BatchEmbeddingSimilarityMatchResponse{
+		Query:               req.Query,
+		KeywordMatches:      matches,
+		AggregationMethod:   aggregationMethod,
+		BestMatchedCategory: bestMatchedCategory,
+	}
+
+	observability.Infof("Calculated batch embedding similarity: query='%s', %d keywords, (model: %s, took: %.2fms)",
+		req.Query, len(req.Keywords), result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
