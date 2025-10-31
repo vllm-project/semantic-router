@@ -4,7 +4,7 @@ This directory contains comprehensive examples demonstrating the candle-binding 
 
 ## Quick Start
 
-### 📊 Embedding Examples & Benchmarks (NEW!)
+### 📊 Embedding Examples & Benchmarks
 
 Generate embeddings and benchmark concurrent performance:
 
@@ -28,12 +28,11 @@ LD_LIBRARY_PATH=$(pwd)/target/release go run ../examples/candle-binding/qwen3_em
 - ✅ Performance metrics (throughput, P50/P95/P99 latency)
 
 **Expected results:**
+On NVIDIA L4 GPU:
 
 - Single-threaded: 55.17 emb/s, 18.5ms P95 latency
 - 8 concurrent clients: 14.90 emb/s, 601ms P95 latency (shows CUDA serialization)
 - **With continuous batching: 170 emb/s, ~10ms P95 latency (11.4x faster!)**
-
-See `EMBEDDING_EXAMPLES.md` for detailed documentation.
 
 ### 🐹 Go Example (Recommended)
 
@@ -130,16 +129,15 @@ examples/candle-binding/
 ├── qwen3_example.go              # Comprehensive Go example for Multi-LoRA classification
 ├── qwen3_example.rs              # Comprehensive Rust example for Multi-LoRA classification
 ├── qwen3_guard_example.go        # Qwen3Guard safety classification example
-├── qwen3_embedding_example.go    # NEW: Embedding generation and similarity example
-├── qwen3_embedding_benchmark.go  # NEW: Concurrent embedding server benchmark
-├── EMBEDDING_EXAMPLES.md         # NEW: Detailed embedding documentation
+├── qwen3_embedding_example.go    # Embedding generation and similarity example
+├── qwen3_embedding_benchmark.go  # Concurrent embedding server benchmark
 ├── go.mod                        # Go module configuration
 └── README.md                     # This file
 ```
 
 ## What's Demonstrated
 
-### 0. Embedding Generation & Semantic Search (NEW!)
+### 0. Embedding Generation & Semantic Search
 
 Generate embeddings and perform semantic similarity:
 
@@ -250,7 +248,7 @@ for _, sample := range samples {
 Examples expect models at:
 
 - **Base model**: `../../models/Qwen3-0.6B`
-- **Embedding model**: `../../models/Qwen3-Embedding-0.6B` (NEW!)
+- **Embedding model**: `../../models/Qwen3-Embedding-0.6B`
 - **Category adapter**: `../../models/qwen3_generative_classifier_r16`
 - **Qwen3Guard model**: `../../models/Qwen3Guard-Gen-0.6B`
 
@@ -276,7 +274,7 @@ cd ../../models
 git clone https://huggingface.co/Qwen/Qwen3-0.6B
 ```
 
-### Embedding Model (Required for embedding examples - NEW!)
+### Embedding Model (Required for embedding examples)
 
 ```bash
 cd ../../models
@@ -437,7 +435,7 @@ OVERALL ACCURACY: 68.42% (26/38 correct)
    Arabic, Russian, Portuguese, Italian, Hindi, Turkish, Vietnamese, Thai
 ```
 
-### Embedding Benchmark (NEW!)
+### Embedding Benchmark
 
 ```
 ================================================================================
@@ -546,24 +544,6 @@ ls ../../models/qwen3_generative_classifier_r16/
 3. **Adapter preloading**: Load all adapters once at startup
 
 4. **Cache results**: Cache classifications for repeated queries
-
-## Documentation
-
-For detailed documentation, see:
-
-**Classification:**
-
-- `../../candle-binding/ZERO_SHOT_CLASSIFICATION.md` - Zero-shot guide
-- `../../candle-binding/BASE_MODEL_EXPLAINED.md` - Base model concepts
-- `../../candle-binding/MULTI_ADAPTER_IMPLEMENTATION.md` - Multi-LoRA architecture
-- `../../candle-binding/QUICK_START_ZERO_SHOT.md` - Quick start guide
-
-**Embeddings (NEW!):**
-
-- `EMBEDDING_EXAMPLES.md` - Comprehensive embedding guide
-- `../../candle-binding/CONTINUOUS_BATCHING_RESULTS.md` - Performance analysis
-- `../../candle-binding/CONTINUOUS_BATCHING_VERIFICATION.md` - Implementation details
-- `../../candle-binding/examples/embedding_benchmark.rs` - Rust benchmark source
 
 **Testing:**
 

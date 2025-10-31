@@ -36,14 +36,14 @@ use std::time::{Duration, Instant};
 struct EmbeddingRequest {
     /// Unique request ID
     id: u64,
-    /// Input token IDs [1, seq_len]
-    input_ids: Tensor,
-    /// Attention mask [1, seq_len]
-    attention_mask: Tensor,
+    /// Input token IDs as raw vec (tensors created on scheduler thread to avoid CUDA context issues)
+    input_ids_raw: Vec<u32>,
+    /// Attention mask as raw vec
+    attention_mask_raw: Vec<u32>,
     /// Sequence length (for batching optimization)
     seq_len: usize,
-    /// Channel to send result back to caller
-    response_tx: Sender<UnifiedResult<Tensor>>,
+    /// Channel to send result back to caller (now sends Vec<f32> to avoid CUDA context issues)
+    response_tx: Sender<UnifiedResult<Vec<f32>>>,
     /// Time when request was received
     received_at: Instant,
 }
@@ -176,24 +176,28 @@ impl ContinuousBatchScheduler {
         }
     }
 
-    /// Submit an embedding request (blocking until result is ready)
+    /// Submit an embedding request using raw token vectors (avoids CUDA context issues)
     ///
     /// # Arguments
-    /// - `input_ids`: Token IDs [1, seq_len]
-    /// - `attention_mask`: Attention mask [1, seq_len]
+    /// - `input_ids_raw`: Token IDs as Vec<u32>
+    /// - `attention_mask_raw`: Attention mask as Vec<u32>
     ///
     /// # Returns
     /// Embedding tensor [1, hidden_size]
-    pub fn embed(&self, input_ids: &Tensor, attention_mask: &Tensor) -> UnifiedResult<Tensor> {
+    ///
+    /// # Note
+    /// This method accepts raw vectors instead of Tensors to avoid CUDA context errors.
+    /// Tensors are created on the scheduler thread which owns the model and CUDA context.
+    pub fn embed_from_raw(
+        &self,
+        input_ids_raw: Vec<u32>,
+        attention_mask_raw: Vec<u32>,
+    ) -> UnifiedResult<Vec<f32>> {
         // Generate unique request ID (lock-free atomic increment)
         let id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
 
         // Get sequence length
-        let seq_len = input_ids.dim(1).map_err(|e| UnifiedError::Processing {
-            operation: "get sequence length".to_string(),
-            source: e.to_string(),
-            input_context: None,
-        })?;
+        let seq_len = input_ids_raw.len();
 
         // Create response channel
         let (response_tx, response_rx) = channel();
@@ -201,8 +205,8 @@ impl ContinuousBatchScheduler {
         // Create request
         let request = EmbeddingRequest {
             id,
-            input_ids: input_ids.clone(),
-            attention_mask: attention_mask.clone(),
+            input_ids_raw,
+            attention_mask_raw,
             seq_len,
             response_tx,
             received_at: Instant::now(),
@@ -218,6 +222,7 @@ impl ContinuousBatchScheduler {
             })?;
 
         // Wait for response (blocking until result is ready)
+        // Response is now Vec<f32> to avoid CUDA context issues
         response_rx.recv().map_err(|_| UnifiedError::Processing {
             operation: "receive result".to_string(),
             source: "scheduler dropped response".to_string(),
@@ -256,13 +261,35 @@ impl ContinuousBatchScheduler {
                 break;
             }
 
-            // Collect new requests (non-blocking)
+            // Collect new requests (non-blocking first pass)
             while pending_requests.len() < config.max_batch_size {
                 match request_rx.try_recv() {
                     Ok(req) => {
                         pending_requests.push(req);
                     }
-                    Err(_) => break, // No more requests available
+                    Err(_) => break, // No more requests available immediately
+                }
+            }
+
+            // If we have at least one request but batch isn't full, wait for more to accumulate
+            if !pending_requests.is_empty() && pending_requests.len() < config.max_batch_size {
+                // Always wait the full batch timeout to collect concurrent requests
+                let deadline = Instant::now() + batch_timeout;
+
+                while Instant::now() < deadline && pending_requests.len() < config.max_batch_size {
+                    match request_rx.try_recv() {
+                        Ok(req) => {
+                            pending_requests.push(req);
+                            // If batch is full, break immediately
+                            if pending_requests.len() >= config.max_batch_size {
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            // No request available, sleep briefly to avoid busy-waiting
+                            thread::sleep(Duration::from_micros(100));
+                        }
+                    }
                 }
             }
 
@@ -284,9 +311,9 @@ impl ContinuousBatchScheduler {
                 }
                 true
             } else {
-                // Wait a bit more for batch to fill
-                thread::sleep(Duration::from_micros(100));
-                false
+                // Still within timeout window, but have requests - process them
+                // This prevents unnecessary waiting when requests are already queued
+                true
             };
 
             if should_process && !pending_requests.is_empty() {
@@ -343,7 +370,7 @@ impl ContinuousBatchScheduler {
         // Find max sequence length in this batch
         let max_seq_len = requests.iter().map(|r| r.seq_len).max().unwrap();
 
-        // Collect input_ids and attention_masks with padding
+        // Collect input_ids and attention_masks with padding (working with raw Vec<u32>)
         // Track successful requests to maintain index alignment
         let mut successful_requests = Vec::new();
         let mut all_input_ids = Vec::new();
@@ -353,103 +380,28 @@ impl ContinuousBatchScheduler {
             let seq_len = request.seq_len;
 
             // Pad to max_seq_len if needed (left padding for Qwen3)
+            // Working with raw vectors - no CUDA context issues!
             let padded_input_ids = if seq_len < max_seq_len {
                 let pad_len = max_seq_len - seq_len;
-                let pad_shape = (1, pad_len);
-
-                match Tensor::zeros(
-                    pad_shape,
-                    request.input_ids.dtype(),
-                    &request.input_ids.device(),
-                ) {
-                    Ok(padding) => {
-                        match Tensor::cat(&[&padding, &request.input_ids], 1) {
-                            Ok(padded) => padded,
-                            Err(e) => {
-                                // Send error to this request and skip it
-                                let _ = request.response_tx.send(Err(UnifiedError::Processing {
-                                    operation: "concatenate padding".to_string(),
-                                    source: e.to_string(),
-                                    input_context: None,
-                                }));
-                                continue;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let _ = request.response_tx.send(Err(UnifiedError::Processing {
-                            operation: "create padding".to_string(),
-                            source: e.to_string(),
-                            input_context: None,
-                        }));
-                        continue;
-                    }
-                }
+                let mut padded = vec![0u32; pad_len]; // Padding token ID = 0
+                padded.extend_from_slice(&request.input_ids_raw);
+                padded
             } else {
-                request.input_ids.clone()
+                request.input_ids_raw.clone()
             };
 
             let padded_attention_mask = if seq_len < max_seq_len {
                 let pad_len = max_seq_len - seq_len;
-                let pad_shape = (1, pad_len);
-
-                match Tensor::zeros(
-                    pad_shape,
-                    request.attention_mask.dtype(),
-                    &request.attention_mask.device(),
-                ) {
-                    Ok(padding) => match Tensor::cat(&[&padding, &request.attention_mask], 1) {
-                        Ok(padded) => padded,
-                        Err(e) => {
-                            let _ = request.response_tx.send(Err(UnifiedError::Processing {
-                                operation: "concatenate mask padding".to_string(),
-                                source: e.to_string(),
-                                input_context: None,
-                            }));
-                            continue;
-                        }
-                    },
-                    Err(e) => {
-                        let _ = request.response_tx.send(Err(UnifiedError::Processing {
-                            operation: "create mask padding".to_string(),
-                            source: e.to_string(),
-                            input_context: None,
-                        }));
-                        continue;
-                    }
-                }
+                let mut padded = vec![0u32; pad_len]; // Padding mask = 0
+                padded.extend_from_slice(&request.attention_mask_raw);
+                padded
             } else {
-                request.attention_mask.clone()
+                request.attention_mask_raw.clone()
             };
 
-            // Extract as Vec for batching
-            let ids_vec = match padded_input_ids.to_vec2::<u32>() {
-                Ok(v) => v,
-                Err(e) => {
-                    let _ = request.response_tx.send(Err(UnifiedError::Processing {
-                        operation: "convert input_ids to vec".to_string(),
-                        source: e.to_string(),
-                        input_context: None,
-                    }));
-                    continue;
-                }
-            };
-
-            let mask_vec = match padded_attention_mask.to_vec2::<u32>() {
-                Ok(v) => v,
-                Err(e) => {
-                    let _ = request.response_tx.send(Err(UnifiedError::Processing {
-                        operation: "convert attention_mask to vec".to_string(),
-                        source: e.to_string(),
-                        input_context: None,
-                    }));
-                    continue;
-                }
-            };
-
-            // Only add to batch if all operations succeeded
-            all_input_ids.push(ids_vec[0].clone());
-            all_attention_masks.push(mask_vec[0].clone());
+            // Add to batch
+            all_input_ids.push(padded_input_ids);
+            all_attention_masks.push(padded_attention_mask);
             successful_requests.push(request);
         }
 
@@ -509,27 +461,40 @@ impl ContinuousBatchScheduler {
         // Distribute results back to individual requesters
         match batch_result {
             Ok(batch_embeddings) => {
+                // CRITICAL: Convert tensor to Vec<Vec<f32>> ON scheduler thread (where CUDA context is valid)
+                let embeddings_vecs: Vec<Vec<f32>> = match batch_embeddings.to_vec2::<f32>() {
+                    Ok(vecs) => vecs,
+                    Err(e) => {
+                        // Conversion failed - send error to all requesters
+                        for req in successful_requests {
+                            let _ = req.response_tx.send(Err(UnifiedError::Processing {
+                                operation: "convert batch tensor to vec".to_string(),
+                                source: e.to_string(),
+                                input_context: None,
+                            }));
+                        }
+                        return;
+                    }
+                };
+
                 // Collect all latencies first
                 let mut latencies = Vec::with_capacity(actual_batch_size);
 
-                // Extract individual embeddings and send to each requester
+                // Send individual embedding vectors to each requester
                 for (i, req) in successful_requests.into_iter().enumerate() {
                     let req_start = req.received_at;
                     let latency_ms = req_start.elapsed().as_secs_f64() * 1000.0;
                     latencies.push(latency_ms);
 
-                    // Extract embedding for this request
-                    match batch_embeddings.get(i) {
-                        Ok(embedding) => {
-                            let _ = req.response_tx.send(Ok(embedding));
-                        }
-                        Err(e) => {
-                            let _ = req.response_tx.send(Err(UnifiedError::Processing {
-                                operation: format!("extract embedding {}", i),
-                                source: e.to_string(),
-                                input_context: None,
-                            }));
-                        }
+                    // Send embedding vector (no more tensor - no CUDA context issues!)
+                    if i < embeddings_vecs.len() {
+                        let _ = req.response_tx.send(Ok(embeddings_vecs[i].clone()));
+                    } else {
+                        let _ = req.response_tx.send(Err(UnifiedError::Processing {
+                            operation: format!("extract embedding {}", i),
+                            source: "index out of bounds".to_string(),
+                            input_context: None,
+                        }));
                     }
                 }
 
