@@ -38,7 +38,7 @@
 
 An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
 
-![](./website/static/img/mom-overview.png)
+![Mixture-of-Models (MoM) Router Overview - Intelligent routing diagram showing how requests are directed to the most suitable model](./website/static/img/mom-overview.png)
 
 Conceptually similar to Mixture-of-Experts (MoE) which lives *within* a model, this system selects the best *entire model* for the nature of the task.
 

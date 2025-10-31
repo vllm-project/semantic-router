@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 name = "candle_semantic_router"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib", "staticlib", "cdylib"]
 
 [features]
 default = ["cuda"]
