@@ -23,7 +23,7 @@ NC ?= \033[0m
 	helm-uninstall helm-status helm-list helm-history helm-rollback helm-test \
 	helm-package helm-dev helm-prod helm-values helm-manifest \
 	helm-port-forward-api helm-port-forward-grpc helm-port-forward-metrics \
-	helm-logs helm-clean helm-setup helm-cleanup help-helm _check-k8s
+	helm-logs helm-clean helm-setup helm-cleanup helm-reinstall help-helm _check-k8s
 
 helm-lint: ## Lint the Helm chart
 helm-lint:
@@ -48,11 +48,12 @@ helm-install: _check-k8s
 		echo "$(BLUE)[INFO]$(NC) Use 'make helm-upgrade' to upgrade or 'make helm-uninstall' to remove it first"; \
 		exit 1; \
 	fi
+	@echo "$(BLUE)[INFO]$(NC) Ensuring namespace $(HELM_NAMESPACE) exists..."
+	@kubectl get namespace $(HELM_NAMESPACE) &>/dev/null || kubectl create namespace $(HELM_NAMESPACE)
 	@helm install $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
 		--namespace $(HELM_NAMESPACE) \
-		--create-namespace \
 		--wait \
 		--timeout $(HELM_TIMEOUT)
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm chart installed successfully"
@@ -209,6 +210,34 @@ helm-cleanup:
 
 helm-clean: ## Alias for helm-cleanup
 helm-clean: helm-cleanup
+
+helm-reinstall: ## Force reinstall: cleanup and install fresh
+helm-reinstall:
+	@$(LOG_TARGET)
+	@echo "$(YELLOW)[INFO]$(NC) Force reinstalling Helm release..."
+	@echo "$(BLUE)[STEP 1/5]$(NC) Uninstalling existing release (if any)..."
+	@helm uninstall $(HELM_RELEASE_NAME) --namespace $(HELM_NAMESPACE) 2>/dev/null || echo "No existing release found"
+	@echo "$(BLUE)[STEP 2/5]$(NC) Deleting namespace..."
+	@kubectl delete namespace $(HELM_NAMESPACE) --ignore-not-found=true --wait=false 2>/dev/null || true
+	@echo "$(BLUE)[STEP 3/5]$(NC) Waiting for namespace to be fully deleted..."
+	@timeout=30; \
+	elapsed=0; \
+	while kubectl get namespace $(HELM_NAMESPACE) &>/dev/null && [ $$elapsed -lt $$timeout ]; do \
+		echo "  Waiting for namespace $(HELM_NAMESPACE) to terminate... ($$elapsed/$$timeout seconds)"; \
+		sleep 2; \
+		elapsed=$$((elapsed + 2)); \
+	done; \
+	if kubectl get namespace $(HELM_NAMESPACE) &>/dev/null; then \
+		echo "$(YELLOW)[WARNING]$(NC) Namespace still exists after $$timeout seconds, forcing cleanup..."; \
+		kubectl get namespace $(HELM_NAMESPACE) -o json 2>/dev/null | jq '.spec.finalizers = []' | kubectl replace --raw /api/v1/namespaces/$(HELM_NAMESPACE)/finalize -f - 2>/dev/null || true; \
+		sleep 2; \
+	fi
+	@echo "$(GREEN)[✓]$(NC) Namespace deleted successfully"
+	@echo "$(BLUE)[STEP 4/5]$(NC) Ensuring namespace is gone..."
+	@sleep 3
+	@echo "$(BLUE)[STEP 5/5]$(NC) Installing fresh release..."
+	@$(MAKE) helm-install
+	@echo "$(GREEN)[SUCCESS]$(NC) Helm release reinstalled successfully!"
 
 # Internal helper target to check if Kubernetes is available
 _check-k8s:
