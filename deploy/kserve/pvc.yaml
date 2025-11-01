@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-models
+  labels:
+    app: semantic-router
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # Adjust based on model size requirements
+  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-cache
+  labels:
+    app: semantic-router
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi  # Cache storage - adjust as needed
+  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed
+  volumeMode: Filesystem

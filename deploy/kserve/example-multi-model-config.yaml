@@ -1,0 +1,294 @@
+# Example configuration for multiple KServe InferenceServices
+# This shows how to configure the semantic router to route between multiple models
+# based on query category and complexity
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-kserve-config
+  labels:
+    app: semantic-router
+    component: config
+data:
+  config.yaml: |
+    bert_model:
+      model_id: models/all-MiniLM-L12-v2
+      threshold: 0.6
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      similarity_threshold: 0.85
+      max_entries: 5000
+      ttl_seconds: 7200
+      eviction_policy: "lru"
+      use_hnsw: true
+      hnsw_m: 16
+      hnsw_ef_construction: 200
+      embedding_model: "bert"
+
+    tools:
+      enabled: true
+      top_k: 5
+      similarity_threshold: 0.2
+      tools_db_path: "config/tools_db.json"
+      fallback_to_empty: true
+
+    prompt_guard:
+      enabled: true
+      use_modernbert: true
+      model_id: "models/jailbreak_classifier_modernbert-base_model"
+      threshold: 0.7
+      use_cpu: true
+      jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+    # Multiple vLLM Endpoints - KServe InferenceServices
+    # Example: Small model for simple queries, large model for complex ones
+    # Replace <namespace> with your actual namespace
+    vllm_endpoints:
+      # Small, fast model (e.g., Granite 3.2 8B)
+      - name: "granite32-8b-endpoint"
+        address: "granite32-8b-predictor.<namespace>.svc.cluster.local"
+        port: 80
+        weight: 1
+
+      # Larger, more capable model (e.g., Granite 3.2 78B or Llama 3.1 70B)
+      # - name: "granite32-78b-endpoint"
+      #   address: "granite32-78b-predictor.<namespace>.svc.cluster.local"
+      #   port: 80
+      #   weight: 1
+
+      # Specialized coding model (e.g., CodeLlama or Granite Code)
+      # - name: "granite-code-endpoint"
+      #   address: "granite-code-predictor.<namespace>.svc.cluster.local"
+      #   port: 80
+      #   weight: 1
+
+    model_config:
+      # Small model - good for general queries, fast
+      "granite32-8b":
+        reasoning_family: "qwen3"
+        preferred_endpoints: ["granite32-8b-endpoint"]
+        pii_policy:
+          allow_by_default: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+      # Large model - better for complex reasoning
+      # "granite32-78b":
+      #   reasoning_family: "qwen3"
+      #   preferred_endpoints: ["granite32-78b-endpoint"]
+      #   pii_policy:
+      #     allow_by_default: true
+      #     pii_types_allowed: ["EMAIL_ADDRESS"]
+
+      # Code-specialized model
+      # "granite-code":
+      #   reasoning_family: "qwen3"
+      #   preferred_endpoints: ["granite-code-endpoint"]
+      #   pii_policy:
+      #     allow_by_default: true
+
+    classifier:
+      category_model:
+        model_id: "models/category_classifier_modernbert-base_model"
+        use_modernbert: true
+        threshold: 0.6
+        use_cpu: true
+        category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+      pii_model:
+        model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+        use_modernbert: true
+        threshold: 0.7
+        use_cpu: true
+        pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+    # Category-based routing strategy
+    # Higher scores route to that model for the category
+    categories:
+      # Simple categories → small model
+      - name: business
+        system_prompt: "You are a senior business consultant and strategic advisor."
+        model_scores:
+          - model: granite32-8b
+            score: 0.8
+            use_reasoning: false
+          # - model: granite32-78b
+          #   score: 0.6
+          #   use_reasoning: false
+
+      - name: other
+        system_prompt: "You are a helpful assistant."
+        semantic_cache_enabled: true
+        semantic_cache_similarity_threshold: 0.75
+        model_scores:
+          - model: granite32-8b
+            score: 1.0
+            use_reasoning: false
+
+      # Complex reasoning categories → large model
+      - name: math
+        system_prompt: "You are a mathematics expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.7
+            use_reasoning: true
+          # - model: granite32-78b
+          #   score: 1.0
+          #   use_reasoning: true
+
+      - name: physics
+        system_prompt: "You are a physics expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.7
+            use_reasoning: true
+          # - model: granite32-78b
+          #   score: 0.9
+          #   use_reasoning: true
+
+      # Coding → specialized code model
+      - name: computer science
+        system_prompt: "You are a computer science expert."
+        model_scores:
+          # - model: granite-code
+          #   score: 1.0
+          #   use_reasoning: false
+          - model: granite32-8b
+            score: 0.8
+            use_reasoning: false
+          # - model: granite32-78b
+          #   score: 0.6
+          #   use_reasoning: false
+
+      # Other categories
+      - name: law
+        system_prompt: "You are a knowledgeable legal expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.5
+            use_reasoning: false
+          # - model: granite32-78b
+          #   score: 0.9
+          #   use_reasoning: false
+
+      - name: psychology
+        system_prompt: "You are a psychology expert."
+        semantic_cache_enabled: true
+        semantic_cache_similarity_threshold: 0.92
+        model_scores:
+          - model: granite32-8b
+            score: 0.7
+            use_reasoning: false
+
+      - name: biology
+        system_prompt: "You are a biology expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.9
+            use_reasoning: false
+
+      - name: chemistry
+        system_prompt: "You are a chemistry expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.7
+            use_reasoning: true
+          # - model: granite32-78b
+          #   score: 0.9
+          #   use_reasoning: true
+
+      - name: history
+        system_prompt: "You are a historian."
+        model_scores:
+          - model: granite32-8b
+            score: 0.8
+            use_reasoning: false
+
+      - name: health
+        system_prompt: "You are a health and medical information expert."
+        semantic_cache_enabled: true
+        semantic_cache_similarity_threshold: 0.95
+        model_scores:
+          - model: granite32-8b
+            score: 0.6
+            use_reasoning: false
+          # - model: granite32-78b
+          #   score: 0.8
+          #   use_reasoning: false
+
+      - name: economics
+        system_prompt: "You are an economics expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.9
+            use_reasoning: false
+
+      - name: philosophy
+        system_prompt: "You are a philosophy expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.6
+            use_reasoning: false
+          # - model: granite32-78b
+          #   score: 0.8
+          #   use_reasoning: false
+
+      - name: engineering
+        system_prompt: "You are an engineering expert."
+        model_scores:
+          - model: granite32-8b
+            score: 0.8
+            use_reasoning: false
+
+    default_model: granite32-8b
+
+    reasoning_families:
+      deepseek:
+        type: "chat_template_kwargs"
+        parameter: "thinking"
+      qwen3:
+        type: "chat_template_kwargs"
+        parameter: "enable_thinking"
+      gpt-oss:
+        type: "reasoning_effort"
+        parameter: "reasoning_effort"
+      gpt:
+        type: "reasoning_effort"
+        parameter: "reasoning_effort"
+
+    default_reasoning_effort: high
+
+    api:
+      batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+          duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+          size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+    embedding_models:
+      qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+      gemma_model_path: "models/embeddinggemma-300m"
+      use_cpu: true
+
+    observability:
+      tracing:
+        enabled: false
+        provider: "opentelemetry"
+        exporter:
+          type: "stdout"
+          endpoint: "localhost:4317"
+          insecure: true
+        sampling:
+          type: "always_on"
+          rate: 1.0
+        resource:
+          service_name: "vllm-semantic-router"
+          service_version: "v0.1.0"
+          deployment_environment: "production"
