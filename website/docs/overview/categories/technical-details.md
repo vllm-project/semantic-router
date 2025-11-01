@@ -431,10 +431,10 @@ func (c *Classifier) HealthCheck() error {
    ```yaml
    categories:
      - name: "new_category"
-       use_reasoning: false
        model_scores:
          - model: "best-model-for-category"
            score: 1.0
+           use_reasoning: false  # Set per-model reasoning
    ```
 
 ### Custom Classification Models
