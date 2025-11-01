@@ -5,6 +5,7 @@
 // FFI modules
 pub mod classify; //  classification functions
 pub mod embedding; //  embedding functions
+pub mod generative_classifier; // Qwen3 LoRA generative classifier
 pub mod init; //  initialization functions
 pub mod memory; //  memory management functions
 pub mod similarity; //  similarity functions
@@ -18,6 +19,7 @@ pub mod state_manager; // Global state management system
 // Re-export types and functions
 pub use classify::*;
 pub use embedding::*; // Intelligent embedding functions
+pub use generative_classifier::*; // Qwen3 LoRA generative classifier functions
 pub use init::*;
 pub use memory::*;
 

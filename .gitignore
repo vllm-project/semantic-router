@@ -75,6 +75,9 @@ bin/
 !*/models/README.md
 models/
 
+# Training data
+wikipedia_data/
+
 # Added by Claude Task Master
 # Logs
 logs
@@ -94,7 +97,7 @@ node_modules/
 *.sw?
 # Task files
 tasks.json
-tasks/ 
+tasks/
 .cursor/
 .roo/
 .env.example

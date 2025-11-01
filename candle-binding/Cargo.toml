@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 name = "candle_semantic_router"
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 default = ["cuda"]
@@ -20,12 +20,12 @@ flash-attn = ["cuda", "candle-flash-attn"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = "0.8.4"
-candle-nn = "0.8.4"
-candle-transformers = "0.8.4"
+candle-core = "0.9.2-alpha.1"
+candle-nn = "0.9.2-alpha.1"
+candle-transformers = "0.9.2-alpha.1"
 # Flash Attention 2 (optional, requires CUDA)
 # Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
-candle-flash-attn = { version = "0.8.4", optional = true }
+candle-flash-attn = { version = "0.9.2-alpha.1", optional = true }
 tokenizers = { version = "0.21.0", features = ["http"] }
 hf-hub = "0.4.1"
 safetensors = "0.4.1"
@@ -44,4 +44,13 @@ tokio = { version = "1.0", features = ["full"] }
 tempfile = "3.8"
 serial_test = "3.0"
 criterion = "0.5"
-async-std = { version = "1.12", features = ["attributes"] } 
+async-std = { version = "1.12", features = ["attributes"] }
+
+# Example demonstrating Qwen3 Multi-LoRA classification
+[[example]]
+name = "qwen3_example"
+path = "../examples/candle-binding/qwen3_example.rs"
+
+# Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
+# They are not included in the library build to keep it self-contained.
+# To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.
