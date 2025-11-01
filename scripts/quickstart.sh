@@ -52,7 +52,9 @@ typewriter() {
 # Function to show ASCII art with animation
 show_ascii_art() {
     # Skip clear in CI environments (no proper terminal)
-    [ -z "${CI:-}" ] && clear || true
+    if [ -z "${CI:-}" ]; then
+        clear || true
+    fi
     echo
     echo
     print_color "$CYAN" "        ██╗   ██╗██╗     ██╗     ███╗   ███╗"
