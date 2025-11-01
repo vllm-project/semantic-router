@@ -45,10 +45,19 @@
   box-shadow: 0 8px 20px rgba(88, 166, 255, 0.5);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 996px) {
   .scrollToTop {
     bottom: 1.5rem;
     right: 1.5rem;
+    width: 45px;
+    height: 45px;
+  }
+}
+
+@media (max-width: 768px) {
+  .scrollToTop {
+    bottom: 5rem;
+    right: 1rem;
     width: 45px;
     height: 45px;
   }
