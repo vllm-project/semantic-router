@@ -1,0 +1,74 @@
+# Example Router Configuration with OpenTelemetry Tracing Enabled
+#
+# This configuration demonstrates how to enable distributed tracing
+# in the semantic router for end-to-end observability.
+
+# Observability configuration
+observability:
+  tracing:
+    # Enable distributed tracing
+    enabled: true
+
+    # OpenTelemetry provider
+    provider: "opentelemetry"
+
+    # OTLP exporter configuration
+    exporter:
+      # Export to OTLP collector (Jaeger in this example)
+      type: "otlp"
+
+      # Jaeger OTLP gRPC endpoint
+      endpoint: "jaeger:4317"
+
+      # Use insecure connection (for local development)
+      # In production, set to false and configure TLS
+      insecure: true
+
+    # Sampling configuration
+    sampling:
+      # Sample all requests for development/debugging
+      # In production, use "probabilistic" with a lower rate
+      type: "always_on"
+
+      # For production, use probabilistic sampling:
+      # type: "probabilistic"
+      # rate: 0.1  # Sample 10% of requests
+
+    # Resource attributes for service identification
+    resource:
+      service_name: "vllm-semantic-router"
+      service_version: "v0.1.0"
+      deployment_environment: "development"
+
+# Model routing configuration (example)
+models:
+  - name: "llama-3.1-8b"
+    category: "general"
+    endpoints:
+      - name: "vllm-backend-1"
+        address: "http://vllm-backend:8000"
+        weight: 1.0
+
+  - name: "llama-3.1-70b"
+    category: "reasoning"
+    endpoints:
+      - name: "vllm-backend-2"
+        address: "http://vllm-backend:8000"
+        weight: 1.0
+
+# Classification configuration
+classification:
+  enabled: true
+  # You can add more classification settings here
+
+# Security features (optional)
+security:
+  pii_detection:
+    enabled: false
+  jailbreak_detection:
+    enabled: false
+
+# Caching (optional)
+cache:
+  enabled: false
+  # cache configuration here

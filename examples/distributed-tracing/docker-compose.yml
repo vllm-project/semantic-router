@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Jaeger all-in-one for tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger-tracing
+    ports:
+      # Jaeger UI
+      - "16686:16686"
+      # OTLP gRPC receiver
+      - "4317:4317"
+      # OTLP HTTP receiver
+      - "4318:4318"
+      # Jaeger Thrift HTTP
+      - "14268:14268"
+      # Jaeger Thrift compact
+      - "6831:6831/udp"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=debug
+    networks:
+      - tracing-network
+
+  # Semantic Router with tracing enabled
+  semantic-router:
+    image: vllm-semantic-router:latest
+    container_name: semantic-router
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./router-config.yaml:/config/config.yaml
+    environment:
+      - CONFIG_PATH=/config/config.yaml
+    networks:
+      - tracing-network
+    depends_on:
+      - jaeger
+
+  # Example vLLM backend (optional - requires vLLM image)
+  # Uncomment if you have a vLLM backend to test with
+  # vllm-backend:
+  #   image: vllm/vllm-openai:latest
+  #   container_name: vllm-backend
+  #   ports:
+  #     - "8001:8000"
+  #   command:
+  #     - --model
+  #     - facebook/opt-125m
+  #     - --max-model-len
+  #     - "2048"
+  #   environment:
+  #     - CUDA_VISIBLE_DEVICES=0
+  #   networks:
+  #     - tracing-network
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+
+networks:
+  tracing-network:
+    driver: bridge
