@@ -186,6 +186,17 @@ jobs:
               - op: replace
                 path: /spec/template/spec/containers/0/resources/limits/cpu
                 value: "1"
+              - op: replace
+                path: /spec/template/spec/containers/0/readinessProbe
+                value:
+                  httpGet:
+                    path: /health
+                    port: classify-api
+                    scheme: HTTP
+                  initialDelaySeconds: 120
+                  periodSeconds: 15
+                  timeoutSeconds: 5
+                  failureThreshold: 20
               - op: add
                 path: /spec/template/spec/containers/0/imagePullPolicy
                 value: "IfNotPresent"
@@ -244,7 +255,7 @@ jobs:
 
           # Wait for PVC to be bound
           echo "Waiting for PVC to be bound..."
-          kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/semantic-router-models -n vllm-semantic-router-system --timeout=120s || {
+          kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/semantic-router-models -n vllm-semantic-router-system --timeout=300s || {
             echo "PVC binding timeout. Checking PVC status..."
             kubectl describe pvc -n vllm-semantic-router-system
             exit 1
@@ -252,14 +263,14 @@ jobs:
 
           # Wait for pods to be created
           echo "Waiting for pods to be created..."
-          timeout 120 bash -c 'until kubectl get pods -n vllm-semantic-router-system | grep -q semantic-router; do echo "Waiting for pod creation..."; sleep 5; done'
+          timeout 300 bash -c 'until kubectl get pods -n vllm-semantic-router-system | grep -q semantic-router; do echo "Waiting for pod creation..."; sleep 5; done'
 
           # Show pod status
           kubectl get pods -n vllm-semantic-router-system
 
           # Wait for init container to complete (model download)
           echo "Waiting for init container to complete (downloading models)..."
-          kubectl wait --for=condition=Initialized pods -l app=semantic-router -n vllm-semantic-router-system --timeout=600s || {
+          kubectl wait --for=condition=Initialized pods -l app=semantic-router -n vllm-semantic-router-system --timeout=1200s || {
             echo "❌ Init container did not complete in time. Showing logs..."
             kubectl logs -n vllm-semantic-router-system -l app=semantic-router -c model-downloader --tail=200 || true
             kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
@@ -268,7 +279,7 @@ jobs:
 
           # Wait for main container to be ready (increased timeout for model loading)
           echo "Waiting for main container to be ready..."
-          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=600s || {
+          kubectl wait --for=condition=Ready pods -l app=semantic-router -n vllm-semantic-router-system --timeout=1200s || {
             echo "❌ Pod did not become ready in time. Showing status and logs..."
             kubectl describe pods -n vllm-semantic-router-system -l app=semantic-router
             kubectl logs -n vllm-semantic-router-system -l app=semantic-router --tail=200 || true

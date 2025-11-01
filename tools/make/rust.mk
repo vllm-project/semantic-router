@@ -91,8 +91,9 @@ test-jailbreak-classifier: $(if $(CI),rust-ci,rust) ## Test jailbreak classifier
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
-# Build the Rust library (with CUDA by default)
-rust: ## Ensure Rust is installed and build the Rust library with CUDA support
+# Build the Rust library (with CUDA by default, Flash Attention optional)
+# Set ENABLE_FLASH_ATTN=1 to enable Flash Attention: make rust ENABLE_FLASH_ATTN=1
+rust: ## Ensure Rust is installed and build the Rust library with CUDA support (Flash Attention optional via ENABLE_FLASH_ATTN=1)
 	@$(LOG_TARGET)
 	@bash -c 'if ! command -v rustc >/dev/null 2>&1; then \
 		echo "rustc not found, installing..."; \
@@ -105,8 +106,22 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support
 	if ! command -v cargo >/dev/null 2>&1; then \
 		echo "Error: cargo not found in PATH" && exit 1; \
 	fi && \
-	echo "Building Rust library with CUDA support..." && \
-	cd candle-binding && cargo build --release'
+	if [ "$$ENABLE_FLASH_ATTN" = "1" ]; then \
+		if command -v nvcc >/dev/null 2>&1; then \
+			echo "Building Rust library with CUDA and Flash Attention support (ENABLE_FLASH_ATTN=1)..." && \
+			echo "✅ nvcc found: $$(nvcc --version | grep release)" && \
+			echo "   Note: Flash Attention requires CUDA Compute Capability >= 8.0 (RTX 3090+, A100, H100)" && \
+			cd candle-binding && cargo build --release --features flash-attn; \
+		else \
+			echo "❌ Error: ENABLE_FLASH_ATTN=1 but nvcc not found" && \
+			echo "   Flash Attention requires CUDA environment. Install CUDA toolkit or unset ENABLE_FLASH_ATTN." && \
+			exit 1; \
+		fi; \
+	else \
+		echo "Building Rust library with CUDA support..." && \
+		echo "💡 Tip: For 20-30% speedup on RTX 3090+/A100/H100, use: make rust ENABLE_FLASH_ATTN=1" && \
+		cd candle-binding && cargo build --release; \
+	fi'
 
 # Build the Rust library without CUDA (for CI/CD environments)
 rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)

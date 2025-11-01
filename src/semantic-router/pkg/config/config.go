@@ -10,8 +10,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// KeywordRule defines a rule for keyword-based classification.
+type KeywordRule struct {
+	Category      string   `yaml:"category"`
+	Operator      string   `yaml:"operator"`
+	Keywords      []string `yaml:"keywords"`
+	CaseSensitive bool     `yaml:"case_sensitive"`
+}
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
+	// Keyword-based classification rules
+	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
+
 	// BERT model configuration for Candle BERT similarity comparison
 	BertModel struct {
 		ModelID   string  `yaml:"model_id"`

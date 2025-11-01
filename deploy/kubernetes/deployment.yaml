@@ -141,6 +141,7 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
+          # Note: CI overrides readinessProbe via workflow kustomize patch to use HTTP GET /health on port 'classify-api'
           readinessProbe:
             tcpSocket:
               port: 50051

@@ -24,15 +24,6 @@ semantic_cache:
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
   embedding_model: "bert"
-  # HNSW index configuration (for memory backend only)
-  use_hnsw: true # Enable HNSW index for faster similarity search
-  hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
-  hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
-  
-  # Hybrid cache configuration (when backend_type: "hybrid")
-  # Combines in-memory HNSW for fast search with Milvus for scalable storage
-  # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
-  # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
 tools:
   enabled: true
@@ -223,7 +214,7 @@ router:
   traditional_attention_dropout_prob: 0.1          # Traditional model attention dropout probability
   tie_break_confidence: 0.5                        # Confidence value for tie-breaking situations
 
-default_model: openai/gpt-oss-20b
+default_model: qwen3
 
 # Reasoning family configurations
 reasoning_families:
