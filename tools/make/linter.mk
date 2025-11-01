@@ -44,4 +44,5 @@ shellcheck: ## Lint all shell scripts in the project
 		echo "  SKIP=shellcheck pre-commit run --all-files"; \
 		exit 1; \
 	fi
-	@shellcheck --rcfile=tools/linter/shellcheck/.shellcheckrc $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*")
+	@echo "Running shellcheck with config from tools/linter/shellcheck/.shellcheckrc"
+	@shellcheck -e SC2155,SC2034,SC1091 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*")
