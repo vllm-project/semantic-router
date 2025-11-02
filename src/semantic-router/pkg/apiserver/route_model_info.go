@@ -80,7 +80,7 @@ func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 	}
 
 	// Category classifier model
-	if s.config.Classifier.CategoryModel.CategoryMappingPath != "" {
+	if s.config.CategoryMappingPath != "" {
 		categories := []string{}
 		// Extract category names from config.Categories
 		for _, cat := range s.config.Categories {
@@ -91,27 +91,27 @@ func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 			Name:       "category_classifier",
 			Type:       "intent_classification",
 			Loaded:     true,
-			ModelPath:  s.config.Classifier.CategoryModel.ModelID,
+			ModelPath:  s.config.CategoryModel.ModelID,
 			Categories: categories,
 			Metadata: map[string]string{
-				"mapping_path": s.config.Classifier.CategoryModel.CategoryMappingPath,
+				"mapping_path": s.config.CategoryMappingPath,
 				"model_type":   "modernbert",
-				"threshold":    fmt.Sprintf("%.2f", s.config.Classifier.CategoryModel.Threshold),
+				"threshold":    fmt.Sprintf("%.2f", s.config.CategoryModel.Threshold),
 			},
 		})
 	}
 
 	// PII classifier model
-	if s.config.Classifier.PIIModel.PIIMappingPath != "" {
+	if s.config.PIIMappingPath != "" {
 		models = append(models, ModelInfo{
 			Name:      "pii_classifier",
 			Type:      "pii_detection",
 			Loaded:    true,
-			ModelPath: s.config.Classifier.PIIModel.ModelID,
+			ModelPath: s.config.PIIModel.ModelID,
 			Metadata: map[string]string{
-				"mapping_path": s.config.Classifier.PIIModel.PIIMappingPath,
+				"mapping_path": s.config.PIIMappingPath,
 				"model_type":   "modernbert_token",
-				"threshold":    fmt.Sprintf("%.2f", s.config.Classifier.PIIModel.Threshold),
+				"threshold":    fmt.Sprintf("%.2f", s.config.PIIModel.Threshold),
 			},
 		})
 	}
@@ -130,15 +130,15 @@ func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 	}
 
 	// BERT similarity model
-	if s.config.BertModel.ModelID != "" {
+	if s.config.ModelID != "" {
 		models = append(models, ModelInfo{
 			Name:      "bert_similarity_model",
 			Type:      "similarity",
 			Loaded:    true,
-			ModelPath: s.config.BertModel.ModelID,
+			ModelPath: s.config.ModelID,
 			Metadata: map[string]string{
 				"model_type": "sentence_transformer",
-				"threshold":  fmt.Sprintf("%.2f", s.config.BertModel.Threshold),
+				"threshold":  fmt.Sprintf("%.2f", s.config.Threshold),
 				"use_cpu":    fmt.Sprintf("%t", s.config.BertModel.UseCPU),
 			},
 		})

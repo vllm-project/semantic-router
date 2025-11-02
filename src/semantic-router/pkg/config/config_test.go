@@ -9,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,7 +37,7 @@ var _ = Describe("Config Package", func() {
 		ResetConfig()
 	})
 
-	Describe("LoadConfig", func() {
+	Describe("Load", func() {
 		Context("with valid YAML configuration", func() {
 			BeforeEach(func() {
 				validConfig := `
@@ -119,7 +120,7 @@ tools:
 			})
 
 			It("should load configuration successfully", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 
@@ -182,10 +183,10 @@ tools:
 			})
 
 			It("should return the same config instance on subsequent calls (singleton)", func() {
-				cfg1, err := LoadConfig(configFile)
+				cfg1, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg2, err := LoadConfig(configFile)
+				cfg2, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg1).To(BeIdenticalTo(cfg2))
@@ -194,7 +195,7 @@ tools:
 
 		Context("with missing config file", func() {
 			It("should return an error", func() {
-				cfg, err := LoadConfig("/nonexistent/config.yaml")
+				cfg, err := Load("/nonexistent/config.yaml")
 				Expect(err).To(HaveOccurred())
 				Expect(cfg).To(BeNil())
 				Expect(err.Error()).To(ContainSubstring("failed to read config file"))
@@ -213,7 +214,7 @@ bert_model:
 			})
 
 			It("should return a parsing error", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).To(HaveOccurred())
 				Expect(cfg).To(BeNil())
 				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
@@ -227,7 +228,7 @@ bert_model:
 			})
 
 			It("should load successfully with zero values", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 				Expect(cfg.BertModel.ModelID).To(BeEmpty())
@@ -247,7 +248,7 @@ default_model: "model-b"
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should handle concurrent LoadConfig calls safely", func() {
+			It("should handle concurrent Load calls safely", func() {
 				const numGoroutines = 10
 				var wg sync.WaitGroup
 				results := make([]*RouterConfig, numGoroutines)
@@ -257,7 +258,7 @@ default_model: "model-b"
 				for i := 0; i < numGoroutines; i++ {
 					go func(index int) {
 						defer wg.Done()
-						cfg, err := LoadConfig(configFile)
+						cfg, err := Load(configFile)
 						results[index] = cfg
 						errors[index] = err
 					}(i)
@@ -293,7 +294,7 @@ semantic_cache:
 			})
 
 			It("should return the semantic cache threshold", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -314,7 +315,7 @@ semantic_cache:
 			})
 
 			It("should return the BERT model threshold", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -348,7 +349,7 @@ default_model: "default-model"
 
 		Context("with valid category index", func() {
 			It("should return the best model for the category", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForCategoryIndex(0)
@@ -361,7 +362,7 @@ default_model: "default-model"
 
 		Context("with invalid category index", func() {
 			It("should return the default model for negative index", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForCategoryIndex(-1)
@@ -369,7 +370,7 @@ default_model: "default-model"
 			})
 
 			It("should return the default model for index beyond range", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForCategoryIndex(10)
@@ -393,7 +394,7 @@ default_model: "fallback-model"
 			})
 
 			It("should return the default model", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForCategoryIndex(0)
@@ -423,7 +424,7 @@ model_config:
 
 		Describe("GetModelPIIPolicy", func() {
 			It("should return configured PII policy for existing model", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				policy := cfg.GetModelPIIPolicy("strict-model")
@@ -435,7 +436,7 @@ model_config:
 			})
 
 			It("should return default allow-all policy for non-existent model", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				policy := cfg.GetModelPIIPolicy("non-existent-model")
@@ -446,7 +447,7 @@ model_config:
 
 		Describe("IsModelAllowedForPIIType", func() {
 			It("should allow all PII types when allow_by_default is true", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsModelAllowedForPIIType("permissive-model", PIITypePerson)).To(BeTrue())
@@ -455,7 +456,7 @@ model_config:
 			})
 
 			It("should only allow explicitly permitted PII types when allow_by_default is false", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Should allow explicitly listed PII types
@@ -469,7 +470,7 @@ model_config:
 			})
 
 			It("should handle unknown models with default allow-all policy", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsModelAllowedForPIIType("unknown-model", PIITypePerson)).To(BeTrue())
@@ -479,7 +480,7 @@ model_config:
 
 		Describe("IsModelAllowedForPIITypes", func() {
 			It("should return true when all PII types are allowed", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				piiTypes := []string{PIITypeNoPII, PIITypeOrganization}
@@ -487,7 +488,7 @@ model_config:
 			})
 
 			It("should return false when any PII type is not allowed", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				piiTypes := []string{PIITypeNoPII, PIITypePerson}
@@ -495,7 +496,7 @@ model_config:
 			})
 
 			It("should return true for empty PII types list", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsModelAllowedForPIITypes("strict-model", []string{})).To(BeTrue())
@@ -515,7 +516,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeTrue())
@@ -530,7 +531,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
@@ -545,7 +546,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
@@ -563,7 +564,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsCategoryClassifierEnabled()).To(BeTrue())
@@ -574,7 +575,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsCategoryClassifierEnabled()).To(BeFalse())
@@ -592,7 +593,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
@@ -608,7 +609,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
@@ -623,7 +624,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
@@ -654,7 +655,7 @@ categories:
 			})
 
 			It("should return all category descriptions", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -688,7 +689,7 @@ categories:
 			})
 
 			It("should use category name as fallback for missing descriptions", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -706,7 +707,7 @@ categories:
 				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -727,7 +728,7 @@ semantic_cache:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := LoadConfig(configFile)
+			cfg, err := Load(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.BertModel.Threshold).To(Equal(float32(0)))
 			Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
@@ -744,7 +745,7 @@ model_config:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := LoadConfig(configFile)
+			cfg, err := Load(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.ModelConfig["large-model"].PIIPolicy.AllowByDefault).To(BeTrue())
 		})
@@ -765,7 +766,7 @@ categories:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := LoadConfig(configFile)
+			cfg, err := Load(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.BertModel.ModelID).To(Equal("model/with/slashes"))
 			Expect(cfg.DefaultModel).To(Equal("model-with-hyphens_and_underscores"))
@@ -816,7 +817,7 @@ default_model: "model-b"
 
 		Describe("GetEndpointsForModel", func() {
 			It("should return preferred endpoints when configured", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-a")
@@ -826,7 +827,7 @@ default_model: "model-b"
 			})
 
 			It("should return empty slice when no preferred endpoints configured", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-c")
@@ -834,7 +835,7 @@ default_model: "model-b"
 			})
 
 			It("should return empty slice for non-existent model", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("non-existent-model")
@@ -842,7 +843,7 @@ default_model: "model-b"
 			})
 
 			It("should return only preferred endpoints", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-b has preferred endpoint2
@@ -854,7 +855,7 @@ default_model: "model-b"
 
 		Describe("GetEndpointByName", func() {
 			It("should return endpoint when it exists", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoint, found := cfg.GetEndpointByName("endpoint1")
@@ -865,7 +866,7 @@ default_model: "model-b"
 			})
 
 			It("should return false when endpoint doesn't exist", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoint, found := cfg.GetEndpointByName("non-existent")
@@ -876,7 +877,7 @@ default_model: "model-b"
 
 		Describe("GetAllModels", func() {
 			It("should return all models from model_config", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				models := cfg.GetAllModels()
@@ -887,7 +888,7 @@ default_model: "model-b"
 
 		Describe("SelectBestEndpointForModel", func() {
 			It("should select endpoint with highest weight when multiple available", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-a has preferred endpoints: endpoint1 (weight 1) and endpoint3 (weight 1)
@@ -898,7 +899,7 @@ default_model: "model-b"
 			})
 
 			It("should return false for non-existent model", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpointName, found := cfg.SelectBestEndpointForModel("non-existent-model")
@@ -907,7 +908,7 @@ default_model: "model-b"
 			})
 
 			It("should return false when model has no preferred endpoints", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpointName, found := cfg.SelectBestEndpointForModel("model-c")
@@ -918,7 +919,7 @@ default_model: "model-b"
 
 		Describe("ValidateEndpoints", func() {
 			It("should pass validation when all models have endpoints", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -950,7 +951,7 @@ default_model: "existing-model"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -976,7 +977,7 @@ default_model: "missing-default-model"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -1011,7 +1012,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := LoadConfig(configFile)
+					cfg, err := Load(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
 				})
@@ -1040,7 +1041,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := LoadConfig(configFile)
+					cfg, err := Load(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("::1"))
 				})
@@ -1071,7 +1072,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = LoadConfig(configFile)
+					_, err = Load(configFile)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("endpoint1"))
 					Expect(err.Error()).To(ContainSubstring("address validation failed"))
@@ -1102,7 +1103,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = LoadConfig(configFile)
+					_, err = Load(configFile)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("protocol prefixes"))
 					Expect(err.Error()).To(ContainSubstring("are not supported"))
@@ -1132,7 +1133,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = LoadConfig(configFile)
+					_, err = Load(configFile)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("paths are not supported"))
 				})
@@ -1161,7 +1162,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = LoadConfig(configFile)
+					_, err = Load(configFile)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("port numbers in address are not supported"))
 					Expect(err.Error()).To(ContainSubstring("use 'port' field instead"))
@@ -1191,7 +1192,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = LoadConfig(configFile)
+					_, err = Load(configFile)
 					Expect(err).To(HaveOccurred())
 
 					errorMsg := err.Error()
@@ -1236,7 +1237,7 @@ default_model: "test-model1"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = LoadConfig(configFile)
+					_, err = Load(configFile)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("endpoint2"))
 					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
@@ -1261,7 +1262,7 @@ semantic_cache:
 			})
 
 			It("should parse memory backend configuration correctly", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1288,7 +1289,7 @@ semantic_cache:
 			})
 
 			It("should parse milvus backend configuration correctly", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1317,7 +1318,7 @@ semantic_cache:
 			})
 
 			It("should preserve configuration even when cache is disabled", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeFalse())
@@ -1337,7 +1338,7 @@ semantic_cache:
 			})
 
 			It("should handle minimal configuration with default values", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1367,7 +1368,7 @@ semantic_cache:
 			})
 
 			It("should parse all semantic cache fields correctly", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1399,7 +1400,7 @@ semantic_cache:
 			})
 
 			It("should fall back to BERT threshold when cache threshold not specified", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
@@ -1426,7 +1427,7 @@ semantic_cache:
 			})
 
 			It("should handle edge case values correctly", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1451,7 +1452,7 @@ semantic_cache:
 			})
 
 			It("should parse unsupported backend type without error (validation happens at runtime)", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Configuration parsing should succeed
@@ -1492,7 +1493,7 @@ default_model: "gpt-4"
 			})
 
 			It("should handle production-like configuration correctly", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify BERT config
@@ -1538,7 +1539,7 @@ semantic_cache:
 			})
 
 			It("should parse active configuration and ignore commented alternatives", func() {
-				cfg, err := LoadConfig(configFile)
+				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1669,14 +1670,18 @@ api:
 		Context("GetEffectiveAutoModelName", func() {
 			It("should return configured AutoModelName when set", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "CustomAuto",
+					RouterOptions: RouterOptions{
+						AutoModelName: "CustomAuto",
+					},
 				}
 				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomAuto"))
 			})
 
 			It("should return default 'MoM' when AutoModelName is not set", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "",
+					RouterOptions: RouterOptions{
+						AutoModelName: "",
+					},
 				}
 				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
 			})
@@ -1690,28 +1695,36 @@ api:
 		Context("IsAutoModelName", func() {
 			It("should recognize 'auto' as auto model name for backward compatibility", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "MoM",
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM",
+					},
 				}
 				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
 			})
 
 			It("should recognize configured AutoModelName", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "CustomAuto",
+					RouterOptions: RouterOptions{
+						AutoModelName: "CustomAuto",
+					},
 				}
 				Expect(cfg.IsAutoModelName("CustomAuto")).To(BeTrue())
 			})
 
 			It("should recognize default 'MoM' when AutoModelName is not set", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "",
+					RouterOptions: RouterOptions{
+						AutoModelName: "",
+					},
 				}
 				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
 			})
 
 			It("should not recognize other model names as auto", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "MoM",
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM",
+					},
 				}
 				Expect(cfg.IsAutoModelName("gpt-4")).To(BeFalse())
 				Expect(cfg.IsAutoModelName("claude")).To(BeFalse())
@@ -1719,7 +1732,9 @@ api:
 
 			It("should support both 'auto' and configured name", func() {
 				cfg := &RouterConfig{
-					AutoModelName: "MoM",
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM",
+					},
 				}
 				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
 				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
@@ -1736,7 +1751,7 @@ default_model: "test-model"
 				var cfg RouterConfig
 				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.AutoModelName).To(Equal("CustomRouter"))
+				Expect(cfg.RouterOptions.AutoModelName).To(Equal("CustomRouter"))
 				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomRouter"))
 			})
 
@@ -1747,7 +1762,7 @@ default_model: "test-model"
 				var cfg RouterConfig
 				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.AutoModelName).To(Equal(""))
+				Expect(cfg.RouterOptions.AutoModelName).To(Equal(""))
 				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
 			})
 		})
@@ -1874,34 +1889,33 @@ categories:
 
 			It("should handle nil pointers for optional cache settings", func() {
 				category := Category{
-					Name: "test",
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
 					ModelScores: []ModelScore{
-						{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)},
+						{
+							Model: "test",
+							Score: 1.0,
+							ModelReasoningControl: ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
 					},
 				}
 
 				cfg := &RouterConfig{
-					SemanticCache: struct {
-						BackendType         string   `yaml:"backend_type,omitempty"`
-						Enabled             bool     `yaml:"enabled"`
-						SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
-						MaxEntries          int      `yaml:"max_entries,omitempty"`
-						TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
-						EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
-						BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
-						EmbeddingModel      string   `yaml:"embedding_model,omitempty"`
-					}{
+					SemanticCache: SemanticCache{
 						Enabled:             true,
-						SimilarityThreshold: Float32Ptr(0.8),
+						SimilarityThreshold: lo.ToPtr(float32(0.8)),
 					},
-					BertModel: struct {
-						ModelID   string  `yaml:"model_id"`
-						Threshold float32 `yaml:"threshold"`
-						UseCPU    bool    `yaml:"use_cpu"`
-					}{
-						Threshold: 0.7,
+					InlineModels: InlineModels{
+						BertModel: BertModel{
+							Threshold: 0.7,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				// Nil values should use defaults
@@ -1915,15 +1929,21 @@ categories:
 		Context("when global jailbreak is enabled", func() {
 			It("should return true for category without explicit setting", func() {
 				category := Category{
-					Name:        "test",
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
 					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: true,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: true,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
@@ -1931,16 +1951,26 @@ categories:
 
 			It("should return false when category explicitly disables jailbreak", func() {
 				category := Category{
-					Name:             "test",
-					JailbreakEnabled: BoolPtr(false),
-					ModelScores:      []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakEnabled: lo.ToPtr(false),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: true,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: true,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
@@ -1948,16 +1978,26 @@ categories:
 
 			It("should return true when category explicitly enables jailbreak", func() {
 				category := Category{
-					Name:             "test",
-					JailbreakEnabled: BoolPtr(true),
-					ModelScores:      []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakEnabled: lo.ToPtr(true),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: true,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: true,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
@@ -1967,15 +2007,21 @@ categories:
 		Context("when global jailbreak is disabled", func() {
 			It("should return false for category without explicit setting", func() {
 				category := Category{
-					Name:        "test",
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
 					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: false,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: false,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
@@ -1983,16 +2029,26 @@ categories:
 
 			It("should return true when category explicitly enables jailbreak", func() {
 				category := Category{
-					Name:             "test",
-					JailbreakEnabled: BoolPtr(true),
-					ModelScores:      []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakEnabled: lo.ToPtr(true),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: false,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: false,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeTrue())
@@ -2000,16 +2056,26 @@ categories:
 
 			It("should return false when category explicitly disables jailbreak", func() {
 				category := Category{
-					Name:             "test",
-					JailbreakEnabled: BoolPtr(false),
-					ModelScores:      []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakEnabled: lo.ToPtr(false),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: false,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: false,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("test")).To(BeFalse())
@@ -2019,10 +2085,14 @@ categories:
 		Context("when category does not exist", func() {
 			It("should fall back to global setting", func() {
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Enabled: true,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: true,
+						},
 					},
-					Categories: []Category{},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{},
+					},
 				}
 
 				Expect(cfg.IsJailbreakEnabledForCategory("nonexistent")).To(BeTrue())
@@ -2034,15 +2104,21 @@ categories:
 		Context("when global threshold is set", func() {
 			It("should return global threshold for category without explicit setting", func() {
 				category := Category{
-					Name:        "test",
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
 					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Threshold: 0.7,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Threshold: 0.7,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.7)))
@@ -2050,16 +2126,26 @@ categories:
 
 			It("should return category-specific threshold when set", func() {
 				category := Category{
-					Name:               "test",
-					JailbreakThreshold: Float32Ptr(0.9),
-					ModelScores:        []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakThreshold: lo.ToPtr(float32(0.9)),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Threshold: 0.7,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Threshold: 0.7,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.9)))
@@ -2067,16 +2153,26 @@ categories:
 
 			It("should allow lower threshold override", func() {
 				category := Category{
-					Name:               "test",
-					JailbreakThreshold: Float32Ptr(0.5),
-					ModelScores:        []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakThreshold: lo.ToPtr(float32(0.5)),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Threshold: 0.7,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Threshold: 0.7,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.5)))
@@ -2084,16 +2180,26 @@ categories:
 
 			It("should allow higher threshold override", func() {
 				category := Category{
-					Name:               "test",
-					JailbreakThreshold: Float32Ptr(0.95),
-					ModelScores:        []ModelScore{{Model: "test", Score: 1.0}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						JailbreakPolicy: JailbreakPolicy{
+							JailbreakThreshold: lo.ToPtr(float32(0.95)),
+						},
+					},
+					ModelScores: []ModelScore{{Model: "test", Score: 1.0}},
 				}
 
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Threshold: 0.7,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Threshold: 0.7,
+						},
 					},
-					Categories: []Category{category},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
 
 				Expect(cfg.GetJailbreakThresholdForCategory("test")).To(Equal(float32(0.95)))
@@ -2103,10 +2209,14 @@ categories:
 		Context("when category does not exist", func() {
 			It("should fall back to global threshold", func() {
 				cfg := &RouterConfig{
-					PromptGuard: PromptGuardConfig{
-						Threshold: 0.8,
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Threshold: 0.8,
+						},
 					},
-					Categories: []Category{},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{},
+					},
 				}
 
 				Expect(cfg.GetJailbreakThresholdForCategory("nonexistent")).To(Equal(float32(0.8)))
@@ -2118,63 +2228,135 @@ categories:
 		Context("when global threshold is set", func() {
 			It("should return global threshold for category without explicit setting", func() {
 				category := Category{
-					Name:        "test",
-					ModelScores: []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								Threshold: 0.7,
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				cfg.Classifier.PIIModel.Threshold = 0.7
 
 				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.7)))
 			})
 
 			It("should return category-specific threshold when set", func() {
 				category := Category{
-					Name:         "test",
-					PIIThreshold: Float32Ptr(0.9),
-					ModelScores:  []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						PIIDetectionPolicy: PIIDetectionPolicy{
+							PIIThreshold: lo.ToPtr(float32(0.9)),
+						},
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								Threshold: 0.7,
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				cfg.Classifier.PIIModel.Threshold = 0.7
 
 				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.9)))
 			})
 
 			It("should allow lower threshold override", func() {
 				category := Category{
-					Name:         "test",
-					PIIThreshold: Float32Ptr(0.5),
-					ModelScores:  []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						PIIDetectionPolicy: PIIDetectionPolicy{
+							PIIThreshold: lo.ToPtr(float32(0.5)),
+						},
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								Threshold: 0.7,
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				cfg.Classifier.PIIModel.Threshold = 0.7
 
 				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.5)))
 			})
 
 			It("should allow higher threshold override", func() {
 				category := Category{
-					Name:         "test",
-					PIIThreshold: Float32Ptr(0.95),
-					ModelScores:  []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						PIIDetectionPolicy: PIIDetectionPolicy{
+							PIIThreshold: lo.ToPtr(float32(0.95)),
+						},
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								Threshold: 0.7,
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				cfg.Classifier.PIIModel.Threshold = 0.7
 
 				Expect(cfg.GetPIIThresholdForCategory("test")).To(Equal(float32(0.95)))
 			})
@@ -2183,10 +2365,17 @@ categories:
 		Context("when category does not exist", func() {
 			It("should fall back to global threshold", func() {
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								Threshold: 0.8,
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{},
+					},
 				}
-				cfg.Classifier.PIIModel.Threshold = 0.8
 
 				Expect(cfg.GetPIIThresholdForCategory("nonexistent")).To(Equal(float32(0.8)))
 			})
@@ -2197,50 +2386,102 @@ categories:
 		Context("when global PII is enabled", func() {
 			It("should return true for category without explicit setting", func() {
 				category := Category{
-					Name:        "test",
-					ModelScores: []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								ModelID:        "test-model",
+								PIIMappingPath: "/path/to/mapping.json",
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				cfg.Classifier.PIIModel.ModelID = "test-model"
-				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
 
 				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeTrue())
 			})
 
 			It("should return category-specific setting when set to false", func() {
 				category := Category{
-					Name:        "test",
-					PIIEnabled:  BoolPtr(false),
-					ModelScores: []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						PIIDetectionPolicy: PIIDetectionPolicy{
+							PIIEnabled: lo.ToPtr(false),
+						},
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								ModelID:        "test-model",
+								PIIMappingPath: "/path/to/mapping.json",
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				cfg.Classifier.PIIModel.ModelID = "test-model"
-				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
 
 				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeFalse())
 			})
 
 			It("should return category-specific setting when set to true", func() {
 				category := Category{
-					Name:        "test",
-					PIIEnabled:  BoolPtr(true),
-					ModelScores: []ModelScore{{Model: "test", Score: 1.0, UseReasoning: BoolPtr(false)}},
+					CategoryMetadata: CategoryMetadata{
+						Name: "test",
+					},
+					DomainAwarePolicies: DomainAwarePolicies{
+						PIIDetectionPolicy: PIIDetectionPolicy{
+							PIIEnabled: lo.ToPtr(true),
+						},
+					},
+					ModelScores: []ModelScore{{
+						Model: "test",
+						Score: 1.0,
+						ModelReasoningControl: ModelReasoningControl{
+							UseReasoning: lo.ToPtr(false),
+						},
+					}},
 				}
 
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{category},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								ModelID: "",
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{category},
+					},
 				}
-				// Global is disabled (no model ID)
-				cfg.Classifier.PIIModel.ModelID = ""
 
 				Expect(cfg.IsPIIEnabledForCategory("test")).To(BeTrue())
 			})
@@ -2249,11 +2490,18 @@ categories:
 		Context("when category does not exist", func() {
 			It("should fall back to global setting", func() {
 				cfg := &RouterConfig{
-					Classifier: RouterConfig{}.Classifier,
-					Categories: []Category{},
+					InlineModels: InlineModels{
+						Classifier: Classifier{
+							PIIModel: PIIModel{
+								ModelID:        "test-model",
+								PIIMappingPath: "/path/to/mapping.json",
+							},
+						},
+					},
+					IntelligentRouting: IntelligentRouting{
+						Categories: []Category{},
+					},
 				}
-				cfg.Classifier.PIIModel.ModelID = "test-model"
-				cfg.Classifier.PIIModel.PIIMappingPath = "/path/to/mapping.json"
 
 				Expect(cfg.IsPIIEnabledForCategory("nonexistent")).To(BeTrue())
 			})
@@ -2329,25 +2577,29 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 		link := filepath.Join(tempDir, "link-config.yaml")
 		Expect(os.Symlink(target, link)).To(Succeed())
 
-		cfg, err := ParseConfigFile(link)
+		cfg, err := Parse(link)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
 		Expect(cfg.DefaultModel).To(Equal("test-model"))
 	})
 
 	It("should return error when file does not exist", func() {
-		_, err := ParseConfigFile(filepath.Join(tempDir, "no-such.yaml"))
+		_, err := Parse(filepath.Join(tempDir, "no-such.yaml"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to read config file"))
 	})
 
 	It("should replace global config and reflect via GetConfig", func() {
 		// new config instance
-		newCfg := &RouterConfig{DefaultModel: "new-default"}
-		ReplaceGlobalConfig(newCfg)
-		got := GetConfig()
+		newCfg := &RouterConfig{
+			BackendModels: BackendModels{
+				DefaultModel: "new-default",
+			},
+		}
+		Replace(newCfg)
+		got := Get()
 		Expect(got).To(Equal(newCfg))
-		Expect(got.DefaultModel).To(Equal("new-default"))
+		Expect(got.BackendModels.DefaultModel).To(Equal("new-default"))
 	})
 })
 
@@ -2626,8 +2878,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when MCP is fully configured", func() {
 			It("should return true", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Enabled = true
+				cfg.ToolName = "classify_text"
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeTrue())
 			})
@@ -2635,8 +2887,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when MCP is not enabled", func() {
 			It("should return false", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = false
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Enabled = false
+				cfg.ToolName = "classify_text"
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
@@ -2644,8 +2896,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when MCP tool name is empty", func() {
 			It("should return false", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = ""
+				cfg.Enabled = true
+				cfg.ToolName = ""
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
@@ -2653,8 +2905,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when both enabled and tool name are missing", func() {
 			It("should return false", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = false
-				cfg.Classifier.MCPCategoryModel.ToolName = ""
+				cfg.Enabled = false
+				cfg.ToolName = ""
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
@@ -2670,13 +2922,13 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when configuring stdio transport", func() {
 			It("should accept valid stdio configuration", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-				cfg.Classifier.MCPCategoryModel.Command = "python"
-				cfg.Classifier.MCPCategoryModel.Args = []string{"server_keyword.py"}
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
-				cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 30
+				cfg.Enabled = true
+				cfg.TransportType = "stdio"
+				cfg.Command = "python"
+				cfg.Args = []string{"server_keyword.py"}
+				cfg.ToolName = "classify_text"
+				cfg.MCPCategoryModel.Threshold = 0.5
+				cfg.TimeoutSeconds = 30
 
 				Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
@@ -2688,7 +2940,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 			})
 
 			It("should accept environment variables", func() {
-				cfg.Classifier.MCPCategoryModel.Env = map[string]string{
+				cfg.Env = map[string]string{
 					"PYTHONPATH": "/app/lib",
 					"LOG_LEVEL":  "debug",
 				}
@@ -2701,10 +2953,10 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when configuring HTTP transport", func() {
 			It("should accept valid HTTP configuration", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.TransportType = "http"
-				cfg.Classifier.MCPCategoryModel.URL = "http://localhost:8080/mcp"
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Enabled = true
+				cfg.TransportType = "http"
+				cfg.URL = "http://localhost:8080/mcp"
+				cfg.ToolName = "classify_text"
 
 				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
 				Expect(cfg.Classifier.MCPCategoryModel.URL).To(Equal("http://localhost:8080/mcp"))
@@ -2713,8 +2965,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when threshold is not set", func() {
 			It("should default to zero", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Enabled = true
+				cfg.ToolName = "classify_text"
 
 				Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
 			})
@@ -2725,7 +2977,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				testCases := []float32{0.0, 0.3, 0.5, 0.7, 0.9, 1.0}
 
 				for _, threshold := range testCases {
-					cfg.Classifier.MCPCategoryModel.Threshold = threshold
+					cfg.MCPCategoryModel.Threshold = threshold
 					Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", threshold))
 				}
 			})
@@ -2733,8 +2985,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when timeout is not set", func() {
 			It("should default to zero", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Enabled = true
+				cfg.ToolName = "classify_text"
 
 				Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
 			})
@@ -2751,14 +3003,14 @@ var _ = Describe("MCP Configuration Validation", func() {
 		Context("when both in-tree and MCP are configured", func() {
 			It("should have both configurations available", func() {
 				// Configure in-tree classifier
-				cfg.Classifier.CategoryModel.ModelID = "/path/to/model"
-				cfg.Classifier.CategoryModel.CategoryMappingPath = "/path/to/mapping.json"
-				cfg.Classifier.CategoryModel.Threshold = 0.7
+				cfg.CategoryModel.ModelID = "/path/to/model"
+				cfg.CategoryMappingPath = "/path/to/mapping.json"
+				cfg.CategoryModel.Threshold = 0.7
 
 				// Configure MCP classifier
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
+				cfg.Enabled = true
+				cfg.ToolName = "classify_text"
+				cfg.MCPCategoryModel.Threshold = 0.5
 
 				// Both should be configured
 				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
@@ -2768,8 +3020,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when only in-tree is configured", func() {
 			It("should not have MCP enabled", func() {
-				cfg.Classifier.CategoryModel.ModelID = "/path/to/model"
-				cfg.Classifier.CategoryModel.CategoryMappingPath = "/path/to/mapping.json"
+				cfg.CategoryModel.ModelID = "/path/to/model"
+				cfg.CategoryMappingPath = "/path/to/mapping.json"
 
 				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
@@ -2778,8 +3030,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when only MCP is configured", func() {
 			It("should have MCP enabled and no in-tree model", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Enabled = true
+				cfg.ToolName = "classify_text"
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeTrue())
 				Expect(cfg.Classifier.CategoryModel.ModelID).To(BeEmpty())
@@ -2802,14 +3054,14 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should support all required fields for stdio transport", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-			cfg.Classifier.MCPCategoryModel.Command = "python3"
-			cfg.Classifier.MCPCategoryModel.Args = []string{"-m", "server"}
-			cfg.Classifier.MCPCategoryModel.Env = map[string]string{"DEBUG": "1"}
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
-			cfg.Classifier.MCPCategoryModel.Threshold = 0.6
-			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 60
+			cfg.Enabled = true
+			cfg.TransportType = "stdio"
+			cfg.Command = "python3"
+			cfg.Args = []string{"-m", "server"}
+			cfg.Env = map[string]string{"DEBUG": "1"}
+			cfg.ToolName = "classify"
+			cfg.MCPCategoryModel.Threshold = 0.6
+			cfg.TimeoutSeconds = 60
 
 			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
@@ -2822,12 +3074,12 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should support all required fields for HTTP transport", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "http"
-			cfg.Classifier.MCPCategoryModel.URL = "https://mcp-server:443/api"
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
-			cfg.Classifier.MCPCategoryModel.Threshold = 0.8
-			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 120
+			cfg.Enabled = true
+			cfg.TransportType = "http"
+			cfg.URL = "https://mcp-server:443/api"
+			cfg.ToolName = "classify"
+			cfg.MCPCategoryModel.Threshold = 0.8
+			cfg.TimeoutSeconds = 120
 
 			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
@@ -2838,10 +3090,10 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should allow optional fields to be omitted", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-			cfg.Classifier.MCPCategoryModel.Command = "server"
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
+			cfg.Enabled = true
+			cfg.TransportType = "stdio"
+			cfg.Command = "server"
+			cfg.ToolName = "classify"
 
 			// Optional fields should have zero values
 			Expect(cfg.Classifier.MCPCategoryModel.Args).To(BeNil())

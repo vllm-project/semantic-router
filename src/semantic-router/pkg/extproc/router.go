@@ -31,17 +31,17 @@ var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 // NewOpenAIRouter creates a new OpenAI API router instance
 func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Always parse fresh config for router construction (supports live reload)
-	cfg, err := config.ParseConfigFile(configPath)
+	cfg, err := config.Parse(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 	// Update global config reference for packages that rely on config.GetConfig()
-	config.ReplaceGlobalConfig(cfg)
+	config.Replace(cfg)
 
 	// Load category mapping if classifier is enabled
 	var categoryMapping *classification.CategoryMapping
-	if cfg.Classifier.CategoryModel.CategoryMappingPath != "" {
-		categoryMapping, err = classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	if cfg.CategoryMappingPath != "" {
+		categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
@@ -50,8 +50,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Load PII mapping if PII classifier is enabled
 	var piiMapping *classification.PIIMapping
-	if cfg.Classifier.PIIModel.PIIMappingPath != "" {
-		piiMapping, err = classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	if cfg.PIIMappingPath != "" {
+		piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
@@ -69,7 +69,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Initialize the BERT model for similarity search
-	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+	if initErr := candle_binding.InitModel(cfg.ModelID, cfg.BertModel.UseCPU); initErr != nil {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
@@ -78,14 +78,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
-		BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
-		Enabled:             cfg.SemanticCache.Enabled,
+		BackendType:         cache.CacheBackendType(cfg.BackendType),
+		Enabled:             cfg.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.SemanticCache.MaxEntries,
-		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
-		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		MaxEntries:          cfg.MaxEntries,
+		TTLSeconds:          cfg.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),
+		BackendConfigPath:   cfg.BackendConfigPath,
+		EmbeddingModel:      cfg.EmbeddingModel,
 	}
 
 	// Use default backend type if not specified
@@ -109,7 +109,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Create tools database with config options
-	toolsThreshold := cfg.BertModel.Threshold // Default to BERT threshold
+	toolsThreshold := cfg.Threshold // Default to BERT threshold
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
 	}

@@ -520,7 +520,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	ctx.RequestQuery = requestQuery
 
 	// Check if caching is enabled for this category
-	cacheEnabled := r.Config.SemanticCache.Enabled
+	cacheEnabled := r.Config.Enabled
 	if categoryName != "" {
 		cacheEnabled = r.Config.IsCacheEnabledForCategory(categoryName)
 	}
@@ -790,7 +790,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				if categoryName != "" {
 					// Try to get the most up-to-date category configuration from global config first
 					// This ensures API updates are reflected immediately
-					globalConfig := config.GetConfig()
+					globalConfig := config.Get()
 					var category *config.Category
 					if globalConfig != nil {
 						category = globalConfig.GetCategoryByName(categoryName)

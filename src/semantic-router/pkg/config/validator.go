@@ -82,3 +82,33 @@ func getIPAddressType(address string) string {
 	}
 	return "invalid"
 }
+
+// validateConfigStructure performs additional validation on the parsed config
+func validateConfigStructure(cfg *RouterConfig) error {
+	// Ensure all categories have at least one model with scores
+	for _, category := range cfg.Categories {
+		if len(category.ModelScores) == 0 {
+			return fmt.Errorf("category '%s' has no model_scores defined - each category must have at least one model", category.Name)
+		}
+
+		// Validate each model score has the required fields
+		for i, modelScore := range category.ModelScores {
+			if modelScore.Model == "" {
+				return fmt.Errorf("category '%s', model_scores[%d]: model name cannot be empty", category.Name, i)
+			}
+			if modelScore.Score <= 0 {
+				return fmt.Errorf("category '%s', model '%s': score must be greater than 0, got %f", category.Name, modelScore.Model, modelScore.Score)
+			}
+			if modelScore.UseReasoning == nil {
+				return fmt.Errorf("category '%s', model '%s': missing required field 'use_reasoning'", category.Name, modelScore.Model)
+			}
+		}
+	}
+
+	// Validate vLLM endpoints address formats
+	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
+		return err
+	}
+
+	return nil
+}

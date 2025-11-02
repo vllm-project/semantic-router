@@ -18,6 +18,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -458,98 +459,80 @@ var _ ext_proc.ExternalProcessor_ProcessServer = &MockStream{}
 // CreateTestConfig creates a standard test configuration
 func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
-		BertModel: struct {
-			ModelID   string  `yaml:"model_id"`
-			Threshold float32 `yaml:"threshold"`
-			UseCPU    bool    `yaml:"use_cpu"`
-		}{
-			ModelID:   "sentence-transformers/all-MiniLM-L12-v2",
-			Threshold: 0.8,
-			UseCPU:    true,
-		},
-		Classifier: struct {
-			CategoryModel struct {
-				ModelID             string  `yaml:"model_id"`
-				Threshold           float32 `yaml:"threshold"`
-				UseCPU              bool    `yaml:"use_cpu"`
-				UseModernBERT       bool    `yaml:"use_modernbert"`
-				CategoryMappingPath string  `yaml:"category_mapping_path"`
-			} `yaml:"category_model"`
-			MCPCategoryModel struct {
-				Enabled        bool              `yaml:"enabled"`
-				TransportType  string            `yaml:"transport_type"`
-				Command        string            `yaml:"command,omitempty"`
-				Args           []string          `yaml:"args,omitempty"`
-				Env            map[string]string `yaml:"env,omitempty"`
-				URL            string            `yaml:"url,omitempty"`
-				ToolName       string            `yaml:"tool_name,omitempty"`
-				Threshold      float32           `yaml:"threshold"`
-				TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
-			} `yaml:"mcp_category_model,omitempty"`
-			PIIModel struct {
-				ModelID        string  `yaml:"model_id"`
-				Threshold      float32 `yaml:"threshold"`
-				UseCPU         bool    `yaml:"use_cpu"`
-				PIIMappingPath string  `yaml:"pii_mapping_path"`
-			} `yaml:"pii_model"`
-		}{
-			CategoryModel: struct {
-				ModelID             string  `yaml:"model_id"`
-				Threshold           float32 `yaml:"threshold"`
-				UseCPU              bool    `yaml:"use_cpu"`
-				UseModernBERT       bool    `yaml:"use_modernbert"`
-				CategoryMappingPath string  `yaml:"category_mapping_path"`
-			}{
-				ModelID:             "../../../../models/category_classifier_modernbert-base_model",
-				UseCPU:              true,
-				UseModernBERT:       true,
-				CategoryMappingPath: "../../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+		InlineModels: config.InlineModels{
+			BertModel: config.BertModel{
+				ModelID:   "sentence-transformers/all-MiniLM-L12-v2",
+				Threshold: 0.8,
+				UseCPU:    true,
 			},
-			MCPCategoryModel: struct {
-				Enabled        bool              `yaml:"enabled"`
-				TransportType  string            `yaml:"transport_type"`
-				Command        string            `yaml:"command,omitempty"`
-				Args           []string          `yaml:"args,omitempty"`
-				Env            map[string]string `yaml:"env,omitempty"`
-				URL            string            `yaml:"url,omitempty"`
-				ToolName       string            `yaml:"tool_name,omitempty"`
-				Threshold      float32           `yaml:"threshold"`
-				TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
-			}{
-				Enabled: false, // MCP not used in tests
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "../../../../models/category_classifier_modernbert-base_model",
+					UseCPU:              true,
+					UseModernBERT:       true,
+					CategoryMappingPath: "../../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+				},
+				MCPCategoryModel: config.MCPCategoryModel{
+					Enabled: false, // MCP not used in tests
+				},
+				PIIModel: config.PIIModel{
+					ModelID:        "../../../../models/pii_classifier_modernbert-base_presidio_token_model",
+					UseCPU:         true,
+					PIIMappingPath: "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+				},
 			},
-			PIIModel: struct {
-				ModelID        string  `yaml:"model_id"`
-				Threshold      float32 `yaml:"threshold"`
-				UseCPU         bool    `yaml:"use_cpu"`
-				PIIMappingPath string  `yaml:"pii_mapping_path"`
-			}{
-				ModelID:        "../../../../models/pii_classifier_modernbert-base_presidio_token_model",
-				UseCPU:         true,
-				PIIMappingPath: "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+			PromptGuard: config.PromptGuardConfig{
+				Enabled:   false, // Disable for most tests
+				ModelID:   "test-jailbreak-model",
+				Threshold: 0.5,
 			},
 		},
-		Categories: []config.Category{
-			{
-				Name:        "coding",
-				Description: "Programming tasks",
-				ModelScores: []config.ModelScore{
-					{Model: "model-a", Score: 0.9},
-					{Model: "model-b", Score: 0.8},
+		BackendModels: config.BackendModels{
+			DefaultModel: "model-b",
+			ModelConfig: map[string]config.ModelParams{
+				"model-a": {
+					PIIPolicy: config.PIIPolicy{
+						AllowByDefault: true,
+					},
+					PreferredEndpoints: []string{"test-endpoint1"},
+				},
+				"model-b": {
+					PIIPolicy: config.PIIPolicy{
+						AllowByDefault: true,
+					},
+					PreferredEndpoints: []string{"test-endpoint1", "test-endpoint2"},
+				},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{
+					Name:    "test-endpoint1",
+					Address: "127.0.0.1",
+					Port:    8000,
+					Weight:  1,
+				},
+				{
+					Name:    "test-endpoint2",
+					Address: "127.0.0.1",
+					Port:    8001,
+					Weight:  2,
 				},
 			},
 		},
-		DefaultModel: "model-b",
-		SemanticCache: struct {
-			BackendType         string   `yaml:"backend_type,omitempty"`
-			Enabled             bool     `yaml:"enabled"`
-			SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
-			MaxEntries          int      `yaml:"max_entries,omitempty"`
-			TTLSeconds          int      `yaml:"ttl_seconds,omitempty"`
-			EvictionPolicy      string   `yaml:"eviction_policy,omitempty"`
-			BackendConfigPath   string   `yaml:"backend_config_path,omitempty"`
-			EmbeddingModel      string   `yaml:"embedding_model,omitempty"`
-		}{
+		IntelligentRouting: config.IntelligentRouting{
+			Categories: []config.Category{
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name:        "coding",
+						Description: "Programming tasks",
+					},
+					ModelScores: []config.ModelScore{
+						{Model: "model-a", Score: 0.9},
+						{Model: "model-b", Score: 0.8},
+					},
+				},
+			},
+		},
+		SemanticCache: config.SemanticCache{
 			BackendType:         "memory",
 			Enabled:             false, // Disable for most tests
 			SimilarityThreshold: &[]float32{0.9}[0],
@@ -558,43 +541,12 @@ func CreateTestConfig() *config.RouterConfig {
 			EmbeddingModel:      "bert", // Default for tests
 			TTLSeconds:          3600,
 		},
-		PromptGuard: config.PromptGuardConfig{
-			Enabled:   false, // Disable for most tests
-			ModelID:   "test-jailbreak-model",
-			Threshold: 0.5,
-		},
-		ModelConfig: map[string]config.ModelParams{
-			"model-a": {
-				PIIPolicy: config.PIIPolicy{
-					AllowByDefault: true,
-				},
-				PreferredEndpoints: []string{"test-endpoint1"},
-			},
-			"model-b": {
-				PIIPolicy: config.PIIPolicy{
-					AllowByDefault: true,
-				},
-				PreferredEndpoints: []string{"test-endpoint1", "test-endpoint2"},
-			},
-		},
-		Tools: config.ToolsConfig{
-			Enabled:         false, // Disable for most tests
-			TopK:            3,
-			ToolsDBPath:     "",
-			FallbackToEmpty: true,
-		},
-		VLLMEndpoints: []config.VLLMEndpoint{
-			{
-				Name:    "test-endpoint1",
-				Address: "127.0.0.1",
-				Port:    8000,
-				Weight:  1,
-			},
-			{
-				Name:    "test-endpoint2",
-				Address: "127.0.0.1",
-				Port:    8001,
-				Weight:  2,
+		ToolSelection: config.ToolSelection{
+			Tools: config.ToolsConfig{
+				Enabled:         false, // Disable for most tests
+				TopK:            3,
+				ToolsDBPath:     "",
+				FallbackToEmpty: true,
 			},
 		},
 	}
@@ -603,30 +555,30 @@ func CreateTestConfig() *config.RouterConfig {
 // CreateTestRouter creates a properly initialized router for testing
 func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	// Create mock components
-	categoryMapping, err := classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	categoryMapping, err := classification.LoadCategoryMapping(cfg.CategoryMappingPath)
 	if err != nil {
 		return nil, err
 	}
 
-	piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
 	if err != nil {
 		return nil, err
 	}
 
 	// Initialize the BERT model for similarity search
-	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+	if initErr := candle_binding.InitModel(cfg.ModelID, cfg.BertModel.UseCPU); initErr != nil {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
 	// Create semantic cache
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.InMemoryCacheType,
-		Enabled:             cfg.SemanticCache.Enabled,
+		Enabled:             cfg.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.SemanticCache.MaxEntries,
-		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		MaxEntries:          cfg.MaxEntries,
+		TTLSeconds:          cfg.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),
+		EmbeddingModel:      cfg.EmbeddingModel,
 	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {
@@ -635,7 +587,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 
 	// Create tools database
 	toolsOptions := tools.ToolsDatabaseOptions{
-		SimilarityThreshold: cfg.BertModel.Threshold,
+		SimilarityThreshold: cfg.Threshold,
 		Enabled:             cfg.Tools.Enabled,
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
@@ -683,8 +635,8 @@ var _ = Describe("Security Checks", func() {
 
 	Context("with PII detection enabled", func() {
 		BeforeEach(func() {
-			cfg.Classifier.PIIModel.ModelID = testPIIModelID
-			cfg.Classifier.PIIModel.PIIMappingPath = testPIIMappingPath
+			cfg.PIIModel.ModelID = testPIIModelID
+			cfg.PIIMappingPath = testPIIMappingPath
 
 			// Create a restrictive PII policy
 			cfg.ModelConfig["model-a"] = config.ModelParams{
@@ -733,12 +685,12 @@ var _ = Describe("Security Checks", func() {
 
 	Context("with PII token classification", func() {
 		BeforeEach(func() {
-			cfg.Classifier.PIIModel.ModelID = testPIIModelID
-			cfg.Classifier.PIIModel.PIIMappingPath = testPIIMappingPath
-			cfg.Classifier.PIIModel.Threshold = testPIIThreshold
+			cfg.PIIModel.ModelID = testPIIModelID
+			cfg.PIIMappingPath = testPIIMappingPath
+			cfg.PIIModel.Threshold = testPIIThreshold
 
 			// Reload classifier with PII mapping
-			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+			piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
@@ -782,8 +734,8 @@ var _ = Describe("Security Checks", func() {
 
 			It("should respect confidence threshold", func() {
 				// Set a very high threshold to filter out detections
-				originalThreshold := cfg.Classifier.PIIModel.Threshold
-				cfg.Classifier.PIIModel.Threshold = 0.99
+				originalThreshold := cfg.PIIModel.Threshold
+				cfg.PIIModel.Threshold = 0.99
 
 				text := "Contact me at test@example.com"
 				piiTypes, err := router.Classifier.ClassifyPII(text)
@@ -793,7 +745,7 @@ var _ = Describe("Security Checks", func() {
 				Expect(len(piiTypes)).To(BeNumerically("<=", 1))
 
 				// Restore original threshold
-				cfg.Classifier.PIIModel.Threshold = originalThreshold
+				cfg.PIIModel.Threshold = originalThreshold
 			})
 
 			It("should detect various PII entity types", func() {
@@ -977,11 +929,11 @@ var _ = Describe("Security Checks", func() {
 
 	Context("PII token classification edge cases", func() {
 		BeforeEach(func() {
-			cfg.Classifier.PIIModel.ModelID = testPIIModelID
-			cfg.Classifier.PIIModel.PIIMappingPath = testPIIMappingPath
-			cfg.Classifier.PIIModel.Threshold = testPIIThreshold
+			cfg.PIIModel.ModelID = testPIIModelID
+			cfg.PIIMappingPath = testPIIMappingPath
+			cfg.PIIModel.Threshold = testPIIThreshold
 
-			piiMapping, err := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+			piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			router.Classifier, err = classification.NewClassifier(cfg, router.Classifier.CategoryMapping, piiMapping, nil)
@@ -1644,11 +1596,23 @@ var _ = Describe("Request Processing", func() {
 			BeforeEach(func() {
 				// Add a category with system prompt to the config
 				cfg.Categories = append(cfg.Categories, config.Category{
-					Name:         "math",
-					Description:  "Mathematical queries and calculations",
-					SystemPrompt: "You are a helpful assistant specialized in mathematics. Please provide step-by-step solutions.",
+					CategoryMetadata: config.CategoryMetadata{
+						Name:        "math",
+						Description: "Mathematical queries and calculations",
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SystemPromptPolicy: config.SystemPromptPolicy{
+							SystemPrompt: "You are a helpful assistant specialized in mathematics. Please provide step-by-step solutions.",
+						},
+					},
 					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 0.9, UseReasoning: config.BoolPtr(false)},
+						{
+							Model: "model-a",
+							Score: 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
 					},
 				})
 
@@ -1774,10 +1738,10 @@ var _ = Describe("ExtProc Package", func() {
 		It("should create test configuration successfully", func() {
 			cfg := CreateTestConfig()
 			Expect(cfg).NotTo(BeNil())
-			Expect(cfg.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
-			Expect(cfg.DefaultModel).To(Equal("model-b"))
-			Expect(len(cfg.Categories)).To(Equal(1))
-			Expect(cfg.Categories[0].Name).To(Equal("coding"))
+			Expect(cfg.InlineModels.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
+			Expect(cfg.BackendModels.DefaultModel).To(Equal("model-b"))
+			Expect(len(cfg.IntelligentRouting.Categories)).To(Equal(1))
+			Expect(cfg.IntelligentRouting.Categories[0].CategoryMetadata.Name).To(Equal("coding"))
 		})
 
 		It("should create test router successfully", func() {
@@ -1793,8 +1757,8 @@ var _ = Describe("ExtProc Package", func() {
 		It("should handle missing model files gracefully", func() {
 			cfg := CreateTestConfig()
 			// Intentionally use invalid paths to test error handling
-			cfg.Classifier.CategoryModel.CategoryMappingPath = "/nonexistent/path/category_mapping.json"
-			cfg.Classifier.PIIModel.PIIMappingPath = "/nonexistent/path/pii_mapping.json"
+			cfg.CategoryMappingPath = "/nonexistent/path/category_mapping.json"
+			cfg.PIIMappingPath = "/nonexistent/path/pii_mapping.json"
 
 			_, err := CreateTestRouter(cfg)
 			Expect(err).To(HaveOccurred())
@@ -1807,11 +1771,11 @@ var _ = Describe("ExtProc Package", func() {
 			cfg := CreateTestConfig()
 
 			// Test essential fields are present
-			Expect(cfg.BertModel.ModelID).NotTo(BeEmpty())
-			Expect(cfg.DefaultModel).NotTo(BeEmpty())
-			Expect(cfg.ModelConfig).NotTo(BeEmpty())
-			Expect(cfg.ModelConfig).To(HaveKey("model-a"))
-			Expect(cfg.ModelConfig).To(HaveKey("model-b"))
+			Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
+			Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
+			Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
+			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-a"))
+			Expect(cfg.BackendModels.ModelConfig).To(HaveKey("model-b"))
 		})
 
 		It("should have valid cache configuration", func() {
@@ -1827,17 +1791,17 @@ var _ = Describe("ExtProc Package", func() {
 		It("should have valid classifier configuration", func() {
 			cfg := CreateTestConfig()
 
-			Expect(cfg.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
-			Expect(cfg.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
-			Expect(cfg.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
-			Expect(cfg.Classifier.PIIModel.PIIMappingPath).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.Classifier.PIIModel.PIIMappingPath).NotTo(BeEmpty())
 		})
 
 		It("should have valid tools configuration", func() {
 			cfg := CreateTestConfig()
 
-			Expect(cfg.Tools.TopK).To(BeNumerically(">", 0))
-			Expect(cfg.Tools.FallbackToEmpty).To(BeTrue())
+			Expect(cfg.ToolSelection.Tools.TopK).To(BeNumerically(">", 0))
+			Expect(cfg.ToolSelection.Tools.FallbackToEmpty).To(BeTrue())
 		})
 	})
 
@@ -2731,7 +2695,7 @@ var _ = Describe("Caching Functionality", func() {
 
 	BeforeEach(func() {
 		cfg = CreateTestConfig()
-		cfg.SemanticCache.Enabled = true
+		cfg.Enabled = true
 
 		var err error
 		router, err = CreateTestRouter(cfg)
@@ -2919,7 +2883,7 @@ var _ = Describe("Caching Functionality", func() {
 
 	Context("with cache disabled", func() {
 		BeforeEach(func() {
-			cfg.SemanticCache.Enabled = false
+			cfg.Enabled = false
 			cacheConfig := cache.CacheConfig{
 				BackendType:         cache.InMemoryCacheType,
 				Enabled:             false,
@@ -2966,26 +2930,50 @@ var _ = Describe("Caching Functionality", func() {
 		It("should use category-specific cache settings", func() {
 			// Create a config with category-specific cache settings
 			cfg := CreateTestConfig()
-			cfg.SemanticCache.Enabled = true
-			cfg.SemanticCache.SimilarityThreshold = config.Float32Ptr(0.8)
+			cfg.Enabled = true
+			cfg.SimilarityThreshold = lo.ToPtr(float32(0.8))
 
 			// Add categories with different cache settings
 			cfg.Categories = []config.Category{
 				{
-					Name: "health",
-					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "health",
 					},
-					SemanticCacheEnabled:             config.BoolPtr(true),
-					SemanticCacheSimilarityThreshold: config.Float32Ptr(0.95),
+					ModelScores: []config.ModelScore{
+						{
+							Model: "model-a",
+							Score: 1.0,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SemanticCachingPolicy: config.SemanticCachingPolicy{
+							SemanticCacheEnabled:             lo.ToPtr(true),
+							SemanticCacheSimilarityThreshold: lo.ToPtr(float32(0.95)),
+						},
+					},
 				},
 				{
-					Name: "general",
-					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "general",
 					},
-					SemanticCacheEnabled:             config.BoolPtr(false),
-					SemanticCacheSimilarityThreshold: config.Float32Ptr(0.7),
+					ModelScores: []config.ModelScore{
+						{
+							Model: "model-a",
+							Score: 1.0,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SemanticCachingPolicy: config.SemanticCachingPolicy{
+							SemanticCacheEnabled:             lo.ToPtr(false),
+							SemanticCacheSimilarityThreshold: lo.ToPtr(float32(0.7)),
+						},
+					},
 				},
 			}
 
@@ -2998,15 +2986,23 @@ var _ = Describe("Caching Functionality", func() {
 
 		It("should fall back to global settings when category doesn't specify", func() {
 			cfg := CreateTestConfig()
-			cfg.SemanticCache.Enabled = true
-			cfg.SemanticCache.SimilarityThreshold = config.Float32Ptr(0.8)
+			cfg.Enabled = true
+			cfg.SimilarityThreshold = lo.ToPtr(float32(0.8))
 
 			// Add category without cache settings
 			cfg.Categories = []config.Category{
 				{
-					Name: "test",
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "test",
+					},
 					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 1.0, UseReasoning: config.BoolPtr(false)},
+						{
+							Model: "model-a",
+							Score: 1.0,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
 					},
 				},
 			}
@@ -3296,49 +3292,86 @@ func TestVSRInjectedSystemPromptHeader(t *testing.T) {
 func TestReasoningModeIntegration(t *testing.T) {
 	// Create a mock router with reasoning configuration
 	cfg := &config.RouterConfig{
-		DefaultReasoningEffort: "medium",
-		Categories: []config.Category{
-			{
-				Name: "math",
-				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning", ReasoningEffort: "high"},
-					{Model: "phi4", Score: 0.7, UseReasoning: config.BoolPtr(false)},
+		IntelligentRouting: config.IntelligentRouting{
+			ReasoningConfig: config.ReasoningConfig{
+				DefaultReasoningEffort: "medium",
+				ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+					"deepseek": {
+						Type:      "chat_template_kwargs",
+						Parameter: "thinking",
+					},
+					"qwen3": {
+						Type:      "chat_template_kwargs",
+						Parameter: "enable_thinking",
+					},
+					"gpt-oss": {
+						Type:      "reasoning_effort",
+						Parameter: "reasoning_effort",
+					},
 				},
 			},
-			{
-				Name: "business",
-				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
-					{Model: "deepseek-v31", Score: 0.6, UseReasoning: config.BoolPtr(false)},
+			Categories: []config.Category{
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "math",
+					},
+					ModelScores: []config.ModelScore{
+						{
+							Model: "deepseek-v31",
+							Score: 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning:         lo.ToPtr(true),
+								ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+								ReasoningEffort:      "high",
+							},
+						},
+						{
+							Model: "phi4",
+							Score: 0.7,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
+					},
+				},
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "business",
+					},
+					ModelScores: []config.ModelScore{
+						{
+							Model: "phi4",
+							Score: 0.8,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning:         lo.ToPtr(false),
+								ReasoningDescription: "Business content is typically conversational",
+							},
+						},
+						{
+							Model: "deepseek-v31",
+							Score: 0.6,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning: lo.ToPtr(false),
+							},
+						},
+					},
 				},
 			},
 		},
-		ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
-			"deepseek": {
-				Type:      "chat_template_kwargs",
-				Parameter: "thinking",
-			},
-			"qwen3": {
-				Type:      "chat_template_kwargs",
-				Parameter: "enable_thinking",
-			},
-			"gpt-oss": {
-				Type:      "reasoning_effort",
-				Parameter: "reasoning_effort",
-			},
-		},
-		ModelConfig: map[string]config.ModelParams{
-			"deepseek-v31": {
-				ReasoningFamily: "deepseek",
-			},
-			"qwen3-model": {
-				ReasoningFamily: "qwen3",
-			},
-			"gpt-oss-model": {
-				ReasoningFamily: "gpt-oss",
-			},
-			"phi4": {
-				// No reasoning family - doesn't support reasoning
+		BackendModels: config.BackendModels{
+			ModelConfig: map[string]config.ModelParams{
+				"deepseek-v31": {
+					ReasoningFamily: "deepseek",
+				},
+				"qwen3-model": {
+					ReasoningFamily: "qwen3",
+				},
+				"gpt-oss-model": {
+					ReasoningFamily: "gpt-oss",
+				},
+				"phi4": {
+					// No reasoning family - doesn't support reasoning
+				},
 			},
 		},
 	}
@@ -3474,26 +3507,32 @@ func TestReasoningModeIntegration(t *testing.T) {
 		// Create a router with sample configurations for testing
 		testRouter := &OpenAIRouter{
 			Config: &config.RouterConfig{
-				DefaultReasoningEffort: "medium",
-				ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
-					"deepseek": {
-						Type:      "chat_template_kwargs",
-						Parameter: "thinking",
-					},
-					"qwen3": {
-						Type:      "chat_template_kwargs",
-						Parameter: "enable_thinking",
+				IntelligentRouting: config.IntelligentRouting{
+					ReasoningConfig: config.ReasoningConfig{
+						DefaultReasoningEffort: "medium",
+						ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+							"deepseek": {
+								Type:      "chat_template_kwargs",
+								Parameter: "thinking",
+							},
+							"qwen3": {
+								Type:      "chat_template_kwargs",
+								Parameter: "enable_thinking",
+							},
+						},
 					},
 				},
-				ModelConfig: map[string]config.ModelParams{
-					"deepseek-v31": {
-						ReasoningFamily: "deepseek",
-					},
-					"qwen3-model": {
-						ReasoningFamily: "qwen3",
-					},
-					"phi4": {
-						// No reasoning family - doesn't support reasoning
+				BackendModels: config.BackendModels{
+					ModelConfig: map[string]config.ModelParams{
+						"deepseek-v31": {
+							ReasoningFamily: "deepseek",
+						},
+						"qwen3-model": {
+							ReasoningFamily: "qwen3",
+						},
+						"phi4": {
+							// No reasoning family - doesn't support reasoning
+						},
 					},
 				},
 			},
@@ -3569,9 +3608,18 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Math category with reasoning enabled",
 			category: config.Category{
-				Name: "math",
+				CategoryMetadata: config.CategoryMetadata{
+					Name: "math",
+				},
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning"},
+					{
+						Model: "deepseek-v31",
+						Score: 0.9,
+						ModelReasoningControl: config.ModelReasoningControl{
+							UseReasoning:         lo.ToPtr(true),
+							ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+						},
+					},
 				},
 			},
 			expected: true,
@@ -3579,9 +3627,18 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Business category with reasoning disabled",
 			category: config.Category{
-				Name: "business",
+				CategoryMetadata: config.CategoryMetadata{
+					Name: "business",
+				},
 				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
+					{
+						Model: "phi4",
+						Score: 0.8,
+						ModelReasoningControl: config.ModelReasoningControl{
+							UseReasoning:         lo.ToPtr(false),
+							ReasoningDescription: "Business content is typically conversational",
+						},
+					},
 				},
 			},
 			expected: false,
@@ -3589,9 +3646,18 @@ func TestReasoningModeConfigurationValidation(t *testing.T) {
 		{
 			name: "Science category with reasoning enabled",
 			category: config.Category{
-				Name: "science",
+				CategoryMetadata: config.CategoryMetadata{
+					Name: "science",
+				},
 				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Scientific concepts benefit from structured analysis"},
+					{
+						Model: "deepseek-v31",
+						Score: 0.9,
+						ModelReasoningControl: config.ModelReasoningControl{
+							UseReasoning:         lo.ToPtr(true),
+							ReasoningDescription: "Scientific concepts benefit from structured analysis",
+						},
+					},
 				},
 			},
 			expected: true,
@@ -3624,43 +3690,49 @@ func TestModelReasoningFamily(t *testing.T) {
 	// Create a router with sample model configurations
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			DefaultReasoningEffort: "medium",
-			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
-				"qwen3": {
-					Type:      "chat_template_kwargs",
-					Parameter: "enable_thinking",
-				},
-				"deepseek": {
-					Type:      "chat_template_kwargs",
-					Parameter: "thinking",
-				},
-				"gpt-oss": {
-					Type:      "reasoning_effort",
-					Parameter: "reasoning_effort",
-				},
-				"gpt": {
-					Type:      "reasoning_effort",
-					Parameter: "reasoning_effort",
+			IntelligentRouting: config.IntelligentRouting{
+				ReasoningConfig: config.ReasoningConfig{
+					DefaultReasoningEffort: "medium",
+					ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+						"qwen3": {
+							Type:      "chat_template_kwargs",
+							Parameter: "enable_thinking",
+						},
+						"deepseek": {
+							Type:      "chat_template_kwargs",
+							Parameter: "thinking",
+						},
+						"gpt-oss": {
+							Type:      "reasoning_effort",
+							Parameter: "reasoning_effort",
+						},
+						"gpt": {
+							Type:      "reasoning_effort",
+							Parameter: "reasoning_effort",
+						},
+					},
 				},
 			},
-			ModelConfig: map[string]config.ModelParams{
-				"qwen3-model": {
-					ReasoningFamily: "qwen3",
-				},
-				"ds-v31-custom": {
-					ReasoningFamily: "deepseek",
-				},
-				"my-deepseek": {
-					ReasoningFamily: "deepseek",
-				},
-				"gpt-oss-model": {
-					ReasoningFamily: "gpt-oss",
-				},
-				"custom-gpt": {
-					ReasoningFamily: "gpt",
-				},
-				"phi4": {
-					// No reasoning family - doesn't support reasoning
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"qwen3-model": {
+						ReasoningFamily: "qwen3",
+					},
+					"ds-v31-custom": {
+						ReasoningFamily: "deepseek",
+					},
+					"my-deepseek": {
+						ReasoningFamily: "deepseek",
+					},
+					"gpt-oss-model": {
+						ReasoningFamily: "gpt-oss",
+					},
+					"custom-gpt": {
+						ReasoningFamily: "gpt",
+					},
+					"phi4": {
+						// No reasoning family - doesn't support reasoning
+					},
 				},
 			},
 		},
@@ -3763,33 +3835,39 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 	// Create a router with family-based reasoning configurations
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			DefaultReasoningEffort: "medium",
-			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
-				"deepseek": {
-					Type:      "chat_template_kwargs",
-					Parameter: "thinking",
-				},
-				"qwen3": {
-					Type:      "chat_template_kwargs",
-					Parameter: "enable_thinking",
-				},
-				"gpt-oss": {
-					Type:      "reasoning_effort",
-					Parameter: "reasoning_effort",
+			IntelligentRouting: config.IntelligentRouting{
+				ReasoningConfig: config.ReasoningConfig{
+					DefaultReasoningEffort: "medium",
+					ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+						"deepseek": {
+							Type:      "chat_template_kwargs",
+							Parameter: "thinking",
+						},
+						"qwen3": {
+							Type:      "chat_template_kwargs",
+							Parameter: "enable_thinking",
+						},
+						"gpt-oss": {
+							Type:      "reasoning_effort",
+							Parameter: "reasoning_effort",
+						},
+					},
 				},
 			},
-			ModelConfig: map[string]config.ModelParams{
-				"ds-v31-custom": {
-					ReasoningFamily: "deepseek",
-				},
-				"qwen3-model": {
-					ReasoningFamily: "qwen3",
-				},
-				"gpt-oss-model": {
-					ReasoningFamily: "gpt-oss",
-				},
-				"phi4": {
-					// No reasoning family - doesn't support reasoning
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"ds-v31-custom": {
+						ReasoningFamily: "deepseek",
+					},
+					"qwen3-model": {
+						ReasoningFamily: "qwen3",
+					},
+					"gpt-oss-model": {
+						ReasoningFamily: "gpt-oss",
+					},
+					"phi4": {
+						// No reasoning family - doesn't support reasoning
+					},
 				},
 			},
 		},
@@ -3966,23 +4044,52 @@ func TestReasoningModeConfiguration(_ *testing.T) {
 
 	// Create a mock configuration for testing
 	cfg := &config.RouterConfig{
-		Categories: []config.Category{
-			{
-				Name: "math",
-				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Mathematical problems require step-by-step reasoning"},
+		IntelligentRouting: config.IntelligentRouting{
+			Categories: []config.Category{
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "math",
+					},
+					ModelScores: []config.ModelScore{
+						{
+							Model: "deepseek-v31",
+							Score: 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning:         lo.ToPtr(true),
+								ReasoningDescription: "Mathematical problems require step-by-step reasoning",
+							},
+						},
+					},
 				},
-			},
-			{
-				Name: "business",
-				ModelScores: []config.ModelScore{
-					{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false), ReasoningDescription: "Business content is typically conversational"},
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "business",
+					},
+					ModelScores: []config.ModelScore{
+						{
+							Model: "phi4",
+							Score: 0.8,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning:         lo.ToPtr(false),
+								ReasoningDescription: "Business content is typically conversational",
+							},
+						},
+					},
 				},
-			},
-			{
-				Name: "biology",
-				ModelScores: []config.ModelScore{
-					{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true), ReasoningDescription: "Biological processes benefit from structured analysis"},
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "biology",
+					},
+					ModelScores: []config.ModelScore{
+						{
+							Model: "deepseek-v31",
+							Score: 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{
+								UseReasoning:         lo.ToPtr(true),
+								ReasoningDescription: "Biological processes benefit from structured analysis",
+							},
+						},
+					},
 				},
 			},
 		},
@@ -4185,33 +4292,39 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 	// Create a mock router with family-based reasoning config
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			DefaultReasoningEffort: "medium",
-			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
-				"deepseek": {
-					Type:      "chat_template_kwargs",
-					Parameter: "thinking",
-				},
-				"qwen3": {
-					Type:      "chat_template_kwargs",
-					Parameter: "enable_thinking",
-				},
-				"gpt-oss": {
-					Type:      "reasoning_effort",
-					Parameter: "reasoning_effort",
+			IntelligentRouting: config.IntelligentRouting{
+				ReasoningConfig: config.ReasoningConfig{
+					DefaultReasoningEffort: "medium",
+					ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+						"deepseek": {
+							Type:      "chat_template_kwargs",
+							Parameter: "thinking",
+						},
+						"qwen3": {
+							Type:      "chat_template_kwargs",
+							Parameter: "enable_thinking",
+						},
+						"gpt-oss": {
+							Type:      "reasoning_effort",
+							Parameter: "reasoning_effort",
+						},
+					},
 				},
 			},
-			ModelConfig: map[string]config.ModelParams{
-				"deepseek-v31": {
-					ReasoningFamily: "deepseek",
-				},
-				"qwen3-model": {
-					ReasoningFamily: "qwen3",
-				},
-				"gpt-oss-model": {
-					ReasoningFamily: "gpt-oss",
-				},
-				"phi4": {
-					// No reasoning family - doesn't support reasoning
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"deepseek-v31": {
+						ReasoningFamily: "deepseek",
+					},
+					"qwen3-model": {
+						ReasoningFamily: "qwen3",
+					},
+					"gpt-oss-model": {
+						ReasoningFamily: "gpt-oss",
+					},
+					"phi4": {
+						// No reasoning family - doesn't support reasoning
+					},
 				},
 			},
 		},
@@ -4373,43 +4486,51 @@ func TestAddReasoningModeToRequestBody(_ *testing.T) {
 func TestHandleModelsRequest(t *testing.T) {
 	// Create a test router with mock config
 	cfg := &config.RouterConfig{
-		VLLMEndpoints: []config.VLLMEndpoint{
-			{
-				Name:    "primary",
-				Address: "127.0.0.1",
-				Port:    8000,
-				Weight:  1,
+		BackendModels: config.BackendModels{
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{
+					Name:    "primary",
+					Address: "127.0.0.1",
+					Port:    8000,
+					Weight:  1,
+				},
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"gpt-4o-mini": {
+					PreferredEndpoints: []string{"primary"},
+				},
+				"llama-3.1-8b-instruct": {
+					PreferredEndpoints: []string{"primary"},
+				},
 			},
 		},
-		ModelConfig: map[string]config.ModelParams{
-			"gpt-4o-mini": {
-				PreferredEndpoints: []string{"primary"},
-			},
-			"llama-3.1-8b-instruct": {
-				PreferredEndpoints: []string{"primary"},
-			},
+		RouterOptions: config.RouterOptions{
+			IncludeConfigModelsInList: false, // Default: don't include configured models
 		},
-		IncludeConfigModelsInList: false, // Default: don't include configured models
 	}
 
 	cfgWithModels := &config.RouterConfig{
-		VLLMEndpoints: []config.VLLMEndpoint{
-			{
-				Name:    "primary",
-				Address: "127.0.0.1",
-				Port:    8000,
-				Weight:  1,
+		BackendModels: config.BackendModels{
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{
+					Name:    "primary",
+					Address: "127.0.0.1",
+					Port:    8000,
+					Weight:  1,
+				},
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"gpt-4o-mini": {
+					PreferredEndpoints: []string{"primary"},
+				},
+				"llama-3.1-8b-instruct": {
+					PreferredEndpoints: []string{"primary"},
+				},
 			},
 		},
-		ModelConfig: map[string]config.ModelParams{
-			"gpt-4o-mini": {
-				PreferredEndpoints: []string{"primary"},
-			},
-			"llama-3.1-8b-instruct": {
-				PreferredEndpoints: []string{"primary"},
-			},
+		RouterOptions: config.RouterOptions{
+			IncludeConfigModelsInList: true, // Include configured models
 		},
-		IncludeConfigModelsInList: true, // Include configured models
 	}
 
 	tests := []struct {
@@ -4529,17 +4650,19 @@ func TestHandleModelsRequest(t *testing.T) {
 func TestHandleRequestHeadersWithModelsEndpoint(t *testing.T) {
 	// Create a test router
 	cfg := &config.RouterConfig{
-		VLLMEndpoints: []config.VLLMEndpoint{
-			{
-				Name:    "primary",
-				Address: "127.0.0.1",
-				Port:    8000,
-				Weight:  1,
+		BackendModels: config.BackendModels{
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{
+					Name:    "primary",
+					Address: "127.0.0.1",
+					Port:    8000,
+					Weight:  1,
+				},
 			},
-		},
-		ModelConfig: map[string]config.ModelParams{
-			"gpt-4o-mini": {
-				PreferredEndpoints: []string{"primary"},
+			ModelConfig: map[string]config.ModelParams{
+				"gpt-4o-mini": {
+					PreferredEndpoints: []string{"primary"},
+				},
 			},
 		},
 	}

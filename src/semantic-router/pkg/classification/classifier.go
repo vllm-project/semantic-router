@@ -321,15 +321,15 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	}
 
 	// Add in-tree classifier if configured
-	if cfg.Classifier.CategoryModel.ModelID != "" {
-		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.Classifier.CategoryModel.UseModernBERT), createCategoryInference(cfg.Classifier.CategoryModel.UseModernBERT)))
+	if cfg.CategoryModel.ModelID != "" {
+		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.UseModernBERT), createCategoryInference(cfg.UseModernBERT)))
 	}
 
 	// Add MCP classifier if configured
 	// Note: Both in-tree and MCP classifiers can be configured simultaneously.
 	// At runtime, in-tree classifier will be tried first, with MCP as a fallback.
 	// This allows flexible deployment scenarios (e.g., gradual migration, A/B testing).
-	if cfg.Classifier.MCPCategoryModel.Enabled {
+	if cfg.Enabled {
 		mcpInit := createMCPCategoryInitializer()
 		mcpInf := createMCPCategoryInference(mcpInit)
 		options = append(options, withMCPCategory(mcpInit, mcpInf))
@@ -340,7 +340,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 // IsCategoryEnabled checks if category classification is properly configured
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.Classifier.CategoryModel.ModelID != "" && c.Config.Classifier.CategoryModel.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model
@@ -354,7 +354,7 @@ func (c *Classifier) initializeCategoryClassifier() error {
 		return fmt.Errorf("not enough categories for classification, need at least 2, got %d", numClasses)
 	}
 
-	return c.categoryInitializer.Init(c.Config.Classifier.CategoryModel.ModelID, c.Config.Classifier.CategoryModel.UseCPU, numClasses)
+	return c.categoryInitializer.Init(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, numClasses)
 }
 
 // ClassifyCategory performs category classification on the given text
@@ -409,9 +409,9 @@ func (c *Classifier) classifyCategoryInTree(text string) (string, float64, error
 	logging.Infof("Classification result: class=%d, confidence=%.4f", result.Class, result.Confidence)
 
 	// Check confidence threshold
-	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
+	if result.Confidence < c.Config.CategoryModel.Threshold {
 		logging.Infof("Classification confidence (%.4f) below threshold (%.4f)",
-			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
+			result.Confidence, c.Config.CategoryModel.Threshold)
 		return "", float64(result.Confidence), nil
 	}
 
@@ -544,7 +544,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(contentList []strin
 
 // IsPIIEnabled checks if PII detection is properly configured
 func (c *Classifier) IsPIIEnabled() bool {
-	return c.Config.Classifier.PIIModel.ModelID != "" && c.Config.Classifier.PIIModel.PIIMappingPath != "" && c.PIIMapping != nil
+	return c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model
@@ -558,7 +558,7 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	return c.piiInitializer.Init(c.Config.Classifier.PIIModel.ModelID, c.Config.Classifier.PIIModel.UseCPU)
+	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU)
 }
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
@@ -630,7 +630,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		result.Probabilities,
 		categoryNames,
 		categoryReasoningMap,
-		float64(c.Config.Classifier.CategoryModel.Threshold),
+		float64(c.Config.CategoryModel.Threshold),
 	)
 	entropyLatency := time.Since(entropyStart).Seconds()
 
@@ -689,9 +689,9 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	)
 
 	// Check confidence threshold for category determination
-	if result.Confidence < c.Config.Classifier.CategoryModel.Threshold {
+	if result.Confidence < c.Config.CategoryModel.Threshold {
 		logging.Infof("Classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
-			result.Confidence, c.Config.Classifier.CategoryModel.Threshold)
+			result.Confidence, c.Config.CategoryModel.Threshold)
 
 		// Still return reasoning decision based on entropy even if confidence is low
 		return "", float64(result.Confidence), reasoningDecision, nil
@@ -716,7 +716,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types
 func (c *Classifier) ClassifyPII(text string) ([]string, error) {
-	return c.ClassifyPIIWithThreshold(text, c.Config.Classifier.PIIModel.Threshold)
+	return c.ClassifyPIIWithThreshold(text, c.Config.PIIModel.Threshold)
 }
 
 // ClassifyPIIWithThreshold performs PII token classification with a custom threshold
@@ -730,7 +730,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Use ModernBERT PII token classifier for entity detection
-	configPath := fmt.Sprintf("%s/config.json", c.Config.Classifier.PIIModel.ModelID)
+	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
 	start := time.Now()
 	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
 	metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
@@ -795,7 +795,7 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 
 // AnalyzeContentForPII performs detailed PII analysis on multiple content pieces
 func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnalysisResult, error) {
-	return c.AnalyzeContentForPIIWithThreshold(contentList, c.Config.Classifier.PIIModel.Threshold)
+	return c.AnalyzeContentForPIIWithThreshold(contentList, c.Config.PIIModel.Threshold)
 }
 
 // AnalyzeContentForPIIWithThreshold performs detailed PII analysis with a custom threshold
@@ -817,7 +817,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		configPath := fmt.Sprintf("%s/config.json", c.Config.Classifier.PIIModel.ModelID)
+		configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
 		start := time.Now()
 		tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
 		metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())

@@ -46,7 +46,7 @@ func main() {
 	}
 
 	// Load configuration to initialize tracing
-	cfg, err := config.ParseConfigFile(*configPath)
+	cfg, err := config.Parse(*configPath)
 	if err != nil {
 		logging.Fatalf("Failed to load config: %v", err)
 	}
@@ -114,18 +114,18 @@ func main() {
 	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
 	// Initialize embedding models if configured (Long-context support)
-	cfg, err = config.LoadConfig(*configPath)
+	cfg, err = config.Load(*configPath)
 	if err != nil {
 		logging.Warnf("Failed to load config for embedding models: %v", err)
-	} else if cfg.EmbeddingModels.Qwen3ModelPath != "" || cfg.EmbeddingModels.GemmaModelPath != "" {
+	} else if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
 		logging.Infof("Initializing embedding models...")
-		logging.Infof("  Qwen3 model: %s", cfg.EmbeddingModels.Qwen3ModelPath)
-		logging.Infof("  Gemma model: %s", cfg.EmbeddingModels.GemmaModelPath)
+		logging.Infof("  Qwen3 model: %s", cfg.Qwen3ModelPath)
+		logging.Infof("  Gemma model: %s", cfg.GemmaModelPath)
 		logging.Infof("  Use CPU: %v", cfg.EmbeddingModels.UseCPU)
 
 		if err := candle_binding.InitEmbeddingModels(
-			cfg.EmbeddingModels.Qwen3ModelPath,
-			cfg.EmbeddingModels.GemmaModelPath,
+			cfg.Qwen3ModelPath,
+			cfg.GemmaModelPath,
 			cfg.EmbeddingModels.UseCPU,
 		); err != nil {
 			logging.Errorf("Failed to initialize embedding models: %v", err)

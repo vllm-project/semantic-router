@@ -214,12 +214,14 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 		{
 			name: "Custom max batch size",
 			config: &config.RouterConfig{
-				API: config.APIConfig{
-					BatchClassification: struct {
-						Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-					}{
-						Metrics: config.BatchClassificationMetricsConfig{
-							Enabled: true,
+				APIServer: config.APIServer{
+					API: config.APIConfig{
+						BatchClassification: struct {
+							Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
+						}{
+							Metrics: config.BatchClassificationMetricsConfig{
+								Enabled: true,
+							},
 						},
 					},
 				},
@@ -248,12 +250,14 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 		{
 			name: "Valid request within custom limits",
 			config: &config.RouterConfig{
-				API: config.APIConfig{
-					BatchClassification: struct {
-						Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-					}{
-						Metrics: config.BatchClassificationMetricsConfig{
-							Enabled: true,
+				APIServer: config.APIServer{
+					API: config.APIConfig{
+						BatchClassification: struct {
+							Metrics config.BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
+						}{
+							Metrics: config.BatchClassificationMetricsConfig{
+								Enabled: true,
+							},
 						},
 					},
 				},
@@ -305,23 +309,27 @@ func TestBatchClassificationConfiguration(t *testing.T) {
 func TestOpenAIModelsEndpoint(t *testing.T) {
 	// Test with default config (IncludeConfigModelsInList = false)
 	cfg := &config.RouterConfig{
-		VLLMEndpoints: []config.VLLMEndpoint{
-			{
-				Name:    "primary",
-				Address: "127.0.0.1",
-				Port:    8000,
-				Weight:  1,
+		BackendModels: config.BackendModels{
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{
+					Name:    "primary",
+					Address: "127.0.0.1",
+					Port:    8000,
+					Weight:  1,
+				},
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"gpt-4o-mini": {
+					PreferredEndpoints: []string{"primary"},
+				},
+				"llama-3.1-8b-instruct": {
+					PreferredEndpoints: []string{"primary"},
+				},
 			},
 		},
-		ModelConfig: map[string]config.ModelParams{
-			"gpt-4o-mini": {
-				PreferredEndpoints: []string{"primary"},
-			},
-			"llama-3.1-8b-instruct": {
-				PreferredEndpoints: []string{"primary"},
-			},
+		RouterOptions: config.RouterOptions{
+			IncludeConfigModelsInList: false,
 		},
-		IncludeConfigModelsInList: false,
 	}
 
 	apiServer := &ClassificationAPIServer{
@@ -371,23 +379,27 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 func TestOpenAIModelsEndpointWithConfigModels(t *testing.T) {
 	// Test with IncludeConfigModelsInList = true
 	cfg := &config.RouterConfig{
-		VLLMEndpoints: []config.VLLMEndpoint{
-			{
-				Name:    "primary",
-				Address: "127.0.0.1",
-				Port:    8000,
-				Weight:  1,
+		BackendModels: config.BackendModels{
+			VLLMEndpoints: []config.VLLMEndpoint{
+				{
+					Name:    "primary",
+					Address: "127.0.0.1",
+					Port:    8000,
+					Weight:  1,
+				},
+			},
+			ModelConfig: map[string]config.ModelParams{
+				"gpt-4o-mini": {
+					PreferredEndpoints: []string{"primary"},
+				},
+				"llama-3.1-8b-instruct": {
+					PreferredEndpoints: []string{"primary"},
+				},
 			},
 		},
-		ModelConfig: map[string]config.ModelParams{
-			"gpt-4o-mini": {
-				PreferredEndpoints: []string{"primary"},
-			},
-			"llama-3.1-8b-instruct": {
-				PreferredEndpoints: []string{"primary"},
-			},
+		RouterOptions: config.RouterOptions{
+			IncludeConfigModelsInList: true,
 		},
-		IncludeConfigModelsInList: true,
 	}
 
 	apiServer := &ClassificationAPIServer{
@@ -441,18 +453,32 @@ func TestOpenAIModelsEndpointWithConfigModels(t *testing.T) {
 func TestSystemPromptEndpointSecurity(t *testing.T) {
 	// Create test configuration with categories that have system prompts
 	cfg := &config.RouterConfig{
-		Categories: []config.Category{
-			{
-				Name:                "math",
-				SystemPrompt:        "You are a math expert.",
-				SystemPromptEnabled: &[]bool{true}[0], // Pointer to true
-				SystemPromptMode:    "replace",
-			},
-			{
-				Name:                "coding",
-				SystemPrompt:        "You are a coding assistant.",
-				SystemPromptEnabled: &[]bool{false}[0], // Pointer to false
-				SystemPromptMode:    "insert",
+		IntelligentRouting: config.IntelligentRouting{
+			Categories: []config.Category{
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "math",
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SystemPromptPolicy: config.SystemPromptPolicy{
+							SystemPrompt:        "You are a math expert.",
+							SystemPromptEnabled: &[]bool{true}[0], // Pointer to true
+							SystemPromptMode:    "replace",
+						},
+					},
+				},
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "coding",
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SystemPromptPolicy: config.SystemPromptPolicy{
+							SystemPrompt:        "You are a coding assistant.",
+							SystemPromptEnabled: &[]bool{false}[0], // Pointer to false
+							SystemPromptMode:    "insert",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -633,16 +659,30 @@ func TestSystemPromptEndpointSecurity(t *testing.T) {
 func TestSystemPromptEndpointFunctionality(t *testing.T) {
 	// Create test configuration
 	cfg := &config.RouterConfig{
-		Categories: []config.Category{
-			{
-				Name:                "math",
-				SystemPrompt:        "You are a math expert.",
-				SystemPromptEnabled: &[]bool{true}[0],
-				SystemPromptMode:    "replace",
-			},
-			{
-				Name:         "no-prompt",
-				SystemPrompt: "", // No system prompt
+		IntelligentRouting: config.IntelligentRouting{
+			Categories: []config.Category{
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "math",
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SystemPromptPolicy: config.SystemPromptPolicy{
+							SystemPrompt:        "You are a math expert.",
+							SystemPromptEnabled: &[]bool{true}[0],
+							SystemPromptMode:    "replace",
+						},
+					},
+				},
+				{
+					CategoryMetadata: config.CategoryMetadata{
+						Name: "no-prompt",
+					},
+					DomainAwarePolicies: config.DomainAwarePolicies{
+						SystemPromptPolicy: config.SystemPromptPolicy{
+							SystemPrompt: "", // No system prompt
+						},
+					},
+				},
 			},
 		},
 	}

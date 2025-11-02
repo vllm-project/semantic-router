@@ -57,11 +57,11 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 	// Always try to auto-discover and initialize unified classifier for batch processing
 	// Use model path from config, fallback to "./models" if not specified
 	modelsPath := "./models"
-	if config != nil && config.Classifier.CategoryModel.ModelID != "" {
+	if config != nil && config.CategoryModel.ModelID != "" {
 		// Extract the models directory from the model path
 		// e.g., "models/category_classifier_modernbert-base_model" -> "models"
-		if idx := strings.Index(config.Classifier.CategoryModel.ModelID, "/"); idx > 0 {
-			modelsPath = config.Classifier.CategoryModel.ModelID[:idx]
+		if idx := strings.Index(config.CategoryModel.ModelID, "/"); idx > 0 {
+			modelsPath = config.CategoryModel.ModelID[:idx]
 		}
 	}
 	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifier(modelsPath)
@@ -86,18 +86,18 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 
 	// Check if we should load categories from MCP server
 	// Note: tool_name is optional and will be auto-discovered if not specified
-	useMCPCategories := config.Classifier.CategoryModel.ModelID == "" &&
-		config.Classifier.MCPCategoryModel.Enabled
+	useMCPCategories := config.CategoryModel.ModelID == "" &&
+		config.Enabled
 
 	if useMCPCategories {
 		// Categories will be loaded from MCP server during initialization
 		logging.Infof("Category mapping will be loaded from MCP server")
 		// Create empty mapping initially - will be populated during initialization
 		categoryMapping = nil
-	} else if config.Classifier.CategoryModel.CategoryMappingPath != "" {
+	} else if config.CategoryMappingPath != "" {
 		// Load from file as usual
 		var err error
-		categoryMapping, err = classification.LoadCategoryMapping(config.Classifier.CategoryModel.CategoryMappingPath)
+		categoryMapping, err = classification.LoadCategoryMapping(config.CategoryMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
@@ -105,9 +105,9 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 
 	// Load PII mapping
 	var piiMapping *classification.PIIMapping
-	if config.Classifier.PIIModel.PIIMappingPath != "" {
+	if config.PIIMappingPath != "" {
 		var err error
-		piiMapping, err = classification.LoadPIIMapping(config.Classifier.PIIModel.PIIMappingPath)
+		piiMapping, err = classification.LoadPIIMapping(config.PIIMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
@@ -567,5 +567,5 @@ func (s *ClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	defer s.configMutex.Unlock()
 	s.config = newConfig
 	// Update the global config as well
-	config.ReplaceGlobalConfig(newConfig)
+	config.Replace(newConfig)
 }

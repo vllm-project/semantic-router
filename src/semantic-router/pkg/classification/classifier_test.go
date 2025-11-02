@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -57,9 +58,9 @@ var _ = Describe("category classification and model selection", func() {
 		mockCategoryInitializer = &MockCategoryInitializer{InitError: nil}
 		mockCategoryModel = &MockCategoryInference{}
 		cfg := &config.RouterConfig{}
-		cfg.Classifier.CategoryModel.ModelID = "model-id"
-		cfg.Classifier.CategoryModel.CategoryMappingPath = "category-mapping-path"
-		cfg.Classifier.CategoryModel.Threshold = 0.5
+		cfg.CategoryModel.ModelID = "model-id"
+		cfg.CategoryMappingPath = "category-mapping-path"
+		cfg.CategoryModel.Threshold = 0.5
 		classifier, _ = newClassifierWithOptions(cfg,
 			withCategory(&CategoryMapping{
 				CategoryToIdx: map[string]int{"technology": 0, "sports": 1, "politics": 2},
@@ -114,8 +115,8 @@ var _ = Describe("category classification and model selection", func() {
 
 		DescribeTable("when category classification is not properly configured",
 			func(r row) {
-				classifier.Config.Classifier.CategoryModel.ModelID = r.ModelID
-				classifier.Config.Classifier.CategoryModel.CategoryMappingPath = r.CategoryMappingPath
+				classifier.Config.CategoryModel.ModelID = r.ModelID
+				classifier.Config.CategoryMappingPath = r.CategoryMappingPath
 				classifier.CategoryMapping = r.CategoryMapping
 				_, _, err := classifier.ClassifyCategory("Some text")
 				Expect(err).To(HaveOccurred())
@@ -221,9 +222,30 @@ var _ = Describe("category classification and model selection", func() {
 
 				// Add UseReasoning configuration for the categories
 				classifier.Config.Categories = []config.Category{
-					{Name: "technology", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
-					{Name: "sports", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
-					{Name: "politics", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "technology"},
+						ModelScores: []config.ModelScore{{
+							Model:                 "phi4",
+							Score:                 0.8,
+							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+						}},
+					},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "sports"},
+						ModelScores: []config.ModelScore{{
+							Model:                 "phi4",
+							Score:                 0.8,
+							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+						}},
+					},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "politics"},
+						ModelScores: []config.ModelScore{{
+							Model:                 "deepseek-v31",
+							Score:                 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
+						}},
+					},
 				}
 
 				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
@@ -246,9 +268,30 @@ var _ = Describe("category classification and model selection", func() {
 				}
 
 				classifier.Config.Categories = []config.Category{
-					{Name: "technology", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
-					{Name: "sports", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
-					{Name: "politics", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "technology"},
+						ModelScores: []config.ModelScore{{
+							Model:                 "phi4",
+							Score:                 0.8,
+							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+						}},
+					},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "sports"},
+						ModelScores: []config.ModelScore{{
+							Model:                 "deepseek-v31",
+							Score:                 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
+						}},
+					},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "politics"},
+						ModelScores: []config.ModelScore{{
+							Model:                 "deepseek-v31",
+							Score:                 0.9,
+							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
+						}},
+					},
 				}
 
 				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
@@ -278,15 +321,15 @@ var _ = Describe("category classification and model selection", func() {
 	BeforeEach(func() {
 		classifier.Config.Categories = []config.Category{
 			{
-				Name: "technology",
+				CategoryMetadata: config.CategoryMetadata{Name: "technology"},
 				ModelScores: []config.ModelScore{
 					{Model: "model-a", Score: 0.9},
 					{Model: "model-b", Score: 0.8},
 				},
 			},
 			{
-				Name:        "sports",
-				ModelScores: []config.ModelScore{},
+				CategoryMetadata: config.CategoryMetadata{Name: "sports"},
+				ModelScores:      []config.ModelScore{},
 			},
 		}
 		classifier.Config.DefaultModel = "default-model"
@@ -391,17 +434,17 @@ var _ = Describe("category classification and model selection", func() {
 				if r.want == nil {
 					Expect(cat).To(BeNil())
 				} else {
-					Expect(cat.Name).To(Equal(r.want.Name))
+					Expect(cat.CategoryMetadata.Name).To(Equal(r.want.Name))
 				}
 			},
-			Entry("should find category case-insensitively", row{query: "TECHNOLOGY", want: &config.Category{Name: "technology"}}),
+			Entry("should find category case-insensitively", row{query: "TECHNOLOGY", want: &config.Category{CategoryMetadata: config.CategoryMetadata{Name: "technology"}}}),
 			Entry("should return nil for non-existent category", row{query: "non-existent", want: nil}),
 		)
 
 		Describe("select best model internal", func() {
 			It("should select best model without filter", func() {
 				cat := &config.Category{
-					Name: "test",
+					CategoryMetadata: config.CategoryMetadata{Name: "test"},
 					ModelScores: []config.ModelScore{
 						{Model: "model-a", Score: 0.9},
 						{Model: "model-b", Score: 0.8},
@@ -416,7 +459,7 @@ var _ = Describe("category classification and model selection", func() {
 
 			It("should select best model with filter", func() {
 				cat := &config.Category{
-					Name: "test",
+					CategoryMetadata: config.CategoryMetadata{Name: "test"},
 					ModelScores: []config.ModelScore{
 						{Model: "model-a", Score: 0.9},
 						{Model: "model-b", Score: 0.8},
@@ -435,7 +478,7 @@ var _ = Describe("category classification and model selection", func() {
 
 			It("should return empty when no models match filter", func() {
 				cat := &config.Category{
-					Name: "test",
+					CategoryMetadata: config.CategoryMetadata{Name: "test"},
 					ModelScores: []config.ModelScore{
 						{Model: "model-a", Score: 0.9},
 						{Model: "model-b", Score: 0.8},
@@ -453,8 +496,8 @@ var _ = Describe("category classification and model selection", func() {
 
 			It("should return empty when category has no models", func() {
 				cat := &config.Category{
-					Name:        "test",
-					ModelScores: []config.ModelScore{},
+					CategoryMetadata: config.CategoryMetadata{Name: "test"},
+					ModelScores:      []config.ModelScore{},
 				}
 
 				bestModel, score := classifier.selectBestModelInternal(cat, nil)
@@ -745,9 +788,9 @@ var _ = Describe("PII detection", func() {
 		mockPIIModel = &MockPIIInference{}
 		mockPIIModel.responseMap = make(map[string]MockPIIInferenceResponse)
 		cfg := &config.RouterConfig{}
-		cfg.Classifier.PIIModel.ModelID = "test-pii-model"
-		cfg.Classifier.PIIModel.PIIMappingPath = "test-pii-mapping-path"
-		cfg.Classifier.PIIModel.Threshold = 0.7
+		cfg.PIIModel.ModelID = "test-pii-model"
+		cfg.PIIMappingPath = "test-pii-mapping-path"
+		cfg.PIIModel.Threshold = 0.7
 
 		classifier, _ = newClassifierWithOptions(cfg,
 			withPII(&PIIMapping{
@@ -803,8 +846,8 @@ var _ = Describe("PII detection", func() {
 
 		DescribeTable("when PII detection is not properly configured",
 			func(r row) {
-				classifier.Config.Classifier.PIIModel.ModelID = r.ModelID
-				classifier.Config.Classifier.PIIModel.PIIMappingPath = r.PIIMappingPath
+				classifier.Config.PIIModel.ModelID = r.ModelID
+				classifier.Config.PIIMappingPath = r.PIIMappingPath
 				classifier.PIIMapping = r.PIIMapping
 				piiTypes, err := classifier.ClassifyPII("Some text")
 				Expect(err).To(HaveOccurred())
@@ -1005,20 +1048,22 @@ var _ = Describe("get models for category", func() {
 
 	BeforeEach(func() {
 		c, _ = newClassifierWithOptions(&config.RouterConfig{
-			Categories: []config.Category{
-				{
-					Name: "Toxicity",
-					ModelScores: []config.ModelScore{
-						{Model: "m1"}, {Model: "m2"},
+			IntelligentRouting: config.IntelligentRouting{
+				Categories: []config.Category{
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "Toxicity"},
+						ModelScores: []config.ModelScore{
+							{Model: "m1"}, {Model: "m2"},
+						},
 					},
-				},
-				{
-					Name:        "Toxicity", // duplicate name, should be ignored by "first wins"
-					ModelScores: []config.ModelScore{{Model: "mX"}},
-				},
-				{
-					Name:        "Jailbreak",
-					ModelScores: []config.ModelScore{{Model: "jb1"}},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "Toxicity"}, // duplicate name, should be ignored by "first wins"
+						ModelScores:      []config.ModelScore{{Model: "mX"}},
+					},
+					{
+						CategoryMetadata: config.CategoryMetadata{Name: "Jailbreak"},
+						ModelScores:      []config.ModelScore{{Model: "jb1"}},
+					},
 				},
 			},
 		})
@@ -1221,38 +1266,50 @@ var _ = Describe("generic category mapping (MMLU-Pro -> generic)", func() {
 		mockCategoryModel = &MockCategoryInference{}
 
 		cfg := &config.RouterConfig{}
-		cfg.Classifier.CategoryModel.ModelID = "model-id"
-		cfg.Classifier.CategoryModel.CategoryMappingPath = "category-mapping-path"
-		cfg.Classifier.CategoryModel.Threshold = 0.5
+		cfg.CategoryModel.ModelID = "model-id"
+		cfg.CategoryMappingPath = "category-mapping-path"
+		cfg.CategoryModel.Threshold = 0.5
 
 		// Define generic categories with MMLU-Pro mappings
 		cfg.Categories = []config.Category{
 			{
-				Name:           "tech",
-				MMLUCategories: []string{"computer science", "engineering"},
+				CategoryMetadata: config.CategoryMetadata{
+					Name:           "tech",
+					MMLUCategories: []string{"computer science", "engineering"},
+				},
 				ModelScores: []config.ModelScore{{
-					Model:           "phi4",
-					Score:           0.9,
-					UseReasoning:    config.BoolPtr(false),
-					ReasoningEffort: "low",
+					Model: "phi4",
+					Score: 0.9,
+					ModelReasoningControl: config.ModelReasoningControl{
+						UseReasoning:    lo.ToPtr(false),
+						ReasoningEffort: "low",
+					},
 				}},
 			},
 			{
-				Name:           "finance",
-				MMLUCategories: []string{"economics"},
+				CategoryMetadata: config.CategoryMetadata{
+					Name:           "finance",
+					MMLUCategories: []string{"economics"},
+				},
 				ModelScores: []config.ModelScore{{
-					Model:        "gemma3:27b",
-					Score:        0.8,
-					UseReasoning: config.BoolPtr(true),
+					Model: "gemma3:27b",
+					Score: 0.8,
+					ModelReasoningControl: config.ModelReasoningControl{
+						UseReasoning: lo.ToPtr(true),
+					},
 				}},
 			},
 			{
-				Name: "politics",
-				// No explicit mmlu_categories -> identity fallback when label exists in mapping
+				CategoryMetadata: config.CategoryMetadata{
+					Name: "politics",
+					// No explicit mmlu_categories -> identity fallback when label exists in mapping
+				},
 				ModelScores: []config.ModelScore{{
-					Model:        "gemma3:27b",
-					Score:        0.6,
-					UseReasoning: config.BoolPtr(false),
+					Model: "gemma3:27b",
+					Score: 0.6,
+					ModelReasoningControl: config.ModelReasoningControl{
+						UseReasoning: lo.ToPtr(false),
+					},
 				}},
 			},
 		}
@@ -1643,12 +1700,12 @@ var _ = Describe("MCP Category Classifier", func() {
 		mockClient = &MockMCPClient{}
 		mcpClassifier = &MCPCategoryClassifier{}
 		cfg = &config.RouterConfig{}
-		cfg.Classifier.MCPCategoryModel.Enabled = true
-		cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-		cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-		cfg.Classifier.MCPCategoryModel.Command = "python"
-		cfg.Classifier.MCPCategoryModel.Args = []string{"server_keyword.py"}
-		cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 30
+		cfg.Enabled = true
+		cfg.ToolName = "classify_text"
+		cfg.TransportType = "stdio"
+		cfg.Command = "python"
+		cfg.Args = []string{"server_keyword.py"}
+		cfg.TimeoutSeconds = 30
 	})
 
 	Describe("Init", func() {
@@ -1662,7 +1719,7 @@ var _ = Describe("MCP Category Classifier", func() {
 
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = false
+				cfg.Enabled = false
 				err := mcpClassifier.Init(cfg)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not enabled"))
@@ -1685,7 +1742,7 @@ var _ = Describe("MCP Category Classifier", func() {
 
 		Context("when tool name is explicitly configured", func() {
 			It("should use the configured tool name", func() {
-				cfg.Classifier.MCPCategoryModel.ToolName = "my_classifier"
+				cfg.ToolName = "my_classifier"
 				err := mcpClassifier.discoverClassificationTool()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(mcpClassifier.toolName).To(Equal("my_classifier"))
@@ -1694,7 +1751,7 @@ var _ = Describe("MCP Category Classifier", func() {
 
 		Context("when tool name is not configured", func() {
 			BeforeEach(func() {
-				cfg.Classifier.MCPCategoryModel.ToolName = ""
+				cfg.ToolName = ""
 			})
 
 			It("should discover classify_text tool", func() {
@@ -2278,10 +2335,10 @@ var _ = Describe("Classifier MCP Methods", func() {
 	BeforeEach(func() {
 		mockClient = &MockMCPClient{}
 		cfg := &config.RouterConfig{}
-		cfg.Classifier.MCPCategoryModel.Enabled = true
-		cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-		cfg.Classifier.MCPCategoryModel.Threshold = 0.5
-		cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 30
+		cfg.Enabled = true
+		cfg.ToolName = "classify_text"
+		cfg.MCPCategoryModel.Threshold = 0.5
+		cfg.TimeoutSeconds = 30
 
 		// Create MCP classifier manually and inject mock client
 		mcpClassifier := &MCPCategoryClassifier{
@@ -2317,7 +2374,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 		})
 
 		It("should return false when not enabled", func() {
-			classifier.Config.Classifier.MCPCategoryModel.Enabled = false
+			classifier.Config.Enabled = false
 			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
 		})
 
@@ -2330,7 +2387,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("classifyCategoryMCP", func() {
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				classifier.Config.Classifier.MCPCategoryModel.Enabled = false
+				classifier.Config.Enabled = false
 				_, _, err := classifier.classifyCategoryMCP("test text")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
@@ -2408,9 +2465,30 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("classifyCategoryWithEntropyMCP", func() {
 		BeforeEach(func() {
 			classifier.Config.Categories = []config.Category{
-				{Name: "tech", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
-				{Name: "sports", ModelScores: []config.ModelScore{{Model: "phi4", Score: 0.8, UseReasoning: config.BoolPtr(false)}}},
-				{Name: "politics", ModelScores: []config.ModelScore{{Model: "deepseek-v31", Score: 0.9, UseReasoning: config.BoolPtr(true)}}},
+				{
+					CategoryMetadata: config.CategoryMetadata{Name: "tech"},
+					ModelScores: []config.ModelScore{{
+						Model:                 "phi4",
+						Score:                 0.8,
+						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+					}},
+				},
+				{
+					CategoryMetadata: config.CategoryMetadata{Name: "sports"},
+					ModelScores: []config.ModelScore{{
+						Model:                 "phi4",
+						Score:                 0.8,
+						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+					}},
+				},
+				{
+					CategoryMetadata: config.CategoryMetadata{Name: "politics"},
+					ModelScores: []config.ModelScore{{
+						Model:                 "deepseek-v31",
+						Score:                 0.9,
+						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
+					}},
+				},
 			}
 		})
 
@@ -2458,7 +2536,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("initializeMCPCategoryClassifier", func() {
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				classifier.Config.Classifier.MCPCategoryModel.Enabled = false
+				classifier.Config.Enabled = false
 				err := classifier.initializeMCPCategoryClassifier()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
@@ -2525,7 +2603,7 @@ var _ = Describe("Classifier Per-Category System Prompts", func() {
 
 	BeforeEach(func() {
 		cfg := &config.RouterConfig{}
-		cfg.Classifier.MCPCategoryModel.Enabled = true
+		cfg.Enabled = true
 
 		classifier = &Classifier{
 			Config: cfg,

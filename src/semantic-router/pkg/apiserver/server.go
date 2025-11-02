@@ -18,7 +18,7 @@ import (
 // Init starts the API server
 func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 	// Load configuration
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
