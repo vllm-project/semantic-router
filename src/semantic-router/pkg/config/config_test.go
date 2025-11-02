@@ -2922,13 +2922,13 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when configuring stdio transport", func() {
 			It("should accept valid stdio configuration", func() {
-				cfg.Enabled = true
-				cfg.TransportType = "stdio"
-				cfg.Command = "python"
-				cfg.Args = []string{"server_keyword.py"}
-				cfg.ToolName = "classify_text"
-				cfg.MCPCategoryModel.Threshold = 0.5
-				cfg.TimeoutSeconds = 30
+				cfg.Classifier.MCPCategoryModel.Enabled = true
+				cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
+				cfg.Classifier.MCPCategoryModel.Command = "python"
+				cfg.Classifier.MCPCategoryModel.Args = []string{"server_keyword.py"}
+				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
+				cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 30
 
 				Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
@@ -3003,14 +3003,14 @@ var _ = Describe("MCP Configuration Validation", func() {
 		Context("when both in-tree and MCP are configured", func() {
 			It("should have both configurations available", func() {
 				// Configure in-tree classifier
-				cfg.CategoryModel.ModelID = "/path/to/model"
-				cfg.CategoryMappingPath = "/path/to/mapping.json"
-				cfg.CategoryModel.Threshold = 0.7
+				cfg.Classifier.CategoryModel.ModelID = "/path/to/model"
+				cfg.Classifier.CategoryModel.CategoryMappingPath = "/path/to/mapping.json"
+				cfg.Classifier.CategoryModel.Threshold = 0.7
 
 				// Configure MCP classifier
-				cfg.Enabled = true
-				cfg.ToolName = "classify_text"
-				cfg.MCPCategoryModel.Threshold = 0.5
+				cfg.Classifier.MCPCategoryModel.Enabled = true
+				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
 
 				// Both should be configured
 				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
@@ -3054,14 +3054,14 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should support all required fields for stdio transport", func() {
-			cfg.Enabled = true
-			cfg.TransportType = "stdio"
-			cfg.Command = "python3"
-			cfg.Args = []string{"-m", "server"}
-			cfg.Env = map[string]string{"DEBUG": "1"}
-			cfg.ToolName = "classify"
-			cfg.MCPCategoryModel.Threshold = 0.6
-			cfg.TimeoutSeconds = 60
+			cfg.Classifier.MCPCategoryModel.Enabled = true
+			cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
+			cfg.Classifier.MCPCategoryModel.Command = "python3"
+			cfg.Classifier.MCPCategoryModel.Args = []string{"-m", "server"}
+			cfg.Classifier.MCPCategoryModel.Env = map[string]string{"DEBUG": "1"}
+			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
+			cfg.Classifier.MCPCategoryModel.Threshold = 0.6
+			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 60
 
 			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
@@ -3074,12 +3074,12 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should support all required fields for HTTP transport", func() {
-			cfg.Enabled = true
-			cfg.TransportType = "http"
-			cfg.URL = "https://mcp-server:443/api"
-			cfg.ToolName = "classify"
-			cfg.MCPCategoryModel.Threshold = 0.8
-			cfg.TimeoutSeconds = 120
+			cfg.Classifier.MCPCategoryModel.Enabled = true
+			cfg.Classifier.MCPCategoryModel.TransportType = "http"
+			cfg.Classifier.MCPCategoryModel.URL = "https://mcp-server:443/api"
+			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
+			cfg.Classifier.MCPCategoryModel.Threshold = 0.8
+			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 120
 
 			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
