@@ -110,6 +110,9 @@ linters:
         text: "SA5011"  # Allow possible nil pointer dereference in test assertions
         path: "_test\\.go$"
       - linters:
+          - staticcheck
+        text: "QF1008:"  # Allow explicit embedded field access for clarity
+      - linters:
           - bodyclose
         path: test/e2e
       - linters:
