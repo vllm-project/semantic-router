@@ -2,10 +2,10 @@ name: Pre-commit
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual triggering
+    branches: [main]
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   pre-commit:
@@ -13,98 +13,99 @@ jobs:
     name: Run pre-commit hooks check file lint
 
     steps:
-    - name: Check out the repo
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Fetch full history for pre-commit
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for pre-commit
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
 
-    - name: Set up Node
-      uses: actions/setup-node@v5
-      with:
-        node-version: 23
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 23
 
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: 1.90
-        components: rustfmt, clippy
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+          components: rustfmt, clippy
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          make \
-          build-essential \
-          pkg-config
-        npm install -g markdownlint-cli
-        pip install --user yamllint codespell
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            build-essential \
+            pkg-config \
+            shellcheck
+          npm install -g markdownlint-cli
+          pip install --user yamllint codespell
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
 
-    - name: Cache Rust dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          candle-binding/target/
-        key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-precommit-
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+          key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-precommit-
 
-    - name: Cache Go dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-precommit-
+      - name: Cache Go dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-precommit-
 
-    - name: Cache Node dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.npm
-        key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-precommit-
+      - name: Cache Node dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+          key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-precommit-
 
-    - name: Cache pre-commit environments
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pre-commit
-        key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-precommit-
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-precommit-
 
-    - name: Install pre-commit
-      run: make precommit-install
+      - name: Install pre-commit
+        run: make precommit-install
 
-    - name: Run Code Spell Check
-      run: make codespell
+      - name: Run Code Spell Check
+        run: make codespell
 
-    - name: Run pre-commit check
-      run: make precommit-check
-      env:
-        CI: true
+      - name: Run pre-commit check
+        run: make precommit-check
+        env:
+          CI: true
 
-    - name: Show pre-commit results
-      if: failure()
-      run: |
-        echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
-        echo "To run pre-commit locally:"
-        echo "  pip install pre-commit"
-        echo "  pre-commit install"
-        echo "  pre-commit run --all-files"
+      - name: Show pre-commit results
+        if: failure()
+        run: |
+          echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
+          echo "To run pre-commit locally:"
+          echo "  pip install pre-commit"
+          echo "  pre-commit install"
+          echo "  pre-commit run --all-files"

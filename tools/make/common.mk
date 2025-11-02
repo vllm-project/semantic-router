@@ -48,7 +48,7 @@ help:
 	@echo ""
 	@echo "  Run targets:"
 	@echo "    run-router              - Run the router (CONFIG_FILE=config/config.yaml)"
-	@echo "    run-router-e2e          - Run the router with e2e config (config/config.e2e.yaml)"
+	@echo "    run-router-e2e          - Run the router with e2e config (config/testing/config.e2e.yaml)"
 	@echo "    run-envoy               - Run Envoy proxy"
 	@echo ""
 	@echo "  Test targets:"

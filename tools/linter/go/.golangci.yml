@@ -45,6 +45,7 @@ linters:
         - G404  # Allow math/rand for non-cryptographic purposes
         - G501  # Allow MD5 for non-security checksums (cache keys)
         - G401  # Allow MD5 usage in cache implementation
+        - G602  # Allow slice index access in loops with proper bounds checking
     govet:
       disable:
         - fieldalignment
@@ -108,6 +109,9 @@ linters:
           - staticcheck
         text: "SA5011"  # Allow possible nil pointer dereference in test assertions
         path: "_test\\.go$"
+      - linters:
+          - staticcheck
+        text: "QF1008:"  # Allow explicit embedded field access for clarity
       - linters:
           - bodyclose
         path: test/e2e

@@ -7,11 +7,11 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
@@ -31,31 +31,31 @@ var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 // NewOpenAIRouter creates a new OpenAI API router instance
 func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Always parse fresh config for router construction (supports live reload)
-	cfg, err := config.ParseConfigFile(configPath)
+	cfg, err := config.Parse(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 	// Update global config reference for packages that rely on config.GetConfig()
-	config.ReplaceGlobalConfig(cfg)
+	config.Replace(cfg)
 
 	// Load category mapping if classifier is enabled
 	var categoryMapping *classification.CategoryMapping
-	if cfg.Classifier.CategoryModel.CategoryMappingPath != "" {
-		categoryMapping, err = classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	if cfg.CategoryMappingPath != "" {
+		categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
-		observability.Infof("Loaded category mapping with %d categories", categoryMapping.GetCategoryCount())
+		logging.Infof("Loaded category mapping with %d categories", categoryMapping.GetCategoryCount())
 	}
 
 	// Load PII mapping if PII classifier is enabled
 	var piiMapping *classification.PIIMapping
-	if cfg.Classifier.PIIModel.PIIMappingPath != "" {
-		piiMapping, err = classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	if cfg.PIIMappingPath != "" {
+		piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
-		observability.Infof("Loaded PII mapping with %d PII types", piiMapping.GetPIITypeCount())
+		logging.Infof("Loaded PII mapping with %d PII types", piiMapping.GetPIITypeCount())
 	}
 
 	// Load jailbreak mapping if prompt guard is enabled
@@ -65,27 +65,27 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
 		}
-		observability.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
+		logging.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
 	// Initialize the BERT model for similarity search
-	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+	if initErr := candle_binding.InitModel(cfg.ModelID, cfg.BertModel.UseCPU); initErr != nil {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
-	observability.Infof("Category descriptions: %v", categoryDescriptions)
+	logging.Infof("Category descriptions: %v", categoryDescriptions)
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
-		BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
-		Enabled:             cfg.SemanticCache.Enabled,
+		BackendType:         cache.CacheBackendType(cfg.BackendType),
+		Enabled:             cfg.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.SemanticCache.MaxEntries,
-		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
-		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		MaxEntries:          cfg.MaxEntries,
+		TTLSeconds:          cfg.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),
+		BackendConfigPath:   cfg.BackendConfigPath,
+		EmbeddingModel:      cfg.EmbeddingModel,
 	}
 
 	// Use default backend type if not specified
@@ -99,17 +99,17 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	if semanticCache.IsEnabled() {
-		observability.Infof("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
+		logging.Infof("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
 			cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.TTLSeconds)
 		if cacheConfig.BackendType == cache.InMemoryCacheType {
-			observability.Infof("In-memory cache max entries: %d", cacheConfig.MaxEntries)
+			logging.Infof("In-memory cache max entries: %d", cacheConfig.MaxEntries)
 		}
 	} else {
-		observability.Infof("Semantic cache is disabled")
+		logging.Infof("Semantic cache is disabled")
 	}
 
 	// Create tools database with config options
-	toolsThreshold := cfg.BertModel.Threshold // Default to BERT threshold
+	toolsThreshold := cfg.Threshold // Default to BERT threshold
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
 	}
@@ -122,12 +122,12 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Load tools from file if enabled and path is provided
 	if toolsDatabase.IsEnabled() && cfg.Tools.ToolsDBPath != "" {
 		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
-			observability.Warnf("Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, loadErr)
+			logging.Warnf("Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, loadErr)
 		}
-		observability.Infof("Tools database enabled with threshold: %.4f, top-k: %d",
+		logging.Infof("Tools database enabled with threshold: %.4f, top-k: %d",
 			toolsThreshold, cfg.Tools.TopK)
 	} else {
-		observability.Infof("Tools database is disabled")
+		logging.Infof("Tools database is disabled")
 	}
 
 	// Create utility components
@@ -142,10 +142,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// This will prioritize LoRA models over legacy ModernBERT
 	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
 	if err != nil {
-		observability.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
+		logging.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
 		services.NewClassificationService(classifier, cfg)
 	} else {
-		observability.Infof("Router initialization: Using auto-discovered unified classifier")
+		logging.Infof("Router initialization: Using auto-discovered unified classifier")
 		// The service is already set as global in NewUnifiedClassificationService
 		_ = autoSvc
 	}

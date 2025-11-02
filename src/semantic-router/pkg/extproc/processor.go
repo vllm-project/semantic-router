@@ -9,13 +9,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // Process implements the ext_proc calls
 func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	observability.Infof("Started processing a new request")
+	logging.Infof("Started processing a new request")
 
 	// Initialize request context
 	ctx := &RequestContext{
@@ -27,7 +27,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		if err != nil {
 			// Handle EOF - this indicates the client has closed the stream gracefully
 			if errors.Is(err, io.EOF) {
-				observability.Infof("Stream ended gracefully")
+				logging.Infof("Stream ended gracefully")
 				return nil
 			}
 
@@ -35,11 +35,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			if s, ok := status.FromError(err); ok {
 				switch s.Code() {
 				case codes.Canceled:
-					observability.Infof("Stream canceled gracefully")
+					logging.Infof("Stream canceled gracefully")
 					metrics.RecordRequestError(ctx.RequestModel, "cancellation")
 					return nil
 				case codes.DeadlineExceeded:
-					observability.Infof("Stream deadline exceeded")
+					logging.Infof("Stream deadline exceeded")
 					metrics.RecordRequestError(ctx.RequestModel, "timeout")
 					return nil
 				}
@@ -47,17 +47,17 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 			// Handle context cancellation from the server-side context
 			if errors.Is(err, context.Canceled) {
-				observability.Infof("Stream canceled gracefully")
+				logging.Infof("Stream canceled gracefully")
 				metrics.RecordRequestError(ctx.RequestModel, "cancellation")
 				return nil
 			}
 			if errors.Is(err, context.DeadlineExceeded) {
-				observability.Infof("Stream deadline exceeded")
+				logging.Infof("Stream deadline exceeded")
 				metrics.RecordRequestError(ctx.RequestModel, "timeout")
 				return nil
 			}
 
-			observability.Errorf("Error receiving request: %v", err)
+			logging.Errorf("Error receiving request: %v", err)
 			return err
 		}
 
@@ -65,22 +65,22 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		case *ext_proc.ProcessingRequest_RequestHeaders:
 			response, err := r.handleRequestHeaders(v, ctx)
 			if err != nil {
-				observability.Errorf("handleRequestHeaders failed: %v", err)
+				logging.Errorf("handleRequestHeaders failed: %v", err)
 				return err
 			}
 			if err := sendResponse(stream, response, "request header"); err != nil {
-				observability.Errorf("sendResponse for headers failed: %v", err)
+				logging.Errorf("sendResponse for headers failed: %v", err)
 				return err
 			}
 
 		case *ext_proc.ProcessingRequest_RequestBody:
 			response, err := r.handleRequestBody(v, ctx)
 			if err != nil {
-				observability.Errorf("handleRequestBody failed: %v", err)
+				logging.Errorf("handleRequestBody failed: %v", err)
 				return err
 			}
 			if err := sendResponse(stream, response, "request body"); err != nil {
-				observability.Errorf("sendResponse for body failed: %v", err)
+				logging.Errorf("sendResponse for body failed: %v", err)
 				return err
 			}
 
@@ -103,7 +103,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			}
 
 		default:
-			observability.Warnf("Unknown request type: %v", v)
+			logging.Warnf("Unknown request type: %v", v)
 
 			// For unknown message types, create a body response with CONTINUE status
 			response := &ext_proc.ProcessingResponse{
