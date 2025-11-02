@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // Global classification service instance
@@ -51,8 +51,8 @@ func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedCl
 func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
 	// Debug: Check current working directory
 	wd, _ := os.Getwd()
-	observability.Debugf("Debug: Current working directory: %s", wd)
-	observability.Debugf("Debug: Attempting to discover models in: ./models")
+	logging.Debugf("Debug: Current working directory: %s", wd)
+	logging.Debugf("Debug: Attempting to discover models in: ./models")
 
 	// Always try to auto-discover and initialize unified classifier for batch processing
 	// Use model path from config, fallback to "./models" if not specified
@@ -66,15 +66,15 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 	}
 	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifier(modelsPath)
 	if ucErr != nil {
-		observability.Infof("Unified classifier auto-discovery failed: %v", ucErr)
+		logging.Infof("Unified classifier auto-discovery failed: %v", ucErr)
 	}
 	// create legacy classifier
 	legacyClassifier, lcErr := createLegacyClassifier(config)
 	if lcErr != nil {
-		observability.Warnf("Legacy classifier initialization failed: %v", lcErr)
+		logging.Warnf("Legacy classifier initialization failed: %v", lcErr)
 	}
 	if unifiedClassifier == nil && legacyClassifier == nil {
-		observability.Warnf("No classifier initialized. Using placeholder service.")
+		logging.Warnf("No classifier initialized. Using placeholder service.")
 	}
 	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
 }
@@ -91,7 +91,7 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 
 	if useMCPCategories {
 		// Categories will be loaded from MCP server during initialization
-		observability.Infof("Category mapping will be loaded from MCP server")
+		logging.Infof("Category mapping will be loaded from MCP server")
 		// Create empty mapping initially - will be populated during initialization
 		categoryMapping = nil
 	} else if config.Classifier.CategoryModel.CategoryMappingPath != "" {

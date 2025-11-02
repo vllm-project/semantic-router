@@ -12,8 +12,8 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // handleResponseHeaders processes the response headers
@@ -194,7 +194,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 				ctx.TTFTSeconds = ttft
 				ctx.TTFTRecorded = true
-				observability.Infof("Recorded TTFT on first streamed body chunk: %.3fs", ttft)
+				logging.Infof("Recorded TTFT on first streamed body chunk: %.3fs", ttft)
 			}
 		}
 
@@ -214,7 +214,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Parse tokens from the response JSON using OpenAI SDK types
 	var parsed openai.ChatCompletion
 	if err := json.Unmarshal(responseBody, &parsed); err != nil {
-		observability.Errorf("Error parsing tokens from response: %v", err)
+		logging.Errorf("Error parsing tokens from response: %v", err)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 	}
 	promptTokens := int(parsed.Usage.PromptTokens)
@@ -244,7 +244,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 					currency = "USD"
 				}
 				metrics.RecordModelCost(ctx.RequestModel, currency, costAmount)
-				observability.LogEvent("llm_usage", map[string]interface{}{
+				logging.LogEvent("llm_usage", map[string]interface{}{
 					"request_id":            ctx.RequestID,
 					"model":                 ctx.RequestModel,
 					"prompt_tokens":         promptTokens,
@@ -255,7 +255,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 					"currency":              currency,
 				})
 			} else {
-				observability.LogEvent("llm_usage", map[string]interface{}{
+				logging.LogEvent("llm_usage", map[string]interface{}{
 					"request_id":            ctx.RequestID,
 					"model":                 ctx.RequestModel,
 					"prompt_tokens":         promptTokens,
@@ -274,10 +274,10 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if ctx.RequestID != "" && responseBody != nil {
 		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody)
 		if err != nil {
-			observability.Errorf("Error updating cache: %v", err)
+			logging.Errorf("Error updating cache: %v", err)
 			// Continue even if cache update fails
 		} else {
-			observability.Infof("Cache updated for request ID: %s", ctx.RequestID)
+			logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
 		}
 	}
 
