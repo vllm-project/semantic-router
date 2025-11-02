@@ -187,7 +187,7 @@ response1=$(curl -s -k -X POST "$ROUTER_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"$CACHE_QUERY\"}], \"max_tokens\": 20}" 2>/dev/null)
 time1_end=$(date +%s%N)
-time1=$((($time1_end - $time1_start) / 1000000))
+time1=$(((time1_end - time1_start) / 1000000))
 
 sleep 1
 
@@ -197,13 +197,13 @@ response2=$(curl -s -k -X POST "$ROUTER_URL/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"$CACHE_QUERY\"}], \"max_tokens\": 20}" 2>/dev/null)
 time2_end=$(date +%s%N)
-time2=$((($time2_end - $time2_start) / 1000000))
+time2=$(((time2_end - time2_start) / 1000000))
 
 echo "First request: ${time1}ms"
 echo "Second request: ${time2}ms"
 
 if [ "$time2" -lt "$time1" ]; then
-    speedup=$((($time1 - $time2) * 100 / $time1))
+    speedup=$(((time1 - time2) * 100 / time1))
     echo -e "${GREEN}✓${NC} Cache appears to be working (${speedup}% faster)"
 else
     echo -e "${YELLOW}⚠${NC} Cache behavior unclear or not significant"
