@@ -172,6 +172,6 @@ Check the router logs to confirm the correct LoRA adapter is selected for each q
 
 ## Next Steps
 
-- See [complete LoRA routing example](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing_example.yaml)
+- See [complete LoRA routing example](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing.yaml)
 - Learn about [category configuration](../../overview/categories/configuration.md#lora_name-optional)
 - Explore [reasoning routing](./reasoning.md) to combine with LoRA adapters
