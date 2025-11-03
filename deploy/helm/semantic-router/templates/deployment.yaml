@@ -49,7 +49,7 @@ spec:
           # Download {{ .name }}
           if [ ! -d "{{ .name }}" ]; then
             echo "Downloading {{ .name }}..."
-            huggingface-cli download {{ .repo }} --local-dir {{ .name }}
+            python -m huggingface_hub.commands.huggingface_cli download {{ .repo }} --local-dir {{ .name }}
           else
             echo "{{ .name }} already exists, skipping..."
           fi
