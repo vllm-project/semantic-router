@@ -277,7 +277,7 @@ categories:
 - **Flexible Deployment**: Add/remove adapters without router restart
 - **Configuration Validation**: Prevents typos and missing LoRA definitions
 
-See [LoRA Routing Example](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing_example.yaml) for complete configuration.
+See [LoRA Routing Example](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing.yaml) for complete configuration.
 
 ## Complete Configuration Examples
 
