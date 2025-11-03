@@ -2335,10 +2335,38 @@ var _ = Describe("Classifier MCP Methods", func() {
 	BeforeEach(func() {
 		mockClient = &MockMCPClient{}
 		cfg := &config.RouterConfig{}
-		cfg.Enabled = true
-		cfg.ToolName = "classify_text"
+		cfg.MCPCategoryModel.Enabled = true
+		cfg.MCPCategoryModel.ToolName = "classify_text"
 		cfg.MCPCategoryModel.Threshold = 0.5
-		cfg.TimeoutSeconds = 30
+		cfg.MCPCategoryModel.TimeoutSeconds = 30
+
+		// Add Categories configuration for entropy-based tests
+		cfg.Categories = []config.Category{
+			{
+				CategoryMetadata: config.CategoryMetadata{Name: "tech"},
+				ModelScores: []config.ModelScore{{
+					Model:                 "phi4",
+					Score:                 0.8,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+				}},
+			},
+			{
+				CategoryMetadata: config.CategoryMetadata{Name: "sports"},
+				ModelScores: []config.ModelScore{{
+					Model:                 "phi4",
+					Score:                 0.8,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+				}},
+			},
+			{
+				CategoryMetadata: config.CategoryMetadata{Name: "politics"},
+				ModelScores: []config.ModelScore{{
+					Model:                 "deepseek-v31",
+					Score:                 0.9,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
+				}},
+			},
+		}
 
 		// Create MCP classifier manually and inject mock client
 		mcpClassifier := &MCPCategoryClassifier{
@@ -2374,7 +2402,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 		})
 
 		It("should return false when not enabled", func() {
-			classifier.Config.Enabled = false
+			classifier.Config.MCPCategoryModel.Enabled = false
 			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
 		})
 
@@ -2387,7 +2415,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("classifyCategoryMCP", func() {
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				classifier.Config.Enabled = false
+				classifier.Config.MCPCategoryModel.Enabled = false
 				_, _, err := classifier.classifyCategoryMCP("test text")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
@@ -2463,35 +2491,6 @@ var _ = Describe("Classifier MCP Methods", func() {
 	})
 
 	Describe("classifyCategoryWithEntropyMCP", func() {
-		BeforeEach(func() {
-			classifier.Config.Categories = []config.Category{
-				{
-					CategoryMetadata: config.CategoryMetadata{Name: "tech"},
-					ModelScores: []config.ModelScore{{
-						Model:                 "phi4",
-						Score:                 0.8,
-						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-					}},
-				},
-				{
-					CategoryMetadata: config.CategoryMetadata{Name: "sports"},
-					ModelScores: []config.ModelScore{{
-						Model:                 "phi4",
-						Score:                 0.8,
-						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-					}},
-				},
-				{
-					CategoryMetadata: config.CategoryMetadata{Name: "politics"},
-					ModelScores: []config.ModelScore{{
-						Model:                 "deepseek-v31",
-						Score:                 0.9,
-						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
-					}},
-				},
-			}
-		})
-
 		Context("when MCP returns probabilities", func() {
 			It("should return category with entropy decision", func() {
 				mockClient.callToolResult = &mcp.CallToolResult{
@@ -2536,7 +2535,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("initializeMCPCategoryClassifier", func() {
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				classifier.Config.Enabled = false
+				classifier.Config.MCPCategoryModel.Enabled = false
 				err := classifier.initializeMCPCategoryClassifier()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
