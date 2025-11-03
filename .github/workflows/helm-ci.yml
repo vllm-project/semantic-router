@@ -178,6 +178,13 @@ jobs:
           kubectl version
           echo "::endgroup::"
 
+      - name: Create namespace
+        run: |
+          echo "::group::Create Namespace"
+          kubectl create namespace vllm-semantic-router-system || echo "Namespace already exists"
+          kubectl get namespace vllm-semantic-router-system
+          echo "::endgroup::"
+
       - name: Install Helm chart with dev values
         run: |
           echo "::group::Install Chart"
