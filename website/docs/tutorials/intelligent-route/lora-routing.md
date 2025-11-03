@@ -11,7 +11,7 @@ This guide shows how to enable intent-aware LoRA (Low-Rank Adaptation) routing i
 
 - A running vLLM server with LoRA support enabled
 - LoRA adapter files (fine-tuned for specific domains)
-- Envoy + the router (see [Start the router](../../getting-started/quickstart.md) section)
+- Envoy + the router (see [Installation](../../installation/installation.md) guide)
 
 ## 1. Start vLLM with LoRA Adapters
 
