@@ -42,6 +42,36 @@ INTENT_TEST_CASES = [
         "text": "Describe the main causes of World War I",
         "expected_category": "history",
     },
+    {
+        "name": "Biology Query",
+        "text": "Explain the process of photosynthesis in plants",
+        "expected_category": "biology",
+    },
+    {
+        "name": "Chemistry Query",
+        "text": "What is the molecular formula for glucose and how does it react with oxygen?",
+        "expected_category": "chemistry",
+    },
+    {
+        "name": "Physics Query",
+        "text": "Calculate the force required to accelerate a 10kg object at 5m/s²",
+        "expected_category": "physics",
+    },
+    {
+        "name": "Law Query",
+        "text": "What are the key differences between civil law and criminal law?",
+        "expected_category": "law",
+    },
+    {
+        "name": "Economics Query",
+        "text": "Explain the concept of supply and demand in market economics",
+        "expected_category": "economics",
+    },
+    {
+        "name": "Psychology Query",
+        "text": "Describe the stages of cognitive development according to Piaget",
+        "expected_category": "psychology",
+    },
 ]
 
 
