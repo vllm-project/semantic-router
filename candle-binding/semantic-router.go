@@ -19,6 +19,8 @@ import (
 
 extern bool init_similarity_model(const char* model_id, bool use_cpu);
 
+extern bool is_similarity_model_initialized();
+
 extern float calculate_similarity(const char* text1, const char* text2, int max_length);
 
 extern bool init_classifier(const char* model_id, int num_classes, bool use_cpu);
@@ -353,6 +355,14 @@ type LoRABatchResult struct {
 
 // InitModel initializes the BERT model with the specified model ID
 func InitModel(modelID string, useCPU bool) error {
+	// Sync Go state with Rust state (source of truth)
+	// This handles cases where ResetModel() was called but Rust OnceLock is still initialized
+	rustInitialized := bool(C.is_similarity_model_initialized())
+	if rustInitialized {
+		modelInitialized = true
+		return nil // Already initialized in Rust, no-op
+	}
+
 	var err error
 	initOnce.Do(func() {
 		if modelID == "" {
@@ -1192,8 +1202,13 @@ func SetMemoryCleanupHandler() {
 }
 
 // IsModelInitialized returns whether the model has been successfully initialized
-func IsModelInitialized() bool {
-	return modelInitialized
+func IsModelInitialized() (rustState bool, goState bool) {
+	// Sync Go state with Rust state (source of truth)
+	rustInitialized := bool(C.is_similarity_model_initialized())
+	if rustInitialized {
+		modelInitialized = true
+	}
+	return rustInitialized, modelInitialized
 }
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes

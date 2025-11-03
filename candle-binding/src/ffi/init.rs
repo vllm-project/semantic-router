@@ -146,6 +146,18 @@ pub extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu: bool) 
     }
 }
 
+/// Check if BERT similarity model is initialized
+///
+/// This function checks the Rust-side OnceLock state to determine if the model
+/// has been initialized. This is the source of truth for initialization status.
+///
+/// # Returns
+/// `true` if BERT_SIMILARITY OnceLock contains an initialized model, `false` otherwise
+#[no_mangle]
+pub extern "C" fn is_similarity_model_initialized() -> bool {
+    BERT_SIMILARITY.get().is_some()
+}
+
 /// Initialize traditional BERT classifier
 ///
 /// # Safety
