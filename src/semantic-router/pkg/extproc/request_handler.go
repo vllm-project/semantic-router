@@ -520,7 +520,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	ctx.RequestQuery = requestQuery
 
 	// Check if caching is enabled for this category
-	cacheEnabled := r.Config.Enabled
+	cacheEnabled := r.Config.SemanticCache.Enabled
 	if categoryName != "" {
 		cacheEnabled = r.Config.IsCacheEnabledForCategory(categoryName)
 	}

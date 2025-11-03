@@ -130,15 +130,15 @@ func (s *ClassificationAPIServer) getLoadedModelsInfo() []ModelInfo {
 	}
 
 	// BERT similarity model
-	if s.config.ModelID != "" {
+	if s.config.BertModel.ModelID != "" {
 		models = append(models, ModelInfo{
 			Name:      "bert_similarity_model",
 			Type:      "similarity",
 			Loaded:    true,
-			ModelPath: s.config.ModelID,
+			ModelPath: s.config.BertModel.ModelID,
 			Metadata: map[string]string{
 				"model_type": "sentence_transformer",
-				"threshold":  fmt.Sprintf("%.2f", s.config.Threshold),
+				"threshold":  fmt.Sprintf("%.2f", s.config.BertModel.Threshold),
 				"use_cpu":    fmt.Sprintf("%t", s.config.BertModel.UseCPU),
 			},
 		})

@@ -69,7 +69,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Initialize the BERT model for similarity search
-	if initErr := candle_binding.InitModel(cfg.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
@@ -78,14 +78,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
-		BackendType:         cache.CacheBackendType(cfg.BackendType),
-		Enabled:             cfg.Enabled,
+		BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.MaxEntries,
-		TTLSeconds:          cfg.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),
-		BackendConfigPath:   cfg.BackendConfigPath,
-		EmbeddingModel:      cfg.EmbeddingModel,
+		MaxEntries:          cfg.SemanticCache.MaxEntries,
+		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
+		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
 
 	// Use default backend type if not specified
@@ -109,7 +109,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Create tools database with config options
-	toolsThreshold := cfg.Threshold // Default to BERT threshold
+	toolsThreshold := cfg.BertModel.Threshold // Default to BERT threshold
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
 	}

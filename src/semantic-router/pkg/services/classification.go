@@ -87,7 +87,7 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 	// Check if we should load categories from MCP server
 	// Note: tool_name is optional and will be auto-discovered if not specified
 	useMCPCategories := config.CategoryModel.ModelID == "" &&
-		config.Enabled
+		config.MCPCategoryModel.Enabled
 
 	if useMCPCategories {
 		// Categories will be loaded from MCP server during initialization

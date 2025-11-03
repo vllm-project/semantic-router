@@ -329,7 +329,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Note: Both in-tree and MCP classifiers can be configured simultaneously.
 	// At runtime, in-tree classifier will be tried first, with MCP as a fallback.
 	// This allows flexible deployment scenarios (e.g., gradual migration, A/B testing).
-	if cfg.Enabled {
+	if cfg.MCPCategoryModel.Enabled {
 		mcpInit := createMCPCategoryInitializer()
 		mcpInf := createMCPCategoryInference(mcpInit)
 		options = append(options, withMCPCategory(mcpInit, mcpInf))
