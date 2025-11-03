@@ -30,6 +30,11 @@ import torch
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer
 
+from reference_generation_utils import (
+    convert_tensors_to_lists,
+    prepare_device,
+)
+
 
 def mean_pool(
     last_hidden_states: torch.Tensor, attention_mask: torch.Tensor
@@ -136,8 +141,7 @@ def main():
 
     # Load model and tokenizer
     print("\nLoading model and tokenizer...")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"  Using device: {device}")
+    device = prepare_device()
 
     # Load tokenizer (for extracting input_ids and attention_mask)
     tokenizer = AutoTokenizer.from_pretrained(str(model_path))

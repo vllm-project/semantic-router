@@ -17,6 +17,15 @@ from pathlib import Path
 import torch
 from transformers import AutoModel, AutoTokenizer
 
+from reference_generation_utils import (
+    convert_tensors_to_lists,
+    format_test_case_result,
+    prepare_device,
+    print_embedding_stats,
+    save_reference_file,
+    setup_output_directory,
+)
+
 
 def last_token_pool(
     last_hidden_states: torch.Tensor, attention_mask: torch.Tensor
@@ -123,8 +132,7 @@ def main():
 
     # Load model
     print("\nLoading model...")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"  Using device: {device}")
+    device = prepare_device()
 
     if device.type == "cuda":
         print("  Note: Using GPU with Flash Attention 2 (if available)")
@@ -170,9 +178,8 @@ def main():
 
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
-        seq_len = attention_mask.sum().item()
 
-        print(f"  Tokenized length: {seq_len} tokens")
+        print(f"  Tokenized length: {attention_mask.sum().item()} tokens")
         print(f"  Input shape: {list(input_ids.shape)}")
 
         # Forward pass
@@ -189,43 +196,31 @@ def main():
         print(f"  Embedding shape: {list(embedding.shape)}")
         print(f"  Embedding norm: {embedding.norm().item():.6f} (should be ~1.0)")
 
-        # Convert to list
-        embedding_list = embedding[0].cpu().float().numpy().tolist()
-
-        # Convert input_ids and attention_mask to lists for Rust consumption
-        input_ids_list = input_ids[0].cpu().numpy().tolist()
-        attention_mask_list = attention_mask[0].cpu().numpy().tolist()
-
-        # Store result
-        results.append(
-            {
-                "name": case["name"],
-                "input": {
-                    "text": (
-                        case["text"][:100] + "..."
-                        if len(case["text"]) > 100
-                        else case["text"]
-                    ),
-                    "full_text_length": len(case["text"]),
-                    "instruction": case["instruction"],
-                },
-                "tokenization": {
-                    "seq_len": int(seq_len),
-                    "input_shape": list(input_ids.shape),
-                    "input_ids": input_ids_list,
-                    "attention_mask": attention_mask_list,
-                },
-                "embedding": embedding_list,
-                "embedding_shape": list(embedding.shape),
-                "embedding_dim": embedding.shape[1],
-            }
+        # Convert to lists
+        input_ids_list, attention_mask_list, seq_len = convert_tensors_to_lists(
+            input_ids, attention_mask
         )
+        embedding_np = embedding[0].cpu().float().numpy()
+
+        # Store result using utility function
+        result = format_test_case_result(
+            case_name=case["name"],
+            text=case["text"],
+            input_ids_list=input_ids_list,
+            attention_mask_list=attention_mask_list,
+            seq_len=seq_len,
+            embedding=embedding_np,
+            additional_fields={"input": {"instruction": case["instruction"]}},
+        )
+        results.append(result)
 
         print(f"  Result stored. Embedding dimension: {embedding.shape[1]}")
 
     # Save results
     output_path = Path("candle-binding/test_data/qwen3_reference_outputs.json")
-    output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Save using the utility function - but keep the original format for compatibility
     print("\n" + "=" * 80)
     print(f"Saving results to: {output_path}")
     print("=" * 80)
