@@ -190,12 +190,27 @@ jobs:
           echo "::group::Install Chart"
           helm install semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
-            --set initContainer.enabled=false \
-            --set persistence.enabled=false \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 5m \
+            --timeout 15m \
             --debug
+          echo "::endgroup::"
+
+      # For ci debug, check init container logs
+      - name: Check init container logs
+        if: always()
+        run: |
+          echo "::group::Init Container Logs"
+          # Wait a bit for init container to start
+          sleep 5
+          # Get pod name
+          POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app.kubernetes.io/name=semantic-router -o jsonpath='{.items[0].metadata.name}')
+          if [ -n "$POD_NAME" ]; then
+            echo "Checking init container logs for pod: $POD_NAME"
+            kubectl logs -n vllm-semantic-router-system $POD_NAME -c model-downloader --tail=100 || echo "Init container may have already completed or not started yet"
+          else
+            echo "No pod found yet"
+          fi
           echo "::endgroup::"
 
       - name: Verify installation
@@ -281,14 +296,12 @@ jobs:
       - name: Test upgrade
         run: |
           echo "::group::Upgrade Chart"
+          # need some time, download models may take a while
           helm upgrade semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
-            # ci not need init container and pvc. so disable them
-            --set initContainer.enabled=false \
-            --set persistence.enabled=false \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 5m
+            --timeout 15m
           echo "::endgroup::"
 
           echo "::group::Verify Upgrade"
