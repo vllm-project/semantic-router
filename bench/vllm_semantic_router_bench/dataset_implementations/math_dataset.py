@@ -16,16 +16,15 @@ from datasets import load_dataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..dataset_interface import DatasetInfo, DatasetInterface, Question
+from ..dataset_interface import CachedDatasetMixin, DatasetInfo, DatasetInterface, Question
 
 
-class MATHDataset(DatasetInterface):
+class MATHDataset(CachedDatasetMixin, DatasetInterface):
     """MATH (Hendrycks et al.) dataset implementation for mathematical reasoning."""
 
     def __init__(self):
         """Initialize MATH dataset."""
-        self._dataset_cache = None
-        self._categories_cache = None
+        super().__init__()
 
     @property
     def dataset_name(self) -> str:

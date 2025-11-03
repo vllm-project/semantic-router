@@ -16,16 +16,15 @@ from datasets import load_dataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..dataset_interface import DatasetInfo, DatasetInterface, Question
+from ..dataset_interface import CachedDatasetMixin, DatasetInfo, DatasetInterface, Question
 
 
-class AquaRatDataset(DatasetInterface):
+class AquaRatDataset(CachedDatasetMixin, DatasetInterface):
     """AQUA-RAT dataset implementation for algebraic reasoning with rationales."""
 
     def __init__(self):
         """Initialize AQUA-RAT dataset."""
-        self._dataset_cache = None
-        self._categories_cache = None
+        super().__init__()
 
     @property
     def dataset_name(self) -> str:

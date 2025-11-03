@@ -117,6 +117,25 @@ class DatasetInterface(ABC):
         pass
 
 
+class CachedDatasetMixin:
+    """
+    Mixin class providing common caching functionality for dataset implementations.
+    
+    This mixin provides standardized dataset and category caching to reduce redundant
+    loads across multiple dataset implementations.
+    """
+
+    def __init__(self):
+        """Initialize cache attributes."""
+        self._dataset_cache = None
+        self._categories_cache = None
+
+    def _clear_cache(self):
+        """Clear all cached data."""
+        self._dataset_cache = None
+        self._categories_cache = None
+
+
 class PromptFormatter:
     """Utility class for formatting prompts consistently across datasets."""
 

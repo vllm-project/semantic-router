@@ -16,16 +16,15 @@ from datasets import load_dataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..dataset_interface import DatasetInfo, DatasetInterface, Question
+from ..dataset_interface import CachedDatasetMixin, DatasetInfo, DatasetInterface, Question
 
 
-class StrategyQADataset(DatasetInterface):
+class StrategyQADataset(CachedDatasetMixin, DatasetInterface):
     """StrategyQA dataset implementation for multi-step implicit reasoning."""
 
     def __init__(self):
         """Initialize StrategyQA dataset."""
-        self._dataset_cache = None
-        self._categories_cache = None
+        super().__init__()
 
     @property
     def dataset_name(self) -> str:

@@ -17,10 +17,10 @@ from datasets import load_dataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ..dataset_interface import DatasetInfo, DatasetInterface, PromptFormatter, Question
+from ..dataset_interface import CachedDatasetMixin, DatasetInfo, DatasetInterface, PromptFormatter, Question
 
 
-class GPQADataset(DatasetInterface):
+class GPQADataset(CachedDatasetMixin, DatasetInterface):
     """GPQA (Graduate-level Google-proof Q&A) dataset implementation."""
 
     def __init__(self, subset: str = "gpqa_main"):
