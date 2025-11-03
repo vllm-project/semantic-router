@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Sync vLLM Semantic Router Pipe versions across deployment locations.
+Verify vLLM Semantic Router Pipe versions are in sync across deployment locations.
 
-This script helps maintain the three deployment-specific copies of the pipe
-while preserving their configuration differences.
+This script checks that the three deployment-specific copies of the pipe
+are synchronized, accounting for expected configuration differences.
 
 Usage:
-    python sync_pipe_versions.py [--dry-run]
+    python sync_pipe_versions.py
 """
 
 import argparse
@@ -17,12 +17,7 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync pipe versions across deployments"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes",
+        description="Verify pipe versions are in sync across deployments"
     )
     args = parser.parse_args()
 

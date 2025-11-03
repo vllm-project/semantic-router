@@ -8,7 +8,7 @@ from different model architectures to validate Rust implementations.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -19,7 +19,7 @@ def save_reference_file(
     model_name: str,
     model_id: str,
     results: List[Dict[str, Any]],
-    metadata: Dict[str, Any] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ):
     """
     Save reference embeddings to JSON file with consistent formatting.
