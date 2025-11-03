@@ -1,21 +1,29 @@
 """
-title: vLLM Semantic Router Pipe
+title: vLLM Semantic Router Pipe (Docker Compose)
 author: open-webui
 date: 2025-10-01
 version: 1.1
 license: Apache-2.0
-description: A pipe for proxying requests to vLLM Semantic Router and displaying decision headers (category, reasoning, model, injection) and security alerts (PII violations, jailbreak detection).
+description: Docker Compose deployment configuration for vLLM Semantic Router pipe.
 requirements: requests, pydantic
 """
 
-import json
-from typing import Generator, Iterator, List, Union
+import os
+import sys
 
-import requests
-from pydantic import BaseModel
+# Add the shared pipe base module to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../tools/openwebui-pipe"))
+
+try:
+    from vllm_semantic_router_pipe_base import PipelineBase
+except ImportError:
+    # Fallback: if import fails, define inline (for standalone deployment)
+    print("Warning: Could not import PipelineBase, using inline copy")
+    # This would be the full inline copy if needed for standalone deployment
+    raise
 
 
-class Pipeline:
+class Pipeline(PipelineBase):
     class Valves(BaseModel):
         # vLLM Semantic Router endpoint URL
         vsr_base_url: str = "http://envoy-proxy:8801"
