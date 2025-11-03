@@ -29,13 +29,11 @@ class GPQADataset(CachedDatasetMixin, DatasetInterface):
         Args:
             subset: Which GPQA subset to use ("gpqa_main", "gpqa_extended", or "gpqa_diamond")
         """
+        super().__init__()
         self.subset = subset
         valid_subsets = ["gpqa_main", "gpqa_extended", "gpqa_diamond"]
         if self.subset not in valid_subsets:
             raise ValueError(f"subset must be one of {valid_subsets}")
-
-        self._dataset_cache = None
-        self._categories_cache = None
 
     @property
     def dataset_name(self) -> str:

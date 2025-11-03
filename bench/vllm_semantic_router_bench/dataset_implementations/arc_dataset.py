@@ -29,12 +29,10 @@ class ARCDataset(CachedDatasetMixin, DatasetInterface):
         Args:
             variant: Which ARC variant to use ("easy", "challenge", or "both")
         """
+        super().__init__()
         self.variant = variant.lower()
         if self.variant not in ["easy", "challenge", "both"]:
             raise ValueError("variant must be 'easy', 'challenge', or 'both'")
-
-        self._dataset_cache = None
-        self._categories_cache = None
 
     @property
     def dataset_name(self) -> str:

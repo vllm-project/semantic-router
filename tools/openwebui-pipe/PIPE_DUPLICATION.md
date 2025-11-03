@@ -93,12 +93,11 @@ tools/openwebui-pipe/
 
 ## Sync Script
 
-A sync script template is provided in `tools/openwebui-pipe/sync_pipe_versions.sh`:
+A sync script is provided in `tools/openwebui-pipe/sync_pipe_versions.py`:
 
 ```bash
-#!/bin/bash
-# Sync pipe versions while preserving configuration differences
-# Usage: ./sync_pipe_versions.sh
+# Check if pipe versions are in sync
+python tools/openwebui-pipe/sync_pipe_versions.py
 ```
 
 ## Maintenance Guidelines

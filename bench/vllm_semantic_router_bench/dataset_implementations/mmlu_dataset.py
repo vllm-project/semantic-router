@@ -23,8 +23,7 @@ class MMLUDataset(CachedDatasetMixin, DatasetInterface):
     """MMLU-Pro dataset implementation."""
 
     def __init__(self):
-        self._dataset_cache = None
-        self._categories_cache = None
+        super().__init__()
 
     @property
     def dataset_name(self) -> str:
