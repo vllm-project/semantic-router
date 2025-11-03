@@ -184,7 +184,6 @@ jobs:
           helm install semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
             --namespace vllm-semantic-router-system \
-            --create-namespace \
             --wait \
             --timeout 5m \
             --debug
