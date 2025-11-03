@@ -64,6 +64,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/intelligent-route/overview',
             'tutorials/intelligent-route/reasoning',
+            'tutorials/intelligent-route/lora-routing',
           ],
         },
         {
