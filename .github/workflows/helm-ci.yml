@@ -190,6 +190,8 @@ jobs:
           echo "::group::Install Chart"
           helm install semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            --set initContainer.enabled=false \
+            --set persistence.enabled=false \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 5m \
@@ -251,6 +253,7 @@ jobs:
           kubectl get endpoints -n vllm-semantic-router-system
           echo "::endgroup::"
 
+      # for ci debug.
       - name: Collect logs on failure
         if: failure()
         run: |
@@ -280,6 +283,9 @@ jobs:
           echo "::group::Upgrade Chart"
           helm upgrade semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            # ci not need init container and pvc. so disable them
+            --set initContainer.enabled=false \
+            --set persistence.enabled=false \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 5m
