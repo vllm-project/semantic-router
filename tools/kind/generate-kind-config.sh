@@ -48,4 +48,3 @@ echo -e "${GREEN}✓ Generated ${OUTPUT_FILE}${NC}"
 echo ""
 echo "You can now create the kind cluster with:"
 echo "  kind create cluster --config ${OUTPUT_FILE}"
-

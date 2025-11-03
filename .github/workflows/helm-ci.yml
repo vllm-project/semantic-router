@@ -169,18 +169,6 @@ jobs:
           node_image: kindest/node:${{ matrix.k8s-version }}
           cluster_name: helm-test-cluster
           wait: 120s
-          config: |
-            kind: Cluster
-            apiVersion: kind.x-k8s.io/v1alpha4
-            nodes:
-              - role: control-plane
-                extraPortMappings:
-                  - containerPort: 30080
-                    hostPort: 30080
-                    protocol: TCP
-                  - containerPort: 30051
-                    hostPort: 30051
-                    protocol: TCP
 
       - name: Verify Kind cluster
         run: |
