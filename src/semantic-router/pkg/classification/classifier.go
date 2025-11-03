@@ -984,7 +984,15 @@ func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter f
 		if modelFilter != nil && !modelFilter(model) {
 			return
 		}
-		c.updateBestModel(modelScore.Score, model, &bestScore, &bestModel)
+		// Use LoRA name if specified, otherwise use the base model name
+		// This enables intent-aware LoRA routing where the final model name
+		// in the request becomes the LoRA adapter name
+		finalModelName := model
+		if modelScore.LoRAName != "" {
+			finalModelName = modelScore.LoRAName
+			logging.Debugf("Using LoRA adapter '%s' for base model '%s'", finalModelName, model)
+		}
+		c.updateBestModel(modelScore.Score, finalModelName, &bestScore, &bestModel)
 	})
 
 	return bestModel, bestScore
@@ -1024,13 +1032,19 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 }
 
 // GetModelsForCategory returns all models that are configured for the given category
+// If a ModelScore has a LoRAName specified, the LoRA name is returned instead of the base model name
 func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	var models []string
 
 	for _, category := range c.Config.Categories {
 		if strings.EqualFold(category.Name, categoryName) {
 			for _, modelScore := range category.ModelScores {
-				models = append(models, modelScore.Model)
+				// Use LoRA name if specified, otherwise use the base model name
+				if modelScore.LoRAName != "" {
+					models = append(models, modelScore.LoRAName)
+				} else {
+					models = append(models, modelScore.Model)
+				}
 			}
 			break
 		}

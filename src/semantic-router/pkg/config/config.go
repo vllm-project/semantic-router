@@ -373,6 +373,18 @@ type ModelParams struct {
 	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
 	// If empty, the model doesn't support reasoning mode
 	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+
+	// LoRA adapters available for this model
+	// These must be registered with vLLM using --lora-modules flag
+	LoRAs []LoRAAdapter `yaml:"loras,omitempty"`
+}
+
+// LoRAAdapter represents a LoRA adapter configuration for a model
+type LoRAAdapter struct {
+	// Name of the LoRA adapter (must match the name registered with vLLM)
+	Name string `yaml:"name"`
+	// Description of what this LoRA adapter is optimized for
+	Description string `yaml:"description,omitempty"`
 }
 
 // ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
@@ -426,6 +438,11 @@ type Category struct {
 type ModelScore struct {
 	Model string  `yaml:"model"`
 	Score float64 `yaml:"score"`
+	// Optional LoRA adapter name - when specified, this LoRA adapter name will be used
+	// as the final model name in requests instead of the base model name.
+	// This enables intent-aware LoRA routing where different LoRA adapters can be
+	// selected based on the classified category.
+	LoRAName string `yaml:"lora_name,omitempty"`
 	// Reasoning mode control on Model Level
 	ModelReasoningControl `yaml:",inline"`
 }

@@ -35,9 +35,9 @@
 
 ### Intelligent Routing 🧠
 
-#### Auto-Reasoning and Auto-Selection of Models
+#### Auto-Selection of Models and LoRA Adapters
 
-An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
+An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models or LoRA adapters from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
 
 ![mom-overview](./website/static/img/mom-overview.png)
 
@@ -78,10 +78,6 @@ Detect PII in the prompt, avoiding sending PII to the LLM so as to protect the p
 #### Prompt guard
 
 Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving. Can be configured globally or at the category level for fine-grained security control.
-
-### Distributed Tracing 🔍
-
-Comprehensive observability with OpenTelemetry distributed tracing provides fine-grained visibility into the request processing pipeline.
 
 ### vLLM Semantic Router Dashboard 💬
 
