@@ -162,7 +162,6 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 Check the router logs to confirm the correct LoRA adapter is selected for each query.
 
-
 ## Benefits
 
 - **Domain Expertise**: Each LoRA adapter is fine-tuned for specific domains
