@@ -19,6 +19,19 @@ const papers = [
   {
     id: 2,
     type: 'paper',
+    title: 'Category-Aware Semantic Caching for Heterogeneous LLM Workloads',
+    authors: 'Chen Wang, Xunzhuo Liu, Yue Zhu, Alaa Youssef, Priya Nagpurkar, Huamin Chen',
+    venue: '',
+    year: '2025',
+    abstract: 'We present a category-aware semantic caching where similarity thresholds, TTLs, and quotas vary by query category, with a hybrid architecture separating in-memory HNSW search from external document storage.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2510.26835', label: '📄 Paper' },
+    ],
+    featured: true,
+  },
+  {
+    id: 3,
+    type: 'paper',
     title: 'Semantic Inference Routing Protocol (SIRP)',
     authors: 'Huamin Chen, Luay Jalil',
     venue: 'Internet Engineering Task Force (IETF)',
@@ -30,7 +43,7 @@ const papers = [
     featured: true,
   },
   {
-    id: 3,
+    id: 4,
     type: 'paper',
     title: 'Multi-Provider Extensions for Agentic AI Inference APIs',
     authors: 'H. Chen, L. Jalil, N. Cocker',

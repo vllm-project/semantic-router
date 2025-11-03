@@ -16,11 +16,12 @@
 
 *Latest News* 🔥
 
+- [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published 📝
 - [2025/10/26] We reached 2000 stars on GitHub! 🔥
 - [2025/10/21] We announced the [2025 Q4 Roadmap: Journey to Iris](https://vllm-semantic-router.com/blog/q4-roadmap-iris) 📅.
 - [2025/10/16] We established the [vLLM Semantic Router Youtube Channel](https://www.youtube.com/@vLLMSemanticRouter) ✨.
 - [2025/10/15] We announced the [vLLM Semantic Router Dashboard](https://www.youtube.com/watch?v=E2IirN8PsFw) 🚀.
-- [2025/10/12] Our paper [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys 🧠.
+- [2025/10/12] **Our paper** [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys 🧠.
 - [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team 👋.
 - [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/kubernetes/) 🌊.
 - [2025/09/15] We reached 1000 stars on GitHub! 🔥

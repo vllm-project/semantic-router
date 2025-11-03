@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
 
@@ -71,23 +71,23 @@ func (s *Server) Start() error {
 			if err != nil {
 				return fmt.Errorf("failed to load TLS certificate from %s: %w", s.certPath, err)
 			}
-			observability.Infof("Loaded TLS certificate from %s", s.certPath)
+			logging.Infof("Loaded TLS certificate from %s", s.certPath)
 		} else {
 			// Create self-signed certificate
 			cert, err = tlsutil.CreateSelfSignedTLSCertificate()
 			if err != nil {
 				return fmt.Errorf("failed to create self-signed certificate: %w", err)
 			}
-			observability.Infof("Created self-signed TLS certificate")
+			logging.Infof("Created self-signed TLS certificate")
 		}
 
 		creds := credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{cert},
 		})
 		serverOpts = append(serverOpts, grpc.Creds(creds))
-		observability.Infof("Starting secure LLM Router ExtProc server on port %d...", s.port)
+		logging.Infof("Starting secure LLM Router ExtProc server on port %d...", s.port)
 	} else {
-		observability.Infof("Starting insecure LLM Router ExtProc server on port %d...", s.port)
+		logging.Infof("Starting insecure LLM Router ExtProc server on port %d...", s.port)
 	}
 
 	s.server = grpc.NewServer(serverOpts...)
@@ -97,7 +97,7 @@ func (s *Server) Start() error {
 	serverErrCh := make(chan error, 1)
 	go func() {
 		if err := s.server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			observability.Errorf("Server error: %v", err)
+			logging.Errorf("Server error: %v", err)
 			serverErrCh <- err
 		} else {
 			serverErrCh <- nil
@@ -117,11 +117,11 @@ func (s *Server) Start() error {
 	select {
 	case err := <-serverErrCh:
 		if err != nil {
-			observability.Errorf("Server exited with error: %v", err)
+			logging.Errorf("Server exited with error: %v", err)
 			return err
 		}
 	case <-signalChan:
-		observability.Infof("Received shutdown signal, gracefully stopping server...")
+		logging.Infof("Received shutdown signal, gracefully stopping server...")
 	}
 
 	s.Stop()
@@ -132,7 +132,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	if s.server != nil {
 		s.server.GracefulStop()
-		observability.Infof("Server stopped")
+		logging.Infof("Server stopped")
 	}
 }
 
@@ -160,7 +160,7 @@ func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer
 func (s *Server) watchConfigAndReload(ctx context.Context) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		observability.LogEvent("config_watcher_error", map[string]interface{}{
+		logging.LogEvent("config_watcher_error", map[string]interface{}{
 			"stage": "create_watcher",
 			"error": err.Error(),
 		})
@@ -173,7 +173,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 
 	// Watch both the file and its directory to handle symlink swaps (Kubernetes ConfigMap)
 	if err := watcher.Add(cfgDir); err != nil {
-		observability.LogEvent("config_watcher_error", map[string]interface{}{
+		logging.LogEvent("config_watcher_error", map[string]interface{}{
 			"stage": "watch_dir",
 			"dir":   cfgDir,
 			"error": err.Error(),
@@ -192,14 +192,14 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 		// Parse and build a new router
 		newRouter, err := NewOpenAIRouter(cfgFile)
 		if err != nil {
-			observability.LogEvent("config_reload_failed", map[string]interface{}{
+			logging.LogEvent("config_reload_failed", map[string]interface{}{
 				"file":  cfgFile,
 				"error": err.Error(),
 			})
 			return
 		}
 		s.service.Swap(newRouter)
-		observability.LogEvent("config_reloaded", map[string]interface{}{
+		logging.LogEvent("config_reloaded", map[string]interface{}{
 			"file": cfgFile,
 		})
 	}
@@ -227,7 +227,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			if !ok {
 				return
 			}
-			observability.LogEvent("config_watcher_error", map[string]interface{}{
+			logging.LogEvent("config_watcher_error", map[string]interface{}{
 				"stage": "watch_loop",
 				"error": err.Error(),
 			})

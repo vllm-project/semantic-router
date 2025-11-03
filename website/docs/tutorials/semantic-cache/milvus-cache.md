@@ -46,10 +46,10 @@ graph TB
 
 ### Milvus Backend Configuration
 
-Configure in `config/cache/milvus.yaml`:
+Configure in `config/semantic-cache/milvus.yaml`:
 
 ```yaml
-# config/cache/milvus.yaml
+# config/semantic-cache/milvus.yaml
 connection:
   host: "localhost"
   port: 19530
@@ -96,14 +96,14 @@ curl http://localhost:19530/health
 Basic Milvus Configuration:
 
 - Set `backend_type: "milvus"` in `config/config.yaml`
-- Set `backend_config_path: "config/cache/milvus.yaml"` in `config/config.yaml`
+- Set `backend_config_path: "config/semantic-cache/milvus.yaml"` in `config/config.yaml`
 
 ```yaml
 # config/config.yaml
 semantic_cache:
   enabled: true
   backend_type: "milvus"
-  backend_config_path: "config/cache/milvus.yaml"
+  backend_config_path: "config/semantic-cache/milvus.yaml"
   similarity_threshold: 0.8
   ttl_seconds: 7200
 ```

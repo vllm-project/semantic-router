@@ -118,9 +118,14 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 			exit 1; \
 		fi; \
 	else \
-		echo "Building Rust library with CUDA support..." && \
-		echo "💡 Tip: For 20-30% speedup on RTX 3090+/A100/H100, use: make rust ENABLE_FLASH_ATTN=1" && \
-		cd candle-binding && cargo build --release; \
+		if command -v nvcc >/dev/null 2>&1; then \
+			echo "Building Rust library with CUDA support..." && \
+			echo "💡 Tip: For 20-30% speedup on RTX 3090+/A100/H100, use: make rust ENABLE_FLASH_ATTN=1" && \
+			cd candle-binding && cargo build --release; \
+		else \
+			echo "Building Rust library for CPU (nvcc not found)..." && \
+			cd candle-binding && cargo build --release --no-default-features; \
+		fi; \
 	fi'
 
 # Build the Rust library without CUDA (for CI/CD environments)
