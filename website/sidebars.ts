@@ -74,6 +74,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/semantic-cache/overview',
             'tutorials/semantic-cache/in-memory-cache',
             'tutorials/semantic-cache/milvus-cache',
+            'tutorials/semantic-cache/hybrid-cache',
           ],
         },
         {
