@@ -7,6 +7,7 @@ This deployment uses **dynamic IP configuration** to ensure portability across d
 ## Architecture
 
 ### Pod Structure
+
 1. **semantic-router Pod**:
    - Container 1: `semantic-router` (ExtProc service)
    - Container 2: `envoy-proxy` (Proxy)
@@ -41,16 +42,19 @@ oc create configmap semantic-router-config --from-file=dynamic-config.yaml
 ## Benefits
 
 ### ✅ Cross-Cluster Portability
+
 - Works on any OpenShift/Kubernetes cluster
 - No manual IP configuration needed
 - IPs are discovered automatically
 
 ### ✅ Service-Based Routing
+
 - Uses Kubernetes ClusterIP services
 - Automatic service discovery
 - Load balancing handled by Kubernetes
 
 ### ✅ Separation of Concerns
+
 - vLLM models in separate pods
 - Independent scaling
 - Better resource isolation
@@ -185,24 +189,29 @@ oc rollout status deployment/semantic-router -n vllm-semantic-router-system
 ## Comparison: Alternative Approaches
 
 ### ❌ Hardcoded IPs (Original)
+
 ```yaml
 address: "172.30.64.134"  # Works only on specific cluster
 ```
 
 ### ❌ Localhost (Sidecar Pattern)
+
 ```yaml
 address: "127.0.0.1"  # Requires all containers in same pod
 ```
 
 ### ✅ Dynamic IPs (Current Solution)
+
 ```yaml
 address: "$DISCOVERED_IP"  # Works on any cluster
 ```
 
 ### 🚀 DNS Names (Future Enhancement)
+
 ```yaml
 address: "vllm-model-a.vllm-semantic-router-system.svc.cluster.local"
 ```
+
 **Note**: Requires Go code changes to accept DNS names (see `src/semantic-router/pkg/config/validator.go`)
 
 ## Future Improvements

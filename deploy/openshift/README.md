@@ -20,6 +20,7 @@ cd deploy/openshift
 ```
 
 This script will:
+
 - ✅ Build the llm-katan image from Dockerfile
 - ✅ Create namespace and PVCs
 - ✅ Deploy vLLM model services (model-a and model-b)
