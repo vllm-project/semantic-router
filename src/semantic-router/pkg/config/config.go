@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -267,14 +268,15 @@ type ModelScore struct {
 
 // Category represents a category for routing queries
 type Category struct {
-	Name                 string       `yaml:"name"`
-	Description          string       `yaml:"description,omitempty"`
-	ReasoningDescription string       `yaml:"reasoning_description,omitempty"`
-	ReasoningEffort      string       `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
-	RagStrategy			 string       `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
-	RagDescription       string       `yaml:"rag_description,omitempty"`
+	Name                 string   `yaml:"name"`
+	Description          string   `yaml:"description,omitempty"`
+	ReasoningDescription string   `yaml:"reasoning_description,omitempty"`
+	ReasoningEffort      string   `yaml:"reasoning_effort,omitempty"` // Configurable reasoning effort level (low, medium, high)
+	RagStrategy          string   `yaml:"rag_strategy,omitempty"`     // Configurable rag strategy for a category (never, adaptive, always)
+	RagDescription       string   `yaml:"rag_description,omitempty"`
+	KnowledgeBases       []string `yaml:"knowledge_bases,omitempty"`
 	// TODO: Knowledge Domains?
-	ModelScores          []ModelScore `yaml:"model_scores"`
+	ModelScores []ModelScore `yaml:"model_scores"`
 	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
 	// used by the classifier model. When provided, classifier outputs will be translated
 	// from these MMLU categories to this generic category name.
@@ -292,27 +294,36 @@ type Category struct {
 
 type RagConfig struct {
 	// Enabled bool `yaml:"enabled"` // maybe delete this
-	DefaultStrategy string `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
-	KnowledgeBases []KnowledgeBase `yaml:"knowledge_bases,omitempty"`
-	RetrievalParams RetrievalParams `yaml:"retrieval_params,omitempty"` // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
-	RagTemplatePath string `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
+	DefaultStrategy string          `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
+	KnowledgeBases  []KnowledgeBase `yaml:"knowledge_bases,omitempty"`
+	RetrievalParams RetrievalParams `yaml:"retrieval_params,omitempty"`  // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
+	RagTemplatePath string          `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
 }
 
 type KnowledgeBase struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"` // VectorDB provider
-	Endpoint string `yaml:"endpoint"`
-	Collection string `yaml:"collection"`
-	EmbeddingModel string `yaml:"embedding_model"`
-	ApiKeyEnv string `yaml:"api_key_env,omitempty"`
-	Index string `yaml:"index,omitempty"`
+	Name              string `yaml:"name"`
+	Type              string `yaml:"type"` // VectorDB provider
+	Endpoint          string `yaml:"endpoint"`
+	Collection        string `yaml:"collection"`
+	Tenant            string `yaml:"tenant"`
+	Database          string `yaml:"database"`
+	EmbeddingEndpoint string `yaml:"embedding_endpoint"`
+	EmbeddingModel    string `yaml:"embedding_model"`
+	ApiKeyEnv         string `yaml:"api_key_env,omitempty"`
+	Index             string `yaml:"index,omitempty"`
 }
 
+// Type for supported vector DBs
+const (
+	ChromaVectorDbType = "chroma"
+	MilvusVectorDbType = "milvus"
+)
+
 type RetrievalParams struct {
-	TopK int `yaml:"top_k,omitempty"`
+	TopK                int     `yaml:"top_k,omitempty"`
 	SimilarityThreshold float32 `yaml:"similarity_threshold,omitempty"`
-	MaxContextLength int `yaml:"max_context_length,omitempty"`
-	RerankEnabled bool `yaml:"rerank_enabled,omitempty"`
+	MaxContextLength    int     `yaml:"max_context_length,omitempty"`
+	RerankEnabled       bool    `yaml:"rerank_enabled,omitempty"`
 }
 
 // TODO: Reranking config?
