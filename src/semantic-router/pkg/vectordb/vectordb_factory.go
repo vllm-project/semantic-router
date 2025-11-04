@@ -14,8 +14,10 @@ func NewVectorDbBackend(config VectorDbConfig) (VectorDbBackend, error) {
 	case ChromaVectorDbType:
 		observability.Debugf("Creating chroma backend - Endpoint: %s, Collection: %s", config.Endpoint, config.Collection)
 		options := ChromaVectorDbOptions{
-			Endpoint:   config.Endpoint,
-			Collection: config.Collection,
+			Endpoint:         config.Endpoint,
+			Collection:       config.Collection,
+			EmbeddingService: config.EmbeddingService,
+			EmbeddingModel:   config.EmbeddingModel,
 		}
 		vectorDb, err := NewChromaVectorDb(options)
 		if err != nil {

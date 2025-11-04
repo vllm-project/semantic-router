@@ -9,18 +9,18 @@ import (
 )
 
 type ChromaVectorDbOptions struct {
-	Endpoint          string // Chroma server endpoint
-	Tenant            string // Default tenant to use
-	Database          string // Default database to use
-	Collection        string // Collection
-	EmbeddingEndpoint string // EmbeddingEndpoint
-	EmbeddingModel    string // EmbeddingModel
+	Endpoint         string           // Chroma server endpoint
+	Tenant           string           // Default tenant to use
+	Database         string           // Default database to use
+	Collection       string           // Collection
+	EmbeddingService EmbeddingService // EmbeddingService
+	EmbeddingModel   string           // EmbeddingModel
 }
 
 type ChromaVectorDb struct {
 	client           chroma.Client
 	collection       string
-	embeddingService *OpenAIEmbeddingService
+	embeddingService EmbeddingService
 	embeddingModel   string
 }
 
@@ -46,11 +46,10 @@ func NewChromaVectorDb(options ChromaVectorDbOptions) (*ChromaVectorDb, error) {
 		return nil, err
 	}
 	observability.Debugf("Initialized Chroma client with API Version: %s \n", v)
-	es := NewOpenAIEmbeddingService(NewOpenAIEmbeddingServiceOptions{Endpoint: "http://localhost:11434/v1/"})
 	return &ChromaVectorDb{
 		client:           c,
 		collection:       options.Collection,
-		embeddingService: es,
+		embeddingService: options.EmbeddingService,
 		embeddingModel:   options.EmbeddingModel,
 	}, nil
 }

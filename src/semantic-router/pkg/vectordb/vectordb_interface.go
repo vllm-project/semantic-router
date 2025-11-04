@@ -5,6 +5,7 @@ type VectorDbConfig struct {
 	Endpoint         string
 	Collection       string
 	EmbeddingService EmbeddingService
+	EmbeddingModel   string
 }
 
 type VectorDbBackend interface {

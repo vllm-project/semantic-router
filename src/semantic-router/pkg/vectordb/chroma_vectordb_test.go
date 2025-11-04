@@ -4,11 +4,14 @@ import "testing"
 
 func TestChromaVectorDb(t *testing.T) {
 	t.Run("ChromaVectorDb", func(t *testing.T) {
+		es := NewOpenAIEmbeddingService(NewOpenAIEmbeddingServiceOptions{
+			Endpoint: "http://localhost:11434/v1/",
+		})
 		options := ChromaVectorDbOptions{
-			Endpoint:          "http://localhost:8000",
-			Collection:        "my_collection",
-			EmbeddingEndpoint: "http://localhost:11434/v1/",
-			EmbeddingModel:    "all-minilm",
+			Endpoint:         "http://localhost:8000",
+			Collection:       "my_collection",
+			EmbeddingService: es,
+			EmbeddingModel:   "all-minilm",
 		}
 		c, err := NewChromaVectorDb(options)
 		if err != nil {
