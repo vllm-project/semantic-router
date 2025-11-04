@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectordb"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests
@@ -24,6 +25,7 @@ type OpenAIRouter struct {
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
+	KnowledgeBases       map[string]vectordb.VectorDbBackend
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -150,6 +152,39 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		_ = autoSvc
 	}
 
+	embeddingServices := make(map[string]vectordb.EmbeddingService)
+	knowledgeBases := make(map[string]vectordb.VectorDbBackend)
+
+	for _, knowledgeBase := range cfg.Rag.KnowledgeBases {
+		// Check if we already have a knowledge base with that name; if yes, skip
+		_, ok := knowledgeBases[knowledgeBase.Name]
+		if ok {
+			observability.Warnf("Found redundant config for knowledge base %s. Skipping...", knowledgeBase.Name)
+			continue
+		}
+		// Check if we already have an embedding service for that endpoint; else create one
+		embeddingService, ok := embeddingServices[knowledgeBase.EmbeddingEndpoint]
+		if !ok {
+			embeddingService = vectordb.NewOpenAIEmbeddingService(
+				vectordb.NewOpenAIEmbeddingServiceOptions{Endpoint: knowledgeBase.EmbeddingEndpoint},
+			)
+			embeddingServices[knowledgeBase.EmbeddingEndpoint] = embeddingService
+		}
+		vectorDbConfig := vectordb.VectorDbConfig{
+			Type:             vectordb.VectorDbBackendType(knowledgeBase.Type),
+			Endpoint:         knowledgeBase.Endpoint,
+			Collection:       knowledgeBase.Collection,
+			EmbeddingService: embeddingService,
+			EmbeddingModel:   knowledgeBase.EmbeddingModel,
+		}
+		vectorDbBackend, err := vectordb.NewVectorDbBackend(vectorDbConfig)
+		if err != nil {
+			observability.Errorf("Error creating knowledge base %s: %v", knowledgeBase.Name, err)
+		} else {
+			knowledgeBases[knowledgeBase.Name] = vectorDbBackend
+		}
+	}
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -157,6 +192,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
+		KnowledgeBases:       knowledgeBases,
 	}
 
 	// Log reasoning configuration after router is created
