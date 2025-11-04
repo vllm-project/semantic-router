@@ -938,7 +938,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 		if ep < 0 || ep >= len(h.embeddings) {
 			continue
 		}
-		dist := -dotProduct(query, h.embeddings[ep])
+		dist := -dotProduct(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
 		candidates.push(ep, dist)
 		results.push(ep, dist)
 		visited[ep] = true
@@ -946,7 +946,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 
 	for len(candidates.data) > 0 {
 		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > -results.data[0].dist {
+		if len(results.data) > 0 && currentDist > results.data[0].dist {
 			break
 		}
 
@@ -964,7 +964,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 
 			dist := -dotProduct(query, h.embeddings[neighborID])
 
-			if len(results.data) < ef || dist < -results.data[0].dist {
+			if len(results.data) < ef || dist < results.data[0].dist {
 				candidates.push(neighborID, dist)
 				results.push(neighborID, dist)
 
@@ -1062,7 +1062,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 		if ep < 0 || ep >= len(h.embeddings) {
 			continue
 		}
-		dist := -dotProductSIMD(query, h.embeddings[ep])
+		dist := -dotProductSIMD(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
 		candidates.push(ep, dist)
 		results.push(ep, dist)
 		visited[ep] = true
@@ -1075,7 +1075,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 
 	for len(candidates.data) > 0 {
 		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > -results.data[0].dist {
+		if len(results.data) > 0 && currentDist > results.data[0].dist {
 			break
 		}
 
@@ -1098,7 +1098,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 				return []int{neighborID}
 			}
 
-			if len(results.data) < ef || dist < -results.data[0].dist {
+			if len(results.data) < ef || dist < results.data[0].dist {
 				candidates.push(neighborID, dist)
 				results.push(neighborID, dist)
 

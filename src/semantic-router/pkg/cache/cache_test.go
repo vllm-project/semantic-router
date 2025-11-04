@@ -1514,6 +1514,95 @@ milvus:
 	}
 }
 
+// Ensures hybrid layer search skips candidates that are already worse than the frontier.
+func TestHybridCacheSearchLayerPrunesWeakerBranch(t *testing.T) {
+	// Regression fixture: the buggy comparison let the frontier accept a much
+	// worse neighbor (node 3) even after ef was saturated. That re-opened the
+	// branch to node 4, so the search would walk every reachable node—hurting
+	// latency and risking a worse match. We wire an artificial edge (3→4) to
+	// isolate the pruning logic; production HNSW builders try to avoid such links.
+	embeddings := [][]float32{
+		{0.80},  // node 0: entry point
+		{0.79},  // node 1: near-tie neighbor
+		{0.78},  // node 2: another strong neighbor
+		{0.10},  // node 3: weak branch that should be pruned
+		{0.995}, // node 4: hidden best reachable only via node 3
+	}
+
+	nodes := []*HNSWNode{
+		{
+			entryIndex: 0,
+			neighbors: map[int][]int{
+				0: {1, 2, 3},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 1,
+			neighbors: map[int][]int{
+				0: {0},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 2,
+			neighbors: map[int][]int{
+				0: {0},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 3,
+			neighbors: map[int][]int{
+				0: {0, 4},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 4,
+			neighbors: map[int][]int{
+				0: {3},
+			},
+			maxLayer: 0,
+		},
+	}
+
+	nodeIndex := map[int]*HNSWNode{
+		0: nodes[0],
+		1: nodes[1],
+		2: nodes[2],
+		3: nodes[3],
+		4: nodes[4],
+	}
+
+	cache := &HybridCache{
+		hnswIndex: &HNSWIndex{
+			nodes:          nodes,
+			nodeIndex:      nodeIndex,
+			entryPoint:     0,
+			maxLayer:       0,
+			efConstruction: 4,
+			M:              4,
+			Mmax:           4,
+			Mmax0:          4,
+			ml:             1,
+		},
+		embeddings: embeddings,
+		idMap:      map[int]string{},
+	}
+
+	results := cache.searchLayerHybrid([]float32{1}, 3, 0, []int{0})
+	if len(results) != 3 {
+		t.Fatalf("expected frontier to keep three best neighbors, got %v", results)
+	}
+	if slices.Contains(results, 4) {
+		t.Fatalf("expected weaker branch to stay pruned, got %v", results)
+	}
+	if !slices.Contains(results, 1) {
+		t.Fatalf("expected best neighbor 1 to remain in results, got %v", results)
+	}
+}
+
 // BenchmarkHybridCacheAddEntry benchmarks adding entries to hybrid cache
 func BenchmarkHybridCacheAddEntry(b *testing.B) {
 	if os.Getenv("MILVUS_URI") == "" {
