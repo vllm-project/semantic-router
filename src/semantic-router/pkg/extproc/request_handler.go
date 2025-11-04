@@ -223,7 +223,7 @@ func addRAGChunksToRequestBody(requestBody []byte, ragChunks []string, ragTempla
 	observability.Infof("RAG formatted prompt: %s", finalPrompt)
 
 	requestMap["messages"] = messages
-	
+
 	// Marshal back to JSON
 	modifiedBody, err := json.Marshal(requestMap)
 	return modifiedBody, true, err
@@ -242,7 +242,6 @@ func loadRAGTemplate(filePath string) (string, error) {
 	return ragTemplate, templateFileErr
 }
 
-
 // formatUserPromptWithRAG formats a user prompt using the RAG template loaded from file
 func formatUserPromptWithRAG(originalQuestion string, ragChunks []string, templatePath string) string {
 	// Load template from file
@@ -251,14 +250,13 @@ func formatUserPromptWithRAG(originalQuestion string, ragChunks []string, templa
 	if err != nil {
 		observability.Infof("Failed to load the RAG template")
 	}
-	
+
 	// Join RAG chunks into context
 	contextStr := strings.Join(ragChunks, "\n\n")
 
 	// Format using the template with sprintf substitution
 	return fmt.Sprintf(template, contextStr, originalQuestion)
 }
-
 
 // extractUserAndNonUserContent extracts content from request messages
 func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
@@ -737,15 +735,21 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 				// Check 2. On-Demand RAG Pipeline from Github Issue
 				// Modify the prompt with RAG
-					// 1. Retrieve the RAG chunks
-					// 2. Modify the request body with the chunks 
-				
-				var ragInjected bool;
+				// 1. Retrieve the RAG chunks
+				// 2. Modify the request body with the chunks
+
+				var ragInjected bool
 				if ragDecision {
-					// ragChunks := r.getRAGChunks(categoryName, query) // list of chunks (strings)
-					ragChunks := []string{"The derivative of x^2 is 2x", "Use the power rule", "The derivative is the rate of change"}
-					ragTemplatePath := r.Config.Rag.RagTemplatePath
-					modifiedBody, ragInjected, err = addRAGChunksToRequestBody(modifiedBody, ragChunks, ragTemplatePath)
+					ragChunks, err := r.getRAGChunks(categoryName, userContent)
+					if err != nil {
+						observability.Errorf("Could not fetch RAG chunks: %v", err)
+					} else {
+						ragTemplatePath := r.Config.Rag.RagTemplatePath
+						modifiedBody, ragInjected, err = addRAGChunksToRequestBody(modifiedBody, ragChunks, ragTemplatePath)
+						if err != nil {
+							observability.Errorf("Could not add RAG chunks to request body: %v", err)
+						}
+					}
 				}
 
 				if err != nil {
@@ -754,11 +758,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					return nil, status.Errorf(codes.Internal, "error adding RAG chunks: %v", err)
 				}
 
-				if ragInjected{
+				if ragInjected {
 					logMessage := "Modified user prompt with RAG chunks."
 					observability.Infof("%s", logMessage)
 				}
-				
+
 				// Create body mutation with the modified body
 				bodyMutation := &ext_proc.BodyMutation{
 					Mutation: &ext_proc.BodyMutation_Body{
