@@ -7,6 +7,7 @@ use crate::core::{ModelErrorType, UnifiedError};
 use crate::model_error;
 use anyhow::Result;
 use candle_core::{Device, Tensor};
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -107,7 +108,7 @@ impl TraditionalModelManager {
     }
 
     /// Load ModernBERT model for specific task
-    pub fn load_modernbert_for_task(&mut self, task: TaskType) -> Result<(), candle_core::Error> {
+    pub fn load_modernbert_for_task(&self, task: TaskType) -> Result<(), candle_core::Error> {
         let _model_key = format!("modernbert_{:?}", task);
 
         // Determine model path and configuration based on task
@@ -161,7 +162,7 @@ impl LoRAModelManager {
             Device::cuda_if_available(0).unwrap_or(Device::Cpu)
         };
 
-        let mut manager = Self {
+        let manager = Self {
             models: HashMap::new(),
             device,
         };
@@ -188,7 +189,7 @@ impl LoRAModelManager {
 
     /// Load parallel classifier for LoRA models (following old architecture pattern)
     pub fn load_lora_models(
-        &mut self,
+        &self,
         intent_model_path: &str,
         pii_model_path: &str,
         security_model_path: &str,
@@ -221,7 +222,7 @@ impl LoRAModelManager {
 
     /// Auto classify using LoRA models
     pub fn auto_classify(
-        &mut self,
+        &self,
         _input_tensor: &Tensor,
         _tasks: Vec<TaskType>,
     ) -> Result<LoRAClassificationOutput, candle_core::Error> {
@@ -265,6 +266,8 @@ pub struct UnifiedTaskResult {
     pub predicted_class: usize,
     /// Confidence score
     pub confidence: f32,
+    /// Category name (human-readable label)
+    pub category_name: String,
     /// Raw logits
     pub logits: Vec<f32>,
     /// Processing time for this task
@@ -302,18 +305,18 @@ impl std::error::Error for UnifiedClassifierError {}
 /// Dual-path unified classifier implementation
 #[derive(Debug)]
 pub struct DualPathUnifiedClassifier {
-    /// Traditional model manager
-    traditional_manager: Option<TraditionalModelManager>,
-    /// LoRA model manager
-    lora_manager: Option<LoRAModelManager>,
-    /// Intelligent router
-    router: DualPathRouter,
+    /// Traditional model manager (uses RwLock for interior mutability)
+    traditional_manager: RwLock<Option<TraditionalModelManager>>,
+    /// LoRA model manager (uses RwLock for interior mutability)
+    lora_manager: RwLock<Option<LoRAModelManager>>,
+    /// Intelligent router (uses RwLock for interior mutability)
+    router: RwLock<DualPathRouter>,
     /// Configuration
     config: DualPathConfig,
     /// Device
     device: Device,
-    /// Performance statistics
-    performance_stats: UnifiedPerformanceStats,
+    /// Performance statistics (uses RwLock for interior mutability)
+    performance_stats: RwLock<UnifiedPerformanceStats>,
 }
 
 /// Performance metrics
@@ -382,17 +385,17 @@ impl DualPathUnifiedClassifier {
         let router = DualPathRouter::new(config.global.path_selection);
 
         Ok(Self {
-            traditional_manager: None,
-            lora_manager: None,
-            router,
+            traditional_manager: RwLock::new(None),
+            lora_manager: RwLock::new(None),
+            router: RwLock::new(router),
             config,
             device,
-            performance_stats: UnifiedPerformanceStats::default(),
+            performance_stats: RwLock::new(UnifiedPerformanceStats::default()),
         })
     }
 
     /// Initialize traditional path
-    pub fn init_traditional_path(&mut self) -> Result<(), UnifiedClassifierError> {
+    pub fn init_traditional_path(&self) -> Result<(), UnifiedClassifierError> {
         let traditional_manager = TraditionalModelManager::new(self.config.traditional.clone())
             .map_err(|e| {
                 UnifiedClassifierError::TraditionalError(format!(
@@ -401,13 +404,13 @@ impl DualPathUnifiedClassifier {
                 ))
             })?;
 
-        self.traditional_manager = Some(traditional_manager);
+        *self.traditional_manager.write() = Some(traditional_manager);
         Ok(())
     }
 
     /// Initialize LoRA path with model paths (following old architecture pattern)
     pub fn init_lora_path_with_models(
-        &mut self,
+        &self,
         intent_model_path: &str,
         pii_model_path: &str,
         security_model_path: &str,
@@ -424,17 +427,14 @@ impl DualPathUnifiedClassifier {
             UnifiedClassifierError::LoRAError(format!("Failed to create LoRA manager: {}", e))
         })?;
 
-        self.lora_manager = Some(lora_manager);
+        *self.lora_manager.write() = Some(lora_manager);
         Ok(())
     }
 
     /// Load models for specific tasks
-    pub fn load_models_for_tasks(
-        &mut self,
-        tasks: &[TaskType],
-    ) -> Result<(), UnifiedClassifierError> {
+    pub fn load_models_for_tasks(&self, tasks: &[TaskType]) -> Result<(), UnifiedClassifierError> {
         // Load traditional models
-        if let Some(ref mut traditional_manager) = self.traditional_manager {
+        if let Some(ref mut traditional_manager) = *self.traditional_manager.write() {
             for &task in tasks {
                 traditional_manager
                     .load_modernbert_for_task(task)
@@ -453,15 +453,15 @@ impl DualPathUnifiedClassifier {
 
     /// Classify texts with intelligent path selection
     pub fn classify_intelligent(
-        &mut self,
+        &self,
         texts: &[&str],
         tasks: &[TaskType],
     ) -> Result<UnifiedClassificationResult, UnifiedClassifierError> {
         let start_time = Instant::now();
 
         //Super intelligent routing logic
-        let has_lora_models = self.lora_manager.is_some();
-        let has_traditional_models = self.traditional_manager.is_some();
+        let has_lora_models = self.lora_manager.read().is_some();
+        let has_traditional_models = self.traditional_manager.read().is_some();
 
         // Enhanced processing requirements analysis
         let requirements = ProcessingRequirements {
@@ -512,7 +512,7 @@ impl DualPathUnifiedClassifier {
 
         // Record performance for adaptive learning
         if let Ok(ref result) = result {
-            self.router.record_performance(
+            self.router.write().record_performance(
                 selected_path,
                 tasks.to_vec(),
                 texts.len(),
@@ -563,7 +563,7 @@ impl DualPathUnifiedClassifier {
 
     /// Optimized LoRA path processing (40% performance improvement target)
     fn classify_with_lora_path_optimized(
-        &mut self,
+        &self,
         texts: &[&str],
         tasks: &[TaskType],
         start_time: Instant,
@@ -583,7 +583,8 @@ impl DualPathUnifiedClassifier {
             UnifiedClassifierError::ProcessingError(format!("Failed to create input tensor: {}", e))
         })?;
 
-        let lora_manager = self.lora_manager.as_mut().ok_or_else(|| {
+        let mut lora_manager_guard = self.lora_manager.write();
+        let lora_manager = lora_manager_guard.as_mut().ok_or_else(|| {
             UnifiedClassifierError::LoRAError("LoRA manager not initialized".to_string())
         })?;
 
@@ -622,7 +623,7 @@ impl DualPathUnifiedClassifier {
 
     /// Optimized traditional path processing
     fn classify_with_traditional_path_optimized(
-        &mut self,
+        &self,
         texts: &[&str],
         tasks: &[TaskType],
         start_time: Instant,
@@ -632,7 +633,7 @@ impl DualPathUnifiedClassifier {
         // Sequential processing with optimizations
         for &task in tasks {
             // Load appropriate model for task with caching
-            if let Some(traditional_manager) = self.traditional_manager.as_mut() {
+            if let Some(traditional_manager) = self.traditional_manager.write().as_mut() {
                 traditional_manager
                     .load_modernbert_for_task(task)
                     .map_err(|e| {
@@ -730,19 +731,16 @@ impl DualPathUnifiedClassifier {
     }
 
     /// Update performance statistics for optimization
-    fn update_performance_stats(
-        &mut self,
-        path_used: ModelType,
-        result: &UnifiedClassificationResult,
-    ) {
+    fn update_performance_stats(&self, path_used: ModelType, result: &UnifiedClassificationResult) {
+        let mut stats = self.performance_stats.write();
         match path_used {
             ModelType::LoRA => {
-                self.performance_stats.lora_total_time += result.total_processing_time_ms;
-                self.performance_stats.lora_request_count += 1;
+                stats.lora_total_time += result.total_processing_time_ms;
+                stats.lora_request_count += 1;
             }
             ModelType::Traditional => {
-                self.performance_stats.traditional_total_time += result.total_processing_time_ms;
-                self.performance_stats.traditional_request_count += 1;
+                stats.traditional_total_time += result.total_processing_time_ms;
+                stats.traditional_request_count += 1;
             }
             ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
                 // Embedding models don't participate in classification
@@ -761,35 +759,32 @@ impl DualPathUnifiedClassifier {
     /// - `processing_time_ms`: Time taken to generate the embedding
     /// - `sequence_length`: Length of the input sequence
     pub fn update_embedding_stats(
-        &mut self,
+        &self,
         model_type: ModelType,
         processing_time_ms: f32,
         sequence_length: usize,
     ) {
-        self.performance_stats.embedding_total_requests += 1;
+        let mut stats = self.performance_stats.write();
+        stats.embedding_total_requests += 1;
 
         match model_type {
             ModelType::Qwen3Embedding => {
-                self.performance_stats.qwen3_usage += 1;
-                self.performance_stats.qwen3_total_time_ms += processing_time_ms;
+                stats.qwen3_usage += 1;
+                stats.qwen3_total_time_ms += processing_time_ms;
 
                 // Update average sequence length (incremental average)
-                let n = self.performance_stats.qwen3_usage as f32;
-                self.performance_stats.avg_qwen3_sequence_length =
-                    (self.performance_stats.avg_qwen3_sequence_length * (n - 1.0)
-                        + sequence_length as f32)
-                        / n;
+                let n = stats.qwen3_usage as f32;
+                stats.avg_qwen3_sequence_length =
+                    (stats.avg_qwen3_sequence_length * (n - 1.0) + sequence_length as f32) / n;
             }
             ModelType::GemmaEmbedding => {
-                self.performance_stats.gemma_usage += 1;
-                self.performance_stats.gemma_total_time_ms += processing_time_ms;
+                stats.gemma_usage += 1;
+                stats.gemma_total_time_ms += processing_time_ms;
 
                 // Update average sequence length (incremental average)
-                let n = self.performance_stats.gemma_usage as f32;
-                self.performance_stats.avg_gemma_sequence_length =
-                    (self.performance_stats.avg_gemma_sequence_length * (n - 1.0)
-                        + sequence_length as f32)
-                        / n;
+                let n = stats.gemma_usage as f32;
+                stats.avg_gemma_sequence_length =
+                    (stats.avg_gemma_sequence_length * (n - 1.0) + sequence_length as f32) / n;
             }
             _ => {
                 // Not an embedding model, ignore
@@ -826,12 +821,21 @@ impl DualPathUnifiedClassifier {
             // Extract real values from lora_output instead of hardcoded values
             let unified_result = UnifiedTaskResult {
                 task,
-                predicted_class: 0, // Extract from lora_output.task_results
+                predicted_class: lora_output
+                    .task_results
+                    .get(&task)
+                    .map(|r| r.predicted_class)
+                    .unwrap_or(0), // Extract from lora_output.task_results
                 confidence: lora_output
                     .task_results
                     .get(&task)
                     .map(|r| r.confidence)
                     .unwrap_or(0.0), // Dynamic confidence from actual results
+                category_name: lora_output
+                    .task_results
+                    .get(&task)
+                    .map(|r| r.category_name.clone())
+                    .unwrap_or_else(|| format!("class_{}", 0)), // Extract category name or default
                 logits: lora_output
                     .task_results
                     .get(&task)
@@ -1026,9 +1030,10 @@ impl DualPathUnifiedClassifier {
         match path_used {
             ModelType::LoRA => {
                 // Calculate improvement based on historical traditional performance
-                if self.performance_stats.traditional_request_count > 0 {
-                    let avg_traditional = self.performance_stats.traditional_total_time
-                        / self.performance_stats.traditional_request_count as f32;
+                let stats = self.performance_stats.read();
+                if stats.traditional_request_count > 0 {
+                    let avg_traditional =
+                        stats.traditional_total_time / stats.traditional_request_count as f32;
                     if avg_traditional > 0.0 {
                         ((avg_traditional - processing_time) / avg_traditional) * 100.0
                     } else {
@@ -1053,8 +1058,10 @@ impl DualPathUnifiedClassifier {
     }
 
     ///  Get current performance statistics
-    pub fn get_performance_stats(&self) -> &UnifiedPerformanceStats {
-        &self.performance_stats
+    pub fn get_performance_stats(
+        &self,
+    ) -> parking_lot::RwLockReadGuard<'_, UnifiedPerformanceStats> {
+        self.performance_stats.read()
     }
 }
 

@@ -457,7 +457,7 @@ pub extern "C" fn init_unified_classifier_c(
 
     // Initialize UnifiedClassifier with real model loading
     match crate::classifiers::unified::DualPathUnifiedClassifier::new(config) {
-        Ok(mut classifier) => {
+        Ok(classifier) => {
             // Initialize traditional path with actual models
             match classifier.init_traditional_path() {
                 Ok(_) => UNIFIED_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
