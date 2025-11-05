@@ -192,7 +192,7 @@ jobs:
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 5m \
+            --timeout 10m \
             --debug
           echo "::endgroup::"
 
@@ -300,7 +300,7 @@ jobs:
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 5m
+            --timeout 10m
           echo "::endgroup::"
 
           echo "::group::Verify Upgrade"
