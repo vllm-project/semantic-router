@@ -761,28 +761,37 @@ func (h *HybridCache) evictOneUnsafe() {
 		return
 	}
 
-	// Simple FIFO eviction: remove oldest entry
+	// Simple FIFO eviction: remove oldest entry (index 0)
 	victimIdx := 0
-
-	// Could use LRU/LFU here by tracking access times/counts
-	// For now, just evict the first entry
 
 	// Get milvusID before removing from map (for logging)
 	milvusID := h.idMap[victimIdx]
 
-	// Remove from structures
-	delete(h.idMap, victimIdx)
+	// Remove the embedding from the slice
+	h.embeddings = h.embeddings[1:]
 
-	// Note: We don't remove from Milvus (data persists there)
-	// We also don't rebuild HNSW (mark as stale)
+	// Rebuild idMap with adjusted indices (all indices shift down by 1)
+	newIDMap := make(map[int]string, len(h.idMap)-1)
+	for idx, id := range h.idMap {
+		if idx > victimIdx {
+			newIDMap[idx-1] = id // Shift index down
+		}
+		// Skip victimIdx (it's being evicted)
+	}
+	h.idMap = newIDMap
+
+	// Mark HNSW index as stale (needs rebuild with new indices)
 	h.hnswIndex.markStale()
 
 	atomic.AddInt64(&h.evictCount, 1)
 
+	logging.Debugf("HybridCache.evictOne: evicted entry at index %d (milvus_id=%s), new size=%d",
+		victimIdx, milvusID, len(h.embeddings))
 	logging.LogEvent("hybrid_cache_evicted", map[string]interface{}{
 		"backend":     "hybrid",
 		"milvus_id":   milvusID,
 		"hnsw_index":  victimIdx,
+		"new_size":    len(h.embeddings),
 		"max_entries": h.maxMemoryEntries,
 	})
 }

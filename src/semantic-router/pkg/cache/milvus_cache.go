@@ -374,7 +374,7 @@ func (c *MilvusCache) createCollection() error {
 	}
 
 	// Create index with updated API
-	index, err := entity.NewIndexHNSW(entity.MetricType(c.config.Collection.VectorField.MetricType), c.config.Collection.Index.Params.EfConstruction, c.config.Collection.Index.Params.M)
+	index, err := entity.NewIndexHNSW(entity.MetricType(c.config.Collection.VectorField.MetricType), c.config.Collection.Index.Params.M, c.config.Collection.Index.Params.EfConstruction)
 	if err != nil {
 		return fmt.Errorf("failed to create HNSW index: %w", err)
 	}
@@ -843,11 +843,12 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 	logging.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
 
 	// Query Milvus by request_id (primary key)
+	// Filter for non-empty responses to avoid race condition with pending entries
 	queryResult, err := c.client.Query(
 		ctx,
 		c.collectionName,
 		[]string{}, // Empty partitions means search all
-		fmt.Sprintf("request_id == \"%s\"", requestID),
+		fmt.Sprintf("request_id == \"%s\" && response_body != \"\"", requestID),
 		[]string{"response_body"}, // Only fetch document, not embedding!
 	)
 	if err != nil {
