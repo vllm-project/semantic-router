@@ -24,6 +24,9 @@ Before starting, ensure you have the following tools installed:
 Create a local Kubernetes cluster optimized for the semantic router workload:
 
 ```bash
+# Generate kind configuration
+./tools/kind/generate-kind-config.sh
+
 # Create cluster with optimized resource settings
 kind create cluster --name semantic-router-cluster --config tools/kind/kind-config.yaml
 
@@ -70,6 +73,9 @@ kubectl wait --timeout=300s -n envoy-gateway-system deployment/envoy-gateway --f
 Install the AI-specific extensions for inference workloads:
 
 ```bash
+# Envoy Envoy AI Gateway CRDs
+helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm --version v0.0.0-latest --namespace envoy-ai-gateway-system
+
 # Install Envoy AI Gateway using Helm
 helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
     --version v0.0.0-latest \
