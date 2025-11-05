@@ -103,6 +103,36 @@ spec:
     requests:
       storage: 20Gi
   storageClassName: gp3-csi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-a-cache
+  labels:
+    app: vllm-model
+    model: model-a
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3-csi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-b-cache
+  labels:
+    app: vllm-model
+    model: model-b
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3-csi
 EOF
 success "PVCs created"
 
