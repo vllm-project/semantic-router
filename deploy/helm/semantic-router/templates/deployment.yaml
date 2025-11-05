@@ -42,6 +42,8 @@ spec:
           echo "Installing Hugging Face CLI..."
           pip install --no-cache-dir huggingface_hub[cli]
 
+          hash -r
+
           echo "Downloading models to persistent volume..."
           cd /app/models
 
@@ -49,7 +51,7 @@ spec:
           # Download {{ .name }}
           if [ ! -d "{{ .name }}" ]; then
             echo "Downloading {{ .name }}..."
-            python -m huggingface_hub.commands.huggingface_cli download {{ .repo }} --local-dir {{ .name }}
+            huggingface_cli download {{ .repo }} --local-dir {{ .name }}
           else
             echo "{{ .name }} already exists, skipping..."
           fi
