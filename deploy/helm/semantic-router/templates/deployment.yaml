@@ -47,24 +47,24 @@ spec:
 
           {{- range .Values.initContainer.models }}
           # Download {{ .name }}
-          if [ ! -d "{{ .name }}" ]; then
-            echo "Downloading {{ .name }}..."
-            python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', local_dir_use_symlinks=False)"
-            echo "Downloaded {{ .name }}, checking contents..."
-            ls -la "{{ .name }}/" || echo "Failed to list {{ .name }}"
-            # Show first level of files to verify structure
-            find "{{ .name }}" -maxdepth 2 -type f | head -10 || echo "No files found in {{ .name }}"
+          echo "Downloading {{ .name }} from {{ .repo }}..."
+          # Remove .cache directory to ensure fresh download
+          rm -rf "{{ .name }}/.cache" 2>/dev/null || true
+          # Download with ignore_patterns to exclude ONNX-only files if pytorch model exists
+          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', local_dir_use_symlinks=False, ignore_patterns=['*.onnx', '*.msgpack', '*.h5', '*.tflite'] if '{{ .name }}' == 'all-MiniLM-L12-v2' else None)"
+
+          # Check for required model files
+          echo "Checking {{ .name }} for required files:"
+          if [ -f "{{ .name }}/pytorch_model.bin" ] || [ -f "{{ .name }}/model.safetensors" ]; then
+            echo "✓ Found PyTorch model weights in {{ .name }}"
           else
-            echo "{{ .name }} already exists, skipping..."
-            ls -la "{{ .name }}/" || echo "Failed to list existing {{ .name }}"
+            echo "✗ WARNING: No PyTorch model weights found in {{ .name }}"
+            ls -la "{{ .name }}/" | head -20
           fi
 
           {{- end }}
           echo "All models downloaded successfully!"
-          echo "Final directory structure:"
           ls -la /app/models/
-          echo "Checking for model files in all-MiniLM-L12-v2:"
-          find /app/models/all-MiniLM-L12-v2 -type f -name "*.bin" -o -name "*.safetensors" -o -name "*.onnx" -o -name "pytorch_model.bin" 2>/dev/null || echo "No model weight files found"
         env:
         - name: HF_HUB_CACHE
           value: /tmp/hf_cache
