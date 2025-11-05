@@ -50,13 +50,21 @@ spec:
           if [ ! -d "{{ .name }}" ]; then
             echo "Downloading {{ .name }}..."
             python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', local_dir_use_symlinks=False)"
+            echo "Downloaded {{ .name }}, checking contents..."
+            ls -la "{{ .name }}/" || echo "Failed to list {{ .name }}"
+            # Show first level of files to verify structure
+            find "{{ .name }}" -maxdepth 2 -type f | head -10 || echo "No files found in {{ .name }}"
           else
             echo "{{ .name }} already exists, skipping..."
+            ls -la "{{ .name }}/" || echo "Failed to list existing {{ .name }}"
           fi
 
           {{- end }}
           echo "All models downloaded successfully!"
+          echo "Final directory structure:"
           ls -la /app/models/
+          echo "Checking for model files in all-MiniLM-L12-v2:"
+          find /app/models/all-MiniLM-L12-v2 -type f -name "*.bin" -o -name "*.safetensors" -o -name "*.onnx" -o -name "pytorch_model.bin" 2>/dev/null || echo "No model weight files found"
         env:
         - name: HF_HUB_CACHE
           value: /tmp/hf_cache

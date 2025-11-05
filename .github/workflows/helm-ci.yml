@@ -192,7 +192,7 @@ jobs:
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 15m \
+            --timeout 5m \
             --debug
           echo "::endgroup::"
 
@@ -296,12 +296,11 @@ jobs:
       - name: Test upgrade
         run: |
           echo "::group::Upgrade Chart"
-          # need some time, download models may take a while
           helm upgrade semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 15m
+            --timeout 5m
           echo "::endgroup::"
 
           echo "::group::Verify Upgrade"
