@@ -1048,7 +1048,7 @@ default_model: "test-model"
 			})
 
 			Context("with invalid address formats", func() {
-				It("should reject domain names", func() {
+				It("should accept valid DNS names", func() {
 					configContent := `
 vllm_endpoints:
   - name: "endpoint1"
@@ -1072,11 +1072,9 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = Load(configFile)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("endpoint1"))
-					Expect(err.Error()).To(ContainSubstring("address validation failed"))
-					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("example.com"))
 				})
 
 				It("should reject protocol prefixes", func() {
@@ -1200,8 +1198,8 @@ default_model: "test-model"
 					Expect(errorMsg).To(ContainSubstring("Supported formats"))
 					Expect(errorMsg).To(ContainSubstring("IPv4: 192.168.1.1"))
 					Expect(errorMsg).To(ContainSubstring("IPv6: ::1"))
+					Expect(errorMsg).To(ContainSubstring("DNS names: example.com"))
 					Expect(errorMsg).To(ContainSubstring("Unsupported formats"))
-					Expect(errorMsg).To(ContainSubstring("Domain names: example.com"))
 					Expect(errorMsg).To(ContainSubstring("Protocol prefixes: http://"))
 				})
 			})
@@ -1237,10 +1235,11 @@ default_model: "test-model1"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = Load(configFile)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("endpoint2"))
-					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cfg.VLLMEndpoints).To(HaveLen(2))
+					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
+					Expect(cfg.VLLMEndpoints[1].Address).To(Equal("example.com"))
 				})
 			})
 		})
@@ -2644,19 +2643,21 @@ var _ = Describe("IP Address Validation", func() {
 		})
 
 		Context("with domain names", func() {
-			It("should reject domain names", func() {
+			It("should accept valid DNS hostnames", func() {
 				domainNames := []string{
 					"example.com",
 					"localhost",
 					"api.openai.com",
 					"subdomain.example.org",
 					"test.local",
+					"vllm-model-a",
+					"vllm-service.namespace.svc.cluster.local",
+					"my-service-123",
 				}
 
 				for _, domain := range domainNames {
 					err := validateIPAddress(domain)
-					Expect(err).To(HaveOccurred(), "Expected %s to be rejected", domain)
-					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+					Expect(err).NotTo(HaveOccurred(), "Expected %s to be accepted as valid DNS name", domain)
 				}
 			})
 		})
@@ -2736,8 +2737,8 @@ var _ = Describe("IP Address Validation", func() {
 				for _, addr := range domainPortAddresses {
 					err := validateIPAddress(addr)
 					Expect(err).To(HaveOccurred(), "Expected %s to be rejected", addr)
-					// 这些会被域名检测捕获，而不是端口检测
-					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+					// These will be caught by DNS hostname validation (colon is invalid in DNS names)
+					Expect(err.Error()).To(ContainSubstring("invalid address format"))
 				}
 			})
 		})
@@ -2760,17 +2761,18 @@ var _ = Describe("IP Address Validation", func() {
 
 			It("should reject invalid formats", func() {
 				invalidFormats := []string{
-					"not-an-ip",
-					"256.256.256.256",
-					"192.168.1",
-					"192.168.1.1.1",
-					"gggg::1",
+					"gggg::1",       // Invalid IPv6
+					"-invalid",      // DNS label cannot start with hyphen
+					"invalid-",      // DNS label cannot end with hyphen
+					"invalid..name", // Empty label
+					"invalid_name",  // Underscore not allowed in DNS
+					"invalid@name",  // @ not allowed in DNS
 				}
 
 				for _, format := range invalidFormats {
 					err := validateIPAddress(format)
 					Expect(err).To(HaveOccurred(), "Expected %s to be rejected", format)
-					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
+					Expect(err.Error()).To(ContainSubstring("invalid address format"))
 				}
 			})
 		})
@@ -2798,23 +2800,22 @@ var _ = Describe("IP Address Validation", func() {
 		})
 
 		Context("with invalid endpoints", func() {
-			It("should reject endpoints with domain names", func() {
+			It("should accept endpoints with valid DNS names", func() {
 				endpoints := []VLLMEndpoint{
 					{
-						Name:    "invalid-endpoint",
+						Name:    "dns-endpoint",
 						Address: "example.com",
+						Port:    8000,
+					},
+					{
+						Name:    "k8s-service",
+						Address: "vllm-service.namespace.svc.cluster.local",
 						Port:    8000,
 					},
 				}
 
 				err := validateVLLMEndpoints(endpoints)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid-endpoint"))
-				Expect(err.Error()).To(ContainSubstring("address validation failed"))
-				Expect(err.Error()).To(ContainSubstring("Supported formats"))
-				Expect(err.Error()).To(ContainSubstring("IPv4: 192.168.1.1"))
-				Expect(err.Error()).To(ContainSubstring("IPv6: ::1"))
-				Expect(err.Error()).To(ContainSubstring("Unsupported formats"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should provide detailed error messages", func() {
@@ -2832,7 +2833,7 @@ var _ = Describe("IP Address Validation", func() {
 				errorMsg := err.Error()
 				Expect(errorMsg).To(ContainSubstring("test-endpoint"))
 				Expect(errorMsg).To(ContainSubstring("protocol prefixes"))
-				Expect(errorMsg).To(ContainSubstring("Domain names: example.com, localhost"))
+				Expect(errorMsg).To(ContainSubstring("DNS names: example.com"))
 				Expect(errorMsg).To(ContainSubstring("Protocol prefixes: http://, https://"))
 				Expect(errorMsg).To(ContainSubstring("use 'port' field instead"))
 			})

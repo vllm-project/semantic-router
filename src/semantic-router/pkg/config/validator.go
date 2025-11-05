@@ -17,8 +17,9 @@ var (
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
 )
 
-// validateIPAddress validates IP address format
-// Supports IPv4 and IPv6 addresses, rejects domain names, protocol prefixes, paths, etc.
+// validateIPAddress validates IP address or DNS hostname format
+// Supports IPv4, IPv6 addresses, and DNS names (for Kubernetes service discovery)
+// Rejects protocol prefixes, paths, and port numbers in the address field
 func validateIPAddress(address string) error {
 	// Check for empty string
 	trimmed := strings.TrimSpace(address)
@@ -41,20 +42,67 @@ func validateIPAddress(address string) error {
 		return fmt.Errorf("port numbers in address are not supported, use 'port' field instead, got: %s", address)
 	}
 
-	// Use Go standard library to validate IP address format
+	// Try to parse as IP address first
 	ip := net.ParseIP(trimmed)
-	if ip == nil {
-		return fmt.Errorf("invalid IP address format, got: %s", address)
+	if ip != nil {
+		// Valid IP address
+		return nil
+	}
+
+	// Not an IP address, validate as DNS hostname
+	if err := validateDNSHostname(trimmed); err != nil {
+		return fmt.Errorf("invalid address format (must be IP address or DNS hostname), got: %s - %w", address, err)
 	}
 
 	return nil
+}
+
+// validateDNSHostname validates DNS hostname format
+// Supports standard DNS names and Kubernetes service names
+func validateDNSHostname(hostname string) error {
+	// Check length constraints
+	if len(hostname) == 0 || len(hostname) > 253 {
+		return fmt.Errorf("hostname length must be between 1 and 253 characters")
+	}
+
+	// Split hostname into labels (parts separated by dots)
+	labels := strings.Split(hostname, ".")
+
+	for _, label := range labels {
+		labelLen := len(label)
+
+		// Each label must be 1-63 characters
+		if labelLen == 0 || labelLen > 63 {
+			return fmt.Errorf("each label must be between 1 and 63 characters")
+		}
+
+		// Label must start and end with alphanumeric character
+		if !isAlphanumeric(label[0]) || !isAlphanumeric(label[labelLen-1]) {
+			return fmt.Errorf("labels must start and end with alphanumeric characters")
+		}
+
+		// Label can only contain alphanumeric characters and hyphens
+		for i := 0; i < labelLen; i++ {
+			c := label[i]
+			if !isAlphanumeric(c) && c != '-' {
+				return fmt.Errorf("labels can only contain alphanumeric characters and hyphens")
+			}
+		}
+	}
+
+	return nil
+}
+
+// isAlphanumeric checks if a byte is alphanumeric (a-z, A-Z, 0-9)
+func isAlphanumeric(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
 }
 
 // validateVLLMEndpoints validates the address format of all vLLM endpoints
 func validateVLLMEndpoints(endpoints []VLLMEndpoint) error {
 	for _, endpoint := range endpoints {
 		if err := validateIPAddress(endpoint.Address); err != nil {
-			return fmt.Errorf("vLLM endpoint '%s' address validation failed: %w\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n\nUnsupported formats:\n- Domain names: example.com, localhost\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err)
+			return fmt.Errorf("vLLM endpoint '%s' address validation failed: %w\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: example.com, vllm-service.namespace.svc.cluster.local\n- Short names: vllm-service, localhost\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err)
 		}
 	}
 	return nil
