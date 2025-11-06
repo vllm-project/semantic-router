@@ -54,6 +54,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/ai-gateway',
             'installation/k8s/production-stack',
+            'installation/k8s/aibrix',
             'installation/k8s/istio',
             'installation/k8s/llm-d',
           ],

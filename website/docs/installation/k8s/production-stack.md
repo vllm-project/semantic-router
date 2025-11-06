@@ -1,4 +1,4 @@
-# Install with Production Stack
+# Install with vLLM Production Stack
 
 This tutorial is adapted from [vLLM production stack tutorials](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md)
 
