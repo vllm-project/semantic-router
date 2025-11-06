@@ -563,6 +563,19 @@ func (c *Classifier) initializePIIClassifier() error {
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
+	// Try keyword classifier first
+	if c.keywordClassifier != nil {
+		category, confidence, err := c.keywordClassifier.Classify(text)
+		if err != nil {
+			return "", 0.0, entropy.ReasoningDecision{}, err
+		}
+		if category != "" {
+			// Keyword matched - determine reasoning mode from category configuration
+			reasoningDecision := c.makeReasoningDecisionForKeywordCategory(category)
+			return category, confidence, reasoningDecision, nil
+		}
+	}
+
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryWithEntropyInTree(text)
@@ -579,6 +592,36 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 	}
 
 	return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("no category classification method available")
+}
+
+// makeReasoningDecisionForKeywordCategory creates a reasoning decision for keyword-matched categories
+func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) entropy.ReasoningDecision {
+	// Find the category configuration
+	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
+	useReasoning := false
+
+	for _, cat := range c.Config.Categories {
+		if strings.ToLower(cat.Name) == normalizedCategory {
+			// Check if the category has reasoning enabled in its best model
+			if len(cat.ModelScores) > 0 && cat.ModelScores[0].UseReasoning != nil {
+				useReasoning = *cat.ModelScores[0].UseReasoning
+			}
+			break
+		}
+	}
+
+	return entropy.ReasoningDecision{
+		UseReasoning:     useReasoning,
+		Confidence:       1.0, // Keyword matches have 100% confidence
+		DecisionReason:   "keyword_match_category_config",
+		FallbackStrategy: "keyword_based_classification",
+		TopCategories: []entropy.CategoryProbability{
+			{
+				Category:    category,
+				Probability: 1.0,
+			},
+		},
+	}
 }
 
 // classifyCategoryWithEntropyInTree performs category classification with entropy using in-tree model

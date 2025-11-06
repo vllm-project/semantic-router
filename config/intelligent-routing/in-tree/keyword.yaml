@@ -59,23 +59,6 @@ model_config:
 
 # Classifier configuration
 classifier:
-  keyword_rules:
-    - category: "urgent_request"
-      operator: "OR"
-      keywords: ["urgent", "immediate", "asap"]
-      case_sensitive: false
-    - category: "sensitive_data"
-      operator: "AND"
-      keywords: ["SSN", "social security number", "credit card"]
-      case_sensitive: false
-    - category: "exclude_spam"
-      operator: "NOR"
-      keywords: ["buy now", "free money"]
-      case_sensitive: false
-    - category: "regex_pattern_match"
-      operator: "OR"
-      keywords: ["user\\.name@domain\\.com", "C:\\Program Files\\\\"] # Keywords are treated as regex
-      case_sensitive: false
   category_model:
     model_id: "models/category_classifier_modernbert-base_model"
     use_modernbert: true
@@ -89,8 +72,54 @@ classifier:
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
+keyword_rules:
+  - category: "urgent_request"
+    operator: "OR"
+    keywords: ["urgent", "immediate", "asap"]
+    case_sensitive: false
+  - category: "sensitive_data"
+    operator: "AND"
+    keywords: ["SSN", "social security number", "credit card"]
+    case_sensitive: false
+  - category: "exclude_spam"
+    operator: "NOR"
+    keywords: ["buy now", "free money"]
+    case_sensitive: false
+  - category: "regex_pattern_match"
+    operator: "OR"
+    keywords: ["user\\.name@domain\\.com", "C:\\Program Files\\\\"] # Keywords are treated as regex
+    case_sensitive: false
+
 # Categories with new use_reasoning field structure
 categories:
+  # Keyword-based categories
+  - name: urgent_request
+    system_prompt: "You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions."
+    model_scores:
+      - model: qwen3
+        score: 0.8
+        use_reasoning: false # Urgent requests need fast responses
+  - name: sensitive_data
+    system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations."
+    jailbreak_enabled: true  # Enable extra security for sensitive data
+    jailbreak_threshold: 0.6  # Lower threshold for more strict detection
+    model_scores:
+      - model: qwen3
+        score: 0.9
+        use_reasoning: false
+  - name: exclude_spam
+    system_prompt: "You are a content moderation assistant. This request has been flagged as potential spam. Please verify the legitimacy of the request before proceeding."
+    model_scores:
+      - model: qwen3
+        score: 0.5
+        use_reasoning: false
+  - name: regex_pattern_match
+    system_prompt: "You are a technical assistant specialized in handling structured data and pattern-based requests. Provide precise, format-aware responses."
+    model_scores:
+      - model: qwen3
+        score: 0.7
+        use_reasoning: false
+  # Standard categories
   - name: business
     system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
     # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category

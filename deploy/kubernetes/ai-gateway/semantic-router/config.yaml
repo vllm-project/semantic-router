@@ -129,6 +129,12 @@ categories:
         lora_name: science-expert
         score: 0.7
         use_reasoning: false
+  - name: thinking
+    system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
+    model_scores:
+      - model: general-expert
+        score: 0.7
+        use_reasoning: true
 
 default_model: base-model
 
@@ -188,6 +194,12 @@ classifier:
     threshold: 0.7
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+keyword_rules:
+  - category: "thinking"
+    operator: "OR"
+    keywords: ["urgent", "immediate", "asap", "think", "careful"]
+    case_sensitive: false
 
 
 # Router Configuration for Dual-Path Selection

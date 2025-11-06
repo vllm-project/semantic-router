@@ -15,7 +15,7 @@ import (
 
 // Process implements the ext_proc calls
 func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	logging.Infof("Started processing a new request")
+	logging.Infof("Processing at stage [init]")
 
 	// Initialize request context
 	ctx := &RequestContext{
@@ -35,7 +35,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			if s, ok := status.FromError(err); ok {
 				switch s.Code() {
 				case codes.Canceled:
-					logging.Infof("Stream canceled gracefully")
 					metrics.RecordRequestError(ctx.RequestModel, "cancellation")
 					return nil
 				case codes.DeadlineExceeded:
