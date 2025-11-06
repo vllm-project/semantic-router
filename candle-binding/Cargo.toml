@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 name = "candle_semantic_router"
+# Order: rlib for Rust-to-Rust linking, staticlib for C/Go FFI (static), cdylib for dynamic linking
 crate-type = ["rlib", "staticlib", "cdylib"]
 
 [features]

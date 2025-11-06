@@ -1702,8 +1702,8 @@ milvus:
 	}
 }
 
-// BenchmarkResult stores detailed benchmark metrics
-type BenchmarkResult struct {
+// TestBenchmarkResult stores detailed benchmark metrics for test cases
+type TestBenchmarkResult struct {
 	CacheType           string
 	CacheSize           int
 	Operation           string
@@ -2004,7 +2004,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 						// Memory usage estimation
 						memUsageMB := estimateMilvusMemory(cacheSize)
 
-						result := BenchmarkResult{
+						result := TestBenchmarkResult{
 							CacheType:           "milvus",
 							CacheSize:           cacheSize,
 							Operation:           "search",
@@ -2180,7 +2180,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 						hitRate := float64(hits) / float64(b.N) * 100
 						dbCallPercent := float64(dbCalls) / float64(b.N) * 100
 
-						result := BenchmarkResult{
+						result := TestBenchmarkResult{
 							CacheType:           "hybrid",
 							CacheSize:           cacheSize,
 							Operation:           "search",
@@ -2450,7 +2450,7 @@ func estimateHybridMemory(cacheSize int) float64 {
 	return embeddingMB + indexMB + idMapMB
 }
 
-func writeBenchmarkResultToCSV(file *os.File, result BenchmarkResult) {
+func writeBenchmarkResultToCSV(file *os.File, result TestBenchmarkResult) {
 	line := fmt.Sprintf("%s,%d,%s,%d,%.3f,%.3f,%.3f,%.3f,%.0f,%.1f,%.1f,%d,%d,%.1f\n",
 		result.CacheType,
 		result.CacheSize,

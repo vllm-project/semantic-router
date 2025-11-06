@@ -455,11 +455,17 @@ func printResults(results []BenchmarkResult) {
 	}
 }
 
-var modelsInitialized = false
+var (
+	// Ensure thread-safe single initialization using sync.Once
+	modelsInitOnce sync.Once
+	modelsInitErr  error
+)
 
 // InitEmbeddingModels initializes the embedding models needed for benchmarks
 // This should be called once before running any benchmarks
 // It initializes Qwen3 which has continuous batching support for better performance
+//
+// Thread-safe: Multiple concurrent calls will only initialize once
 //
 // Environment Variables:
 //
@@ -474,10 +480,15 @@ var modelsInitialized = false
 //	export USE_GPU=true
 //	export USE_HNSW=true
 func InitEmbeddingModels() error {
-	// Skip if already initialized
-	if modelsInitialized {
-		return nil
-	}
+	// Thread-safe initialization - only executes once regardless of concurrent calls
+	modelsInitOnce.Do(func() {
+		modelsInitErr = initEmbeddingModelsOnce()
+	})
+	return modelsInitErr
+}
+
+// initEmbeddingModelsOnce performs the actual initialization (called by sync.Once)
+func initEmbeddingModelsOnce() error {
 	// Check if GPU should be used
 	useGPU := false
 	useGPUEnv := os.Getenv("USE_GPU")
@@ -531,7 +542,6 @@ func InitEmbeddingModels() error {
 			if useGPU {
 				fmt.Printf("  GPU acceleration: ENABLED\n")
 			}
-			modelsInitialized = true
 			return nil
 		}
 		lastErr = err
