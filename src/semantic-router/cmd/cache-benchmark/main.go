@@ -81,13 +81,15 @@ func main() {
 		f, err := os.Create(config.CPUProfile)
 		if err != nil {
 			fmt.Printf("Error creating CPU profile: %v\n", err)
-			os.Exit(1)
+			cancel()
+			return
 		}
 		defer f.Close()
 
 		if err := pprof.StartCPUProfile(f); err != nil {
 			fmt.Printf("Error starting CPU profile: %v\n", err)
-			os.Exit(1)
+			cancel()
+			return
 		}
 		defer pprof.StopCPUProfile()
 
@@ -98,7 +100,8 @@ func main() {
 	fmt.Println("🔧 Initializing embedding models...")
 	if err := cache.InitEmbeddingModels(); err != nil {
 		fmt.Printf("Error initializing models: %v\n", err)
-		os.Exit(1)
+		cancel()
+		return
 	}
 	fmt.Println()
 
@@ -110,14 +113,16 @@ func main() {
 		f, err := os.Create(config.MemProfile)
 		if err != nil {
 			fmt.Printf("Error creating memory profile: %v\n", err)
-			os.Exit(1)
+			cancel()
+			return
 		}
 		defer f.Close()
 
 		runtime.GC() // Get up-to-date statistics
 		if err := pprof.WriteHeapProfile(f); err != nil {
 			fmt.Printf("Error writing memory profile: %v\n", err)
-			os.Exit(1)
+			cancel()
+			return
 		}
 
 		fmt.Printf("\nMemory profile written to: %s\n", config.MemProfile)
@@ -172,25 +177,27 @@ func parseFlags() Config {
 	flag.Parse()
 
 	// Parse cache sizes - simple implementation for common values
-	if *cacheSizesStr == "100,1000,10000" {
+	switch *cacheSizesStr {
+	case "100,1000,10000":
 		config.CacheSizes = []int{100, 1000, 10000}
-	} else if *cacheSizesStr == "100,1000" {
+	case "100,1000":
 		config.CacheSizes = []int{100, 1000}
-	} else if *cacheSizesStr == "1000,10000" {
+	case "1000,10000":
 		config.CacheSizes = []int{1000, 10000}
-	} else {
+	default:
 		// Default or single value
 		config.CacheSizes = []int{1000}
 	}
 
 	// Parse concurrency levels
-	if *concurrencyStr == "1,10,50,100" {
+	switch *concurrencyStr {
+	case "1,10,50,100":
 		config.ConcurrencyLevels = []int{1, 10, 50, 100}
-	} else if *concurrencyStr == "1,10,50" {
+	case "1,10,50":
 		config.ConcurrencyLevels = []int{1, 10, 50}
-	} else if *concurrencyStr == "10,50,100" {
+	case "10,50,100":
 		config.ConcurrencyLevels = []int{10, 50, 100}
-	} else {
+	default:
 		config.ConcurrencyLevels = []int{50} // default
 	}
 
@@ -318,9 +325,10 @@ func runScalabilityAnalysis(ctx context.Context, config Config) []cache.Benchmar
 	// Check if USE_HNSW environment variable is set to force a specific mode
 	hnswModes := []bool{false, true}
 	hnswEnv := os.Getenv("USE_HNSW")
-	if hnswEnv == "true" || hnswEnv == "1" {
+	switch hnswEnv {
+	case "true", "1":
 		hnswModes = []bool{true} // Only test HNSW
-	} else if hnswEnv == "false" || hnswEnv == "0" {
+	case "false", "0":
 		hnswModes = []bool{false} // Only test Linear
 	}
 
@@ -378,9 +386,10 @@ func runConcurrencyAnalysis(ctx context.Context, config Config) []cache.Benchmar
 	// Check if USE_HNSW environment variable is set to force a specific mode
 	hnswModes := []bool{false, true}
 	hnswEnv := os.Getenv("USE_HNSW")
-	if hnswEnv == "true" || hnswEnv == "1" {
+	switch hnswEnv {
+	case "true", "1":
 		hnswModes = []bool{true} // Only test HNSW
-	} else if hnswEnv == "false" || hnswEnv == "0" {
+	case "false", "0":
 		hnswModes = []bool{false} // Only test Linear
 	}
 
@@ -519,7 +528,7 @@ func outputJSON(results []cache.BenchmarkResult, outputFile string) {
 		fmt.Println("\n=== JSON Output ===")
 		fmt.Println(string(data))
 	} else {
-		if err := os.WriteFile(outputFile, data, 0644); err != nil {
+		if err := os.WriteFile(outputFile, data, 0o644); err != nil {
 			fmt.Printf("Error writing results to file: %v\n", err)
 			return
 		}

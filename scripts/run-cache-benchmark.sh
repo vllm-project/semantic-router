@@ -211,7 +211,7 @@ run_custom() {
 clean() {
     print_info "Cleaning benchmark artifacts..."
     cd "$BENCHMARK_DIR"
-    rm -f cache-benchmark *.prof *.json
+    rm -f cache-benchmark ./*.prof ./*.json
     print_success "Cleaned benchmark artifacts"
 }
 

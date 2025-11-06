@@ -257,9 +257,10 @@ func runBenchmarkScenario(config BenchmarkConfig, concurrency int) BenchmarkResu
 	useHNSW := config.UseHNSW
 	hnswEnv := os.Getenv("USE_HNSW")
 	if hnswEnv != "" {
-		if hnswEnv == "true" || hnswEnv == "1" {
+		switch hnswEnv {
+		case "true", "1":
 			useHNSW = true
-		} else if hnswEnv == "false" || hnswEnv == "0" {
+		case "false", "0":
 			useHNSW = false
 		}
 	}

@@ -834,6 +834,12 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 // selectNeighbors selects the best neighbors by sorting by distance
 // This is CRITICAL for HNSW graph quality - must select NEAREST neighbors, not arbitrary ones!
 func (h *HNSWIndex) selectNeighbors(candidates []int, m int, queryEmb []float32, entries []CacheEntry) []int {
+	// Validate queryEmb: must not be nil or empty to ensure correct distance calculations
+	if len(queryEmb) == 0 {
+		logging.Errorf("selectNeighbors: queryEmb is empty - cannot compute distances")
+		return []int{}
+	}
+
 	if len(candidates) <= m {
 		return candidates
 	}
@@ -849,6 +855,13 @@ func (h *HNSWIndex) selectNeighbors(candidates []int, m int, queryEmb []float32,
 	// Compute distance from query to each candidate (using SIMD!)
 	for i, idx := range candidates {
 		if idx >= 0 && idx < len(entries) {
+			// Validate dimension match to prevent silent data corruption in HNSW graph
+			if len(entries[idx].Embedding) != len(queryEmb) {
+				logging.Errorf("selectNeighbors: dimension mismatch - query has %d dims, candidate %d has %d dims",
+					len(queryEmb), idx, len(entries[idx].Embedding))
+				// Skip this candidate rather than corrupting the graph
+				continue
+			}
 			neighbors[i] = neighborDist{
 				idx:  idx,
 				dist: h.distance(queryEmb, entries[idx].Embedding),
