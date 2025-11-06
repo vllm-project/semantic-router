@@ -49,7 +49,16 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
-        'installation/kubernetes',
+        {
+          type: 'category',
+          label: 'Kubernetes',
+          items: [
+            'installation/k8s/ai-gateway',
+            'installation/k8s/production-stack',
+            'installation/k8s/istio',
+            'installation/k8s/llm-d',
+          ],
+        },
         'installation/docker-compose',
         'installation/configuration',
       ],

@@ -53,7 +53,7 @@ vllm_endpoints:
 model_config:
   "qwen3":
     reasoning_family: "qwen3" # This model uses Qwen-3 reasoning syntax
-    preferred_endpoints: ["endpoint1"]
+    preferred_endpoints: ["endpoint1"]  # Optional: omit to let upstream handle endpoint selection
     pii_policy:
       allow_by_default: true
 

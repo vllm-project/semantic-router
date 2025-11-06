@@ -12,7 +12,7 @@ const (
 
 	// GatewayDestinationEndpoint specifies the backend endpoint address selected by the router.
 	// This header is set by the router to direct Envoy to the appropriate upstream service.
-	GatewayDestinationEndpoint = "x-gateway-destination-endpoint"
+	GatewayDestinationEndpoint = "x-vsr-destination-endpoint"
 
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.

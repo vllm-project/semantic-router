@@ -111,7 +111,8 @@ spec:
       containers:
         - name: semantic-router
           image: ghcr.io/vllm-project/semantic-router/extproc:latest
-          args: ["--secure=true"]
+          imagePullPolicy: IfNotPresent
+          args: ["--secure=false"]
           securityContext:
             runAsNonRoot: false
             allowPrivilegeEscalation: false
@@ -128,6 +129,8 @@ spec:
           env:
             - name: LD_LIBRARY_PATH
               value: "/app/lib"
+            - name: SR_LOG_LEVEL
+              value: "debug"
           volumeMounts:
             - name: config-volume
               mountPath: /app/config
@@ -137,7 +140,7 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 50051
-            initialDelaySeconds: 60
+            initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
@@ -145,7 +148,7 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 50051
-            initialDelaySeconds: 90
+            initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3

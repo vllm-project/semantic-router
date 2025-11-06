@@ -915,6 +915,37 @@ default_model: "model-b"
 				Expect(found).To(BeFalse())
 				Expect(endpointName).To(BeEmpty())
 			})
+
+			Describe("SelectBestEndpointAddressForModel", func() {
+				It("should return endpoint address when model has preferred endpoints", func() {
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					// model-a has preferred endpoints
+					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-a")
+					Expect(found).To(BeTrue())
+					Expect(endpointAddress).To(MatchRegexp(`127\.0\.0\.1:\d+`))
+				})
+
+				It("should return false when model has no preferred endpoints", func() {
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					// model-c has no preferred_endpoints configured
+					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-c")
+					Expect(found).To(BeFalse())
+					Expect(endpointAddress).To(BeEmpty())
+				})
+
+				It("should return false for non-existent model", func() {
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("non-existent-model")
+					Expect(found).To(BeFalse())
+					Expect(endpointAddress).To(BeEmpty())
+				})
+			})
 		})
 
 		Describe("ValidateEndpoints", func() {

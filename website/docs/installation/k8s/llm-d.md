@@ -1,4 +1,4 @@
-# vLLM Semantic Router with LLM-D
+# Install with LLM-D
 
 This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) in combination with [LLM-D](https://github.com/llm-d/llm-d). This will also illustrate a key design pattern namely use of the vsr as a model picker in combination with the use of LLM-D as endpoint picker. 
 
@@ -6,7 +6,7 @@ A model picker provides the ability to route an LLM query to one of multiple LLM
 
 Since LLM-D has a number of deployment configurations some of which require a larger hardware setup we will demonstrate a baseline version of LLM-D  working in combination with vsr to introduce the core concepts. These same core concepts will also apply when using vsr with more complex LLM-D configurations and production grade well-lit paths as described in the LLM-D repo at [this link](https://github.com/llm-d/llm-d/tree/main/guides). 
 
-Also we will use LLM-D with Istio as the Inference Gateway in order to build on the steps and hardware setup from the [Istio deployment example](../istio/README.md) documented in this repo. Istio is also commonly used as the default gateway for LLM-D with or without vsr.
+Also we will use LLM-D with Istio as the Inference Gateway in order to build on the steps and hardware setup from the [Istio deployment example](istio) documented in this repo. Istio is also commonly used as the default gateway for LLM-D with or without vsr.
 
 ## Architecture Overview
 
@@ -28,17 +28,17 @@ Before starting, ensure you have the following tools installed:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
 - [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) - Istio CLI
 
-We use minikube in the description below. As noted above, this guide builds upon the vsr + Istio [deployment guide]((../istio/README.md)) from this repo hence will point to that guide for the common portions of documentation and add the incremental additional steps here.
+We use minikube in the description below. As noted above, this guide builds upon the vsr + Istio [deployment guide](istio) from this repo hence will point to that guide for the common portions of documentation and add the incremental additional steps here.
 
 As was the case for the Istio guide, you will need a machine that has GPU support with at least 2 GPUs to run this exercise so that we can deploy and test the use of vsr to do model routing between two different LLM base models. 
 
 ## Step 1: Common Steps from Istio Guide
 
-First, follow the steps documented in the [Istio guide](../istio/README.md), to create a local minikube cluster.  
+First, follow the steps documented in the [Istio guide](istio), to create a local minikube cluster.  
 
 ## Step 2: Install Istio Gateway, Gateway API, Inference Extension CRDs
 
-Install CRDs for the Kubernetes Gateway API, Gateway API Inference Extension, Istio Control plane and an instance of the Istio Gateway exactly as described in the [Istio guide](../istio/README.md). Use the same version of Istio as documented in that guide. If you were following the LLM-D well-lit paths this part would be done by the Gateway provider Helm charts from the LLM-D repo. In this guide, we set these up manually to keep things common and reusable with the Istio guide from this repo. This will also help the reader understand the parts that are common between a GIE/EPP based deployment and an LLM-D based deployment and how vsr can be used in both cases.
+Install CRDs for the Kubernetes Gateway API, Gateway API Inference Extension, Istio Control plane and an instance of the Istio Gateway exactly as described in the [Istio guide](istio). Use the same version of Istio as documented in that guide. If you were following the LLM-D well-lit paths this part would be done by the Gateway provider Helm charts from the LLM-D repo. In this guide, we set these up manually to keep things common and reusable with the Istio guide from this repo. This will also help the reader understand the parts that are common between a GIE/EPP based deployment and an LLM-D based deployment and how vsr can be used in both cases.
 
 If installed correctly you should see the api CRDs for gateway api and inference extension as well as pods running for the Istio gateway and Istiod using the commands shown below.
 
@@ -60,7 +60,7 @@ kubectl get pods -n istio-system
 
 ## Step 3: Deploy LLM models
 
-Now deploy two LLM models similar to the [Istio guide](../istio/README.md) documentation. Note from the manifest file names that these example commands are to be executed from the top folder of the repo. The counterpart of this step from the LLM-D deployment documentation is the setup of the LLM-D Model Service. To keep things simple, we do not need the LLM-D Model service for this guide. 
+Now deploy two LLM models similar to the [Istio guide](istio) documentation. Note from the manifest file names that these example commands are to be executed from the top folder of the repo. The counterpart of this step from the LLM-D deployment documentation is the setup of the LLM-D Model Service. To keep things simple, we do not need the LLM-D Model service for this guide. 
 
 ```bash
 kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
@@ -131,7 +131,7 @@ kubectl apply -f deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml
 
 ## Step 6: Update vsr config
 
-Since this guide is based on using the same backend models as in the [Istio guide](../istio/README.md), we will reuse the same vsr config as from that guide and hence you do not need to update the file deploy/kubernetes/istio/config.yaml. If you were using different backend models as part of the LLM-D deployment, you would need to update this file. 
+Since this guide is based on using the same backend models as in the [Istio guide](istio), we will reuse the same vsr config as from that guide and hence you do not need to update the file deploy/kubernetes/istio/config.yaml. If you were using different backend models as part of the LLM-D deployment, you would need to update this file. 
 
 ## Step 7: Deploy vLLM Semantic Router
 
@@ -159,7 +159,7 @@ kubectl apply -f deploy/kubernetes/istio/envoyfilter.yaml
 
 ## Step 7: Install gateway routes 
 
-Install HTTPRoutes in the Istio gateway. Note a difference here compared to the http routes used in the prior vsr + istio guide, here the backendRefs in the route matches based on point to the InferencePools which in turn point to the LLM-D schedulers for those pools instead of the backendRefs pointing to the vllm service endpoints of the models as was done in the [istio guide without llm-d](../istio/README.md).
+Install HTTPRoutes in the Istio gateway. Note a difference here compared to the http routes used in the prior vsr + istio guide, here the backendRefs in the route matches based on point to the InferencePools which in turn point to the LLM-D schedulers for those pools instead of the backendRefs pointing to the vllm service endpoints of the models as was done in the [istio guide without llm-d](istio).
 
 ```bash
 kubectl apply -f deploy/kubernetes/llmd-base/httproute-llama-pool.yaml

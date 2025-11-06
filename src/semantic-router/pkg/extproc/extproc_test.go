@@ -1901,7 +1901,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var modelHeaderFound bool
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-vsr-destination-endpoint" {
 							endpointHeaderFound = true
 							// Should be one of the configured endpoint addresses
 							// Check both Value and RawValue since implementation uses RawValue
@@ -1975,7 +1975,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var selectedEndpoint string
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-vsr-destination-endpoint" {
 							endpointHeaderFound = true
 							// Check both Value and RawValue since implementation uses RawValue
 							selectedEndpoint = header.Header.Value
@@ -2038,7 +2038,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var selectedEndpoint string
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-vsr-destination-endpoint" {
 							endpointHeaderFound = true
 							// Check both Value and RawValue since implementation uses RawValue
 							selectedEndpoint = header.Header.Value
