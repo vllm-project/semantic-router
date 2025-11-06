@@ -1576,9 +1576,7 @@ pub extern "C" fn get_embedding_batched(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Error: invalid UTF-8 in text: {}", e);
-                unsafe {
-                    (*result) = create_error_result();
-                }
+                (*result) = create_error_result();
                 return -1;
             }
         }
@@ -1590,9 +1588,7 @@ pub extern "C" fn get_embedding_batched(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Error: invalid UTF-8 in model_type: {}", e);
-                unsafe {
-                    (*result) = create_error_result();
-                }
+                (*result) = create_error_result();
                 return -1;
             }
         }

@@ -24,7 +24,7 @@
 use crate::core::{UnifiedError, UnifiedResult};
 use crate::model_architectures::embedding::qwen3_embedding::Qwen3EmbeddingModel;
 use candle_core::Tensor;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use crossbeam_channel::{bounded, select, tick, unbounded, Receiver, Sender};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex,
@@ -142,8 +142,9 @@ impl ContinuousBatchScheduler {
     /// # Returns
     /// A new scheduler instance that can accept concurrent requests
     pub fn new(model: Qwen3EmbeddingModel, config: ContinuousBatchConfig) -> Self {
-        let (request_tx, request_rx) = channel();
-        let (shutdown_tx, shutdown_rx) = channel();
+        // Use unbounded channels for flexibility (crossbeam-channel)
+        let (request_tx, request_rx) = unbounded();
+        let (shutdown_tx, shutdown_rx) = bounded(1);
 
         let stats = Arc::new(BatchSchedulerStats {
             total_requests: AtomicU64::new(0),
@@ -199,8 +200,8 @@ impl ContinuousBatchScheduler {
         // Get sequence length
         let seq_len = input_ids_raw.len();
 
-        // Create response channel
-        let (response_tx, response_rx) = channel();
+        // Create response channel (bounded for backpressure)
+        let (response_tx, response_rx) = bounded(1);
 
         // Create request
         let request = EmbeddingRequest {
@@ -241,6 +242,7 @@ impl ContinuousBatchScheduler {
     }
 
     /// Main scheduler loop (runs in dedicated thread)
+    /// Uses crossbeam-channel's select! for efficient multi-channel wakeup
     fn scheduler_loop(
         model: Qwen3EmbeddingModel,
         request_rx: Receiver<EmbeddingRequest>,
@@ -250,100 +252,100 @@ impl ContinuousBatchScheduler {
     ) {
         let mut pending_requests: Vec<EmbeddingRequest> = Vec::new();
         let batch_timeout = Duration::from_millis(config.max_wait_time_ms);
-        let mut last_batch_time = Instant::now();
+
+        // Create a ticker for timeout events (efficient wakeup mechanism)
+        let ticker = tick(batch_timeout);
 
         loop {
-            // Check for shutdown signal
-            if shutdown_rx.try_recv().is_ok() {
-                if config.verbose {
-                    println!("🛑 Embedding scheduler shutting down");
-                }
-                break;
-            }
-
-            // Collect new requests (non-blocking first pass)
-            while pending_requests.len() < config.max_batch_size {
-                match request_rx.try_recv() {
-                    Ok(req) => {
-                        pending_requests.push(req);
+            // Wait for events using select! (no busy-waiting, no recv_timeout polling)
+            select! {
+                recv(shutdown_rx) -> _ => {
+                    // Shutdown signal received
+                    if config.verbose {
+                        println!("🛑 Embedding scheduler shutting down");
                     }
-                    Err(_) => break, // No more requests available immediately
+                    break;
                 }
-            }
-
-            // If we have at least one request but batch isn't full, wait for more to accumulate
-            if !pending_requests.is_empty() && pending_requests.len() < config.max_batch_size {
-                // Always wait the full batch timeout to collect concurrent requests
-                let deadline = Instant::now() + batch_timeout;
-
-                while Instant::now() < deadline && pending_requests.len() < config.max_batch_size {
-                    match request_rx.try_recv() {
+                recv(request_rx) -> msg => {
+                    // New request arrived
+                    match msg {
                         Ok(req) => {
                             pending_requests.push(req);
-                            // If batch is full, break immediately
+
+                            // Drain any additional pending requests (non-blocking)
+                            while pending_requests.len() < config.max_batch_size {
+                                match request_rx.try_recv() {
+                                    Ok(req) => pending_requests.push(req),
+                                    Err(_) => break,
+                                }
+                            }
+
+                            // If batch is full, process immediately
                             if pending_requests.len() >= config.max_batch_size {
-                                break;
+                                if config.verbose {
+                                    println!("📦 Batch full ({} requests)", pending_requests.len());
+                                }
+                                Self::process_and_update_stats(
+                                    &model,
+                                    &mut pending_requests,
+                                    &config,
+                                    &stats,
+                                );
                             }
                         }
                         Err(_) => {
-                            // No request available, sleep briefly to avoid busy-waiting
-                            thread::sleep(Duration::from_micros(100));
+                            // Channel disconnected, shutdown
+                            break;
                         }
                     }
                 }
+                recv(ticker) -> _ => {
+                    // Timeout tick - process pending requests if any
+                    if !pending_requests.is_empty() {
+                        if config.verbose {
+                            println!("⏱️  Batch timeout ({} requests)", pending_requests.len());
+                        }
+                        Self::process_and_update_stats(
+                            &model,
+                            &mut pending_requests,
+                            &config,
+                            &stats,
+                        );
+                    }
+                }
             }
+        }
+    }
 
-            // Decide whether to process batch now
-            let should_process = if pending_requests.is_empty() {
-                // No requests, wait a bit and try again
-                thread::sleep(Duration::from_micros(100));
-                false
-            } else if pending_requests.len() >= config.max_batch_size {
-                // Batch is full, process immediately
-                if config.verbose {
-                    println!("📦 Batch full ({} requests)", pending_requests.len());
-                }
-                true
-            } else if last_batch_time.elapsed() >= batch_timeout {
-                // Timeout reached, process what we have
-                if config.verbose {
-                    println!("⏱️  Batch timeout ({} requests)", pending_requests.len());
-                }
-                true
-            } else {
-                // Still within timeout window, but have requests - process them
-                // This prevents unnecessary waiting when requests are already queued
-                true
-            };
+    /// Helper to process batch and update statistics
+    fn process_and_update_stats(
+        model: &Qwen3EmbeddingModel,
+        pending_requests: &mut Vec<EmbeddingRequest>,
+        config: &ContinuousBatchConfig,
+        stats: &Arc<BatchSchedulerStats>,
+    ) {
+        let batch_start = Instant::now();
+        let batch_size = pending_requests.len();
 
-            if should_process && !pending_requests.is_empty() {
-                let batch_start = Instant::now();
-                let batch_size = pending_requests.len();
+        // Process batch
+        Self::process_batch(model, pending_requests, config, stats);
 
-                // Process batch
-                Self::process_batch(&model, &mut pending_requests, &config, &stats);
+        // Update statistics (lock-free for counters, minimal lock for averages)
+        let batch_duration = batch_start.elapsed();
+        let total_batches = stats.total_batches.fetch_add(1, Ordering::Relaxed) + 1;
 
-                // Update statistics (lock-free for counters, minimal lock for averages)
-                let batch_duration = batch_start.elapsed();
-                let total_batches = stats.total_batches.fetch_add(1, Ordering::Relaxed) + 1;
+        // Update average batch size (requires lock for float arithmetic)
+        let mut avg_batch_size = stats.avg_batch_size.lock().unwrap();
+        *avg_batch_size = (*avg_batch_size * (total_batches - 1) as f64 + batch_size as f64)
+            / total_batches as f64;
+        drop(avg_batch_size);
 
-                // Update average batch size (requires lock for float arithmetic)
-                let mut avg_batch_size = stats.avg_batch_size.lock().unwrap();
-                *avg_batch_size = (*avg_batch_size * (total_batches - 1) as f64
-                    + batch_size as f64)
-                    / total_batches as f64;
-                drop(avg_batch_size);
-
-                if config.verbose {
-                    println!(
-                        "✅ Batch processed: {} requests in {:.2}ms",
-                        batch_size,
-                        batch_duration.as_secs_f64() * 1000.0
-                    );
-                }
-
-                last_batch_time = Instant::now();
-            }
+        if config.verbose {
+            println!(
+                "✅ Batch processed: {} requests in {:.2}ms",
+                batch_size,
+                batch_duration.as_secs_f64() * 1000.0
+            );
         }
     }
 
@@ -371,11 +373,13 @@ impl ContinuousBatchScheduler {
         let max_seq_len = requests.iter().map(|r| r.seq_len).max().unwrap();
 
         // Collect input_ids and attention_masks with padding (working with raw Vec<u32>)
-        // Track successful requests to maintain index alignment
-        let mut successful_requests = Vec::new();
+        // IMPORTANT: drain() immediately takes ownership of ALL requests from the vector,
+        // so we must ensure every request gets either a result or an error response.
+        let mut batch_requests = Vec::new();
         let mut all_input_ids = Vec::new();
         let mut all_attention_masks = Vec::new();
 
+        // Drain all requests at once (they're now owned by us - must handle each one)
         for request in requests.drain(..) {
             let seq_len = request.seq_len;
 
@@ -402,23 +406,23 @@ impl ContinuousBatchScheduler {
             // Add to batch
             all_input_ids.push(padded_input_ids);
             all_attention_masks.push(padded_attention_mask);
-            successful_requests.push(request);
+            batch_requests.push(request);
         }
 
-        // If no successful requests, return early
-        if successful_requests.is_empty() {
+        // If no requests were collected, return early
+        if batch_requests.is_empty() {
             return;
         }
 
-        let actual_batch_size = successful_requests.len();
+        let actual_batch_size = batch_requests.len();
 
         // Create batched tensors
         let device = &model.device();
         let batched_input_ids = match Tensor::new(all_input_ids, device) {
             Ok(t) => t,
             Err(e) => {
-                // Send error to all successful requests
-                for req in successful_requests {
+                // Send error to ALL requests (we own them now via drain)
+                for req in batch_requests {
                     let _ = req.response_tx.send(Err(UnifiedError::Processing {
                         operation: "create batched input_ids".to_string(),
                         source: e.to_string(),
@@ -432,8 +436,8 @@ impl ContinuousBatchScheduler {
         let batched_attention_mask = match Tensor::new(all_attention_masks, device) {
             Ok(t) => t,
             Err(e) => {
-                // Send error to all successful requests
-                for req in successful_requests {
+                // Send error to ALL requests (we own them now via drain)
+                for req in batch_requests {
                     let _ = req.response_tx.send(Err(UnifiedError::Processing {
                         operation: "create batched attention_mask".to_string(),
                         source: e.to_string(),
@@ -465,8 +469,8 @@ impl ContinuousBatchScheduler {
                 let embeddings_vecs: Vec<Vec<f32>> = match batch_embeddings.to_vec2::<f32>() {
                     Ok(vecs) => vecs,
                     Err(e) => {
-                        // Conversion failed - send error to all requesters
-                        for req in successful_requests {
+                        // Conversion failed - send error to ALL requesters
+                        for req in batch_requests {
                             let _ = req.response_tx.send(Err(UnifiedError::Processing {
                                 operation: "convert batch tensor to vec".to_string(),
                                 source: e.to_string(),
@@ -481,7 +485,7 @@ impl ContinuousBatchScheduler {
                 let mut latencies = Vec::with_capacity(actual_batch_size);
 
                 // Send individual embedding vectors to each requester
-                for (i, req) in successful_requests.into_iter().enumerate() {
+                for (i, req) in batch_requests.into_iter().enumerate() {
                     let req_start = req.received_at;
                     let latency_ms = req_start.elapsed().as_secs_f64() * 1000.0;
                     latencies.push(latency_ms);
@@ -530,9 +534,9 @@ impl ContinuousBatchScheduler {
                 }
             }
             Err(e) => {
-                // If batch fails, send error to all requesters
+                // If batch fails, send error to ALL requesters
                 let error_msg = format!("Batch embedding failed: {:?}", e);
-                for req in successful_requests {
+                for req in batch_requests {
                     let error = UnifiedError::Processing {
                         operation: "batch embedding".to_string(),
                         source: error_msg.clone(),

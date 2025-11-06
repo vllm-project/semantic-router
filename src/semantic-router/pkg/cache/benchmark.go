@@ -88,7 +88,7 @@ func generateTestQueries(count int, diversity float64) []string {
 	}
 
 	queries := make([]string, 0, count)
-	rand.Seed(time.Now().UnixNano())
+	// Note: rand is automatically seeded in Go 1.20+ (no manual seeding needed)
 
 	for i := 0; i < count; i++ {
 		if rand.Float64() < diversity {

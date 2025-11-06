@@ -40,8 +40,8 @@ typedef struct {
     float processing_time_ms;
 } EmbeddingResult;
 
-extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
-extern int get_embedding_with_model_type(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
+extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
+extern int get_embedding_batched(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
 */
 import "C"
 import "unsafe"
@@ -83,7 +83,7 @@ func getEmbedding(text string) (time.Duration, error) {
 	var result C.EmbeddingResult
 
 	start := time.Now()
-	status := C.get_embedding_with_model_type(cText, cModelType, -1, &result)
+	status := C.get_embedding_batched(cText, cModelType, -1, &result)
 	duration := time.Since(start)
 
 	if status != 0 || result.error {
@@ -278,12 +278,17 @@ func main() {
 	cModelPath := C.CString(modelPath)
 	defer C.free(unsafe.Pointer(cModelPath))
 
-	success := C.init_embedding_models(cModelPath, nil, false)
+	// Initialize with continuous batching
+	maxBatchSize := 64      // Batch up to 64 requests
+	maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
+
+	success := C.init_embedding_models_batched(cModelPath, C.int(maxBatchSize), C.ulonglong(maxWaitMs), false)
 	if !success {
-		log.Fatalf("❌ Failed to initialize embedding model from: %s", modelPath)
+		log.Fatalf("❌ Failed to initialize batched embedding model from: %s", modelPath)
 	}
 
-	fmt.Printf("✅ Model loaded successfully from: %s\n", modelPath)
+	fmt.Printf("✅ Batched model loaded successfully from: %s\n", modelPath)
+	fmt.Printf("   Continuous batching: max_batch=%d, max_wait=%dms\n", maxBatchSize, maxWaitMs)
 
 	// Warm-up
 	fmt.Println("\n🔥 Warming up model...")
