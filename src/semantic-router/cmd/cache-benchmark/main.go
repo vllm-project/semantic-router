@@ -60,7 +60,7 @@ type Config struct {
 }
 
 func main() {
-	fmt.Println(logo)
+	fmt.Print(logo)
 
 	config := parseFlags()
 
@@ -442,7 +442,7 @@ func runComponentBreakdown(ctx context.Context, config Config) []cache.Benchmark
 	if len(results) > 0 {
 		r := results[0]
 
-		fmt.Println("\n=== Component Latency Breakdown ===\n")
+		fmt.Print("\n=== Component Latency Breakdown ===\n")
 
 		embeddingPct := (r.EmbeddingP50 / r.OverallP50) * 100
 		searchPct := (r.SearchP50 / r.OverallP50) * 100
