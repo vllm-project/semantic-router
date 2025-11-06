@@ -23,6 +23,20 @@ use std::sync::{Arc, OnceLock};
 
 use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
 
+// Classification constants for consistent category detection
+/// PII detection positive class identifier (numeric)
+const PII_POSITIVE_CLASS: usize = 1;
+/// PII detection positive class identifier (string)
+const PII_POSITIVE_CLASS_STR: &str = "1";
+
+/// Security threat detection positive class identifier (numeric)
+const SECURITY_THREAT_CLASS: usize = 1;
+/// Security threat detection positive class identifier (string)
+const SECURITY_THREAT_CLASS_STR: &str = "1";
+
+/// Keywords used to identify security threats in category names
+const SECURITY_THREAT_KEYWORDS: &[&str] = &["jailbreak", "unsafe", "threat"];
+
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
 pub fn load_id2label_from_config(
@@ -274,6 +288,8 @@ pub extern "C" fn classify_unified_batch(
             // Convert UnifiedClassificationResult to UnifiedBatchResult
             // Note: UnifiedClassificationResult provides aggregated results for the batch,
             // so we replicate the same result for each text in the batch
+            // SAFETY: The batch_size passed to convert_unified_result_to_batch matches the number of texts (_texts.len()),
+            // and memory allocation for the result is properly handled, satisfying the function's safety requirements.
             unsafe { convert_unified_result_to_batch(&result, _texts.len()) }
         }
         Err(e) => UnifiedBatchResult {
@@ -342,8 +358,8 @@ unsafe fn convert_unified_result_to_batch(
             // Use category_name to determine if PII is detected
             // Common PII labels: "no_pii", "has_pii" or "0", "1" etc.
             let has_pii = pii.category_name.to_lowercase().contains("pii")
-                || pii.category_name == "1"
-                || pii.predicted_class == 1;
+                || pii.category_name == PII_POSITIVE_CLASS_STR
+                || pii.predicted_class == PII_POSITIVE_CLASS;
             results.push(PIIResult {
                 has_pii,
                 pii_types: std::ptr::null_mut(), // No detailed PII types available
@@ -374,11 +390,11 @@ unsafe fn convert_unified_result_to_batch(
             // Use category_name to determine if jailbreak is detected
             // Common labels: "safe", "jailbreak", "unsafe" or "0", "1" etc.
             let category_lower = security.category_name.to_lowercase();
-            let is_jailbreak = category_lower.contains("jailbreak")
-                || category_lower.contains("unsafe")
-                || category_lower.contains("threat")
-                || security.category_name == "1"
-                || security.predicted_class == 1;
+            let is_jailbreak = SECURITY_THREAT_KEYWORDS
+                .iter()
+                .any(|&keyword| category_lower.contains(keyword))
+                || security.category_name == SECURITY_THREAT_CLASS_STR
+                || security.predicted_class == SECURITY_THREAT_CLASS;
 
             // Use category_name as threat_type if jailbreak detected, otherwise "none"
             let threat_type = if is_jailbreak {

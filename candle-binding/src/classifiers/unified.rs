@@ -16,6 +16,12 @@ use crate::model_architectures::routing::{DualPathRouter, ProcessingRequirements
 use crate::model_architectures::traits::*;
 use crate::model_architectures::unified_interface::CoreModel;
 
+// Default classification constants for fallback scenarios
+/// Default predicted class when task result is not available
+const DEFAULT_PREDICTED_CLASS: usize = 0;
+/// Default class ID used in category name generation
+const UNKNOWN_CLASS_ID: usize = 0;
+
 /// LoRA classification output with performance metrics
 #[derive(Debug, Clone)]
 pub struct LoRAClassificationOutput {
@@ -583,17 +589,23 @@ impl DualPathUnifiedClassifier {
             UnifiedClassifierError::ProcessingError(format!("Failed to create input tensor: {}", e))
         })?;
 
-        let mut lora_manager_guard = self.lora_manager.write();
-        let lora_manager = lora_manager_guard.as_mut().ok_or_else(|| {
-            UnifiedClassifierError::LoRAError("LoRA manager not initialized".to_string())
-        })?;
-
-        // Execute parallel multi-task classification (Intent||PII||Security)
-        let lora_output = lora_manager
-            .auto_classify(&input_tensor, tasks.to_vec())
-            .map_err(|e| {
-                UnifiedClassifierError::LoRAError(format!("LoRA classification failed: {}", e))
+        // Acquire write lock, perform classification, and release lock early to reduce contention
+        let lora_output = {
+            let mut lora_manager_guard = self.lora_manager.write();
+            let lora_manager = lora_manager_guard.as_mut().ok_or_else(|| {
+                UnifiedClassifierError::LoRAError("LoRA manager not initialized".to_string())
             })?;
+
+            // Execute parallel multi-task classification (Intent||PII||Security)
+            // Note: LoRAModelManager cannot be cloned (contains Box<dyn CoreModel>),
+            // so we keep the lock only for the classification operation
+            lora_manager
+                .auto_classify(&input_tensor, tasks.to_vec())
+                .map_err(|e| {
+                    UnifiedClassifierError::LoRAError(format!("LoRA classification failed: {}", e))
+                })?
+            // Lock is automatically released here when the block ends
+        };
 
         let processing_time = start_time.elapsed().as_millis() as f32;
 
@@ -630,10 +642,12 @@ impl DualPathUnifiedClassifier {
     ) -> Result<UnifiedClassificationResult, UnifiedClassifierError> {
         let mut task_results = Vec::new();
 
-        // Sequential processing with optimizations
-        for &task in tasks {
-            // Load appropriate model for task with caching
-            if let Some(traditional_manager) = self.traditional_manager.write().as_mut() {
+        // Acquire write lock once before the loop to reduce lock contention
+        let mut traditional_manager_guard = self.traditional_manager.write();
+        if let Some(traditional_manager) = traditional_manager_guard.as_mut() {
+            // Sequential processing with optimizations
+            for &task in tasks {
+                // Load appropriate model for task with caching
                 traditional_manager
                     .load_modernbert_for_task(task)
                     .map_err(|e| {
@@ -642,12 +656,12 @@ impl DualPathUnifiedClassifier {
                             e
                         ))
                     })?;
-            }
 
-            // Process texts for this task
-            for (i, &text) in texts.iter().enumerate() {
-                let result = self.classify_single_text_traditional(text, task, i)?;
-                task_results.push(result);
+                // Process texts for this task
+                for (i, &text) in texts.iter().enumerate() {
+                    let result = self.classify_single_text_traditional(text, task, i)?;
+                    task_results.push(result);
+                }
             }
         }
 
@@ -825,7 +839,7 @@ impl DualPathUnifiedClassifier {
                     .task_results
                     .get(&task)
                     .map(|r| r.predicted_class)
-                    .unwrap_or(0), // Extract from lora_output.task_results
+                    .unwrap_or(DEFAULT_PREDICTED_CLASS), // Extract from lora_output.task_results
                 confidence: lora_output
                     .task_results
                     .get(&task)
@@ -835,7 +849,7 @@ impl DualPathUnifiedClassifier {
                     .task_results
                     .get(&task)
                     .map(|r| r.category_name.clone())
-                    .unwrap_or_else(|| format!("class_{}", 0)), // Extract category name or default
+                    .unwrap_or_else(|| format!("class_{}", UNKNOWN_CLASS_ID)), // Extract category name or default
                 logits: lora_output
                     .task_results
                     .get(&task)
