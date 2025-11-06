@@ -185,14 +185,19 @@ jobs:
           kubectl get namespace vllm-semantic-router-system
           echo "::endgroup::"
 
-      - name: Install Helm chart with dev values
+      - name: Install Helm chart with dev values (CI minimal config)
         run: |
           echo "::group::Install Chart"
+          # CI environment: Download only essential model to avoid OOM
+          # Only download all-MiniLM-L12-v2 (smallest model ~120MB)
           helm install semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            --set initContainer.resources.limits.memory=2Gi \
+            --set initContainer.resources.requests.memory=1Gi \
+            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 30m \
+            --timeout 10m \
             --debug
           echo "::endgroup::"
 
@@ -296,11 +301,15 @@ jobs:
       - name: Test upgrade
         run: |
           echo "::group::Upgrade Chart"
+          # Use same minimal config for upgrade test
           helm upgrade semantic-router ${{ env.CHART_PATH }} \
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            --set initContainer.resources.limits.memory=2Gi \
+            --set initContainer.resources.requests.memory=1Gi \
+            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
             --namespace vllm-semantic-router-system \
             --wait \
-            --timeout 30m
+            --timeout 10m
           echo "::endgroup::"
 
           echo "::group::Verify Upgrade"
