@@ -1,0 +1,116 @@
+# Example configuration for Intent-Aware LoRA Routing
+# This demonstrates how to use the lora_name field to route requests to different
+# LoRA adapters based on the classified intent/category.
+#
+# Prerequisites:
+# 1. vLLM server must be started with --enable-lora flag
+# 2. LoRA adapters must be registered at server startup using --lora-modules
+#    Example: vllm serve meta-llama/Llama-2-7b-hf \
+#               --enable-lora \
+#               --lora-modules technical-lora=/path/to/technical-adapter \
+#                              medical-lora=/path/to/medical-adapter \
+#                              legal-lora=/path/to/legal-adapter
+#
+# How it works:
+# - When a request is classified into a category (e.g., "technical")
+# - The router selects the best ModelScore for that category
+# - If the ModelScore has a lora_name specified, that name is used as the final model name
+# - The request is sent to vLLM with model="technical-lora" instead of model="llama2-7b"
+# - vLLM automatically routes to the appropriate LoRA adapter
+
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "vllm-primary"
+    address: "172.28.0.20"
+    port: 8002
+    weight: 1
+
+# Base model configuration
+# IMPORTANT: LoRA adapters must be defined here before they can be referenced in model_scores
+model_config:
+  "llama2-7b":
+    reasoning_family: "llama2"
+    preferred_endpoints: ["vllm-primary"]
+    pii_policy:
+      allow_by_default: true
+    # Define available LoRA adapters for this model
+    # These names must match the LoRA modules registered with vLLM at startup
+    loras:
+      - name: "technical-lora"
+        description: "Optimized for programming and technical questions"
+      - name: "medical-lora"
+        description: "Specialized for medical and healthcare domain"
+      - name: "legal-lora"
+        description: "Fine-tuned for legal questions and law-related topics"
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+
+# Categories with LoRA routing
+categories:
+  - name: technical
+    description: "Programming, software engineering, and technical questions"
+    system_prompt: "You are an expert software engineer with deep knowledge of programming languages, algorithms, system design, and best practices. Provide clear, accurate technical guidance with code examples when appropriate."
+    model_scores:
+      - model: llama2-7b          # Base model name (for endpoint selection and PII policy)
+        lora_name: technical-lora  # LoRA adapter name (used as final model name in request)
+        score: 1.0
+        use_reasoning: true
+        reasoning_effort: medium
+
+  - name: medical
+    description: "Medical and healthcare questions"
+    system_prompt: "You are a medical expert with comprehensive knowledge of anatomy, physiology, diseases, treatments, and healthcare practices. Provide accurate medical information while emphasizing that responses are for educational purposes only and not a substitute for professional medical advice."
+    model_scores:
+      - model: llama2-7b
+        lora_name: medical-lora    # Different LoRA adapter for medical domain
+        score: 1.0
+        use_reasoning: true
+        reasoning_effort: high
+
+  - name: legal
+    description: "Legal questions and law-related topics"
+    system_prompt: "You are a legal expert with knowledge of legal principles, case law, and statutory interpretation. Provide accurate legal information while clearly stating that responses are for informational purposes only and do not constitute legal advice."
+    model_scores:
+      - model: llama2-7b
+        lora_name: legal-lora      # Different LoRA adapter for legal domain
+        score: 1.0
+        use_reasoning: true
+        reasoning_effort: high
+
+  - name: general
+    description: "General questions that don't fit specific domains"
+    system_prompt: "You are a helpful AI assistant with broad knowledge across many topics. Provide clear, accurate, and helpful responses."
+    model_scores:
+      - model: llama2-7b           # No lora_name specified - uses base model
+        score: 0.8
+        use_reasoning: false
+
+# Default model for fallback
+default_model: llama2-7b
+
+# Benefits of LoRA Routing:
+# 1. Domain-Specific Expertise: Each LoRA adapter is fine-tuned for specific domains
+# 2. Cost Efficiency: Share base model weights across adapters, reducing memory footprint
+# 3. Easy A/B Testing: Gradually roll out new adapters by adjusting scores
+# 4. Flexible Deployment: Add/remove adapters without restarting the router
+# 5. Performance: vLLM efficiently serves multiple LoRA adapters with minimal overhead
+#
+# Use Cases:
+# - Multi-domain chatbots (technical support, medical advice, legal information)
+# - Task-specific optimization (code generation, summarization, translation)
+# - Language-specific adapters for multilingual systems
+# - Customer-specific adapters for personalized experiences
+# - Version testing (compare different adapter versions)
+

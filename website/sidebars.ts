@@ -48,9 +48,19 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Installation',
       items: [
-        'installation/installation',
-        'installation/kubernetes',
+        {
+          type: 'category',
+          label: 'Kubernetes',
+          items: [
+            'installation/k8s/ai-gateway',
+            'installation/k8s/production-stack',
+            'installation/k8s/aibrix',
+            'installation/k8s/istio',
+            'installation/k8s/llm-d',
+          ],
+        },
         'installation/docker-compose',
+        'installation/installation',
         'installation/configuration',
       ],
     },
@@ -64,6 +74,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/intelligent-route/overview',
             'tutorials/intelligent-route/reasoning',
+            'tutorials/intelligent-route/lora-routing',
           ],
         },
         {
@@ -73,6 +84,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/semantic-cache/overview',
             'tutorials/semantic-cache/in-memory-cache',
             'tutorials/semantic-cache/milvus-cache',
+            'tutorials/semantic-cache/hybrid-cache',
           ],
         },
         {

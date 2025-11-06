@@ -379,11 +379,11 @@ def create_lora_model(model_name: str, num_labels: int, lora_config: dict):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load base model
+    # Load base model - Force FP32 to prevent NaN gradients during training
     base_model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         num_labels=num_labels,
-        dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        torch_dtype=torch.float32,  # Always use FP32 for stable training
     )
 
     # Create LoRA configuration
@@ -601,7 +601,7 @@ def merge_lora_adapter_to_full_model(
 
     # Load base model with correct number of labels
     base_model = AutoModelForSequenceClassification.from_pretrained(
-        base_model_path, num_labels=num_labels, dtype=torch.float32, device_map="cpu"
+        base_model_path, num_labels=num_labels, torch_dtype=torch.float32
     )
 
     # Load tokenizer with model-specific configuration

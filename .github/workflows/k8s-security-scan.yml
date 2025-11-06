@@ -28,7 +28,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "config"
-          scan-ref: "deploy/kubernetes"
+          scan-ref: "deploy/kubernetes/ai-gateway/semantic-router"
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
@@ -43,7 +43,7 @@ jobs:
       - name: Run Checkov scan
         uses: bridgecrewio/checkov-action@master
         with:
-          directory: deploy/kubernetes
+          directory: deploy/kubernetes/ai-gateway/semantic-router
           framework: kubernetes
           output_format: cli
           soft_fail: true # Don't fail the build

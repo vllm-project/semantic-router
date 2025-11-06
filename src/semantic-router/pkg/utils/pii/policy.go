@@ -4,7 +4,7 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // PolicyChecker handles PII policy validation
@@ -17,7 +17,7 @@ type PolicyChecker struct {
 func (c *PolicyChecker) IsPIIEnabled(model string) bool {
 	modelConfig, exists := c.ModelConfigs[model]
 	if !exists {
-		observability.Infof("No PII policy found for model %s, allowing request", model)
+		logging.Infof("No PII policy found for model %s, allowing request", model)
 		return false
 	}
 	// if it is allowed by default, then it is not enabled
@@ -35,14 +35,14 @@ func NewPolicyChecker(cfg *config.RouterConfig, modelConfigs map[string]config.M
 // CheckPolicy checks if the detected PII types are allowed for the given model
 func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, []string, error) {
 	if !pc.IsPIIEnabled(model) {
-		observability.Infof("PII detection is disabled, allowing request")
+		logging.Infof("PII detection is disabled, allowing request")
 		return true, nil, nil
 	}
 
 	modelConfig, exists := pc.ModelConfigs[model]
 	if !exists {
 		// If no specific config, allow by default
-		observability.Infof("No PII policy found for model %s, allowing request", model)
+		logging.Infof("No PII policy found for model %s, allowing request", model)
 		return true, nil, nil
 	}
 
@@ -67,11 +67,11 @@ func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, 
 	}
 
 	if len(deniedPII) > 0 {
-		observability.Warnf("PII policy violation for model %s: denied PII types %v", model, deniedPII)
+		logging.Warnf("PII policy violation for model %s: denied PII types %v", model, deniedPII)
 		return false, deniedPII, nil
 	}
 
-	observability.Infof("PII policy check passed for model %s", model)
+	logging.Infof("PII policy check passed for model %s", model)
 	return true, nil, nil
 }
 
@@ -82,7 +82,7 @@ func (pc *PolicyChecker) FilterModelsForPII(candidateModels []string, detectedPI
 	for _, model := range candidateModels {
 		allowed, _, err := pc.CheckPolicy(model, detectedPII)
 		if err != nil {
-			observability.Errorf("Error checking PII policy for model %s: %v", model, err)
+			logging.Errorf("Error checking PII policy for model %s: %v", model, err)
 			continue
 		}
 		if allowed {

@@ -377,7 +377,7 @@ tracestate: vendor=value
 
 ```
 traceparent: 00-abc123-ghi789-01
-x-gateway-destination-endpoint: endpoint1
+x-vsr-destination-endpoint: endpoint1
 x-selected-model: gpt-4
 ```
 

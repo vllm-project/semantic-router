@@ -37,6 +37,7 @@ rand = "0.8.5"
 # Performance optimization: parallel processing and lock-free initialization
 rayon = "1.8"       
 once_cell = "1.19"  # Used for lazy initialization of global state
+parking_lot = "0.12"
 
 [dev-dependencies]
 rstest = "0.18"

@@ -46,37 +46,41 @@ spec:
           echo "Downloading models to persistent volume..."
           cd /app/models
 
-          # Download category classifier model with ALL files to see what's available
-          if [ ! -d "category_classifier_modernbert-base_model" ] || [ -z "$(find category_classifier_modernbert-base_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading category classifier model (all files)..."
-            huggingface-cli download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir category_classifier_modernbert-base_model --cache-dir /app/cache/hf
-          else
-            echo "Category classifier model already exists, skipping..."
-          fi
+          # Use Python to download models
+          python3 << 'PYTHON_SCRIPT'
+          from huggingface_hub import snapshot_download
+          import os
 
-          # Download PII classifier model with ALL files
-          if [ ! -d "pii_classifier_modernbert-base_model" ] || [ -z "$(find pii_classifier_modernbert-base_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading PII classifier model (all files)..."
-            huggingface-cli download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir pii_classifier_modernbert-base_model --cache-dir /app/cache/hf
-          else
-            echo "PII classifier model already exists, skipping..."
-          fi
+          cache_dir = "/app/cache/hf"
+          models_dir = "/app/models"
 
-          # Download jailbreak classifier model with ALL files
-          if [ ! -d "jailbreak_classifier_modernbert-base_model" ] || [ -z "$(find jailbreak_classifier_modernbert-base_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading jailbreak classifier model (all files)..."
-            huggingface-cli download LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model --local-dir jailbreak_classifier_modernbert-base_model --cache-dir /app/cache/hf
-          else
-            echo "Jailbreak classifier model already exists, skipping..."
-          fi
+          models = [
+              ("LLM-Semantic-Router/category_classifier_modernbert-base_model", "category_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/pii_classifier_modernbert-base_model", "pii_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model", "jailbreak_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_presidio_token_model")
+          ]
 
-          # Download PII token classifier model with ALL files
-          if [ ! -d "pii_classifier_modernbert-base_presidio_token_model" ] || [ -z "$(find pii_classifier_modernbert-base_presidio_token_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading PII token classifier model (all files)..."
-            huggingface-cli download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir pii_classifier_modernbert-base_presidio_token_model --cache-dir /app/cache/hf
-          else
-            echo "PII token classifier model already exists, skipping..."
-          fi
+          for repo_id, local_dir_name in models:
+              local_dir = os.path.join(models_dir, local_dir_name)
+
+              # Check if model exists and has weight files
+              if os.path.isdir(local_dir):
+                  weight_files = [f for f in os.listdir(local_dir) if f.endswith(('.safetensors', '.bin')) or f.startswith('pytorch_model.')]
+                  if weight_files:
+                      print(f"Model {local_dir_name} already exists, skipping...")
+                      continue
+
+              print(f"Downloading {repo_id}...")
+              snapshot_download(
+                  repo_id=repo_id,
+                  local_dir=local_dir,
+                  cache_dir=cache_dir
+              )
+              print(f"Downloaded {repo_id} to {local_dir}")
+
+          print("All models downloaded successfully!")
+          PYTHON_SCRIPT
 
           echo "All models downloaded successfully!"
           ls -la /app/models/

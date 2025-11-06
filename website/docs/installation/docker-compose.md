@@ -63,7 +63,7 @@ docker compose -f deploy/docker-compose/docker-compose.yml up --build
 docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 
 # Include mock vLLM + testing profile (points router to mock endpoint)
-CONFIG_FILE=/app/config/config.testing.yaml \
+CONFIG_FILE=/app/config/testing/config.testing.yaml \
   docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
 ```
 

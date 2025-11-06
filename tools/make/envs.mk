@@ -2,6 +2,10 @@
 # = Environment Makefile, refer for other makefile    =
 # ====================== envs.mk ======================
 
+# CI environment flag (set by CI/CD systems like GitHub Actions)
+# Can be overridden: CI=true make build
+CI ?=
+
 # Container runtime (docker or podman)
 CONTAINER_RUNTIME ?= docker
 

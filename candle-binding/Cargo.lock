@@ -393,6 +393,7 @@ dependencies = [
  "hf-hub",
  "libc",
  "once_cell",
+ "parking_lot",
  "rand 0.8.5",
  "rayon",
  "rstest",

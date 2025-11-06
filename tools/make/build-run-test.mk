@@ -25,9 +25,9 @@ run-router: build-router download-models
 # Run the router with e2e config for testing
 run-router-e2e: ## Run the router with e2e config for testing
 run-router-e2e: build-router download-models
-	@echo "Running router with e2e config: config/config.e2e.yaml"
+	@echo "Running router with e2e config: config/testing/config.e2e.yaml"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		./bin/router -config=config/config.e2e.yaml
+		./bin/router -config=config/testing/config.e2e.yaml
 
 # Unit test semantic-router
 # By default, Milvus tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false
