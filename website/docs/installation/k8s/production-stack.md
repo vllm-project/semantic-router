@@ -93,7 +93,7 @@ kubectl get svc vllm-router-service
 
 ## Step 2: Deploy vLLM Semantic Router and point it at your vLLM router Service
 
-Follow the official guide from the official website with **the updated config file as the following**: [Install in Kubernetes](https://vllm-semantic-router.com/docs/installation/kubernetes).
+Follow the official guide from the official website with **the updated config file as the following**: [Install in Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway).
 
 Minimal sequence (same as the guide):
 
