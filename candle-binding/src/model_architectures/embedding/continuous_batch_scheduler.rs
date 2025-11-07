@@ -88,26 +88,32 @@ impl Default for ContinuousBatchConfig {
 /// Statistics for monitoring scheduler performance
 #[derive(Debug)]
 pub struct BatchSchedulerStats {
-    /// Total requests processed (lock-free atomic)
-    pub total_requests: AtomicU64,
     /// Total batches processed (lock-free atomic)
     pub total_batches: AtomicU64,
     /// Average batch size (requires mutex for float arithmetic)
     pub avg_batch_size: Mutex<f64>,
-    /// Average latency in milliseconds (requires mutex for float arithmetic)
-    pub avg_latency_ms: Mutex<f64>,
     /// Maximum latency in microseconds (lock-free atomic, stored as integer)
     pub max_latency_us: AtomicU64,
+    /// Combined statistics requiring atomic updates (protected by single mutex)
+    pub inner: Mutex<StatsInner>,
+}
+
+/// Inner stats that must be updated atomically together to avoid race conditions
+#[derive(Debug, Clone, Copy)]
+pub struct StatsInner {
+    /// Total requests processed
+    pub total_requests: u64,
+    /// Average latency in milliseconds
+    pub avg_latency_ms: f64,
 }
 
 impl Clone for BatchSchedulerStats {
     fn clone(&self) -> Self {
         Self {
-            total_requests: AtomicU64::new(self.total_requests.load(Ordering::Relaxed)),
             total_batches: AtomicU64::new(self.total_batches.load(Ordering::Relaxed)),
             avg_batch_size: Mutex::new(*self.avg_batch_size.lock().unwrap()),
-            avg_latency_ms: Mutex::new(*self.avg_latency_ms.lock().unwrap()),
             max_latency_us: AtomicU64::new(self.max_latency_us.load(Ordering::Relaxed)),
+            inner: Mutex::new(*self.inner.lock().unwrap()),
         }
     }
 }
@@ -147,11 +153,13 @@ impl ContinuousBatchScheduler {
         let (shutdown_tx, shutdown_rx) = bounded(1);
 
         let stats = Arc::new(BatchSchedulerStats {
-            total_requests: AtomicU64::new(0),
             total_batches: AtomicU64::new(0),
             avg_batch_size: Mutex::new(0.0),
-            avg_latency_ms: Mutex::new(0.0),
             max_latency_us: AtomicU64::new(0),
+            inner: Mutex::new(StatsInner {
+                total_requests: 0,
+                avg_latency_ms: 0.0,
+            }),
         });
 
         let stats_clone = Arc::clone(&stats);
@@ -502,19 +510,15 @@ impl ContinuousBatchScheduler {
                     }
                 }
 
-                // Update statistics (lock-free where possible, batched)
-                let total_requests = stats
-                    .total_requests
-                    .fetch_add(actual_batch_size as u64, Ordering::Relaxed)
-                    + actual_batch_size as u64;
-
-                // Update average latency (minimal lock for float arithmetic)
+                // Update statistics atomically (single mutex prevents race conditions)
                 let total_latency_ms: f64 = latencies.iter().sum();
-                let mut avg_latency = stats.avg_latency_ms.lock().unwrap();
-                *avg_latency = (*avg_latency * (total_requests - actual_batch_size as u64) as f64
+                let mut inner = stats.inner.lock().unwrap();
+                inner.total_requests += actual_batch_size as u64;
+                inner.avg_latency_ms = (inner.avg_latency_ms
+                    * (inner.total_requests - actual_batch_size as u64) as f64
                     + total_latency_ms)
-                    / total_requests as f64;
-                drop(avg_latency);
+                    / inner.total_requests as f64;
+                drop(inner);
 
                 // Update max latency (lock-free atomic compare-and-swap)
                 for &latency_ms in &latencies {
