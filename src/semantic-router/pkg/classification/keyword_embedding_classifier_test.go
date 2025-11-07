@@ -32,7 +32,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.9}, {Index: 1, Similarity: 0.8}, {Index: 2, Similarity: 0.7}}}, nil
 		}
 
-		rules := []config.KeywordSimilarityMatchRule{{
+		rules := []config.EmbeddingRule{{
 			Category:                  "cat1",
 			Keywords:                  []string{"science", "math"},
 			AggregationMethodConfiged: config.AggregationMethodMean,
@@ -55,7 +55,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.4}, {Index: 1, Similarity: 0.6}}}, nil
 		}
 
-		rules := []config.KeywordSimilarityMatchRule{{
+		rules := []config.EmbeddingRule{{
 			Category:                  "cat2",
 			Keywords:                  []string{"x", "y"},
 			AggregationMethodConfiged: config.AggregationMethodMax,
@@ -78,7 +78,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.2}, {Index: 1, Similarity: 0.95}}}, nil
 		}
 
-		rules := []config.KeywordSimilarityMatchRule{{
+		rules := []config.EmbeddingRule{{
 			Category:                  "cat3",
 			Keywords:                  []string{"p", "q"},
 			AggregationMethodConfiged: config.AggregationMethodAny,
@@ -101,7 +101,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			return nil, errors.New("external failure")
 		}
 
-		rules := []config.KeywordSimilarityMatchRule{{
+		rules := []config.EmbeddingRule{{
 			Category:                  "cat4",
 			Keywords:                  []string{"z"},
 			AggregationMethodConfiged: config.AggregationMethodMean,

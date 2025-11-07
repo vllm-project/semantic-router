@@ -82,7 +82,7 @@ type IntelligentRouting struct {
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
 
 	// Embedding-based classification rules
-	KeywordSimilarityMatchRules []KeywordSimilarityMatchRule `yaml:"keyword_embedding_match_rules,omitempty"`
+	EmbeddingRules []EmbeddingRule `yaml:"embedding_rules,omitempty"`
 
 	// Categories for routing queries
 	Categories []Category `yaml:"categories"`
@@ -211,8 +211,8 @@ const (
 	AggregationMethodAny  AggregationMethod = "any"
 )
 
-// KeywordEmbeddingRule defines a rule for keyword embedding based similarity match.
-type KeywordSimilarityMatchRule struct {
+// EmbeddingRule defines a rule for keyword embedding based similarity match rule.
+type EmbeddingRule struct {
 	Category                  string            `yaml:"category"`
 	SimilarityThreshold       float32           `yaml:"threshold"`
 	Keywords                  []string          `yaml:"keywords"`

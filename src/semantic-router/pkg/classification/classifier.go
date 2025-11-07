@@ -336,8 +336,8 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	}
 
 	// Add keyword embedding classifier if configured
-	if len(cfg.KeywordSimilarityMatchRules) > 0 {
-		keywordEmbeddingClassifier, err := NewKeywordEmbeddingClassifier(cfg.KeywordSimilarityMatchRules)
+	if len(cfg.EmbeddingRules) > 0 {
+		keywordEmbeddingClassifier, err := NewKeywordEmbeddingClassifier(cfg.EmbeddingRules)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
 			return nil, err

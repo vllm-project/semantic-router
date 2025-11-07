@@ -35,17 +35,17 @@ func createKeywordEmbeddingInitializer() KeywordEmbeddingInitializer {
 }
 
 type KeywordEmbeddingClassifier struct {
-	rules []config.KeywordSimilarityMatchRule
+	rules []config.EmbeddingRule
 }
 
 // NewKeywordClassifier creates a new KeywordEmbeddingClassifier.
-func NewKeywordEmbeddingClassifier(cfgRules []config.KeywordSimilarityMatchRule) (*KeywordEmbeddingClassifier, error) {
+func NewKeywordEmbeddingClassifier(cfgRules []config.EmbeddingRule) (*KeywordEmbeddingClassifier, error) {
 	return &KeywordEmbeddingClassifier{rules: cfgRules}, nil
 }
 
 // IsKeywordEmbeddingClassifierEnabled checks if Keyword embedding classification rules are properly configured
 func (c *Classifier) IsKeywordEmbeddingClassifierEnabled() bool {
-	return len(c.Config.KeywordSimilarityMatchRules) > 0
+	return len(c.Config.EmbeddingRules) > 0
 }
 
 // initializeKeywordEmbeddingClassifier initializes the KeywordEmbedding classification model
@@ -81,8 +81,7 @@ func (c *KeywordEmbeddingClassifier) Classify(text string) (string, float64, err
 }
 
 // matches checks if the text matches the given keyword rule.
-func (c *KeywordEmbeddingClassifier) matches(text string, rule config.KeywordSimilarityMatchRule) (bool, float32, error) {
-
+func (c *KeywordEmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (bool, float32, error) {
 	// Validate input
 	if text == "" {
 		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: query must be provided")
@@ -113,7 +112,7 @@ func (c *KeywordEmbeddingClassifier) matches(text string, rule config.KeywordSim
 		rule.Dimension,
 	)
 	if err != nil {
-		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: failed to calculate batch similarity: %v", err)
+		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: failed to calculate batch similarity: %w", err)
 	}
 	// Check for matches based on the aggregation method
 	switch rule.AggregationMethodConfiged {
@@ -122,7 +121,7 @@ func (c *KeywordEmbeddingClassifier) matches(text string, rule config.KeywordSim
 		for _, match := range result.Matches {
 			aggregatedScore += match.Similarity
 		}
-		aggregatedScore = aggregatedScore / float32(len(result.Matches))
+		aggregatedScore /= float32(len(result.Matches))
 		if aggregatedScore >= rule.SimilarityThreshold {
 			return true, aggregatedScore, nil
 		} else {
