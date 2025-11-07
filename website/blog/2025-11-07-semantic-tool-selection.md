@@ -21,38 +21,38 @@ Our solution: **semantic tool selection**—using semantic similarity to automat
 
 ### Context Window Bloat
 
-Consider an AI agent with access to 500 tools across multiple domains. Loading all 500 tool definitions into the context window for every request:
+Consider an AI agent with access to hundreds of tools across multiple domains. Loading all tool definitions into the context window for every request:
 
-- **Consumes 50,000-100,000 tokens** just for tool definitions
-- **Increases latency** as the model processes irrelevant tools
-- **Raises costs** significantly for every API call
-- **Reduces accuracy** as the model struggles to choose from too many options
+- **Consumes significant tokens** for tool definitions (e.g., 741 tools require ~120K tokens)
+- **Increases latency** as the model processes a large number of tools
+- **Raises costs** due to increased token usage
+- **May reduce accuracy** as the model faces more complex selection decisions
 
 ### The Relevance Problem
 
-Even worse, most tools are completely irrelevant for any given query:
+In many cases, most tools are not relevant for a given query:
 
 - User asks: *"What's the weather in San Francisco?"*
-- Agent receives: 500 tool definitions (weather, finance, database, email, calendar, etc.)
-- Reality: Only 1-2 tools are actually relevant
+- Agent receives: Hundreds of tool definitions (weather, finance, database, email, calendar, etc.)
+- Reality: Only a small subset of tools are actually relevant
 
-This is inefficient at every level—tokens, latency, cost, and cognitive load on the model.
+This creates inefficiency in terms of tokens, latency, cost, and model decision-making complexity.
 
 ### The Research Evidence
 
-Recent academic studies have quantified just how severe this problem is:
+Recent academic studies have measured the impact of large tool catalogs on LLM performance:
 
-**Accuracy Collapse:** Research testing tool selection with growing catalogs found that:
+**Accuracy Degradation:** Research testing tool selection with growing catalogs found that:
 
-- With 10-30 tools: 90%+ accuracy
-- With 50-70 tools: 70-80% accuracy
-- With 100+ tools: 13-45% accuracy (depending on model)
+- With ~50 tools (8K tokens): Most models maintain 84-95% accuracy
+- With ~200 tools (32K tokens): Accuracy ranges from 41-83% depending on model
+- With ~740 tools (120K tokens): Accuracy drops to 0-76%, with only GPT-4o maintaining >70%
 
-Even GPT-4o, one of the most capable models, shows measurable degradation. Open-source models can experience **catastrophic 85%+ accuracy drops**.
+Different models show varying degrees of degradation. GPT-4o experiences a 19% accuracy drop, while some open-source models show 79-100% degradation when scaling from small to large tool catalogs.
 
-**The "Lost in the Middle" Effect:** When tools are buried in the middle of long lists, accuracy drops by 30-40% compared to tools at the beginning or end. This position bias means that even if the right tool is present, the model may systematically miss it.
+**The "Lost in the Middle" Effect:** Research has documented position bias where tools in the middle of long lists are less likely to be selected correctly. For example, with 741 tools, middle positions (40-60%) showed 22-52% accuracy compared to 31-32% at the beginning/end positions for some models.
 
-**Non-Linear Degradation:** Performance doesn't degrade linearly—it falls off a cliff. Moving from 50 to 100 tools can cause accuracy to drop from 75% to 15%, making the system essentially unusable.
+**Non-Linear Degradation:** Performance degradation is not gradual. Research shows that accuracy can drop sharply as tool count increases, with the transition from 207 to 417 tools showing particularly steep declines (e.g., from 64% to 20% for one model tested).
 
 ## Our Solution: Semantic Tool Selection
 
@@ -154,10 +154,10 @@ Testing with 741 tools at different positions revealed severe "lost in the middl
 
 With semantic retrieval selecting top-3 tools (reducing context from 120K to ~1K tokens):
 
-- **Accuracy**: Restored to 94%+ across all models
-- **Token reduction**: 98.6% (127,315 → 1,084 tokens)
-- **Latency improvement**: 89% faster (3,420ms → 385ms)
-- **Position bias**: Eliminated - consistent 94%+ accuracy regardless of original tool position
+- **Accuracy**: Improved significantly (e.g., RAG-MCP achieved 43.13% vs 13.62% baseline)
+- **Token reduction**: 99.1% (127,315 → 1,084 tokens)
+- **Latency improvement**: Reduced processing time due to smaller context
+- **Position bias**: Mitigated through relevance-based selection rather than position-dependent retrieval
 
 ### Experiment 2: RAG-MCP Benchmark Comparison
 
@@ -322,9 +322,9 @@ Testing answer position within 80K token responses (position 1 = beginning, posi
 These findings reinforce why semantic selection is critical:
 
 1. **Smaller contexts = better comprehension**: By reducing tool catalog from 120K to 1K tokens, we leave 119K tokens for tool responses and conversation history
-2. **Focused selection = better recall**: With only 3-5 relevant tools, models can focus on understanding responses rather than parsing 500+ tool descriptions
+2. **Focused selection = better recall**: With only 3-5 relevant tools, models can focus on understanding responses rather than parsing hundreds of tool descriptions
 3. **Complementary to other optimizations**: Semantic selection works alongside response parsing, context compression, and conversation management
-4. **Enables longer conversations**: Saving 98.6% of context on tool definitions allows for 50x more conversation history or tool responses
+4. **Enables longer conversations**: Saving 99.1% of context on tool definitions (127,315 → 1,084 tokens) allows significantly more room for conversation history or tool responses
 
 ### Cross-Cutting Analysis
 
@@ -441,8 +441,8 @@ sequenceDiagram
     LLM-->>Router: Response with Tool Calls
     Router-->>User: Final Response
 
-    Note over Router,ToolDB: Similarity Search: 3ms
-    Note over Router,LLM: Token Reduction: 98.6%
+    Note over Router,ToolDB: Similarity Search: Fast
+    Note over Router,LLM: Token Reduction: 99.1%
 ```
 
 ### System Components
@@ -476,11 +476,14 @@ graph TB
 
 ### vs. Loading All Tools
 
-| Approach | Tokens | Latency | Cost | Accuracy |
-|----------|--------|---------|------|----------|
-| Load All (500 tools) | 87,420 | 2,847ms | $142.50 | 76.3% |
-| Semantic Selection | 1,240 | 312ms | $8.20 | 94.8% |
-| **Improvement** | **98.6%↓** | **89.0%↓** | **94.2%↓** | **+18.5%** |
+Research demonstrates clear advantages of semantic selection:
+
+| Metric | Observation |
+|--------|-------------|
+| **Token Usage** | 99.1% reduction (127,315 → 1,084 tokens for 741 tools) |
+| **Accuracy** | 3.2x improvement (43.13% vs 13.62% baseline in RAG-MCP study) |
+| **Scalability** | Maintains performance as tool count grows to 4,400+ |
+| **Position Bias** | Mitigates "lost in the middle" effects through relevance-based selection |
 
 ### vs. Manual Categorization
 
@@ -569,12 +572,12 @@ As tool catalogs grow, validation becomes critical:
 
 Anthropic's blog on code execution with MCP highlighted a fundamental challenge: **agents need efficient ways to discover and use tools at scale**. Their solution—progressive disclosure through code execution—is elegant and powerful.
 
-Our semantic tool selection approach tackles the same problem from a complementary angle: **use semantic similarity to automatically select relevant tools before the LLM even sees the request**. This provides:
+Our semantic tool selection approach tackles the same problem from a complementary angle: **use semantic similarity to automatically select relevant tools before the LLM even sees the request**. Research demonstrates:
 
-- **98.6% token reduction** compared to loading all tools
-- **89% faster response times** with smaller context windows
-- **94% lower costs** for tool-heavy applications
-- **+18-25% better accuracy** by reducing model cognitive load
+- **99.1% token reduction** (127,315 → 1,084 tokens for 741 tools)
+- **3.2x accuracy improvement** (43.13% vs 13.62% baseline in RAG-MCP benchmark)
+- **Significant cost reduction** through reduced token usage
+- **Improved selection quality** by focusing on relevant tools
 - **Transparent and debuggable** tool selection process
 
 The two approaches are not mutually exclusive—in fact, they work beautifully together:
