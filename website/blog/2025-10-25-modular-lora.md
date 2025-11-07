@@ -5,7 +5,10 @@ authors: [ivar, onezero, rootfs, Xunzhuo]
 tags: [LoRA, Candle, vllm, semantic-router]
 ---
 
+
 Semantic routing systems face a scaling challenge. When each classification request requires running multiple fine-tuned models independently, the computational cost grows linearly with the number of models. This post examines how a recent refactoring of the vLLM Semantic Router's Rust-based classification layer addresses this problem through architectural modularity, Low-Rank Adaptation (LoRA), and concurrency optimization.
+
+> Sync from [vLLM Official Blog](https://blog.vllm.ai/2025/10/27/semantic-router-modular.html).
 
 ## Background: From BERT to a Modular System
 
