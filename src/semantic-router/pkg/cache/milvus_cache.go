@@ -728,8 +728,21 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	// Cache Hit
+	// Milvus automatically includes the primary key in search results but order is non-deterministic
+	// Check which field is the response_body by detecting if field[0] is an MD5 hash
+	responseBodyFieldIndex := 0
+	if len(searchResult[0].Fields) > 1 {
+		if testCol, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
+			testVal := testCol.Data()[0]
+			// If field[0] is exactly 32 hex chars, it's the ID hash, so response_body is in field[1]
+			if len(testVal) == 32 && isHexString(testVal) {
+				responseBodyFieldIndex = 1
+			}
+		}
+	}
+
 	var responseBody []byte
-	responseBodyColumn, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar)
+	responseBodyColumn, ok := searchResult[0].Fields[responseBodyFieldIndex].(*entity.ColumnVarChar)
 	if ok && responseBodyColumn.Len() > 0 {
 		responseBody = []byte(responseBodyColumn.Data()[0])
 	}
@@ -782,21 +795,34 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 		return nil, nil, fmt.Errorf("milvus query all failed: %w", err)
 	}
 
-	if len(queryResult) < 2 {
+	// Milvus automatically includes the primary key but column order may vary
+	// We requested ["request_id", embedding_field], so we expect 2-3 columns
+	// If 3 columns: primary key was auto-included, adjust indices
+	requestIDColIndex := 0
+	embeddingColIndex := 1
+	expectedMinCols := 2
+
+	if len(queryResult) >= 3 {
+		// Primary key was auto-included, adjust indices
+		requestIDColIndex = 1
+		embeddingColIndex = 2
+	}
+
+	if len(queryResult) < expectedMinCols {
 		logging.Infof("MilvusCache.GetAllEntries: no entries found or incomplete result")
 		return []string{}, [][]float32{}, nil
 	}
 
-	// Extract request IDs (first column)
-	requestIDColumn, ok := queryResult[0].(*entity.ColumnVarChar)
+	// Extract request IDs
+	requestIDColumn, ok := queryResult[requestIDColIndex].(*entity.ColumnVarChar)
 	if !ok {
-		return nil, nil, fmt.Errorf("unexpected request_id column type: %T", queryResult[0])
+		return nil, nil, fmt.Errorf("unexpected request_id column type: %T", queryResult[requestIDColIndex])
 	}
 
-	// Extract embeddings (second column)
-	embeddingColumn, ok := queryResult[1].(*entity.ColumnFloatVector)
+	// Extract embeddings
+	embeddingColumn, ok := queryResult[embeddingColIndex].(*entity.ColumnFloatVector)
 	if !ok {
-		return nil, nil, fmt.Errorf("unexpected embedding column type: %T", queryResult[1])
+		return nil, nil, fmt.Errorf("unexpected embedding column type: %T", queryResult[embeddingColIndex])
 	}
 
 	if requestIDColumn.Len() != embeddingColumn.Len() {
@@ -828,6 +854,16 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 		entryCount, elapsed, float64(entryCount)/elapsed.Seconds())
 
 	return requestIDs, embeddings, nil
+}
+
+// isHexString checks if a string contains only hexadecimal characters
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // GetByID retrieves a document from Milvus by its request ID
@@ -863,12 +899,28 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 		return nil, fmt.Errorf("document not found: %s", requestID)
 	}
 
-	// Extract response body (first column since we only requested "response_body")
-	responseBodyColumn, ok := queryResult[0].(*entity.ColumnVarChar)
+	// Milvus automatically includes the primary key but the column order is non-deterministic
+	// We need to find which column is the response_body by checking which is NOT the primary key (32-char hash)
+	responseBodyColIndex := 0
+	if len(queryResult) > 1 {
+		// Check if column[0] looks like an MD5 hash (32 hex chars)
+		if testCol, ok := queryResult[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
+			testVal, _ := testCol.ValueByIdx(0)
+			// If it's exactly 32 chars and all hex, it's likely the ID hash
+			if len(testVal) == 32 && isHexString(testVal) {
+				responseBodyColIndex = 1 // response_body is in column 1
+			} else {
+				responseBodyColIndex = 0 // response_body is in column 0
+			}
+		}
+	}
+
+	// Extract response body
+	responseBodyColumn, ok := queryResult[responseBodyColIndex].(*entity.ColumnVarChar)
 	if !ok {
-		logging.Debugf("MilvusCache.GetByID: unexpected response_body column type: %T", queryResult[0])
+		logging.Debugf("MilvusCache.GetByID: unexpected response_body column type: %T", queryResult[responseBodyColIndex])
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("invalid response_body column type: %T", queryResult[0])
+		return nil, fmt.Errorf("invalid response_body column type: %T", queryResult[responseBodyColIndex])
 	}
 
 	if responseBodyColumn.Len() == 0 {
