@@ -1,7 +1,7 @@
 ---
 slug: semantic-tool-selection
 title: "Semantic Tool Selection: Building Smarter AI Agents with Context-Aware Routing"
-authors: [Xunzhuo]
+authors: [Xunzhuo, rootfs]
 tags: [tools, semantic-routing, mcp, performance, agents]
 ---
 
@@ -12,6 +12,8 @@ Anthropic recently published an insightful [blog post on code execution with MCP
 This resonates deeply with our experience building the vLLM Semantic Router. We've observed the same problem from a different angle: when AI agents have access to hundreds or thousands of tools, **how do they know which tools are relevant for a given task?**
 
 Our solution: **semantic tool selection**—using semantic similarity to automatically select the most relevant tools for each user query before the request even reaches the LLM.
+
+![tools](/img/tools.png)
 
 <!-- truncate -->
 
@@ -146,7 +148,7 @@ tools:
 
 - 350 tools (Git, Docker, Kubernetes, CI/CD, monitoring, testing, deployment)
 - 8,000 developer commands from IDE integration
-- Real-time performance requirements (<500ms)
+- Real-time performance requirements (under 500ms)
 
 **Configuration:**
 
@@ -398,7 +400,7 @@ tools:
 
 - 1,200 tools for market data, research, compliance
 - Complex multi-step queries requiring 5-10 tools
-- Strict latency requirements (<1s)
+- Strict latency requirements (under 1 second)
 - Regulatory compliance for tool usage
 
 **Solution:**
