@@ -46,9 +46,9 @@ Recent academic studies have measured the impact of large tool catalogs on LLM p
 
 - With ~50 tools (8K tokens): Most models maintain 84-95% accuracy
 - With ~200 tools (32K tokens): Accuracy ranges from 41-83% depending on model
-- With ~740 tools (120K tokens): Accuracy drops to 0-76%, with only GPT-4o maintaining >70%
+- With ~740 tools (120K tokens): Accuracy drops to 0-20% for most models
 
-Different models show varying degrees of degradation. GPT-4o experiences a 19% accuracy drop, while some open-source models show 79-100% degradation when scaling from small to large tool catalogs.
+Different models show varying degrees of degradation, with open-source models showing 79-100% degradation when scaling from small to large tool catalogs.
 
 **The "Lost in the Middle" Effect:** Research has documented position bias where tools in the middle of long lists are less likely to be selected correctly. For example, with 741 tools, middle positions (40-60%) showed 22-52% accuracy compared to 31-32% at the beginning/end positions for some models.
 
@@ -111,7 +111,7 @@ Recent academic research has quantified the severity of this problem. Studies sh
 
 One study testing tool selection with increasing catalog sizes found that baseline accuracy dropped from 78% with 10 tools to just 13.62% with 100+ tools - a catastrophic 82% degradation. This "needle in a haystack" problem for tool selection motivated our semantic approach.
 
-### Experiment 1: Large Tool Catalog Stress Test
+### Large Tool Catalog Stress Test
 
 **Setup:**
 
@@ -119,14 +119,13 @@ Based on the Berkeley Function Calling Leaderboard (BFCL) dataset, we tested too
 
 - **Dataset**: 858 function calling samples (simple, live_simple, multiple subsets)
 - **Tool catalog sizes**: Varied from 49 tools (8K tokens) to 741 tools (120K tokens)
-- **Models tested**: GPT-4o, Llama-3.1-70B, Mistral-Large, Granite-3.1-8B, ToolACE-8B, BitAgent-8B
+- **Models tested**: Llama-3.1-70B, Mistral-Large, Granite-3.1-8B, ToolACE-8B, BitAgent-8B
 - **Position testing**: Tools placed at 10%, 30%, 50%, 70%, 90% positions in the catalog
 
 **Results - Accuracy Degradation by Catalog Size:**
 
 | Model | Max Accuracy (Small Catalog) | Min Accuracy (Large Catalog) | Degradation |
 |-------|----------------------------|----------------------------|-------------|
-| GPT-4o | 94% | 76% | **-19%** |
 | Llama-3.1-70B | 95% | 20% | **-79%** |
 | Mistral-Large | 94% | 0% | **-100%** |
 | Granite-3.1-8B | 84% | 7% | **-92%** |
@@ -135,187 +134,19 @@ Based on the Berkeley Function Calling Leaderboard (BFCL) dataset, we tested too
 **Key Findings:**
 
 1. **Catastrophic degradation**: Most models experience 79-100% accuracy drops as tool count increases from ~50 to ~740 tools
-2. **GPT-4o resilience**: Only GPT-4o maintains reasonable performance (76% accuracy) with 741 tools, but still shows 19% degradation
-3. **Prompt bloat**: At 120K tokens, average prompt size was 127,315 tokens with all tools loaded
+2. **Prompt bloat**: At 120K tokens, average prompt size was 127,315 tokens with all tools loaded
 
 **Position Bias Analysis:**
 
 Testing with 741 tools at different positions revealed severe "lost in the middle" effects:
 
-| Tool Position | Granite-3.1-8B | Llama-3.1-70B | BitAgent-8B | GPT-4o |
-|--------------|---------------|--------------|------------|--------|
-| Beginning (10%) | 18% | 32% | 57% | 83% |
-| Early (30%) | 12% | 28% | 45% | 81% |
-| Middle (50%) | 8% | 22% | 24% | 74% |
-| Late (70%) | 14% | 29% | 41% | 78% |
-| End (90%) | 17% | 31% | 53% | 82% |
-
-**Impact of Semantic Selection:**
-
-With semantic retrieval selecting top-3 tools (reducing context from 120K to ~1K tokens):
-
-- **Accuracy**: Improved significantly (e.g., RAG-MCP achieved 43.13% vs 13.62% baseline)
-- **Token reduction**: 99.1% (127,315 → 1,084 tokens)
-- **Latency improvement**: Reduced processing time due to smaller context
-- **Position bias**: Mitigated through relevance-based selection rather than position-dependent retrieval
-
-### Experiment 2: RAG-MCP Benchmark Comparison
-
-**Setup:**
-
-Based on the MCPBench web search evaluation:
-
-- **Dataset**: 20 web search tasks requiring tool selection
-- **Baseline approaches**:
-  - **Blank Conditioning**: Load all N MCP schemas into prompt
-  - **Actual Match**: Keyword-based pre-filtering
-  - **RAG-MCP**: Semantic retrieval (our approach)
-- **Models tested**: Qwen-max-0125 as base LLM
-- **Evaluation**: Automated with Deepseek-v3 as judge
-
-**Results:**
-
-| Method | Accuracy | Avg Prompt Tokens | Avg Completion Tokens |
-|--------|----------|------------------|---------------------|
-| Blank Conditioning | 13.62% | 2,134 | 162 |
-| Actual Match (Keyword) | 18.20% | 1,646 | 24 |
-| **RAG-MCP (Semantic)** | **43.13%** | **1,084** | **78** |
-
-**Key Findings:**
-
-1. **3.2x accuracy improvement**: Semantic retrieval (43.13%) vs naive loading (13.62%)
-2. **49% token reduction**: 2,134 → 1,084 prompt tokens
-3. **Keyword matching insufficient**: Simple keyword matching (18.20%) performs poorly compared to semantic similarity
-4. **Scalability**: Performance maintained even as MCP registry grew to 4,400+ servers
-
-**Stress Test Results:**
-
-Testing with varying numbers of distractor MCPs (1 to 100+):
-
-| MCP Count | Context Tokens | Success Rate | Notes |
-|-----------|---------------|-------------|-------|
-| 1-10 | 8,192 | 90%+ | High accuracy with small catalogs |
-| 11-30 | 16,384 | 75-85% | Beginning of degradation |
-| 31-70 | 32,768 | 50-70% | Significant accuracy drop |
-| 71-100 | 65,536 | 20-45% | Severe degradation |
-| 100+ | 120,000 | 13-15% | Near-random selection |
-
-The stress test confirms non-linear degradation: accuracy doesn't decline gradually but falls off a cliff beyond ~50 tools.
-
-### Experiment 3: Model Comparison Across Catalog Sizes
-
-**Setup:**
-
-Comprehensive evaluation across multiple state-of-the-art models using BFCL dataset:
-
-- **Models**: 9 models including GPT-4o, Llama-3.1 (8B/70B), Mistral-Large, DeepSeek-R1-Distill-Qwen-32B, QwQ-32B, Granite-3.1-8B, ToolACE-8B, BitAgent-8B
-- **Context lengths**: 8K, 16K, 32K, 65K, 120K tokens
-- **Tool counts**: 49, 102, 207, 417, 741 tools respectively
-- **Metric**: AST (Abstract Syntax Tree) accuracy for function call correctness
-
-**Results - Performance by Model Family:**
-
-| Model | 8K Context | 32K Context | 120K Context | Total Degradation |
-|-------|-----------|------------|-------------|------------------|
-| GPT-4o | 94% | 83% | 76% | **-19%** |
-| QwQ-32B | 92% | 78% | 47% | **-49%** |
-| DeepSeek-R1-32B | 89% | 45% | 1% | **-99%** |
-| Llama-3.1-70B | 95% | 64% | 20% | **-79%** |
-| Llama-3.1-8B | 86% | 24% | 7% | **-92%** |
-| Mistral-Large | 94% | 53% | 0% | **-100%** |
-| Granite-3.1-8B | 84% | 41% | 7% | **-92%** |
-| ToolACE-8B | 94% | 71% | 25% | **-73%** |
-| BitAgent-8B | 95% | 57% | 10% | **-89%** |
-
-**Key Findings:**
-
-1. **Only GPT-4o maintains usability**: At 120K context (741 tools), only GPT-4o achieves >70% accuracy
-2. **Open-source models collapse**: Most open-source models drop below 25% accuracy with large catalogs
-3. **Size matters but isn't everything**: 32B models (QwQ, DeepSeek-R1) show mixed results - architecture and training matter more than parameter count
-4. **Specialized models help**: ToolACE-8B and BitAgent-8B (fine-tuned for tool calling) outperform general-purpose models of similar size
-
-**Implications:**
-
-Without semantic selection, deploying tool-calling systems with 500+ tools is:
-
-- **Impractical for open-source models**: 85-100% accuracy loss
-- **Expensive for GPT-4o**: Requires 120K+ context windows at $10-30 per 1M tokens
-- **Unreliable even with best models**: 19% degradation is unacceptable for production
-
-### Experiment 4: Long Tool Responses & Multi-Turn Conversations
-
-While semantic selection solves the tool catalog problem, research has identified two additional long-context challenges in tool calling:
-
-**Challenge A: Long Tool Responses**
-
-**Setup:**
-
-- **Dataset**: 566 QA samples from ComplexFuncBench using real booking.com REST APIs
-- **APIs tested**: Flight search, hotel booking, car rental, attractions, seat maps
-- **Question types**: Extraction (finding values), Filtering (matching criteria), Aggregation (computing sums/averages)
-- **Response sizes**: 10K, 20K, 40K, 80K tokens
-- **Models**: GPT-4o, Llama-3.1-70B, Llama-3.1-8B, Mistral-Large, Granite-3.1-8B, ToolACE-8B, BitAgent-8B
-
-**Results - Tool Response QA Accuracy:**
-
-| Response Size | GPT-4o | Llama-3.1-70B | Llama-3.1-8B | Mistral-Large | Granite-3.1-8B |
-|--------------|--------|--------------|-------------|--------------|---------------|
-| 10K tokens | 74% | 68% | 21% | 72% | 57% |
-| 20K tokens | 71% | 61% | 20% | 58% | 54% |
-| 40K tokens | 68% | 52% | 23% | 34% | 47% |
-| 80K tokens | 67% | 47% | 26% | 18% | 39% |
-| **Degradation** | **-9.5%** | **-30.9%** | **+23.8%*** | **-75.0%** | **-31.6%** |
-
-*Llama-3.1-8B showed anomalous behavior at short contexts (generating unnecessary JSON)
-
-**Performance by Question Type (80K tokens):**
-
-| Question Type | GPT-4o | Llama-3.1-70B | Mistral-Large |
-|--------------|--------|--------------|--------------|
-| Extraction | 78% | 62% | 28% |
-| Filtering | 64% | 41% | 15% |
-| Aggregation | 58% | 38% | 11% |
-
-**Position Bias in Responses:**
-
-Testing answer position within 80K token responses (position 1 = beginning, position 8 = end):
-
-| Model | Position 1 | Position 4 | Position 8 | Recency Bias |
-|-------|-----------|-----------|-----------|-------------|
-| GPT-4o | 61% | 64% | 65% | +6.6% |
-| Llama-3.1-70B | 35% | 41% | 43% | +22.9% |
-| Mistral-Large | 6% | 18% | 26% | +333% |
-
-**Challenge B: Long Multi-Turn Conversations**
-
-**Setup:**
-
-- **Dataset**: 200 samples per token limit from ComplexFuncBench
-- **Conversation lengths**: 10K, 20K, 40K, 80K tokens
-- **Two scenarios**:
-  - **Structured**: Information from earlier tool call (JSON) needed for later call
-  - **Unstructured**: Information from earlier user message (text) needed for later call
-- **Models**: Llama-3.1-70B, Llama-3.1-8B, DeepSeek-R1-Distill-Qwen-32B, Granite-3.1-8B, ToolACE-8B, BitAgent-8B
-
-**Results - Multi-Turn AST Accuracy:**
-
-| Model | Structured 10K | Structured 80K | Degradation | Unstructured 10K | Unstructured 80K | Degradation |
-|-------|---------------|---------------|-------------|-----------------|-----------------|-------------|
-| Llama-3.1-70B | 38% | 19% | **-50%** | 96% | 99% | **+3%** |
-| DeepSeek-R1-32B | 23% | 2% | **-91%** | 40% | 10% | **-75%** |
-| Llama-3.1-8B | 22% | 10% | **-55%** | 10% | 24% | **+140%*** |
-| Granite-3.1-8B | 82% | 4% | **-95%** | 15% | 5% | **-67%** |
-| ToolACE-8B | 91% | 29% | **-68%** | 24% | 10% | **-58%** |
-| BitAgent-8B | 87% | 32% | **-63%** | 49% | 28% | **-43%** |
-
-*Anomalous improvement likely due to model-specific behavior changes
-
-**Key Insights:**
-
-1. **Structured context is harder**: 50-95% degradation for JSON tool responses vs 43-75% for text
-2. **Model size helps for text**: Llama-3.1-70B maintains 99% accuracy on unstructured context at 80K tokens
-3. **Specialized models excel at structured**: ToolACE-8B and BitAgent-8B start at 87-91% for structured context (vs 22-38% for general models)
-4. **Catastrophic failures common**: Multiple models drop below 10% accuracy at 80K tokens
+| Tool Position | Granite-3.1-8B | Llama-3.1-70B | BitAgent-8B |
+|--------------|---------------|--------------|------------|
+| Beginning (10%) | 18% | 32% | 57% |
+| Early (30%) | 12% | 28% | 45% |
+| Middle (50%) | 8% | 22% | 24% |
+| Late (70%) | 14% | 29% | 41% |
+| End (90%) | 17% | 31% | 53% |
 
 **Implications for vLLM Semantic Router:**
 
@@ -325,36 +156,6 @@ These findings reinforce why semantic selection is critical:
 2. **Focused selection = better recall**: With only 3-5 relevant tools, models can focus on understanding responses rather than parsing hundreds of tool descriptions
 3. **Complementary to other optimizations**: Semantic selection works alongside response parsing, context compression, and conversation management
 4. **Enables longer conversations**: Saving 99.1% of context on tool definitions (127,315 → 1,084 tokens) allows significantly more room for conversation history or tool responses
-
-### Cross-Cutting Analysis
-
-**Accuracy vs. Tool Count (Research Data):**
-
-```mermaid
-graph LR
-    A[49 tools<br/>8K tokens] -->|94% accuracy| B[102 tools<br/>16K tokens]
-    B -->|83% accuracy| C[207 tools<br/>32K tokens]
-    C -->|64% accuracy| D[417 tools<br/>65K tokens]
-    D -->|20% accuracy| E[741 tools<br/>120K tokens]
-
-    style A fill:#4CAF50
-    style B fill:#8BC34A
-    style C fill:#FF9800
-    style D fill:#FF5722
-    style E fill:#F44336
-```
-
-**Insight:** Accuracy collapses non-linearly. The drop from 207 to 417 tools (64% → 20%) is catastrophic.
-
-**Token Reduction by Approach:**
-
-| Approach | Prompt Tokens | Reduction vs. Baseline |
-|----------|--------------|----------------------|
-| Load All Tools (741 tools) | 127,315 | Baseline |
-| Keyword Matching | 1,646 | 98.7% |
-| **Semantic Selection (top-3)** | **1,084** | **99.1%** |
-
-**Insight:** Semantic selection achieves the best token reduction while maintaining highest accuracy (43.13% vs 18.20% for keyword matching).
 
 ## Benefits of Semantic Tool Selection
 
@@ -381,7 +182,7 @@ Research shows that without semantic selection, tool-calling systems become **un
 - **Semantic Selection**: 1,084 tokens per request
 - **Reduction**: 99.1% (117x fewer tokens)
 
-**Cost Impact (GPT-4o pricing at $2.50/$10 per 1M input/output tokens):**
+**Cost Impact (based on typical LLM pricing at $2.50/$10 per 1M input/output tokens):**
 
 | Volume | Without Selection | With Selection | Annual Savings |
 |--------|------------------|---------------|----------------|
@@ -399,19 +200,6 @@ Research documents severe "lost in the middle" effects. Semantic selection elimi
 - **End**: 31% accuracy
 
 **With Semantic Selection**: 94% accuracy regardless of original position
-
-### 4. Enables Open-Source Models
-
-Without semantic selection, only GPT-4o remains usable with large tool catalogs:
-
-| Model | 741 Tools (No Selection) | With Selection | Viability |
-|-------|------------------------|---------------|-----------|
-| GPT-4o | 76% | 94% | ✅ Usable both ways |
-| Llama-3.1-70B | 20% | 94% | ❌ → ✅ Enabled |
-| Mistral-Large | 0% | 94% | ❌ → ✅ Enabled |
-| Granite-3.1-8B | 7% | 94% | ❌ → ✅ Enabled |
-
-**Impact**: Organizations can use cost-effective open-source models instead of expensive API calls.
 
 ### 5. Scalability Beyond Current Limits
 
@@ -560,14 +348,6 @@ For long conversations with many tool calls:
 - **Selective history**: Include only relevant past tool calls in context
 - **State management**: Track conversation state separately from full history
 
-### Validation and Testing
-
-As tool catalogs grow, validation becomes critical:
-
-- **Automated testing**: Generate synthetic queries to test tool coverage
-- **Retrieval quality metrics**: Monitor precision/recall of tool selection
-- **A/B testing**: Compare different similarity thresholds and top-K values
-
 ## Conclusion
 
 Anthropic's blog on code execution with MCP highlighted a fundamental challenge: **agents need efficient ways to discover and use tools at scale**. Their solution—progressive disclosure through code execution—is elegant and powerful.
@@ -588,9 +368,9 @@ The two approaches are not mutually exclusive—in fact, they work beautifully t
 
 As AI agents become more capable and connect to more tools, intelligent tool management becomes critical. Whether through semantic selection, code execution, or a combination of both, the future of AI agents lies in **smart, context-aware tool discovery** that scales efficiently.
 
-## Try It Yourself
+## Give it a Try
 
-The vLLM Semantic Router is open source and production-ready:
+The vLLM Semantic Router is open source:
 
 - **GitHub:** [github.com/vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
 - **Documentation:** [vllm-semantic-router.com](https://vllm-semantic-router.com)
