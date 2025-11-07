@@ -170,9 +170,9 @@ sed -e "s|address: \".*\" # model-a-ip|address: \"$MODEL_A_IP\"|g" \
 if ! grep -q "$MODEL_A_IP" "$TEMP_CONFIG" || ! grep -q "$MODEL_B_IP" "$TEMP_CONFIG"; then
     warn "IP substitution may have failed. Using template config instead..."
     # Fallback: create config with sed on known patterns
-    cat "$SCRIPT_DIR/config-openshift.yaml" | \
-        sed "s/172\.30\.64\.134/$MODEL_A_IP/g" | \
-        sed "s/172\.30\.116\.177/$MODEL_B_IP/g" > "$TEMP_CONFIG"
+    sed -e "s/172\.30\.64\.134/$MODEL_A_IP/g" \
+        -e "s/172\.30\.116\.177/$MODEL_B_IP/g" \
+        "$SCRIPT_DIR/config-openshift.yaml" > "$TEMP_CONFIG"
 fi
 
 success "Dynamic config generated with IPs: Model-A=$MODEL_A_IP, Model-B=$MODEL_B_IP"
