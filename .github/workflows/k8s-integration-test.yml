@@ -26,7 +26,7 @@ name: Kubernetes Integration Test
 on:
   pull_request:
     paths:
-      - "deploy/kubernetes/**"
+      - "deploy/kubernetes/ai-gateway/semantic-router/**"
       - ".github/workflows/k8s-integration-test*.yml"
       - "Dockerfile.extproc"
       - "tools/kind/**"

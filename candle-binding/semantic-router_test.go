@@ -56,61 +56,83 @@ const (
 
 // TestInitModel tests the model initialization function
 func TestInitModel(t *testing.T) {
-	defer ResetModel()
 
 	t.Run("InitWithDefaultModel", func(t *testing.T) {
 		err := InitModel("", true) // Empty string should use default
 		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping test due to model initialization error: %v", err)
-			}
 			t.Fatalf("Failed to initialize with default model: %v", err)
 		}
 
-		if !IsModelInitialized() {
+		rustState, _ := IsModelInitialized()
+		if !rustState {
 			t.Fatal("Model should be initialized")
 		}
 	})
 
-	t.Run("InitWithSpecificModel", func(t *testing.T) {
-		ResetModel()
-		err := InitModel(DefaultModelID, true)
-		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping test due to model initialization error: %v", err)
+	t.Run("SubsequentInitAttemptsShouldBeIgnored", func(t *testing.T) {
+		// Ensure model is initialized from previous test
+		rustState, _ := IsModelInitialized()
+		if !rustState {
+			err := InitModel("", true)
+			if err != nil {
+				t.Fatalf("Failed initial model initialization: %v", err)
 			}
-			t.Fatalf("Failed to initialize with specific model: %v", err)
 		}
 
-		if !IsModelInitialized() {
-			t.Fatal("Model should be initialized")
+		// Generate embedding with the current model (this is our baseline)
+		testText := "singleton verification test"
+		embeddingBefore, err := GetEmbeddingDefault(testText)
+		if err != nil || len(embeddingBefore) == 0 {
+			t.Fatalf("Failed to generate baseline embedding: %v", err)
 		}
+
+		// Try to initialize with an invalid model ID
+		// If OnceLock works correctly, this should be ignored
+		invalidModel := "definitely-not-a-real-model-12345"
+		_ = InitModel(invalidModel, true) // Intentionally ignore error
+
+		// Verify the original model still works by generating another embedding
+		// If the invalid model was actually loaded, this would fail
+		embeddingAfter, err := GetEmbeddingDefault(testText)
+		if err != nil || len(embeddingAfter) == 0 {
+			t.Fatalf("Original model no longer works after second init - OnceLock may have failed: %v", err)
+		}
+
+		// Verify embeddings match (same model + same input = same output)
+		if len(embeddingBefore) != len(embeddingAfter) {
+			t.Fatalf("Embedding dimensions changed: %d -> %d (model was replaced!)",
+				len(embeddingBefore), len(embeddingAfter))
+		}
+
+		// Check values are identical within floating point tolerance
+		var maxDiff float32
+		for i := range embeddingBefore {
+			diff := embeddingBefore[i] - embeddingAfter[i]
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff > maxDiff {
+				maxDiff = diff
+			}
+		}
+
+		if maxDiff > 0.0001 {
+			t.Errorf("Embeddings differ (max: %.6f) - model may have changed", maxDiff)
+		}
+
+		t.Logf("Singleton test passed: embeddings identical (diff: %.6f), dimensions: %d",
+			maxDiff, len(embeddingAfter))
 	})
 
-	t.Run("InitWithInvalidModel", func(t *testing.T) {
-		ResetModel()
-		err := InitModel("invalid-model-id", true)
-		if err == nil {
-			t.Fatal("Expected error for invalid model ID")
-		}
-
-		if IsModelInitialized() {
-			t.Fatal("Model should not be initialized with invalid ID")
-		}
-	})
 }
 
 // TestTokenization tests all tokenization functions
 func TestTokenization(t *testing.T) {
-	// Initialize model for tokenization tests
+	// Initialize model for tokenization tests (no-op if already initialized)
 	err := InitModel(DefaultModelID, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping tokenization tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
-	defer ResetModel()
 
 	t.Run("TokenizeText", func(t *testing.T) {
 		result, err := TokenizeText(TestText1, TestMaxLength)
@@ -181,26 +203,15 @@ func TestTokenization(t *testing.T) {
 		}
 	})
 
-	t.Run("TokenizeWithoutInitializedModel", func(t *testing.T) {
-		ResetModel()
-		_, err := TokenizeText(TestText1, TestMaxLength)
-		if err == nil {
-			t.Fatal("Expected error when model is not initialized")
-		}
-	})
 }
 
 // TestEmbeddings tests all embedding functions
 func TestEmbeddings(t *testing.T) {
-	// Initialize model for embedding tests
+	// Initialize model for embedding tests (no-op if already initialized)
 	err := InitModel(DefaultModelID, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping embedding tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
-	defer ResetModel()
 
 	t.Run("GetEmbedding", func(t *testing.T) {
 		embedding, err := GetEmbedding(TestText1, TestMaxLength)
@@ -259,26 +270,15 @@ func TestEmbeddings(t *testing.T) {
 		}
 	})
 
-	t.Run("EmbeddingWithoutInitializedModel", func(t *testing.T) {
-		ResetModel()
-		_, err := GetEmbedding(TestText1, TestMaxLength)
-		if err == nil {
-			t.Fatal("Expected error when model is not initialized")
-		}
-	})
 }
 
 // TestSimilarity tests all similarity calculation functions
 func TestSimilarity(t *testing.T) {
-	// Initialize model for similarity tests
+	// Initialize model for similarity tests (no-op if already initialized)
 	err := InitModel(DefaultModelID, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping similarity tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
-	defer ResetModel()
 
 	t.Run("CalculateSimilarity", func(t *testing.T) {
 		score := CalculateSimilarity(TestText1, TestText2, TestMaxLength)
@@ -321,26 +321,15 @@ func TestSimilarity(t *testing.T) {
 		}
 	})
 
-	t.Run("SimilarityWithoutInitializedModel", func(t *testing.T) {
-		ResetModel()
-		score := CalculateSimilarityDefault(TestText1, TestText2)
-		if score != -1.0 {
-			t.Errorf("Expected -1.0 when model not initialized, got %f", score)
-		}
-	})
 }
 
 // TestFindMostSimilar tests the most similar text finding functions
 func TestFindMostSimilar(t *testing.T) {
-	// Initialize model for similarity tests
+	// Initialize model for similarity tests (no-op if already initialized)
 	err := InitModel(DefaultModelID, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping find most similar tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
-	defer ResetModel()
 
 	candidates := []string{
 		"Machine learning is fascinating",
@@ -388,14 +377,6 @@ func TestFindMostSimilar(t *testing.T) {
 		}
 	})
 
-	t.Run("FindMostSimilarWithoutInitializedModel", func(t *testing.T) {
-		ResetModel()
-		result := FindMostSimilarDefault("test", candidates)
-		if result.Index != -1 || result.Score != -1.0 {
-			t.Errorf("Expected index=-1 and score=-1.0 when model not initialized, got index=%d, score=%f",
-				result.Index, result.Score)
-		}
-	})
 }
 
 // TestClassifiers tests classification functions - removed basic BERT tests, keeping only working ModernBERT tests
@@ -902,32 +883,6 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 
 // TestUtilityFunctions tests utility functions
 func TestUtilityFunctions(t *testing.T) {
-	t.Run("IsModelInitialized", func(t *testing.T) {
-		// Initially should not be initialized
-		ResetModel()
-		if IsModelInitialized() {
-			t.Error("Model should not be initialized initially")
-		}
-
-		// After initialization should return true
-		err := InitModel(DefaultModelID, true)
-		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping IsModelInitialized test due to model initialization error: %v", err)
-			}
-			t.Fatalf("Failed to initialize model: %v", err)
-		}
-
-		if !IsModelInitialized() {
-			t.Error("Model should be initialized after InitModel")
-		}
-
-		// After reset should not be initialized
-		ResetModel()
-		if IsModelInitialized() {
-			t.Error("Model should not be initialized after reset")
-		}
-	})
 
 	t.Run("SetMemoryCleanupHandler", func(t *testing.T) {
 		// This function should not panic
@@ -942,14 +897,11 @@ func TestUtilityFunctions(t *testing.T) {
 // TestErrorHandling tests error conditions and edge cases - focused on basic functionality
 func TestErrorHandling(t *testing.T) {
 	t.Run("EmptyStringHandling", func(t *testing.T) {
+		// Initialize model (no-op if already initialized)
 		err := InitModel(DefaultModelID, true)
 		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping empty string handling tests due to model initialization error: %v", err)
-			}
 			t.Fatalf("Failed to initialize model: %v", err)
 		}
-		defer ResetModel()
 
 		// Test empty strings in various functions
 		score := CalculateSimilarity("", "", TestMaxLength)
@@ -959,9 +911,6 @@ func TestErrorHandling(t *testing.T) {
 
 		result, err := TokenizeText("", TestMaxLength)
 		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping empty string tokenization tests due to model initialization error: %v", err)
-			}
 			t.Errorf("Empty string tokenization should not fail: %v", err)
 		}
 		if len(result.TokenIDs) == 0 {
@@ -970,9 +919,6 @@ func TestErrorHandling(t *testing.T) {
 
 		embedding, err := GetEmbedding("", TestMaxLength)
 		if err != nil {
-			if isModelInitializationError(err) {
-				t.Skipf("Skipping empty string embedding tests due to model initialization error: %v", err)
-			}
 			t.Errorf("Empty string embedding should not fail: %v", err)
 		}
 		if len(embedding) == 0 {
@@ -983,14 +929,11 @@ func TestErrorHandling(t *testing.T) {
 
 // TestConcurrency tests thread safety
 func TestConcurrency(t *testing.T) {
+	// Initialize model for concurrency tests (no-op if already initialized)
 	err := InitModel(DefaultModelID, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping concurrency tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
-	defer ResetModel()
 
 	t.Run("ConcurrentSimilarityCalculation", func(t *testing.T) {
 		const numGoroutines = 10

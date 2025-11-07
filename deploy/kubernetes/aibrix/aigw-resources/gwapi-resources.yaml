@@ -1,0 +1,116 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: ai-gateway-prepost-extproc-patch-policy
+  namespace: aibrix-system
+spec:
+  jsonPatches:
+  - name: aibrix-system/aibrix-eg/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          allow_mode_override: true
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:50051
+              clusterName: semantic-router
+            timeout: 60s
+          message_timeout: 10s
+          processing_mode:
+            request_body_mode: BUFFERED
+            request_header_mode: SEND
+            request_trailer_mode: SKIP
+            response_body_mode: BUFFERED
+            response_header_mode: SEND
+            response_trailer_mode: SKIP
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: semantic-router
+    operation:
+      op: add
+      path: ''
+      value:
+        connect_timeout: 10s
+        http2_protocol_options: {}
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic-router
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                    port_value: 50051
+        name: semantic-router
+        type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: aibrix-eg
+  type: JSONPatch
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: aibrix-custom-proxy-config
+  namespace: aibrix-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 1
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 1
+        pod:
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                      - envoy
+                  topologyKey: kubernetes.io/hostname
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                  - key: nvidia.com/gpu.present
+                    operator: NotIn
+                    values:
+                    - 'true'
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              template:
+                spec:
+                  containers:
+                  - name: envoy
+                    image: envoyproxy/envoy:v1.33.2
+                    resources:
+                      requests:
+                        cpu: 1
+                        memory: 1Gi
+                      limits:
+                        cpu: 1
+                        memory: 1Gi
+                  - name: shutdown-manager
+                    image: envoyproxy/gateway:v1.2.8
+                    resources:
+                      requests:
+                        cpu: 10m
+                        memory: 32Mi

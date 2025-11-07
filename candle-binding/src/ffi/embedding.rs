@@ -1414,3 +1414,294 @@ pub extern "C" fn free_embedding_models_info(
         info_result.num_models = 0;
     }
 }
+
+// ============================================================================
+// Continuous Batching FFI Functions
+// ============================================================================
+
+use crate::model_architectures::embedding::continuous_batch_scheduler::ContinuousBatchConfig;
+use crate::model_architectures::embedding::qwen3_batched::Qwen3EmbeddingModelBatched;
+use crate::model_architectures::embedding::qwen3_embedding::Qwen3EmbeddingModel;
+use std::sync::{Arc, Mutex};
+use tokenizers::Tokenizer;
+
+/// Batched model with tokenizer and device info
+struct BatchedModelContext {
+    model: Arc<Qwen3EmbeddingModelBatched>,
+    tokenizer: Arc<Mutex<Tokenizer>>, // Tokenizer needs mutex (not thread-safe)
+    device: candle_core::Device,
+}
+
+/// Global singleton for batched model
+static GLOBAL_BATCHED_MODEL: OnceLock<BatchedModelContext> = OnceLock::new();
+
+/// Initialize Qwen3 embedding model with continuous batching
+///
+/// This function loads the Qwen3 model and wraps it with continuous batching scheduler.
+///
+/// # Parameters
+/// - `qwen3_model_path`: Path to Qwen3 model directory (C string)
+/// - `max_batch_size`: Maximum batch size for continuous batching
+/// - `max_wait_ms`: Maximum wait time in milliseconds before processing a batch
+/// - `use_cpu`: Whether to use CPU instead of GPU
+///
+/// # Returns
+/// - `true` if initialization succeeded
+/// - `false` if initialization failed or already initialized
+#[no_mangle]
+pub extern "C" fn init_embedding_models_batched(
+    qwen3_model_path: *const c_char,
+    max_batch_size: i32,
+    max_wait_ms: u64,
+    use_cpu: bool,
+) -> bool {
+    use candle_core::Device;
+
+    // Check if already initialized
+    if GLOBAL_BATCHED_MODEL.get().is_some() {
+        eprintln!("Warning: batched embedding model already initialized");
+        return true;
+    }
+
+    // Parse model path
+    let model_path = if qwen3_model_path.is_null() {
+        eprintln!("Error: qwen3_model_path is null");
+        return false;
+    } else {
+        unsafe {
+            match CStr::from_ptr(qwen3_model_path).to_str() {
+                Ok(s) if !s.is_empty() => s.to_string(),
+                _ => {
+                    eprintln!("Error: invalid qwen3_model_path");
+                    return false;
+                }
+            }
+        }
+    };
+
+    // Determine device
+    let device = if use_cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+    };
+
+    // Load tokenizer
+    let tokenizer_path = format!("{}/tokenizer.json", model_path);
+    let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
+        Ok(t) => {
+            println!("INFO: Tokenizer loaded successfully");
+            t
+        }
+        Err(e) => {
+            eprintln!(
+                "ERROR: Failed to load tokenizer from {}: {:?}",
+                tokenizer_path, e
+            );
+            return false;
+        }
+    };
+
+    // Load base model
+    println!("Loading Qwen3 embedding model from: {}", model_path);
+    let base_model = match Qwen3EmbeddingModel::load(&model_path, &device) {
+        Ok(model) => {
+            println!("INFO: Qwen3 embedding model loaded successfully");
+            model
+        }
+        Err(e) => {
+            eprintln!("ERROR: Failed to load Qwen3 model: {:?}", e);
+            return false;
+        }
+    };
+
+    // Create continuous batch config
+    let batch_config = ContinuousBatchConfig {
+        max_batch_size: max_batch_size as usize,
+        max_wait_time_ms: max_wait_ms,
+        min_batch_size: 1,
+        enable_dynamic: true,
+        max_seq_len_diff: 512,
+        verbose: false,
+    };
+
+    // Wrap with continuous batching
+    println!(
+        "Initializing continuous batching (max_batch={}, max_wait={}ms)",
+        max_batch_size, max_wait_ms
+    );
+    let batched_model = Qwen3EmbeddingModelBatched::from_model(base_model, batch_config);
+
+    // Create context with tokenizer (wrap in Arc for concurrent access)
+    let context = BatchedModelContext {
+        model: Arc::new(batched_model),
+        tokenizer: Arc::new(Mutex::new(tokenizer)),
+        device: device.clone(),
+    };
+
+    // Store in global singleton (no outer Mutex needed - Arc handles concurrency)
+    if GLOBAL_BATCHED_MODEL.set(context).is_err() {
+        eprintln!("ERROR: Failed to set global batched model");
+        return false;
+    }
+
+    println!("INFO: Batched embedding model initialized successfully");
+    true
+}
+
+/// Get embedding using continuous batching model
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - `model_type` must be a valid null-terminated C string (currently only "qwen3" supported)
+/// - `result` must be a valid pointer to EmbeddingResult
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub extern "C" fn get_embedding_batched(
+    text: *const c_char,
+    model_type: *const c_char,
+    target_dim: i32,
+    result: *mut EmbeddingResult,
+) -> i32 {
+    if text.is_null() || model_type.is_null() || result.is_null() {
+        eprintln!("Error: null pointer passed to get_embedding_batched");
+        return -1;
+    }
+
+    // Parse text
+    let text_str = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: invalid UTF-8 in text: {}", e);
+                (*result) = create_error_result();
+                return -1;
+            }
+        }
+    };
+
+    // Parse model type (currently only qwen3 supported)
+    let model_type_str = unsafe {
+        match CStr::from_ptr(model_type).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: invalid UTF-8 in model_type: {}", e);
+                (*result) = create_error_result();
+                return -1;
+            }
+        }
+    };
+
+    if model_type_str != "qwen3" {
+        eprintln!(
+            "Error: unsupported model type '{}' for batched embeddings (only 'qwen3' supported)",
+            model_type_str
+        );
+        unsafe {
+            (*result) = create_error_result();
+        }
+        return -1;
+    }
+
+    // Get batched model context (OnceLock - no lock needed!)
+    let batched_context = match GLOBAL_BATCHED_MODEL.get() {
+        Some(ctx) => ctx,
+        None => {
+            eprintln!("Error: batched embedding model not initialized. Call init_embedding_models_batched first.");
+            unsafe {
+                (*result) = create_error_result();
+            }
+            return -1;
+        }
+    };
+
+    let start_time = std::time::Instant::now();
+
+    // Clone Arc references for concurrent access
+    let tokenizer = Arc::clone(&batched_context.tokenizer);
+    let model = Arc::clone(&batched_context.model);
+
+    // Tokenize (brief lock on tokenizer only)
+    let (ids_raw, mask_raw, seq_len) = {
+        let tokenizer_guard = match tokenizer.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                eprintln!("Error: failed to lock tokenizer: {}", e);
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        };
+
+        // Tokenize
+        let encodings = match tokenizer_guard.encode_batch(vec![text_str.to_string()], true) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("Error: tokenization failed: {}", e);
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        };
+
+        let ids: Vec<u32> = encodings[0].get_ids().to_vec();
+        let mask: Vec<u32> = encodings[0].get_attention_mask().to_vec();
+        let seq_len = encodings[0].len();
+
+        // Tokenizer lock released here - can now process concurrently!
+        (ids, mask, seq_len)
+    };
+
+    // Generate embedding using continuous batching
+    // NO LOCK HELD - multiple requests execute concurrently!
+    // Model is Arc-wrapped and internally thread-safe via channels
+    let embedding_vec = match model.embedding_forward_from_raw(ids_raw, mask_raw) {
+        Ok(vec) => vec,
+        Err(e) => {
+            eprintln!("Error: embedding generation failed: {:?}", e);
+            unsafe {
+                (*result) = create_error_result();
+            }
+            return -1;
+        }
+    };
+
+    // Apply target dimension if specified
+    let final_embedding = if target_dim > 0 && (target_dim as usize) < embedding_vec.len() {
+        embedding_vec[..(target_dim as usize)].to_vec()
+    } else {
+        embedding_vec
+    };
+
+    let length = final_embedding.len() as i32;
+    let data = Box::into_raw(final_embedding.into_boxed_slice()) as *mut f32;
+    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        (*result) = EmbeddingResult {
+            data,
+            length,
+            error: false,
+            model_type: 0, // Qwen3
+            sequence_length: seq_len as i32,
+            processing_time_ms,
+        };
+    }
+
+    0
+}
+
+/// Shutdown the continuous batching scheduler
+///
+/// This function should be called when you're done using the batched model
+/// to properly clean up resources and stop the background scheduler thread.
+#[no_mangle]
+pub extern "C" fn shutdown_embedding_batched() {
+    // The scheduler thread will automatically stop when the model is dropped
+    // This is handled by the Drop implementation of Qwen3EmbeddingModelBatched
+    println!("INFO: Shutting down batched embedding model");
+}

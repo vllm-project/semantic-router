@@ -151,11 +151,11 @@ spec:
           # Significantly reduced resource requirements for kind cluster
           resources:
             requests:
-              memory: "3Gi" # Reduced from 8Gi
-              cpu: "1" # Reduced from 2
+              memory: "3Gi"  # Reduced from 8Gi
+              cpu: "1"  # Reduced from 2
             limits:
-              memory: "6Gi" # Reduced from 12Gi
-              cpu: "2" # Reduced from 4
+              memory: "6Gi"  # Reduced from 12Gi
+              cpu: "2"  # Reduced from 4
       volumes:
         - name: config-volume
           configMap:

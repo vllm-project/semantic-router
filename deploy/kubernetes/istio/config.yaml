@@ -5,14 +5,14 @@ bert_model:
 
 semantic_cache:
   enabled: false
-  backend_type: "memory" # Options: "memory" or "milvus"
+  backend_type: "memory"  # Options: "memory" or "milvus"
   similarity_threshold: 0.8
-  max_entries: 1000 # Only applies to memory backend
+  max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
   eviction_policy: "fifo"
   # Embedding model for semantic similarity matching
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
-  embedding_model: "bert"  # Default: BERT (fastest, lowest memory for Kubernetes)  
+  embedding_model: "bert"  # Default: BERT (fastest, lowest memory for Kubernetes)
 
 tools:
   enabled: false
@@ -35,11 +35,11 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "10.98.150.102" # Static IPv4 of llama3-8b k8s service
+    address: "10.98.150.102"  # Static IPv4 of llama3-8b k8s service
     port: 80
     weight: 1
   - name: "endpoint2"
-    address: "10.98.118.242" # Static IPv4 of phi4-mini k8s service
+    address: "10.98.118.242"  # Static IPv4 of phi4-mini k8s service
     port: 80
     weight: 1
 
@@ -77,12 +77,12 @@ categories:
     # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category
     # jailbreak_threshold: 0.8  # Optional: Override global jailbreak threshold per category
     model_scores:
-      - model: llama3-8b 
+      - model: llama3-8b
         score: 0.8
-        use_reasoning: false # Business performs better without reasoning
-      - model: phi4-mini 
+        use_reasoning: false  # Business performs better without reasoning
+      - model: phi4-mini
         score: 0.3
-        use_reasoning: false # Business performs better without reasoning
+        use_reasoning: false  # Business performs better without reasoning
   - name: law
     system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
     model_scores:
@@ -92,7 +92,7 @@ categories:
   - name: psychology
     system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
     semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.92 # High threshold for psychology - sensitive to nuances
+    semantic_cache_similarity_threshold: 0.92  # High threshold for psychology - sensitive to nuances
     model_scores:
       - model: llama3-8b
         score: 0.6
@@ -108,7 +108,7 @@ categories:
     model_scores:
       - model: llama3-8b
         score: 0.6
-        use_reasoning: false # Enable reasoning for complex chemistry
+        use_reasoning: false  # Enable reasoning for complex chemistry
   - name: history
     system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
     model_scores:
@@ -118,7 +118,7 @@ categories:
   - name: other
     system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
     semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.75 # Lower threshold for general chat - less sensitive
+    semantic_cache_similarity_threshold: 0.75  # Lower threshold for general chat - less sensitive
     model_scores:
       - model: llama3-8b
         score: 0.7
@@ -126,7 +126,7 @@ categories:
   - name: health
     system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
     semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.95 # High threshold for health - very sensitive to word changes
+    semantic_cache_similarity_threshold: 0.95  # High threshold for health - very sensitive to word changes
     model_scores:
       - model: llama3-8b
         score: 0.5
@@ -142,13 +142,13 @@ categories:
     model_scores:
       - model: phi4-mini
         score: 1.0
-        use_reasoning: false # Enable reasoning for complex math
+        use_reasoning: false  # Enable reasoning for complex math
   - name: physics
     system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
     model_scores:
       - model: llama3-8b
         score: 0.7
-        use_reasoning: false # Enable reasoning for physics
+        use_reasoning: false  # Enable reasoning for physics
   - name: computer science
     system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
     model_scores:
@@ -205,7 +205,7 @@ reasoning_families:
 default_reasoning_effort: high
 
 # Gateway route cache clearing
-clear_route_cache: true             # Enable for some gateways such as Istio 
+clear_route_cache: true  # Enable for some gateways such as Istio
 
 # API Configuration
 api:
@@ -225,15 +225,15 @@ api:
 # Observability Configuration
 observability:
   tracing:
-    enabled: true # Enable distributed tracing for docker-compose stack
-    provider: "opentelemetry" # Provider: opentelemetry, openinference, openllmetry
+    enabled: true  # Enable distributed tracing for docker-compose stack
+    provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
     exporter:
-      type: "otlp" # Export spans to Jaeger (via OTLP gRPC)
-      endpoint: "jaeger:4317" # Jaeger collector inside compose network
-      insecure: true # Use insecure connection (no TLS)
+      type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)
+      endpoint: "jaeger:4317"  # Jaeger collector inside compose network
+      insecure: true  # Use insecure connection (no TLS)
     sampling:
-      type: "always_on" # Sampling: always_on, always_off, probabilistic
-      rate: 1.0 # Sampling rate for probabilistic (0.0-1.0)
+      type: "always_on"  # Sampling: always_on, always_off, probabilistic
+      rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
     resource:
       service_name: "vllm-semantic-router"
       service_version: "v0.1.0"

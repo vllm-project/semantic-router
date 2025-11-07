@@ -6,6 +6,7 @@ ignore: |
   .git
   .github
   node_modules
+  .venv
 
 rules:
   braces:

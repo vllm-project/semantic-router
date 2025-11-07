@@ -83,6 +83,31 @@ jobs:
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
 
+      - name: Start Milvus service
+        run: |
+          echo "Starting Milvus vector database..."
+          docker run -d \
+            --name milvus-semantic-cache \
+            --security-opt seccomp:unconfined \
+            -e ETCD_USE_EMBED=true \
+            -e ETCD_DATA_DIR=/var/lib/milvus/etcd \
+            -e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
+            -e COMMON_STORAGETYPE=local \
+            -e CLUSTER_ENABLED=false \
+            -p 19530:19530 \
+            -p 9091:9091 \
+            milvusdb/milvus:v2.3.3 \
+            milvus run standalone
+          
+          echo "Waiting for Milvus to be ready..."
+          sleep 20
+          
+          # Verify Milvus is responsive
+          timeout 30 bash -c 'until docker logs milvus-semantic-cache 2>&1 | grep -q "Proxy successfully started"; do sleep 2; done' || true
+          
+          echo "Milvus is ready at localhost:19530"
+          docker ps --filter "name=milvus-semantic-cache"
+
       - name: Run semantic router tests
         run: make test
         env:
@@ -90,6 +115,16 @@ jobs:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+          MILVUS_URI: localhost:19530
+          SKIP_MILVUS_TESTS: false
+
+      - name: Stop Milvus service
+        if: always()
+        run: |
+          echo "Stopping Milvus container..."
+          docker stop milvus-semantic-cache || true
+          docker rm milvus-semantic-cache || true
+          echo "Milvus container cleaned up"
 
       - name: Upload test artifacts on failure
         if: failure()

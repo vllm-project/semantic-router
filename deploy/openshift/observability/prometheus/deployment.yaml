@@ -29,12 +29,12 @@ spec:
       - name: prometheus
         image: prom/prometheus:v2.53.0
         args:
-          - '--config.file=/etc/prometheus/prometheus.yml'
-          - '--storage.tsdb.path=/prometheus'
-          - '--storage.tsdb.retention.time=15d'
-          - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-          - '--web.console.templates=/usr/share/prometheus/consoles'
-          - '--web.enable-lifecycle'
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=15d
+        - --web.console.libraries=/usr/share/prometheus/console_libraries
+        - --web.console.templates=/usr/share/prometheus/consoles
+        - --web.enable-lifecycle
         ports:
         - name: http
           containerPort: 9090
@@ -70,11 +70,11 @@ spec:
           failureThreshold: 3
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
+            memory: 1Gi
+            cpu: 500m
           limits:
-            memory: "2Gi"
-            cpu: "1"
+            memory: 2Gi
+            cpu: '1'
       volumes:
       - name: config
         configMap:

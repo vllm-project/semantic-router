@@ -9,7 +9,7 @@ classifier:
     threshold: 0.7  # Global default threshold - can be overridden per category
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_model/pii_type_mapping.json"
-  
+
   category_model:
     model_id: "models/category_classifier_modernbert-base_model"
     use_modernbert: true
@@ -104,7 +104,7 @@ model_config:
       pii_types_allowed:
         - "GPE"  # Geopolitical entities (cities, countries) are OK
         - "ORGANIZATION"  # Organization names are OK
-  
+
   "general-llm":
     preferred_endpoints: ["general-endpoint"]
     pii_policy:
@@ -119,7 +119,7 @@ vllm_endpoints:
     address: "127.0.0.1"
     port: 8000
     weight: 1
-  
+
   - name: "general-endpoint"
     address: "127.0.0.1"
     port: 8001
