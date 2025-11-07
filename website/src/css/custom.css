@@ -483,9 +483,11 @@ a:hover {
 table {
   background: var(--tech-card-bg);
   border-radius: 8px;
-  overflow: hidden;
   border: 1px solid var(--tech-border);
   transition: all 0.3s ease;
+  border-collapse: collapse;
+  width: 100%;
+  display: table;
 }
 
 [data-theme='dark'] table {
@@ -506,6 +508,14 @@ th {
 
 td, th {
   border-color: var(--tech-border);
+}
+
+/* Table wrapper for horizontal scrolling */
+.markdown,
+article .markdown,
+[class*='blogPostContent'] {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Admonition styling */
@@ -878,8 +888,258 @@ td, th {
 }
 
 @media (max-width: 768px) {
+  /* Remove all padding and margins on mobile for full-width display */
   [class*='blog-wrapper'] article,
   [class*='blog-wrapper'] article[class*='blogPostItem'] {
-    padding: 1.5rem 1rem !important;
+    padding: 1rem 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Remove container padding on mobile */
+  [class*='blog-wrapper'] .container,
+  [class*='blog-wrapper'] div[class*='blogContainer'] {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Remove main wrapper padding on mobile */
+  [class*='blog-wrapper'] .main-wrapper {
+    padding: 0 !important;
+  }
+
+  /* Ensure content takes full width */
+  [class*='blog-wrapper'] .row {
+    margin: 0 !important;
+  }
+
+  /* Add comfortable padding to text content for readability */
+  [class*='blog-wrapper'] article p,
+  [class*='blog-wrapper'] article h1,
+  [class*='blog-wrapper'] article h2,
+  [class*='blog-wrapper'] article h3,
+  [class*='blog-wrapper'] article h4,
+  [class*='blog-wrapper'] article h5,
+  [class*='blog-wrapper'] article h6,
+  [class*='blog-wrapper'] article ul,
+  [class*='blog-wrapper'] article ol,
+  [class*='blog-wrapper'] article blockquote,
+  [class*='blog-wrapper'] article div:not(.mermaid) {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Ensure list items have proper spacing */
+  [class*='blog-wrapper'] article li {
+    margin-left: 0 !important;
+  }
+
+  /* Create a scrollable container for tables */
+  [class*='blog-wrapper'] .markdown > table,
+  [class*='blog-wrapper'] article table {
+    margin: 1rem 0 !important;
+  }
+
+  /* Wrap table in a div for scrolling */
+  [class*='blog-wrapper'] table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+  }
+
+  /* Table content should maintain structure */
+  [class*='blog-wrapper'] table > thead,
+  [class*='blog-wrapper'] table > tbody {
+    display: table !important;
+    width: 100% !important;
+    min-width: 600px !important;
+  }
+
+  [class*='blog-wrapper'] table thead,
+  [class*='blog-wrapper'] table tbody {
+    display: table-row-group !important;
+  }
+
+  [class*='blog-wrapper'] table tr {
+    display: table-row !important;
+  }
+
+  [class*='blog-wrapper'] table th,
+  [class*='blog-wrapper'] table td {
+    display: table-cell !important;
+  }
+
+  /* Remove padding from table cells on mobile for more content space */
+  [class*='blog-wrapper'] table td,
+  [class*='blog-wrapper'] table th {
+    padding: 0.5rem !important;
+    font-size: 0.85rem !important;
+    white-space: nowrap !important;
+  }
+
+  /* Ensure images are responsive */
+  [class*='blog-wrapper'] article img {
+    max-width: calc(100% - 2rem) !important;
+    height: auto !important;
+    margin: 1rem !important;
+    display: block !important;
+  }
+
+  /* Code blocks should be scrollable with padding */
+  [class*='blog-wrapper'] article pre {
+    margin: 1rem !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Mermaid diagrams should be scrollable with padding */
+  [class*='blog-wrapper'] .mermaid {
+    margin: 1rem !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Ensure header elements have proper spacing */
+  [class*='blog-wrapper'] article header {
+    padding: 0 1rem !important;
+  }
+
+  /* Blog post metadata */
+  [class*='blog-wrapper'] .avatar,
+  [class*='blog-wrapper'] .avatar__intro,
+  [class*='blog-wrapper'] [class*='blogPostData'] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* ============================================
+     Documentation Pages Mobile Optimization
+     ============================================ */
+
+  /* Remove padding from doc containers on mobile */
+  .theme-doc-wrapper,
+  [class*='docMainContainer'],
+  .docMainContainer {
+    padding: 0 !important;
+  }
+
+  /* Optimize doc article spacing */
+  .theme-doc-wrapper article,
+  [class*='docItemContainer'] article {
+    padding: 1rem 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Add comfortable padding to doc text content */
+  .theme-doc-wrapper article p,
+  .theme-doc-wrapper article h1,
+  .theme-doc-wrapper article h2,
+  .theme-doc-wrapper article h3,
+  .theme-doc-wrapper article h4,
+  .theme-doc-wrapper article h5,
+  .theme-doc-wrapper article h6,
+  .theme-doc-wrapper article ul,
+  .theme-doc-wrapper article ol,
+  .theme-doc-wrapper article blockquote,
+  .theme-doc-wrapper article div:not(.mermaid),
+  [class*='docItemContainer'] article p,
+  [class*='docItemContainer'] article h1,
+  [class*='docItemContainer'] article h2,
+  [class*='docItemContainer'] article h3,
+  [class*='docItemContainer'] article h4,
+  [class*='docItemContainer'] article h5,
+  [class*='docItemContainer'] article h6,
+  [class*='docItemContainer'] article ul,
+  [class*='docItemContainer'] article ol,
+  [class*='docItemContainer'] article blockquote,
+  [class*='docItemContainer'] article div:not(.mermaid) {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Make doc tables scrollable */
+  .theme-doc-wrapper table,
+  [class*='docItemContainer'] table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+    margin: 1rem 0 !important;
+  }
+
+  .theme-doc-wrapper table > thead,
+  .theme-doc-wrapper table > tbody,
+  [class*='docItemContainer'] table > thead,
+  [class*='docItemContainer'] table > tbody {
+    display: table !important;
+    width: 100% !important;
+    min-width: 600px !important;
+  }
+
+  .theme-doc-wrapper table thead,
+  .theme-doc-wrapper table tbody,
+  [class*='docItemContainer'] table thead,
+  [class*='docItemContainer'] table tbody {
+    display: table-row-group !important;
+  }
+
+  .theme-doc-wrapper table tr,
+  [class*='docItemContainer'] table tr {
+    display: table-row !important;
+  }
+
+  .theme-doc-wrapper table th,
+  .theme-doc-wrapper table td,
+  [class*='docItemContainer'] table th,
+  [class*='docItemContainer'] table td {
+    display: table-cell !important;
+    padding: 0.5rem !important;
+    font-size: 0.85rem !important;
+    white-space: nowrap !important;
+  }
+
+  /* Doc images responsive */
+  .theme-doc-wrapper article img,
+  [class*='docItemContainer'] article img {
+    max-width: calc(100% - 2rem) !important;
+    height: auto !important;
+    margin: 1rem !important;
+    display: block !important;
+  }
+
+  /* Doc code blocks scrollable */
+  .theme-doc-wrapper article pre,
+  [class*='docItemContainer'] article pre {
+    margin: 1rem !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Doc Mermaid diagrams scrollable */
+  .theme-doc-wrapper .mermaid,
+  [class*='docItemContainer'] .mermaid {
+    margin: 1rem !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Remove doc container max-width constraints */
+  .theme-doc-wrapper .container,
+  [class*='docItemContainer'] .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Doc page header spacing */
+  .theme-doc-wrapper header,
+  [class*='docItemContainer'] header {
+    padding: 0 1rem !important;
   }
 }
