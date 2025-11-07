@@ -198,13 +198,15 @@ type PIIAnalysisResult struct {
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	// Dependencies - In-tree classifiers
-	categoryInitializer  CategoryInitializer
-	categoryInference    CategoryInference
-	jailbreakInitializer JailbreakInitializer
-	jailbreakInference   JailbreakInference
-	piiInitializer       PIIInitializer
-	piiInference         PIIInference
-	keywordClassifier    *KeywordClassifier
+	categoryInitializer         CategoryInitializer
+	categoryInference           CategoryInference
+	jailbreakInitializer        JailbreakInitializer
+	jailbreakInference          JailbreakInference
+	piiInitializer              PIIInitializer
+	piiInference                PIIInference
+	keywordClassifier           *KeywordClassifier
+	keywordEmbeddingInitializer KeywordEmbeddingInitializer
+	keywordEmbeddingClassifier  *KeywordEmbeddingClassifier
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
@@ -254,6 +256,13 @@ func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	}
 }
 
+func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer KeywordEmbeddingInitializer, keywordEmbeddingClassifier *KeywordEmbeddingClassifier) option {
+	return func(c *Classifier) {
+		c.keywordEmbeddingInitializer = keywordEmbeddingInitializer
+		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
+	}
+}
+
 // initModels initializes the models for the classifier
 func initModels(classifier *Classifier) (*Classifier, error) {
 	// Initialize either in-tree OR MCP-based category classifier
@@ -275,6 +284,12 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 
 	if classifier.IsPIIEnabled() {
 		if err := classifier.initializePIIClassifier(); err != nil {
+			return nil, err
+		}
+	}
+
+	if classifier.IsKeywordEmbeddingClassifierEnabled() {
+		if err := classifier.initializeKeywordEmbeddingClassifier(); err != nil {
 			return nil, err
 		}
 	}
@@ -318,6 +333,16 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			return nil, err
 		}
 		options = append(options, withKeywordClassifier(keywordClassifier))
+	}
+
+	// Add keyword embedding classifier if configured
+	if len(cfg.KeywordSimilarityMatchRules) > 0 {
+		keywordEmbeddingClassifier, err := NewKeywordEmbeddingClassifier(cfg.KeywordSimilarityMatchRules)
+		if err != nil {
+			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
+			return nil, err
+		}
+		options = append(options, withKeywordEmbeddingClassifier(createKeywordEmbeddingInitializer(), keywordEmbeddingClassifier))
 	}
 
 	// Add in-tree classifier if configured
@@ -369,7 +394,17 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 			return category, confidence, nil
 		}
 	}
-
+	// TODO: more sophiscated fusion engine needs to be designed and implemented to combine classifiers' results
+	// Try embedding based similarity classification if properly configured
+	if c.keywordEmbeddingClassifier != nil {
+		category, confidence, err := c.keywordEmbeddingClassifier.Classify(text)
+		if err != nil {
+			return "", 0.0, err
+		}
+		if category != "" {
+			return category, confidence, nil
+		}
+	}
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryInTree(text)
