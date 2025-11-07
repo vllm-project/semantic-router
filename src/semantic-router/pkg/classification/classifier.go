@@ -205,8 +205,8 @@ type Classifier struct {
 	piiInitializer              PIIInitializer
 	piiInference                PIIInference
 	keywordClassifier           *KeywordClassifier
-	keywordEmbeddingInitializer KeywordEmbeddingInitializer
-	keywordEmbeddingClassifier  *KeywordEmbeddingClassifier
+	keywordEmbeddingInitializer EmbeddingClassifierInitializer
+	keywordEmbeddingClassifier  *EmbeddingClassifier
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
@@ -256,7 +256,7 @@ func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	}
 }
 
-func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer KeywordEmbeddingInitializer, keywordEmbeddingClassifier *KeywordEmbeddingClassifier) option {
+func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassifierInitializer, keywordEmbeddingClassifier *EmbeddingClassifier) option {
 	return func(c *Classifier) {
 		c.keywordEmbeddingInitializer = keywordEmbeddingInitializer
 		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
@@ -337,12 +337,12 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add keyword embedding classifier if configured
 	if len(cfg.EmbeddingRules) > 0 {
-		keywordEmbeddingClassifier, err := NewKeywordEmbeddingClassifier(cfg.EmbeddingRules)
+		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
 			return nil, err
 		}
-		options = append(options, withKeywordEmbeddingClassifier(createKeywordEmbeddingInitializer(), keywordEmbeddingClassifier))
+		options = append(options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
 	}
 
 	// Add in-tree classifier if configured

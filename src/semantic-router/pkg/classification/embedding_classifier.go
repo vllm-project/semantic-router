@@ -13,14 +13,14 @@ import (
 // override it.
 var calculateSimilarityBatch = candle_binding.CalculateSimilarityBatch
 
-// KeywordEmbeddingInitializer initializes KeywordEmbeddingClassifier for embedding based classification
-type KeywordEmbeddingInitializer interface {
+// EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
+type EmbeddingClassifierInitializer interface {
 	Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error
 }
 
-type ExternalModelBasedKeywordEmbeddingInitializer struct{}
+type ExternalModelBasedEmbeddingInitializer struct{}
 
-func (c *ExternalModelBasedKeywordEmbeddingInitializer) Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error {
+func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error {
 	err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, useCPU)
 	if err != nil {
 		return err
@@ -29,18 +29,18 @@ func (c *ExternalModelBasedKeywordEmbeddingInitializer) Init(qwen3ModelPath stri
 	return nil
 }
 
-// createKeywordEmbeddingInitializer creates the appropriate keyword embedding initializer based on configuration
-func createKeywordEmbeddingInitializer() KeywordEmbeddingInitializer {
-	return &ExternalModelBasedKeywordEmbeddingInitializer{}
+// createEmbeddingInitializer creates the appropriate keyword embedding initializer based on configuration
+func createEmbeddingInitializer() EmbeddingClassifierInitializer {
+	return &ExternalModelBasedEmbeddingInitializer{}
 }
 
-type KeywordEmbeddingClassifier struct {
+type EmbeddingClassifier struct {
 	rules []config.EmbeddingRule
 }
 
 // NewKeywordClassifier creates a new KeywordEmbeddingClassifier.
-func NewKeywordEmbeddingClassifier(cfgRules []config.EmbeddingRule) (*KeywordEmbeddingClassifier, error) {
-	return &KeywordEmbeddingClassifier{rules: cfgRules}, nil
+func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule) (*EmbeddingClassifier, error) {
+	return &EmbeddingClassifier{rules: cfgRules}, nil
 }
 
 // IsKeywordEmbeddingClassifierEnabled checks if Keyword embedding classification rules are properly configured
@@ -57,7 +57,7 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 }
 
 // Classify performs keyword-based embedding similarity classification on the given text.
-func (c *KeywordEmbeddingClassifier) Classify(text string) (string, float64, error) {
+func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
 	var bestScore float32
 	var mostMatchedCategory string
 	for _, rule := range c.rules {
@@ -81,7 +81,7 @@ func (c *KeywordEmbeddingClassifier) Classify(text string) (string, float64, err
 }
 
 // matches checks if the text matches the given keyword rule.
-func (c *KeywordEmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (bool, float32, error) {
+func (c *EmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (bool, float32, error) {
 	// Validate input
 	if text == "" {
 		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: query must be provided")

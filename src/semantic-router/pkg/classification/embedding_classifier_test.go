@@ -11,12 +11,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestKeywordEmbeddingClassifierSuite(t *testing.T) {
+func TestEmbeddingClassifierSuite(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "KeywordEmbeddingClassifier Suite")
+	RunSpecs(t, "EmbeddingClassifier Suite")
 }
 
-var _ = Describe("KeywordEmbeddingClassifier", func() {
+var _ = Describe("EmbeddingClassifier", func() {
 	var origCalculate func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error)
 
 	BeforeEach(func() {
@@ -41,7 +41,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			Dimension:                 768,
 		}}
 
-		clf, err := NewKeywordEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifier(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		cat, score, err := clf.Classify("some text")
@@ -64,7 +64,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			Dimension:                 512,
 		}}
 
-		clf, err := NewKeywordEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifier(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		cat, score, err := clf.Classify("other text")
@@ -87,7 +87,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			Dimension:                 256,
 		}}
 
-		clf, err := NewKeywordEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifier(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		cat, score, err := clf.Classify("third text")
@@ -110,7 +110,7 @@ var _ = Describe("KeywordEmbeddingClassifier", func() {
 			Dimension:                 768,
 		}}
 
-		clf, err := NewKeywordEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifier(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, _, err = clf.Classify("will error")
