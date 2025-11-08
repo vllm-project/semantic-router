@@ -18,7 +18,7 @@ yuezhu1:
 
 Xunzhuo:
   name: Xunzhuo Liu
-  title: Software Engineer @ Tencent
+  title: AI Networking @ Tencent
   url: https://github.com/Xunzhuo
   image_url: /img/team/xunzhuo.png
 
@@ -28,3 +28,14 @@ minyin:
   url: https://github.com/yinmin2020
   image_url: /img/team/yinmin.jpg
 
+ivar:
+  name: Ivar Flakstad
+  title: Machine Learning @ Hugging Face
+  url: https://github.com/ivarflakstad
+  image_url: /img/team/ivar.jpeg
+
+onezero:
+  name: OneZero-Y
+  title: "LLM Inference"
+  url: https://github.com/OneZero-Y
+  image_url: /img/team/onezero.jpeg

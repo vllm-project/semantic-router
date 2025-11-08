@@ -2,7 +2,7 @@
 sidebar_position: 4
 ---
 
-# Global Configuration
+# Configuration
 
 This guide covers the configuration options for the Semantic Router. The system uses a single YAML configuration file that controls all aspects of routing, classification, and security.
 
@@ -229,12 +229,25 @@ Configure model-specific settings:
 
 ```yaml
 model_config:
-  "llama2-7b":              # Must match the model name in vllm_endpoints
+  "llama2-7b":
     pii_policy:
       allow_by_default: true    # Allow PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
-    preferred_endpoints: ["my_endpoint"]
+    preferred_endpoints: ["my_endpoint"]  # Optional: specify which endpoints can serve this model
+
+  "gpt-4":
+    pii_policy:
+      allow_by_default: false
+    # preferred_endpoints omitted - router will not set endpoint header
+    # Useful when external load balancer handles endpoint selection
 ```
+
+**Note on `preferred_endpoints`:**
+
+- **Optional field**: If omitted, the router will not set the `x-vsr-destination-endpoint` header
+- **When specified**: Router selects the best endpoint based on weights and sets the header
+- **When omitted**: Upstream load balancer or service mesh handles endpoint selection
+- **Validation**: Models used in categories or as `default_model` must have `preferred_endpoints` configured
 
 ### Pricing (Optional)
 

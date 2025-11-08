@@ -145,7 +145,7 @@ Verify routing via response headers
 The router does not inject routing metadata into the JSON body. Instead, inspect the response headers added by the router:
 
 - X-Selected-Model
-- X-GATEWAY-DESTINATION-ENDPOINT
+- x-vsr-destination-endpoint
 
 Example:
 
@@ -161,7 +161,7 @@ curl -i http://localhost:8801/v1/chat/completions \
   }'
 # In the response headers, look for:
 #   X-Selected-Model: <your-selected-model>
-#   X-GATEWAY-DESTINATION-ENDPOINT: <address:port>
+#   x-vsr-destination-endpoint: <address:port>
 ```
 
 4) Run a comprehensive evaluation

@@ -1,5 +1,4 @@
 //go:build !windows && cgo
-// +build !windows,cgo
 
 package cache
 
@@ -12,8 +11,8 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // HNSWNode represents a node in the HNSW graph
@@ -70,7 +69,7 @@ type InMemoryCacheOptions struct {
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
 func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
-	observability.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s, useHNSW=%t",
+	logging.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s, useHNSW=%t",
 		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold, options.EvictionPolicy, options.UseHNSW)
 
 	var evictionPolicy EvictionPolicy
@@ -95,7 +94,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
 	}
 
-	observability.Debugf("Semantic cache embedding model: %s", embeddingModel)
+	logging.Debugf("Semantic cache embedding model: %s", embeddingModel)
 
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
@@ -120,7 +119,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 			efConstruction = 200 // Default value
 		}
 		cache.hnswIndex = newHNSWIndex(M, efConstruction)
-		observability.Debugf("HNSW index initialized: M=%d, efConstruction=%d", M, efConstruction)
+		logging.Debugf("HNSW index initialized: M=%d, efConstruction=%d", M, efConstruction)
 	}
 
 	return cache
@@ -137,8 +136,16 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
 
 	switch modelName {
-	case "qwen3", "gemma":
-		// Use GetEmbeddingWithModelType for Qwen3 or Gemma
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with TRUE continuous batching
+		// Now properly fixed to avoid CUDA context issues!
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma (standard version)
 		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
 		if err != nil {
 			return nil, err
@@ -199,7 +206,7 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 		c.hnswIndex.addNode(entryIndex, embedding, c.entries)
 	}
 
-	observability.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t)",
+	logging.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t)",
 		len(c.entries), len(embedding), c.useHNSW)
 
 	// Record metrics
@@ -230,7 +237,7 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 			c.entries[i].ResponseBody = responseBody
 			c.entries[i].Timestamp = time.Now()
 			c.entries[i].LastAccessAt = time.Now()
-			observability.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
+			logging.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
 				len(responseBody))
 
 			// Record successful completion
@@ -291,9 +298,9 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 		c.hnswIndex.addNode(entryIndex, embedding, c.entries)
 	}
 
-	observability.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t)",
+	logging.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t)",
 		len(c.entries), len(requestBody), len(responseBody), c.useHNSW)
-	observability.LogEvent("cache_entry_added", map[string]interface{}{
+	logging.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend": "memory",
 		"query":   query,
 		"model":   model,
@@ -317,14 +324,14 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	start := time.Now()
 
 	if !c.enabled {
-		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
+		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
 	queryPreview := query
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
 		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding using the configured model
@@ -387,7 +394,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 			}
 		}
 
-		observability.Debugf("InMemoryCache.FindSimilar: HNSW search checked %d candidates", len(candidateIndices))
+		logging.Debugf("InMemoryCache.FindSimilar: HNSW search checked %d candidates", len(candidateIndices))
 	} else {
 		// Fallback to linear search
 		for entryIndex, entry := range c.entries {
@@ -421,7 +428,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		}
 
 		if !c.useHNSW {
-			observability.Debugf("InMemoryCache.FindSimilar: Linear search used (HNSW disabled)")
+			logging.Debugf("InMemoryCache.FindSimilar: Linear search used (HNSW disabled)")
 		}
 	}
 
@@ -435,9 +442,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 	// Log if any expired entries were skipped
 	if expiredCount > 0 {
-		observability.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
+		logging.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
 			expiredCount, c.ttlSeconds)
-		observability.LogEvent("cache_expired_entries_found", map[string]interface{}{
+		logging.LogEvent("cache_expired_entries_found", map[string]interface{}{
 			"backend":       "memory",
 			"expired_count": expiredCount,
 			"ttl_seconds":   c.ttlSeconds,
@@ -447,7 +454,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	// Handle case where no suitable entries exist
 	if bestIndex < 0 {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
+		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
@@ -461,9 +468,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		c.updateAccessInfo(bestIndex, bestEntry)
 		c.mu.Unlock()
 
-		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
 			bestSimilarity, threshold, len(bestEntry.ResponseBody))
-		observability.LogEvent("cache_hit", map[string]interface{}{
+		logging.LogEvent("cache_hit", map[string]interface{}{
 			"backend":    "memory",
 			"similarity": bestSimilarity,
 			"threshold":  threshold,
@@ -475,9 +482,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	}
 
 	atomic.AddInt64(&c.missCount, 1)
-	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
 		bestSimilarity, threshold, entriesChecked)
-	observability.LogEvent("cache_miss", map[string]interface{}{
+	logging.LogEvent("cache_miss", map[string]interface{}{
 		"backend":         "memory",
 		"best_similarity": bestSimilarity,
 		"threshold":       threshold,
@@ -553,9 +560,9 @@ func (c *InMemoryCache) cleanupExpiredEntries() {
 	}
 
 	expiredCount := len(c.entries) - len(validEntries)
-	observability.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
+	logging.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
 		expiredCount, len(validEntries))
-	observability.LogEvent("cache_cleanup", map[string]interface{}{
+	logging.LogEvent("cache_cleanup", map[string]interface{}{
 		"backend":         "memory",
 		"expired_count":   expiredCount,
 		"remaining_count": len(validEntries),
@@ -626,7 +633,7 @@ func (c *InMemoryCache) evictOne() {
 	c.entries[victimIdx] = c.entries[len(c.entries)-1]
 	c.entries = c.entries[:len(c.entries)-1]
 
-	observability.LogEvent("cache_evicted", map[string]any{
+	logging.LogEvent("cache_evicted", map[string]any{
 		"backend":     "memory",
 		"request_id":  evictedRequestID,
 		"max_entries": c.maxEntries,
@@ -642,7 +649,7 @@ func (c *InMemoryCache) rebuildHNSWIndex() {
 		return
 	}
 
-	observability.Debugf("InMemoryCache: Rebuilding HNSW index with %d entries", len(c.entries))
+	logging.Debugf("InMemoryCache: Rebuilding HNSW index with %d entries", len(c.entries))
 
 	// Clear the existing index
 	c.hnswIndex.nodes = []*HNSWNode{}
@@ -657,7 +664,7 @@ func (c *InMemoryCache) rebuildHNSWIndex() {
 		}
 	}
 
-	observability.Debugf("InMemoryCache: HNSW index rebuilt with %d nodes", len(c.hnswIndex.nodes))
+	logging.Debugf("InMemoryCache: HNSW index rebuilt with %d nodes", len(c.hnswIndex.nodes))
 }
 
 // newHNSWIndex creates a new HNSW index
@@ -719,7 +726,7 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 		if lc == 0 {
 			M = h.Mmax0
 		}
-		neighbors := h.selectNeighbors(candidates, M, entries)
+		neighbors := h.selectNeighbors(candidates, M, embedding, entries)
 
 		// Add bidirectional links
 		node.neighbors[lc] = neighbors
@@ -733,7 +740,8 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 
 				// Prune neighbors if needed
 				if len(n.neighbors[lc]) > M {
-					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries)
+					// Use neighbor's own embedding as query for pruning
+					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries[neighborIdx].Embedding, entries)
 				}
 			}
 		}
@@ -823,26 +831,71 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 	return results.items()
 }
 
-// selectNeighbors selects the best neighbors using a simple heuristic
-func (h *HNSWIndex) selectNeighbors(candidates []int, m int, entries []CacheEntry) []int {
+// selectNeighbors selects the best neighbors by sorting by distance
+// This is CRITICAL for HNSW graph quality - must select NEAREST neighbors, not arbitrary ones!
+func (h *HNSWIndex) selectNeighbors(candidates []int, m int, queryEmb []float32, entries []CacheEntry) []int {
+	// Validate queryEmb: must not be nil or empty to ensure correct distance calculations
+	if len(queryEmb) == 0 {
+		logging.Errorf("selectNeighbors: queryEmb is empty - cannot compute distances")
+		return []int{}
+	}
+
 	if len(candidates) <= m {
 		return candidates
 	}
-	// Just return first m for simplicity
-	return candidates[:m]
+
+	// Create a temporary slice with distances for sorting
+	type neighborDist struct {
+		idx  int
+		dist float32
+	}
+
+	neighbors := make([]neighborDist, len(candidates))
+
+	// Compute distance from query to each candidate (using SIMD!)
+	for i, idx := range candidates {
+		if idx >= 0 && idx < len(entries) {
+			// Validate dimension match to prevent silent data corruption in HNSW graph
+			if len(entries[idx].Embedding) != len(queryEmb) {
+				logging.Errorf("selectNeighbors: dimension mismatch - query has %d dims, candidate %d has %d dims",
+					len(queryEmb), idx, len(entries[idx].Embedding))
+				// Skip this candidate rather than corrupting the graph
+				continue
+			}
+			neighbors[i] = neighborDist{
+				idx:  idx,
+				dist: h.distance(queryEmb, entries[idx].Embedding),
+			}
+		}
+	}
+
+	// Sort by distance (ascending - smallest distance first)
+	// Use a simple selection sort since m is typically small (16-32)
+	for i := 0; i < m && i < len(neighbors); i++ {
+		minIdx := i
+		for j := i + 1; j < len(neighbors); j++ {
+			if neighbors[j].dist < neighbors[minIdx].dist {
+				minIdx = j
+			}
+		}
+		if minIdx != i {
+			neighbors[i], neighbors[minIdx] = neighbors[minIdx], neighbors[i]
+		}
+	}
+
+	// Return the m nearest neighbors
+	result := make([]int, m)
+	for i := 0; i < m; i++ {
+		result[i] = neighbors[i].idx
+	}
+	return result
 }
 
 // distance calculates cosine similarity (as dot product since embeddings are normalized)
 func (h *HNSWIndex) distance(a, b []float32) float32 {
 	// We use negative dot product so that larger similarity = smaller distance
-	var dotProduct float32
-	minLen := len(a)
-	if len(b) < minLen {
-		minLen = len(b)
-	}
-	for i := 0; i < minLen; i++ {
-		dotProduct += a[i] * b[i]
-	}
+	// Use SIMD-optimized dot product (AVX2/AVX512)
+	dotProduct := dotProductSIMD(a, b)
 	return -dotProduct // Negate so higher similarity = lower distance
 }
 

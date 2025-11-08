@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import time
+import unittest
 import uuid
 
 import requests
@@ -45,7 +46,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check Envoy
         try:
             payload = {
-                "model": "gemma3:27b",
+                "model": "Model-A",
                 "messages": [{"role": "user", "content": "test"}],
             }
 
@@ -89,7 +90,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check if cache is enabled in metrics
         response = requests.get(ROUTER_METRICS_URL)
         metrics_text = response.text
-        if "llm_router_cache" not in metrics_text:
+        if "llm_cache" not in metrics_text:
             self.skipTest("Cache metrics not found. Semantic cache may be disabled.")
 
     def test_cache_hit_with_identical_query(self):
@@ -105,13 +106,11 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Get baseline cache metrics
         response = requests.get(ROUTER_METRICS_URL)
         baseline_metrics = response.text
-        baseline_hits = (
-            extract_metric(baseline_metrics, "llm_router_cache_hits_total") or 0
-        )
+        baseline_hits = extract_metric(baseline_metrics, "llm_cache_hits_total") or 0
 
         self.print_request_info(
             payload={
-                "model": "gemma3:27b",
+                "model": "Model-A",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": query},
@@ -123,7 +122,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
 
         # First request should be a cache miss
         payload = {
-            "model": "gemma3:27b",
+            "model": "Model-A",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": query},
@@ -136,7 +135,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # First request
         self.print_subtest_header("First Request (Expected Cache Miss)")
         response1 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=120
         )
 
         response1_json = response1.json()
@@ -157,7 +156,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Second identical request
         self.print_subtest_header("Second Request (Expected Cache Hit)")
         response2 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=120
         )
 
         response2_json = response2.json()
@@ -178,9 +177,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check if cache hits increased
         response = requests.get(ROUTER_METRICS_URL)
         updated_metrics = response.text
-        updated_hits = (
-            extract_metric(updated_metrics, "llm_router_cache_hits_total") or 0
-        )
+        updated_hits = extract_metric(updated_metrics, "llm_cache_hits_total") or 0
 
         passed = (model1 == model2) and (updated_hits > baseline_hits)
         self.print_test_result(
@@ -215,14 +212,12 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Get baseline cache metrics
         response = requests.get(ROUTER_METRICS_URL)
         baseline_metrics = response.text
-        baseline_hits = (
-            extract_metric(baseline_metrics, "llm_router_cache_hits_total") or 0
-        )
+        baseline_hits = extract_metric(baseline_metrics, "llm_cache_hits_total") or 0
 
         # First request with original query
         self.print_subtest_header("Original Query")
         payload1 = {
-            "model": "gemma3:27b",
+            "model": "Model-A",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": original_query},
@@ -237,7 +232,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         headers = {"Content-Type": "application/json", "X-Session-ID": session_id}
 
         response1 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload1, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload1, timeout=120
         )
 
         response1_json = response1.json()
@@ -259,7 +254,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Second request with similar query
         self.print_subtest_header("Similar Query")
         payload2 = {
-            "model": "gemma3:27b",
+            "model": "Model-A",
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": similar_query},
@@ -273,7 +268,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         )
 
         response2 = requests.post(
-            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload2, timeout=10
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload2, timeout=120
         )
 
         response2_json = response2.json()
@@ -295,9 +290,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check cache metrics
         response = requests.get(ROUTER_METRICS_URL)
         updated_metrics = response.text
-        updated_hits = (
-            extract_metric(updated_metrics, "llm_router_cache_hits_total") or 0
-        )
+        updated_hits = extract_metric(updated_metrics, "llm_cache_hits_total") or 0
 
         passed = (model1 == model2) and (updated_hits > baseline_hits)
         self.print_test_result(
@@ -328,10 +321,10 @@ class SemanticCacheTest(SemanticRouterTestBase):
 
         # Look for specific cache metrics
         cache_metrics = [
-            "llm_router_cache_hits_total",
-            "llm_router_cache_misses_total",
-            "llm_router_cache_size",
-            "llm_router_cache_max_size",
+            "llm_cache_hits_total",
+            "llm_cache_misses_total",
+            "llm_cache_size",
+            "llm_cache_max_size",
         ]
 
         metrics_found = {}

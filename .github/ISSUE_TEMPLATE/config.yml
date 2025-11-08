@@ -1,0 +1,9 @@
+blank_issues_enabled: true
+
+contact_links:
+  - name: Have you read the tutorials?
+    url: https://vllm-semantic-router.com
+    about: Much help can be found in the docs
+  - name: Chat on Slack
+    url: https://slack.vllm.ai/
+    about: Maybe chatting with the community can help @semantic-router channel

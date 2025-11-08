@@ -1,0 +1,104 @@
+# Local Tracing Configuration (Jaeger + Always-On Sampling)
+# This config is used by tools/tracing/docker-compose.tracing.yaml via CONFIG_FILE.
+
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+
+model_config:
+  "openai/gpt-oss-20b":
+    reasoning_family: "gpt-oss"
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
+
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+categories:
+  - name: math
+    system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 1.0
+        use_reasoning: true
+  - name: other
+    system_prompt: "You are a helpful assistant."
+    model_scores:
+      - model: openai/gpt-oss-20b
+        score: 0.7
+        use_reasoning: false
+
+default_model: openai/gpt-oss-20b
+
+reasoning_families:
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+default_reasoning_effort: high
+
+api:
+  batch_classification:
+    max_batch_size: 100
+    concurrency_threshold: 5
+    max_concurrency: 8
+    metrics:
+      enabled: true
+
+observability:
+  tracing:
+    enabled: true
+    provider: "opentelemetry"
+    exporter:
+      type: "otlp"
+      endpoint: "jaeger:4317"  # Jaeger gRPC OTLP endpoint inside compose network
+      insecure: true
+    sampling:
+      type: "always_on"  # Always sample in local/dev for easy debugging
+      rate: 1.0
+    resource:
+      service_name: "vllm-semantic-router"
+      service_version: "dev"
+      deployment_environment: "local"

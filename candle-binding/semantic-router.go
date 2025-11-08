@@ -6,6 +6,7 @@ package candle_binding
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -17,6 +18,8 @@ import (
 #include <stdbool.h>
 
 extern bool init_similarity_model(const char* model_id, bool use_cpu);
+
+extern bool is_similarity_model_initialized();
 
 extern float calculate_similarity(const char* text1, const char* text2, int max_length);
 
@@ -146,6 +149,40 @@ typedef struct {
     int num_classes;
 } ClassificationResultWithProbs;
 
+// Qwen3 LoRA Generative Classifier structures
+typedef struct {
+    int class_id;
+    float confidence;
+    char* category_name;
+    float* probabilities;
+    int num_categories;
+    bool error;
+    char* error_message;
+} GenerativeClassificationResult;
+
+extern void free_generative_classification_result(GenerativeClassificationResult* result);
+extern void free_categories(char** categories, int num_categories);
+
+// Qwen3 Multi-LoRA Adapter System
+extern int init_qwen3_multi_lora_classifier(const char* base_model_path);
+extern int load_qwen3_lora_adapter(const char* adapter_name, const char* adapter_path);
+extern int classify_with_qwen3_adapter(const char* text, const char* adapter_name, GenerativeClassificationResult* result);
+extern int get_qwen3_loaded_adapters(char*** adapters_out, int* num_adapters);
+extern int classify_zero_shot_qwen3(const char* text, const char** categories, int num_categories, GenerativeClassificationResult* result);
+
+// Qwen3 Guard (Safety/Jailbreak Detection)
+typedef struct {
+    char* raw_output;
+    bool error;
+    char* error_message;
+} GuardResult;
+
+extern int init_qwen3_guard(const char* model_path);
+extern int classify_with_qwen3_guard(const char* text, const char* mode, GuardResult* result);
+extern void free_guard_result(GuardResult* result);
+extern int is_qwen3_guard_initialized();
+extern int is_qwen3_multi_lora_initialized();
+
 // ModernBERT Classification result structure
 typedef struct {
     int class;
@@ -165,7 +202,9 @@ extern EmbeddingResult get_text_embedding(const char* text, int max_length);
 extern int get_embedding_smart(const char* text, float quality_priority, float latency_priority, EmbeddingResult* result);
 extern int get_embedding_with_dim(const char* text, float quality_priority, float latency_priority, int target_dim, EmbeddingResult* result);
 extern int get_embedding_with_model_type(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
+extern int get_embedding_batched(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
 extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
+extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
@@ -318,6 +357,14 @@ type LoRABatchResult struct {
 
 // InitModel initializes the BERT model with the specified model ID
 func InitModel(modelID string, useCPU bool) error {
+	// Sync Go state with Rust state (source of truth)
+	// This handles cases where ResetModel() was called but Rust OnceLock is still initialized
+	rustInitialized := bool(C.is_similarity_model_initialized())
+	if rustInitialized {
+		modelInitialized = true
+		return nil // Already initialized in Rust, no-op
+	}
+
 	var err error
 	initOnce.Do(func() {
 		if modelID == "" {
@@ -531,7 +578,106 @@ func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([
 	return embedding, nil
 }
 
-// InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models.
+// InitEmbeddingModelsBatched initializes Qwen3 embedding model with continuous batching support
+//
+// This provides 2-5x throughput improvement for concurrent workloads by batching multiple
+// requests together dynamically. Ideal for high-concurrency scenarios like API servers.
+//
+// Parameters:
+//   - qwen3ModelPath: Path to Qwen3 model directory
+//   - maxBatchSize: Maximum number of requests to batch together (e.g., 32, 64)
+//   - maxWaitMs: Maximum time in milliseconds to wait before processing a batch (e.g., 10ms)
+//   - useCPU: If true, use CPU; if false, use GPU if available
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	// Initialize with continuous batching for GPU
+//	err := InitEmbeddingModelsBatched(
+//	    "/path/to/Qwen3-Embedding-0.6B",
+//	    64,    // batch up to 64 requests
+//	    10,    // wait max 10ms for batch to fill
+//	    false, // use GPU
+//	)
+func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
+	if qwen3ModelPath == "" {
+		return fmt.Errorf("qwen3ModelPath cannot be empty for batched initialization")
+	}
+
+	cQwen3Path := C.CString(qwen3ModelPath)
+	defer C.free(unsafe.Pointer(cQwen3Path))
+
+	success := C.init_embedding_models_batched(
+		cQwen3Path,
+		C.int(maxBatchSize),
+		C.ulonglong(maxWaitMs),
+		C.bool(useCPU),
+	)
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize batched embedding models")
+	}
+
+	return nil
+}
+
+// GetEmbeddingBatched generates an embedding using the continuous batching model
+//
+// This function should be used after calling InitEmbeddingModelsBatched.
+// It automatically benefits from continuous batching for concurrent requests (2-5x throughput).
+//
+// Parameters:
+//   - text: Input text to generate embedding for
+//   - modelType: "qwen3" (currently only Qwen3 supports batching)
+//   - targetDim: Target dimension (0 for default, or 768, 512, 256, 128)
+//
+// Returns:
+//   - *EmbeddingOutput: Embedding output with metadata
+//   - error: Non-nil if embedding generation fails
+func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	var result C.EmbeddingResult
+	status := C.get_embedding_batched(
+		cText,
+		cModelType,
+		C.int(targetDim),
+		&result,
+	)
+
+	// Check status code (0 = success, -1 = error)
+	if status != 0 || result.error {
+		return nil, fmt.Errorf("failed to generate batched embedding (status: %d)", status)
+	}
+
+	// Convert C array to Go slice
+	length := int(result.length)
+	embedding := make([]float32, length)
+	cArray := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
+	for i := 0; i < length; i++ {
+		embedding[i] = float32(cArray[i])
+	}
+
+	// Free the C memory
+	C.free_embedding(result.data, result.length)
+
+	return &EmbeddingOutput{
+		Embedding:        embedding,
+		ModelType:        modelType,
+		SequenceLength:   int(result.sequence_length),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models (standard version).
+//
+// Note: For high-concurrency workloads, use InitEmbeddingModelsBatched instead for 2-5x better throughput.
 //
 // This function must be called before using GetEmbeddingWithDim for Qwen3/Gemma models.
 //
@@ -1157,8 +1303,13 @@ func SetMemoryCleanupHandler() {
 }
 
 // IsModelInitialized returns whether the model has been successfully initialized
-func IsModelInitialized() bool {
-	return modelInitialized
+func IsModelInitialized() (rustState bool, goState bool) {
+	// Sync Go state with Rust state (source of truth)
+	rustInitialized := bool(C.is_similarity_model_initialized())
+	if rustInitialized {
+		modelInitialized = true
+	}
+	return rustInitialized, modelInitialized
 }
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes
@@ -1893,6 +2044,421 @@ func ClassifyBatchWithLoRA(texts []string) (LoRABatchResult, error) {
 
 	return result, nil
 }
+
+// ================================================================================================
+// QWEN3 LORA GENERATIVE CLASSIFIER GO BINDINGS
+// ================================================================================================
+
+// Qwen3LoRAResult represents the classification result from Qwen3 LoRA generative classifier
+type Qwen3LoRAResult struct {
+	ClassID       int
+	Confidence    float32
+	CategoryName  string
+	Probabilities []float32
+	NumCategories int
+}
+
+// ================================================================================================
+// QWEN3 MULTI-LORA ADAPTER SYSTEM GO BINDINGS (with Zero-Shot Support)
+// ================================================================================================
+
+// InitQwen3MultiLoRAClassifier initializes the Qwen3 Multi-LoRA classifier with base model
+func InitQwen3MultiLoRAClassifier(baseModelPath string) error {
+	cBaseModelPath := C.CString(baseModelPath)
+	defer C.free(unsafe.Pointer(cBaseModelPath))
+
+	result := C.init_qwen3_multi_lora_classifier(cBaseModelPath)
+	if result != 0 {
+		return fmt.Errorf("failed to initialize Qwen3 Multi-LoRA classifier (error code: %d)", result)
+	}
+
+	log.Printf("✅ Qwen3 Multi-LoRA classifier initialized from: %s", baseModelPath)
+	return nil
+}
+
+// LoadQwen3LoRAAdapter loads a LoRA adapter for the multi-adapter system
+func LoadQwen3LoRAAdapter(adapterName, adapterPath string) error {
+	cAdapterName := C.CString(adapterName)
+	defer C.free(unsafe.Pointer(cAdapterName))
+
+	cAdapterPath := C.CString(adapterPath)
+	defer C.free(unsafe.Pointer(cAdapterPath))
+
+	result := C.load_qwen3_lora_adapter(cAdapterName, cAdapterPath)
+	if result != 0 {
+		return fmt.Errorf("failed to load adapter '%s' (error code: %d)", adapterName, result)
+	}
+
+	log.Printf("✅ Loaded adapter '%s' from: %s", adapterName, adapterPath)
+	return nil
+}
+
+// ClassifyWithQwen3Adapter classifies text using a specific LoRA adapter
+func ClassifyWithQwen3Adapter(text, adapterName string) (*Qwen3LoRAResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cAdapterName := C.CString(adapterName)
+	defer C.free(unsafe.Pointer(cAdapterName))
+
+	var result C.GenerativeClassificationResult
+	ret := C.classify_with_qwen3_adapter(cText, cAdapterName, &result)
+	defer C.free_generative_classification_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := fmt.Sprintf("classification with adapter '%s' failed", adapterName)
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	// Convert probabilities
+	numCats := int(result.num_categories)
+	probs := make([]float32, numCats)
+	if result.probabilities != nil && numCats > 0 {
+		probsSlice := (*[1000]C.float)(unsafe.Pointer(result.probabilities))[:numCats:numCats]
+		for i := 0; i < numCats; i++ {
+			probs[i] = float32(probsSlice[i])
+		}
+	}
+
+	goResult := &Qwen3LoRAResult{
+		ClassID:       int(result.class_id),
+		Confidence:    float32(result.confidence),
+		CategoryName:  C.GoString(result.category_name),
+		Probabilities: probs,
+		NumCategories: numCats,
+	}
+
+	return goResult, nil
+}
+
+// GetQwen3LoadedAdapters returns the list of currently loaded adapter names
+func GetQwen3LoadedAdapters() ([]string, error) {
+	var adaptersPtr **C.char
+	var numAdapters C.int
+
+	ret := C.get_qwen3_loaded_adapters(&adaptersPtr, &numAdapters)
+	if ret != 0 {
+		return nil, fmt.Errorf("failed to get loaded adapters (error code: %d)", ret)
+	}
+	defer C.free_categories(adaptersPtr, numAdapters)
+
+	// Convert C strings to Go strings
+	count := int(numAdapters)
+	adapters := make([]string, count)
+
+	if adaptersPtr != nil && count > 0 {
+		adaptersSlice := (*[1000]*C.char)(unsafe.Pointer(adaptersPtr))[:count:count]
+		for i := 0; i < count; i++ {
+			adapters[i] = C.GoString(adaptersSlice[i])
+		}
+	}
+
+	return adapters, nil
+}
+
+// ClassifyZeroShotQwen3 classifies text with just the base model (no adapter)
+// by providing categories at runtime
+//
+// Parameters:
+//   - text: The text to classify
+//   - categories: List of category names (e.g., ["positive", "negative", "neutral"])
+//
+// Returns:
+//   - Qwen3LoRAResult with classification results
+//   - Error if classification fails
+//
+// Note: This uses the base model without LoRA fine-tuning, so accuracy
+// will be lower than using a pre-trained adapter. Best for quick testing
+// or when no adapter is available.
+func ClassifyZeroShotQwen3(text string, categories []string) (*Qwen3LoRAResult, error) {
+	if len(categories) == 0 {
+		return nil, fmt.Errorf("categories list cannot be empty")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	// Convert Go string slice to C string array
+	cCategories := make([]*C.char, len(categories))
+	for i, cat := range categories {
+		cCategories[i] = C.CString(cat)
+		defer C.free(unsafe.Pointer(cCategories[i]))
+	}
+
+	var result C.GenerativeClassificationResult
+	ret := C.classify_zero_shot_qwen3(cText, &cCategories[0], C.int(len(categories)), &result)
+	defer C.free_generative_classification_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "zero-shot classification failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	// Convert probabilities
+	numCats := int(result.num_categories)
+	probs := make([]float32, numCats)
+	if result.probabilities != nil && numCats > 0 {
+		probsSlice := (*[1000]C.float)(unsafe.Pointer(result.probabilities))[:numCats:numCats]
+		for i := 0; i < numCats; i++ {
+			probs[i] = float32(probsSlice[i])
+		}
+	}
+
+	goResult := &Qwen3LoRAResult{
+		ClassID:       int(result.class_id),
+		Confidence:    float32(result.confidence),
+		CategoryName:  C.GoString(result.category_name),
+		Probabilities: probs,
+		NumCategories: numCats,
+	}
+
+	return goResult, nil
+}
+
+// ================================================================================================
+// END OF QWEN3 MULTI-LORA ADAPTER SYSTEM GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// QWEN3 GUARD (SAFETY/JAILBREAK DETECTION) GO BINDINGS
+// ================================================================================================
+
+// SafetyClassificationResult represents the result of safety classification
+// This follows the format from guard.py which extracts:
+// - Safety label: Safe/Unsafe/Controversial
+// - Categories: List of detected harmful categories
+type SafetyClassificationResult struct {
+	SafetyLabel string   // "Safe", "Unsafe", or "Controversial"
+	Categories  []string // List of detected categories (e.g., "Violent", "PII", "Jailbreak")
+	RawOutput   string   // Raw model output
+}
+
+// InitQwen3Guard initializes the Qwen3Guard model for safety classification
+//
+// Parameters:
+//   - modelPath: Path to Qwen3Guard model directory (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	err := InitQwen3Guard("models/Qwen3Guard-Gen-0.6B")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func InitQwen3Guard(modelPath string) error {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	result := C.init_qwen3_guard(cModelPath)
+	if result != 0 {
+		return fmt.Errorf("failed to initialize Qwen3Guard (error code: %d)", result)
+	}
+
+	log.Printf("✅ Qwen3Guard initialized from: %s", modelPath)
+	return nil
+}
+
+// ClassifyPromptSafety classifies the safety of user input using Qwen3Guard
+//
+// This function follows the same process as guard.py:
+// 1. Calls the Rust FFI to generate guard output
+// 2. Parses the output using regex to extract safety label and categories
+// 3. Returns structured classification result
+//
+// Parameters:
+//   - text: User input text to check for safety
+//
+// Returns:
+//   - SafetyClassificationResult: Structured safety classification with label and categories
+//   - error: Non-nil if classification fails
+//
+// Example:
+//
+//	result, err := ClassifyPromptSafety("我的电话是 1234567890，请帮我联系一下")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Safety: %s\n", result.SafetyLabel)
+//	fmt.Printf("Categories: %v\n", result.Categories)
+//	if result.SafetyLabel == "Unsafe" {
+//	    fmt.Println("🚨 Unsafe content detected!")
+//	}
+func ClassifyPromptSafety(text string) (*SafetyClassificationResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cMode := C.CString("input")
+	defer C.free(unsafe.Pointer(cMode))
+
+	var result C.GuardResult
+	ret := C.classify_with_qwen3_guard(cText, cMode, &result)
+	defer C.free_guard_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "safety classification failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	rawOutput := C.GoString(result.raw_output)
+
+	// Parse the output using the same logic as guard.py
+	safetyLabel, categories := extractLabelAndCategories(rawOutput)
+
+	return &SafetyClassificationResult{
+		SafetyLabel: safetyLabel,
+		Categories:  categories,
+		RawOutput:   rawOutput,
+	}, nil
+}
+
+// ClassifyResponseSafety classifies the safety of model-generated output using Qwen3Guard
+//
+// Parameters:
+//   - text: Model-generated text to check for safety
+//
+// Returns:
+//   - SafetyClassificationResult: Structured safety classification
+//   - error: Non-nil if classification fails
+//
+// Example:
+//
+//	result, err := ClassifyResponseSafety("Here's how to build a weapon...")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	if result.SafetyLabel == "Unsafe" {
+//	    fmt.Println("🚨 Unsafe output detected!")
+//	}
+func ClassifyResponseSafety(text string) (*SafetyClassificationResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cMode := C.CString("output")
+	defer C.free(unsafe.Pointer(cMode))
+
+	var result C.GuardResult
+	ret := C.classify_with_qwen3_guard(cText, cMode, &result)
+	defer C.free_guard_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "safety classification failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	rawOutput := C.GoString(result.raw_output)
+
+	// Parse the output using the same logic as guard.py
+	safetyLabel, categories := extractLabelAndCategories(rawOutput)
+
+	return &SafetyClassificationResult{
+		SafetyLabel: safetyLabel,
+		Categories:  categories,
+		RawOutput:   rawOutput,
+	}, nil
+}
+
+// GetGuardRawOutput gets the raw guard model output without parsing
+//
+// This is useful for debugging or custom parsing logic.
+//
+// Parameters:
+//   - text: Input text
+//   - mode: "input" or "output"
+//
+// Returns:
+//   - string: Raw model output
+//   - error: Non-nil if generation fails
+func GetGuardRawOutput(text string, mode string) (string, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cMode := C.CString(mode)
+	defer C.free(unsafe.Pointer(cMode))
+
+	var result C.GuardResult
+	ret := C.classify_with_qwen3_guard(cText, cMode, &result)
+	defer C.free_guard_result(&result)
+
+	if ret != 0 || result.error {
+		errMsg := "guard generation failed"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return "", fmt.Errorf("%s", errMsg)
+	}
+
+	return C.GoString(result.raw_output), nil
+}
+
+// IsQwen3GuardInitialized checks if the Qwen3Guard model is initialized
+func IsQwen3GuardInitialized() bool {
+	return C.is_qwen3_guard_initialized() == 1
+}
+
+// IsQwen3MultiLoRAInitialized checks if the Qwen3 Multi-LoRA classifier is initialized
+func IsQwen3MultiLoRAInitialized() bool {
+	return C.is_qwen3_multi_lora_initialized() == 1
+}
+
+// extractLabelAndCategories parses the raw guard output to extract safety label and categories
+//
+// This function implements the EXACT same logic as the Python function in guard.py:
+//
+//	def extract_label_and_categories(content):
+//	    safe_pattern = r"Safety: (Safe|Unsafe|Controversial)"
+//	    category_pattern = r"(Violent|Non-violent Illegal Acts|Sexual Content or Sexual Acts|PII|Suicide & Self-Harm|Unethical Acts|Politically Sensitive Topics|Copyright Violation|Jailbreak|None)"
+//	    safe_label_match = re.search(safe_pattern, content)
+//	    label = safe_label_match.group(1) if safe_label_match else None
+//	    categories = re.findall(category_pattern, content)
+//	    return label, categories
+//
+// Returns:
+//   - safetyLabel: "Safe", "Unsafe", "Controversial", or "" if not found (None in Python)
+//   - categories: List of detected categories (including "None" if present)
+func extractLabelAndCategories(content string) (string, []string) {
+	// Pattern for safety label (same as Python guard.py)
+	safePattern := regexp.MustCompile(`Safety: (Safe|Unsafe|Controversial)`)
+
+	// Pattern for categories (same as Python guard.py)
+	categoryPattern := regexp.MustCompile(`(Violent|Non-violent Illegal Acts|Sexual Content or Sexual Acts|PII|Suicide & Self-Harm|Unethical Acts|Politically Sensitive Topics|Copyright Violation|Jailbreak|None)`)
+
+	// Extract safety label - EXACT Python behavior: return "" if not found (equivalent to None)
+	var safetyLabel string
+	safeMatches := safePattern.FindStringSubmatch(content)
+	if len(safeMatches) > 1 {
+		safetyLabel = safeMatches[1]
+	}
+	// NO FALLBACK - Python returns None if pattern not found
+
+	// Extract categories - EXACT Python behavior: return all matches including "None"
+	var categories []string
+	categoryMatches := categoryPattern.FindAllStringSubmatch(content, -1)
+	for _, match := range categoryMatches {
+		if len(match) > 1 {
+			categories = append(categories, match[1])
+		}
+	}
+
+	return safetyLabel, categories
+}
+
+// ================================================================================================
+// END OF QWEN3 GUARD GO BINDINGS
+// ================================================================================================
 
 // ================================================================================================
 // END OF LORA UNIFIED CLASSIFIER GO BINDINGS

@@ -31,7 +31,6 @@ static_resources:
                   upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                   request_id: "%REQ(X-REQUEST-ID)%"
                   selected_model: "%REQ(X-SELECTED-MODEL)%"
-                  selected_endpoint: "%REQ(X-GATEWAY-DESTINATION-ENDPOINT)%"
           route_config:
             name: local_route
             virtual_hosts:
@@ -106,7 +105,7 @@ static_resources:
     lb_policy: CLUSTER_PROVIDED
     original_dst_lb_config:
       use_http_header: true
-      http_header_name: "x-gateway-destination-endpoint"
+      http_header_name: "x-vsr-destination-endpoint"
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions

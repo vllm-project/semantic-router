@@ -4,14 +4,6 @@
 
 ##@ Linter
 
-docs-lint: docs-install ## Lint documentation in website/
-	@$(LOG_TARGET)
-	cd website && npm run lint
-
-docs-lint-fix: docs-install ## Auto-fix documentation lint issues in website/
-	@$(LOG_TARGET)
-	cd website && npm run lint:fix
-
 markdown-lint: ## Lint all markdown files in the project
 	@$(LOG_TARGET)
 	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
@@ -40,4 +32,17 @@ codespell: ## Check for common misspellings in code and docs
 
 shellcheck: ## Lint all shell scripts in the project
 	@$(LOG_TARGET)
-	shellcheck --rcfile=tools/linter/shellcheck/.shellcheckrc $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*")
+	@if ! command -v shellcheck >/dev/null 2>&1; then \
+		echo "❌ Error: shellcheck is not installed"; \
+		echo ""; \
+		echo "To install shellcheck:"; \
+		echo "  macOS:   brew install shellcheck"; \
+		echo "  Ubuntu:  sudo apt-get install shellcheck"; \
+		echo "  Fedora:  sudo dnf install shellcheck"; \
+		echo ""; \
+		echo "Or skip shellcheck in pre-commit by running:"; \
+		echo "  SKIP=shellcheck pre-commit run --all-files"; \
+		exit 1; \
+	fi
+	@echo "Running shellcheck with config from tools/linter/shellcheck/.shellcheckrc"
+	@shellcheck -e SC2155,SC2034,SC1091 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*")

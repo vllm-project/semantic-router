@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/yaml"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // MilvusConfig defines the complete configuration structure for Milvus cache backend
@@ -119,25 +119,25 @@ type MilvusCacheOptions struct {
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
 func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	if !options.Enabled {
-		observability.Debugf("MilvusCache: disabled, returning stub")
+		logging.Debugf("MilvusCache: disabled, returning stub")
 		return &MilvusCache{
 			enabled: false,
 		}, nil
 	}
 
 	// Load Milvus configuration from file
-	observability.Debugf("MilvusCache: loading config from %s", options.ConfigPath)
+	logging.Debugf("MilvusCache: loading config from %s", options.ConfigPath)
 	config, err := loadMilvusConfig(options.ConfigPath)
 	if err != nil {
-		observability.Debugf("MilvusCache: failed to load config: %v", err)
+		logging.Debugf("MilvusCache: failed to load config: %v", err)
 		return nil, fmt.Errorf("failed to load Milvus config: %w", err)
 	}
-	observability.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=auto-detect",
+	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=auto-detect",
 		config.Connection.Host, config.Connection.Port, config.Collection.Name)
 
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", config.Connection.Host, config.Connection.Port)
-	observability.Debugf("MilvusCache: connecting to Milvus at %s", connectionString)
+	logging.Debugf("MilvusCache: connecting to Milvus at %s", connectionString)
 	dialCtx := context.Background()
 	var cancel context.CancelFunc
 	if config.Connection.Timeout > 0 {
@@ -145,14 +145,14 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		timeout := time.Duration(config.Connection.Timeout) * time.Second
 		dialCtx, cancel = context.WithTimeout(dialCtx, timeout)
 		defer cancel()
-		observability.Debugf("MilvusCache: connection timeout set to %s", timeout)
+		logging.Debugf("MilvusCache: connection timeout set to %s", timeout)
 	}
 	milvusClient, err := client.NewGrpcClient(dialCtx, connectionString)
 	if err != nil {
-		observability.Debugf("MilvusCache: failed to connect: %v", err)
+		logging.Debugf("MilvusCache: failed to connect: %v", err)
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
-	observability.Debugf("MilvusCache: successfully connected to Milvus")
+	logging.Debugf("MilvusCache: successfully connected to Milvus")
 
 	cache := &MilvusCache{
 		client:              milvusClient,
@@ -164,13 +164,13 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	}
 
 	// Set up the collection for caching
-	observability.Debugf("MilvusCache: initializing collection '%s'", config.Collection.Name)
+	logging.Debugf("MilvusCache: initializing collection '%s'", config.Collection.Name)
 	if err := cache.initializeCollection(); err != nil {
-		observability.Debugf("MilvusCache: failed to initialize collection: %v", err)
+		logging.Debugf("MilvusCache: failed to initialize collection: %v", err)
 		milvusClient.Close()
 		return nil, fmt.Errorf("failed to initialize collection: %w", err)
 	}
-	observability.Debugf("MilvusCache: initialization complete")
+	logging.Debugf("MilvusCache: initialization complete")
 
 	return cache, nil
 }
@@ -261,12 +261,12 @@ func (c *MilvusCache) initializeCollection() error {
 	// Handle development mode collection reset
 	if c.config.Development.DropCollectionOnStartup && hasCollection {
 		if err := c.client.DropCollection(ctx, c.collectionName); err != nil {
-			observability.Debugf("MilvusCache: failed to drop collection: %v", err)
+			logging.Debugf("MilvusCache: failed to drop collection: %v", err)
 			return fmt.Errorf("failed to drop collection: %w", err)
 		}
 		hasCollection = false
-		observability.Debugf("MilvusCache: dropped existing collection '%s' for development", c.collectionName)
-		observability.LogEvent("collection_dropped", map[string]interface{}{
+		logging.Debugf("MilvusCache: dropped existing collection '%s' for development", c.collectionName)
+		logging.LogEvent("collection_dropped", map[string]interface{}{
 			"backend":    "milvus",
 			"collection": c.collectionName,
 			"reason":     "development_mode",
@@ -282,12 +282,12 @@ func (c *MilvusCache) initializeCollection() error {
 		}
 
 		if err := c.createCollection(); err != nil {
-			observability.Debugf("MilvusCache: failed to create collection: %v", err)
+			logging.Debugf("MilvusCache: failed to create collection: %v", err)
 			return fmt.Errorf("failed to create collection: %w", err)
 		}
-		observability.Debugf("MilvusCache: created new collection '%s' with dimension %d",
+		logging.Debugf("MilvusCache: created new collection '%s' with dimension %d",
 			c.collectionName, c.config.Collection.VectorField.Dimension)
-		observability.LogEvent("collection_created", map[string]interface{}{
+		logging.LogEvent("collection_created", map[string]interface{}{
 			"backend":    "milvus",
 			"collection": c.collectionName,
 			"dimension":  c.config.Collection.VectorField.Dimension,
@@ -295,12 +295,12 @@ func (c *MilvusCache) initializeCollection() error {
 	}
 
 	// Load collection into memory for queries
-	observability.Debugf("MilvusCache: loading collection '%s' into memory", c.collectionName)
+	logging.Debugf("MilvusCache: loading collection '%s' into memory", c.collectionName)
 	if err := c.client.LoadCollection(ctx, c.collectionName, false); err != nil {
-		observability.Debugf("MilvusCache: failed to load collection: %v", err)
+		logging.Debugf("MilvusCache: failed to load collection: %v", err)
 		return fmt.Errorf("failed to load collection: %w", err)
 	}
-	observability.Debugf("MilvusCache: collection loaded successfully")
+	logging.Debugf("MilvusCache: collection loaded successfully")
 
 	return nil
 }
@@ -316,7 +316,7 @@ func (c *MilvusCache) createCollection() error {
 	}
 	actualDimension := len(testEmbedding)
 
-	observability.Debugf("MilvusCache.createCollection: auto-detected embedding dimension: %d", actualDimension)
+	logging.Debugf("MilvusCache.createCollection: auto-detected embedding dimension: %d", actualDimension)
 
 	// Define schema with auto-detected dimension
 	schema := &entity.Schema{
@@ -374,7 +374,7 @@ func (c *MilvusCache) createCollection() error {
 	}
 
 	// Create index with updated API
-	index, err := entity.NewIndexHNSW(entity.MetricType(c.config.Collection.VectorField.MetricType), c.config.Collection.Index.Params.EfConstruction, c.config.Collection.Index.Params.M)
+	index, err := entity.NewIndexHNSW(entity.MetricType(c.config.Collection.VectorField.MetricType), c.config.Collection.Index.Params.M, c.config.Collection.Index.Params.EfConstruction)
 	if err != nil {
 		return fmt.Errorf("failed to create HNSW index: %w", err)
 	}
@@ -418,7 +418,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 		return nil
 	}
 
-	observability.Debugf("MilvusCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d)",
+	logging.Debugf("MilvusCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d)",
 		requestID, len(responseBody))
 
 	// Find the pending entry and complete it with the response
@@ -426,18 +426,18 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 	ctx := context.Background()
 	queryExpr := fmt.Sprintf("request_id == \"%s\" && response_body == \"\"", requestID)
 
-	observability.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
+	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
 		[]string{"id", "model", "query", "request_body"})
 	if err != nil {
-		observability.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
+		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to query pending entry: %w", err)
 	}
 
 	if len(results) == 0 {
-		observability.Debugf("MilvusCache.UpdateWithResponse: no pending entry found")
+		logging.Debugf("MilvusCache.UpdateWithResponse: no pending entry found")
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("no pending entry found")
 	}
@@ -454,7 +454,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 		query := queryColumn.Data()[0]
 		requestBody := requestColumn.Data()[0]
 
-		observability.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
+		logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
 
 		// Create the complete entry with response data
 		err := c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
@@ -463,7 +463,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 			return fmt.Errorf("failed to add complete entry: %w", err)
 		}
 
-		observability.Debugf("MilvusCache.UpdateWithResponse: successfully added complete entry with response")
+		logging.Debugf("MilvusCache.UpdateWithResponse: successfully added complete entry with response")
 		metrics.RecordCacheOperation("milvus", "update_response", "success", time.Since(start).Seconds())
 	}
 
@@ -501,7 +501,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 		return nil
 	}
 
-	observability.Debugf("MilvusCache.AddEntriesBatch: adding %d entries in batch", len(entries))
+	logging.Debugf("MilvusCache.AddEntriesBatch: adding %d entries in batch", len(entries))
 
 	// Prepare slices for all entries
 	ids := make([]string, len(entries))
@@ -550,11 +550,11 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 
 	// Upsert all entries at once
-	observability.Debugf("MilvusCache.AddEntriesBatch: upserting %d entries into collection '%s'",
+	logging.Debugf("MilvusCache.AddEntriesBatch: upserting %d entries into collection '%s'",
 		len(entries), c.collectionName)
 	_, err := c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
 	if err != nil {
-		observability.Debugf("MilvusCache.AddEntriesBatch: upsert failed: %v", err)
+		logging.Debugf("MilvusCache.AddEntriesBatch: upsert failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "add_entries_batch", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to upsert cache entries: %w", err)
 	}
@@ -563,7 +563,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	// Call Flush() explicitly after all batches if immediate persistence is required
 
 	elapsed := time.Since(start)
-	observability.Debugf("MilvusCache.AddEntriesBatch: successfully added %d entries in %v (%.0f entries/sec)",
+	logging.Debugf("MilvusCache.AddEntriesBatch: successfully added %d entries in %v (%.0f entries/sec)",
 		len(entries), elapsed, float64(len(entries))/elapsed.Seconds())
 	metrics.RecordCacheOperation("milvus", "add_entries_batch", "success", elapsed.Seconds())
 
@@ -581,7 +581,7 @@ func (c *MilvusCache) Flush() error {
 		return fmt.Errorf("failed to flush: %w", err)
 	}
 
-	observability.Debugf("MilvusCache: flushed collection '%s'", c.collectionName)
+	logging.Debugf("MilvusCache: flushed collection '%s'", c.collectionName)
 	return nil
 }
 
@@ -621,21 +621,21 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 
 	// Upsert the entry into the collection
-	observability.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d)",
+	logging.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d)",
 		c.collectionName, len(embedding), len(requestBody), len(responseBody))
 	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
 	if err != nil {
-		observability.Debugf("MilvusCache.addEntry: upsert failed: %v", err)
+		logging.Debugf("MilvusCache.addEntry: upsert failed: %v", err)
 		return fmt.Errorf("failed to upsert cache entry: %w", err)
 	}
 
 	// Ensure data is persisted to storage
 	if err := c.client.Flush(ctx, c.collectionName, false); err != nil {
-		observability.Warnf("Failed to flush cache entry: %v", err)
+		logging.Warnf("Failed to flush cache entry: %v", err)
 	}
 
-	observability.Debugf("MilvusCache.addEntry: successfully added entry to Milvus")
-	observability.LogEvent("cache_entry_added", map[string]interface{}{
+	logging.Debugf("MilvusCache.addEntry: successfully added entry to Milvus")
+	logging.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend":             "milvus",
 		"collection":          c.collectionName,
 		"request_id":          requestID,
@@ -656,14 +656,14 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	start := time.Now()
 
 	if !c.enabled {
-		observability.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
 	queryPreview := query
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+	logging.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
 		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding for similarity comparison
@@ -695,7 +695,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		searchParam,
 	)
 	if err != nil {
-		observability.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
@@ -704,7 +704,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
@@ -713,9 +713,9 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	bestScore := searchResult[0].Scores[0]
 	if bestScore < threshold {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
 			bestScore, threshold)
-		observability.LogEvent("cache_miss", map[string]interface{}{
+		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "milvus",
 			"best_similarity": bestScore,
 			"threshold":       threshold,
@@ -728,14 +728,27 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	// Cache Hit
+	// Milvus automatically includes the primary key in search results but order is non-deterministic
+	// Check which field is the response_body by detecting if field[0] is an MD5 hash
+	responseBodyFieldIndex := 0
+	if len(searchResult[0].Fields) > 1 {
+		if testCol, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
+			testVal := testCol.Data()[0]
+			// If field[0] is exactly 32 hex chars, it's the ID hash, so response_body is in field[1]
+			if len(testVal) == 32 && isHexString(testVal) {
+				responseBodyFieldIndex = 1
+			}
+		}
+	}
+
 	var responseBody []byte
-	responseBodyColumn, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar)
+	responseBodyColumn, ok := searchResult[0].Fields[responseBodyFieldIndex].(*entity.ColumnVarChar)
 	if ok && responseBodyColumn.Len() > 0 {
 		responseBody = []byte(responseBodyColumn.Data()[0])
 	}
 
 	if responseBody == nil {
-		observability.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
+		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
@@ -743,9 +756,9 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
-	observability.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+	logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
 		bestScore, threshold, len(responseBody))
-	observability.LogEvent("cache_hit", map[string]interface{}{
+	logging.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "milvus",
 		"similarity": bestScore,
 		"threshold":  threshold,
@@ -766,7 +779,7 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 		return nil, nil, fmt.Errorf("milvus cache is not enabled")
 	}
 
-	observability.Infof("MilvusCache.GetAllEntries: querying all entries for HNSW rebuild")
+	logging.Infof("MilvusCache.GetAllEntries: querying all entries for HNSW rebuild")
 
 	// Query all entries with embeddings and request_ids
 	// Filter to only get entries with complete responses (not pending)
@@ -778,25 +791,38 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
 	)
 	if err != nil {
-		observability.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
+		logging.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
 		return nil, nil, fmt.Errorf("milvus query all failed: %w", err)
 	}
 
-	if len(queryResult) < 2 {
-		observability.Infof("MilvusCache.GetAllEntries: no entries found or incomplete result")
+	// Milvus automatically includes the primary key but column order may vary
+	// We requested ["request_id", embedding_field], so we expect 2-3 columns
+	// If 3 columns: primary key was auto-included, adjust indices
+	requestIDColIndex := 0
+	embeddingColIndex := 1
+	expectedMinCols := 2
+
+	if len(queryResult) >= 3 {
+		// Primary key was auto-included, adjust indices
+		requestIDColIndex = 1
+		embeddingColIndex = 2
+	}
+
+	if len(queryResult) < expectedMinCols {
+		logging.Infof("MilvusCache.GetAllEntries: no entries found or incomplete result")
 		return []string{}, [][]float32{}, nil
 	}
 
-	// Extract request IDs (first column)
-	requestIDColumn, ok := queryResult[0].(*entity.ColumnVarChar)
+	// Extract request IDs
+	requestIDColumn, ok := queryResult[requestIDColIndex].(*entity.ColumnVarChar)
 	if !ok {
-		return nil, nil, fmt.Errorf("unexpected request_id column type: %T", queryResult[0])
+		return nil, nil, fmt.Errorf("unexpected request_id column type: %T", queryResult[requestIDColIndex])
 	}
 
-	// Extract embeddings (second column)
-	embeddingColumn, ok := queryResult[1].(*entity.ColumnFloatVector)
+	// Extract embeddings
+	embeddingColumn, ok := queryResult[embeddingColIndex].(*entity.ColumnFloatVector)
 	if !ok {
-		return nil, nil, fmt.Errorf("unexpected embedding column type: %T", queryResult[1])
+		return nil, nil, fmt.Errorf("unexpected embedding column type: %T", queryResult[embeddingColIndex])
 	}
 
 	if requestIDColumn.Len() != embeddingColumn.Len() {
@@ -824,10 +850,20 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 	}
 
 	elapsed := time.Since(start)
-	observability.Infof("MilvusCache.GetAllEntries: loaded %d entries in %v (%.0f entries/sec)",
+	logging.Infof("MilvusCache.GetAllEntries: loaded %d entries in %v (%.0f entries/sec)",
 		entryCount, elapsed, float64(entryCount)/elapsed.Seconds())
 
 	return requestIDs, embeddings, nil
+}
+
+// isHexString checks if a string contains only hexadecimal characters
+func isHexString(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // GetByID retrieves a document from Milvus by its request ID
@@ -840,38 +876,55 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 		return nil, fmt.Errorf("milvus cache is not enabled")
 	}
 
-	observability.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
+	logging.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
 
 	// Query Milvus by request_id (primary key)
+	// Filter for non-empty responses to avoid race condition with pending entries
 	queryResult, err := c.client.Query(
 		ctx,
 		c.collectionName,
 		[]string{}, // Empty partitions means search all
-		fmt.Sprintf("request_id == \"%s\"", requestID),
+		fmt.Sprintf("request_id == \"%s\" && response_body != \"\"", requestID),
 		[]string{"response_body"}, // Only fetch document, not embedding!
 	)
 	if err != nil {
-		observability.Debugf("MilvusCache.GetByID: query failed: %v", err)
+		logging.Debugf("MilvusCache.GetByID: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
 		return nil, fmt.Errorf("milvus query failed: %w", err)
 	}
 
 	if len(queryResult) == 0 {
-		observability.Debugf("MilvusCache.GetByID: document not found: %s", requestID)
+		logging.Debugf("MilvusCache.GetByID: document not found: %s", requestID)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
 		return nil, fmt.Errorf("document not found: %s", requestID)
 	}
 
-	// Extract response body (first column since we only requested "response_body")
-	responseBodyColumn, ok := queryResult[0].(*entity.ColumnVarChar)
+	// Milvus automatically includes the primary key but the column order is non-deterministic
+	// We need to find which column is the response_body by checking which is NOT the primary key (32-char hash)
+	responseBodyColIndex := 0
+	if len(queryResult) > 1 {
+		// Check if column[0] looks like an MD5 hash (32 hex chars)
+		if testCol, ok := queryResult[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
+			testVal, _ := testCol.ValueByIdx(0)
+			// If it's exactly 32 chars and all hex, it's likely the ID hash
+			if len(testVal) == 32 && isHexString(testVal) {
+				responseBodyColIndex = 1 // response_body is in column 1
+			} else {
+				responseBodyColIndex = 0 // response_body is in column 0
+			}
+		}
+	}
+
+	// Extract response body
+	responseBodyColumn, ok := queryResult[responseBodyColIndex].(*entity.ColumnVarChar)
 	if !ok {
-		observability.Debugf("MilvusCache.GetByID: unexpected response_body column type: %T", queryResult[0])
+		logging.Debugf("MilvusCache.GetByID: unexpected response_body column type: %T", queryResult[responseBodyColIndex])
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("invalid response_body column type: %T", queryResult[0])
+		return nil, fmt.Errorf("invalid response_body column type: %T", queryResult[responseBodyColIndex])
 	}
 
 	if responseBodyColumn.Len() == 0 {
-		observability.Debugf("MilvusCache.GetByID: response_body column is empty")
+		logging.Debugf("MilvusCache.GetByID: response_body column is empty")
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
 		return nil, fmt.Errorf("response_body is empty for: %s", requestID)
 	}
@@ -879,7 +932,7 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 	// Get the response body value
 	responseBodyStr, err := responseBodyColumn.ValueByIdx(0)
 	if err != nil {
-		observability.Debugf("MilvusCache.GetByID: failed to get response_body value: %v", err)
+		logging.Debugf("MilvusCache.GetByID: failed to get response_body value: %v", err)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
 		return nil, fmt.Errorf("failed to get response_body value: %w", err)
 	}
@@ -887,12 +940,12 @@ func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, er
 	responseBody := []byte(responseBodyStr)
 
 	if len(responseBody) == 0 {
-		observability.Debugf("MilvusCache.GetByID: response_body is empty")
+		logging.Debugf("MilvusCache.GetByID: response_body is empty")
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
 		return nil, fmt.Errorf("response_body is empty for: %s", requestID)
 	}
 
-	observability.Debugf("MilvusCache.GetByID: SUCCESS - fetched %d bytes in %dms",
+	logging.Debugf("MilvusCache.GetByID: SUCCESS - fetched %d bytes in %dms",
 		len(responseBody), time.Since(start).Milliseconds())
 	metrics.RecordCacheOperation("milvus", "get_by_id", "success", time.Since(start).Seconds())
 
@@ -930,11 +983,11 @@ func (c *MilvusCache) GetStats() CacheStats {
 			// Extract entity count from statistics
 			if entityCount, ok := stats["row_count"]; ok {
 				_, _ = fmt.Sscanf(entityCount, "%d", &totalEntries)
-				observability.Debugf("MilvusCache.GetStats: collection '%s' contains %d entries",
+				logging.Debugf("MilvusCache.GetStats: collection '%s' contains %d entries",
 					c.collectionName, totalEntries)
 			}
 		} else {
-			observability.Debugf("MilvusCache.GetStats: failed to get collection stats: %v", err)
+			logging.Debugf("MilvusCache.GetStats: failed to get collection stats: %v", err)
 		}
 	}
 

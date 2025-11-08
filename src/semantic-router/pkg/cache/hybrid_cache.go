@@ -1,5 +1,4 @@
 //go:build !windows && cgo
-// +build !windows,cgo
 
 package cache
 
@@ -11,8 +10,8 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 const (
@@ -113,11 +112,11 @@ type HybridCacheOptions struct {
 
 // NewHybridCache creates a new hybrid cache instance
 func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
-	observability.Infof("Initializing hybrid cache: enabled=%t, maxMemoryEntries=%d, threshold=%.3f",
+	logging.Infof("Initializing hybrid cache: enabled=%t, maxMemoryEntries=%d, threshold=%.3f",
 		options.Enabled, options.MaxMemoryEntries, options.SimilarityThreshold)
 
 	if !options.Enabled {
-		observability.Debugf("Hybrid cache disabled, returning inactive instance")
+		logging.Debugf("Hybrid cache disabled, returning inactive instance")
 		return &HybridCache{
 			enabled: false,
 		}, nil
@@ -161,27 +160,27 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 		enabled:             true,
 	}
 
-	observability.Infof("Hybrid cache initialized: HNSW(M=%d, ef=%d), maxMemory=%d",
+	logging.Infof("Hybrid cache initialized: HNSW(M=%d, ef=%d), maxMemory=%d",
 		options.HNSWM, options.HNSWEfConstruction, options.MaxMemoryEntries)
 
 	// Rebuild HNSW index from Milvus on startup (enabled by default)
 	// This ensures the in-memory index is populated after a restart
 	// Set DisableRebuildOnStartup=true to skip this step (not recommended for production)
 	if !options.DisableRebuildOnStartup {
-		observability.Infof("Hybrid cache: rebuilding HNSW index from Milvus...")
+		logging.Infof("Hybrid cache: rebuilding HNSW index from Milvus...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		if err := cache.RebuildFromMilvus(ctx); err != nil {
-			observability.Warnf("Hybrid cache: failed to rebuild HNSW index from Milvus: %v", err)
-			observability.Warnf("Hybrid cache: continuing with empty HNSW index")
+			logging.Warnf("Hybrid cache: failed to rebuild HNSW index from Milvus: %v", err)
+			logging.Warnf("Hybrid cache: continuing with empty HNSW index")
 			// Don't fail initialization, just log warning and continue with empty index
 		} else {
-			observability.Infof("Hybrid cache: HNSW index rebuild complete")
+			logging.Infof("Hybrid cache: HNSW index rebuild complete")
 		}
 	} else {
-		observability.Warnf("Hybrid cache: skipping HNSW index rebuild (DisableRebuildOnStartup=true)")
-		observability.Warnf("Hybrid cache: index will be empty until entries are added")
+		logging.Warnf("Hybrid cache: skipping HNSW index rebuild (DisableRebuildOnStartup=true)")
+		logging.Warnf("Hybrid cache: index will be empty until entries are added")
 	}
 
 	return cache, nil
@@ -200,7 +199,7 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	observability.Infof("HybridCache.RebuildFromMilvus: starting HNSW index rebuild from Milvus")
+	logging.Infof("HybridCache.RebuildFromMilvus: starting HNSW index rebuild from Milvus")
 
 	// Query all entries from Milvus
 	requestIDs, embeddings, err := h.milvusCache.GetAllEntries(ctx)
@@ -209,11 +208,11 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	}
 
 	if len(requestIDs) == 0 {
-		observability.Infof("HybridCache.RebuildFromMilvus: no entries to rebuild, starting with empty index")
+		logging.Infof("HybridCache.RebuildFromMilvus: no entries to rebuild, starting with empty index")
 		return nil
 	}
 
-	observability.Infof("HybridCache.RebuildFromMilvus: rebuilding HNSW index with %d entries", len(requestIDs))
+	logging.Infof("HybridCache.RebuildFromMilvus: rebuilding HNSW index with %d entries", len(requestIDs))
 
 	// Lock for the entire rebuild process
 	h.mu.Lock()
@@ -229,7 +228,7 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	for i, embedding := range embeddings {
 		// Check memory limits
 		if len(h.embeddings) >= h.maxMemoryEntries {
-			observability.Warnf("HybridCache.RebuildFromMilvus: reached max memory entries (%d), stopping rebuild at %d/%d",
+			logging.Warnf("HybridCache.RebuildFromMilvus: reached max memory entries (%d), stopping rebuild at %d/%d",
 				h.maxMemoryEntries, i, len(embeddings))
 			break
 		}
@@ -246,17 +245,17 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 			rate := float64(i+1) / elapsed.Seconds()
 			remaining := len(embeddings) - (i + 1)
 			eta := time.Duration(float64(remaining)/rate) * time.Second
-			observability.Infof("HybridCache.RebuildFromMilvus: progress %d/%d (%.1f%%, %.0f entries/sec, ETA: %v)",
+			logging.Infof("HybridCache.RebuildFromMilvus: progress %d/%d (%.1f%%, %.0f entries/sec, ETA: %v)",
 				i+1, len(embeddings), float64(i+1)/float64(len(embeddings))*100, rate, eta)
 		}
 	}
 
 	elapsed := time.Since(start)
 	rate := float64(len(h.embeddings)) / elapsed.Seconds()
-	observability.Infof("HybridCache.RebuildFromMilvus: rebuild complete - %d entries in %v (%.0f entries/sec)",
+	logging.Infof("HybridCache.RebuildFromMilvus: rebuild complete - %d entries in %v (%.0f entries/sec)",
 		len(h.embeddings), elapsed, rate)
 
-	observability.LogEvent("hybrid_cache_rebuilt", map[string]interface{}{
+	logging.LogEvent("hybrid_cache_rebuilt", map[string]interface{}{
 		"backend":           "hybrid",
 		"entries_loaded":    len(h.embeddings),
 		"entries_in_milvus": len(embeddings),
@@ -305,7 +304,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	h.idMap[entryIndex] = requestID
 	h.addNodeHybrid(entryIndex, embedding)
 
-	observability.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s",
+	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s",
 		entryIndex, requestID)
 
 	metrics.RecordCacheOperation("hybrid", "add_pending", "success", time.Since(start).Seconds())
@@ -330,7 +329,7 @@ func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte) 
 
 	// HNSW index already has the embedding, no update needed there
 
-	observability.Debugf("HybridCache.UpdateWithResponse: updated milvusID=%s", requestID)
+	logging.Debugf("HybridCache.UpdateWithResponse: updated milvusID=%s", requestID)
 	metrics.RecordCacheOperation("hybrid", "update_response", "success", time.Since(start).Seconds())
 
 	return nil
@@ -372,9 +371,9 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	h.idMap[entryIndex] = requestID
 	h.addNodeHybrid(entryIndex, embedding)
 
-	observability.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s",
+	logging.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s",
 		entryIndex, requestID)
-	observability.LogEvent("hybrid_cache_entry_added", map[string]interface{}{
+	logging.LogEvent("hybrid_cache_entry_added", map[string]interface{}{
 		"backend": "hybrid",
 		"query":   query,
 		"model":   model,
@@ -399,7 +398,7 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 		return nil
 	}
 
-	observability.Debugf("HybridCache.AddEntriesBatch: adding %d entries in batch", len(entries))
+	logging.Debugf("HybridCache.AddEntriesBatch: adding %d entries in batch", len(entries))
 
 	// Generate all embeddings first
 	embeddings := make([][]float32, len(entries))
@@ -436,9 +435,9 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 	}
 
 	elapsed := time.Since(start)
-	observability.Debugf("HybridCache.AddEntriesBatch: added %d entries in %v (%.0f entries/sec)",
+	logging.Debugf("HybridCache.AddEntriesBatch: added %d entries in %v (%.0f entries/sec)",
 		len(entries), elapsed, float64(len(entries))/elapsed.Seconds())
-	observability.LogEvent("hybrid_cache_entries_added", map[string]interface{}{
+	logging.LogEvent("hybrid_cache_entries_added", map[string]interface{}{
 		"backend": "hybrid",
 		"count":   len(entries),
 		"in_hnsw": true,
@@ -471,7 +470,7 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("HybridCache.FindSimilar: searching for model='%s', query='%s'",
+	logging.Debugf("HybridCache.FindSimilar: searching for model='%s', query='%s'",
 		model, queryPreview)
 
 	// Generate query embedding
@@ -520,17 +519,17 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 	if len(candidatesWithIDs) == 0 {
 		atomic.AddInt64(&h.missCount, 1)
 		if len(candidates) > 0 {
-			observability.Debugf("HybridCache.FindSimilar: %d candidates found but none above threshold %.3f",
+			logging.Debugf("HybridCache.FindSimilar: %d candidates found but none above threshold %.3f",
 				len(candidates), h.similarityThreshold)
 		} else {
-			observability.Debugf("HybridCache.FindSimilar: no candidates found in HNSW")
+			logging.Debugf("HybridCache.FindSimilar: no candidates found in HNSW")
 		}
 		metrics.RecordCacheOperation("hybrid", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
-	observability.Debugf("HybridCache.FindSimilar: HNSW returned %d candidates, %d above threshold",
+	logging.Debugf("HybridCache.FindSimilar: HNSW returned %d candidates, %d above threshold",
 		len(candidates), len(candidatesWithIDs))
 
 	// Fetch document from Milvus for qualified candidates
@@ -545,16 +544,16 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 		fetchCancel()
 
 		if err != nil {
-			observability.Debugf("HybridCache.FindSimilar: Milvus GetByID failed for %s: %v",
+			logging.Debugf("HybridCache.FindSimilar: Milvus GetByID failed for %s: %v",
 				candidate.milvusID, err)
 			continue
 		}
 
 		if responseBody != nil {
 			atomic.AddInt64(&h.hitCount, 1)
-			observability.Debugf("HybridCache.FindSimilar: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
+			logging.Debugf("HybridCache.FindSimilar: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
 				candidate.similarity, h.similarityThreshold)
-			observability.LogEvent("hybrid_cache_hit", map[string]interface{}{
+			logging.LogEvent("hybrid_cache_hit", map[string]interface{}{
 				"backend":    "hybrid",
 				"source":     "milvus",
 				"similarity": candidate.similarity,
@@ -570,8 +569,8 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 
 	// No match found above threshold
 	atomic.AddInt64(&h.missCount, 1)
-	observability.Debugf("HybridCache.FindSimilar: CACHE MISS - no match above threshold")
-	observability.LogEvent("hybrid_cache_miss", map[string]interface{}{
+	logging.Debugf("HybridCache.FindSimilar: CACHE MISS - no match above threshold")
+	logging.LogEvent("hybrid_cache_miss", map[string]interface{}{
 		"backend":    "hybrid",
 		"threshold":  h.similarityThreshold,
 		"model":      model,
@@ -595,7 +594,7 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("HybridCache.FindSimilarWithThreshold: searching for model='%s', query='%s', threshold=%.3f",
+	logging.Debugf("HybridCache.FindSimilarWithThreshold: searching for model='%s', query='%s', threshold=%.3f",
 		model, queryPreview, threshold)
 
 	// Generate query embedding
@@ -643,17 +642,17 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 	if len(candidatesWithIDs) == 0 {
 		atomic.AddInt64(&h.missCount, 1)
 		if len(candidates) > 0 {
-			observability.Debugf("HybridCache.FindSimilarWithThreshold: %d candidates found but none above threshold %.3f",
+			logging.Debugf("HybridCache.FindSimilarWithThreshold: %d candidates found but none above threshold %.3f",
 				len(candidates), threshold)
 		} else {
-			observability.Debugf("HybridCache.FindSimilarWithThreshold: no candidates found in HNSW")
+			logging.Debugf("HybridCache.FindSimilarWithThreshold: no candidates found in HNSW")
 		}
 		metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
-	observability.Debugf("HybridCache.FindSimilarWithThreshold: HNSW returned %d candidates, %d above threshold",
+	logging.Debugf("HybridCache.FindSimilarWithThreshold: HNSW returned %d candidates, %d above threshold",
 		len(candidates), len(candidatesWithIDs))
 
 	// Fetch document from Milvus for qualified candidates
@@ -668,16 +667,16 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 		fetchCancel()
 
 		if err != nil {
-			observability.Debugf("HybridCache.FindSimilarWithThreshold: Milvus GetByID failed for %s: %v",
+			logging.Debugf("HybridCache.FindSimilarWithThreshold: Milvus GetByID failed for %s: %v",
 				candidate.milvusID, err)
 			continue
 		}
 
 		if responseBody != nil {
 			atomic.AddInt64(&h.hitCount, 1)
-			observability.Debugf("HybridCache.FindSimilarWithThreshold: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
+			logging.Debugf("HybridCache.FindSimilarWithThreshold: MILVUS HIT - similarity=%.4f (threshold=%.3f)",
 				candidate.similarity, threshold)
-			observability.LogEvent("hybrid_cache_hit", map[string]interface{}{
+			logging.LogEvent("hybrid_cache_hit", map[string]interface{}{
 				"backend":    "hybrid",
 				"source":     "milvus",
 				"similarity": candidate.similarity,
@@ -693,8 +692,8 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 
 	// No match found above threshold
 	atomic.AddInt64(&h.missCount, 1)
-	observability.Debugf("HybridCache.FindSimilarWithThreshold: CACHE MISS - no match above threshold")
-	observability.LogEvent("hybrid_cache_miss", map[string]interface{}{
+	logging.Debugf("HybridCache.FindSimilarWithThreshold: CACHE MISS - no match above threshold")
+	logging.LogEvent("hybrid_cache_miss", map[string]interface{}{
 		"backend":    "hybrid",
 		"threshold":  threshold,
 		"model":      model,
@@ -718,7 +717,7 @@ func (h *HybridCache) Close() error {
 	// Close Milvus connection
 	if h.milvusCache != nil {
 		if err := h.milvusCache.Close(); err != nil {
-			observability.Debugf("HybridCache.Close: Milvus close error: %v", err)
+			logging.Debugf("HybridCache.Close: Milvus close error: %v", err)
 		}
 	}
 
@@ -762,28 +761,37 @@ func (h *HybridCache) evictOneUnsafe() {
 		return
 	}
 
-	// Simple FIFO eviction: remove oldest entry
+	// Simple FIFO eviction: remove oldest entry (index 0)
 	victimIdx := 0
-
-	// Could use LRU/LFU here by tracking access times/counts
-	// For now, just evict the first entry
 
 	// Get milvusID before removing from map (for logging)
 	milvusID := h.idMap[victimIdx]
 
-	// Remove from structures
-	delete(h.idMap, victimIdx)
+	// Remove the embedding from the slice
+	h.embeddings = h.embeddings[1:]
 
-	// Note: We don't remove from Milvus (data persists there)
-	// We also don't rebuild HNSW (mark as stale)
+	// Rebuild idMap with adjusted indices (all indices shift down by 1)
+	newIDMap := make(map[int]string, len(h.idMap)-1)
+	for idx, id := range h.idMap {
+		if idx > victimIdx {
+			newIDMap[idx-1] = id // Shift index down
+		}
+		// Skip victimIdx (it's being evicted)
+	}
+	h.idMap = newIDMap
+
+	// Mark HNSW index as stale (needs rebuild with new indices)
 	h.hnswIndex.markStale()
 
 	atomic.AddInt64(&h.evictCount, 1)
 
-	observability.LogEvent("hybrid_cache_evicted", map[string]interface{}{
+	logging.Debugf("HybridCache.evictOne: evicted entry at index %d (milvus_id=%s), new size=%d",
+		victimIdx, milvusID, len(h.embeddings))
+	logging.LogEvent("hybrid_cache_evicted", map[string]interface{}{
 		"backend":     "hybrid",
 		"milvus_id":   milvusID,
 		"hnsw_index":  victimIdx,
+		"new_size":    len(h.embeddings),
 		"max_entries": h.maxMemoryEntries,
 	})
 }
@@ -939,7 +947,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 		if ep < 0 || ep >= len(h.embeddings) {
 			continue
 		}
-		dist := -dotProduct(query, h.embeddings[ep])
+		dist := -dotProduct(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
 		candidates.push(ep, dist)
 		results.push(ep, dist)
 		visited[ep] = true
@@ -947,7 +955,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 
 	for len(candidates.data) > 0 {
 		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > -results.data[0].dist {
+		if len(results.data) > 0 && currentDist > results.data[0].dist {
 			break
 		}
 
@@ -965,7 +973,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 
 			dist := -dotProduct(query, h.embeddings[neighborID])
 
-			if len(results.data) < ef || dist < -results.data[0].dist {
+			if len(results.data) < ef || dist < results.data[0].dist {
 				candidates.push(neighborID, dist)
 				results.push(neighborID, dist)
 
@@ -1063,7 +1071,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 		if ep < 0 || ep >= len(h.embeddings) {
 			continue
 		}
-		dist := -dotProductSIMD(query, h.embeddings[ep])
+		dist := -dotProductSIMD(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
 		candidates.push(ep, dist)
 		results.push(ep, dist)
 		visited[ep] = true
@@ -1076,7 +1084,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 
 	for len(candidates.data) > 0 {
 		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > -results.data[0].dist {
+		if len(results.data) > 0 && currentDist > results.data[0].dist {
 			break
 		}
 
@@ -1099,7 +1107,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 				return []int{neighborID}
 			}
 
-			if len(results.data) < ef || dist < -results.data[0].dist {
+			if len(results.data) < ef || dist < results.data[0].dist {
 				candidates.push(neighborID, dist)
 				results.push(neighborID, dist)
 

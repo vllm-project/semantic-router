@@ -227,7 +227,7 @@ func (r *OpenAIRouter) handleRequestBody(
     headerMutations := []*core.HeaderValueOption{
         {
             Header: &core.HeaderValue{
-                Key:   "x-gateway-destination-endpoint", 
+                Key:   "x-vsr-destination-endpoint", 
                 Value: selectedEndpoint,
             },
             Append: &wrapperspb.BoolValue{Value: false},
@@ -347,7 +347,7 @@ static_resources:
                   response_code: "%RESPONSE_CODE%"
                   duration: "%DURATION%"
                   selected_model: "%REQ(X-SELECTED-MODEL)%"
-                  selected_endpoint: "%REQ(X-GATEWAY-DESTINATION-ENDPOINT)%"
+                  selected_endpoint: "%REQ(x-vsr-destination-endpoint)%"
                   routing_confidence: "%REQ(X-ROUTING-CONFIDENCE)%"
           
           # Route configuration with dynamic routing
@@ -361,7 +361,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-gateway-destination-endpoint"
+                  - name: "x-vsr-destination-endpoint"
                     string_match:
                       exact: "endpoint1"
                 route:
@@ -370,7 +370,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-gateway-destination-endpoint"  
+                  - name: "x-vsr-destination-endpoint"  
                     string_match:
                       exact: "endpoint2"
                 route:
@@ -379,7 +379,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: "x-gateway-destination-endpoint"
+                  - name: "x-vsr-destination-endpoint"
                     string_match:
                       exact: "endpoint3"
                 route:

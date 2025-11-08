@@ -27,6 +27,12 @@ pub mod pooling;
 // Qwen3-Embedding model
 pub mod qwen3_embedding;
 
+// Continuous batching for embeddings
+pub mod continuous_batch_scheduler;
+
+// Qwen3 with continuous batching
+pub mod qwen3_batched;
+
 // GemmaEmbedding model
 pub mod gemma_embedding;
 
@@ -47,6 +53,10 @@ pub use pooling::{cls_pool, last_token_pool, mean_pool};
 // Model-specific re-exports
 pub use qwen3_embedding::Qwen3EmbeddingConfig;
 pub use qwen3_embedding::Qwen3EmbeddingModel;
+
+// Continuous batching re-exports
+pub use continuous_batch_scheduler::{ContinuousBatchConfig, ContinuousBatchScheduler};
+pub use qwen3_batched::Qwen3EmbeddingModelBatched;
 
 // GemmaEmbedding re-exports
 pub use gemma_embedding::AttentionLayerType;
