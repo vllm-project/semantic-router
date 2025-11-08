@@ -428,8 +428,10 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 
 	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
+	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
+	// We request model, query, request_body and will detect which column is which
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"id", "model", "query", "request_body"})
+		[]string{"model", "query", "request_body"})
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -442,30 +444,68 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 		return fmt.Errorf("no pending entry found")
 	}
 
-	// Get the model and request body from the pending entry
-	idColumn := results[0].(*entity.ColumnVarChar)
-	modelColumn := results[1].(*entity.ColumnVarChar)
-	queryColumn := results[2].(*entity.ColumnVarChar)
-	requestColumn := results[3].(*entity.ColumnVarChar)
-
-	if idColumn.Len() > 0 {
-		id := idColumn.Data()[0]
-		model := modelColumn.Data()[0]
-		query := queryColumn.Data()[0]
-		requestBody := requestColumn.Data()[0]
-
-		logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
-
-		// Create the complete entry with response data
-		err := c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
-		if err != nil {
-			metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
-			return fmt.Errorf("failed to add complete entry: %w", err)
-		}
-
-		logging.Debugf("MilvusCache.UpdateWithResponse: successfully added complete entry with response")
-		metrics.RecordCacheOperation("milvus", "update_response", "success", time.Since(start).Seconds())
+	// Milvus automatically includes the primary key in results but order is non-deterministic
+	// We requested ["model", "query", "request_body"], expect 3-4 columns (primary key may be auto-included)
+	// Strategy: Find the ID column (32-char hex string), then map remaining columns
+	if len(results) < 3 {
+		logging.Debugf("MilvusCache.UpdateWithResponse: unexpected result count: %d", len(results))
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("incomplete query result: expected 3+ columns, got %d", len(results))
 	}
+
+	var id, model, query, requestBody string
+	idColIndex := -1
+
+	// First pass: find the ID column (32-char hex string = MD5 hash)
+	for i := 0; i < len(results); i++ {
+		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
+			val := col.Data()[0]
+			if len(val) == 32 && isHexString(val) {
+				id = val
+				idColIndex = i
+				break
+			}
+		}
+	}
+
+	// Second pass: extract data fields in order, skipping the ID column
+	dataFieldIndex := 0
+	for i := 0; i < len(results); i++ {
+		if i == idColIndex {
+			continue // Skip the primary key column
+		}
+		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
+			val := col.Data()[0]
+			switch dataFieldIndex {
+			case 0:
+				model = val
+			case 1:
+				query = val
+			case 2:
+				requestBody = val
+			}
+			dataFieldIndex++
+		}
+	}
+
+	if id == "" || model == "" || query == "" {
+		logging.Debugf("MilvusCache.UpdateWithResponse: failed to extract all required fields (id: %s, model: %s, query_len: %d)",
+			id, model, len(query))
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to extract required fields from query result")
+	}
+
+	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
+
+	// Create the complete entry with response data
+	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to add complete entry: %w", err)
+	}
+
+	logging.Debugf("MilvusCache.UpdateWithResponse: successfully added complete entry with response")
+	metrics.RecordCacheOperation("milvus", "update_response", "success", time.Since(start).Seconds())
 
 	return nil
 }
