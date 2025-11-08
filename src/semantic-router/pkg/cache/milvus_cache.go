@@ -18,80 +18,82 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// MilvusConfig defines the complete configuration structure for Milvus cache backend
+// MilvusConfig defines the complete configuration structure for Milvus cache backend.
+// Fields use both json/yaml tags because sigs.k8s.io/yaml converts YAML→JSON before decoding,
+// so json tags ensure snake_case keys map correctly without switching parsers.
 type MilvusConfig struct {
 	Connection struct {
-		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
-		Database string `yaml:"database"`
-		Timeout  int    `yaml:"timeout"`
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database string `json:"database" yaml:"database"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
 		Auth     struct {
-			Enabled  bool   `yaml:"enabled"`
-			Username string `yaml:"username"`
-			Password string `yaml:"password"`
-		} `yaml:"auth"`
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			Username string `json:"username" yaml:"username"`
+			Password string `json:"password" yaml:"password"`
+		} `json:"auth" yaml:"auth"`
 		TLS struct {
-			Enabled  bool   `yaml:"enabled"`
-			CertFile string `yaml:"cert_file"`
-			KeyFile  string `yaml:"key_file"`
-			CAFile   string `yaml:"ca_file"`
-		} `yaml:"tls"`
-	} `yaml:"connection"`
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
 	Collection struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description"`
+		Name        string `json:"name" yaml:"name"`
+		Description string `json:"description" yaml:"description"`
 		VectorField struct {
-			Name       string `yaml:"name"`
-			Dimension  int    `yaml:"dimension"`
-			MetricType string `yaml:"metric_type"`
-		} `yaml:"vector_field"`
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"`
+		} `json:"vector_field" yaml:"vector_field"`
 		Index struct {
-			Type   string `yaml:"type"`
+			Type   string `json:"type" yaml:"type"`
 			Params struct {
-				M              int `yaml:"M"`
-				EfConstruction int `yaml:"efConstruction"`
-			} `yaml:"params"`
-		} `yaml:"index"`
-	} `yaml:"collection"`
+				M              int `json:"M" yaml:"M"`
+				EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+			} `json:"params" yaml:"params"`
+		} `json:"index" yaml:"index"`
+	} `json:"collection" yaml:"collection"`
 	Search struct {
 		Params struct {
-			Ef int `yaml:"ef"`
-		} `yaml:"params"`
-		TopK             int    `yaml:"topk"`
-		ConsistencyLevel string `yaml:"consistency_level"`
-	} `yaml:"search"`
+			Ef int `json:"ef" yaml:"ef"`
+		} `json:"params" yaml:"params"`
+		TopK             int    `json:"topk" yaml:"topk"`
+		ConsistencyLevel string `json:"consistency_level" yaml:"consistency_level"`
+	} `json:"search" yaml:"search"`
 	Performance struct {
 		ConnectionPool struct {
-			MaxConnections     int `yaml:"max_connections"`
-			MaxIdleConnections int `yaml:"max_idle_connections"`
-			AcquireTimeout     int `yaml:"acquire_timeout"`
-		} `yaml:"connection_pool"`
+			MaxConnections     int `json:"max_connections" yaml:"max_connections"`
+			MaxIdleConnections int `json:"max_idle_connections" yaml:"max_idle_connections"`
+			AcquireTimeout     int `json:"acquire_timeout" yaml:"acquire_timeout"`
+		} `json:"connection_pool" yaml:"connection_pool"`
 		Batch struct {
-			InsertBatchSize int `yaml:"insert_batch_size"`
-			Timeout         int `yaml:"timeout"`
-		} `yaml:"batch"`
-	} `yaml:"performance"`
+			InsertBatchSize int `json:"insert_batch_size" yaml:"insert_batch_size"`
+			Timeout         int `json:"timeout" yaml:"timeout"`
+		} `json:"batch" yaml:"batch"`
+	} `json:"performance" yaml:"performance"`
 	DataManagement struct {
 		TTL struct {
-			Enabled         bool   `yaml:"enabled"`
-			TimestampField  string `yaml:"timestamp_field"`
-			CleanupInterval int    `yaml:"cleanup_interval"`
-		} `yaml:"ttl"`
+			Enabled         bool   `json:"enabled" yaml:"enabled"`
+			TimestampField  string `json:"timestamp_field" yaml:"timestamp_field"`
+			CleanupInterval int    `json:"cleanup_interval" yaml:"cleanup_interval"`
+		} `json:"ttl" yaml:"ttl"`
 		Compaction struct {
-			Enabled  bool `yaml:"enabled"`
-			Interval int  `yaml:"interval"`
-		} `yaml:"compaction"`
-	} `yaml:"data_management"`
+			Enabled  bool `json:"enabled" yaml:"enabled"`
+			Interval int  `json:"interval" yaml:"interval"`
+		} `json:"compaction" yaml:"compaction"`
+	} `json:"data_management" yaml:"data_management"`
 	Logging struct {
-		Level          string `yaml:"level"`
-		EnableQueryLog bool   `yaml:"enable_query_log"`
-		EnableMetrics  bool   `yaml:"enable_metrics"`
-	} `yaml:"logging"`
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
 	Development struct {
-		DropCollectionOnStartup bool `yaml:"drop_collection_on_startup"`
-		AutoCreateCollection    bool `yaml:"auto_create_collection"`
-		VerboseErrors           bool `yaml:"verbose_errors"`
-	} `yaml:"development"`
+		DropCollectionOnStartup bool `json:"drop_collection_on_startup" yaml:"drop_collection_on_startup"`
+		AutoCreateCollection    bool `json:"auto_create_collection" yaml:"auto_create_collection"`
+		VerboseErrors           bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
 }
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
