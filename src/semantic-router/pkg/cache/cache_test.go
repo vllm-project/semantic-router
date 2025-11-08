@@ -227,6 +227,51 @@ connection:
 				})
 			})
 
+			Context("Milvus YAML parsing", func() {
+				It("should parse snake_case configuration fields without default fallbacks", func() {
+					configPath := filepath.Join(tempDir, "milvus-snake.yaml")
+					configYAML := `
+connection:
+  host: "localhost"
+  port: 19530
+collection:
+  name: "yaml_snake_case"
+  vector_field:
+    name: "custom_embedding"
+    dimension: 512
+    metric_type: "L2"
+  index:
+    type: "IVF_FLAT"
+    params:
+      M: 24
+      efConstruction: 128
+search:
+  params:
+    ef: 42
+  topk: 25
+development:
+  auto_create_collection: true
+  drop_collection_on_startup: true
+`
+					err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := loadMilvusConfig(configPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(config.Collection.Name).To(Equal("yaml_snake_case"))
+					Expect(config.Collection.VectorField.Name).To(Equal("custom_embedding"))
+					Expect(config.Collection.VectorField.Dimension).To(Equal(512))
+					Expect(config.Collection.VectorField.MetricType).To(Equal("L2"))
+					Expect(config.Collection.Index.Type).To(Equal("IVF_FLAT"))
+					Expect(config.Collection.Index.Params.M).To(Equal(24))
+					Expect(config.Collection.Index.Params.EfConstruction).To(Equal(128))
+					Expect(config.Search.Params.Ef).To(Equal(42))
+					Expect(config.Search.TopK).To(Equal(25))
+					Expect(config.Development.AutoCreateCollection).To(BeTrue())
+					Expect(config.Development.DropCollectionOnStartup).To(BeTrue())
+				})
+			})
+
 			Context("with unsupported backend type", func() {
 				It("should return error for unsupported backend type", func() {
 					config := CacheConfig{
