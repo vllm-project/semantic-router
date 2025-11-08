@@ -81,6 +81,9 @@ type IntelligentRouting struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
 
+	// Embedding-based classification rules
+	EmbeddingRules []EmbeddingRule `yaml:"embedding_rules,omitempty"`
+
 	// Categories for routing queries
 	Categories []Category `yaml:"categories"`
 
@@ -197,6 +200,27 @@ type KeywordRule struct {
 	Operator      string   `yaml:"operator"`
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
+}
+
+// Aggregation method used in keyword embedding rule
+type AggregationMethod string
+
+const (
+	AggregationMethodMean AggregationMethod = "mean"
+	AggregationMethodMax  AggregationMethod = "max"
+	AggregationMethodAny  AggregationMethod = "any"
+)
+
+// EmbeddingRule defines a rule for keyword embedding based similarity match rule.
+type EmbeddingRule struct {
+	Category                  string            `yaml:"category"`
+	SimilarityThreshold       float32           `yaml:"threshold"`
+	Keywords                  []string          `yaml:"keywords"`
+	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_mathod"`
+	Model                     string            `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
+	Dimension                 int               `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	QualityPriority           float32           `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	LatencyPriority           float32           `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
 }
 
 // APIConfig represents configuration for API endpoints
@@ -373,6 +397,18 @@ type ModelParams struct {
 	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
 	// If empty, the model doesn't support reasoning mode
 	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+
+	// LoRA adapters available for this model
+	// These must be registered with vLLM using --lora-modules flag
+	LoRAs []LoRAAdapter `yaml:"loras,omitempty"`
+}
+
+// LoRAAdapter represents a LoRA adapter configuration for a model
+type LoRAAdapter struct {
+	// Name of the LoRA adapter (must match the name registered with vLLM)
+	Name string `yaml:"name"`
+	// Description of what this LoRA adapter is optimized for
+	Description string `yaml:"description,omitempty"`
 }
 
 // ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
@@ -426,6 +462,11 @@ type Category struct {
 type ModelScore struct {
 	Model string  `yaml:"model"`
 	Score float64 `yaml:"score"`
+	// Optional LoRA adapter name - when specified, this LoRA adapter name will be used
+	// as the final model name in requests instead of the base model name.
+	// This enables intent-aware LoRA routing where different LoRA adapters can be
+	// selected based on the classified category.
+	LoRAName string `yaml:"lora_name,omitempty"`
 	// Reasoning mode control on Model Level
 	ModelReasoningControl `yaml:",inline"`
 }

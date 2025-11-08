@@ -1901,7 +1901,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var modelHeaderFound bool
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-vsr-destination-endpoint" {
 							endpointHeaderFound = true
 							// Should be one of the configured endpoint addresses
 							// Check both Value and RawValue since implementation uses RawValue
@@ -1975,7 +1975,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var selectedEndpoint string
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-vsr-destination-endpoint" {
 							endpointHeaderFound = true
 							// Check both Value and RawValue since implementation uses RawValue
 							selectedEndpoint = header.Header.Value
@@ -2038,7 +2038,7 @@ var _ = Describe("Endpoint Selection", func() {
 					var selectedEndpoint string
 
 					for _, header := range headerMutation.SetHeaders {
-						if header.Header.Key == "x-gateway-destination-endpoint" {
+						if header.Header.Key == "x-vsr-destination-endpoint" {
 							endpointHeaderFound = true
 							// Check both Value and RawValue since implementation uses RawValue
 							selectedEndpoint = header.Header.Value
@@ -3379,41 +3379,6 @@ func TestReasoningModeIntegration(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: cfg,
 	}
-
-	// Test case 1: Math query should enable reasoning (when classifier works)
-	t.Run("Math query enables reasoning", func(t *testing.T) {
-		mathQuery := "What is the derivative of x^2 + 3x + 1?"
-
-		// Since we don't have the actual classifier, this will return false
-		// But we can test the configuration logic directly
-		useReasoning := router.shouldUseReasoningMode(mathQuery)
-
-		// Without a working classifier, this should be false
-		expectedReasoning := false
-
-		if useReasoning != expectedReasoning {
-			t.Errorf("Expected reasoning mode %v for math query without classifier, got %v", expectedReasoning, useReasoning)
-		}
-
-		// Test the configuration logic directly
-		mathCategory := cfg.Categories[0] // math category
-		if len(mathCategory.ModelScores) == 0 || mathCategory.ModelScores[0].UseReasoning == nil || !*mathCategory.ModelScores[0].UseReasoning {
-			t.Error("Math category's best model should have UseReasoning set to true in configuration")
-		}
-	})
-
-	// Test case 2: Business query should not enable reasoning
-	t.Run("Business query disables reasoning", func(t *testing.T) {
-		businessQuery := "Write a business plan for a coffee shop"
-
-		useReasoning := router.shouldUseReasoningMode(businessQuery)
-
-		// Should be false because classifier returns empty (no category found)
-		if useReasoning != false {
-			t.Errorf("Expected reasoning mode false for business query, got %v", useReasoning)
-		}
-	})
-
 	// Test case 3: Test addReasoningModeToRequestBody function
 	t.Run("addReasoningModeToRequestBody adds correct fields", func(t *testing.T) {
 		// Test with DeepSeek model (which supports chat_template_kwargs)
@@ -3577,23 +3542,6 @@ func TestReasoningModeIntegration(t *testing.T) {
 		}
 		if effort != "" {
 			t.Errorf("Expected effort string: empty for unknown model, got %v", effort)
-		}
-	})
-
-	// Test case 5: Test empty query handling
-	t.Run("Empty query defaults to no reasoning", func(t *testing.T) {
-		useReasoning := router.shouldUseReasoningMode("")
-		if useReasoning != false {
-			t.Errorf("Expected reasoning mode false for empty query, got %v", useReasoning)
-		}
-	})
-
-	// Test case 6: Test unknown category handling
-	t.Run("Unknown category defaults to no reasoning", func(t *testing.T) {
-		unknownQuery := "This is some unknown category query"
-		useReasoning := router.shouldUseReasoningMode(unknownQuery)
-		if useReasoning != false {
-			t.Errorf("Expected reasoning mode false for unknown category, got %v", useReasoning)
 		}
 	})
 }

@@ -26,20 +26,20 @@ classifier:
 
   # Enable MCP-based category classifier (HTTP transport only)
   mcp_category_model:
-    enabled: true                    # Enable MCP classifier
-    transport_type: "http"           # HTTP transport
-    url: "http://localhost:8090/mcp" # MCP server endpoint
-    
+    enabled: true  # Enable MCP classifier
+    transport_type: "http"  # HTTP transport
+    url: "http://localhost:8090/mcp"  # MCP server endpoint
+
     # tool_name: Optional - auto-discovers classification tool if not specified
     # Will search for tools like: classify_text, classify, categorize, etc.
     # Uncomment to explicitly specify:
     # tool_name: "classify_text"
-    
-    threshold: 0.6                   # Confidence threshold
-    timeout_seconds: 30              # Request timeout
+
+    threshold: 0.6  # Confidence threshold
+    timeout_seconds: 30  # Request timeout
 
 # Categories for routing queries
-# 
+#
 # Categories are automatically loaded from MCP server via 'list_categories' tool.
 # The MCP server controls BOTH classification AND routing decisions.
 #

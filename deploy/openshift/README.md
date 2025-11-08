@@ -1,6 +1,6 @@
 # OpenShift Deployment for Semantic Router
 
-This directory contains OpenShift-specific deployment manifests for the vLLM Semantic Router.
+This directory contains OpenShift-specific deployment manifests for the vLLM Semantic Router with **dynamic IP configuration** for cross-cluster portability.
 
 ## Quick Deployment
 
@@ -10,33 +10,48 @@ This directory contains OpenShift-specific deployment manifests for the vLLM Sem
 - `oc` CLI tool configured and logged in
 - Cluster admin privileges (or permissions to create namespaces and routes)
 
-### One-Command Deployment
+### Automated Deployment (Recommended)
+
+The deployment script automatically handles everything including dynamic IP configuration:
 
 ```bash
-oc apply -k deploy/openshift/
+cd deploy/openshift
+./deploy-to-openshift.sh
 ```
 
-### Step-by-Step Deployment
+This script will:
+
+- ✅ Build the llm-katan image from Dockerfile
+- ✅ Create namespace and PVCs
+- ✅ Deploy vLLM model services (model-a and model-b)
+- ✅ Auto-discover Kubernetes service ClusterIPs
+- ✅ Generate configuration with actual IPs (portable across clusters)
+- ✅ Deploy semantic-router with Envoy proxy
+- ✅ Create OpenShift routes for external access
+
+### Manual Deployment (Advanced)
+
+If you prefer manual deployment or need to customize:
 
 1. **Create namespace:**
 
    ```bash
-   oc apply -f deploy/openshift/namespace.yaml
+   oc create namespace vllm-semantic-router-system
    ```
 
-2. **Deploy core resources:**
+2. **Build llm-katan image:**
 
    ```bash
-   oc apply -f deploy/openshift/pvc.yaml
-   oc apply -f deploy/openshift/deployment.yaml
-   oc apply -f deploy/openshift/service.yaml
+   oc new-build --dockerfile - --name llm-katan -n vllm-semantic-router-system < Dockerfile.llm-katan
    ```
 
-3. **Create external routes:**
+3. **Deploy resources:**
 
    ```bash
-   oc apply -f deploy/openshift/routes.yaml
+   oc apply -f deployment.yaml -n vllm-semantic-router-system
    ```
+
+4. **Note:** You'll need to manually configure ClusterIPs in `config-openshift.yaml`
 
 ## Accessing Services
 

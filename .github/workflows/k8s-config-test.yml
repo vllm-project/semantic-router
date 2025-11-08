@@ -27,7 +27,7 @@ jobs:
       - name: Test kustomize with different overlays
         run: |
           echo "Testing base kustomization..."
-          kustomize build deploy/kubernetes > /tmp/base-manifests.yaml
+          kustomize build deploy/kubernetes/ai-gateway/semantic-router > /tmp/base-manifests.yaml
 
           echo "Validating generated resources..."
 
@@ -57,22 +57,22 @@ jobs:
       - name: Verify ConfigMap generation
         run: |
           echo "Checking ConfigMap generation..."
-          kustomize build deploy/kubernetes | grep -A 20 "kind: ConfigMap"
+          kustomize build deploy/kubernetes/ai-gateway/semantic-router | grep -A 20 "kind: ConfigMap"
 
           # Verify config files are included
-          if ! kustomize build deploy/kubernetes | grep -q "config.yaml"; then
+          if ! kustomize build deploy/kubernetes/ai-gateway/semantic-router | grep -q "config.yaml"; then
             echo "Warning: config.yaml might not be properly included in ConfigMap"
           fi
 
-          if ! kustomize build deploy/kubernetes | grep -q "tools_db.json"; then
+          if ! kustomize build deploy/kubernetes/ai-gateway/semantic-router | grep -q "tools_db.json"; then
             echo "Warning: tools_db.json might not be properly included in ConfigMap"
           fi
 
       - name: Validate observability kustomization
         run: |
           echo "Validating observability stack kustomization..."
-          if [ -d "deploy/kubernetes/observability" ]; then
-            kustomize build deploy/kubernetes/observability > /tmp/observability-manifests.yaml
+          if [ -d "deploy/kubernetes/ai-gateway/semantic-router/observability" ]; then
+            kustomize build deploy/kubernetes/ai-gateway/semantic-router/observability > /tmp/observability-manifests.yaml
             echo "✓ Observability kustomization is valid"
             
             # Verify expected resources
@@ -90,9 +90,9 @@ jobs:
           echo "Validating AI Gateway configurations..."
 
           # Check if ai-gateway directory exists
-          if [ -d "deploy/kubernetes/ai-gateway" ]; then
+          if [ -d "deploy/kubernetes/ai-gateway/semantic-router/ai-gateway" ]; then
             # Validate configuration yamls (without CRDs)
-            for yaml_file in deploy/kubernetes/ai-gateway/configuration/*.yaml; do
+            for yaml_file in deploy/kubernetes/ai-gateway/semantic-router/ai-gateway/configuration/*.yaml; do
               if [ -f "$yaml_file" ]; then
                 echo "Checking $yaml_file..."
                 # Basic YAML syntax check
@@ -101,7 +101,7 @@ jobs:
             done
             
             # Validate inference-pool manifests (skip CRD validation as they may not be installed)
-            for yaml_file in deploy/kubernetes/ai-gateway/inference-pool/*.yaml; do
+            for yaml_file in deploy/kubernetes/ai-gateway/semantic-router/ai-gateway/inference-pool/*.yaml; do
               if [ -f "$yaml_file" ]; then
                 echo "Checking $yaml_file for YAML syntax..."
                 # Just check if it's valid YAML

@@ -761,28 +761,37 @@ func (h *HybridCache) evictOneUnsafe() {
 		return
 	}
 
-	// Simple FIFO eviction: remove oldest entry
+	// Simple FIFO eviction: remove oldest entry (index 0)
 	victimIdx := 0
-
-	// Could use LRU/LFU here by tracking access times/counts
-	// For now, just evict the first entry
 
 	// Get milvusID before removing from map (for logging)
 	milvusID := h.idMap[victimIdx]
 
-	// Remove from structures
-	delete(h.idMap, victimIdx)
+	// Remove the embedding from the slice
+	h.embeddings = h.embeddings[1:]
 
-	// Note: We don't remove from Milvus (data persists there)
-	// We also don't rebuild HNSW (mark as stale)
+	// Rebuild idMap with adjusted indices (all indices shift down by 1)
+	newIDMap := make(map[int]string, len(h.idMap)-1)
+	for idx, id := range h.idMap {
+		if idx > victimIdx {
+			newIDMap[idx-1] = id // Shift index down
+		}
+		// Skip victimIdx (it's being evicted)
+	}
+	h.idMap = newIDMap
+
+	// Mark HNSW index as stale (needs rebuild with new indices)
 	h.hnswIndex.markStale()
 
 	atomic.AddInt64(&h.evictCount, 1)
 
+	logging.Debugf("HybridCache.evictOne: evicted entry at index %d (milvus_id=%s), new size=%d",
+		victimIdx, milvusID, len(h.embeddings))
 	logging.LogEvent("hybrid_cache_evicted", map[string]interface{}{
 		"backend":     "hybrid",
 		"milvus_id":   milvusID,
 		"hnsw_index":  victimIdx,
+		"new_size":    len(h.embeddings),
 		"max_entries": h.maxMemoryEntries,
 	})
 }
@@ -938,7 +947,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 		if ep < 0 || ep >= len(h.embeddings) {
 			continue
 		}
-		dist := -dotProduct(query, h.embeddings[ep])
+		dist := -dotProduct(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
 		candidates.push(ep, dist)
 		results.push(ep, dist)
 		visited[ep] = true
@@ -946,7 +955,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 
 	for len(candidates.data) > 0 {
 		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > -results.data[0].dist {
+		if len(results.data) > 0 && currentDist > results.data[0].dist {
 			break
 		}
 
@@ -964,7 +973,7 @@ func (h *HybridCache) searchLayerHybrid(query []float32, ef int, layer int, entr
 
 			dist := -dotProduct(query, h.embeddings[neighborID])
 
-			if len(results.data) < ef || dist < -results.data[0].dist {
+			if len(results.data) < ef || dist < results.data[0].dist {
 				candidates.push(neighborID, dist)
 				results.push(neighborID, dist)
 
@@ -1062,7 +1071,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 		if ep < 0 || ep >= len(h.embeddings) {
 			continue
 		}
-		dist := -dotProductSIMD(query, h.embeddings[ep])
+		dist := -dotProductSIMD(query, h.embeddings[ep]) // Negative product so that higher similarity = lower distance
 		candidates.push(ep, dist)
 		results.push(ep, dist)
 		visited[ep] = true
@@ -1075,7 +1084,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 
 	for len(candidates.data) > 0 {
 		currentIdx, currentDist := candidates.pop()
-		if len(results.data) > 0 && currentDist > -results.data[0].dist {
+		if len(results.data) > 0 && currentDist > results.data[0].dist {
 			break
 		}
 
@@ -1098,7 +1107,7 @@ func (h *HybridCache) searchLayerHybridWithEarlyStop(query []float32, ef int, la
 				return []int{neighborID}
 			}
 
-			if len(results.data) < ef || dist < -results.data[0].dist {
+			if len(results.data) < ef || dist < results.data[0].dist {
 				candidates.push(neighborID, dist)
 				results.push(neighborID, dist)
 

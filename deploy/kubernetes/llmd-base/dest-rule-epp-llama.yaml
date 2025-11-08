@@ -1,0 +1,10 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: epp-llama-8b-insecure-tls
+spec:
+  host: vllm-llama3-8b-instruct-epp
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      insecureSkipVerify: true

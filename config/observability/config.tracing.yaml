@@ -93,10 +93,10 @@ observability:
     provider: "opentelemetry"
     exporter:
       type: "otlp"
-      endpoint: "jaeger:4317" # Jaeger gRPC OTLP endpoint inside compose network
+      endpoint: "jaeger:4317"  # Jaeger gRPC OTLP endpoint inside compose network
       insecure: true
     sampling:
-      type: "always_on" # Always sample in local/dev for easy debugging
+      type: "always_on"  # Always sample in local/dev for easy debugging
       rate: 1.0
     resource:
       service_name: "vllm-semantic-router"

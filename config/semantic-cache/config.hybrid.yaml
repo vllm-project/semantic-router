@@ -5,17 +5,17 @@ bert_model:
 
 semantic_cache:
   enabled: true
-  backend_type: "hybrid" # Hybrid HNSW + Milvus backend
+  backend_type: "hybrid"  # Hybrid HNSW + Milvus backend
   similarity_threshold: 0.85
   ttl_seconds: 3600
-  
+
   # Hybrid cache specific settings
-  max_memory_entries: 100000 # Max entries in HNSW index (100K)
-  
+  max_memory_entries: 100000  # Max entries in HNSW index (100K)
+
   # HNSW parameters
-  hnsw_m: 16 # Number of bi-directional links
-  hnsw_ef_construction: 200 # Construction quality parameter
-  
+  hnsw_m: 16  # Number of bi-directional links
+  hnsw_ef_construction: 200  # Construction quality parameter
+
   # Milvus configuration file path
   backend_config_path: "config/semantic-cache/milvus.yaml"
 

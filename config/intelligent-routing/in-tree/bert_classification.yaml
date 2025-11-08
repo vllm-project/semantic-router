@@ -5,21 +5,21 @@ bert_model:
 
 semantic_cache:
   enabled: true
-  backend_type: "memory" # Options: "memory", "milvus", or "hybrid"
+  backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
   similarity_threshold: 0.8
-  max_entries: 1000 # Only applies to memory backend
+  max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
   eviction_policy: "fifo"
   # HNSW index configuration (for memory backend only)
-  use_hnsw: true # Enable HNSW index for faster similarity search
-  hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
-  hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
-  
+  use_hnsw: true  # Enable HNSW index for faster similarity search
+  hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
+  hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
+
   # Hybrid cache configuration (when backend_type: "hybrid")
   # Combines in-memory HNSW for fast search with Milvus for scalable storage
   # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
   # backend_config_path: "config/milvus.yaml" # Path to Milvus config
-  
+
   # Embedding model for semantic similarity matching
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
@@ -46,13 +46,13 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "172.28.0.20" # Static IPv4 of llm-katan within docker compose network
+    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
     port: 8002
     weight: 1
 
 model_config:
   "qwen3":
-    reasoning_family: "qwen3" # This model uses Qwen-3 reasoning syntax
+    reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true
@@ -81,7 +81,7 @@ categories:
     model_scores:
       - model: qwen3
         score: 0.7
-        use_reasoning: false # Business performs better without reasoning
+        use_reasoning: false  # Business performs better without reasoning
   - name: law
     system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
     model_scores:
@@ -91,7 +91,7 @@ categories:
   - name: psychology
     system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
     semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.92 # High threshold for psychology - sensitive to nuances
+    semantic_cache_similarity_threshold: 0.92  # High threshold for psychology - sensitive to nuances
     model_scores:
       - model: qwen3
         score: 0.6
@@ -107,7 +107,7 @@ categories:
     model_scores:
       - model: qwen3
         score: 0.6
-        use_reasoning: true # Enable reasoning for complex chemistry
+        use_reasoning: true  # Enable reasoning for complex chemistry
   - name: history
     system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
     model_scores:
@@ -117,7 +117,7 @@ categories:
   - name: other
     system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
     semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.75 # Lower threshold for general chat - less sensitive
+    semantic_cache_similarity_threshold: 0.75  # Lower threshold for general chat - less sensitive
     model_scores:
       - model: qwen3
         score: 0.7
@@ -125,7 +125,7 @@ categories:
   - name: health
     system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
     semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.95 # High threshold for health - very sensitive to word changes
+    semantic_cache_similarity_threshold: 0.95  # High threshold for health - very sensitive to word changes
     model_scores:
       - model: qwen3
         score: 0.5
@@ -141,13 +141,13 @@ categories:
     model_scores:
       - model: qwen3
         score: 1.0
-        use_reasoning: true # Enable reasoning for complex math
+        use_reasoning: true  # Enable reasoning for complex math
   - name: physics
     system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
     model_scores:
       - model: qwen3
         score: 0.7
-        use_reasoning: true # Enable reasoning for physics
+        use_reasoning: true  # Enable reasoning for physics
   - name: computer science
     system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
     model_scores:
@@ -195,24 +195,24 @@ router:
   lora_default_success_rate: 0.98
   traditional_default_success_rate: 0.95
   # Scoring weights for intelligent path selection (balanced approach)
-  multi_task_lora_weight: 0.30        # LoRA advantage for multi-task processing
-  single_task_traditional_weight: 0.30 # Traditional advantage for single tasks
-  large_batch_lora_weight: 0.25       # LoRA advantage for large batches (≥4)
-  small_batch_traditional_weight: 0.25 # Traditional advantage for single items
-  medium_batch_weight: 0.10           # Neutral weight for medium batches (2-3)
-  high_confidence_lora_weight: 0.25   # LoRA advantage for high confidence (≥0.99)
-  low_confidence_traditional_weight: 0.25 # Traditional for lower confidence (≤0.9)
-  low_latency_lora_weight: 0.30       # LoRA advantage for low latency (≤2000ms)
-  high_latency_traditional_weight: 0.10 # Traditional acceptable for relaxed timing
-  performance_history_weight: 0.20    # Historical performance comparison factor
+  multi_task_lora_weight: 0.30  # LoRA advantage for multi-task processing
+  single_task_traditional_weight: 0.30  # Traditional advantage for single tasks
+  large_batch_lora_weight: 0.25  # LoRA advantage for large batches (≥4)
+  small_batch_traditional_weight: 0.25  # Traditional advantage for single items
+  medium_batch_weight: 0.10  # Neutral weight for medium batches (2-3)
+  high_confidence_lora_weight: 0.25  # LoRA advantage for high confidence (≥0.99)
+  low_confidence_traditional_weight: 0.25  # Traditional for lower confidence (≤0.9)
+  low_latency_lora_weight: 0.30  # LoRA advantage for low latency (≤2000ms)
+  high_latency_traditional_weight: 0.10  # Traditional acceptable for relaxed timing
+  performance_history_weight: 0.20  # Historical performance comparison factor
   # Traditional model specific configurations
-  traditional_bert_confidence_threshold: 0.95      # Traditional BERT confidence threshold
-  traditional_modernbert_confidence_threshold: 0.8 # Traditional ModernBERT confidence threshold
-  traditional_pii_detection_threshold: 0.5         # Traditional PII detection confidence threshold
+  traditional_bert_confidence_threshold: 0.95  # Traditional BERT confidence threshold
+  traditional_modernbert_confidence_threshold: 0.8  # Traditional ModernBERT confidence threshold
+  traditional_pii_detection_threshold: 0.5  # Traditional PII detection confidence threshold
   traditional_token_classification_threshold: 0.9  # Traditional token classification threshold
-  traditional_dropout_prob: 0.1                    # Traditional model dropout probability
-  traditional_attention_dropout_prob: 0.1          # Traditional model attention dropout probability
-  tie_break_confidence: 0.5                        # Confidence value for tie-breaking situations
+  traditional_dropout_prob: 0.1  # Traditional model dropout probability
+  traditional_attention_dropout_prob: 0.1  # Traditional model attention dropout probability
+  tie_break_confidence: 0.5  # Confidence value for tie-breaking situations
 
 default_model: qwen3
 
@@ -253,7 +253,7 @@ api:
 
 # Embedding Models Configuration
 # These models provide intelligent embedding generation with automatic routing:
-# - Qwen3-Embedding-0.6B: Up to 32K context, high quality, 
+# - Qwen3-Embedding-0.6B: Up to 32K context, high quality,
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
   qwen3_model_path: "models/Qwen3-Embedding-0.6B"
@@ -263,15 +263,15 @@ embedding_models:
 # Observability Configuration
 observability:
   tracing:
-    enabled: true # Enable distributed tracing for docker-compose stack
-    provider: "opentelemetry" # Provider: opentelemetry, openinference, openllmetry
+    enabled: true  # Enable distributed tracing for docker-compose stack
+    provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
     exporter:
-      type: "otlp" # Export spans to Jaeger (via OTLP gRPC)
-      endpoint: "jaeger:4317" # Jaeger collector inside compose network
-      insecure: true # Use insecure connection (no TLS)
+      type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)
+      endpoint: "jaeger:4317"  # Jaeger collector inside compose network
+      insecure: true  # Use insecure connection (no TLS)
     sampling:
-      type: "always_on" # Sampling: always_on, always_off, probabilistic
-      rate: 1.0 # Sampling rate for probabilistic (0.0-1.0)
+      type: "always_on"  # Sampling: always_on, always_off, probabilistic
+      rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
     resource:
       service_name: "vllm-semantic-router"
       service_version: "v0.1.0"

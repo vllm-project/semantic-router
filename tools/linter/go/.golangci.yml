@@ -7,19 +7,19 @@ linters:
 
   # enable specific linters
   enable:
-    - bodyclose      # checks that HTTP response body is closed properly to prevent resource leaks
-    - copyloopvar    # detects improper loop variable usage in closures (fixed in Go 1.22+)
-    - depguard       # checks for disallowed package dependencies
-    - errorlint      # finds common mistakes in error handling like wrapping and type assertions
-    - gocritic       # provides extensive code quality checks for performance, style, and diagnostics
-    - gosec          # security checker that inspects code for common security problems
-    - importas       # enforces consistent import aliases for specific packages
-    - misspell       # finds commonly misspelled English words in code
-    - revive         # fast, configurable, extensible Go linter (successor to golint)
-    - staticcheck    # advanced static analysis tool that detects bugs, performance issues, and simplifications
-    - testifylint    # checks for best practices when using the testify testing framework
-    - unconvert      # removes unnecessary type conversions
-  
+    - bodyclose  # checks that HTTP response body is closed properly to prevent resource leaks
+    - copyloopvar  # detects improper loop variable usage in closures (fixed in Go 1.22+)
+    - depguard  # checks for disallowed package dependencies
+    - errorlint  # finds common mistakes in error handling like wrapping and type assertions
+    - gocritic  # provides extensive code quality checks for performance, style, and diagnostics
+    - gosec  # security checker that inspects code for common security problems
+    - importas  # enforces consistent import aliases for specific packages
+    - misspell  # finds commonly misspelled English words in code
+    - revive  # fast, configurable, extensible Go linter (successor to golint)
+    - staticcheck  # advanced static analysis tool that detects bugs, performance issues, and simplifications
+    - testifylint  # checks for best practices when using the testify testing framework
+    - unconvert  # removes unnecessary type conversions
+
   settings:
     depguard:
       rules:
@@ -167,4 +167,4 @@ formatters:
     paths:
       - examples$
       - zz_generated
-  
+

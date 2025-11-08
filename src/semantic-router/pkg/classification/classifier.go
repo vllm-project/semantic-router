@@ -198,13 +198,15 @@ type PIIAnalysisResult struct {
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	// Dependencies - In-tree classifiers
-	categoryInitializer  CategoryInitializer
-	categoryInference    CategoryInference
-	jailbreakInitializer JailbreakInitializer
-	jailbreakInference   JailbreakInference
-	piiInitializer       PIIInitializer
-	piiInference         PIIInference
-	keywordClassifier    *KeywordClassifier
+	categoryInitializer         CategoryInitializer
+	categoryInference           CategoryInference
+	jailbreakInitializer        JailbreakInitializer
+	jailbreakInference          JailbreakInference
+	piiInitializer              PIIInitializer
+	piiInference                PIIInference
+	keywordClassifier           *KeywordClassifier
+	keywordEmbeddingInitializer EmbeddingClassifierInitializer
+	keywordEmbeddingClassifier  *EmbeddingClassifier
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
@@ -254,6 +256,13 @@ func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	}
 }
 
+func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassifierInitializer, keywordEmbeddingClassifier *EmbeddingClassifier) option {
+	return func(c *Classifier) {
+		c.keywordEmbeddingInitializer = keywordEmbeddingInitializer
+		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
+	}
+}
+
 // initModels initializes the models for the classifier
 func initModels(classifier *Classifier) (*Classifier, error) {
 	// Initialize either in-tree OR MCP-based category classifier
@@ -275,6 +284,12 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 
 	if classifier.IsPIIEnabled() {
 		if err := classifier.initializePIIClassifier(); err != nil {
+			return nil, err
+		}
+	}
+
+	if classifier.IsKeywordEmbeddingClassifierEnabled() {
+		if err := classifier.initializeKeywordEmbeddingClassifier(); err != nil {
 			return nil, err
 		}
 	}
@@ -318,6 +333,16 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			return nil, err
 		}
 		options = append(options, withKeywordClassifier(keywordClassifier))
+	}
+
+	// Add keyword embedding classifier if configured
+	if len(cfg.EmbeddingRules) > 0 {
+		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules)
+		if err != nil {
+			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
+			return nil, err
+		}
+		options = append(options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
 	}
 
 	// Add in-tree classifier if configured
@@ -369,7 +394,17 @@ func (c *Classifier) ClassifyCategory(text string) (string, float64, error) {
 			return category, confidence, nil
 		}
 	}
-
+	// TODO: more sophiscated fusion engine needs to be designed and implemented to combine classifiers' results
+	// Try embedding based similarity classification if properly configured
+	if c.keywordEmbeddingClassifier != nil {
+		category, confidence, err := c.keywordEmbeddingClassifier.Classify(text)
+		if err != nil {
+			return "", 0.0, err
+		}
+		if category != "" {
+			return category, confidence, nil
+		}
+	}
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryInTree(text)
@@ -563,6 +598,19 @@ func (c *Classifier) initializePIIClassifier() error {
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
+	// Try keyword classifier first
+	if c.keywordClassifier != nil {
+		category, confidence, err := c.keywordClassifier.Classify(text)
+		if err != nil {
+			return "", 0.0, entropy.ReasoningDecision{}, err
+		}
+		if category != "" {
+			// Keyword matched - determine reasoning mode from category configuration
+			reasoningDecision := c.makeReasoningDecisionForKeywordCategory(category)
+			return category, confidence, reasoningDecision, nil
+		}
+	}
+
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryWithEntropyInTree(text)
@@ -579,6 +627,36 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 	}
 
 	return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("no category classification method available")
+}
+
+// makeReasoningDecisionForKeywordCategory creates a reasoning decision for keyword-matched categories
+func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) entropy.ReasoningDecision {
+	// Find the category configuration
+	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
+	useReasoning := false
+
+	for _, cat := range c.Config.Categories {
+		if strings.ToLower(cat.Name) == normalizedCategory {
+			// Check if the category has reasoning enabled in its best model
+			if len(cat.ModelScores) > 0 && cat.ModelScores[0].UseReasoning != nil {
+				useReasoning = *cat.ModelScores[0].UseReasoning
+			}
+			break
+		}
+	}
+
+	return entropy.ReasoningDecision{
+		UseReasoning:     useReasoning,
+		Confidence:       1.0, // Keyword matches have 100% confidence
+		DecisionReason:   "keyword_match_category_config",
+		FallbackStrategy: "keyword_based_classification",
+		TopCategories: []entropy.CategoryProbability{
+			{
+				Category:    category,
+				Probability: 1.0,
+			},
+		},
+	}
 }
 
 // classifyCategoryWithEntropyInTree performs category classification with entropy using in-tree model
@@ -984,7 +1062,15 @@ func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter f
 		if modelFilter != nil && !modelFilter(model) {
 			return
 		}
-		c.updateBestModel(modelScore.Score, model, &bestScore, &bestModel)
+		// Use LoRA name if specified, otherwise use the base model name
+		// This enables intent-aware LoRA routing where the final model name
+		// in the request becomes the LoRA adapter name
+		finalModelName := model
+		if modelScore.LoRAName != "" {
+			finalModelName = modelScore.LoRAName
+			logging.Debugf("Using LoRA adapter '%s' for base model '%s'", finalModelName, model)
+		}
+		c.updateBestModel(modelScore.Score, finalModelName, &bestScore, &bestModel)
 	})
 
 	return bestModel, bestScore
@@ -1024,13 +1110,19 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 }
 
 // GetModelsForCategory returns all models that are configured for the given category
+// If a ModelScore has a LoRAName specified, the LoRA name is returned instead of the base model name
 func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	var models []string
 
 	for _, category := range c.Config.Categories {
 		if strings.EqualFold(category.Name, categoryName) {
 			for _, modelScore := range category.ModelScores {
-				models = append(models, modelScore.Model)
+				// Use LoRA name if specified, otherwise use the base model name
+				if modelScore.LoRAName != "" {
+					models = append(models, modelScore.LoRAName)
+				} else {
+					models = append(models, modelScore.Model)
+				}
 			}
 			break
 		}

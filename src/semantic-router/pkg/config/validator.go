@@ -102,6 +102,13 @@ func validateConfigStructure(cfg *RouterConfig) error {
 			if modelScore.UseReasoning == nil {
 				return fmt.Errorf("category '%s', model '%s': missing required field 'use_reasoning'", category.Name, modelScore.Model)
 			}
+
+			// Validate LoRA name if specified
+			if modelScore.LoRAName != "" {
+				if err := validateLoRAName(cfg, modelScore.Model, modelScore.LoRAName); err != nil {
+					return fmt.Errorf("category '%s', model '%s': %w", category.Name, modelScore.Model, err)
+				}
+			}
 		}
 	}
 
@@ -111,4 +118,32 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	}
 
 	return nil
+}
+
+// validateLoRAName checks if the specified LoRA name is defined in the model's configuration
+func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) error {
+	// Check if the model exists in model_config
+	modelParams, exists := cfg.ModelConfig[modelName]
+	if !exists {
+		return fmt.Errorf("lora_name '%s' specified but model '%s' is not defined in model_config", loraName, modelName)
+	}
+
+	// Check if the model has any LoRAs defined
+	if len(modelParams.LoRAs) == 0 {
+		return fmt.Errorf("lora_name '%s' specified but model '%s' has no loras defined in model_config", loraName, modelName)
+	}
+
+	// Check if the specified LoRA name exists in the model's LoRA list
+	for _, lora := range modelParams.LoRAs {
+		if lora.Name == loraName {
+			return nil // Valid LoRA name found
+		}
+	}
+
+	// LoRA name not found, provide helpful error message
+	availableLoRAs := make([]string, len(modelParams.LoRAs))
+	for i, lora := range modelParams.LoRAs {
+		availableLoRAs[i] = lora.Name
+	}
+	return fmt.Errorf("lora_name '%s' is not defined in model '%s' loras. Available LoRAs: %v", loraName, modelName, availableLoRAs)
 }

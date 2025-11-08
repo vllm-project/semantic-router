@@ -1,4 +1,3 @@
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,7 +9,7 @@ spec:
     name: inference-gateway
   rules:
   - backendRefs:
-    - name: llama-8b          # service llama-8b
+    - name: llama-8b
       namespace: default
       port: 80
     matches:
@@ -18,9 +17,8 @@ spec:
         type: PathPrefix
         value: /
       headers:
-        - type: Exact
-          name: x-selected-model
-          value: 'llama3-8b'
+      - type: Exact
+        name: x-selected-model
+        value: llama3-8b
     timeouts:
       request: 300s
-

@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    model.aibrix.ai/name: vllm-llama3-8b-instruct  # Note: The label value `model.aibrix.ai/name` here must match with the service name.
+    model.aibrix.ai/port: "8000"
+  name: vllm-llama3-8b-instruct
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      model.aibrix.ai/name: vllm-llama3-8b-instruct
+  template:
+    metadata:
+      labels:
+        model.aibrix.ai/name: vllm-llama3-8b-instruct
+    spec:
+      containers:
+      - name: vllm-sim
+        image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - --model
+        - vllm-llama3-8b-instruct
+        - --port
+        - "8000"
+        - --max-loras
+        - "6"
+        - --lora-modules
+        - '{"name": "math-expert"}'
+        - '{"name": "science-expert"}'
+        - '{"name": "social-expert"}'
+        - '{"name": "humanities-expert"}'
+        - '{"name": "law-expert"}'
+        - '{"name": "general-expert"}'
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    model.aibrix.ai/name: vllm-llama3-8b-instruct
+    prometheus-discovery: "true"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+  name: vllm-llama3-8b-instruct  # Note: The Service name must match the label value `model.aibrix.ai/name` in the Deployment
+  namespace: default
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    model.aibrix.ai/name: vllm-llama3-8b-instruct

@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -159,8 +162,67 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ToolsDatabase:        toolsDatabase,
 	}
 
-	// Log reasoning configuration after router is created
-	router.logReasoningConfiguration()
-
 	return router, nil
+}
+
+// createJSONResponseWithBody creates a direct response with pre-marshaled JSON body
+func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byte) *ext_proc.ProcessingResponse {
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &ext_proc.ImmediateResponse{
+				Status: &typev3.HttpStatus{
+					Code: statusCodeToEnum(statusCode),
+				},
+				Headers: &ext_proc.HeaderMutation{
+					SetHeaders: []*core.HeaderValueOption{
+						{
+							Header: &core.HeaderValue{
+								Key:      "content-type",
+								RawValue: []byte("application/json"),
+							},
+						},
+					},
+				},
+				Body: jsonBody,
+			},
+		},
+	}
+}
+
+// createJSONResponse creates a direct response with JSON content
+func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		logging.Errorf("Failed to marshal JSON response: %v", err)
+		return r.createErrorResponse(500, "Internal server error")
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
+}
+
+// createErrorResponse creates a direct error response
+func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	errorResp := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    "invalid_request_error",
+			"code":    statusCode,
+		},
+	}
+
+	jsonData, err := json.Marshal(errorResp)
+	if err != nil {
+		logging.Errorf("Failed to marshal error response: %v", err)
+		jsonData = []byte(`{"error":{"message":"Internal server error","type":"internal_error","code":500}}`)
+		// Use 500 status code for fallback error
+		statusCode = 500
+	}
+
+	return r.createJSONResponseWithBody(statusCode, jsonData)
+}
+
+// shouldClearRouteCache checks if route cache should be cleared
+func (r *OpenAIRouter) shouldClearRouteCache() bool {
+	// Check if feature is enabled
+	return r.Config.ClearRouteCache
 }
