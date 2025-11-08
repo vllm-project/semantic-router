@@ -856,6 +856,10 @@ pub extern "C" fn calculate_embedding_similarity(
 
         if status1 != 0 || emb_result1.error {
             eprintln!("Error generating embedding for text1");
+            // Clean up allocated memory before returning
+            if !emb_result1.data.is_null() {
+                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+            }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
             }
@@ -875,6 +879,10 @@ pub extern "C" fn calculate_embedding_similarity(
             eprintln!("Error generating embedding for text2");
             if !emb_result1.data.is_null() {
                 crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+            }
+            // Also clean up emb_result2
+            if !emb_result2.data.is_null() {
+                crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
