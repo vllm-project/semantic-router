@@ -130,11 +130,11 @@ initContainer:
   # -- Resource limits for init container
   resources:
     limits:
+      memory: "2Gi"
+      cpu: "1000m"
+    requests:
       memory: "1Gi"
       cpu: "500m"
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
   # -- Models to download
   models:
     - name: all-MiniLM-L12-v2
@@ -175,26 +175,26 @@ livenessProbe:
   # -- Enable liveness probe
   enabled: true
   # -- Initial delay seconds
-  initialDelaySeconds: 60
+  initialDelaySeconds: 120
   # -- Period seconds
   periodSeconds: 30
   # -- Timeout seconds
   timeoutSeconds: 10
   # -- Failure threshold
-  failureThreshold: 3
+  failureThreshold: 5
 
 # Readiness probe configuration
 readinessProbe:
   # -- Enable readiness probe
   enabled: true
   # -- Initial delay seconds
-  initialDelaySeconds: 90
+  initialDelaySeconds: 180
   # -- Period seconds
   periodSeconds: 30
   # -- Timeout seconds
   timeoutSeconds: 10
   # -- Failure threshold
-  failureThreshold: 3
+  failureThreshold: 5
 
 # Persistent Volume Claim for models
 persistence:

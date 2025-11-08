@@ -35,16 +35,16 @@ persistence:
 
 # Conservative probes for production
 livenessProbe:
-  initialDelaySeconds: 90
-  periodSeconds: 30
-  timeoutSeconds: 10
-  failureThreshold: 3
-
-readinessProbe:
   initialDelaySeconds: 120
   periodSeconds: 30
   timeoutSeconds: 10
-  failureThreshold: 3
+  failureThreshold: 5
+
+readinessProbe:
+  initialDelaySeconds: 180
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 5
 
 # Production configuration
 config:

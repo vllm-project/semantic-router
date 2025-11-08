@@ -19,29 +19,29 @@ resources:
 initContainer:
   resources:
     limits:
-      memory: "512Mi"
-      cpu: "250m"
+      memory: "2Gi"
+      cpu: "1000m"
     requests:
-      memory: "256Mi"
-      cpu: "100m"
+      memory: "1Gi"
+      cpu: "500m"
 
 # Smaller storage for development
 persistence:
   size: 5Gi
   storageClassName: "standard"
 
-# Faster probes for development
+# Faster probes for development but allow enough time for init container
 livenessProbe:
-  initialDelaySeconds: 30
+  initialDelaySeconds: 120
   periodSeconds: 10
   timeoutSeconds: 5
-  failureThreshold: 3
+  failureThreshold: 5
 
 readinessProbe:
-  initialDelaySeconds: 45
+  initialDelaySeconds: 180
   periodSeconds: 10
   timeoutSeconds: 5
-  failureThreshold: 3
+  failureThreshold: 5
 
 # Development configuration
 config:

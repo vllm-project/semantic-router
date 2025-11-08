@@ -35,6 +35,8 @@ spec:
         image: {{ .Values.initContainer.image }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        # Allow up to 10 minutes for model downloads in CI environments
+        # This prevents the init container from being killed prematurely
         command: ["/bin/bash", "-c"]
         args:
         - |

@@ -194,7 +194,6 @@ jobs:
             -f ${{ env.CHART_PATH }}/values-dev.yaml \
             --set initContainer.resources.limits.memory=2Gi \
             --set initContainer.resources.requests.memory=1Gi \
-            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 10m \
