@@ -520,8 +520,40 @@ pub extern "C" fn classify_candle_bert_tokens_with_labels(
         }
     };
 
-    // Use TraditionalBertTokenClassifier for token-level classification with labels
+    // Intelligent routing: Check LoRA token classifier first, then fall back to traditional
 
+    // Try LoRA token classifier first
+    if let Some(classifier) = crate::ffi::init::LORA_TOKEN_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_tokens(text) {
+            Ok(token_results) => {
+                // Filter out "O" (Outside) labels - only return actual entities
+                let token_entities: Vec<(String, String, f32)> = token_results
+                    .iter()
+                    .filter(|result| result.label_name != "O" && result.label_id != 0)
+                    .map(|result| {
+                        (
+                            result.token.clone(),
+                            result.label_name.clone(),
+                            result.confidence,
+                        )
+                    })
+                    .collect();
+
+                let entities_ptr = unsafe { allocate_bert_token_entity_array(&token_entities) };
+
+                return BertTokenClassificationResult {
+                    entities: entities_ptr,
+                    num_entities: token_entities.len() as i32,
+                };
+            }
+            Err(_e) => {
+                // Fall through to traditional classifier
+            }
+        }
+    }
+
+    // Fall back to traditional BERT token classifier
     if let Some(classifier) = TRADITIONAL_BERT_TOKEN_CLASSIFIER.get() {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
@@ -581,9 +613,11 @@ pub extern "C" fn classify_candle_bert_tokens(
         let lora_classifier = lora_classifier.clone();
         match lora_classifier.classify_tokens(text) {
             Ok(lora_results) => {
+                // Filter out "O" (Outside) labels - only return actual entities
                 // Convert LoRA results to BertTokenEntity format
                 let token_entities: Vec<(String, String, f32)> = lora_results
                     .iter()
+                    .filter(|r| r.label_name != "O" && r.label_id != 0)
                     .map(|r| (r.token.clone(), r.label_name.clone(), r.confidence))
                     .collect();
 
@@ -591,7 +625,7 @@ pub extern "C" fn classify_candle_bert_tokens(
 
                 return BertTokenClassificationResult {
                     entities: entities_ptr,
-                    num_entities: lora_results.len() as i32,
+                    num_entities: token_entities.len() as i32,
                 };
             }
             Err(_e) => {

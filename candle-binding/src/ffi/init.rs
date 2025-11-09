@@ -594,6 +594,11 @@ pub extern "C" fn init_candle_bert_token_classifier(
 
     match model_type {
         ModelType::LoRA => {
+            // Check if already initialized
+            if LORA_TOKEN_CLASSIFIER.get().is_some() {
+                return true; // Already initialized, return success
+            }
+
             // Route to LoRA token classifier initialization
             match crate::classifiers::lora::token_lora::LoRATokenClassifier::new(
                 model_path, use_cpu,
@@ -606,6 +611,14 @@ pub extern "C" fn init_candle_bert_token_classifier(
             }
         }
         ModelType::Traditional => {
+            // Check if already initialized
+            if crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
+                .get()
+                .is_some()
+            {
+                return true; // Already initialized, return success
+            }
+
             // Route to traditional BERT token classifier
             match crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier::new(
                 model_path,

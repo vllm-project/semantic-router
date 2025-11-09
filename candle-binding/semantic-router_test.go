@@ -1362,7 +1362,7 @@ func TestCandleBertTokensWithLabels(t *testing.T) {
 
 	success := InitCandleBertTokenClassifier(BertPIITokenClassifierModelPath, 9, true) // 9 PII classes
 	if !success {
-		t.Skipf("Candle BERT token classifier not available at path: %s", BertPIITokenClassifierModelPath)
+		t.Fatalf("Failed to initialize Candle BERT token classifier at path: %s. Model should be available in CI (included in LoRA model set).", BertPIITokenClassifierModelPath)
 	}
 
 	testText := "Contact Dr. Sarah Johnson at sarah.johnson@hospital.org for medical records"
@@ -1370,7 +1370,7 @@ func TestCandleBertTokensWithLabels(t *testing.T) {
 	result, err := ClassifyCandleBertTokensWithLabels(testText, id2labelJSON)
 	if err != nil {
 		if isModelInitializationError(err) {
-			t.Skipf("Skipping Candle BERT token classifier tests due to model initialization error: %v", err)
+			t.Fatalf("Candle BERT token classifier failed with model initialization error: %v. Model should be initialized earlier in test.", err)
 		}
 		t.Fatalf("Token classification with labels failed: %v", err)
 	}
