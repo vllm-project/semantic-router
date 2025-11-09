@@ -39,9 +39,8 @@ func (r *OpenAIRouter) performClassificationAndModelSelection(originalModel stri
 	// Perform entropy-based classification once
 	catName, confidence, reasoningDec, err := r.Classifier.ClassifyCategoryWithEntropy(classificationText)
 	if err != nil {
-		logging.Errorf("Entropy-based classification error: %v, falling back to simple classification", err)
-		// Fall back to simple classification
-		categoryName = r.findCategoryForClassification(classificationText)
+		logging.Errorf("Entropy-based classification error: %v, using empty category", err)
+		categoryName = ""
 		classificationConfidence = 0.0
 		reasoningDecision = entropy.ReasoningDecision{}
 	} else {
@@ -59,19 +58,4 @@ func (r *OpenAIRouter) performClassificationAndModelSelection(originalModel stri
 	}
 
 	return categoryName, classificationConfidence, reasoningDecision, selectedModel
-}
-
-// findCategoryForClassification determines the category for the given text using classification
-func (r *OpenAIRouter) findCategoryForClassification(query string) string {
-	if len(r.CategoryDescriptions) == 0 {
-		return ""
-	}
-
-	categoryName, _, err := r.Classifier.ClassifyCategory(query)
-	if err != nil {
-		logging.Errorf("Category classification error: %v", err)
-		return ""
-	}
-
-	return categoryName
 }
