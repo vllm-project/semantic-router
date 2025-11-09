@@ -216,7 +216,7 @@ type EmbeddingRule struct {
 	Category                  string            `yaml:"category"`
 	SimilarityThreshold       float32           `yaml:"threshold"`
 	Keywords                  []string          `yaml:"keywords"`
-	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_mathod"`
+	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
 	Model                     string            `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
 	Dimension                 int               `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
 	QualityPriority           float32           `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model

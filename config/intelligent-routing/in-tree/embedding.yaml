@@ -77,13 +77,13 @@ classifier:
 embedding_rules:
   - category: "technical_support"
     threshold: 0.75
-    keywords: 
+    keywords:
       - "how to configure the system"
       - "installation guide"
       - "troubleshooting steps"
       - "error message explanation"
       - "setup instructions"
-    aggregation_mathod: "max"  # Options: "max", "avg", "any"
+    aggregation_method: "max"  # Options: "max", "avg", "any"
     model: "auto"  # Options: "auto", "qwen3", "gemma"
     dimension: 768  # Options: 128, 256, 512, 768, 1024
     quality_priority: 0.7  # 0.0-1.0, only for "auto" model
@@ -97,7 +97,7 @@ embedding_rules:
       - "availability and stock"
       - "product comparison"
       - "warranty details"
-    aggregation_mathod: "avg"
+    aggregation_method: "avg"
     model: "gemma"
     dimension: 768
 
@@ -109,7 +109,7 @@ embedding_rules:
       - "profile update"
       - "subscription management"
       - "billing information"
-    aggregation_mathod: "max"
+    aggregation_method: "max"
     model: "qwen3"
     dimension: 1024
 
@@ -120,7 +120,7 @@ embedding_rules:
       - "information request"
       - "help needed"
       - "customer service"
-    aggregation_mathod: "any"
+    aggregation_method: "any"
     model: "auto"
     dimension: 512
     quality_priority: 0.5
