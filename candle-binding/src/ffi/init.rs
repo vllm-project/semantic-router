@@ -746,6 +746,11 @@ pub extern "C" fn init_lora_unified_classifier(
         }
     };
 
+    // Check if already initialized - return success if so
+    if PARALLEL_LORA_ENGINE.get().is_some() {
+        return true;
+    }
+
     // Load labels dynamically from model configurations
     let _intent_labels_vec = load_labels_from_model_config(intent_path).unwrap_or_else(|e| {
         eprintln!(
@@ -786,7 +791,9 @@ pub extern "C" fn init_lora_unified_classifier(
     ) {
         Ok(engine) => {
             // Store in global static variable (Arc for efficient cloning during concurrent access)
+            // Return true even if already set (race condition)
             PARALLEL_LORA_ENGINE.set(Arc::new(engine)).is_ok()
+                || PARALLEL_LORA_ENGINE.get().is_some()
         }
         Err(e) => {
             eprintln!(
