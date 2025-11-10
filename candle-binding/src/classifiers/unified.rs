@@ -11,6 +11,7 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::time::Instant;
 
+use crate::ffi::embedding::GLOBAL_MODEL_FACTORY;
 use crate::model_architectures::config::{DualPathConfig, LoRAConfig, TraditionalConfig};
 use crate::model_architectures::routing::{DualPathRouter, ProcessingRequirements};
 use crate::model_architectures::traits::*;
@@ -1022,6 +1023,45 @@ impl DualPathUnifiedClassifier {
             }
         } else {
             model_type
+        };
+
+        // Validate model availability and fall back if necessary
+        let model_type = match model_type {
+            ModelType::GemmaEmbedding => {
+                // Check if Gemma is available
+                if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+                    if factory.get_gemma_model().is_none() {
+                        // Gemma not available, fall back to Qwen3
+                        eprintln!(
+                            "WARNING: GemmaEmbedding selected but not available, falling back to Qwen3Embedding"
+                        );
+                        ModelType::Qwen3Embedding
+                    } else {
+                        ModelType::GemmaEmbedding
+                    }
+                } else {
+                    // No factory available, fall back to Qwen3
+                    eprintln!(
+                        "WARNING: ModelFactory not initialized, falling back to Qwen3Embedding"
+                    );
+                    ModelType::Qwen3Embedding
+                }
+            }
+            ModelType::Qwen3Embedding => {
+                // Qwen3 is the default, should always be available
+                // But verify just in case
+                if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+                    if factory.get_qwen3_model().is_none() {
+                        return Err(UnifiedClassifierError::ProcessingError(
+                            "Qwen3Embedding selected but not available and no fallback available"
+                                .to_string(),
+                        ));
+                    }
+                }
+                ModelType::Qwen3Embedding
+            }
+            // For non-embedding types, pass through
+            other => other,
         };
 
         // Log routing decision for monitoring
