@@ -21,7 +21,7 @@ import (
 const (
 	// Version Configuration
 	// AIBrix version - can be overridden via AIBRIX_VERSION environment variable
-	defaultAIBrixVersion = "v0.4.1"
+	defaultAIBrixVersion = "v0.5.0"
 
 	// Kubernetes Namespaces - used frequently throughout
 	namespaceSemanticRouter = "vllm-semantic-router-system"
