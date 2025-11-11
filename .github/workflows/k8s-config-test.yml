@@ -12,6 +12,7 @@ on:
 jobs:
   test-with-custom-config:
     name: Test with Custom Configuration
+    if: ${{ github.repository == 'vllm-project/semantic-router' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -74,7 +75,7 @@ jobs:
           if [ -d "deploy/kubernetes/ai-gateway/semantic-router/observability" ]; then
             kustomize build deploy/kubernetes/ai-gateway/semantic-router/observability > /tmp/observability-manifests.yaml
             echo "✓ Observability kustomization is valid"
-            
+
             # Verify expected resources
             for resource in "Deployment" "Service" "ConfigMap" "PersistentVolumeClaim"; do
               if ! grep -q "kind: $resource" /tmp/observability-manifests.yaml; then
@@ -99,7 +100,7 @@ jobs:
                 kubectl create --dry-run=client -f "$yaml_file" || echo "Warning: Issues with $yaml_file"
               fi
             done
-            
+
             # Validate inference-pool manifests (skip CRD validation as they may not be installed)
             for yaml_file in deploy/kubernetes/ai-gateway/semantic-router/ai-gateway/inference-pool/*.yaml; do
               if [ -f "$yaml_file" ]; then
@@ -108,7 +109,7 @@ jobs:
                 kubectl create --dry-run=client -f "$yaml_file" 2>&1 | grep -q "no matches for kind" && echo "✓ $yaml_file syntax valid (CRD not installed)" || echo "Validated $yaml_file"
               fi
             done
-            
+
             echo "✓ AI Gateway configuration validation completed"
           else
             echo "AI Gateway directory not found, skipping..."

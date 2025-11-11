@@ -202,7 +202,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	}
 
 	// Perform classification using the existing classifier
-	category, confidence, err := s.classifier.ClassifyCategory(req.Text)
+	category, confidence, _, err := s.classifier.ClassifyCategoryWithEntropy(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("classification failed: %w", err)
 	}

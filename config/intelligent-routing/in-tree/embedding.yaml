@@ -1,0 +1,183 @@
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
+  similarity_threshold: 0.8
+  max_entries: 1000  # Only applies to memory backend
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  # HNSW index configuration (for memory backend only)
+  use_hnsw: true  # Enable HNSW index for faster similarity search
+  hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
+  hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
+
+  # Hybrid cache configuration (when backend_type: "hybrid")
+  # Combines in-memory HNSW for fast search with Milvus for scalable storage
+  # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
+  # backend_config_path: "config/milvus.yaml" # Path to Milvus config
+
+  # Embedding model for semantic similarity matching
+  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  # Default: "bert" (fastest, lowest memory)
+  embedding_model: "bert"
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+# vLLM Endpoints Configuration
+# IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
+# Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1
+# NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
+    port: 8002
+    weight: 1
+
+model_config:
+  "qwen3":
+    reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
+    preferred_endpoints: ["endpoint1"]
+    pii_policy:
+      allow_by_default: true
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Embedding-based classification rules
+# These rules use semantic similarity between query text and keywords
+embedding_rules:
+  - category: "technical_support"
+    threshold: 0.75
+    keywords:
+      - "how to configure the system"
+      - "installation guide"
+      - "troubleshooting steps"
+      - "error message explanation"
+      - "setup instructions"
+    aggregation_method: "max"  # Options: "max", "avg", "any"
+    model: "auto"  # Options: "auto", "qwen3", "gemma"
+    dimension: 768  # Options: 128, 256, 512, 768, 1024
+    quality_priority: 0.7  # 0.0-1.0, only for "auto" model
+    latency_priority: 0.3  # 0.0-1.0, only for "auto" model
+
+  - category: "product_inquiry"
+    threshold: 0.70
+    keywords:
+      - "product features and specifications"
+      - "pricing information"
+      - "availability and stock"
+      - "product comparison"
+      - "warranty details"
+    aggregation_method: "avg"
+    model: "gemma"
+    dimension: 768
+
+  - category: "account_management"
+    threshold: 0.72
+    keywords:
+      - "password reset"
+      - "account settings"
+      - "profile update"
+      - "subscription management"
+      - "billing information"
+    aggregation_method: "max"
+    model: "qwen3"
+    dimension: 1024
+
+  - category: "general_inquiry"
+    threshold: 0.65
+    keywords:
+      - "general question"
+      - "information request"
+      - "help needed"
+      - "customer service"
+    aggregation_method: "any"
+    model: "auto"
+    dimension: 512
+    quality_priority: 0.5
+    latency_priority: 0.5
+
+# Categories with model scores
+categories:
+  # Embedding-based categories
+  - name: technical_support
+    system_prompt: "You are a technical support specialist. Provide detailed, step-by-step guidance for technical issues. Use clear explanations and include relevant troubleshooting steps."
+    model_scores:
+      - model: qwen3
+        score: 0.9
+        use_reasoning: true
+    jailbreak_enabled: true
+    pii_detection_enabled: true
+
+  - name: product_inquiry
+    system_prompt: "You are a product specialist. Provide accurate information about products, features, pricing, and availability. Be helpful and informative."
+    model_scores:
+      - model: qwen3
+        score: 0.85
+        use_reasoning: false
+    jailbreak_enabled: true
+    pii_detection_enabled: false
+
+  - name: account_management
+    system_prompt: "You are an account management assistant. Help users with account-related tasks such as password resets, profile updates, and subscription management. Prioritize security and privacy."
+    model_scores:
+      - model: qwen3
+        score: 0.88
+        use_reasoning: false
+    jailbreak_enabled: true
+    pii_detection_enabled: true
+
+  - name: general_inquiry
+    system_prompt: "You are a helpful general assistant. Answer questions clearly and concisely. If you need more information, ask clarifying questions."
+    model_scores:
+      - model: qwen3
+        score: 0.75
+        use_reasoning: false
+    jailbreak_enabled: true
+    pii_detection_enabled: false
+
+# Embedding Models Configuration
+# These models provide intelligent embedding generation with automatic routing:
+# - Qwen3-Embedding-0.6B: Up to 32K context, high quality, 1024-dim embeddings
+# - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+embedding_models:
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/embeddinggemma-300m"
+  use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
+
+# Default model for fallback
+default_model: "qwen3"
+
+# Entropy-based reasoning configuration
+entropy_threshold: 0.5  # Threshold for entropy-based reasoning decision
+high_entropy_threshold: 0.8  # High entropy threshold for complex queries
+

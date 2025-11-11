@@ -18,80 +18,82 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// MilvusConfig defines the complete configuration structure for Milvus cache backend
+// MilvusConfig defines the complete configuration structure for Milvus cache backend.
+// Fields use both json/yaml tags because sigs.k8s.io/yaml converts YAML→JSON before decoding,
+// so json tags ensure snake_case keys map correctly without switching parsers.
 type MilvusConfig struct {
 	Connection struct {
-		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
-		Database string `yaml:"database"`
-		Timeout  int    `yaml:"timeout"`
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database string `json:"database" yaml:"database"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
 		Auth     struct {
-			Enabled  bool   `yaml:"enabled"`
-			Username string `yaml:"username"`
-			Password string `yaml:"password"`
-		} `yaml:"auth"`
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			Username string `json:"username" yaml:"username"`
+			Password string `json:"password" yaml:"password"`
+		} `json:"auth" yaml:"auth"`
 		TLS struct {
-			Enabled  bool   `yaml:"enabled"`
-			CertFile string `yaml:"cert_file"`
-			KeyFile  string `yaml:"key_file"`
-			CAFile   string `yaml:"ca_file"`
-		} `yaml:"tls"`
-	} `yaml:"connection"`
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
 	Collection struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description"`
+		Name        string `json:"name" yaml:"name"`
+		Description string `json:"description" yaml:"description"`
 		VectorField struct {
-			Name       string `yaml:"name"`
-			Dimension  int    `yaml:"dimension"`
-			MetricType string `yaml:"metric_type"`
-		} `yaml:"vector_field"`
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"`
+		} `json:"vector_field" yaml:"vector_field"`
 		Index struct {
-			Type   string `yaml:"type"`
+			Type   string `json:"type" yaml:"type"`
 			Params struct {
-				M              int `yaml:"M"`
-				EfConstruction int `yaml:"efConstruction"`
-			} `yaml:"params"`
-		} `yaml:"index"`
-	} `yaml:"collection"`
+				M              int `json:"M" yaml:"M"`
+				EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+			} `json:"params" yaml:"params"`
+		} `json:"index" yaml:"index"`
+	} `json:"collection" yaml:"collection"`
 	Search struct {
 		Params struct {
-			Ef int `yaml:"ef"`
-		} `yaml:"params"`
-		TopK             int    `yaml:"topk"`
-		ConsistencyLevel string `yaml:"consistency_level"`
-	} `yaml:"search"`
+			Ef int `json:"ef" yaml:"ef"`
+		} `json:"params" yaml:"params"`
+		TopK             int    `json:"topk" yaml:"topk"`
+		ConsistencyLevel string `json:"consistency_level" yaml:"consistency_level"`
+	} `json:"search" yaml:"search"`
 	Performance struct {
 		ConnectionPool struct {
-			MaxConnections     int `yaml:"max_connections"`
-			MaxIdleConnections int `yaml:"max_idle_connections"`
-			AcquireTimeout     int `yaml:"acquire_timeout"`
-		} `yaml:"connection_pool"`
+			MaxConnections     int `json:"max_connections" yaml:"max_connections"`
+			MaxIdleConnections int `json:"max_idle_connections" yaml:"max_idle_connections"`
+			AcquireTimeout     int `json:"acquire_timeout" yaml:"acquire_timeout"`
+		} `json:"connection_pool" yaml:"connection_pool"`
 		Batch struct {
-			InsertBatchSize int `yaml:"insert_batch_size"`
-			Timeout         int `yaml:"timeout"`
-		} `yaml:"batch"`
-	} `yaml:"performance"`
+			InsertBatchSize int `json:"insert_batch_size" yaml:"insert_batch_size"`
+			Timeout         int `json:"timeout" yaml:"timeout"`
+		} `json:"batch" yaml:"batch"`
+	} `json:"performance" yaml:"performance"`
 	DataManagement struct {
 		TTL struct {
-			Enabled         bool   `yaml:"enabled"`
-			TimestampField  string `yaml:"timestamp_field"`
-			CleanupInterval int    `yaml:"cleanup_interval"`
-		} `yaml:"ttl"`
+			Enabled         bool   `json:"enabled" yaml:"enabled"`
+			TimestampField  string `json:"timestamp_field" yaml:"timestamp_field"`
+			CleanupInterval int    `json:"cleanup_interval" yaml:"cleanup_interval"`
+		} `json:"ttl" yaml:"ttl"`
 		Compaction struct {
-			Enabled  bool `yaml:"enabled"`
-			Interval int  `yaml:"interval"`
-		} `yaml:"compaction"`
-	} `yaml:"data_management"`
+			Enabled  bool `json:"enabled" yaml:"enabled"`
+			Interval int  `json:"interval" yaml:"interval"`
+		} `json:"compaction" yaml:"compaction"`
+	} `json:"data_management" yaml:"data_management"`
 	Logging struct {
-		Level          string `yaml:"level"`
-		EnableQueryLog bool   `yaml:"enable_query_log"`
-		EnableMetrics  bool   `yaml:"enable_metrics"`
-	} `yaml:"logging"`
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
 	Development struct {
-		DropCollectionOnStartup bool `yaml:"drop_collection_on_startup"`
-		AutoCreateCollection    bool `yaml:"auto_create_collection"`
-		VerboseErrors           bool `yaml:"verbose_errors"`
-	} `yaml:"development"`
+		DropCollectionOnStartup bool `json:"drop_collection_on_startup" yaml:"drop_collection_on_startup"`
+		AutoCreateCollection    bool `json:"auto_create_collection" yaml:"auto_create_collection"`
+		VerboseErrors           bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
 }
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
@@ -428,8 +430,10 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 
 	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
+	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
+	// We request model, query, request_body and will detect which column is which
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"id", "model", "query", "request_body"})
+		[]string{"model", "query", "request_body"})
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -442,30 +446,68 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 		return fmt.Errorf("no pending entry found")
 	}
 
-	// Get the model and request body from the pending entry
-	idColumn := results[0].(*entity.ColumnVarChar)
-	modelColumn := results[1].(*entity.ColumnVarChar)
-	queryColumn := results[2].(*entity.ColumnVarChar)
-	requestColumn := results[3].(*entity.ColumnVarChar)
-
-	if idColumn.Len() > 0 {
-		id := idColumn.Data()[0]
-		model := modelColumn.Data()[0]
-		query := queryColumn.Data()[0]
-		requestBody := requestColumn.Data()[0]
-
-		logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
-
-		// Create the complete entry with response data
-		err := c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
-		if err != nil {
-			metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
-			return fmt.Errorf("failed to add complete entry: %w", err)
-		}
-
-		logging.Debugf("MilvusCache.UpdateWithResponse: successfully added complete entry with response")
-		metrics.RecordCacheOperation("milvus", "update_response", "success", time.Since(start).Seconds())
+	// Milvus automatically includes the primary key in results but order is non-deterministic
+	// We requested ["model", "query", "request_body"], expect 3-4 columns (primary key may be auto-included)
+	// Strategy: Find the ID column (32-char hex string), then map remaining columns
+	if len(results) < 3 {
+		logging.Debugf("MilvusCache.UpdateWithResponse: unexpected result count: %d", len(results))
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("incomplete query result: expected 3+ columns, got %d", len(results))
 	}
+
+	var id, model, query, requestBody string
+	idColIndex := -1
+
+	// First pass: find the ID column (32-char hex string = MD5 hash)
+	for i := 0; i < len(results); i++ {
+		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
+			val := col.Data()[0]
+			if len(val) == 32 && isHexString(val) {
+				id = val
+				idColIndex = i
+				break
+			}
+		}
+	}
+
+	// Second pass: extract data fields in order, skipping the ID column
+	dataFieldIndex := 0
+	for i := 0; i < len(results); i++ {
+		if i == idColIndex {
+			continue // Skip the primary key column
+		}
+		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
+			val := col.Data()[0]
+			switch dataFieldIndex {
+			case 0:
+				model = val
+			case 1:
+				query = val
+			case 2:
+				requestBody = val
+			}
+			dataFieldIndex++
+		}
+	}
+
+	if id == "" || model == "" || query == "" {
+		logging.Debugf("MilvusCache.UpdateWithResponse: failed to extract all required fields (id: %s, model: %s, query_len: %d)",
+			id, model, len(query))
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to extract required fields from query result")
+	}
+
+	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
+
+	// Create the complete entry with response data
+	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to add complete entry: %w", err)
+	}
+
+	logging.Debugf("MilvusCache.UpdateWithResponse: successfully added complete entry with response")
+	metrics.RecordCacheOperation("milvus", "update_response", "success", time.Since(start).Seconds())
 
 	return nil
 }

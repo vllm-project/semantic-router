@@ -8,8 +8,9 @@ on:
 
 jobs:
   publish:
+    if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
@@ -65,7 +66,7 @@ jobs:
         CRATE_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
         TAG_VERSION="${{ steps.extract_tag.outputs.version }}"
         echo "Crate version: $CRATE_VERSION"
-        echo "Tag version: $TAG_VERSION" 
+        echo "Tag version: $TAG_VERSION"
         if [ "$CRATE_VERSION" != "$TAG_VERSION" ]; then
           echo "::error::Crate version ($CRATE_VERSION) does not match tag version ($TAG_VERSION)"
           exit 1

@@ -32,6 +32,7 @@ on:
 jobs:
   # Build job for multi-architecture Docker images
   build_multiarch:
+    if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -228,11 +229,11 @@ jobs:
   # Create multi-arch manifest for final images
   create_manifest:
     needs: build_multiarch
+    if: github.repository == 'vllm-project/semantic-router' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    if: github.event_name != 'pull_request'
     strategy:
       matrix:
         image: [extproc, llm-katan, dashboard]

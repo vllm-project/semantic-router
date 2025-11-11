@@ -81,6 +81,9 @@ type IntelligentRouting struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
 
+	// Embedding-based classification rules
+	EmbeddingRules []EmbeddingRule `yaml:"embedding_rules,omitempty"`
+
 	// Categories for routing queries
 	Categories []Category `yaml:"categories"`
 
@@ -197,6 +200,27 @@ type KeywordRule struct {
 	Operator      string   `yaml:"operator"`
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
+}
+
+// Aggregation method used in keyword embedding rule
+type AggregationMethod string
+
+const (
+	AggregationMethodMean AggregationMethod = "mean"
+	AggregationMethodMax  AggregationMethod = "max"
+	AggregationMethodAny  AggregationMethod = "any"
+)
+
+// EmbeddingRule defines a rule for keyword embedding based similarity match rule.
+type EmbeddingRule struct {
+	Category                  string            `yaml:"category"`
+	SimilarityThreshold       float32           `yaml:"threshold"`
+	Keywords                  []string          `yaml:"keywords"`
+	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
+	Model                     string            `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
+	Dimension                 int               `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	QualityPriority           float32           `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
+	LatencyPriority           float32           `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
 }
 
 // APIConfig represents configuration for API endpoints

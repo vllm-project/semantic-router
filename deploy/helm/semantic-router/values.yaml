@@ -1,0 +1,531 @@
+# Default values for semantic-router.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  # -- Namespace for all resources (if not specified, uses Release.Namespace)
+  namespace: ""
+
+# -- Number of replicas for the deployment
+replicaCount: 1
+
+# Image configuration
+image:
+  # -- Image repository
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (overrides the image tag whose default is the chart appVersion)
+  tag: "latest"
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override the name of the chart
+nameOverride: ""
+
+# -- Override the full name of the chart
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext: {}
+  # fsGroup: 2000
+
+# Container security context
+securityContext:
+  # -- Run as non-root user
+  runAsNonRoot: false
+  # -- Allow privilege escalation
+  allowPrivilegeEscalation: false
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsUser: 1000
+
+# Service configuration
+service:
+  # -- Service type
+  type: ClusterIP
+  # gRPC service port
+  grpc:
+    # -- gRPC port number
+    port: 50051
+    # -- gRPC target port
+    targetPort: 50051
+    # -- gRPC protocol
+    protocol: TCP
+  # HTTP API service port
+  api:
+    # -- HTTP API port number
+    port: 8080
+    # -- HTTP API target port
+    targetPort: 8080
+    # -- HTTP API protocol
+    protocol: TCP
+  # Metrics service
+  metrics:
+    # -- Enable metrics service
+    enabled: true
+    # -- Metrics port number
+    port: 9190
+    # -- Metrics target port
+    targetPort: 9190
+    # -- Metrics protocol
+    protocol: TCP
+
+# Ingress configuration
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  # -- Ingress hosts configuration
+  hosts:
+    - host: semantic-router.local
+      paths:
+        - path: /
+          pathType: Prefix
+          servicePort: 8080
+  # -- Ingress TLS configuration
+  tls: []
+  #  - secretName: semantic-router-tls
+  #    hosts:
+  #      - semantic-router.local
+
+# Resource limits and requests
+resources:
+  # -- Resource limits
+  limits:
+    memory: "6Gi"
+    cpu: "2"
+  # -- Resource requests
+  requests:
+    memory: "3Gi"
+    cpu: "1"
+
+# Init container for model downloading
+initContainer:
+  # -- Enable init container
+  enabled: true
+  # -- Init container image
+  image: python:3.11-slim
+  # -- Resource limits for init container
+  resources:
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+  # -- Models to download
+  models:
+    - name: all-MiniLM-L12-v2
+      repo: sentence-transformers/all-MiniLM-L12-v2
+    - name: category_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/category_classifier_modernbert-base_model
+    - name: pii_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/pii_classifier_modernbert-base_model
+    - name: jailbreak_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model
+    - name: pii_classifier_modernbert-base_presidio_token_model
+      repo: LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model
+
+# Autoscaling configuration
+autoscaling:
+  # -- Enable horizontal pod autoscaling
+  enabled: false
+  # -- Minimum number of replicas
+  minReplicas: 1
+  # -- Maximum number of replicas
+  maxReplicas: 10
+  # -- Target CPU utilization percentage
+  targetCPUUtilizationPercentage: 80
+  # -- Target memory utilization percentage
+  # targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Liveness probe configuration
+livenessProbe:
+  # -- Enable liveness probe
+  enabled: true
+  # -- Initial delay seconds
+  initialDelaySeconds: 120
+  # -- Period seconds
+  periodSeconds: 30
+  # -- Timeout seconds
+  timeoutSeconds: 10
+  # -- Failure threshold
+  failureThreshold: 5
+
+# Readiness probe configuration
+readinessProbe:
+  # -- Enable readiness probe
+  enabled: true
+  # -- Initial delay seconds
+  initialDelaySeconds: 180
+  # -- Period seconds
+  periodSeconds: 30
+  # -- Timeout seconds
+  timeoutSeconds: 10
+  # -- Failure threshold
+  failureThreshold: 5
+
+# Persistent Volume Claim for models
+persistence:
+  # -- Enable persistent volume
+  enabled: true
+  # -- Storage class name (use "-" for default storage class)
+  storageClassName: "standard"
+  # -- Access mode
+  accessMode: ReadWriteOnce
+  # -- Storage size
+  size: 10Gi
+  # -- Annotations for PVC
+  annotations: {}
+  # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
+  existingClaim: ""
+
+# Application configuration
+config:
+  # BERT model configuration
+  bert_model:
+    model_id: models/all-MiniLM-L12-v2
+    threshold: 0.6
+    use_cpu: true
+
+  # Semantic cache configuration
+  semantic_cache:
+    enabled: true
+    backend_type: "memory"
+    similarity_threshold: 0.8
+    max_entries: 1000
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+
+  # Tools configuration
+  tools:
+    enabled: true
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
+
+  # Prompt guard configuration
+  prompt_guard:
+    enabled: true
+    use_modernbert: true
+    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+  # vLLM endpoints configuration
+  vllm_endpoints:
+    - name: "endpoint1"
+      address: "172.28.0.20"
+      port: 8002
+      weight: 1
+
+  # Model configuration
+  model_config:
+    "qwen3":
+      reasoning_family: "qwen3"
+      preferred_endpoints: ["endpoint1"]
+      pii_policy:
+        allow_by_default: true
+
+  # Classifier configuration
+  classifier:
+    category_model:
+      model_id: "models/category_classifier_modernbert-base_model"
+      use_modernbert: true
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    pii_model:
+      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+      use_modernbert: true
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+  # Categories configuration
+  categories:
+    - name: business
+      system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+      model_scores:
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+    - name: law
+      system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+      model_scores:
+        - model: qwen3
+          score: 0.4
+          use_reasoning: false
+    - name: psychology
+      system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+      semantic_cache_enabled: true
+      semantic_cache_similarity_threshold: 0.92
+      model_scores:
+        - model: qwen3
+          score: 0.6
+          use_reasoning: false
+    - name: biology
+      system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+      model_scores:
+        - model: qwen3
+          score: 0.9
+          use_reasoning: false
+    - name: chemistry
+      system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+      model_scores:
+        - model: qwen3
+          score: 0.6
+          use_reasoning: true
+    - name: history
+      system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+      model_scores:
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+    - name: other
+      system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+      semantic_cache_enabled: true
+      semantic_cache_similarity_threshold: 0.75
+      model_scores:
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+    - name: health
+      system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+      semantic_cache_enabled: true
+      semantic_cache_similarity_threshold: 0.95
+      model_scores:
+        - model: qwen3
+          score: 0.5
+          use_reasoning: false
+    - name: economics
+      system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+      model_scores:
+        - model: qwen3
+          score: 1.0
+          use_reasoning: false
+    - name: math
+      system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+      model_scores:
+        - model: qwen3
+          score: 1.0
+          use_reasoning: true
+    - name: physics
+      system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+      model_scores:
+        - model: qwen3
+          score: 0.7
+          use_reasoning: true
+    - name: computer science
+      system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+      model_scores:
+        - model: qwen3
+          score: 0.6
+          use_reasoning: false
+    - name: philosophy
+      system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+      model_scores:
+        - model: qwen3
+          score: 0.5
+          use_reasoning: false
+    - name: engineering
+      system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+      model_scores:
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+
+  # Default model
+  default_model: "qwen3"
+
+  # Reasoning families
+  reasoning_families:
+    deepseek:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    gpt:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  # Default reasoning effort
+  default_reasoning_effort: high
+
+  # API configuration
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+  # Observability configuration
+  observability:
+    tracing:
+      enabled: true
+      provider: "opentelemetry"
+      exporter:
+        type: "otlp"
+        endpoint: "jaeger:4317"
+        insecure: true
+      sampling:
+        type: "always_on"
+        rate: 1.0
+      resource:
+        service_name: "vllm-semantic-router"
+        service_version: "v0.1.0"
+        deployment_environment: "development"
+
+# Tools database configuration
+toolsDb:
+  - tool:
+      type: "function"
+      function:
+        name: "get_weather"
+        description: "Get current weather information for a location"
+        parameters:
+          type: "object"
+          properties:
+            location:
+              type: "string"
+              description: "The city and state, e.g. San Francisco, CA"
+            unit:
+              type: "string"
+              enum: ["celsius", "fahrenheit"]
+              description: "Temperature unit"
+          required: ["location"]
+    description: "Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow"
+    category: "weather"
+    tags: ["weather", "temperature", "forecast", "climate"]
+  - tool:
+      type: "function"
+      function:
+        name: "search_web"
+        description: "Search the web for information"
+        parameters:
+          type: "object"
+          properties:
+            query:
+              type: "string"
+              description: "The search query"
+            num_results:
+              type: "integer"
+              description: "Number of results to return"
+              default: 5
+          required: ["query"]
+    description: "Search the internet, web search, find information online, browse web content, lookup, research, google, find answers, discover, investigate"
+    category: "search"
+    tags: ["search", "web", "internet", "information", "browse"]
+  - tool:
+      type: "function"
+      function:
+        name: "calculate"
+        description: "Perform mathematical calculations"
+        parameters:
+          type: "object"
+          properties:
+            expression:
+              type: "string"
+              description: "Mathematical expression to evaluate"
+          required: ["expression"]
+    description: "Calculate mathematical expressions, solve math problems, arithmetic operations, compute numbers, addition, subtraction, multiplication, division, equations, formula"
+    category: "math"
+    tags: ["math", "calculation", "arithmetic", "compute", "numbers"]
+  - tool:
+      type: "function"
+      function:
+        name: "send_email"
+        description: "Send an email message"
+        parameters:
+          type: "object"
+          properties:
+            to:
+              type: "string"
+              description: "Recipient email address"
+            subject:
+              type: "string"
+              description: "Email subject"
+            body:
+              type: "string"
+              description: "Email body content"
+          required: ["to", "subject", "body"]
+    description: "Send email messages, email communication, contact people via email, mail, message, correspondence, notify, inform"
+    category: "communication"
+    tags: ["email", "send", "communication", "message", "contact"]
+  - tool:
+      type: "function"
+      function:
+        name: "create_calendar_event"
+        description: "Create a new calendar event or appointment"
+        parameters:
+          type: "object"
+          properties:
+            title:
+              type: "string"
+              description: "Event title"
+            date:
+              type: "string"
+              description: "Event date in YYYY-MM-DD format"
+            time:
+              type: "string"
+              description: "Event time in HH:MM format"
+            duration:
+              type: "integer"
+              description: "Duration in minutes"
+          required: ["title", "date", "time"]
+    description: "Schedule meetings, create calendar events, set appointments, manage calendar, book time, plan meeting, organize schedule, reminder, agenda"
+    category: "productivity"
+    tags: ["calendar", "event", "meeting", "appointment", "schedule"]
+
+# Container arguments
+args:
+  - "--secure=true"
+
+# Environment variables
+env:
+  - name: LD_LIBRARY_PATH
+    value: "/app/lib"

@@ -659,6 +659,27 @@ def merge_lora_adapter_to_full_model(
         )
         logger.info("Created category_mapping.json")
 
+    # Create lora_config.json for Rust router detection
+    # This file signals to the Rust router that this is a LoRA-trained model
+    # and should be routed to the LoRA inference path
+    logger.info("Creating lora_config.json for LoRA model detection...")
+    lora_config = {
+        "rank": 16,  # LoRA rank (r) - matches training configuration
+        "alpha": 32,  # LoRA alpha scaling factor
+        "dropout": 0.1,  # LoRA dropout rate
+        "target_modules": [
+            "attention.self.query",
+            "attention.self.value",
+            "attention.output.dense",
+            "intermediate.dense",
+            "output.dense",
+        ],
+    }
+    lora_config_path = os.path.join(output_path, "lora_config.json")
+    with open(lora_config_path, "w") as f:
+        json.dump(lora_config, f)
+    logger.info(f"Created {lora_config_path}")
+
     logger.info("LoRA adapter merged successfully!")
 
 

@@ -1,0 +1,370 @@
+name: Helm Chart CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm-ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm-ci.yml'
+  workflow_dispatch:
+
+env:
+  HELM_VERSION: v3.14.0
+  KIND_VERSION: v0.22.0
+  KUBECTL_VERSION: v1.29.0
+  CHART_PATH: deploy/helm/semantic-router
+
+jobs:
+
+  # Lint and validate Helm chart
+  lint-chart:
+    name: Lint Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Run Helm lint
+        run: |
+          echo "::group::Helm Lint"
+          helm lint ${{ env.CHART_PATH }}
+          echo "::endgroup::"
+
+      - name: Run Helm lint with dev values
+        run: |
+          echo "::group::Helm Lint (Dev Values)"
+          helm lint ${{ env.CHART_PATH }} -f ${{ env.CHART_PATH }}/values-dev.yaml
+          echo "::endgroup::"
+
+      - name: Run Helm lint with prod values
+        run: |
+          echo "::group::Helm Lint (Prod Values)"
+          helm lint ${{ env.CHART_PATH }} -f ${{ env.CHART_PATH }}/values-prod.yaml
+          echo "::endgroup::"
+
+  # Template validation
+  template-chart:
+    name: Validate Helm Templates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Template with default values
+        run: |
+          echo "::group::Template with Default Values"
+          helm template test-release ${{ env.CHART_PATH }} \
+            --namespace test-namespace > /tmp/default-template.yaml
+          echo "Templates generated successfully"
+          echo "::endgroup::"
+
+      - name: Template with dev values
+        run: |
+          echo "::group::Template with Dev Values"
+          helm template test-release ${{ env.CHART_PATH }} \
+            -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            --namespace test-namespace > /tmp/dev-template.yaml
+          echo "Dev templates generated successfully"
+          echo "::endgroup::"
+
+      - name: Template with prod values
+        run: |
+          echo "::group::Template with Prod Values"
+          helm template test-release ${{ env.CHART_PATH }} \
+            -f ${{ env.CHART_PATH }}/values-prod.yaml \
+            --namespace test-namespace > /tmp/prod-template.yaml
+          echo "Prod templates generated successfully"
+          echo "::endgroup::"
+
+      - name: Validate generated YAML
+        run: |
+          echo "::group::Validate YAML Syntax"
+          # Check if yamllint is available, install if needed
+          if ! command -v yamllint &> /dev/null; then
+            echo "Installing yamllint..."
+            pip install yamllint
+          fi
+
+          # Validate generated templates (ignore some Helm template warnings)
+          yamllint -d "{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}" \
+            /tmp/default-template.yaml || echo "Some yamllint warnings are expected for Helm templates"
+          echo "::endgroup::"
+
+      - name: Verify required resources
+        run: |
+          echo "::group::Verify Required Resources"
+          required_resources=(
+            "Namespace"
+            "ServiceAccount"
+            "PersistentVolumeClaim"
+            "ConfigMap"
+            "Deployment"
+            "Service"
+          )
+
+          for resource in "${required_resources[@]}"; do
+            if grep -q "kind: $resource" /tmp/default-template.yaml; then
+              echo "✓ Found resource: $resource"
+            else
+              echo "✗ Missing resource: $resource"
+              exit 1
+            fi
+          done
+          echo "All required resources found"
+          echo "::endgroup::"
+
+      - name: Upload templates as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-templates
+          path: /tmp/*-template.yaml
+          retention-days: 7
+
+  # CI test: Install chart in Kind cluster
+  install-chart:
+    name: Install Chart in Kind
+    runs-on: ubuntu-latest
+    needs: [lint-chart, template-chart]
+    strategy:
+      matrix:
+        k8s-version:
+          - v1.27.11
+          - v1.28.7
+          - v1.29.2
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          version: ${{ env.KIND_VERSION }}
+          node_image: kindest/node:${{ matrix.k8s-version }}
+          cluster_name: helm-test-cluster
+          wait: 120s
+
+      - name: Verify Kind cluster
+        run: |
+          echo "::group::Cluster Info"
+          kubectl cluster-info
+          kubectl get nodes
+          kubectl version
+          echo "::endgroup::"
+
+      - name: Create namespace
+        run: |
+          echo "::group::Create Namespace"
+          kubectl create namespace vllm-semantic-router-system || echo "Namespace already exists"
+          kubectl get namespace vllm-semantic-router-system
+          echo "::endgroup::"
+
+      - name: Install Helm chart with dev values (CI minimal config)
+        run: |
+          echo "::group::Install Chart"
+          # CI environment: Download only essential model to avoid OOM
+          # Only download all-MiniLM-L12-v2 (smallest model ~120MB)
+          helm install semantic-router ${{ env.CHART_PATH }} \
+            -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            --set initContainer.resources.limits.memory=2Gi \
+            --set initContainer.resources.requests.memory=1Gi \
+            --namespace vllm-semantic-router-system \
+            --wait \
+            --timeout 10m \
+            --debug
+          echo "::endgroup::"
+
+      # For ci debug, check init container logs
+      - name: Check init container logs
+        if: always()
+        run: |
+          echo "::group::Init Container Logs"
+          # Wait a bit for init container to start
+          sleep 5
+          # Get pod name
+          POD_NAME=$(kubectl get pods -n vllm-semantic-router-system -l app.kubernetes.io/name=semantic-router -o jsonpath='{.items[0].metadata.name}')
+          if [ -n "$POD_NAME" ]; then
+            echo "Checking init container logs for pod: $POD_NAME"
+            kubectl logs -n vllm-semantic-router-system $POD_NAME -c model-downloader --tail=100 || echo "Init container may have already completed or not started yet"
+          else
+            echo "No pod found yet"
+          fi
+          echo "::endgroup::"
+
+      - name: Verify installation
+        run: |
+          echo "::group::Helm Status"
+          helm status semantic-router -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+          echo "::group::Check Resources"
+          kubectl get all -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+          echo "::group::Check PVC"
+          kubectl get pvc -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+          echo "::group::Check ConfigMap"
+          kubectl get configmap -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+      - name: Wait for deployment to be ready
+        run: |
+          echo "::group::Wait for Deployment"
+          kubectl wait --for=condition=Available deployment/semantic-router \
+            -n vllm-semantic-router-system \
+            --timeout=600s || {
+              echo "Deployment failed to become ready"
+              echo "::group::Pod Status"
+              kubectl get pods -n vllm-semantic-router-system
+              echo "::endgroup::"
+              echo "::group::Pod Describe"
+              kubectl describe pods -n vllm-semantic-router-system
+              echo "::endgroup::"
+              echo "::group::Pod Logs"
+              kubectl logs -n vllm-semantic-router-system -l app.kubernetes.io/name=semantic-router --all-containers=true --tail=100
+              echo "::endgroup::"
+              exit 1
+            }
+          echo "::endgroup::"
+
+      - name: Check pod status
+        run: |
+          echo "::group::Pod Details"
+          kubectl get pods -n vllm-semantic-router-system -o wide
+          echo "::endgroup::"
+
+          echo "::group::Pod Events"
+          kubectl get events -n vllm-semantic-router-system --sort-by='.lastTimestamp'
+          echo "::endgroup::"
+
+      - name: Test service endpoints
+        run: |
+          echo "::group::Service Endpoints"
+          kubectl get svc -n vllm-semantic-router-system
+          kubectl get endpoints -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+      # for ci debug.
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "::group::Helm Release Info"
+          helm list -n vllm-semantic-router-system
+          helm get values semantic-router -n vllm-semantic-router-system --all
+          echo "::endgroup::"
+
+          echo "::group::All Resources"
+          kubectl get all -n vllm-semantic-router-system -o wide
+          echo "::endgroup::"
+
+          echo "::group::Pod Logs"
+          for pod in $(kubectl get pods -n vllm-semantic-router-system -o name); do
+            echo "Logs for $pod:"
+            kubectl logs -n vllm-semantic-router-system $pod --all-containers=true --tail=200 || true
+            echo "---"
+          done
+          echo "::endgroup::"
+
+          echo "::group::Events"
+          kubectl get events -n vllm-semantic-router-system --sort-by='.lastTimestamp'
+          echo "::endgroup::"
+
+      - name: Test upgrade
+        run: |
+          echo "::group::Upgrade Chart"
+          # Use same minimal config for upgrade test
+          helm upgrade semantic-router ${{ env.CHART_PATH }} \
+            -f ${{ env.CHART_PATH }}/values-dev.yaml \
+            --set initContainer.resources.limits.memory=2Gi \
+            --set initContainer.resources.requests.memory=1Gi \
+            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
+            --namespace vllm-semantic-router-system \
+            --wait \
+            --timeout 10m
+          echo "::endgroup::"
+
+          echo "::group::Verify Upgrade"
+          helm status semantic-router -n vllm-semantic-router-system
+          kubectl get pods -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+      - name: Test rollback
+        run: |
+          echo "::group::Rollback Chart"
+          helm rollback semantic-router -n vllm-semantic-router-system --wait
+          echo "::endgroup::"
+
+          echo "::group::Verify Rollback"
+          helm history semantic-router -n vllm-semantic-router-system
+          echo "::endgroup::"
+
+      - name: Uninstall chart
+        if: always()
+        run: |
+          echo "::group::Uninstall Chart"
+          helm uninstall semantic-router -n vllm-semantic-router-system || true
+          kubectl delete namespace vllm-semantic-router-system --timeout=60s || true
+          echo "::endgroup::"
+
+  # Job 4: Validation script test
+  validation-script:
+    name: Run Validation Script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Run validation script
+        run: |
+          chmod +x deploy/helm/validate-chart.sh
+          ./deploy/helm/validate-chart.sh
+
+  # all GHA Job success, print it.
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [lint-chart, template-chart, install-chart, validation-script]
+    if: success()
+    steps:
+      - name: Success summary
+        run: |
+          echo "✓ Lint checks passed"
+          echo "✓ Template validation passed"
+          echo "✓ Chart installation tests passed"
+          echo "✓ Validation script passed"

@@ -187,20 +187,23 @@ impl LoRATokenClassifier {
         for (i, (token, token_embedding)) in tokens.iter().enumerate() {
             // Use real BERT embedding from tokenization
 
+            // Add batch dimension: [hidden_size] -> [1, hidden_size]
+            let token_embedding_batched = token_embedding.unsqueeze(0)?;
+
             // Apply base classifier
-            let base_logits = self.base_classifier.forward(&token_embedding)?;
+            let base_logits = self.base_classifier.forward(&token_embedding_batched)?;
 
             // Apply LoRA adapters if available
             let enhanced_logits = if let Some(adapter) = self.adapters.get("token_classification") {
-                let adapter_output = adapter.forward(&token_embedding, false)?; // false = not training
+                let adapter_output = adapter.forward(&token_embedding_batched, false)?; // false = not training
                 (&base_logits + &adapter_output)?
             } else {
                 base_logits
             };
 
-            // Apply softmax to get probabilities
+            // Apply softmax to get probabilities and remove batch dimension
             let probabilities = candle_nn::ops::softmax(&enhanced_logits, 1)?;
-            let probs_vec = probabilities.to_vec1::<f32>()?;
+            let probs_vec = probabilities.squeeze(0)?.to_vec1::<f32>()?;
 
             // Find the class with highest probability
             let (predicted_id, confidence) = probs_vec
