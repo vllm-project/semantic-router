@@ -72,6 +72,7 @@ model_config:
 ### MCP Response Format
 
 **list_categories**:
+
 ```json
 {
   "categories": ["math", "science", "technology"],
@@ -87,6 +88,7 @@ model_config:
 ```
 
 **classify_text**:
+
 ```json
 {
   "class": 3,
@@ -191,6 +193,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Advanced MCP Server Examples
 
 ### Context-Aware Classification
+
 ```python
 @app.post("/mcp/classify_text")
 def classify_text(request: ClassifyRequest, user_id: str = Header(None)):
@@ -216,6 +219,7 @@ def classify_text(request: ClassifyRequest, user_id: str = Header(None)):
 ```
 
 ### Time-Based Routing
+
 ```python
 @app.post("/mcp/classify_text")
 def classify_text(request: ClassifyRequest):
@@ -240,6 +244,7 @@ def classify_text(request: ClassifyRequest):
 ```
 
 ### Risk-Based Routing
+
 ```python
 @app.post("/mcp/classify_text")
 def classify_text(request: ClassifyRequest):
@@ -283,4 +288,3 @@ def classify_text(request: ClassifyRequest):
 ## Reference
 
 See [config-mcp-classifier.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/out-tree/config-mcp-classifier.yaml) for complete configuration.
-

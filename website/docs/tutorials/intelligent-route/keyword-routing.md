@@ -118,7 +118,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 **Impact**: 100% deterministic, full audit trail for compliance
 
 ### 3. High-Frequency Trading (Sub-millisecond Routing)
-**Problem**: Need <1ms classification for real-time market data routing
+**Problem**: Need &lt;1ms classification for real-time market data routing
 **Solution**: Keyword matching provides instant classification without ML overhead
 **Impact**: 0.1ms latency, handles 100K+ requests/sec
 
@@ -142,4 +142,3 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Reference
 
 See [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) for complete configuration.
-

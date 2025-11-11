@@ -5,7 +5,7 @@ This guide shows you how to combine intelligent routing (domain/embedding/keywor
 ## Key Advantages
 
 - **Intent-aware adapter selection**: Combines any classification method (domain/embedding/keyword/MCP) with LoRA adapters
-- **Memory efficient**: Share base model weights across multiple domain adapters (<1% parameters per adapter)
+- **Memory efficient**: Share base model weights across multiple domain adapters (&lt;1% parameters per adapter)
 - **Transparent to users**: Users send requests to one endpoint, router handles adapter selection
 - **Flexible classification**: Choose the best routing method for your use case (domain for accuracy, keyword for compliance, etc.)
 
@@ -205,7 +205,7 @@ Check the router logs to confirm the correct LoRA adapter is selected for each q
 ### 3. Customer Support (Embedding Routing + LoRA)
 **Problem**: Support queries span IT/HR/finance, users phrase questions in many ways
 **Solution**: Embedding routing matches semantic intent, routes to department-specific LoRA adapters
-**Impact**: Handles paraphrases, single endpoint serves all departments with <10ms adapter switching
+**Impact**: Handles paraphrases, single endpoint serves all departments with &lt;10ms adapter switching
 
 ### 4. EdTech Platform (Domain Routing + LoRA)
 **Problem**: Students ask math/science/literature questions, need subject-specific tutors

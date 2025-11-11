@@ -143,7 +143,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ### 1. Multi-Task Classification with LoRA (Efficient)
 **Problem**: Need domain classification + PII detection + jailbreak detection on every request
 **Solution**: LoRA adapters run all 3 tasks with one base model pass instead of 3 separate models
-**Impact**: 3x faster than running 3 full models, <1% parameter overhead per task
+**Impact**: 3x faster than running 3 full models, &lt;1% parameter overhead per task
 
 ### 2. Long Document Analysis (Specialized - Qwen3)
 **Problem**: Research papers and legal documents exceed 8K token limit of ModernBERT
@@ -158,7 +158,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ### 4. Edge Deployment (Specialized - Gemma)
 **Problem**: Mobile/IoT devices can't run large classification models
 **Solution**: EmbeddingGemma-300M with Matryoshka embeddings (128-768 dims)
-**Impact**: 5x smaller model, runs on edge devices with <100MB memory
+**Impact**: 5x smaller model, runs on edge devices with &lt;100MB memory
 
 ### 5. STEM Tutoring Platform (Efficient Reasoning Control)
 **Problem**: Math/physics need reasoning, but history/literature don't
@@ -168,6 +168,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Domain-Specific Optimizations
 
 ### STEM Domains (Reasoning Enabled)
+
 ```yaml
 - name: math
   use_reasoning: true  # Step-by-step solutions
@@ -181,6 +182,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ```
 
 ### Professional Domains (PII + Caching)
+
 ```yaml
 - name: health
   semantic_cache_enabled: true
@@ -192,6 +194,7 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ```
 
 ### General Domains (Fast + Cached)
+
 ```yaml
 - name: business
   use_reasoning: false  # Fast responses
@@ -223,4 +226,3 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Reference
 
 See [bert_classification.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/bert_classification.yaml) for complete configuration.
-

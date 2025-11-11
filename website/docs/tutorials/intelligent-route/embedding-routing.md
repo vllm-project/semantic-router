@@ -159,28 +159,34 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Model Selection Strategy
 
 ### Auto Mode (Recommended)
+
 ```yaml
 model: "auto"
 quality_priority: 0.7  # Favor accuracy
 latency_priority: 0.3  # Accept some latency
 ```
+
 - Automatically selects Qwen3 (high quality) or Gemma (fast) based on priorities
 - Balances accuracy vs speed per request
 
 ### Qwen3 (High Quality)
+
 ```yaml
 model: "qwen3"
 dimension: 1024
 ```
+
 - Best for: Complex queries, subtle distinctions, high-value interactions
 - Latency: ~30-50ms per query
 - Use case: Account management, financial queries
 
 ### Gemma (Fast)
+
 ```yaml
 model: "gemma"
 dimension: 768  # or 512, 256, 128 for Matryoshka
 ```
+
 - Best for: High-throughput, simple categorization, cost-sensitive
 - Latency: ~10-20ms per query
 - Use case: Product inquiries, general support
@@ -197,4 +203,3 @@ dimension: 768  # or 512, 256, 128 for Matryoshka
 ## Reference
 
 See [embedding.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/embedding.yaml) for complete configuration.
-
