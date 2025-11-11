@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openai/openai-go"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectordb"
 )
@@ -50,11 +51,21 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 	case "always":
 		return true
 	case "adaptive":
-		// TODO: Implement adaptive decision: return true
-		return true
+		return r.getAdaptiveRAGDecision(query, categoryName)
 	default:
 		return false
 	}
+}
+
+func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string) bool {
+	logProbs, err := r.getChatResponseLogProbs(query, categoryName)
+	// TODO: Implement
+	return false
+}
+
+func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string) (*openai.ChatCompletionChoiceLogprobs, error) {
+	// TODO: Implement
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (r *OpenAIRouter) getVectorDBForCategory(categoryName string) vectordb.VectorDbBackend {
