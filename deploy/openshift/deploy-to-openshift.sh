@@ -194,6 +194,21 @@ rm -f "$TEMP_CONFIG"
 
 success "Deployment manifests applied"
 
+# Deploy MongoDB (required for ChatUI)
+log "Deploying MongoDB for ChatUI..."
+oc apply -f "$SCRIPT_DIR/mongo/deployment.yaml" -n "$NAMESPACE"
+success "MongoDB deployment applied"
+
+# Deploy ChatUI (HuggingChat interface)
+log "Deploying ChatUI (HuggingChat)..."
+oc apply -f "$SCRIPT_DIR/chatui/deployment.yaml" -n "$NAMESPACE"
+success "ChatUI deployment applied"
+
+# Deploy Dashboard with ChatUI integration
+log "Deploying Dashboard with ChatUI integration..."
+oc apply -f "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml" -n "$NAMESPACE"
+success "Dashboard deployment applied"
+
 # Create routes
 log "Creating OpenShift routes..."
 cat <<EOF | oc apply -n "$NAMESPACE" -f -
@@ -292,3 +307,16 @@ echo "  oc logs -f deployment/semantic-router -c semantic-router -n $NAMESPACE"
 echo ""
 echo "  # Check logs for Envoy"
 echo "  oc logs -f deployment/semantic-router -c envoy-proxy -n $NAMESPACE"
+echo ""
+echo "  # Check logs for MongoDB"
+echo "  oc logs -f deployment/mongo -n $NAMESPACE"
+echo ""
+echo "  # Check logs for ChatUI (HuggingChat)"
+echo "  oc logs -f deployment/chatui -n $NAMESPACE"
+echo ""
+echo "  # Check logs for Dashboard"
+echo "  oc logs -f deployment/dashboard -n $NAMESPACE"
+echo ""
+echo "  # Access ChatUI through Dashboard"
+echo "  DASHBOARD_URL=\$(oc get route dashboard -n $NAMESPACE -o jsonpath='{.spec.host}')"
+echo "  echo \"HuggingChat: https://\$DASHBOARD_URL/huggingchat\""

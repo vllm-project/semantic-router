@@ -31,11 +31,9 @@ spec:
         app: mongo
         component: database
     spec:
-      securityContext:
-        fsGroup: 999
       containers:
         - name: mongo
-          image: mongo:7
+          image: docker.io/library/mongo:7
           imagePullPolicy: IfNotPresent
           ports:
             - name: mongo
