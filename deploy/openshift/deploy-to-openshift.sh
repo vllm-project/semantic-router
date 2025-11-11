@@ -12,6 +12,32 @@ NC='\033[0m'
 
 NAMESPACE="vllm-semantic-router-system"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_OBSERVABILITY=true
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-observability)
+            DEPLOY_OBSERVABILITY=false
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
+            echo "  --help, -h            Show this help message"
+            echo ""
+            echo "By default, deploys the full stack including observability components."
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Run '$0 --help' for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 log() {
     echo -e "${BLUE}[INFO]${NC} $*"
@@ -266,6 +292,88 @@ success "Routes created"
 
 log "Waiting for deployments to be ready..."
 log "This may take several minutes as models are downloaded..."
+
+# Deploy observability components if enabled
+if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
+    log "Deploying observability components..."
+
+    # Create OpenWebUI PVC
+    log "Creating OpenWebUI PVC..."
+    cat <<EOF | oc apply -n "$NAMESPACE" -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openwebui-data
+  labels:
+    app: openwebui
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3-csi
+EOF
+    success "OpenWebUI PVC created"
+
+    # Deploy OpenWebUI
+    log "Deploying OpenWebUI..."
+    oc apply -f "$SCRIPT_DIR/openwebui/deployment.yaml" -n "$NAMESPACE"
+    oc apply -f "$SCRIPT_DIR/openwebui/service.yaml" -n "$NAMESPACE"
+    oc apply -f "$SCRIPT_DIR/openwebui/route.yaml" -n "$NAMESPACE"
+    success "OpenWebUI deployed"
+
+    # Deploy Grafana
+    log "Deploying Grafana..."
+    oc apply -f "$SCRIPT_DIR/observability/grafana/" -n "$NAMESPACE"
+    success "Grafana deployed"
+
+    # Deploy Prometheus
+    log "Deploying Prometheus..."
+    oc apply -f "$SCRIPT_DIR/observability/prometheus/" -n "$NAMESPACE"
+    success "Prometheus deployed"
+
+    # Build and deploy Dashboard using binary build
+    log "Building and deploying Dashboard..."
+
+    # Check if dashboard imagestream exists
+    if ! oc get imagestream dashboard-custom -n "$NAMESPACE" &>/dev/null; then
+        log "Creating dashboard imagestream..."
+        oc create imagestream dashboard-custom -n "$NAMESPACE"
+    fi
+
+    # Check if dashboard buildconfig exists
+    if ! oc get buildconfig dashboard-custom -n "$NAMESPACE" &>/dev/null; then
+        log "Creating dashboard build configuration..."
+        cd "$SCRIPT_DIR/../../dashboard"
+        oc new-build --name=dashboard-custom --binary --strategy=docker --to=dashboard-custom:latest -n "$NAMESPACE"
+    fi
+
+    # Start the build from local dashboard directory
+    log "Building dashboard image from source..."
+    cd "$SCRIPT_DIR/../../dashboard"
+    oc start-build dashboard-custom --from-dir=. --follow -n "$NAMESPACE" || warn "Dashboard build may still be in progress"
+
+    # Deploy dashboard
+    log "Deploying dashboard..."
+    oc apply -f "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml" -n "$NAMESPACE"
+    success "Dashboard deployed"
+
+    # Wait for observability deployments
+    log "Waiting for observability components to be ready..."
+    oc rollout status deployment/openwebui -n "$NAMESPACE" --timeout=5m || warn "OpenWebUI may still be starting"
+    oc rollout status deployment/dashboard -n "$NAMESPACE" --timeout=5m || warn "Dashboard may still be starting"
+
+    success "Observability components deployed!"
+    echo ""
+    echo "  Dashboard: https://$(oc get route dashboard -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo "  OpenWebUI: https://$(oc get route openwebui -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo "  Grafana:   https://$(oc get route grafana -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo "  Prometheus: https://$(oc get route prometheus -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
+    echo ""
+else
+    log "Skipping observability components (--no-observability flag provided)"
+fi
 
 success "Deployment initiated! Check status with the following commands:"
 echo ""
