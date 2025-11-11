@@ -23,6 +23,7 @@ cd deploy/openshift
 This script will deploy:
 
 **Core Components:**
+
 - ✅ Build the llm-katan image from Dockerfile
 - ✅ Create namespace and PVCs
 - ✅ Deploy vLLM model services (Model-A and Model-B)
@@ -32,6 +33,7 @@ This script will deploy:
 - ✅ Create OpenShift routes for external access
 
 **Observability Stack:**
+
 - ✅ Dashboard (built from local source with PlaygroundPage fix)
 - ✅ OpenWebUI playground for testing models
 - ✅ Grafana for metrics visualization
@@ -250,6 +252,7 @@ The cleanup script supports different cleanup levels:
 The cleanup script removes:
 
 **Core Components:**
+
 - semantic-router deployment
 - vLLM model deployments (Model-A, Model-B)
 - All services and routes
@@ -257,6 +260,7 @@ The cleanup script removes:
 - BuildConfigs and ImageStreams (llm-katan, dashboard-custom)
 
 **Observability Stack:**
+
 - Dashboard deployment
 - OpenWebUI deployment
 - Grafana deployment
@@ -264,6 +268,7 @@ The cleanup script removes:
 - All related services, routes, and configmaps
 
 **Storage (namespace level only):**
+
 - PVCs for models and cache
 
 ### Manual Cleanup
