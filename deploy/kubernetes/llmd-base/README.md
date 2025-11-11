@@ -1,18 +1,18 @@
 # vLLM Semantic Router with LLM-D
 
-This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) in combination with [LLM-D](https://github.com/llm-d/llm-d). This will also illustrate a key design pattern namely use of the vsr as a model picker in combination with the use of LLM-D as endpoint picker. 
+This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vSR) in combination with [LLM-D](https://github.com/llm-d/llm-d) and a single Inference gateway. This will also illustrate a key design pattern namely the use of the vSR as an automatic model picker in combination with the use of LLM-D as an endpoint picker.
 
-A model picker provides the ability to route an LLM query to one of multiple LLM models that are entirely different from each other, whereas an endpoint picker selects one of multiple endpoints that each serve an equivalent model (and most often the exact same base model). Hence this deployment shows how vLLM Semantic Router in its role as a model picker is perfectly complementary to endpoint picker solutions such as LLM-D. 
+A model picker provides the ability to route an LLM query to one of multiple LLM models that are entirely different from each other, whereas an endpoint picker selects one of multiple endpoints that each serve the same base model in a scale-out deployment for achieving higher performance. Hence this deployment shows how vSR (vLLM Semantic Router) in its role as a model picker based on semantic prompt analysis is perfectly complementary to endpoint picker solutions such as LLM-D. The combined solution enables optimized model serving with N separate base model types that have M endpoints each while relieving the end user/ LLM client of the burden of model selection or endpoint selection. 
 
-Since LLM-D has a number of deployment configurations some of which require a larger hardware setup we will demonstrate a baseline version of LLM-D  working in combination with vsr to introduce the core concepts. These same core concepts will also apply when using vsr with more complex LLM-D configurations and production grade well-lit paths as described in the LLM-D repo at [this link](https://github.com/llm-d/llm-d/tree/main/guides). 
+Since LLM-D has a number of deployment configurations some of which require a larger hardware setup we will demonstrate a baseline version of LLM-D  working in combination with vSR to introduce the core concepts. These same core concepts will also apply when using vSR with more complex LLM-D configurations and production grade well-lit paths as described in the LLM-D repo at [this link](https://github.com/llm-d/llm-d/tree/main/guides). 
 
-Also we will use LLM-D with Istio as the Inference Gateway in order to build on the steps and hardware setup from the [Istio deployment example](../istio/README.md) documented in this repo. Istio is also commonly used as the default gateway for LLM-D with or without vsr.
+Also we will use LLM-D with Istio as the Inference Gateway in order to build on the steps and hardware setup from the [Istio deployment example](../istio/README.md) already documented in this repo. Istio is also commonly used as the default gateway for LLM-D with or without vSR.
 
 ## Architecture Overview
 
 The deployment consists of:
 
-- **vLLM Semantic Router**: Provides intelligent request routing and processing decisions to Envoy based Gateways
+- **vLLM Semantic Router (vSR)**: Provides intelligent request routing and processing decisions to Envoy based Gateways
 - **LLM-D**: Distributed Inference platform used for scaleout LLM inferencing with SOTA performance. 
 - **Istio Gateway**: Istio's implementation of Kubernetes Gateway API that uses an Envoy proxy under the covers
 - **Gateway API Inference Extension**: Additional APIs to extend the Gateway API for Inference via ExtProc servers
@@ -103,7 +103,7 @@ LLM-D (and Kubernetes IGW) use an API resource called InferencePool alongwith a 
 
 Deploy the provided manifests in order to create InferencePool and LLM-D inference schedulers corresponding to the 2 base models used in this exercise.
 
-In order to show a full combination of model picking and endpoint picking, one would normally need at least 2 inferencepools with at least 2 endpoints per pool. Since that would require 4 instances of vllm serving pods and 4 GPUs in our exercise, that would require a more complex hardware setup. This guide deploys 1 model endpoint per each of the two InferencePools in order to show the core design of vsr's model picking working with and complementing LLM-D scheduler's endpoint picking. 
+In order to show a full combination of model picking and endpoint picking, one would normally need at least 2 inferencepools with at least 2 endpoints per pool. Since that would require 4 instances of vllm serving pods and 4 GPUs in our exercise, that would require a more complex hardware setup. This guide deploys 1 model endpoint per each of the two InferencePools in order to show the core design of vSR's model picking working with and complementing LLM-D scheduler's endpoint picking while requiring a simpler hardware setup.
 
 ```bash
 # Create the LLM-D scheduler and InferencePool for the Llama3-8b model  
@@ -129,9 +129,9 @@ kubectl apply -f deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml
 kubectl apply -f deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml
 ```
 
-## Step 6: Update vsr config
+## Step 6: Update vSR config
 
-Since this guide is based on using the same backend models as in the [Istio guide](../istio/README.md), we will reuse the same vsr config as from that guide and hence you do not need to update the file deploy/kubernetes/istio/config.yaml. If you were using different backend models as part of the LLM-D deployment, you would need to update this file. 
+Since this guide is based on using the same backend models as in the [Istio guide](../istio/README.md), we will reuse the same vSR config as from that guide and hence you do not need to update the file deploy/kubernetes/istio/config.yaml. If you were using different backend models as part of the LLM-D deployment, you would need to update this file. 
 
 ## Step 7: Deploy vLLM Semantic Router
 
@@ -148,7 +148,7 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-## Step 6: Additional Istio configuration for the VSR connection
+## Step 8: Additional Istio configuration for the vSR connection
 
 Install the destinationrule and envoy filter needed for Istio gateway to use ExtProc based interface with vLLM Semantic router.
 
@@ -157,16 +157,16 @@ kubectl apply -f deploy/kubernetes/istio/destinationrule.yaml
 kubectl apply -f deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-## Step 7: Install gateway routes 
+## Step 9: Install gateway routes
 
-Install HTTPRoutes in the Istio gateway. Note a difference here compared to the http routes used in the prior vsr + istio guide, here the backendRefs in the route matches based on point to the InferencePools which in turn point to the LLM-D schedulers for those pools instead of the backendRefs pointing to the vllm service endpoints of the models as was done in the [istio guide without llm-d](../istio/README.md).
+Install HTTPRoutes in the Istio gateway. Note a difference here compared to the http routes used in the prior vsr + istio guide, here the backendRefs in the route matches point to the InferencePools which in turn point to the LLM-D schedulers for those pools instead of pointing to the vllm service endpoints of the models as was done in the [istio guide without llm-d](../istio/README.md).
 
 ```bash
 kubectl apply -f deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
 kubectl apply -f deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
 ```
  
-## Step 8: Testing the Deployment
+## Step 10: Testing the Deployment
 To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
 
 ```bash
@@ -174,16 +174,16 @@ minikube service inference-gateway-istio --url
 http://192.168.49.2:32293
 ```
 
-Now we can send LLM prompts via curl to http://192.168.49.2:32293 to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case. Use the port number that you get as output from your "minikube service" command in the curl examples below.
+Now we can send LLM prompts via curl to http://192.168.49.2:32293 to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case. Use the port number that you get as output from your "minikube service" command when you try the curl examples below.
 
 ### Send Test Requests
 
-Try the following cases with and without model "auto" selection to confirm that Istio + vsr together are able to route queries to the appropriate model. The query responses will include information about which model was used to serve that request.
+Try the following cases with and without model "auto" selection to confirm that Istio + vSR + llm-d together are able to route queries to the appropriate model by combining model picking and endpoint picking. The query responses will include information about which model was used to serve that request.
 
 Example queries to try include the following
 
 ```bash
-# Model name llama3-8b provided explicitly, no model alteration, send to llama EPP for endpoint picking  
+# Model name llama3-8b provided explicitly, no model alteration, routed via llama EPP for endpoint picking  
 curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "llama3-8b",
         "messages": [
@@ -207,7 +207,7 @@ curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: applicati
 ```
 
 ```bash
-# Model name phi4-mini provided explicitly, no model alteration, send to phi4-mini EPP for endpoint picking  
+# Model name phi4-mini provided explicitly, no model alteration, routed via phi4-mini EPP for endpoint picking  
 curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "phi4-mini",
         "messages": [
@@ -237,13 +237,12 @@ curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: applicati
 If you have followed the above steps, you should see pods similar to below running READY state as a quick initial validation. These include the LLM model pods, Istio gateway pod, LLM-D/EPP scheduler pods, vsr pod and istiod controller pod as shown below. You should also see the InferencePools and HTTPRoute instances as shown below with status showing routes in resolved state.
 
 ```bash
-$ kubectl get pods -n default
-NAME                                           READY   STATUS    RESTARTS   AGE
-inference-gateway-istio-6fc8864bfb-gbcz8       1/1     Running   0          14h
-llama-8b-6558848cc8-wkkxn                      1/1     Running   0          3h26m
-phi4-mini-7b94bc69db-rnpkj                     1/1     Running   0          17h
-vllm-llama3-8b-instruct-epp-7f7ff88677-j7lst   1/1     Running   0          134m
-vllm-phi4-mini-epp-6f5dd6bbb9-8pv27            1/1     Running   0          14h
+NAME                                                   READY   STATUS    RESTARTS   AGE
+inference-gateway-istio-6fc8864bfb-gbcz8               1/1     Running   0          30h
+llama-8b-6558848cc8-wkkxn                              1/1     Running   0          19h
+llm-d-inference-scheduler-llama3-8b-74854dcdf6-2kvfq   1/1     Running   0          16m
+llm-d-inference-scheduler-phi4-mini-65f7d4d4db-ql7qv   1/1     Running   0          16m
+phi4-mini-7b94bc69db-rnpkj                             1/1     Running   0          33h
 ```
 
 ```bash
