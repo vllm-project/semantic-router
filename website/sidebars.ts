@@ -72,8 +72,10 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Intelligent Route',
           items: [
-            'tutorials/intelligent-route/overview',
-            'tutorials/intelligent-route/reasoning',
+            'tutorials/intelligent-route/domain-routing',
+            'tutorials/intelligent-route/embedding-routing',
+            'tutorials/intelligent-route/keyword-routing',
+            'tutorials/intelligent-route/mcp-routing',
             'tutorials/intelligent-route/lora-routing',
           ],
         },
