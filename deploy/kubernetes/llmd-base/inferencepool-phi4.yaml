@@ -38,7 +38,7 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vllm-phi4-mini-epp
+  name: llm-d-inference-scheduler-phi4-mini
   namespace: default
   labels:
     app: vllm-phi4-mini-epp
@@ -56,7 +56,7 @@ spec:
       terminationGracePeriodSeconds: 130
       containers:
       - name: epp
-        image: us-central1-docker.pkg.dev/k8s-staging-images/gateway-api-inference-extension/epp:main
+        image: ghcr.io/llm-d/llm-d-inference-scheduler:v0.3.2
         imagePullPolicy: Always
         args:
         - --pool-name
