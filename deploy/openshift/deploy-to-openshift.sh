@@ -188,17 +188,14 @@ done
 # Generate dynamic config with actual ClusterIPs
 log "Generating dynamic configuration with ClusterIPs..."
 TEMP_CONFIG="/tmp/config-openshift-dynamic.yaml"
-sed -e "s|address: \".*\" # model-a-ip|address: \"$MODEL_A_IP\"|g" \
-    -e "s|address: \".*\" # model-b-ip|address: \"$MODEL_B_IP\"|g" \
+sed -e "s/DYNAMIC_MODEL_A_IP/$MODEL_A_IP/g" \
+    -e "s/DYNAMIC_MODEL_B_IP/$MODEL_B_IP/g" \
     "$SCRIPT_DIR/config-openshift.yaml" > "$TEMP_CONFIG"
 
 # Verify the IPs were substituted
 if ! grep -q "$MODEL_A_IP" "$TEMP_CONFIG" || ! grep -q "$MODEL_B_IP" "$TEMP_CONFIG"; then
-    warn "IP substitution may have failed. Using template config instead..."
-    # Fallback: create config with sed on known patterns
-    sed -e "s/172\.30\.64\.134/$MODEL_A_IP/g" \
-        -e "s/172\.30\.116\.177/$MODEL_B_IP/g" \
-        "$SCRIPT_DIR/config-openshift.yaml" > "$TEMP_CONFIG"
+    error "IP substitution failed! Check config-openshift.yaml for DYNAMIC_MODEL_A_IP and DYNAMIC_MODEL_B_IP placeholders"
+    exit 1
 fi
 
 success "Dynamic config generated with IPs: Model-A=$MODEL_A_IP, Model-B=$MODEL_B_IP"
