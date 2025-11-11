@@ -43,7 +43,7 @@ spec:
         - "--log-level"
         - "INFO"
         - "--device"
-        - "cpu"
+        - "cuda"
         env:
         - name: HF_HUB_CACHE
           value: "/app/cache/hf"
@@ -83,9 +83,11 @@ spec:
           requests:
             memory: "4Gi"
             cpu: "1"
+            nvidia.com/gpu: 1
           limits:
             memory: "8Gi"
             cpu: "2"
+            nvidia.com/gpu: 1
       volumes:
       - name: cache-volume
         persistentVolumeClaim:
@@ -134,7 +136,7 @@ spec:
         - "--log-level"
         - "INFO"
         - "--device"
-        - "cpu"
+        - "cuda"
         env:
         - name: HF_HUB_CACHE
           value: "/app/cache/hf"
@@ -174,9 +176,11 @@ spec:
           requests:
             memory: "4Gi"
             cpu: "1"
+            nvidia.com/gpu: 1
           limits:
             memory: "8Gi"
             cpu: "2"
+            nvidia.com/gpu: 1
       volumes:
       - name: cache-volume
         persistentVolumeClaim:

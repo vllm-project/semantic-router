@@ -54,15 +54,12 @@ model_config:
       allow_by_default: false
       pii_types_allowed: ["EMAIL_ADDRESS"]
 
-# Default model to use when classification confidence is below threshold
-default_model: "Model-A"
-
 # Classifier configuration
 classifier:
   category_model:
     model_id: "models/category_classifier_modernbert-base_model"
     use_modernbert: true
-    threshold: 0.45  # Lowered from 0.6 to handle simple queries like "what is cat?"
+    threshold: 0.35  # Lowered from 0.45 to handle queries like "what is physics?" (confidence 0.3581)
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
   pii_model:
