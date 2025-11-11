@@ -76,16 +76,19 @@ The dashboard backend proxies ChatUI at `/embedded/chatui/` and the frontend dis
 ### ChatUI Not Loading
 
 1. Check if ChatUI pod is running:
+
    ```bash
    oc get pods -l app=chatui -n vllm-semantic-router-system
    ```
 
 2. Check ChatUI logs:
+
    ```bash
    oc logs -f deployment/chatui -n vllm-semantic-router-system
    ```
 
 3. Verify MongoDB connection:
+
    ```bash
    oc get pods -l app=mongo -n vllm-semantic-router-system
    ```

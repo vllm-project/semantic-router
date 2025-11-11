@@ -124,17 +124,20 @@ oc exec deployment/mongo -- mongodump --archive=/data/db/backup-$(date +%Y%m%d).
 ### Pod Not Starting
 
 1. Check pod events:
+
    ```bash
    oc describe pod -l app=mongo -n vllm-semantic-router-system
    ```
 
 2. Check PVC status:
+
    ```bash
    oc get pvc mongo-data -n vllm-semantic-router-system
    oc describe pvc mongo-data -n vllm-semantic-router-system
    ```
 
 3. Check security context constraints:
+
    ```bash
    oc get pod -l app=mongo -n vllm-semantic-router-system -o yaml | grep -A 10 securityContext
    ```
@@ -142,11 +145,13 @@ oc exec deployment/mongo -- mongodump --archive=/data/db/backup-$(date +%Y%m%d).
 ### Connection Issues
 
 1. Verify service endpoints:
+
    ```bash
    oc get endpoints mongo -n vllm-semantic-router-system
    ```
 
 2. Test from ChatUI pod:
+
    ```bash
    oc exec deployment/chatui -- sh -c 'nc -zv mongo.vllm-semantic-router-system.svc.cluster.local 27017'
    ```
@@ -154,11 +159,13 @@ oc exec deployment/mongo -- mongodump --archive=/data/db/backup-$(date +%Y%m%d).
 ### Performance Issues
 
 1. Check resource usage:
+
    ```bash
    oc adm top pod -l app=mongo -n vllm-semantic-router-system
    ```
 
 2. Review MongoDB logs for slow queries:
+
    ```bash
    oc logs deployment/mongo -n vllm-semantic-router-system | grep slow
    ```
