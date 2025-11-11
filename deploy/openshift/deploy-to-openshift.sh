@@ -204,6 +204,7 @@ success "Dynamic config generated with IPs: Model-A=$MODEL_A_IP, Model-B=$MODEL_
 log "Creating ConfigMaps with dynamic IPs..."
 oc create configmap semantic-router-config \
     --from-file=config.yaml="$TEMP_CONFIG" \
+    --from-file=tools_db.json="$SCRIPT_DIR/tools_db.json" \
     -n "$NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 
 oc create configmap envoy-config \
@@ -335,10 +336,51 @@ EOF
     oc apply -f "$SCRIPT_DIR/openwebui/route.yaml" -n "$NAMESPACE"
     success "OpenWebUI deployed"
 
-    # Deploy Grafana
+    # Deploy Grafana with dynamic route URL
     log "Deploying Grafana..."
-    oc apply -f "$SCRIPT_DIR/observability/grafana/" -n "$NAMESPACE"
-    success "Grafana deployed"
+
+    # First apply Grafana resources to create the route
+    oc apply -f "$SCRIPT_DIR/observability/grafana/pvc.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    oc apply -f "$SCRIPT_DIR/observability/grafana/service.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    oc apply -f "$SCRIPT_DIR/observability/grafana/route.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    oc apply -f "$SCRIPT_DIR/observability/grafana/configmaps.yaml" -n "$NAMESPACE" 2>/dev/null || true
+
+    # Wait for route to be created and get its URL
+    log "Waiting for Grafana route to be created..."
+    for i in {1..30}; do
+        GRAFANA_ROUTE_URL=$(oc get route grafana -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+
+        if [[ -n "$GRAFANA_ROUTE_URL" ]]; then
+            GRAFANA_ROUTE_URL="https://$GRAFANA_ROUTE_URL"
+            success "Grafana route URL: $GRAFANA_ROUTE_URL"
+            break
+        fi
+
+        if [[ $i -eq 30 ]]; then
+            error "Timeout waiting for Grafana route"
+            exit 1
+        fi
+
+        sleep 2
+    done
+
+    # Generate Grafana deployment with dynamic route URL
+    log "Generating Grafana deployment with dynamic route URL..."
+    TEMP_GRAFANA_DEPLOYMENT="/tmp/grafana-deployment-dynamic.yaml"
+    sed "s|DYNAMIC_GRAFANA_ROUTE_URL|$GRAFANA_ROUTE_URL|g" \
+        "$SCRIPT_DIR/observability/grafana/deployment.yaml" > "$TEMP_GRAFANA_DEPLOYMENT"
+
+    # Verify the URL was substituted
+    if ! grep -q "$GRAFANA_ROUTE_URL" "$TEMP_GRAFANA_DEPLOYMENT"; then
+        error "Grafana route URL substitution failed!"
+        exit 1
+    fi
+
+    # Apply Grafana deployment with dynamic URL
+    oc apply -f "$TEMP_GRAFANA_DEPLOYMENT" -n "$NAMESPACE"
+    rm -f "$TEMP_GRAFANA_DEPLOYMENT"
+
+    success "Grafana deployed with dynamic route URL: $GRAFANA_ROUTE_URL"
 
     # Deploy Prometheus
     log "Deploying Prometheus..."
