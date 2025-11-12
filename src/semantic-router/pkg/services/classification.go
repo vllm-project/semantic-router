@@ -150,6 +150,7 @@ func NewPlaceholderClassificationService() *ClassificationService {
 	}
 }
 
+
 // IntentRequest represents a request for intent classification
 type IntentRequest struct {
 	Text    string         `json:"text"`

@@ -25,9 +25,9 @@ semantic_cache:
   # Default: "bert" (fastest, lowest memory)
   embedding_model: "bert"
   # HNSW index configuration (for memory backend only)
-  use_hnsw: true # Enable HNSW index for faster similarity search
-  hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
-  hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
+  #use_hnsw: true # Enable HNSW index for faster similarity search
+  #hnsw_m: 16 # Number of bi-directional links (higher = better recall, more memory)
+  #hnsw_ef_construction: 200 # Construction parameter (higher = better quality, slower build)
   
   # Hybrid cache configuration (when backend_type: "hybrid")
   # Combines in-memory HNSW for fast search with Milvus for scalable storage
@@ -59,12 +59,22 @@ vllm_endpoints:
     port: 8002
     weight: 1
 
+  - name: "ollama-endpoint"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
 model_config:
   "qwen3":
     reasoning_family: "qwen3" # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true
+  "ollama":
+    pii_policy:
+      allow_by_default: false
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
+    preferred_endpoints: ["ollama-endpoint"]
 
 # Classifier configuration
 classifier:
@@ -175,6 +185,30 @@ categories:
       - model: qwen3
         score: 0.7
         use_reasoning: false
+
+  # ****************************
+  - name: visual_analysis
+    use_reasoning: true
+    reasoning_description: "Visual analysis requires systematic observation and reasoning"
+    multimodal_enabled: true
+    model_scores:
+      - model: llava:7b
+        score: 1.0
+        use_reasoning: true
+        reasoning_description: "Vision-language reasoning for multimodal understanding"
+        capabilities: ["text", "image"]
+
+  - name: document_processing
+    use_reasoning: false
+    reasoning_description: "Document understanding via OCR or structured layout extraction"
+    description: "OCR, document understanding, form extraction"
+    multimodal_enabled: true
+    model_scores:
+      - model: llava:7b
+        score: 0.8
+        use_reasoning: false
+        reasoning_description: "Basic document OCR and layout extraction"
+        capabilities: ["text", "image"]
 
 # Router Configuration for Dual-Path Selection
 router:
