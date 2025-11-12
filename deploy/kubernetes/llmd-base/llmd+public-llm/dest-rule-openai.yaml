@@ -1,0 +1,11 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: openai-tls
+  namespace: default
+spec:
+  host: api.openai.com
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+
