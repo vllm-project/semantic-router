@@ -10,10 +10,10 @@ import (
 
 // RegexProviderConfig holds the configuration for the regex provider.
 type RegexProviderConfig struct {
-	MaxPatterns      int           `yaml:"max_patterns"`
-	MaxPatternLength int           `yaml:"max_pattern_length"`
-	MaxInputLength   int           `yaml:"max_input_length"`
-	DefaultTimeoutMs int           `yaml:"default_timeout_ms"`
+	MaxPatterns      int            `yaml:"max_patterns"`
+	MaxPatternLength int            `yaml:"max_pattern_length"`
+	MaxInputLength   int            `yaml:"max_input_length"`
+	DefaultTimeoutMs int            `yaml:"default_timeout_ms"`
 	Patterns         []RegexPattern `yaml:"patterns"`
 }
 
