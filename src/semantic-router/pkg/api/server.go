@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"runtime"
 	"time"
-	"log"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -274,11 +273,9 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/classify/security", s.handleSecurityDetection)
 	mux.HandleFunc("POST /api/v1/classify/combined", s.handleCombinedClassification)
 	mux.HandleFunc("POST /api/v1/classify/batch", s.handleBatchClassification)
-  
+
 	// ******************
 	mux.HandleFunc("POST /api/v1/classify/multimodal", s.handleMultimodalClassification)
-
-
 
 	// Embedding endpoints
 	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
@@ -658,93 +655,15 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-
-// ******************
-// handleMultimodalClassification handles image + text classification using Ollama vision model (e.g., LLaVA)
-// handleMultimodalClassification handles image + text classification using Ollama vision model (e.g., LLaVA)
-// handleMultimodalClassification handles image + text classification using Ollama vision model (e.g., LLaVA)
-// func (s *ClassificationAPIServer) handleMultimodalClassification(w http.ResponseWriter, r *http.Request) {
-// 	var req struct {
-// 		Text   string `json:"text"`
-// 		Images []struct {
-// 			Data     string `json:"data"`
-// 			MimeType string `json:"mime_type"`
-// 		} `json:"images"`
-// 	}
-
-// 	if err := s.parseJSONRequest(r, &req); err != nil {
-// 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
-// 		return
-// 	}
-
-// 	text := req.Text
-
-// 	// Step 1: If an image is included, describe it with LLaVA
-// 	if len(req.Images) > 0 {
-// 		body := map[string]interface{}{
-// 			"model":  "llava:7b",
-// 			"prompt": "Describe the image briefly for context.",
-// 			"images": []string{req.Images[0].Data},
-// 		}
-
-// 		payload, _ := json.Marshal(body)
-// 		resp, err := http.Post("http://127.0.0.1:11434/api/generate", "application/json", bytes.NewReader(payload))
-// 		if err == nil {
-// 			defer resp.Body.Close()
-
-// 			var fullResponse string
-// 			decoder := json.NewDecoder(resp.Body)
-// 			for decoder.More() {
-// 				var chunk map[string]interface{}
-// 				if err := decoder.Decode(&chunk); err != nil {
-// 					break
-// 				}
-// 				if part, ok := chunk["response"].(string); ok {
-// 					fullResponse += part
-// 				}
-// 			}
-
-// 			if fullResponse != "" {
-// 				text += "\nVisual context: " + fullResponse
-// 			}
-
-// 			fmt.Println("LLaVA response:", fullResponse)
-// 		} else {
-// 			fmt.Println("LLaVA request failed:", err)
-// 		}
-// 	}
-
-// 	// Step 2: Classify the combined text using existing intent classifier
-// 	intentReq := services.IntentRequest{Text: text}
-// 	intentResp, err := s.classificationSvc.ClassifyIntent(intentReq)
-// 	if err != nil {
-// 		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
-// 		return
-// 	}
-
-// 	// Step 3: Safely build response payload
-// 	category := "unknown"
-// 	confidence := 0.0
-// 	if intentResp != nil  {
-// 		category = intentResp.Classification.Category
-// 		confidence = intentResp.Classification.Confidence
-// 	}
-
-// 	response := map[string]interface{}{
-// 		"category":   category,
-// 		"confidence": confidence,
-// 		"combined_text": text,
-// 	}
-
-// 	// Step 4: Send JSON safely
-// 	w.Header().Set("Content-Type", "application/json")
-// 	if err := json.NewEncoder(w).Encode(response); err != nil {
-// 		fmt.Println("Error writing response:", err)
-// 	}
-// }
-
-// handleMultimodalClassification handles image + text classification using Ollama vision model (e.g., LLaVA)
+// handleMultimodalClassification handles image + text classification using the classification service
 func (s *ClassificationAPIServer) handleMultimodalClassification(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			observability.Errorf("Panic in handleMultimodalClassification: %v", r)
+			s.writeErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Panic: %v", r))
+		}
+	}()
+
 	var req struct {
 		Text   string `json:"text"`
 		Images []struct {
@@ -754,90 +673,67 @@ func (s *ClassificationAPIServer) handleMultimodalClassification(w http.Response
 	}
 
 	if err := s.parseJSONRequest(r, &req); err != nil {
+		observability.Errorf("Failed to parse multimodal request: %v", err)
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}
 
-	text := req.Text
+	// Detect content type
 	contentType := "text"
-	selectedModel := "llama3.2" // Default model
-
-	// Step 1: Detect content type
 	if len(req.Images) > 0 && req.Text != "" {
 		contentType = "multimodal"
-		selectedModel = "llava:7b"
 	} else if len(req.Images) > 0 {
 		contentType = "image"
-		selectedModel = "llava:7b"
 	}
-	log.Printf("Detected content type: %s (routing to %s)", contentType, selectedModel)
 
-	// Step 2: If an image is included, describe it using the selected vision model
-	if contentType == "image" || contentType == "multimodal" {
-		body := map[string]interface{}{
-			"model":  "llava:7b",
-			"prompt": "Describe the image briefly for context.",
-			"images": []string{req.Images[0].Data},
-		}
+	observability.Infof("Multimodal request: contentType=%s, textLen=%d, imageCount=%d",
+		contentType, len(req.Text), len(req.Images))
 
-		payload, _ := json.Marshal(body)
-		resp, err := http.Post("http://127.0.0.1:11434/api/generate", "application/json", bytes.NewReader(payload))
-		if err == nil {
-			defer resp.Body.Close()
-
-			var fullResponse string
-			decoder := json.NewDecoder(resp.Body)
-			for decoder.More() {
-				var chunk map[string]interface{}
-				if err := decoder.Decode(&chunk); err != nil {
-					break
-				}
-				if part, ok := chunk["response"].(string); ok {
-					fullResponse += part
-				}
-			}
-
-			if fullResponse != "" {
-				text += "\nVisual context: " + fullResponse
-			}
-			fmt.Println("LLaVA response:", fullResponse)
-		} else {
-			fmt.Println("LLaVA request failed:", err)
+	// Convert request to MultimodalClassificationRequest
+	multimodalImages := make([]services.MultimodalImage, len(req.Images))
+	for i, img := range req.Images {
+		multimodalImages[i] = services.MultimodalImage{
+			Data:     img.Data,
+			MimeType: img.MimeType,
 		}
 	}
 
-	// Step 3: Classify the combined text using existing intent classifier
-	intentReq := services.IntentRequest{Text: text}
-	intentResp, err := s.classificationSvc.ClassifyIntent(intentReq)
+	multimodalReq := services.MultimodalClassificationRequest{
+		Text:        req.Text,
+		Images:      multimodalImages,
+		ContentType: contentType,
+	}
+
+	// Call the classification service
+	intentResp, err := s.classificationSvc.ClassifyMultimodal(multimodalReq)
 	if err != nil {
+		observability.Errorf("Multimodal classification failed: %v", err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
 		return
 	}
 
-	// Step 4: Build response
-	category := "unknown"
-	confidence := 0.0
-	if intentResp != nil {
-		category = intentResp.Classification.Category
-		confidence = intentResp.Classification.Confidence
+	if intentResp == nil {
+		observability.Errorf("ClassifyMultimodal returned nil response")
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", "Classification returned nil response")
+		return
 	}
 
+	// Build response
 	response := map[string]interface{}{
-		"category":       category,
-		"confidence":     confidence,
-		"combined_text":  text,
-		"content_type":   contentType,
-		"selected_model": selectedModel,
+		"category":          intentResp.Classification.Category,
+		"confidence":        intentResp.Classification.Confidence,
+		"content_type":      contentType,
+		"recommended_model": intentResp.RecommendedModel,
+		"routing_decision":  intentResp.RoutingDecision,
 	}
 
-	// Step 5: Send JSON response
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		fmt.Println("Error writing response:", err)
+	if intentResp.Probabilities != nil {
+		response["probabilities"] = intentResp.Probabilities
 	}
+
+	// Send JSON response using helper
+	s.writeJSONResponse(w, http.StatusOK, response)
 }
-
-
 
 // handlePIIDetection handles PII detection requests
 func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *http.Request) {

@@ -70,6 +70,21 @@ model_config:
     preferred_endpoints: ["endpoint1"]
     pii_policy:
       allow_by_default: true
+  "llava:7b":
+    preferred_endpoints: ["ollama-endpoint"]
+    pii_policy:
+      allow_by_default: false
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
+  "llama3.1:latest":
+    preferred_endpoints: ["ollama-endpoint"]
+    pii_policy:
+      allow_by_default: false
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
+  "llama3.1":
+    preferred_endpoints: ["ollama-endpoint"]
+    pii_policy:
+      allow_by_default: false
+      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]
   "ollama":
     pii_policy:
       allow_by_default: false

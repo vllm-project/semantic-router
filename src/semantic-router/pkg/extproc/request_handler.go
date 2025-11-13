@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
@@ -229,6 +230,54 @@ func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, 
 	}
 
 	return userContent, nonUser
+}
+
+func extractImagesFromRequest(req *openai.ChatCompletionNewParams) []services.MultimodalImage {
+	var images []services.MultimodalImage
+
+	for _, msg := range req.Messages {
+		if msg.OfUser != nil && len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
+			for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+				if part.OfImageURL != nil && part.OfImageURL.ImageURL.URL != "" {
+					imageURL := part.OfImageURL.ImageURL.URL
+
+					var base64Data string
+					var mimeType string
+
+					if strings.HasPrefix(imageURL, "data:") {
+						parts := strings.SplitN(imageURL, ",", 2)
+						if len(parts) == 2 {
+							base64Data = parts[1]
+							mimeParts := strings.Split(parts[0], ";")
+							if len(mimeParts) > 0 {
+								mimeType = strings.TrimPrefix(mimeParts[0], "data:")
+							}
+						}
+					} else {
+						images = append(images, services.MultimodalImage{
+							URL:      imageURL,
+							MimeType: "image/jpeg", // defaulting for now
+						})
+						continue
+					}
+
+					if base64Data != "" {
+						images = append(images, services.MultimodalImage{
+							Data:     base64Data,
+							MimeType: mimeType,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return images
+}
+
+func hasMultimodalContent(req *openai.ChatCompletionNewParams) bool {
+	images := extractImagesFromRequest(req)
+	return len(images) > 0
 }
 
 // RequestContext holds the context for processing a request
@@ -596,308 +645,400 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	actualModel := originalModel
 	var selectedEndpoint string
 	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
-	if isAutoModel && (len(nonUserMessages) > 0 || userContent != "") {
-		observability.Infof("Using Auto Model Selection (model=%s)", originalModel)
-		// Determine text to use for classification/similarity
-		var classificationText string
-		if len(userContent) > 0 {
-			classificationText = userContent
-		} else if len(nonUserMessages) > 0 {
-			// Fall back to user content if no system/assistant messages
-			classificationText = strings.Join(nonUserMessages, " ")
+
+	// Check if request contains multimodal content (images)
+	hasImages := hasMultimodalContent(openAIRequest)
+
+	if isAutoModel && (len(nonUserMessages) > 0 || userContent != "" || hasImages) {
+		observability.Infof("Using Auto Model Selection (model=%s, multimodal=%v)", originalModel, hasImages)
+
+		var matchedModel string
+		var categoryName string
+		var classifyTime int64
+
+		classifyCtx, classifySpan := observability.StartSpan(ctx.TraceContext, observability.SpanClassification)
+		classifyStart := time.Now()
+
+		if hasImages {
+			observability.Infof("Detected multimodal request with images, using multimodal classification")
+
+			// Get images from request
+			images := extractImagesFromRequest(openAIRequest)
+
+			contentType := "image"
+			if userContent != "" || len(nonUserMessages) > 0 {
+				contentType = "multimodal"
+			}
+
+			// Create multimodal classification request
+			multimodalReq := services.MultimodalClassificationRequest{
+				Text:        userContent,
+				Images:      images,
+				ContentType: contentType,
+			}
+
+			// Get classification service
+			classificationSvc := services.GetGlobalClassificationService()
+			if classificationSvc == nil {
+				observability.Warnf("Classification service not available, falling back to text-only classification")
+				var classificationText string
+				if len(userContent) > 0 {
+					classificationText = userContent
+				} else if len(nonUserMessages) > 0 {
+					classificationText = strings.Join(nonUserMessages, " ")
+				}
+				if classificationText != "" {
+					matchedModel = r.classifyAndSelectBestModel(classificationText)
+					categoryName = r.findCategoryForClassification(classificationText)
+				}
+			} else {
+				// actually classify
+				intentResp, err := classificationSvc.ClassifyMultimodal(multimodalReq)
+
+				if err != nil {
+					observability.Errorf("Multimodal classification failed: %v, falling back to text-only", err)
+					var classificationText string
+					if len(userContent) > 0 {
+						classificationText = userContent
+					} else if len(nonUserMessages) > 0 {
+						classificationText = strings.Join(nonUserMessages, " ")
+					}
+					if classificationText != "" {
+						matchedModel = r.classifyAndSelectBestModel(classificationText)
+						categoryName = r.findCategoryForClassification(classificationText)
+					}
+				} else if intentResp != nil {
+					categoryName = intentResp.Classification.Category
+					if categoryName != "" {
+						matchedModel = r.Classifier.SelectBestModelForCategory(categoryName)
+					} else {
+						var classificationText string
+						if len(userContent) > 0 {
+							classificationText = userContent
+						} else if len(nonUserMessages) > 0 {
+							classificationText = strings.Join(nonUserMessages, " ")
+						}
+						if classificationText != "" {
+							matchedModel = r.classifyAndSelectBestModel(classificationText)
+						}
+					}
+					observability.Infof("Multimodal classification result: category=%s, confidence=%.3f, model=%s",
+						categoryName, intentResp.Classification.Confidence, matchedModel)
+				}
+			}
+		} else {
+			// Text-only classification path
+			var classificationText string
+			if len(userContent) > 0 {
+				classificationText = userContent
+			} else if len(nonUserMessages) > 0 {
+				classificationText = strings.Join(nonUserMessages, " ")
+			}
+
+			if classificationText != "" {
+				// Find the most similar task description or classify, then select best model
+				matchedModel = r.classifyAndSelectBestModel(classificationText)
+
+				// Get category information for the span
+				categoryName = r.findCategoryForClassification(classificationText)
+			}
 		}
 
-		if classificationText != "" {
-			// Start classification span
-			classifyCtx, classifySpan := observability.StartSpan(ctx.TraceContext, observability.SpanClassification)
-			classifyStart := time.Now()
+		classifyTime = time.Since(classifyStart).Milliseconds()
 
-			// Find the most similar task description or classify, then select best model
-			matchedModel := r.classifyAndSelectBestModel(classificationText)
-			classifyTime := time.Since(classifyStart).Milliseconds()
+		observability.SetSpanAttributes(classifySpan,
+			attribute.String(observability.AttrCategoryName, categoryName),
+			attribute.String(observability.AttrClassifierType, func() string {
+				if hasImages {
+					return "multimodal"
+				}
+				return "bert"
+			}()),
+			attribute.Int64(observability.AttrClassificationTimeMs, classifyTime))
+		classifySpan.End()
+		ctx.TraceContext = classifyCtx
 
-			// Get category information for the span
-			categoryName := r.findCategoryForClassification(classificationText)
+		if matchedModel != originalModel && matchedModel != "" {
+			// Start PII detection span if enabled
+			allContent := pii.ExtractAllContent(userContent, nonUserMessages)
+			if r.PIIChecker.IsPIIEnabled(matchedModel) {
+				piiCtx, piiSpan := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
+				piiStart := time.Now()
 
-			observability.SetSpanAttributes(classifySpan,
-				attribute.String(observability.AttrCategoryName, categoryName),
-				attribute.String(observability.AttrClassifierType, "bert"),
-				attribute.Int64(observability.AttrClassificationTimeMs, classifyTime))
-			classifySpan.End()
-			ctx.TraceContext = classifyCtx
+				observability.Infof("PII policy enabled for model %s", matchedModel)
+				detectedPII := r.Classifier.DetectPIIInContent(allContent)
 
-			if matchedModel != originalModel && matchedModel != "" {
-				// Start PII detection span if enabled
-				allContent := pii.ExtractAllContent(userContent, nonUserMessages)
-				if r.PIIChecker.IsPIIEnabled(matchedModel) {
-					piiCtx, piiSpan := observability.StartSpan(ctx.TraceContext, observability.SpanPIIDetection)
-					piiStart := time.Now()
+				piiTime := time.Since(piiStart).Milliseconds()
+				piiDetected := len(detectedPII) > 0
 
-					observability.Infof("PII policy enabled for model %s", matchedModel)
-					detectedPII := r.Classifier.DetectPIIInContent(allContent)
+				observability.SetSpanAttributes(piiSpan,
+					attribute.Bool(observability.AttrPIIDetected, piiDetected),
+					attribute.Int64(observability.AttrPIIDetectionTimeMs, piiTime))
 
-					piiTime := time.Since(piiStart).Milliseconds()
-					piiDetected := len(detectedPII) > 0
-
+				if piiDetected {
+					// Convert detected PII to comma-separated string
+					piiTypesStr := strings.Join(detectedPII, ",")
 					observability.SetSpanAttributes(piiSpan,
-						attribute.Bool(observability.AttrPIIDetected, piiDetected),
-						attribute.Int64(observability.AttrPIIDetectionTimeMs, piiTime))
+						attribute.String(observability.AttrPIITypes, piiTypesStr))
+				}
 
-					if piiDetected {
-						// Convert detected PII to comma-separated string
-						piiTypesStr := strings.Join(detectedPII, ",")
-						observability.SetSpanAttributes(piiSpan,
-							attribute.String(observability.AttrPIITypes, piiTypesStr))
+				piiSpan.End()
+				ctx.TraceContext = piiCtx
+
+				// Check if the initially selected model passes PII policy
+				allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
+				if err != nil {
+					observability.Errorf("Error checking PII policy for model %s: %v", matchedModel, err)
+					// Continue with original selection on error
+				} else if !allowed {
+					observability.Warnf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
+					// Find alternative models from the same category that pass PII policy
+					if categoryName == "" {
+						var classificationText string
+						if len(userContent) > 0 {
+							classificationText = userContent
+						} else if len(nonUserMessages) > 0 {
+							classificationText = strings.Join(nonUserMessages, " ")
+						}
+						if classificationText != "" {
+							categoryName = r.findCategoryForClassification(classificationText)
+						}
 					}
-
-					piiSpan.End()
-					ctx.TraceContext = piiCtx
-
-					// Check if the initially selected model passes PII policy
-					allowed, deniedPII, err := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
-					if err != nil {
-						observability.Errorf("Error checking PII policy for model %s: %v", matchedModel, err)
-						// Continue with original selection on error
-					} else if !allowed {
-						observability.Warnf("Initially selected model %s violates PII policy, finding alternative", matchedModel)
-						// Find alternative models from the same category that pass PII policy
-						categoryName := r.findCategoryForClassification(classificationText)
-						if categoryName != "" {
-							alternativeModels := r.Classifier.GetModelsForCategory(categoryName)
-							allowedModels := r.PIIChecker.FilterModelsForPII(alternativeModels, detectedPII)
-							if len(allowedModels) > 0 {
-								// Select the best allowed model from this category
-								matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
-								observability.Infof("Selected alternative model %s that passes PII policy", matchedModel)
-								// Record reason code for selecting alternative due to PII
-								metrics.RecordRoutingReasonCode("pii_policy_alternative_selected", matchedModel)
-							} else {
-								observability.Warnf("No models in category %s pass PII policy, using default", categoryName)
-								matchedModel = r.Config.DefaultModel
-								// Check if default model passes policy
-								defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
-								if !defaultAllowed {
-									observability.Errorf("Default model also violates PII policy, returning error")
-									observability.LogEvent("routing_block", map[string]interface{}{
-										"reason_code": "pii_policy_denied_default_model",
-										"request_id":  ctx.RequestID,
-										"model":       matchedModel,
-										"denied_pii":  defaultDeniedPII,
-									})
-									metrics.RecordRequestError(matchedModel, "pii_policy_denied")
-									piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII, ctx.ExpectStreamingResponse)
-									return piiResponse, nil
-								}
-							}
+					if categoryName != "" {
+						alternativeModels := r.Classifier.GetModelsForCategory(categoryName)
+						allowedModels := r.PIIChecker.FilterModelsForPII(alternativeModels, detectedPII)
+						if len(allowedModels) > 0 {
+							// Select the best allowed model from this category
+							matchedModel = r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
+							observability.Infof("Selected alternative model %s that passes PII policy", matchedModel)
+							// Record reason code for selecting alternative due to PII
+							metrics.RecordRoutingReasonCode("pii_policy_alternative_selected", matchedModel)
 						} else {
-							observability.Warnf("Could not determine category, returning PII violation for model %s", matchedModel)
-							observability.LogEvent("routing_block", map[string]interface{}{
-								"reason_code": "pii_policy_denied",
-								"request_id":  ctx.RequestID,
-								"model":       matchedModel,
-								"denied_pii":  deniedPII,
-							})
-							metrics.RecordRequestError(matchedModel, "pii_policy_denied")
-							piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII, ctx.ExpectStreamingResponse)
-							return piiResponse, nil
+							observability.Warnf("No models in category %s pass PII policy, using default", categoryName)
+							matchedModel = r.Config.DefaultModel
+							// Check if default model passes policy
+							defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(matchedModel, detectedPII)
+							if !defaultAllowed {
+								observability.Errorf("Default model also violates PII policy, returning error")
+								observability.LogEvent("routing_block", map[string]interface{}{
+									"reason_code": "pii_policy_denied_default_model",
+									"request_id":  ctx.RequestID,
+									"model":       matchedModel,
+									"denied_pii":  defaultDeniedPII,
+								})
+								metrics.RecordRequestError(matchedModel, "pii_policy_denied")
+								piiResponse := http.CreatePIIViolationResponse(matchedModel, defaultDeniedPII, ctx.ExpectStreamingResponse)
+								return piiResponse, nil
+							}
 						}
+					} else {
+						observability.Warnf("Could not determine category, returning PII violation for model %s", matchedModel)
+						observability.LogEvent("routing_block", map[string]interface{}{
+							"reason_code": "pii_policy_denied",
+							"request_id":  ctx.RequestID,
+							"model":       matchedModel,
+							"denied_pii":  deniedPII,
+						})
+						metrics.RecordRequestError(matchedModel, "pii_policy_denied")
+						piiResponse := http.CreatePIIViolationResponse(matchedModel, deniedPII, ctx.ExpectStreamingResponse)
+						return piiResponse, nil
 					}
 				}
-
-				observability.Infof("Routing to model: %s", matchedModel)
-
-				// Start routing decision span
-				routingCtx, routingSpan := observability.StartSpan(ctx.TraceContext, observability.SpanRoutingDecision)
-
-				// Check reasoning mode for this category using entropy-based approach
-				useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
-				observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
-					useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
-				// Record reasoning decision metric with the effort that will be applied if enabled
-				effortForMetrics := r.getReasoningEffort(categoryName, matchedModel)
-				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
-
-				// Set routing attributes on span
-				observability.SetSpanAttributes(routingSpan,
-					attribute.String(observability.AttrRoutingStrategy, "auto"),
-					attribute.String(observability.AttrRoutingReason, reasoningDecision.DecisionReason),
-					attribute.String(observability.AttrOriginalModel, originalModel),
-					attribute.String(observability.AttrSelectedModel, matchedModel),
-					attribute.Bool(observability.AttrReasoningEnabled, useReasoning),
-					attribute.String(observability.AttrReasoningEffort, effortForMetrics))
-
-				routingSpan.End()
-				ctx.TraceContext = routingCtx
-
-				// Track VSR decision information
-				ctx.VSRSelectedCategory = categoryName
-				ctx.VSRSelectedModel = matchedModel
-				if useReasoning {
-					ctx.VSRReasoningMode = "on"
-				} else {
-					ctx.VSRReasoningMode = "off"
-				}
-
-				// Track the model routing change
-				metrics.RecordModelRouting(originalModel, matchedModel)
-
-				// Update the actual model that will be used
-				actualModel = matchedModel
-
-				// Start backend selection span
-				backendCtx, backendSpan := observability.StartSpan(ctx.TraceContext, observability.SpanBackendSelection)
-
-				// Select the best endpoint for this model
-				endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
-				if endpointFound {
-					selectedEndpoint = endpointAddress
-					observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
-
-					// Extract endpoint name from config
-					endpoints := r.Config.GetEndpointsForModel(matchedModel)
-					if len(endpoints) > 0 {
-						observability.SetSpanAttributes(backendSpan,
-							attribute.String(observability.AttrEndpointName, endpoints[0].Name),
-							attribute.String(observability.AttrEndpointAddress, selectedEndpoint))
-					}
-				} else {
-					observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
-				}
-
-				backendSpan.End()
-				ctx.TraceContext = backendCtx
-
-				// Modify the model in the request
-				openAIRequest.Model = matchedModel
-
-				// Serialize the modified request with stream parameter preserved
-				modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
-				if err != nil {
-					observability.Errorf("Error serializing modified request: %v", err)
-					metrics.RecordRequestError(actualModel, "serialization_error")
-					return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
-				}
-
-				modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
-				if err != nil {
-					observability.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
-					metrics.RecordRequestError(actualModel, "serialization_error")
-					return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
-				}
-
-				// Add category-specific system prompt if configured
-				if categoryName != "" {
-					// Try to get the most up-to-date category configuration from global config first
-					// This ensures API updates are reflected immediately
-					globalConfig := config.GetConfig()
-					var category *config.Category
-					if globalConfig != nil {
-						category = globalConfig.GetCategoryByName(categoryName)
-					}
-
-					// If not found in global config, fall back to router's config (for tests and initial setup)
-					if category == nil {
-						category = r.Classifier.GetCategoryByName(categoryName)
-					}
-
-					if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
-						// Start system prompt injection span
-						promptCtx, promptSpan := observability.StartSpan(ctx.TraceContext, observability.SpanSystemPromptInjection)
-
-						mode := category.GetSystemPromptMode()
-						var injected bool
-						modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
-						if err != nil {
-							observability.Errorf("Error adding system prompt to request: %v", err)
-							observability.RecordError(promptSpan, err)
-							metrics.RecordRequestError(actualModel, "serialization_error")
-							promptSpan.End()
-							return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
-						}
-
-						observability.SetSpanAttributes(promptSpan,
-							attribute.Bool("system_prompt.injected", injected),
-							attribute.String("system_prompt.mode", mode),
-							attribute.String(observability.AttrCategoryName, categoryName))
-
-						if injected {
-							ctx.VSRInjectedSystemPrompt = true
-							observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
-						}
-
-						// Log metadata about system prompt injection (avoid logging sensitive user data)
-						observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
-
-						promptSpan.End()
-						ctx.TraceContext = promptCtx
-					} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {
-						observability.Infof("System prompt disabled for category: %s", categoryName)
-					}
-				}
-
-				// Create body mutation with the modified body
-				bodyMutation := &ext_proc.BodyMutation{
-					Mutation: &ext_proc.BodyMutation_Body{
-						Body: modifiedBody,
-					},
-				}
-
-				// Create header mutation with content-length removal AND all necessary routing headers
-				// (body phase HeaderMutation replaces header phase completely)
-				setHeaders := []*core.HeaderValueOption{}
-				if selectedEndpoint != "" {
-					setHeaders = append(setHeaders, &core.HeaderValueOption{
-						Header: &core.HeaderValue{
-							Key:      headers.GatewayDestinationEndpoint,
-							RawValue: []byte(selectedEndpoint),
-						},
-					})
-				}
-				if actualModel != "" {
-					setHeaders = append(setHeaders, &core.HeaderValueOption{
-						Header: &core.HeaderValue{
-							Key:      headers.SelectedModel,
-							RawValue: []byte(actualModel),
-						},
-					})
-				}
-
-				headerMutation := &ext_proc.HeaderMutation{
-					RemoveHeaders: []string{"content-length"},
-					SetHeaders:    setHeaders,
-				}
-
-				observability.Debugf("ActualModel = '%s'", actualModel)
-
-				// Set the response with body mutation and content-length removal
-				response = &ext_proc.ProcessingResponse{
-					Response: &ext_proc.ProcessingResponse_RequestBody{
-						RequestBody: &ext_proc.BodyResponse{
-							Response: &ext_proc.CommonResponse{
-								Status:         ext_proc.CommonResponse_CONTINUE,
-								HeaderMutation: headerMutation,
-								BodyMutation:   bodyMutation,
-							},
-						},
-					},
-				}
-
-				observability.Infof("Use new model: %s", matchedModel)
-
-				// Structured log for routing decision (auto)
-				observability.LogEvent("routing_decision", map[string]interface{}{
-					"reason_code":        "auto_routing",
-					"request_id":         ctx.RequestID,
-					"original_model":     originalModel,
-					"selected_model":     matchedModel,
-					"category":           categoryName,
-					"reasoning_enabled":  useReasoning,
-					"reasoning_effort":   effortForMetrics,
-					"selected_endpoint":  selectedEndpoint,
-					"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
-				})
-				metrics.RecordRoutingReasonCode("auto_routing", matchedModel)
 			}
+
+			observability.Infof("Routing to model: %s", matchedModel)
+
+			// Start routing decision span
+			routingCtx, routingSpan := observability.StartSpan(ctx.TraceContext, observability.SpanRoutingDecision)
+
+			// Check reasoning mode for this category using entropy-based approach
+			useReasoning, categoryName, reasoningDecision := r.getEntropyBasedReasoningModeAndCategory(userContent)
+			observability.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
+				useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
+			// Record reasoning decision metric with the effort that will be applied if enabled
+			effortForMetrics := r.getReasoningEffort(categoryName, matchedModel)
+			metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
+
+			// Set routing attributes on span
+			observability.SetSpanAttributes(routingSpan,
+				attribute.String(observability.AttrRoutingStrategy, "auto"),
+				attribute.String(observability.AttrRoutingReason, reasoningDecision.DecisionReason),
+				attribute.String(observability.AttrOriginalModel, originalModel),
+				attribute.String(observability.AttrSelectedModel, matchedModel),
+				attribute.Bool(observability.AttrReasoningEnabled, useReasoning),
+				attribute.String(observability.AttrReasoningEffort, effortForMetrics))
+
+			routingSpan.End()
+			ctx.TraceContext = routingCtx
+
+			// Track VSR decision information
+			ctx.VSRSelectedCategory = categoryName
+			ctx.VSRSelectedModel = matchedModel
+			if useReasoning {
+				ctx.VSRReasoningMode = "on"
+			} else {
+				ctx.VSRReasoningMode = "off"
+			}
+
+			// Track the model routing change
+			metrics.RecordModelRouting(originalModel, matchedModel)
+
+			// Update the actual model that will be used
+			actualModel = matchedModel
+
+			// Start backend selection span
+			backendCtx, backendSpan := observability.StartSpan(ctx.TraceContext, observability.SpanBackendSelection)
+
+			// Select the best endpoint for this model
+			endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
+			if endpointFound {
+				selectedEndpoint = endpointAddress
+				observability.Infof("Selected endpoint address: %s for model: %s", selectedEndpoint, matchedModel)
+
+				// Extract endpoint name from config
+				endpoints := r.Config.GetEndpointsForModel(matchedModel)
+				if len(endpoints) > 0 {
+					observability.SetSpanAttributes(backendSpan,
+						attribute.String(observability.AttrEndpointName, endpoints[0].Name),
+						attribute.String(observability.AttrEndpointAddress, selectedEndpoint))
+				}
+			} else {
+				observability.Warnf("No endpoint found for model %s, using fallback", matchedModel)
+			}
+
+			backendSpan.End()
+			ctx.TraceContext = backendCtx
+
+			// Modify the model in the request
+			openAIRequest.Model = matchedModel
+
+			// Serialize the modified request with stream parameter preserved
+			modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+			if err != nil {
+				observability.Errorf("Error serializing modified request: %v", err)
+				metrics.RecordRequestError(actualModel, "serialization_error")
+				return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
+			}
+
+			modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
+			if err != nil {
+				observability.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
+				metrics.RecordRequestError(actualModel, "serialization_error")
+				return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
+			}
+
+			// Add category-specific system prompt if configured
+			if categoryName != "" {
+				// Try to get the most up-to-date category configuration from global config first
+				// This ensures API updates are reflected immediately
+				globalConfig := config.GetConfig()
+				var category *config.Category
+				if globalConfig != nil {
+					category = globalConfig.GetCategoryByName(categoryName)
+				}
+
+				// If not found in global config, fall back to router's config (for tests and initial setup)
+				if category == nil {
+					category = r.Classifier.GetCategoryByName(categoryName)
+				}
+
+				if category != nil && category.SystemPrompt != "" && category.IsSystemPromptEnabled() {
+					// Start system prompt injection span
+					promptCtx, promptSpan := observability.StartSpan(ctx.TraceContext, observability.SpanSystemPromptInjection)
+
+					mode := category.GetSystemPromptMode()
+					var injected bool
+					modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
+					if err != nil {
+						observability.Errorf("Error adding system prompt to request: %v", err)
+						observability.RecordError(promptSpan, err)
+						metrics.RecordRequestError(actualModel, "serialization_error")
+						promptSpan.End()
+						return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
+					}
+
+					observability.SetSpanAttributes(promptSpan,
+						attribute.Bool("system_prompt.injected", injected),
+						attribute.String("system_prompt.mode", mode),
+						attribute.String(observability.AttrCategoryName, categoryName))
+
+					if injected {
+						ctx.VSRInjectedSystemPrompt = true
+						observability.Infof("Added category-specific system prompt for category: %s (mode: %s)", categoryName, mode)
+					}
+
+					// Log metadata about system prompt injection (avoid logging sensitive user data)
+					observability.Infof("System prompt injection completed for category: %s, body size: %d bytes", categoryName, len(modifiedBody))
+
+					promptSpan.End()
+					ctx.TraceContext = promptCtx
+				} else if category != nil && category.SystemPrompt != "" && !category.IsSystemPromptEnabled() {
+					observability.Infof("System prompt disabled for category: %s", categoryName)
+				}
+			}
+
+			// Create body mutation with the modified body
+			bodyMutation := &ext_proc.BodyMutation{
+				Mutation: &ext_proc.BodyMutation_Body{
+					Body: modifiedBody,
+				},
+			}
+
+			// Create header mutation with content-length removal AND all necessary routing headers
+			// (body phase HeaderMutation replaces header phase completely)
+			setHeaders := []*core.HeaderValueOption{}
+			if selectedEndpoint != "" {
+				setHeaders = append(setHeaders, &core.HeaderValueOption{
+					Header: &core.HeaderValue{
+						Key:      headers.GatewayDestinationEndpoint,
+						RawValue: []byte(selectedEndpoint),
+					},
+				})
+			}
+			if actualModel != "" {
+				setHeaders = append(setHeaders, &core.HeaderValueOption{
+					Header: &core.HeaderValue{
+						Key:      headers.SelectedModel,
+						RawValue: []byte(actualModel),
+					},
+				})
+			}
+
+			headerMutation := &ext_proc.HeaderMutation{
+				RemoveHeaders: []string{"content-length"},
+				SetHeaders:    setHeaders,
+			}
+
+			observability.Debugf("ActualModel = '%s'", actualModel)
+
+			// Set the response with body mutation and content-length removal
+			response = &ext_proc.ProcessingResponse{
+				Response: &ext_proc.ProcessingResponse_RequestBody{
+					RequestBody: &ext_proc.BodyResponse{
+						Response: &ext_proc.CommonResponse{
+							Status:         ext_proc.CommonResponse_CONTINUE,
+							HeaderMutation: headerMutation,
+							BodyMutation:   bodyMutation,
+						},
+					},
+				},
+			}
+
+			observability.Infof("Use new model: %s", matchedModel)
+
+			// Structured log for routing decision (auto)
+			observability.LogEvent("routing_decision", map[string]interface{}{
+				"reason_code":        "auto_routing",
+				"request_id":         ctx.RequestID,
+				"original_model":     originalModel,
+				"selected_model":     matchedModel,
+				"category":           categoryName,
+				"reasoning_enabled":  useReasoning,
+				"reasoning_effort":   effortForMetrics,
+				"selected_endpoint":  selectedEndpoint,
+				"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
+			})
+			metrics.RecordRoutingReasonCode("auto_routing", matchedModel)
 		}
 	} else if !isAutoModel {
 		observability.Infof("Using specified model: %s", originalModel)

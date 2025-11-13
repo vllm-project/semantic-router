@@ -1,7 +1,11 @@
 package services
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -150,7 +154,6 @@ func NewPlaceholderClassificationService() *ClassificationService {
 	}
 }
 
-
 // IntentRequest represents a request for intent classification
 type IntentRequest struct {
 	Text    string         `json:"text"`
@@ -177,6 +180,29 @@ type Classification struct {
 	Category         string  `json:"category"`
 	Confidence       float64 `json:"confidence"`
 	ProcessingTimeMs int64   `json:"processing_time_ms"`
+}
+
+// MultimodalClassificationRequest represents a request for multimodal classification
+type MultimodalClassificationRequest struct {
+	Text        string                 `json:"text"`
+	Images      []MultimodalImage      `json:"images,omitempty"`
+	ContentType string                 `json:"content_type"` // "text", "image", "multimodal"
+	Options     *ClassificationOptions `json:"options,omitempty"`
+}
+
+// MultimodalImage represents an image in a multimodal classification request
+type MultimodalImage struct {
+	Data        string `json:"data"`                  // Base64 encoded image
+	URL         string `json:"url,omitempty"`         // Alternative: image URL
+	MimeType    string `json:"mime_type"`             // image/jpeg, image/png, etc.
+	Description string `json:"description,omitempty"` // Optional text description
+}
+
+// ClassificationOptions contains options for multimodal classification
+type ClassificationOptions struct {
+	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
+	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
+	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
 }
 
 // ClassifyIntent performs intent classification
@@ -236,6 +262,151 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	response.RoutingDecision = s.getRoutingDecision(confidence, req.Options)
 
 	return response, nil
+}
+
+// ClassifyMultimodal performs multimodal classification (text + images)
+// Basic prototype version - uses Ollama
+func (s *ClassificationService) ClassifyMultimodal(req MultimodalClassificationRequest) (*IntentResponse, error) {
+	// Validate input
+	if req.Text == "" && len(req.Images) == 0 {
+		return nil, fmt.Errorf("either text or images must be provided")
+	}
+
+	text := req.Text
+
+	var imageDescriptions []string
+	if len(req.Images) > 0 {
+		observability.Infof("Processing %d image(s) with Ollama", len(req.Images))
+		descriptions, err := s.extractImageFeatures(req.Images)
+		if err != nil {
+			observability.Errorf("Failed: ", err)
+		} else if len(descriptions) == 0 {
+			observability.Warnf("no error occurred")
+		} else {
+			imageDescriptions = descriptions
+			observability.Infof("Successfully extracted %d", len(descriptions))
+		}
+	}
+
+	fusedText := s.fuseTextAndImageFeatures(text, imageDescriptions)
+	observability.Debugf("Fused text length: %d chars", len(fusedText))
+
+	intentReq := IntentRequest{
+		Text:    fusedText,
+		Options: convertClassificationOptions(req.Options),
+	}
+
+	intentResp, err := s.ClassifyIntent(intentReq)
+	if err != nil {
+		return nil, fmt.Errorf("classification failed: %w", err)
+	}
+
+	observability.Infof("Classification result: category=%s, confidence=%.3f",
+		intentResp.Classification.Category, intentResp.Classification.Confidence)
+
+	return intentResp, nil
+}
+
+// extractImageFeatures sends images to Ollama for feature extraction
+func (s *ClassificationService) extractImageFeatures(images []MultimodalImage) ([]string, error) {
+	var descriptions []string
+	ollamaURL := "http://127.0.0.1:11434/api/generate" // Hardcoded for prototype
+	ollamaModel := "llava:7b"
+
+	for i, img := range images {
+		if img.Data == "" {
+			observability.Warnf("Skipping image %d with empty data", i+1)
+			continue
+		}
+
+		cleanData := strings.ReplaceAll(strings.TrimSpace(img.Data), "\n", "")
+		observability.Debugf("Sending image %d to Ollama (data length: %d chars, mime_type: %s)", i+1, len(cleanData), img.MimeType)
+
+		body := map[string]interface{}{
+			"model":  ollamaModel,
+			"prompt": "Describe the image briefly for context.",
+			"images": []string{cleanData},
+		}
+
+		payload, err := json.Marshal(body)
+		if err != nil {
+			observability.Errorf("Failed to marshal Ollama request: %v", err)
+			return nil, fmt.Errorf("failed to prepare image request: %w", err)
+		}
+
+		observability.Debugf("Calling Ollama at %s with model %s", ollamaURL, ollamaModel)
+		resp, err := http.Post(ollamaURL, "application/json", bytes.NewReader(payload))
+		if err != nil {
+			observability.Errorf("Ollama request failed: %v", err)
+			return nil, fmt.Errorf("failed to connect to Ollama at %s: %w", ollamaURL, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			observability.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(bodyBytes))
+			return nil, fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		var fullResponse string
+		decoder := json.NewDecoder(resp.Body)
+		for decoder.More() {
+			var chunk map[string]interface{}
+			if err := decoder.Decode(&chunk); err != nil {
+				observability.Warnf("Error decoding Ollama chunk: %v", err)
+				break
+			}
+			if part, ok := chunk["response"].(string); ok {
+				fullResponse += part
+			}
+		}
+
+		if fullResponse != "" {
+			descriptions = append(descriptions, fullResponse)
+			observability.Infof("Image processed successfully, description length: %d chars", len(fullResponse))
+		} else {
+			observability.Warnf("Ollama returned empty response for image")
+		}
+	}
+
+	return descriptions, nil
+}
+
+func (s *ClassificationService) fuseTextAndImageFeatures(text string, imageDescriptions []string) string {
+	if len(imageDescriptions) == 0 {
+		return text
+	}
+
+	var fused strings.Builder
+	if text != "" {
+		fused.WriteString(text)
+	}
+
+	for i, desc := range imageDescriptions {
+		if desc != "" {
+			if fused.Len() > 0 {
+				fused.WriteString("\n")
+			}
+			if len(imageDescriptions) > 1 {
+				fused.WriteString(fmt.Sprintf("Visual context %d: %s", i+1, desc))
+			} else {
+				fused.WriteString("Visual context: " + desc)
+			}
+		}
+	}
+
+	return fused.String()
+}
+
+func convertClassificationOptions(opts *ClassificationOptions) *IntentOptions {
+	if opts == nil {
+		return nil
+	}
+	return &IntentOptions{
+		ReturnProbabilities: opts.ReturnProbabilities,
+		ConfidenceThreshold: opts.ConfidenceThreshold,
+		IncludeExplanation:  opts.IncludeExplanation,
+	}
 }
 
 // PIIRequest represents a request for PII detection
