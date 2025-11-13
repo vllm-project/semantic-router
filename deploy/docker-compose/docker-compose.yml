@@ -78,8 +78,8 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "4318:4317"   # OTLP gRPC (mapped to 4318 on host to avoid conflicts)
-      - "16686:16686" # Web UI
+      - "4318:4317"  # OTLP gRPC (mapped to 4318 on host to avoid conflicts)
+      - "16686:16686"  # Web UI
     networks:
       - semantic-network
 

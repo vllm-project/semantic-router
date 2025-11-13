@@ -26,7 +26,7 @@ name: Kubernetes Integration Test
 on:
   pull_request:
     paths:
-      - "deploy/kubernetes/**"
+      - "deploy/kubernetes/ai-gateway/semantic-router/**"
       - ".github/workflows/k8s-integration-test*.yml"
       - "Dockerfile.extproc"
       - "tools/kind/**"
@@ -43,12 +43,14 @@ env:
 jobs:
   # Step 1: Validate Kubernetes manifests
   validate-manifests:
+    if: github.repository == 'vllm-project/semantic-router'
     uses: ./.github/workflows/k8s-validate-manifests.yml
     with:
       kustomize_version: v5.7.1
 
   # Step 2: Run kind cluster integration test
   kind-integration-test:
+    if: github.repository == 'vllm-project/semantic-router'
     uses: ./.github/workflows/k8s-kind-integration-test.yml
     needs: validate-manifests
     with:
@@ -65,6 +67,7 @@ jobs:
 
   # Step 4: Test with custom configurations
   test-with-custom-config:
+    if: github.repository == 'vllm-project/semantic-router'
     uses: ./.github/workflows/k8s-config-test.yml
     needs: validate-manifests
     with:
@@ -72,6 +75,7 @@ jobs:
 
   # Step 5: Run security scans
   security-scan:
+    if: github.repository == 'vllm-project/semantic-router'
     uses: ./.github/workflows/k8s-security-scan.yml
     needs: validate-manifests
     with:
@@ -80,6 +84,7 @@ jobs:
   # Step 6: Generate test summary
   summary:
     name: Test Summary
+    if: github.repository == 'vllm-project/semantic-router' && always()
     runs-on: ubuntu-latest
     needs:
       [
@@ -88,7 +93,6 @@ jobs:
         test-with-custom-config,
         security-scan,
       ]
-    if: always()
 
     steps:
       - name: Check test results

@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "semantic-router.fullname" . }}
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "semantic-router.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "semantic-router.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.initContainer.enabled }}
+      initContainers:
+      - name: model-downloader
+        image: {{ .Values.initContainer.image }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        # Allow up to 10 minutes for model downloads in CI environments
+        # This prevents the init container from being killed prematurely
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          echo "Installing Hugging Face Hub..."
+          pip install -U --no-cache-dir "huggingface_hub>=0.19.0"
+
+          echo "Downloading models to persistent volume..."
+          cd /app/models
+
+          {{- range .Values.initContainer.models }}
+          # Download {{ .name }}
+          echo "Downloading {{ .name }} from {{ .repo }}..."
+          # Remove .cache directory to ensure fresh download
+          rm -rf "{{ .name }}/.cache" 2>/dev/null || true
+          # Download with ignore_patterns to exclude ONNX-only files if pytorch model exists
+          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', local_dir_use_symlinks=False, ignore_patterns=['*.onnx', '*.msgpack', '*.h5', '*.tflite'] if '{{ .name }}' == 'all-MiniLM-L12-v2' else None)"
+
+          # Check for required model files
+          echo "Checking {{ .name }} for required files:"
+          if [ -f "{{ .name }}/pytorch_model.bin" ] || [ -f "{{ .name }}/model.safetensors" ]; then
+            echo "✓ Found PyTorch model weights in {{ .name }}"
+          else
+            echo "✗ WARNING: No PyTorch model weights found in {{ .name }}"
+            ls -la "{{ .name }}/" | head -20
+          fi
+
+          {{- end }}
+          echo "All models downloaded successfully!"
+          ls -la /app/models/
+        env:
+        - name: HF_HUB_CACHE
+          value: /tmp/hf_cache
+        resources:
+          {{- toYaml .Values.initContainer.resources | nindent 10 }}
+        volumeMounts:
+        - name: models-volume
+          mountPath: /app/models
+      {{- end }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- with .Values.args }}
+        args:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        ports:
+        - containerPort: {{ .Values.service.grpc.targetPort }}
+          name: grpc
+          protocol: TCP
+        - containerPort: {{ .Values.service.metrics.targetPort }}
+          name: metrics
+          protocol: TCP
+        - containerPort: {{ .Values.service.api.targetPort }}
+          name: classify-api
+          protocol: TCP
+        {{- with .Values.env }}
+        env:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        {{- if .Values.persistence.enabled }}
+        - name: models-volume
+          mountPath: /app/models
+        {{- end }}
+        {{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          tcpSocket:
+            port: {{ .Values.service.grpc.targetPort }}
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.readinessProbe.enabled }}
+        readinessProbe:
+          tcpSocket:
+            port: {{ .Values.service.grpc.targetPort }}
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ include "semantic-router.fullname" . }}-config
+      {{- if .Values.persistence.enabled }}
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: {{ include "semantic-router.pvcName" . }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

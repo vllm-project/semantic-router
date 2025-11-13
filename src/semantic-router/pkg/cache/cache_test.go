@@ -227,6 +227,51 @@ connection:
 				})
 			})
 
+			Context("Milvus YAML parsing", func() {
+				It("should parse snake_case configuration fields without default fallbacks", func() {
+					configPath := filepath.Join(tempDir, "milvus-snake.yaml")
+					configYAML := `
+connection:
+  host: "localhost"
+  port: 19530
+collection:
+  name: "yaml_snake_case"
+  vector_field:
+    name: "custom_embedding"
+    dimension: 512
+    metric_type: "L2"
+  index:
+    type: "IVF_FLAT"
+    params:
+      M: 24
+      efConstruction: 128
+search:
+  params:
+    ef: 42
+  topk: 25
+development:
+  auto_create_collection: true
+  drop_collection_on_startup: true
+`
+					err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := loadMilvusConfig(configPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(config.Collection.Name).To(Equal("yaml_snake_case"))
+					Expect(config.Collection.VectorField.Name).To(Equal("custom_embedding"))
+					Expect(config.Collection.VectorField.Dimension).To(Equal(512))
+					Expect(config.Collection.VectorField.MetricType).To(Equal("L2"))
+					Expect(config.Collection.Index.Type).To(Equal("IVF_FLAT"))
+					Expect(config.Collection.Index.Params.M).To(Equal(24))
+					Expect(config.Collection.Index.Params.EfConstruction).To(Equal(128))
+					Expect(config.Search.Params.Ef).To(Equal(42))
+					Expect(config.Search.TopK).To(Equal(25))
+					Expect(config.Development.AutoCreateCollection).To(BeTrue())
+					Expect(config.Development.DropCollectionOnStartup).To(BeTrue())
+				})
+			})
+
 			Context("with unsupported backend type", func() {
 				It("should return error for unsupported backend type", func() {
 					config := CacheConfig{
@@ -1203,28 +1248,14 @@ func TestHybridCacheDisabled(t *testing.T) {
 
 // TestHybridCacheBasicOperations tests basic cache operations
 func TestHybridCacheBasicOperations(t *testing.T) {
-	// Skip if Milvus is not configured
-	if os.Getenv("MILVUS_URI") == "" {
-		t.Skip("Skipping: MILVUS_URI not set")
-	}
+	t.Log("Starting TestHybridCacheBasicOperations - this may take 30-60 seconds...")
 
 	// Create a test Milvus config
-	milvusConfig := "/tmp/test_milvus_config.yaml"
-	err := os.WriteFile(milvusConfig, []byte(`
-milvus:
-  address: "localhost:19530"
-  collection_name: "test_hybrid_cache"
-  dimension: 384
-  index_type: "HNSW"
-  metric_type: "IP"
-  params:
-    M: 16
-    efConstruction: 200
-`), 0o644)
+	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_cache", 200, true)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
-	defer os.Remove(milvusConfig)
+	defer cleanup()
 
 	cache, err := NewHybridCache(HybridCacheOptions{
 		Enabled:             true,
@@ -1260,7 +1291,8 @@ milvus:
 	}
 
 	// Test FindSimilar with exact same query (should hit)
-	time.Sleep(100 * time.Millisecond) // Allow indexing to complete
+	// Wait for Milvus to index the entry
+	time.Sleep(2 * time.Second)
 
 	response, found, err := cache.FindSimilar("gpt-4", testQuery)
 	if err != nil {
@@ -1303,25 +1335,13 @@ milvus:
 
 // TestHybridCachePendingRequest tests pending request flow
 func TestHybridCachePendingRequest(t *testing.T) {
-	// Skip if Milvus is not configured
-	if os.Getenv("MILVUS_URI") == "" {
-		t.Skip("Skipping: MILVUS_URI not set")
-	}
+	t.Log("Starting TestHybridCachePendingRequest - this may take 30-60 seconds...")
 
-	milvusConfig := "/tmp/test_milvus_pending_config.yaml"
-	err := os.WriteFile(milvusConfig, []byte(`
-milvus:
-  address: "localhost:19530"
-  collection_name: "test_hybrid_pending"
-  dimension: 384
-  index_type: "HNSW"
-  metric_type: "IP"
-`),
-		0o644)
+	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_pending", 64, true)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
-	defer os.Remove(milvusConfig)
+	defer cleanup()
 
 	cache, err := NewHybridCache(HybridCacheOptions{
 		Enabled:             true,
@@ -1367,25 +1387,13 @@ milvus:
 
 // TestHybridCacheEviction tests memory eviction behavior
 func TestHybridCacheEviction(t *testing.T) {
-	// Skip if Milvus is not configured
-	if os.Getenv("MILVUS_URI") == "" {
-		t.Skip("Skipping: MILVUS_URI not set")
-	}
+	t.Log("Starting TestHybridCacheEviction - this may take 30-60 seconds...")
 
-	milvusConfig := "/tmp/test_milvus_eviction_config.yaml"
-	err := os.WriteFile(milvusConfig, []byte(`
-milvus:
-  address: "localhost:19530"
-  collection_name: "test_hybrid_eviction"
-  dimension: 384
-  index_type: "HNSW"
-  metric_type: "IP"
-`),
-		0o644)
+	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_eviction", 64, true)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
-	defer os.Remove(milvusConfig)
+	defer cleanup()
 
 	// Create cache with very small memory limit
 	cache, err := NewHybridCache(HybridCacheOptions{
@@ -1418,7 +1426,8 @@ milvus:
 
 	// All entries should still be in Milvus
 	// Try to find a recent entry (should be in memory)
-	time.Sleep(100 * time.Millisecond)
+	// Wait for Milvus to index all entries
+	time.Sleep(2 * time.Second)
 	_, found, err := cache.FindSimilar("gpt-4", "Query number 9")
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
@@ -1438,25 +1447,13 @@ milvus:
 
 // TestHybridCacheLocalCacheHit tests local cache hot path
 func TestHybridCacheLocalCacheHit(t *testing.T) {
-	// Skip if Milvus is not configured
-	if os.Getenv("MILVUS_URI") == "" {
-		t.Skip("Skipping: MILVUS_URI not set")
-	}
+	t.Log("Starting TestHybridCacheLocalCacheHit - this may take 30-60 seconds...")
 
-	milvusConfig := "/tmp/test_milvus_local_config.yaml"
-	err := os.WriteFile(milvusConfig, []byte(`
-milvus:
-  address: "localhost:19530"
-  collection_name: "test_hybrid_local"
-  dimension: 384
-  index_type: "HNSW"
-  metric_type: "IP"
-`),
-		0o644)
+	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_local", 64, true)
 	if err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
-	defer os.Remove(milvusConfig)
+	defer cleanup()
 
 	cache, err := NewHybridCache(HybridCacheOptions{
 		Enabled:             true,
@@ -1478,16 +1475,18 @@ milvus:
 		t.Fatalf("Failed to add entry: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait longer for Milvus to index the entry
+	time.Sleep(2 * time.Second)
 
 	// First search - should populate local cache
-	_, found, err := cache.FindSimilar("gpt-4", testQuery)
+	response1, found, err := cache.FindSimilar("gpt-4", testQuery)
 	if err != nil {
 		t.Fatalf("FindSimilar failed: %v", err)
 	}
 	if !found {
 		t.Fatal("Expected to find entry")
 	}
+	t.Logf("First search returned: %s", string(response1))
 
 	// Second search - should hit local cache (much faster)
 	startTime := time.Now()
@@ -1499,6 +1498,7 @@ milvus:
 	if !found {
 		t.Fatal("Expected to find entry in local cache")
 	}
+	t.Logf("Second search returned: %s", string(response))
 	if string(response) != string(testResponse) {
 		t.Errorf("Response mismatch: got %s, want %s", string(response), string(testResponse))
 	}
@@ -1511,6 +1511,95 @@ milvus:
 	stats := cache.GetStats()
 	if stats.HitCount < 2 {
 		t.Errorf("Expected at least 2 hits, got %d", stats.HitCount)
+	}
+}
+
+// Ensures hybrid layer search skips candidates that are already worse than the frontier.
+func TestHybridCacheSearchLayerPrunesWeakerBranch(t *testing.T) {
+	// Regression fixture: the buggy comparison let the frontier accept a much
+	// worse neighbor (node 3) even after ef was saturated. That re-opened the
+	// branch to node 4, so the search would walk every reachable node—hurting
+	// latency and risking a worse match. We wire an artificial edge (3→4) to
+	// isolate the pruning logic; production HNSW builders try to avoid such links.
+	embeddings := [][]float32{
+		{0.80},  // node 0: entry point
+		{0.79},  // node 1: near-tie neighbor
+		{0.78},  // node 2: another strong neighbor
+		{0.10},  // node 3: weak branch that should be pruned
+		{0.995}, // node 4: hidden best reachable only via node 3
+	}
+
+	nodes := []*HNSWNode{
+		{
+			entryIndex: 0,
+			neighbors: map[int][]int{
+				0: {1, 2, 3},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 1,
+			neighbors: map[int][]int{
+				0: {0},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 2,
+			neighbors: map[int][]int{
+				0: {0},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 3,
+			neighbors: map[int][]int{
+				0: {0, 4},
+			},
+			maxLayer: 0,
+		},
+		{
+			entryIndex: 4,
+			neighbors: map[int][]int{
+				0: {3},
+			},
+			maxLayer: 0,
+		},
+	}
+
+	nodeIndex := map[int]*HNSWNode{
+		0: nodes[0],
+		1: nodes[1],
+		2: nodes[2],
+		3: nodes[3],
+		4: nodes[4],
+	}
+
+	cache := &HybridCache{
+		hnswIndex: &HNSWIndex{
+			nodes:          nodes,
+			nodeIndex:      nodeIndex,
+			entryPoint:     0,
+			maxLayer:       0,
+			efConstruction: 4,
+			M:              4,
+			Mmax:           4,
+			Mmax0:          4,
+			ml:             1,
+		},
+		embeddings: embeddings,
+		idMap:      map[int]string{},
+	}
+
+	results := cache.searchLayerHybrid([]float32{1}, 3, 0, []int{0})
+	if len(results) != 3 {
+		t.Fatalf("expected frontier to keep three best neighbors, got %v", results)
+	}
+	if slices.Contains(results, 4) {
+		t.Fatalf("expected weaker branch to stay pruned, got %v", results)
+	}
+	if !slices.Contains(results, 1) {
+		t.Fatalf("expected best neighbor 1 to remain in results, got %v", results)
 	}
 }
 
@@ -1613,8 +1702,8 @@ milvus:
 	}
 }
 
-// BenchmarkResult stores detailed benchmark metrics
-type BenchmarkResult struct {
+// TestBenchmarkResult stores detailed benchmark metrics for test cases
+type TestBenchmarkResult struct {
 	CacheType           string
 	CacheSize           int
 	Operation           string
@@ -1685,6 +1774,47 @@ func (dcc *DatabaseCallCounter) Get() int64 {
 
 func (dcc *DatabaseCallCounter) Reset() {
 	atomic.StoreInt64(&dcc.calls, 0)
+}
+
+// createTestMilvusConfig creates a temporary Milvus config file for testing
+// Returns the path to the config file and cleanup function
+func createTestMilvusConfig(collectionName string, efConstruction int, dropOnStartup bool) (string, func(), error) {
+	configPath := fmt.Sprintf("/tmp/test_milvus_%s_config.yaml", collectionName)
+
+	configYAML := fmt.Sprintf(`connection:
+  host: "localhost"
+  port: 19530
+  timeout: 30
+collection:
+  name: "%s"
+  vector_field:
+    name: "embedding"
+    dimension: 384
+    metric_type: "IP"
+  index:
+    type: "HNSW"
+    params:
+      M: 16
+      efConstruction: %d
+search:
+  params:
+    ef: 64
+  topk: 10
+development:
+  auto_create_collection: true
+  drop_collection_on_startup: %t
+`, collectionName, efConstruction, dropOnStartup)
+
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create test config: %w", err)
+	}
+
+	cleanup := func() {
+		os.Remove(configPath)
+	}
+
+	return configPath, cleanup, nil
 }
 
 // getMilvusConfigPath returns the path to milvus.yaml config file
@@ -1915,7 +2045,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 						// Memory usage estimation
 						memUsageMB := estimateMilvusMemory(cacheSize)
 
-						result := BenchmarkResult{
+						result := TestBenchmarkResult{
 							CacheType:           "milvus",
 							CacheSize:           cacheSize,
 							Operation:           "search",
@@ -2091,7 +2221,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 						hitRate := float64(hits) / float64(b.N) * 100
 						dbCallPercent := float64(dbCalls) / float64(b.N) * 100
 
-						result := BenchmarkResult{
+						result := TestBenchmarkResult{
 							CacheType:           "hybrid",
 							CacheSize:           cacheSize,
 							Operation:           "search",
@@ -2361,7 +2491,7 @@ func estimateHybridMemory(cacheSize int) float64 {
 	return embeddingMB + indexMB + idMapMB
 }
 
-func writeBenchmarkResultToCSV(file *os.File, result BenchmarkResult) {
+func writeBenchmarkResultToCSV(file *os.File, result TestBenchmarkResult) {
 	line := fmt.Sprintf("%s,%d,%s,%d,%.3f,%.3f,%.3f,%.3f,%.0f,%.1f,%.1f,%d,%d,%.1f\n",
 		result.CacheType,
 		result.CacheSize,
@@ -2386,7 +2516,14 @@ func writeBenchmarkResultToCSV(file *os.File, result BenchmarkResult) {
 
 // TestHybridVsMilvusSmoke is a quick smoke test to verify both caches work
 func TestHybridVsMilvusSmoke(t *testing.T) {
-	t.Skip("Skipping smoke test in short mode")
+	t.Log("Starting TestHybridVsMilvusSmoke - this may take 2-3 minutes...")
+
+	// Create test Milvus config
+	milvusConfig, cleanup, err := createTestMilvusConfig("test_smoke_cache", 64, true)
+	if err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+	defer cleanup()
 
 	// Initialize BERT model
 	useCPU := os.Getenv("USE_CPU") != "false"
@@ -2401,7 +2538,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 			Enabled:             true,
 			SimilarityThreshold: 0.85,
 			TTLSeconds:          3600,
-			ConfigPath:          getMilvusConfigPath(),
+			ConfigPath:          milvusConfig,
 		})
 		if err != nil {
 			t.Fatalf("Failed to create Milvus cache: %v", err)
@@ -2442,7 +2579,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 			MaxMemoryEntries:    1000,
 			HNSWM:               16,
 			HNSWEfConstruction:  200,
-			MilvusConfigPath:    getMilvusConfigPath(),
+			MilvusConfigPath:    milvusConfig,
 		})
 		if err != nil {
 			t.Fatalf("Failed to create Hybrid cache: %v", err)

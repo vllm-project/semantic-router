@@ -9,6 +9,7 @@ on:
 
 jobs:
   pre-commit:
+    if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
     name: Run pre-commit hooks check file lint
 

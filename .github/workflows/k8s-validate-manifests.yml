@@ -12,6 +12,7 @@ on:
 jobs:
   validate-manifests:
     name: Validate Kubernetes Manifests
+    if: ${{ github.repository == 'vllm-project/semantic-router' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -27,7 +28,7 @@ jobs:
       - name: Validate Kustomize build
         run: |
           echo "Building kustomization..."
-          kustomize build deploy/kubernetes > /tmp/k8s-manifests.yaml
+          kustomize build deploy/kubernetes/ai-gateway/semantic-router > /tmp/k8s-manifests.yaml
           echo "Kustomize build successful!"
           echo "Generated manifests:"
           cat /tmp/k8s-manifests.yaml
@@ -42,7 +43,7 @@ jobs:
       - name: Validate manifests with kubeconform
         run: |
           echo "Validating Kubernetes manifests..."
-          kustomize build deploy/kubernetes | \
+          kustomize build deploy/kubernetes/ai-gateway/semantic-router | \
             kubeconform -strict -summary \
               -kubernetes-version 1.28.0 \
               -schema-location default \

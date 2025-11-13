@@ -23,6 +23,20 @@ use std::sync::{Arc, OnceLock};
 
 use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
 
+// Classification constants for consistent category detection
+/// PII detection positive class identifier (numeric)
+const PII_POSITIVE_CLASS: usize = 1;
+/// PII detection positive class identifier (string)
+const PII_POSITIVE_CLASS_STR: &str = "1";
+
+/// Security threat detection positive class identifier (numeric)
+const SECURITY_THREAT_CLASS: usize = 1;
+/// Security threat detection positive class identifier (string)
+const SECURITY_THREAT_CLASS_STR: &str = "1";
+
+/// Keywords used to identify security threats in category names
+const SECURITY_THREAT_KEYWORDS: &[&str] = &["jailbreak", "unsafe", "threat"];
+
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
 pub fn load_id2label_from_config(
@@ -248,28 +262,175 @@ pub extern "C" fn classify_unified_batch(
         }
     };
 
-    if let Some(_classifier_arc) = UNIFIED_CLASSIFIER.get() {
-        // Note: DualPathUnifiedClassifier doesn't implement Clone and requires &mut self
-        // This is incompatible with OnceLock's immutable access pattern
-        // TODO: Need to refactor DualPathUnifiedClassifier to use interior mutability
-        eprintln!("UNIFIED_CLASSIFIER: OnceLock pattern requires non-mutable classifiers - needs refactoring");
-        UnifiedBatchResult {
+    // Get classifier from OnceLock (now with interior mutability support)
+    let classifier = match UNIFIED_CLASSIFIER.get() {
+        Some(c) => c,
+        None => {
+            return UnifiedBatchResult {
+                batch_size: 0,
+                intent_results: std::ptr::null_mut(),
+                pii_results: std::ptr::null_mut(),
+                security_results: std::ptr::null_mut(),
+                error: true,
+                error_message: unsafe { allocate_c_string("Unified classifier not initialized") },
+            };
+        }
+    };
+
+    // Define tasks for unified classification (Intent, PII, Security)
+    use crate::model_architectures::TaskType;
+    let tasks = vec![TaskType::Intent, TaskType::PII, TaskType::Security];
+
+    // Call classify_intelligent (now works with interior mutability)
+    let text_refs: Vec<&str> = _texts.iter().map(|s| s.as_ref()).collect();
+    match classifier.classify_intelligent(&text_refs, &tasks) {
+        Ok(result) => {
+            // Convert UnifiedClassificationResult to UnifiedBatchResult
+            // Note: UnifiedClassificationResult provides aggregated results for the batch,
+            // so we replicate the same result for each text in the batch
+            // SAFETY: The batch_size passed to convert_unified_result_to_batch matches the number of texts (_texts.len()),
+            // and memory allocation for the result is properly handled, satisfying the function's safety requirements.
+            unsafe { convert_unified_result_to_batch(&result, _texts.len()) }
+        }
+        Err(e) => UnifiedBatchResult {
             batch_size: 0,
             intent_results: std::ptr::null_mut(),
             pii_results: std::ptr::null_mut(),
             security_results: std::ptr::null_mut(),
             error: true,
-            error_message: std::ptr::null_mut(),
+            error_message: unsafe { allocate_c_string(&format!("Classification failed: {}", e)) },
+        },
+    }
+}
+
+/// Convert UnifiedClassificationResult to UnifiedBatchResult for FFI
+///
+/// # Safety
+/// - Allocates C memory that must be freed by the caller
+/// - batch_size must match the number of texts in the original request
+unsafe fn convert_unified_result_to_batch(
+    result: &crate::classifiers::unified::UnifiedClassificationResult,
+    batch_size: usize,
+) -> UnifiedBatchResult {
+    use crate::ffi::types::{IntentResult, PIIResult, SecurityResult};
+    use crate::model_architectures::TaskType;
+
+    // Extract task results from the HashMap
+    let intent_task_result = result.task_results.get(&TaskType::Intent);
+    let pii_task_result = result.task_results.get(&TaskType::PII);
+    let security_task_result = result.task_results.get(&TaskType::Security);
+
+    // Allocate Intent results array
+    let intent_results = if let Some(intent) = intent_task_result {
+        let mut results = Vec::with_capacity(batch_size);
+        for _i in 0..batch_size {
+            // Note: Replicating the same result for all texts since UnifiedClassificationResult
+            // provides aggregated results, not per-text results
+            // Use category_name from UnifiedTaskResult (loaded from model config)
+            results.push(IntentResult {
+                category: allocate_c_string(&intent.category_name),
+                confidence: intent.confidence,
+                probabilities: std::ptr::null_mut(), // No detailed probabilities available
+                num_probabilities: 0,
+            });
         }
+        let boxed = results.into_boxed_slice();
+        Box::into_raw(boxed) as *mut IntentResult
     } else {
-        UnifiedBatchResult {
-            batch_size: 0,
-            intent_results: std::ptr::null_mut(),
-            pii_results: std::ptr::null_mut(),
-            security_results: std::ptr::null_mut(),
-            error: true,
-            error_message: std::ptr::null_mut(),
+        // If no Intent result, allocate default values
+        let mut results = Vec::with_capacity(batch_size);
+        for _i in 0..batch_size {
+            results.push(IntentResult {
+                category: allocate_c_string("unknown"),
+                confidence: 0.0,
+                probabilities: std::ptr::null_mut(),
+                num_probabilities: 0,
+            });
         }
+        let boxed = results.into_boxed_slice();
+        Box::into_raw(boxed) as *mut IntentResult
+    };
+
+    // Allocate PII results array
+    let pii_results = if let Some(pii) = pii_task_result {
+        let mut results = Vec::with_capacity(batch_size);
+        for _i in 0..batch_size {
+            // Use category_name to determine if PII is detected
+            // Common PII labels: "no_pii", "has_pii" or "0", "1" etc.
+            let has_pii = pii.category_name.to_lowercase().contains("pii")
+                || pii.category_name == PII_POSITIVE_CLASS_STR
+                || pii.predicted_class == PII_POSITIVE_CLASS;
+            results.push(PIIResult {
+                has_pii,
+                pii_types: std::ptr::null_mut(), // No detailed PII types available
+                num_pii_types: 0,
+                confidence: pii.confidence,
+            });
+        }
+        let boxed = results.into_boxed_slice();
+        Box::into_raw(boxed) as *mut PIIResult
+    } else {
+        let mut results = Vec::with_capacity(batch_size);
+        for _i in 0..batch_size {
+            results.push(PIIResult {
+                has_pii: false,
+                pii_types: std::ptr::null_mut(),
+                num_pii_types: 0,
+                confidence: 0.0,
+            });
+        }
+        let boxed = results.into_boxed_slice();
+        Box::into_raw(boxed) as *mut PIIResult
+    };
+
+    // Allocate Security results array
+    let security_results = if let Some(security) = security_task_result {
+        let mut results = Vec::with_capacity(batch_size);
+        for _i in 0..batch_size {
+            // Use category_name to determine if jailbreak is detected
+            // Common labels: "safe", "jailbreak", "unsafe" or "0", "1" etc.
+            let category_lower = security.category_name.to_lowercase();
+            let is_jailbreak = SECURITY_THREAT_KEYWORDS
+                .iter()
+                .any(|&keyword| category_lower.contains(keyword))
+                || security.category_name == SECURITY_THREAT_CLASS_STR
+                || security.predicted_class == SECURITY_THREAT_CLASS;
+
+            // Use category_name as threat_type if jailbreak detected, otherwise "none"
+            let threat_type = if is_jailbreak {
+                &security.category_name
+            } else {
+                "none"
+            };
+
+            results.push(SecurityResult {
+                is_jailbreak,
+                threat_type: allocate_c_string(threat_type),
+                confidence: security.confidence,
+            });
+        }
+        let boxed = results.into_boxed_slice();
+        Box::into_raw(boxed) as *mut SecurityResult
+    } else {
+        let mut results = Vec::with_capacity(batch_size);
+        for _i in 0..batch_size {
+            results.push(SecurityResult {
+                is_jailbreak: false,
+                threat_type: allocate_c_string("none"),
+                confidence: 0.0,
+            });
+        }
+        let boxed = results.into_boxed_slice();
+        Box::into_raw(boxed) as *mut SecurityResult
+    };
+
+    UnifiedBatchResult {
+        batch_size: batch_size as i32,
+        intent_results,
+        pii_results,
+        security_results,
+        error: false,
+        error_message: std::ptr::null_mut(),
     }
 }
 
@@ -359,8 +520,40 @@ pub extern "C" fn classify_candle_bert_tokens_with_labels(
         }
     };
 
-    // Use TraditionalBertTokenClassifier for token-level classification with labels
+    // Intelligent routing: Check LoRA token classifier first, then fall back to traditional
 
+    // Try LoRA token classifier first
+    if let Some(classifier) = crate::ffi::init::LORA_TOKEN_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_tokens(text) {
+            Ok(token_results) => {
+                // Filter out "O" (Outside) labels - only return actual entities
+                let token_entities: Vec<(String, String, f32)> = token_results
+                    .iter()
+                    .filter(|result| result.label_name != "O" && result.label_id != 0)
+                    .map(|result| {
+                        (
+                            result.token.clone(),
+                            result.label_name.clone(),
+                            result.confidence,
+                        )
+                    })
+                    .collect();
+
+                let entities_ptr = unsafe { allocate_bert_token_entity_array(&token_entities) };
+
+                return BertTokenClassificationResult {
+                    entities: entities_ptr,
+                    num_entities: token_entities.len() as i32,
+                };
+            }
+            Err(_e) => {
+                // Fall through to traditional classifier
+            }
+        }
+    }
+
+    // Fall back to traditional BERT token classifier
     if let Some(classifier) = TRADITIONAL_BERT_TOKEN_CLASSIFIER.get() {
         let classifier = classifier.clone();
         match classifier.classify_tokens(text) {
@@ -420,9 +613,11 @@ pub extern "C" fn classify_candle_bert_tokens(
         let lora_classifier = lora_classifier.clone();
         match lora_classifier.classify_tokens(text) {
             Ok(lora_results) => {
+                // Filter out "O" (Outside) labels - only return actual entities
                 // Convert LoRA results to BertTokenEntity format
                 let token_entities: Vec<(String, String, f32)> = lora_results
                     .iter()
+                    .filter(|r| r.label_name != "O" && r.label_id != 0)
                     .map(|r| (r.token.clone(), r.label_name.clone(), r.confidence))
                     .collect();
 
@@ -430,7 +625,7 @@ pub extern "C" fn classify_candle_bert_tokens(
 
                 return BertTokenClassificationResult {
                     entities: entities_ptr,
-                    num_entities: lora_results.len() as i32,
+                    num_entities: token_entities.len() as i32,
                 };
             }
             Err(_e) => {

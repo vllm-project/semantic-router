@@ -68,7 +68,7 @@ spec:
       modelName: deepseek-v31
       address: 127.0.0.1
       port: 8088
-  
+
   # Rule 2: Creative and general purpose route
   - intents:
     - category: "creative"

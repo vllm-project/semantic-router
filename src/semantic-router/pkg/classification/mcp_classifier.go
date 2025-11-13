@@ -75,7 +75,7 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 	}
 
 	// Validate MCP configuration
-	if !cfg.Enabled {
+	if !cfg.MCPCategoryModel.Enabled {
 		return fmt.Errorf("MCP category classifier is not enabled")
 	}
 
@@ -84,19 +84,19 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 
 	// Create MCP client configuration
 	mcpConfig := mcpclient.ClientConfig{
-		TransportType: cfg.TransportType,
-		Command:       cfg.Command,
-		Args:          cfg.Args,
-		Env:           cfg.Env,
-		URL:           cfg.URL,
+		TransportType: cfg.MCPCategoryModel.TransportType,
+		Command:       cfg.MCPCategoryModel.Command,
+		Args:          cfg.MCPCategoryModel.Args,
+		Env:           cfg.MCPCategoryModel.Env,
+		URL:           cfg.MCPCategoryModel.URL,
 		Options: mcpclient.ClientOptions{
 			LogEnabled: true,
 		},
 	}
 
 	// Set timeout if specified
-	if cfg.TimeoutSeconds > 0 {
-		mcpConfig.Timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
+	if cfg.MCPCategoryModel.TimeoutSeconds > 0 {
+		mcpConfig.Timeout = time.Duration(cfg.MCPCategoryModel.TimeoutSeconds) * time.Second
 	}
 
 	// Create MCP client
@@ -125,8 +125,8 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 // discoverClassificationTool finds the appropriate classification tool from available MCP tools
 func (m *MCPCategoryClassifier) discoverClassificationTool() error {
 	// If tool name is explicitly specified, use it
-	if m.config.ToolName != "" {
-		m.toolName = m.config.ToolName
+	if m.config.MCPCategoryModel.ToolName != "" {
+		m.toolName = m.config.MCPCategoryModel.ToolName
 		logging.Infof("Using explicitly configured tool: %s", m.toolName)
 		return nil
 	}
@@ -356,7 +356,7 @@ func createMCPCategoryInference(initializer MCPCategoryInitializer) MCPCategoryI
 // IsMCPCategoryEnabled checks if MCP-based category classification is properly configured.
 // Note: tool_name is optional and will be auto-discovered during initialization if not specified.
 func (c *Classifier) IsMCPCategoryEnabled() bool {
-	return c.Config.Enabled
+	return c.Config.MCPCategoryModel.Enabled
 }
 
 // initializeMCPCategoryClassifier initializes the MCP category classification model
@@ -380,9 +380,9 @@ func (c *Classifier) initializeMCPCategoryClassifier() error {
 
 		// Create a context with timeout for the list_categories call
 		ctx := context.Background()
-		if c.Config.TimeoutSeconds > 0 {
+		if c.Config.MCPCategoryModel.TimeoutSeconds > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.TimeoutSeconds)*time.Second)
+			ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.MCPCategoryModel.TimeoutSeconds)*time.Second)
 			defer cancel()
 		}
 
@@ -422,9 +422,9 @@ func (c *Classifier) classifyCategoryMCPWithRouting(text string) (*MCPClassifica
 
 	// Create context with timeout
 	ctx := context.Background()
-	if c.Config.TimeoutSeconds > 0 {
+	if c.Config.MCPCategoryModel.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.TimeoutSeconds)*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.MCPCategoryModel.TimeoutSeconds)*time.Second)
 		defer cancel()
 	}
 
@@ -530,9 +530,9 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 
 	// Create context with timeout
 	ctx := context.Background()
-	if c.Config.TimeoutSeconds > 0 {
+	if c.Config.MCPCategoryModel.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.TimeoutSeconds)*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.MCPCategoryModel.TimeoutSeconds)*time.Second)
 		defer cancel()
 	}
 

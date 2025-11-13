@@ -2,7 +2,15 @@ import React, { useState, useEffect } from 'react'
 import styles from './PlaygroundPage.module.css'
 
 const PlaygroundPage: React.FC = () => {
-  const [openWebUIUrl] = useState('http://localhost:3001')
+  // Detect OpenWebUI URL based on current hostname
+  // Assumes openwebui and dashboard have matching hostname patterns
+  const getOpenWebUIUrl = () => {
+    const hostname = window.location.hostname
+    const openwebuiHost = hostname.replace('dashboard', 'openwebui')
+    return `${window.location.protocol}//${openwebuiHost}`
+  }
+
+  const [openWebUIUrl] = useState(getOpenWebUIUrl())
   const [currentUrl, setCurrentUrl] = useState('')
 
   // Auto-load on mount

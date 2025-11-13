@@ -9,7 +9,6 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: "300s"
 spec:
-  host: openwebui-vllm-semantic-router-system.apps.cluster-pbd96.pbd96.sandbox5333.opentlc.com
   to:
     kind: Service
     name: openwebui

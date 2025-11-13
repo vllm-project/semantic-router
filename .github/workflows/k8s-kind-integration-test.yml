@@ -18,6 +18,7 @@ jobs:
   kind-integration-test:
     name: kind Cluster Integration Test
     runs-on: ubuntu-latest
+    if: ${{ github.repository == 'vllm-project/semantic-router' }}
     timeout-minutes: 45 # Increased to account for model downloads
 
     steps:
@@ -138,7 +139,7 @@ jobs:
           echo "Preparing CI deployment configuration..."
 
           # Create a temporary kustomization file for CI
-          cd deploy/kubernetes
+          cd deploy/kubernetes/ai-gateway/semantic-router
 
           # Backup original kustomization.yaml
           cp kustomization.yaml kustomization.yaml.backup
@@ -241,7 +242,7 @@ jobs:
       - name: Deploy to kind cluster
         run: |
           echo "Deploying semantic-router to kind cluster..."
-          kustomize build deploy/kubernetes | kubectl apply -f -
+          kustomize build deploy/kubernetes/ai-gateway/semantic-router | kubectl apply -f -
 
           echo "Waiting for namespace to be active..."
           kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/vllm-semantic-router-system --timeout=60s
@@ -394,7 +395,7 @@ jobs:
           echo "Cleaning up kind cluster..."
           kind delete cluster --name semantic-router-cluster || true
           echo "Restoring original kustomization..."
-          cd deploy/kubernetes
+          cd deploy/kubernetes/ai-gateway/semantic-router
           if [ -f kustomization.yaml.backup ]; then
             mv kustomization.yaml.backup kustomization.yaml
           fi

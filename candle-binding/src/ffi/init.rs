@@ -146,6 +146,18 @@ pub extern "C" fn init_similarity_model(model_id: *const c_char, use_cpu: bool) 
     }
 }
 
+/// Check if BERT similarity model is initialized
+///
+/// This function checks the Rust-side OnceLock state to determine if the model
+/// has been initialized. This is the source of truth for initialization status.
+///
+/// # Returns
+/// `true` if BERT_SIMILARITY OnceLock contains an initialized model, `false` otherwise
+#[no_mangle]
+pub extern "C" fn is_similarity_model_initialized() -> bool {
+    BERT_SIMILARITY.get().is_some()
+}
+
 /// Initialize traditional BERT classifier
 ///
 /// # Safety
@@ -457,7 +469,7 @@ pub extern "C" fn init_unified_classifier_c(
 
     // Initialize UnifiedClassifier with real model loading
     match crate::classifiers::unified::DualPathUnifiedClassifier::new(config) {
-        Ok(mut classifier) => {
+        Ok(classifier) => {
             // Initialize traditional path with actual models
             match classifier.init_traditional_path() {
                 Ok(_) => UNIFIED_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
@@ -582,6 +594,11 @@ pub extern "C" fn init_candle_bert_token_classifier(
 
     match model_type {
         ModelType::LoRA => {
+            // Check if already initialized
+            if LORA_TOKEN_CLASSIFIER.get().is_some() {
+                return true; // Already initialized, return success
+            }
+
             // Route to LoRA token classifier initialization
             match crate::classifiers::lora::token_lora::LoRATokenClassifier::new(
                 model_path, use_cpu,
@@ -594,6 +611,14 @@ pub extern "C" fn init_candle_bert_token_classifier(
             }
         }
         ModelType::Traditional => {
+            // Check if already initialized
+            if crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
+                .get()
+                .is_some()
+            {
+                return true; // Already initialized, return success
+            }
+
             // Route to traditional BERT token classifier
             match crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier::new(
                 model_path,

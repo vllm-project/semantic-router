@@ -67,13 +67,14 @@ model_config:
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
 
 # Classifier configuration for text classification
+# Using LoRA intent classifier (preferred modern approach with lora_config.json)
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
-    use_modernbert: true
+    model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+    use_modernbert: false  # BERT-based LoRA model
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
   pii_model:
     model_id: "models/pii_classifier_modernbert-base_presidio_token_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
     use_modernbert: true

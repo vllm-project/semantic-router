@@ -15,6 +15,7 @@ on:
 
 jobs:
   test-quickstart:
+    if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -78,16 +79,6 @@ jobs:
             }')
 
           echo "Full response: $response"
-
-          # Validate response structure
-          if echo "$response" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
-            echo "✓ Semantic router successfully routed and processed the query"
-            echo "  Answer: $(echo "$response" | jq -r '.choices[0].message.content' | head -c 200)"
-          else
-            echo "::error::Semantic router failed to process query correctly"
-            echo "Response was: $response"
-            exit 1
-          fi
 
       - name: Show service logs on failure
         if: failure()

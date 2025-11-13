@@ -6,6 +6,8 @@ ignore: |
   .git
   .github
   node_modules
+  deploy/helm
+  .venv
 
 rules:
   braces:

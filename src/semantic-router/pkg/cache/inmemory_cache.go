@@ -136,8 +136,16 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
 
 	switch modelName {
-	case "qwen3", "gemma":
-		// Use GetEmbeddingWithModelType for Qwen3 or Gemma
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with TRUE continuous batching
+		// Now properly fixed to avoid CUDA context issues!
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma (standard version)
 		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
 		if err != nil {
 			return nil, err
@@ -718,7 +726,7 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 		if lc == 0 {
 			M = h.Mmax0
 		}
-		neighbors := h.selectNeighbors(candidates, M, entries)
+		neighbors := h.selectNeighbors(candidates, M, embedding, entries)
 
 		// Add bidirectional links
 		node.neighbors[lc] = neighbors
@@ -732,7 +740,8 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 
 				// Prune neighbors if needed
 				if len(n.neighbors[lc]) > M {
-					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries)
+					// Use neighbor's own embedding as query for pruning
+					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries[neighborIdx].Embedding, entries)
 				}
 			}
 		}
@@ -822,26 +831,71 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 	return results.items()
 }
 
-// selectNeighbors selects the best neighbors using a simple heuristic
-func (h *HNSWIndex) selectNeighbors(candidates []int, m int, entries []CacheEntry) []int {
+// selectNeighbors selects the best neighbors by sorting by distance
+// This is CRITICAL for HNSW graph quality - must select NEAREST neighbors, not arbitrary ones!
+func (h *HNSWIndex) selectNeighbors(candidates []int, m int, queryEmb []float32, entries []CacheEntry) []int {
+	// Validate queryEmb: must not be nil or empty to ensure correct distance calculations
+	if len(queryEmb) == 0 {
+		logging.Errorf("selectNeighbors: queryEmb is empty - cannot compute distances")
+		return []int{}
+	}
+
 	if len(candidates) <= m {
 		return candidates
 	}
-	// Just return first m for simplicity
-	return candidates[:m]
+
+	// Create a temporary slice with distances for sorting
+	type neighborDist struct {
+		idx  int
+		dist float32
+	}
+
+	neighbors := make([]neighborDist, len(candidates))
+
+	// Compute distance from query to each candidate (using SIMD!)
+	for i, idx := range candidates {
+		if idx >= 0 && idx < len(entries) {
+			// Validate dimension match to prevent silent data corruption in HNSW graph
+			if len(entries[idx].Embedding) != len(queryEmb) {
+				logging.Errorf("selectNeighbors: dimension mismatch - query has %d dims, candidate %d has %d dims",
+					len(queryEmb), idx, len(entries[idx].Embedding))
+				// Skip this candidate rather than corrupting the graph
+				continue
+			}
+			neighbors[i] = neighborDist{
+				idx:  idx,
+				dist: h.distance(queryEmb, entries[idx].Embedding),
+			}
+		}
+	}
+
+	// Sort by distance (ascending - smallest distance first)
+	// Use a simple selection sort since m is typically small (16-32)
+	for i := 0; i < m && i < len(neighbors); i++ {
+		minIdx := i
+		for j := i + 1; j < len(neighbors); j++ {
+			if neighbors[j].dist < neighbors[minIdx].dist {
+				minIdx = j
+			}
+		}
+		if minIdx != i {
+			neighbors[i], neighbors[minIdx] = neighbors[minIdx], neighbors[i]
+		}
+	}
+
+	// Return the m nearest neighbors
+	result := make([]int, m)
+	for i := 0; i < m; i++ {
+		result[i] = neighbors[i].idx
+	}
+	return result
 }
 
 // distance calculates cosine similarity (as dot product since embeddings are normalized)
 func (h *HNSWIndex) distance(a, b []float32) float32 {
 	// We use negative dot product so that larger similarity = smaller distance
-	var dotProduct float32
-	minLen := len(a)
-	if len(b) < minLen {
-		minLen = len(b)
-	}
-	for i := 0; i < minLen; i++ {
-		dotProduct += a[i] * b[i]
-	}
+	// Use SIMD-optimized dot product (AVX2/AVX512)
+	dotProduct := dotProductSIMD(a, b)
 	return -dotProduct // Negate so higher similarity = lower distance
 }
 

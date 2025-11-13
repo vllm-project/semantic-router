@@ -87,7 +87,7 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 	// Check if we should load categories from MCP server
 	// Note: tool_name is optional and will be auto-discovered if not specified
 	useMCPCategories := config.CategoryModel.ModelID == "" &&
-		config.Enabled
+		config.MCPCategoryModel.Enabled
 
 	if useMCPCategories {
 		// Categories will be loaded from MCP server during initialization
@@ -202,7 +202,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	}
 
 	// Perform classification using the existing classifier
-	category, confidence, err := s.classifier.ClassifyCategory(req.Text)
+	category, confidence, _, err := s.classifier.ClassifyCategoryWithEntropy(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("classification failed: %w", err)
 	}

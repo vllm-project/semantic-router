@@ -106,7 +106,7 @@ var _ = Describe("category classification and model selection", func() {
 		})
 	})
 
-	Describe("classify category", func() {
+	Describe("classify category with entropy", func() {
 		type row struct {
 			ModelID             string
 			CategoryMappingPath string
@@ -118,7 +118,7 @@ var _ = Describe("category classification and model selection", func() {
 				classifier.Config.CategoryModel.ModelID = r.ModelID
 				classifier.Config.CategoryMappingPath = r.CategoryMappingPath
 				classifier.CategoryMapping = r.CategoryMapping
-				_, _, err := classifier.ClassifyCategory("Some text")
+				_, _, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
 			},
@@ -129,12 +129,14 @@ var _ = Describe("category classification and model selection", func() {
 
 		Context("when classification succeeds with high confidence", func() {
 			It("should return the correct category", func() {
-				mockCategoryModel.classifyResult = candle_binding.ClassResult{
-					Class:      2,
-					Confidence: 0.95,
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         2,
+					Confidence:    0.95,
+					Probabilities: []float32{0.02, 0.03, 0.95},
+					NumClasses:    3,
 				}
 
-				category, score, err := classifier.ClassifyCategory("This is about politics")
+				category, score, _, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(category).To(Equal("politics"))
@@ -144,12 +146,14 @@ var _ = Describe("category classification and model selection", func() {
 
 		Context("when classification confidence is below threshold", func() {
 			It("should return empty category", func() {
-				mockCategoryModel.classifyResult = candle_binding.ClassResult{
-					Class:      0,
-					Confidence: 0.3,
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         0,
+					Confidence:    0.3,
+					Probabilities: []float32{0.3, 0.35, 0.35},
+					NumClasses:    3,
 				}
 
-				category, score, err := classifier.ClassifyCategory("Ambiguous text")
+				category, score, _, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(category).To(Equal(""))
@@ -159,9 +163,9 @@ var _ = Describe("category classification and model selection", func() {
 
 		Context("when model inference fails", func() {
 			It("should return empty category with zero score", func() {
-				mockCategoryModel.classifyError = errors.New("model inference failed")
+				mockCategoryModel.classifyWithProbsError = errors.New("model inference failed")
 
-				category, score, err := classifier.ClassifyCategory("Some text")
+				category, score, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("classification error"))
@@ -172,12 +176,14 @@ var _ = Describe("category classification and model selection", func() {
 
 		Context("when input is empty or invalid", func() {
 			It("should handle empty text gracefully", func() {
-				mockCategoryModel.classifyResult = candle_binding.ClassResult{
-					Class:      0,
-					Confidence: 0.8,
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         0,
+					Confidence:    0.8,
+					Probabilities: []float32{0.8, 0.1, 0.1},
+					NumClasses:    3,
 				}
 
-				category, score, err := classifier.ClassifyCategory("")
+				category, score, _, err := classifier.ClassifyCategoryWithEntropy("")
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(category).To(Equal("technology"))
@@ -187,12 +193,14 @@ var _ = Describe("category classification and model selection", func() {
 
 		Context("when class index is not found in category mapping", func() {
 			It("should handle invalid category mapping gracefully", func() {
-				mockCategoryModel.classifyResult = candle_binding.ClassResult{
-					Class:      9,
-					Confidence: 0.8,
+				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+					Class:         9,
+					Confidence:    0.8,
+					Probabilities: []float32{0.1, 0.1, 0.0},
+					NumClasses:    3,
 				}
 
-				category, score, err := classifier.ClassifyCategory("Some text")
+				category, score, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(category).To(Equal(""))
@@ -380,44 +388,6 @@ var _ = Describe("category classification and model selection", func() {
 			It("should return the first candidate model", func() {
 				model := classifier.SelectBestModelFromList([]string{"model-c"}, "technology")
 				Expect(model).To(Equal("model-c"))
-			})
-		})
-	})
-
-	Describe("classify and select best model", func() {
-		It("should return the best model", func() {
-			mockCategoryModel.classifyResult = candle_binding.ClassResult{
-				Class:      0,
-				Confidence: 0.9,
-			}
-			model := classifier.ClassifyAndSelectBestModel("Some text")
-			Expect(model).To(Equal("model-a"))
-		})
-
-		Context("when the categories are empty", func() {
-			It("should return the default model", func() {
-				classifier.Config.Categories = nil
-				model := classifier.ClassifyAndSelectBestModel("Some text")
-				Expect(model).To(Equal("default-model"))
-			})
-		})
-
-		Context("when the classification fails", func() {
-			It("should return the default model", func() {
-				mockCategoryModel.classifyError = errors.New("classification failed")
-				model := classifier.ClassifyAndSelectBestModel("Some text")
-				Expect(model).To(Equal("default-model"))
-			})
-		})
-
-		Context("when the category name is empty", func() {
-			It("should return the default model", func() {
-				mockCategoryModel.classifyResult = candle_binding.ClassResult{
-					Class:      9,
-					Confidence: 0.9,
-				}
-				model := classifier.ClassifyAndSelectBestModel("Some text")
-				Expect(model).To(Equal("default-model"))
 			})
 		})
 	})
@@ -1349,11 +1319,16 @@ var _ = Describe("generic category mapping (MMLU-Pro -> generic)", func() {
 		Expect(classifier.GenericToMMLU).To(HaveKeyWithValue("politics", ConsistOf("politics")))
 	})
 
-	It("translates ClassifyCategory result to generic category", func() {
+	It("translates ClassifyCategoryWithEntropy result to generic category", func() {
 		// Model returns class index 0 -> "Computer Science" (MMLU) which maps to generic "tech"
-		mockCategoryModel.classifyResult = candle_binding.ClassResult{Class: 0, Confidence: 0.92}
+		mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+			Class:         0,
+			Confidence:    0.92,
+			Probabilities: []float32{0.92, 0.05, 0.03},
+			NumClasses:    3,
+		}
 
-		category, score, err := classifier.ClassifyCategory("This text is about GPUs and compilers")
+		category, score, _, err := classifier.ClassifyCategoryWithEntropy("This text is about GPUs and compilers")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(category).To(Equal("tech"))
 		Expect(score).To(BeNumerically("~", 0.92, 0.001))
@@ -1378,9 +1353,14 @@ var _ = Describe("generic category mapping (MMLU-Pro -> generic)", func() {
 
 	It("falls back to identity when no mapping exists for an MMLU label", func() {
 		// index 2 -> "politics" (no explicit mapping provided, but present in MMLU set)
-		mockCategoryModel.classifyResult = candle_binding.ClassResult{Class: 2, Confidence: 0.91}
+		mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
+			Class:         2,
+			Confidence:    0.91,
+			Probabilities: []float32{0.04, 0.05, 0.91},
+			NumClasses:    3,
+		}
 
-		category, score, err := classifier.ClassifyCategory("This is a political debate")
+		category, score, _, err := classifier.ClassifyCategoryWithEntropy("This is a political debate")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(category).To(Equal("politics"))
 		Expect(score).To(BeNumerically("~", 0.91, 0.001))
@@ -2335,10 +2315,38 @@ var _ = Describe("Classifier MCP Methods", func() {
 	BeforeEach(func() {
 		mockClient = &MockMCPClient{}
 		cfg := &config.RouterConfig{}
-		cfg.Enabled = true
-		cfg.ToolName = "classify_text"
+		cfg.MCPCategoryModel.Enabled = true
+		cfg.MCPCategoryModel.ToolName = "classify_text"
 		cfg.MCPCategoryModel.Threshold = 0.5
-		cfg.TimeoutSeconds = 30
+		cfg.MCPCategoryModel.TimeoutSeconds = 30
+
+		// Add Categories configuration for entropy-based tests
+		cfg.Categories = []config.Category{
+			{
+				CategoryMetadata: config.CategoryMetadata{Name: "tech"},
+				ModelScores: []config.ModelScore{{
+					Model:                 "phi4",
+					Score:                 0.8,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+				}},
+			},
+			{
+				CategoryMetadata: config.CategoryMetadata{Name: "sports"},
+				ModelScores: []config.ModelScore{{
+					Model:                 "phi4",
+					Score:                 0.8,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
+				}},
+			},
+			{
+				CategoryMetadata: config.CategoryMetadata{Name: "politics"},
+				ModelScores: []config.ModelScore{{
+					Model:                 "deepseek-v31",
+					Score:                 0.9,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
+				}},
+			},
+		}
 
 		// Create MCP classifier manually and inject mock client
 		mcpClassifier := &MCPCategoryClassifier{
@@ -2374,7 +2382,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 		})
 
 		It("should return false when not enabled", func() {
-			classifier.Config.Enabled = false
+			classifier.Config.MCPCategoryModel.Enabled = false
 			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
 		})
 
@@ -2387,7 +2395,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("classifyCategoryMCP", func() {
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				classifier.Config.Enabled = false
+				classifier.Config.MCPCategoryModel.Enabled = false
 				_, _, err := classifier.classifyCategoryMCP("test text")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
@@ -2463,35 +2471,6 @@ var _ = Describe("Classifier MCP Methods", func() {
 	})
 
 	Describe("classifyCategoryWithEntropyMCP", func() {
-		BeforeEach(func() {
-			classifier.Config.Categories = []config.Category{
-				{
-					CategoryMetadata: config.CategoryMetadata{Name: "tech"},
-					ModelScores: []config.ModelScore{{
-						Model:                 "phi4",
-						Score:                 0.8,
-						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-					}},
-				},
-				{
-					CategoryMetadata: config.CategoryMetadata{Name: "sports"},
-					ModelScores: []config.ModelScore{{
-						Model:                 "phi4",
-						Score:                 0.8,
-						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-					}},
-				},
-				{
-					CategoryMetadata: config.CategoryMetadata{Name: "politics"},
-					ModelScores: []config.ModelScore{{
-						Model:                 "deepseek-v31",
-						Score:                 0.9,
-						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
-					}},
-				},
-			}
-		})
-
 		Context("when MCP returns probabilities", func() {
 			It("should return category with entropy decision", func() {
 				mockClient.callToolResult = &mcp.CallToolResult{
@@ -2536,7 +2515,7 @@ var _ = Describe("Classifier MCP Methods", func() {
 	Describe("initializeMCPCategoryClassifier", func() {
 		Context("when MCP is not enabled", func() {
 			It("should return error", func() {
-				classifier.Config.Enabled = false
+				classifier.Config.MCPCategoryModel.Enabled = false
 				err := classifier.initializeMCPCategoryClassifier()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not properly configured"))
@@ -3580,3 +3559,107 @@ func BenchmarkUnifiedClassifier_BatchSizeComparison(b *testing.B) {
 		}
 	})
 }
+
+// EmbeddingClassifier unit tests
+var _ = Describe("EmbeddingClassifier", func() {
+	var origCalculate func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error)
+
+	BeforeEach(func() {
+		origCalculate = calculateSimilarityBatch
+	})
+
+	AfterEach(func() {
+		calculateSimilarityBatch = origCalculate
+	})
+
+	It("classifies with mean aggregation", func() {
+		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
+			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.9}, {Index: 1, Similarity: 0.8}, {Index: 2, Similarity: 0.7}}}, nil
+		}
+
+		rules := []config.EmbeddingRule{{
+			Category:                  "cat1",
+			Keywords:                  []string{"science", "math"},
+			AggregationMethodConfiged: config.AggregationMethodMean,
+			SimilarityThreshold:       0.8,
+			Model:                     "auto",
+			Dimension:                 768,
+		}}
+
+		clf, err := NewEmbeddingClassifier(rules)
+		Expect(err).ToNot(HaveOccurred())
+
+		cat, score, err := clf.Classify("some text")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cat).To(Equal("cat1"))
+		Expect(score).To(BeNumerically("~", 0.8, 1e-6))
+	})
+
+	It("classifies with max aggregation", func() {
+		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
+			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.4}, {Index: 1, Similarity: 0.6}}}, nil
+		}
+
+		rules := []config.EmbeddingRule{{
+			Category:                  "cat2",
+			Keywords:                  []string{"x", "y"},
+			AggregationMethodConfiged: config.AggregationMethodMax,
+			SimilarityThreshold:       0.5,
+			Model:                     "auto",
+			Dimension:                 512,
+		}}
+
+		clf, err := NewEmbeddingClassifier(rules)
+		Expect(err).ToNot(HaveOccurred())
+
+		cat, score, err := clf.Classify("other text")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cat).To(Equal("cat2"))
+		Expect(score).To(BeNumerically("~", 0.6, 1e-6))
+	})
+
+	It("classifies with any aggregation", func() {
+		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
+			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.2}, {Index: 1, Similarity: 0.95}}}, nil
+		}
+
+		rules := []config.EmbeddingRule{{
+			Category:                  "cat3",
+			Keywords:                  []string{"p", "q"},
+			AggregationMethodConfiged: config.AggregationMethodAny,
+			SimilarityThreshold:       0.7,
+			Model:                     "auto",
+			Dimension:                 256,
+		}}
+
+		clf, err := NewEmbeddingClassifier(rules)
+		Expect(err).ToNot(HaveOccurred())
+
+		cat, score, err := clf.Classify("third text")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cat).To(Equal("cat3"))
+		Expect(score).To(BeNumerically("~", 0.7, 1e-6))
+	})
+
+	It("returns error when CalculateSimilarityBatch fails", func() {
+		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
+			return nil, errors.New("external failure")
+		}
+
+		rules := []config.EmbeddingRule{{
+			Category:                  "cat4",
+			Keywords:                  []string{"z"},
+			AggregationMethodConfiged: config.AggregationMethodMean,
+			SimilarityThreshold:       0.1,
+			Model:                     "auto",
+			Dimension:                 768,
+		}}
+
+		clf, err := NewEmbeddingClassifier(rules)
+		Expect(err).ToNot(HaveOccurred())
+
+		_, _, err = clf.Classify("will error")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to calculate batch similarity"))
+	})
+})

@@ -37,6 +37,7 @@ test-semantic-router: build-router
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
+	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding

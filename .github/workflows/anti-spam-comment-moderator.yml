@@ -1,0 +1,212 @@
+name: Anti-Spam Comment Moderator
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+
+permissions:
+  issues: write          # needed to delete issue comments
+  pull-requests: write   # needed to delete PR review comments
+  contents: write        # needed to delete commit comments
+  # (discussions not handled here; API differs)
+
+jobs:
+  moderate:
+    if: ${{ github.event.action == 'created' || github.event.action == 'edited' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run spam filter
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 1) Collect event/comment info
+            const ev = context.eventName;
+            const comment = context.payload.comment || {};
+            const body    = (comment.body || "").trim();
+            const bodyLower = body.toLowerCase();
+            const assoc   = comment.author_association || "NONE";
+            const actor   = comment.user?.login || "unknown";
+            const owner   = context.repo.owner;
+            const repo    = context.repo.repo;
+
+            // Block specific user outright
+            if ((actor || "").toLowerCase() === "phuole818") {
+              try {
+                if (ev === "issue_comment") {
+                  await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
+                  core.notice(`Deleted comment from blocked user @${actor} (issue comment).`);
+                } else if (ev === "pull_request_review_comment") {
+                  await github.rest.pulls.deleteReviewComment({ owner, repo, comment_id: comment.id });
+                  core.notice(`Deleted comment from blocked user @${actor} (PR review comment).`);
+                } else if (ev === "commit_comment") {
+                  await github.rest.repos.deleteCommitComment({ owner, repo, comment_id: comment.id });
+                  core.notice(`Deleted comment from blocked user @${actor} (commit comment).`);
+                } else {
+                  core.warning(`Unhandled event while blocking user: ${ev}`);
+                }
+              } catch (err) {
+                core.setFailed(`Failed to delete blocked user's comment: ${err?.message || err}`);
+              }
+              return;
+            }
+
+            // 2) Skip trusted roles or explicitly allowed text
+            const trustedRoles = new Set(["OWNER","MEMBER","COLLABORATOR"]);
+            if (trustedRoles.has(assoc)) {
+              core.info(`Skipping trusted author (${assoc}) @${actor}`);
+              return;
+            }
+            if (/#allow|#nospamfilter/i.test(body)) {
+              core.info("Skipping due to explicit allow tag in comment.");
+              return;
+            }
+
+            // 3) Heuristic + sentiment-lite checks
+            // Link analysis with domain allowlist (do not penalize common safe docs/code links)
+            const safeDomains = [
+              "github.com","docs.github.com","githubusercontent.com","gitlab.com","bitbucket.org",
+              "readthedocs.io","arxiv.org","pypi.org","npmjs.com","crates.io","stackoverflow.com","stackexchange.com"
+            ];
+            const urlMatches = (body.match(/https?:\/\/[^\s)]+/gi) || []);
+            let safeLinkCount = 0;
+            let suspiciousLinkCount = 0;
+            for (const u of urlMatches) {
+              try {
+                const h = new URL(u).hostname.replace(/^www\./i, "");
+                const isShortHost = /^(bit\.ly|t\.co|tinyurl\.com|goo\.gl|ow\.ly)$/i.test(h);
+                const isSafe = safeDomains.some(d => h === d || h.endsWith(`.${d}`));
+                if (isSafe && !isShortHost) safeLinkCount += 1;
+                else suspiciousLinkCount += 1;
+              } catch {
+                suspiciousLinkCount += 1;
+              }
+            }
+            const linkCount = urlMatches.length;
+            const emailCount  = (body.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).length;
+            const phoneCount  = (body.match(/(\+?\d[\d\s().-]{8,}\d)/g) || []).length;
+            const mentions    = (body.match(/@\w{1,39}/g) || []).length;
+            const exclaimBlk  = /!{3,}/.test(body);
+            const repeatedChr = /(.)\1{6,}/.test(body);
+            const shortened   = /https?:\/\/(?:bit\.ly|t\.co|tinyurl\.com|goo\.gl|ow\.ly)\//i.test(body);
+
+            const lettersOnly = body.replace(/\s/g, "");
+            const uniqueRatio = lettersOnly.length ? (new Set(lettersOnly).size / lettersOnly.length) : 1;
+            const lowUnique   = lettersOnly.length > 80 && uniqueRatio < 0.30;
+
+            // English/ASCII spam terms (word-boundary safe)
+            const blacklistAscii = [
+              "whatsapp","telegram","crypto","forex","investment","binary options","broker",
+              "dm me","contact me","private message","girls","porn","xxx","nude","sex",
+              "loan approval","free followers","click here","visit my profile","earn $","% off",
+              "sugar daddy","promo code","join my group","passive income","weixin","vx","wx"
+            ];
+            // Chinese/CJK spam phrases (substring match; \b doesn't work for CJK)
+            const blacklistCJK = [
+              "微信","加我微信","添加微信","VX","V信","私信","联系我","电报","比特币","加密货币","外汇","投资","理财","二元期权",
+              "裸聊","色情","黄片","成人网站","约炮","兼职","推广","优惠","促销","关注我","点击这里","访问我的主页","我的主页",
+              "加入群","交流群","被动收入","糖爹","金主","优惠码","贷款","快速贷款","网贷","免费粉丝","粉丝增长",
+              "赚快钱","快速赚钱","轻松赚钱","保证收益","零风险","无风险","稳赚","返利","优惠券"
+            ];
+            const asciiHit = blacklistAscii.some(k => new RegExp(`\\b${k.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i").test(body));
+            const cjkHit = blacklistCJK.some(k => body.includes(k));
+            const keywordHit = asciiHit || cjkHit;
+            const hype = /(100%|guarantee|risk[- ]?free|no (fees|risk)|quick money|make money)/i.test(body) ||
+                         /(保证|无风险|零风险|快速赚钱|轻松赚钱|立即联系|添加微信|加我微信|稳赚|包赚)/.test(body);
+
+            // Attack/Insult/Tech-context term lists (EN + CJK)
+            const attackTermsAscii = [
+              "fake stars","astroturf","bot accounts","paid stars","star farming","star boosting","shill",
+              "manipulated stars","kpi","kpi boosting","no maintainer","ignore issues","ignore prs",
+              "close pr","close issue","no response","waste of time","trash project","scam project",
+              "archive this project","unmaintained","low quality docs","unreadable docs","pitfall","avoid this project"
+            ];
+            const attackTermsCJK = [
+              "刷星","水军","kpi刷单","假号","买粉","造假","刷榜",
+              "别踩坑","大坑","浪费时间","赶紧换","不靠谱","建议归档","建议archive",
+              "没人理你","没人管","装没看见","秒关","石沉大海",
+              "问题一大堆","一塌糊涂","堪忧","离谱","看不懂","入不了门",
+              "警告","大踩雷","失望透顶","全靠刷星","社区大踩雷"
+            ];
+            const insultTermsAscii = [
+              "trash","garbage","bullshit","idiot","moron","stupid","dumb","shameful","useless"
+            ];
+            const insultTermsCJK = [
+              "垃圾","辣鸡","废物","弱智","傻逼","脑残","狗屎","丢人"
+            ];
+            const techContextAscii = [
+              "bug","repro","reproduce","steps to reproduce","minimal repro","expected","actual",
+              "stack trace","traceback","stacktrace","log","logs","error","panic","poc","cve",
+              "version","v1","v2","v3","config","configuration","file","line","code snippet"
+            ];
+            const techContextCJK = [
+              "复现","复现步骤","最小复现","期望行为","实际行为","堆栈","栈追踪","日志","报错",
+              "版本","配置","文件","行号","代码片段","poc","cve"
+            ];
+
+            const escapeRe = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+            const countMatchesAscii = (terms) =>
+              terms.reduce((n, k) => n + (new RegExp(`\\b${escapeRe(k)}\\b`, "i").test(body) ? 1 : 0), 0);
+            const countMatchesCJK = (terms) =>
+              terms.reduce((n, k) => n + (body.includes(k) ? 1 : 0), 0);
+
+            const attackHits = countMatchesAscii(attackTermsAscii) + countMatchesCJK(attackTermsCJK);
+            const insultHit  = (countMatchesAscii(insultTermsAscii) + countMatchesCJK(insultTermsCJK)) > 0;
+            const techCtxHit = (countMatchesAscii(techContextAscii) + countMatchesCJK(techContextCJK)) > 0;
+            const strongCJK  = /(失望透顶|离谱|警告|大踩雷)/.test(body);
+
+            // Sentiment-lite (AFINN-style mini-lexicon)
+            const afinn = {
+              "amazing": 2, "great": 2, "free": 1, "guaranteed": -1,
+              "scam": -3, "profit": 1, "winner": 1, "urgent": -1, "risk-free": -2
+            };
+            const tokens = body.toLowerCase().split(/[^a-z0-9+\-]+/);
+            let sentiment = 0;
+            for (const t of tokens) if (afinn[t] != null) sentiment += afinn[t];
+
+            // Score: Only use attack/insult signals for blocking (ignore links/emails/phones)
+            let points = 0;
+            // Attack/insult scoring with guardrails for technical context
+            let attackContribution = 0;
+            if (insultHit) attackContribution += 2;
+            if (attackHits >= 3) attackContribution += 2;
+            else if (attackHits >= 1) attackContribution += 1;
+            if ((exclaimBlk || strongCJK) && attackContribution > 0) attackContribution += 1;
+            if (techCtxHit) attackContribution = Math.min(1, attackContribution); // cap if technical context detected
+            points += attackContribution;
+
+            core.info(`Spam score for @${actor} = ${points} (attackOnly; links/emails/phones ignored) (links:${linkCount} safe:${safeLinkCount} suspicious:${suspiciousLinkCount}, emails:${emailCount}, phones:${phoneCount}, mentions:${mentions}, sentiment:${sentiment}, attackHits:${attackHits}, insult:${insultHit}, techCtx:${techCtxHit})`);
+
+            // Only block when attack/insult crosses threshold
+            const isSpam = attackContribution >= 2; // adjust threshold if needed
+            if (!isSpam) {
+              core.info("Comment not flagged as spam.");
+              return;
+            }
+
+            // 4) Delete the comment using the appropriate endpoint
+            try {
+              if (ev === "issue_comment") {
+                await github.rest.issues.deleteComment({
+                  owner, repo, comment_id: comment.id
+                });
+                core.notice(`Deleted spam issue comment from @${actor}.`);
+              } else if (ev === "pull_request_review_comment") {
+                await github.rest.pulls.deleteReviewComment({
+                  owner, repo, comment_id: comment.id
+                });
+                core.notice(`Deleted spam PR review comment from @${actor}.`);
+              } else if (ev === "commit_comment") {
+                await github.rest.repos.deleteCommitComment({
+                  owner, repo, comment_id: comment.id
+                });
+                core.notice(`Deleted spam commit comment from @${actor}.`);
+              } else {
+                core.warning(`Unhandled event: ${ev}`);
+              }
+            } catch (err) {
+              core.setFailed(`Failed to delete comment: ${err?.message || err}`);
+            }
+
+

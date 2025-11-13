@@ -64,8 +64,7 @@ test-binding-lora: $(if $(CI),rust-ci,rust) ## Run Go tests with LoRA and advanc
 	@echo "Running candle-binding tests with LoRA and advanced embedding models..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
-		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$" \
-		|| { echo "⚠️  Warning: Some LoRA/embedding tests failed (may be due to missing restricted models), continuing..."; $(if $(CI),true,exit 1); }
+		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$"
 
 # Test the Rust library - all tests (conditionally use rust-ci in CI environments)
 test-binding: $(if $(CI),rust-ci,rust) ## Run all Go tests with the Rust static library
@@ -118,9 +117,14 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 			exit 1; \
 		fi; \
 	else \
-		echo "Building Rust library with CUDA support..." && \
-		echo "💡 Tip: For 20-30% speedup on RTX 3090+/A100/H100, use: make rust ENABLE_FLASH_ATTN=1" && \
-		cd candle-binding && cargo build --release; \
+		if command -v nvcc >/dev/null 2>&1; then \
+			echo "Building Rust library with CUDA support..." && \
+			echo "💡 Tip: For 20-30% speedup on RTX 3090+/A100/H100, use: make rust ENABLE_FLASH_ATTN=1" && \
+			cd candle-binding && cargo build --release; \
+		else \
+			echo "Building Rust library for CPU (nvcc not found)..." && \
+			cd candle-binding && cargo build --release --no-default-features; \
+		fi; \
 	fi'
 
 # Build the Rust library without CUDA (for CI/CD environments)

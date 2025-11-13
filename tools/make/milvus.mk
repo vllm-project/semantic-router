@@ -55,6 +55,7 @@ test-milvus-cache: start-milvus rust
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Milvus backend..."
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./pkg/cache/
 	@echo "Consider running 'make stop-milvus' when done testing"
 
@@ -63,6 +64,7 @@ test-semantic-router-milvus: build-router start-milvus
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Milvus cache backend..."
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./...
 	@echo "Consider running 'make stop-milvus' when done testing"
 
@@ -154,6 +156,7 @@ benchmark-hybrid-quick: rust ## Run quick Hybrid vs Milvus benchmark (smaller sc
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SKIP_MILVUS=$${SKIP_MILVUS:-false} && \
+		export SR_BENCHMARK_MODE=true && \
 		echo "Using GPU mode: USE_CPU=$$USE_CPU" && \
 		echo "Skip Milvus: SKIP_MILVUS=$$SKIP_MILVUS" && \
 		cd src/semantic-router/pkg/cache && \
@@ -186,6 +189,7 @@ benchmark-hybrid-only: rust ## Run ONLY Hybrid cache benchmark (skip Milvus for 
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SKIP_MILVUS=true && \
+		export SR_BENCHMARK_MODE=true && \
 		echo "Using GPU mode: USE_CPU=$$USE_CPU" && \
 		echo "Testing HYBRID CACHE ONLY (Milvus skipped)" && \
 		cd src/semantic-router/pkg/cache && \
