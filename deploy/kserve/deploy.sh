@@ -212,7 +212,14 @@ if [ "$SKIP_VALIDATION" = false ]; then
 
     # Create stable ClusterIP service for predictor (KServe creates headless service by default)
     echo "Creating stable ClusterIP service for predictor..."
-    cat <<EOF | oc apply -f - -n "$NAMESPACE" > /dev/null 2>&1
+
+    # Use template file for stable service
+    if [ -f "$SCRIPT_DIR/service-predictor-stable.yaml" ]; then
+        substitute_vars "$SCRIPT_DIR/service-predictor-stable.yaml" "$TEMP_DIR/service-predictor-stable.yaml.tmp"
+        oc apply -f "$TEMP_DIR/service-predictor-stable.yaml.tmp" -n "$NAMESPACE" > /dev/null 2>&1
+    else
+        # Fallback to inline creation if template not found
+        cat <<EOF | oc apply -f - -n "$NAMESPACE" > /dev/null 2>&1
 apiVersion: v1
 kind: Service
 metadata:
@@ -233,6 +240,7 @@ spec:
     targetPort: 8080
     protocol: TCP
 EOF
+    fi
 
     # Get the stable ClusterIP
     PREDICTOR_SERVICE_IP=$(oc get svc "${INFERENCESERVICE_NAME}-predictor-stable" -n "$NAMESPACE" -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "")

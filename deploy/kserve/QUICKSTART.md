@@ -41,6 +41,7 @@ cd deploy/kserve
 ```
 
 **Example:**
+
 ```bash
 ./deploy.sh --namespace semantic --inferenceservice granite32-8b --model granite32-8b
 ```
@@ -48,6 +49,7 @@ cd deploy/kserve
 ### Step 3: Wait for Ready
 
 The script will:
+
 - ✓ Validate your environment
 - ✓ Download classification models (~2-3 minutes)
 - ✓ Start the semantic router
@@ -97,6 +99,7 @@ Using a specific storage class, larger PVCs, and custom embedding model:
 ```
 
 **Available Embedding Models:**
+
 - `all-MiniLM-L12-v2` (default) - Balanced speed/quality (~90MB)
 - `all-mpnet-base-v2` - Higher quality, larger (~420MB)
 - `all-MiniLM-L6-v2` - Faster, smaller (~80MB)
@@ -241,6 +244,7 @@ Simply redeploy:
 ## Next Steps
 
 1. **Run validation tests**:
+
    ```bash
    # Set namespace and model name
    NAMESPACE=<namespace> MODEL_NAME=<model> ./test-semantic-routing.sh
@@ -274,6 +278,7 @@ Simply redeploy:
 ## Want More Control?
 
 This quick start uses the automated `deploy.sh` script for simplicity. If you need:
+
 - Manual step-by-step deployment
 - Deep understanding of configuration options
 - Advanced customization

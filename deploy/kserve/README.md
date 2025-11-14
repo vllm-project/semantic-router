@@ -103,6 +103,14 @@ INFERENCESERVICE_NAME=<your-inferenceservice-name>
 
 # KServe creates a headless service by default (no stable ClusterIP)
 # Create a stable ClusterIP service for consistent routing
+
+# Option 1: Using the template file (recommended)
+# Substitute variables and apply
+sed -e "s/{{INFERENCESERVICE_NAME}}/$INFERENCESERVICE_NAME/g" \
+    -e "s/{{NAMESPACE}}/$NAMESPACE/g" \
+    service-predictor-stable.yaml | oc apply -f - -n $NAMESPACE
+
+# Option 2: Using heredoc
 cat <<EOF | oc apply -f - -n $NAMESPACE
 apiVersion: v1
 kind: Service
@@ -239,6 +247,7 @@ Find the `kserve_dynamic_cluster` section and update:
 ```
 
 Replace:
+
 - `my-model` with your InferenceService name
 - `my-namespace` with your namespace
 
@@ -709,6 +718,7 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
 **Important Log Events:**
 
 - `routing_decision`: Which model was selected and why
+
   ```json
   {
     "msg": "routing_decision",
@@ -720,6 +730,7 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
   ```
 
 - `cache_hit`/`cache_miss`: Cache performance
+
   ```json
   {
     "msg": "cache_hit",
@@ -730,6 +741,7 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
   ```
 
 - `llm_usage`: Token usage and costs
+
   ```json
   {
     "msg": "llm_usage",
@@ -742,6 +754,7 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
   ```
 
 - `pii_detection`: PII found in requests
+
   ```json
   {
     "msg": "pii_detection",
@@ -815,9 +828,11 @@ oc describe pod -l app=semantic-router -n $NAMESPACE
    - Solution: Check network policies, proxy settings
 
 2. **PVC not bound**: Storage not provisioned
+
    ```bash
    oc get pvc -n $NAMESPACE
    ```
+
    - Solution: Check StorageClass, provision capacity
 
 3. **OOM during model download**: Insufficient memory
@@ -836,21 +851,27 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE --previous
 **Common Causes**:
 
 1. **Configuration error**: Invalid YAML or missing fields
+
    ```
    Failed to load config: yaml: unmarshal errors
    ```
+
    - Solution: Validate YAML syntax, check required fields
 
 2. **Invalid IP address**: Router validation failed
+
    ```
    invalid IP address format, got: my-model.svc.cluster.local
    ```
+
    - Solution: Use service ClusterIP (not DNS) in `vllm_endpoints.address` - see Step 1 for creating stable service
 
 3. **Missing models**: Classification models not downloaded
+
    ```
    failed to read mapping file: no such file or directory
    ```
+
    - Solution: Check init container completed successfully
 
 ### Cannot Connect to InferenceService
@@ -870,24 +891,30 @@ oc exec $POD -c semantic-router -n $NAMESPACE -- \
 **Common Causes**:
 
 1. **InferenceService not ready**:
+
    ```bash
    oc get inferenceservice -n $NAMESPACE
    ```
+
    - Solution: Wait for READY=True, check predictor logs
 
 2. **Wrong DNS name**: Incorrect service name in Envoy config
    - Solution: Verify format: `<inferenceservice>-predictor.<namespace>.svc.cluster.local`
 
 3. **Network policy blocking**: Istio/NetworkPolicy restrictions
+
    ```bash
    oc get networkpolicies -n $NAMESPACE
    ```
+
    - Solution: Add policy to allow traffic from router to predictor
 
 4. **PeerAuthentication conflict**: mTLS mode mismatch
+
    ```bash
    oc get peerauthentication -n $NAMESPACE
    ```
+
    - Solution: Ensure PERMISSIVE mode or adjust Envoy TLS config
 
 ### Predictor Pod IP Changed (If Using Pod IP Instead of Service IP)
@@ -901,6 +928,7 @@ oc exec $POD -c semantic-router -n $NAMESPACE -- \
 **Solution**:
 
 1. Switch to stable service approach (recommended):
+
    ```bash
    # Create stable service
    cat <<EOF | oc apply -f - -n $NAMESPACE
@@ -944,9 +972,11 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE \
 **Common Causes**:
 
 1. **Threshold too high**: Similarity threshold prevents matches
+
    ```yaml
    similarity_threshold: 0.99  # Too strict
    ```
+
    - Solution: Lower threshold to 0.8-0.85
 
 2. **Cache disabled**: Not enabled in config
@@ -1066,6 +1096,7 @@ For multi-replica deployments with shared cache:
 
 1. Deploy Milvus in your cluster
 2. Update `configmap-router-config.yaml`:
+
    ```yaml
    semantic_cache:
      enabled: true
@@ -1077,6 +1108,7 @@ For multi-replica deployments with shared cache:
    ```
 
 3. Apply and restart:
+
    ```bash
    oc apply -f configmap-router-config.yaml -n $NAMESPACE
    oc rollout restart deployment/semantic-router-kserve -n $NAMESPACE
