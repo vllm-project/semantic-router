@@ -417,7 +417,12 @@ time curl -k -s "https://$ROUTER_URL/v1/chat/completions" \
 Run comprehensive validation tests:
 
 ```bash
+# Set environment variables and run tests
 NAMESPACE=$NAMESPACE MODEL_NAME=my-model-name ./test-semantic-routing.sh
+
+# Or let the script auto-detect from config
+cd deploy/kserve
+./test-semantic-routing.sh
 ```
 
 ## Configuration Deep Dive

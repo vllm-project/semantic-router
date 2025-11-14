@@ -63,7 +63,7 @@ spec:
               ("LLM-Semantic-Router/pii_classifier_modernbert-base_model", "pii_classifier_modernbert-base_model"),
               ("LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model", "jailbreak_classifier_modernbert-base_model"),
               ("LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_presidio_token_model"),
-              ("sentence-transformers/all-MiniLM-L12-v2", "all-MiniLM-L12-v2")
+              ("sentence-transformers/{{EMBEDDING_MODEL}}", "{{EMBEDDING_MODEL}}")
           ]
 
           cache_dir = "/app/cache/hf"
@@ -72,16 +72,24 @@ spec:
           for repo_id, local_dir_name in models:
               local_dir = os.path.join(base_dir, local_dir_name)
 
-              # Check if model already exists
+              # Check if model weights actually exist (not just the directory)
               has_model = False
               if os.path.exists(local_dir):
-                  for ext in ['.safetensors', '.bin', 'pytorch_model.']:
-                      for root, dirs, files in os.walk(local_dir):
-                          if any(ext in f for f in files):
+                  # Look specifically for model weight files
+                  for root, dirs, files in os.walk(local_dir):
+                      for f in files:
+                          if f.endswith('.safetensors') or f.endswith('.bin') or f.startswith('pytorch_model.'):
                               has_model = True
+                              print(f"Found model weights: {f}")
                               break
                       if has_model:
                           break
+
+              # Clean up incomplete downloads
+              if os.path.exists(local_dir) and not has_model:
+                  print(f"Removing incomplete download: {local_dir_name}")
+                  import shutil
+                  shutil.rmtree(local_dir, ignore_errors=True)
 
               if not has_model:
                   print(f"Downloading {repo_id}...")
@@ -124,11 +132,11 @@ spec:
           value: /tmp/python_user/bin:/usr/local/bin:/usr/bin:/bin
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
             memory: "1Gi"
             cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
         volumeMounts:
         - name: models-volume
           mountPath: /app/models
@@ -194,11 +202,11 @@ spec:
           failureThreshold: 3
         resources:
           requests:
-            memory: "3Gi"
-            cpu: "1"
+            memory: "4Gi"
+            cpu: "1500m"
           limits:
-            memory: "6Gi"
-            cpu: "2"
+            memory: "8Gi"
+            cpu: "3"
 
       # Envoy proxy container - routes to KServe endpoints
       - name: envoy-proxy

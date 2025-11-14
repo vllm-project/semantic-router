@@ -81,9 +81,9 @@ Just need semantic routing with defaults:
 ./deploy.sh -n myproject -i mymodel -m mymodel
 ```
 
-### Scenario 2: Custom Storage
+### Scenario 2: Custom Storage and Embedding Model
 
-Using a specific storage class or larger PVCs:
+Using a specific storage class, larger PVCs, and custom embedding model:
 
 ```bash
 ./deploy.sh \
@@ -92,8 +92,15 @@ Using a specific storage class or larger PVCs:
   -m mymodel \
   -s gp3-csi \
   --models-pvc-size 20Gi \
-  --cache-pvc-size 10Gi
+  --cache-pvc-size 10Gi \
+  --embedding-model all-mpnet-base-v2
 ```
+
+**Available Embedding Models:**
+- `all-MiniLM-L12-v2` (default) - Balanced speed/quality (~90MB)
+- `all-mpnet-base-v2` - Higher quality, larger (~420MB)
+- `all-MiniLM-L6-v2` - Faster, smaller (~80MB)
+- `paraphrase-multilingual-MiniLM-L12-v2` - Multilingual support
 
 ### Scenario 3: Preview Before Deploying
 
@@ -235,7 +242,12 @@ Simply redeploy:
 
 1. **Run validation tests**:
    ```bash
-   NAMESPACE=<ns> MODEL_NAME=<model> ./test-semantic-routing.sh
+   # Set namespace and model name
+   NAMESPACE=<namespace> MODEL_NAME=<model> ./test-semantic-routing.sh
+
+   # Or let the script auto-detect from your deployment
+   cd deploy/kserve
+   ./test-semantic-routing.sh
    ```
 
 2. **Customize configuration**: See [README.md](./README.md) for detailed configuration options:

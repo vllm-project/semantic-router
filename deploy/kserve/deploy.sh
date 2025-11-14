@@ -22,6 +22,13 @@ MODEL_NAME=""
 STORAGE_CLASS=""
 MODELS_PVC_SIZE="10Gi"
 CACHE_PVC_SIZE="5Gi"
+# Embedding model for semantic caching and tools similarity
+# Common options from sentence-transformers:
+#   - all-MiniLM-L12-v2 (default, balanced speed/quality)
+#   - all-mpnet-base-v2 (higher quality, slower)
+#   - all-MiniLM-L6-v2 (faster, lower quality)
+#   - paraphrase-multilingual-MiniLM-L12-v2 (multilingual)
+EMBEDDING_MODEL="all-MiniLM-L12-v2"
 DRY_RUN=false
 SKIP_VALIDATION=false
 
@@ -41,6 +48,7 @@ Optional:
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
   --models-pvc-size SIZE             Size for models PVC (default: 10Gi)
   --cache-pvc-size SIZE              Size for cache PVC (default: 5Gi)
+  --embedding-model MODEL            BERT embedding model (default: all-MiniLM-L12-v2)
   --dry-run                          Generate manifests without applying
   --skip-validation                  Skip pre-deployment validation
   -h, --help                         Show this help message
@@ -49,8 +57,8 @@ Examples:
   # Deploy to namespace 'semantic' with granite32-8b model
   $0 -n semantic -i granite32-8b -m granite32-8b
 
-  # Deploy with custom storage class
-  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi
+  # Deploy with custom storage class and embedding model
+  $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model all-mpnet-base-v2
 
   # Dry run to see what will be deployed
   $0 -n semantic -i granite32-8b -m granite32-8b --dry-run
@@ -93,6 +101,10 @@ while [[ $# -gt 0 ]]; do
             CACHE_PVC_SIZE="$2"
             shift 2
             ;;
+        --embedding-model)
+            EMBEDDING_MODEL="$2"
+            shift 2
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -129,6 +141,7 @@ echo -e "${BLUE}Configuration:${NC}"
 echo "  Namespace:              $NAMESPACE"
 echo "  InferenceService:       $INFERENCESERVICE_NAME"
 echo "  Model Name:             $MODEL_NAME"
+echo "  Embedding Model:        $EMBEDDING_MODEL"
 echo "  Storage Class:          ${STORAGE_CLASS:-<cluster default>}"
 echo "  Models PVC Size:        $MODELS_PVC_SIZE"
 echo "  Cache PVC Size:         $CACHE_PVC_SIZE"
@@ -237,7 +250,7 @@ fi
 echo -e "${BLUE}Step 2: Generating manifests...${NC}"
 
 TEMP_DIR=$(mktemp -d)
-trap "rm -rf $TEMP_DIR" EXIT
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Function to substitute variables in a file
 substitute_vars() {
@@ -247,6 +260,7 @@ substitute_vars() {
     sed -e "s/{{NAMESPACE}}/$NAMESPACE/g" \
         -e "s/{{INFERENCESERVICE_NAME}}/$INFERENCESERVICE_NAME/g" \
         -e "s/{{MODEL_NAME}}/$MODEL_NAME/g" \
+        -e "s|{{EMBEDDING_MODEL}}|$EMBEDDING_MODEL|g" \
         -e "s/{{PREDICTOR_SERVICE_IP}}/${PREDICTOR_SERVICE_IP:-10.0.0.1}/g" \
         -e "s/{{MODELS_PVC_SIZE}}/$MODELS_PVC_SIZE/g" \
         -e "s/{{CACHE_PVC_SIZE}}/$CACHE_PVC_SIZE/g" \
