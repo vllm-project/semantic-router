@@ -1,0 +1,122 @@
+name: Publish Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm-publish.yml'
+  workflow_dispatch:
+
+env:
+  HELM_VERSION: v3.14.0
+  CHART_PATH: deploy/helm/semantic-router
+  REGISTRY: ghcr.io
+  CHART_NAME: semantic-router
+
+jobs:
+  publish-chart:
+    name: Publish Helm Chart to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Set lowercase repository owner
+        run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} --username ${{ github.actor }} --password-stdin
+
+      - name: Modify chart version to latest
+        run: |
+          echo "::group::Modify Chart.yaml"
+          # Backup original Chart.yaml
+          cp ${{ env.CHART_PATH }}/Chart.yaml ${{ env.CHART_PATH }}/Chart.yaml.bak
+
+          # Replace version with 'v0.0.0-latest' (valid semver with prerelease tag)
+          sed -i 's/^version:.*/version: v0.0.0-latest/' ${{ env.CHART_PATH }}/Chart.yaml
+
+          echo "Modified Chart.yaml:"
+          grep '^version:' ${{ env.CHART_PATH }}/Chart.yaml
+          echo "::endgroup::"
+
+      - name: Package Helm chart
+        run: |
+          echo "::group::Package Chart"
+          mkdir -p ./dist
+          helm package ${{ env.CHART_PATH }} --destination ./dist
+          echo "::endgroup::"
+
+          echo "::group::Packaged Chart"
+          ls -lh ./dist/
+          echo "::endgroup::"
+
+      - name: Push chart to GHCR
+        run: |
+          echo "::group::Push to GHCR"
+          CHART_PACKAGE="./dist/${{ env.CHART_NAME }}-v0.0.0-latest.tgz"
+
+          # Push to GHCR using OCI format with v0.0.0-latest tag
+          helm push "${CHART_PACKAGE}" oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts
+
+          echo "::endgroup::"
+
+          echo "✓ Chart published successfully!"
+          echo "Chart: ${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }}:v0.0.0-latest"
+
+      - name: Restore original Chart.yaml
+        if: always()
+        run: |
+          # Restore original Chart.yaml
+          if [ -f "${{ env.CHART_PATH }}/Chart.yaml.bak" ]; then
+            mv ${{ env.CHART_PATH }}/Chart.yaml.bak ${{ env.CHART_PATH }}/Chart.yaml
+            echo "Chart.yaml restored"
+          fi
+
+      - name: Create release summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 📦 Helm Chart Published
+
+          **Chart:** \`${{ env.CHART_NAME }}\`
+          **Version:** \`v0.0.0-latest\`
+          **Registry:** \`${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts\`
+
+          ### Installation
+
+          \`\`\`bash
+          # Pull the chart
+          helm pull oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }} --version v0.0.0-latest
+
+          # Install directly
+          helm install semantic-router oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }} \\
+            --version v0.0.0-latest \\
+            --namespace vllm-semantic-router-system \\
+            --create-namespace
+          \`\`\`
+
+          ### Upgrade
+
+          \`\`\`bash
+          helm upgrade semantic-router oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }} \\
+            --version v0.0.0-latest \\
+            --namespace vllm-semantic-router-system
+          \`\`\`
+          EOF
+
+      - name: Logout from registry
+        if: always()
+        run: |
+          helm registry logout ${{ env.REGISTRY }} || true
+
