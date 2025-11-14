@@ -175,7 +175,7 @@ livenessProbe:
   # -- Enable liveness probe
   enabled: true
   # -- Initial delay seconds
-  initialDelaySeconds: 120
+  initialDelaySeconds: 30
   # -- Period seconds
   periodSeconds: 30
   # -- Timeout seconds
@@ -188,7 +188,7 @@ readinessProbe:
   # -- Enable readiness probe
   enabled: true
   # -- Initial delay seconds
-  initialDelaySeconds: 180
+  initialDelaySeconds: 30
   # -- Period seconds
   periodSeconds: 30
   # -- Timeout seconds
