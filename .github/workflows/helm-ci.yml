@@ -111,7 +111,6 @@ jobs:
         run: |
           echo "::group::Verify Required Resources"
           required_resources=(
-            "Namespace"
             "ServiceAccount"
             "PersistentVolumeClaim"
             "ConfigMap"
@@ -128,6 +127,7 @@ jobs:
             fi
           done
           echo "All required resources found"
+          echo "Note: Namespace is managed by Helm's --create-namespace flag"
           echo "::endgroup::"
 
       - name: Upload templates as artifacts
