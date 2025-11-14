@@ -1,4 +1,4 @@
-name: Helm Chart CI
+name:  Integration Test [Helm]
 
 on:
   push:

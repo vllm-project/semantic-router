@@ -1,0 +1,81 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
+
+	// Import profiles to register test cases
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
+)
+
+func main() {
+	// Parse command line flags
+	var (
+		profile            = flag.String("profile", "ai-gateway", "Test profile to run (ai-gateway, istio, etc.)")
+		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
+		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")
+		keepCluster        = flag.Bool("keep-cluster", false, "Keep cluster after tests complete")
+		useExistingCluster = flag.Bool("use-existing-cluster", false, "Use existing cluster instead of creating a new one")
+		verbose            = flag.Bool("verbose", false, "Enable verbose logging")
+		parallel           = flag.Bool("parallel", false, "Run tests in parallel")
+		testCases          = flag.String("tests", "", "Comma-separated list of test cases to run (empty means all)")
+	)
+
+	flag.Parse()
+
+	// Parse test cases
+	var testCasesList []string
+	if *testCases != "" {
+		testCasesList = strings.Split(*testCases, ",")
+		for i := range testCasesList {
+			testCasesList[i] = strings.TrimSpace(testCasesList[i])
+		}
+	}
+
+	// Create test options
+	opts := &framework.TestOptions{
+		Profile:            *profile,
+		ClusterName:        *clusterName,
+		ImageTag:           *imageTag,
+		KeepCluster:        *keepCluster,
+		UseExistingCluster: *useExistingCluster,
+		Verbose:            *verbose,
+		Parallel:           *parallel,
+		TestCases:          testCasesList,
+	}
+
+	// Get the profile implementation
+	profileImpl, err := getProfile(*profile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create and run the test runner
+	runner := framework.NewRunner(opts, profileImpl)
+
+	ctx := context.Background()
+	if err := runner.Run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func getProfile(name string) (framework.Profile, error) {
+	switch name {
+	case "ai-gateway":
+		return aigateway.NewProfile(), nil
+	// Add more profiles here as they are implemented
+	// case "istio":
+	//     return istio.NewProfile(), nil
+	default:
+		return nil, fmt.Errorf("unknown profile: %s", name)
+	}
+}
+

@@ -1,0 +1,101 @@
+name: Integration Test [AI Gateway]
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  test-ai-gateway:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.90
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            curl \
+            build-essential \
+            pkg-config
+
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Download E2E test dependencies
+        run: |
+          cd e2e && go mod download
+
+      - name: Build E2E test binary
+        run: |
+          make build-e2e
+
+      - name: Run AI Gateway E2E tests
+        id: e2e-test
+        run: |
+          make e2e-test PROFILE=ai-gateway
+        env:
+          E2E_VERBOSE: "true"
+
+      - name: Show cluster logs on failure
+        if: failure()
+        run: |
+          echo "=== Kind Cluster Info ==="
+          kind get clusters || true
+          kubectl cluster-info --context kind-semantic-router-e2e || true
+          
+          echo "=== All Pods ==="
+          kubectl get pods --all-namespaces -o wide || true
+          
+          echo "=== Semantic Router Logs ==="
+          kubectl logs -n vllm-semantic-router-system deployment/semantic-router --tail=100 || true
+          
+          echo "=== Envoy Gateway Logs ==="
+          kubectl logs -n envoy-gateway-system deployment/envoy-gateway --tail=100 || true
+          
+          echo "=== AI Gateway Controller Logs ==="
+          kubectl logs -n envoy-ai-gateway-system deployment/ai-gateway-controller --tail=100 || true
+          
+          echo "=== Gateway Resources ==="
+          kubectl get gateway -A || true
+          kubectl get httproute -A || true
+          
+          echo "=== Events ==="
+          kubectl get events --all-namespaces --sort-by='.lastTimestamp' || true
+
+      - name: Clean up
+        if: always()
+        run: |
+          make e2e-cleanup || true
+
