@@ -18,8 +18,12 @@ spec:
       labels:
         app: semantic-router
         component: gateway
+        app.kubernetes.io/name: semantic-router
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/part-of: vllm-semantic-router
       annotations:
-        sidecar.istio.io/inject: "false"  # Disable Istio injection to avoid conflicts with Envoy
+        sidecar.istio.io/inject: "true"  # Enable Istio injection for service mesh integration with KServe
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'  # Ensure proxy is ready
     spec:
       serviceAccountName: semantic-router  # Create ServiceAccount if RBAC required
       # OpenShift security context - let OpenShift assign UID/GID
@@ -28,8 +32,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
-      initContainers:
       # Init container to download models from HuggingFace
+      initContainers:
       - name: model-downloader
         image: python:3.11-slim
         securityContext:
@@ -43,74 +47,68 @@ spec:
         args:
         - |
           set -e
-          echo "Installing Hugging Face CLI..."
-          pip install --no-cache-dir huggingface_hub[cli]
+          echo "Installing Hugging Face Hub..."
+          pip install --no-cache-dir --user huggingface_hub
 
           echo "Downloading models to persistent volume..."
           cd /app/models
 
-          # Download category classifier model
-          if [ ! -d "category_classifier_modernbert-base_model" ] || [ -z "$(find category_classifier_modernbert-base_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading category classifier model..."
-            huggingface-cli download LLM-Semantic-Router/category_classifier_modernbert-base_model \
-              --local-dir category_classifier_modernbert-base_model \
-              --cache-dir /app/cache/hf
-          else
-            echo "Category classifier model already exists, skipping..."
-          fi
+          # Use Python API to download models
+          python3 << 'PYEOF'
+          import os
+          from huggingface_hub import snapshot_download
 
-          # Download PII classifier model
-          if [ ! -d "pii_classifier_modernbert-base_model" ] || [ -z "$(find pii_classifier_modernbert-base_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading PII classifier model..."
-            huggingface-cli download LLM-Semantic-Router/pii_classifier_modernbert-base_model \
-              --local-dir pii_classifier_modernbert-base_model \
-              --cache-dir /app/cache/hf
-          else
-            echo "PII classifier model already exists, skipping..."
-          fi
+          models = [
+              ("LLM-Semantic-Router/category_classifier_modernbert-base_model", "category_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/pii_classifier_modernbert-base_model", "pii_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model", "jailbreak_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_presidio_token_model"),
+              ("sentence-transformers/all-MiniLM-L12-v2", "all-MiniLM-L12-v2")
+          ]
 
-          # Download jailbreak classifier model
-          if [ ! -d "jailbreak_classifier_modernbert-base_model" ] || [ -z "$(find jailbreak_classifier_modernbert-base_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading jailbreak classifier model..."
-            huggingface-cli download LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model \
-              --local-dir jailbreak_classifier_modernbert-base_model \
-              --cache-dir /app/cache/hf
-          else
-            echo "Jailbreak classifier model already exists, skipping..."
-          fi
+          cache_dir = "/app/cache/hf"
+          base_dir = "/app/models"
 
-          # Download PII token classifier model
-          if [ ! -d "pii_classifier_modernbert-base_presidio_token_model" ] || [ -z "$(find pii_classifier_modernbert-base_presidio_token_model -name '*.safetensors' -o -name '*.bin' -o -name 'pytorch_model.*' 2>/dev/null)" ]; then
-            echo "Downloading PII token classifier model..."
-            huggingface-cli download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model \
-              --local-dir pii_classifier_modernbert-base_presidio_token_model \
-              --cache-dir /app/cache/hf
-          else
-            echo "PII token classifier model already exists, skipping..."
-          fi
+          for repo_id, local_dir_name in models:
+              local_dir = os.path.join(base_dir, local_dir_name)
 
-          # Download embedding model for semantic cache (BERT)
-          if [ ! -d "all-MiniLM-L12-v2" ]; then
-            echo "Downloading BERT embedding model for semantic cache..."
-            huggingface-cli download sentence-transformers/all-MiniLM-L12-v2 \
-              --local-dir all-MiniLM-L12-v2 \
-              --cache-dir /app/cache/hf
-          else
-            echo "BERT embedding model already exists, skipping..."
-          fi
+              # Check if model already exists
+              has_model = False
+              if os.path.exists(local_dir):
+                  for ext in ['.safetensors', '.bin', 'pytorch_model.']:
+                      for root, dirs, files in os.walk(local_dir):
+                          if any(ext in f for f in files):
+                              has_model = True
+                              break
+                      if has_model:
+                          break
 
-          echo "All models downloaded successfully!"
+              if not has_model:
+                  print(f"Downloading {repo_id}...")
+                  snapshot_download(
+                      repo_id=repo_id,
+                      local_dir=local_dir,
+                      cache_dir=cache_dir
+                  )
+                  print(f"Downloaded {repo_id}")
+              else:
+                  print(f"{local_dir_name} already exists, skipping...")
+
+          print("All models downloaded successfully!")
+          PYEOF
+
+          echo "Model download complete!"
           ls -la /app/models/
 
-          echo "Setting proper permissions for models directory..."
-          find /app/models -type f -exec chmod 644 {} \; || echo "Warning: Could not change model file permissions"
-          find /app/models -type d -exec chmod 755 {} \; || echo "Warning: Could not change model directory permissions"
+          echo "Setting proper permissions..."
+          find /app/models -type f -exec chmod 644 {} \; || true
+          find /app/models -type d -exec chmod 755 {} \; || true
 
           echo "Creating cache directories..."
           mkdir -p /app/cache/hf /app/cache/transformers /app/cache/sentence_transformers /app/cache/xdg /app/cache/bert
-          chmod -R 777 /app/cache/ || echo "Warning: Could not change cache directory permissions"
+          chmod -R 777 /app/cache/ || true
 
-          echo "Model download complete."
+          echo "Model download complete!"
         env:
         - name: HF_HUB_CACHE
           value: /app/cache/hf

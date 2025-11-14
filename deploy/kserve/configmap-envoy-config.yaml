@@ -136,18 +136,24 @@ data:
             explicit_http_config:
               http_protocol_options: {}
 
-      # Dynamic cluster for KServe InferenceService predictors
-      # Uses ORIGINAL_DST with header-based destination selection
-      # The semantic router sets x-gateway-destination-endpoint header to specify the target
-      # Format: <service-name>-predictor.<your-namespace>.svc.cluster.local:80
+      # DNS-based cluster for KServe InferenceService (headless service)
+      # Uses service DNS name with container port (8080) for Istio routing
+      # Template variables: {{INFERENCESERVICE_NAME}}, {{NAMESPACE}}
       - name: kserve_dynamic_cluster
         connect_timeout: 300s
         per_connection_buffer_limit_bytes: 52428800
-        type: ORIGINAL_DST
-        lb_policy: CLUSTER_PROVIDED
-        original_dst_lb_config:
-          use_http_header: true
-          http_header_name: "x-gateway-destination-endpoint"
+        type: STRICT_DNS
+        lb_policy: ROUND_ROBIN
+        dns_lookup_family: V4_ONLY
+        load_assignment:
+          cluster_name: kserve_dynamic_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{INFERENCESERVICE_NAME}}-predictor.{{NAMESPACE}}.svc.cluster.local
+                    port_value: 8080
         typed_extension_protocol_options:
           envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
             "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions

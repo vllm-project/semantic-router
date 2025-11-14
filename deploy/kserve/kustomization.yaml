@@ -9,6 +9,7 @@ resources:
   - pvc.yaml
   - configmap-router-config.yaml
   - configmap-envoy-config.yaml
+  - peerauthentication.yaml
   - deployment.yaml
   - service.yaml
   - route.yaml

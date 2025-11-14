@@ -11,8 +11,8 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi  # Adjust based on model size requirements
-  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed
+      storage: {{MODELS_PVC_SIZE}}  # Adjust based on model size requirements
+  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed (or use --storage-class flag with deploy.sh)
   volumeMode: Filesystem
 
 ---
@@ -28,6 +28,6 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi  # Cache storage - adjust as needed
-  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed
+      storage: {{CACHE_PVC_SIZE}}  # Cache storage - adjust as needed
+  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed (or use --storage-class flag with deploy.sh)
   volumeMode: Filesystem
