@@ -1,0 +1,15 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: semantic-router-kserve-permissive
+  namespace: {{NAMESPACE}}
+  labels:
+    app: semantic-router
+    component: gateway
+spec:
+  selector:
+    matchLabels:
+      app: semantic-router
+      component: gateway
+  mtls:
+    mode: PERMISSIVE  # Accept both mTLS and plain HTTP
