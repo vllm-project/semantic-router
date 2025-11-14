@@ -119,7 +119,6 @@ required_files=(
     "templates/deployment.yaml"
     "templates/service.yaml"
     "templates/configmap.yaml"
-    "templates/namespace.yaml"
     "templates/pvc.yaml"
     "templates/serviceaccount.yaml"
     "templates/ingress.yaml"
@@ -146,7 +145,6 @@ echo ""
 # Test 7: Validate generated resources
 log_info "Validating generated Kubernetes resources..."
 resource_types=(
-    "Namespace"
     "ServiceAccount"
     "PersistentVolumeClaim"
     "ConfigMap"
@@ -162,6 +160,7 @@ for resource in "${resource_types[@]}"; do
         exit 1
     fi
 done
+log_info "Note: Namespace is managed by Helm's --create-namespace flag"
 echo ""
 
 # Test 8: Validate Chart.yaml
