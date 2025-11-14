@@ -1,3 +1,5 @@
+# yamllint disable rule:line-length rule:syntax-check
+# This is a template file with {{VARIABLE}} placeholders - processed by deploy.sh
 apiVersion: v1
 kind: Service
 metadata:
