@@ -1,16 +1,9 @@
-name: Quickstart Integration Test
+name: Integration Test [Docker Compose]
 
 on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'scripts/quickstart.sh'
-      - 'deploy/docker-compose/**'
-      - 'config/config.yaml'
-      - 'tools/make/common.mk'
-      - 'tools/make/models.mk'
-      - 'tools/make/docker.mk'
   workflow_dispatch: # Allow manual triggering
 
 jobs:
