@@ -5,6 +5,8 @@ package cache
 import (
 	"fmt"
 	"math"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -763,7 +765,8 @@ func (h *HNSWIndex) searchKNN(queryEmbedding []float32, k, ef int, entries []Cac
 		return []int{}
 	}
 
-	// Search from top layer to layer 1
+	// Search from top layer to layer 1. We rely on searchLayer returning
+	// candidates sorted by best distance so the first entry is the nearest pivot.
 	currentNearest := h.entryPoint
 	for lc := h.maxLayer; lc > 0; lc-- {
 		nearest := h.searchLayer(queryEmbedding, currentNearest, 1, lc, entries)
@@ -828,7 +831,7 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 		}
 	}
 
-	return results.items()
+	return results.sortedIndices()
 }
 
 // selectNeighbors selects the best neighbors by sorting by distance
@@ -1004,9 +1007,20 @@ func (h *maxHeap) peekDist() float32 {
 	return h.data[0].dist
 }
 
-func (h *maxHeap) items() []int {
-	result := make([]int, len(h.data))
-	for i, item := range h.data {
+// sortedIndices exposes the heap contents ordered from best (smallest distance)
+// to worst, even though the underlying storage is a max-heap. Consumers such as
+// searchLayer expect nearest-first ordering when taking the first element.
+func (h *maxHeap) sortedIndices() []int {
+	if len(h.data) == 0 {
+		return nil
+	}
+	items := slices.Clone(h.data)
+	// Surface results in nearest-first order even though we store them in a max-heap.
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].dist < items[j].dist
+	})
+	result := make([]int, len(items))
+	for i, item := range items {
 		result[i] = item.index
 	}
 	return result
