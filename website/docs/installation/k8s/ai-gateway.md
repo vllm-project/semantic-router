@@ -91,17 +91,11 @@ Before starting, ensure you have the following tools installed:
 Create a local Kubernetes cluster optimized for the semantic router workload:
 
 ```bash
-# Generate kind configuration
-./tools/kind/generate-kind-config.sh
-
-# Create cluster with optimized resource settings
-kind create cluster --name semantic-router-cluster --config tools/kind/kind-config.yaml
+kind create cluster --name semantic-router-cluster
 
 # Verify cluster is ready
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
-
-**Note**: The kind configuration provides sufficient resources (8GB+ RAM, 4+ CPU cores) for running the semantic router and AI gateway components.
 
 ## Step 2: Deploy vLLM Semantic Router
 
