@@ -1,0 +1,81 @@
+# Embedding Similarity Concepts Configuration
+# Defines semantic concepts for embedding similarity detection
+
+concepts:
+  # Reasoning and problem-solving concepts
+  - name: "reasoning"
+    description: "Multi-step reasoning and problem solving"
+    keywords:
+      - "step by step"
+      - "solve this problem"
+      - "explain your reasoning"
+      - "break down the solution"
+      - "think through this"
+      - "logical steps"
+    threshold: 0.75
+    aggregate_method: "mean"  # Options: mean, max, any
+  
+  - name: "mathematics"
+    description: "Mathematical problem solving"
+    keywords:
+      - "solve the equation"
+      - "calculate the derivative"
+      - "find the integral"
+      - "prove the theorem"
+    threshold: 0.7
+    aggregate_method: "mean"
+  
+  # Infrastructure concepts
+  - name: "infrastructure"
+    description: "Cloud infrastructure and DevOps concepts"
+    keywords:
+      - "deploy kubernetes cluster"
+      - "configure cloud infrastructure"
+      - "set up container orchestration"
+      - "manage microservices"
+      - "scale distributed system"
+    threshold: 0.75
+    aggregate_method: "max"
+  
+  - name: "containers"
+    description: "Container and Docker concepts"
+    keywords:
+      - "build docker image"
+      - "containerize application"
+      - "docker compose setup"
+      - "multi-stage dockerfile"
+    threshold: 0.75
+    aggregate_method: "max"
+  
+  # Database concepts
+  - name: "database"
+    description: "Database design and optimization"
+    keywords:
+      - "optimize database query"
+      - "design database schema"
+      - "improve query performance"
+      - "database indexing strategy"
+    threshold: 0.8
+    aggregate_method: "mean"
+  
+  # Code generation concepts
+  - name: "code-generation"
+    description: "Code writing and generation"
+    keywords:
+      - "write a function to"
+      - "implement an algorithm"
+      - "create a class that"
+      - "generate code for"
+    threshold: 0.7
+    aggregate_method: "max"
+  
+  # Security concepts
+  - name: "security-analysis"
+    description: "Security analysis and vulnerability assessment"
+    keywords:
+      - "security vulnerability assessment"
+      - "penetration testing approach"
+      - "threat modeling for"
+      - "security best practices"
+    threshold: 0.75
+    aggregate_method: "mean"
