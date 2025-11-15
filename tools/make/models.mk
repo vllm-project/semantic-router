@@ -24,6 +24,7 @@ download-models: ## Download models (full or minimal set depending on CI_MINIMAL
 # - PII token classifier (ModernBERT Presidio)
 # - Jailbreak classifier (ModernBERT)
 # - Optional plain PII classifier mapping (small)
+# - Embedding models (Qwen3-Embedding-0.6B, embeddinggemma-300m) for smart embedding tests
 
 download-models-minimal:
 download-models-minimal: ## Pre-download minimal set of models for CI tests
@@ -46,6 +47,14 @@ download-models-minimal: ## Pre-download minimal set of models for CI tests
 	fi
 	@if [ ! -f "models/pii_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/pii_classifier_modernbert-base_model" ]; then \
 		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir models/pii_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/pii_classifier_modernbert-base_model/.downloaded; \
+	fi
+	# Download embedding models for smart embedding tests
+	@if [ ! -f "models/Qwen3-Embedding-0.6B/.downloaded" ] || [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
+		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen3-Embedding-0.6B/.downloaded; \
+	fi
+	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
+		echo "Downloading google/embeddinggemma-300m (requires HF_TOKEN for gated model)..."; \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded; \
 	fi
 
 # Full model set for local development and docs
@@ -99,12 +108,12 @@ download-models-full: ## Download all models used in local development and docs
 	@if [ ! -f "models/lora_jailbreak_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_modernbert-base_model" ]; then \
 		hf download LLM-Semantic-Router/lora_jailbreak_classifier_modernbert-base_model --local-dir models/lora_jailbreak_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_modernbert-base_model/.downloaded; \
 	fi
-	@if [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
-		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
+	@if [ ! -f "models/Qwen3-Embedding-0.6B/.downloaded" ] || [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
+		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen3-Embedding-0.6B/.downloaded; \
 	fi
-	@if [ ! -d "models/embeddinggemma-300m" ]; then \
-		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
+	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
+		echo "Downloading google/embeddinggemma-300m (requires HF_TOKEN for gated model)..."; \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded; \
 	fi
 
 # Download only LoRA and advanced embedding models (for CI after minimal tests)
@@ -121,12 +130,12 @@ download-models-lora: ## Download LoRA adapters and advanced embedding models on
 	@if [ ! -f "models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
 		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded; \
 	fi
-	@if [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
-		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
+	@if [ ! -f "models/Qwen3-Embedding-0.6B/.downloaded" ] || [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
+		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen3-Embedding-0.6B/.downloaded; \
 	fi
-	@if [ ! -d "models/embeddinggemma-300m" ]; then \
-		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
+	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
+		echo "Downloading google/embeddinggemma-300m (requires HF_TOKEN for gated model)..."; \
+		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded; \
 	fi
 
 # Clean up minimal models to save disk space (for CI)
