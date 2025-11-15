@@ -107,12 +107,23 @@ def generate_synthetic_pii_data(num_samples: int = 20) -> List[Dict]:
     }
 
     pii_values = {
-        "EMAIL_ADDRESS": ["john.doe@example.com", "sarah.smith@company.org", "mike.jones@email.net"],
+        "EMAIL_ADDRESS": [
+            "john.doe@example.com",
+            "sarah.smith@company.org",
+            "mike.jones@email.net",
+        ],
         "PHONE_NUMBER": ["555-123-4567", "(555) 987-6543", "555.246.8135"],
         "US_SSN": ["123-45-6789", "987-65-4321", "456-78-9012"],
-        "CREDIT_CARD": ["4532-1234-5678-9010", "5425-2334-3010-9903", "3782-822463-10005"],
+        "CREDIT_CARD": [
+            "4532-1234-5678-9010",
+            "5425-2334-3010-9903",
+            "3782-822463-10005",
+        ],
         "PERSON": ["Jane Smith", "John Doe", "Michael Johnson"],
-        "LOCATION": ["123 Main Street, Springfield, IL 62701", "456 Oak Avenue, Portland, OR 97201"],
+        "LOCATION": [
+            "123 Main Street, Springfield, IL 62701",
+            "456 Oak Avenue, Portland, OR 97201",
+        ],
         "DATE_TIME": ["January 15, 1985", "March 22, 1990", "July 4, 1988"],
         "US_DRIVER_LICENSE": ["D1234567", "DL98765432", "A9876543"],
         "US_PASSPORT": ["AB1234567", "CD9876543", "EF5432109"],
@@ -131,19 +142,23 @@ def generate_synthetic_pii_data(num_samples: int = 20) -> List[Dict]:
         value = random.choice(pii_values[entity_type])
         text = template.format(value=value)
 
-        test_cases.append({
-            "description": f"{entity_type} in text",
-            "pii_type": entity_type,
-            "question": text,
-            "expected_blocked": True
-        })
+        test_cases.append(
+            {
+                "description": f"{entity_type} in text",
+                "pii_type": entity_type,
+                "question": text,
+                "expected_blocked": True,
+            }
+        )
 
     # Generate multi-PII samples (40%)
     num_multi = num_samples - num_single
     for i in range(num_multi):
         # Select 2-3 entity types
         num_entities = random.randint(2, 3)
-        selected_types = random.sample(entity_types, min(num_entities, len(entity_types)))
+        selected_types = random.sample(
+            entity_types, min(num_entities, len(entity_types))
+        )
 
         # Build combined text
         parts = []
@@ -155,12 +170,14 @@ def generate_synthetic_pii_data(num_samples: int = 20) -> List[Dict]:
         text = " ".join(parts)
         primary_type = selected_types[0]
 
-        test_cases.append({
-            "description": f"Multiple PII types: {', '.join(selected_types)}",
-            "pii_type": primary_type,
-            "question": text,
-            "expected_blocked": True
-        })
+        test_cases.append(
+            {
+                "description": f"Multiple PII types: {', '.join(selected_types)}",
+                "pii_type": primary_type,
+                "question": text,
+                "expected_blocked": True,
+            }
+        )
 
     random.shuffle(test_cases)
     return test_cases
@@ -246,7 +263,9 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
             if has_required_type:
                 english_samples.append(sample)
 
-        print(f"✅ Loaded {len(english_samples)} English samples with required PII types")
+        print(
+            f"✅ Loaded {len(english_samples)} English samples with required PII types"
+        )
 
         # Separate by number of PII types (for diversity)
         single_pii_samples = []
@@ -274,10 +293,9 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
         num_single = int(num_samples * 0.6)
         num_multi = num_samples - num_single
 
-        selected_samples = (
-            random.sample(single_pii_samples, min(num_single, len(single_pii_samples))) +
-            random.sample(multi_pii_samples, min(num_multi, len(multi_pii_samples)))
-        )
+        selected_samples = random.sample(
+            single_pii_samples, min(num_single, len(single_pii_samples))
+        ) + random.sample(multi_pii_samples, min(num_multi, len(multi_pii_samples)))
 
         # Shuffle to mix single and multi PII samples
         random.shuffle(selected_samples)
@@ -296,7 +314,9 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
                 if label in REQUIRED_PII_TYPES:
                     mapped_type = REQUIRED_PII_TYPES[label]
                     mapped_types.append(mapped_type)
-                    entity_type_counts[mapped_type] = entity_type_counts.get(mapped_type, 0) + 1
+                    entity_type_counts[mapped_type] = (
+                        entity_type_counts.get(mapped_type, 0) + 1
+                    )
 
             # Get unique mapped types
             unique_types = sorted(set(mapped_types))
@@ -310,18 +330,21 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
             # Use the primary entity type (most frequent)
             primary_type = max(entity_type_counts, key=entity_type_counts.get)
 
-            test_cases.append({
-                "description": description,
-                "pii_type": primary_type,
-                "question": text,
-                "expected_blocked": True
-            })
+            test_cases.append(
+                {
+                    "description": description,
+                    "pii_type": primary_type,
+                    "question": text,
+                    "expected_blocked": True,
+                }
+            )
 
         print(f"✅ Generated {len(test_cases)} PII test cases from ai4privacy dataset")
 
         # Show distribution of PII types
         from collections import Counter
-        type_counts = Counter(case['pii_type'] for case in test_cases)
+
+        type_counts = Counter(case["pii_type"] for case in test_cases)
         print(f"   PII type distribution:")
         for pii_type, count in sorted(type_counts.items()):
             print(f"     {pii_type}: {count}")
@@ -334,7 +357,9 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
         return generate_synthetic_pii_data(num_samples)
 
 
-def generate_domain_classification_test_data(samples_per_category: int = 20) -> List[Dict]:
+def generate_domain_classification_test_data(
+    samples_per_category: int = 20,
+) -> List[Dict]:
     """Generate domain classification test data from MMLU-Pro dataset.
 
     Args:
@@ -343,7 +368,9 @@ def generate_domain_classification_test_data(samples_per_category: int = 20) -> 
     Returns:
         List of test cases with balanced distribution across categories
     """
-    print(f"\n📚 Generating {samples_per_category} samples per category for domain classification...")
+    print(
+        f"\n📚 Generating {samples_per_category} samples per category for domain classification..."
+    )
 
     # Load MMLU-Pro dataset
     print("📥 Loading MMLU-Pro dataset...")
@@ -355,6 +382,7 @@ def generate_domain_classification_test_data(samples_per_category: int = 20) -> 
 
     # Group samples by category
     from collections import defaultdict
+
     category_samples = defaultdict(list)
     for question, category in zip(questions, categories):
         category_samples[category].append(question)
@@ -373,17 +401,16 @@ def generate_domain_classification_test_data(samples_per_category: int = 20) -> 
         selected_questions = random.sample(available_questions, num_to_sample)
 
         for question in selected_questions:
-            test_cases.append({
-                "category": category,
-                "question": question
-            })
+            test_cases.append({"category": category, "question": question})
 
         print(f"  ✓ {category}: {num_to_sample} samples")
 
     # Shuffle to mix categories
     random.shuffle(test_cases)
 
-    print(f"✅ Generated {len(test_cases)} domain classification test cases ({samples_per_category} per category)")
+    print(
+        f"✅ Generated {len(test_cases)} domain classification test cases ({samples_per_category} per category)"
+    )
     return test_cases
 
 
@@ -409,7 +436,9 @@ def generate_jailbreak_test_data(num_samples: int = 20) -> List[Dict]:
     # 2. Load salad-data dataset
     print("📥 Loading salad-data dataset...")
     try:
-        salad_dataset = load_dataset("OpenSafetyLab/Salad-Data", "attack_enhanced_set", split="train")
+        salad_dataset = load_dataset(
+            "OpenSafetyLab/Salad-Data", "attack_enhanced_set", split="train"
+        )
         salad_count = 0
         for sample in salad_dataset:
             text = sample.get("attack", "")
@@ -456,11 +485,13 @@ def generate_jailbreak_test_data(num_samples: int = 20) -> List[Dict]:
 
     test_cases = []
     for idx, text in enumerate(selected_samples, 1):
-        test_cases.append({
-            "description": f"Jailbreak attempt {idx}",
-            "question": text,
-            "expected_blocked": True
-        })
+        test_cases.append(
+            {
+                "description": f"Jailbreak attempt {idx}",
+                "question": text,
+                "expected_blocked": True,
+            }
+        )
 
     print(f"✅ Generated {len(test_cases)} jailbreak test cases")
     return test_cases
