@@ -95,40 +95,50 @@ kubectl get svc vllm-router-service
 
 Follow the official guide from the official website with **the updated config file as the following**: [Install in Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway).
 
-Minimal sequence (same as the guide):
+Deploy using Helm with custom values:
 
 ```bash
-   # Deploy vLLM Semantic Router manifests
-   kubectl apply -k deploy/kubernetes/ai-gateway/semantic-router
+   # Deploy vLLM Semantic Router with custom values from GHCR OCI registry
+   helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
+     --version v0.0.0-latest \
+     --namespace vllm-semantic-router-system \
+     --create-namespace \
+     -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml
+
    kubectl wait --for=condition=Available deployment/semantic-router \
      -n vllm-semantic-router-system --timeout=600s
 
    # Install Envoy Gateway
-  helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
-    --version v0.0.0-latest \
-    --namespace envoy-gateway-system \
-    --create-namespace \
-    -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml
+   helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
+     --version v0.0.0-latest \
+     --namespace envoy-gateway-system \
+     --create-namespace \
+     -f https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml
 
    # Install Envoy AI Gateway
    helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
      --version v0.0.0-latest \
      --namespace envoy-ai-gateway-system \
      --create-namespace
+
    # Install Envoy AI Gateway CRDs
-   helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm --version v0.0.0-latest --namespace envoy-ai-gateway-system
+   helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
+     --version v0.0.0-latest \
+     --namespace envoy-ai-gateway-system
 
    kubectl wait --timeout=300s -n envoy-ai-gateway-system \
      deployment/ai-gateway-controller --for=condition=Available
 ```
 
+**Note**: The values file contains the configuration for the semantic router. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml) to match your vLLM Production Stack setup.
+
 Create LLM Demo Backends and AI Gateway Routes:
 
 ```bash
    # Apply LLM demo backends
-   kubectl apply -f deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
+   kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
    # Apply AI Gateway routes
-   kubectl apply -f deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
+   kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
 ```
 
 ---
@@ -156,6 +166,34 @@ Send a chat completions request:
         {"role": "user", "content": "What is the derivative of f(x) = x^3?"}
       ]
     }'
+```
+
+---
+
+## Cleanup
+
+To remove the entire deployment:
+
+```bash
+# Remove Gateway API resources and Demo LLM
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
+
+# Remove semantic router
+helm uninstall semantic-router -n vllm-semantic-router-system
+
+# Remove AI gateway
+helm uninstall aieg -n envoy-ai-gateway-system
+helm uninstall aieg-crd -n envoy-ai-gateway-system
+
+# Remove Envoy gateway
+helm uninstall eg -n envoy-gateway-system
+
+# Remove vLLM Production Stack
+helm uninstall vllm-stack
+
+# Delete kind cluster (optional)
+kind delete cluster --name semantic-router-cluster
 ```
 
 ---

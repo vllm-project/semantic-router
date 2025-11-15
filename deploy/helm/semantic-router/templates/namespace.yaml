@@ -1,8 +1,0 @@
-{{- if not (lookup "v1" "Namespace" "" (include "semantic-router.namespace" .)) }}
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ include "semantic-router.namespace" . }}
-  labels:
-    {{- include "semantic-router.labels" . | nindent 4 }}
-{{- end }}
