@@ -2696,6 +2696,8 @@ var _ = Describe("Caching Functionality", func() {
 	BeforeEach(func() {
 		cfg = CreateTestConfig()
 		cfg.Enabled = true
+		// Disable PII detection for caching tests (not needed and avoids model loading issues)
+		cfg.InlineModels.Classifier.PIIModel.ModelID = ""
 
 		var err error
 		router, err = CreateTestRouter(cfg)

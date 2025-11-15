@@ -76,11 +76,11 @@ classifier:
     use_cpu: true
     category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
   pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"  # TODO: Use local model for now before the code can download the entire model from huggingface
-    use_modernbert: true
+    model_id: "models/lora_pii_detector_bert-base-uncased_model"
+    use_modernbert: false  # BERT-based LoRA model (this field is ignored - always auto-detects)
     threshold: 0.7
     use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+    pii_mapping_path: "models/lora_pii_detector_bert-base-uncased_model/pii_type_mapping.json"
 categories:
   - name: business
     model_scores:

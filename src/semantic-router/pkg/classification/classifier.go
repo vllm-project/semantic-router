@@ -139,35 +139,55 @@ func createJailbreakInference(useModernBERT bool) JailbreakInference {
 }
 
 type PIIInitializer interface {
-	Init(modelID string, useCPU bool) error
+	Init(modelID string, useCPU bool, numClasses int) error
 }
 
-type ModernBertPIIInitializer struct{}
+type PIIInitializerImpl struct {
+	usedModernBERT bool // Track which init path succeeded for inference routing
+}
 
-func (c *ModernBertPIIInitializer) Init(modelID string, useCPU bool) error {
+func (c *PIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
+	// Try auto-detecting Candle BERT init first - checks for lora_config.json
+	// This enables LoRA PII models when available
+	success := candle_binding.InitCandleBertTokenClassifier(modelID, numClasses, useCPU)
+	if success {
+		c.usedModernBERT = false
+		logging.Infof("Initialized PII token classifier with auto-detection (LoRA or Traditional BERT)")
+		return nil
+	}
+
+	// Fallback to ModernBERT-specific init for backward compatibility
+	// This handles models with incomplete configs (missing hidden_act, etc.)
+	logging.Infof("Auto-detection failed, falling back to ModernBERT PII initializer")
 	err := candle_binding.InitModernBertPIITokenClassifier(modelID, useCPU)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize PII token classifier (both auto-detect and ModernBERT): %w", err)
 	}
-	logging.Infof("Initialized ModernBERT PII token classifier for entity detection")
+	c.usedModernBERT = true
+	logging.Infof("Initialized ModernBERT PII token classifier (fallback mode)")
 	return nil
 }
 
-// createPIIInitializer creates the appropriate PII initializer (currently only ModernBERT)
-func createPIIInitializer() PIIInitializer { return &ModernBertPIIInitializer{} }
+// createPIIInitializer creates the PII initializer (auto-detecting)
+func createPIIInitializer() PIIInitializer {
+	return &PIIInitializerImpl{}
+}
 
 type PIIInference interface {
 	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
 }
 
-type ModernBertPIIInference struct{}
+type PIIInferenceImpl struct{}
 
-func (c *ModernBertPIIInference) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
-	return candle_binding.ClassifyModernBertPIITokens(text, configPath)
+func (c *PIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
+	return candle_binding.ClassifyCandleBertTokens(text)
 }
 
-// createPIIInference creates the appropriate PII inference (currently only ModernBERT)
-func createPIIInference() PIIInference { return &ModernBertPIIInference{} }
+// createPIIInference creates the PII inference (auto-detecting)
+func createPIIInference() PIIInference {
+	return &PIIInferenceImpl{}
+}
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
 type JailbreakDetection struct {
@@ -211,6 +231,9 @@ type Classifier struct {
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
 	mcpCategoryInference   MCPCategoryInference
+
+	// NEW: Unified classifier for LoRA models (preferred when available)
+	UnifiedClassifier *UnifiedClassifier
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -347,7 +370,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add in-tree classifier if configured
 	if cfg.CategoryModel.ModelID != "" {
-		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.UseModernBERT), createCategoryInference(cfg.UseModernBERT)))
+		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.CategoryModel.UseModernBERT), createCategoryInference(cfg.CategoryModel.UseModernBERT)))
 	}
 
 	// Add MCP classifier if configured
@@ -508,7 +531,8 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU)
+	// Pass numClasses to support auto-detection
+	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
 }
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
@@ -539,7 +563,12 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 		}
 	}
 
-	// Try in-tree first if properly configured
+	// Try UnifiedClassifier (LoRA models) first - highest accuracy
+	if c.UnifiedClassifier != nil {
+		return c.classifyWithUnifiedClassifier(text)
+	}
+
+	// Try in-tree classifier if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryWithEntropyInTree(text)
 	}
@@ -582,6 +611,56 @@ func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) en
 			{
 				Category:    category,
 				Probability: 1.0,
+			},
+		},
+	}
+}
+
+// classifyWithUnifiedClassifier uses UnifiedClassifier (LoRA models) for classification
+func (c *Classifier) classifyWithUnifiedClassifier(text string) (string, float64, entropy.ReasoningDecision, error) {
+	// Use batch classification with single item
+	results, err := c.UnifiedClassifier.ClassifyBatch([]string{text})
+	if err != nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("unified classifier error: %w", err)
+	}
+
+	if len(results.IntentResults) == 0 {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("no classification results from unified classifier")
+	}
+
+	intentResult := results.IntentResults[0]
+	category := intentResult.Category
+	confidence := float64(intentResult.Confidence)
+
+	// Build reasoning decision based on category configuration
+	reasoningDecision := c.makeReasoningDecisionForCategory(category, confidence)
+
+	return category, confidence, reasoningDecision, nil
+}
+
+// makeReasoningDecisionForCategory creates reasoning decision based on category config
+func (c *Classifier) makeReasoningDecisionForCategory(category string, confidence float64) entropy.ReasoningDecision {
+	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
+	useReasoning := false
+
+	for _, cat := range c.Config.Categories {
+		if strings.ToLower(cat.Name) == normalizedCategory {
+			if len(cat.ModelScores) > 0 && cat.ModelScores[0].UseReasoning != nil {
+				useReasoning = *cat.ModelScores[0].UseReasoning
+			}
+			break
+		}
+	}
+
+	return entropy.ReasoningDecision{
+		UseReasoning:     useReasoning,
+		Confidence:       confidence,
+		DecisionReason:   "unified_lora_classification",
+		FallbackStrategy: "lora_based_classification",
+		TopCategories: []entropy.CategoryProbability{
+			{
+				Category:    category,
+				Probability: float32(confidence),
 			},
 		},
 	}
