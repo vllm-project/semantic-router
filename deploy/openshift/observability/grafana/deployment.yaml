@@ -48,6 +48,18 @@ spec:
           value: ""
         - name: GF_PATHS_PROVISIONING
           value: /etc/grafana/provisioning
+        - name: GF_SERVER_SERVE_FROM_SUB_PATH
+          value: "true"
+        - name: GF_SERVER_ROOT_URL
+          value: "DYNAMIC_GRAFANA_ROUTE_URL"
+        - name: GF_SERVER_PROTOCOL
+          value: "http"
+        - name: GF_SECURITY_ALLOW_EMBEDDING
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+          value: "Viewer"
         volumeMounts:
         - name: storage
           mountPath: /var/lib/grafana

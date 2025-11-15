@@ -31,37 +31,14 @@ const MonitoringPage: React.FC = () => {
     return () => observer.disconnect()
   }, [theme])
 
-  // Build initial Grafana URL - load the root path first
-  const buildInitialGrafanaUrl = () => {
-    // Start with Grafana root path
-    const url = `/embedded/grafana/?orgId=1&theme=${theme}`
-    console.log('Initial Grafana URL:', url)
-    return url
-  }
-
-  // Build dashboard URL using goto endpoint - this is what Grafana uses internally
-  const buildDashboardUrl = () => {
-    // Use Grafana's goto endpoint to navigate by UID
-    // This mimics the internal navigation when clicking Home
+  // Build Grafana dashboard URL directly
+  const buildGrafanaUrl = () => {
+    // Load the dashboard directly using the goto endpoint
+    // This is the cleanest approach and avoids redirect loops
     const url = `/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`
-    console.log('Dashboard goto URL:', url)
+    console.log('Grafana URL:', url)
     return url
   }
-
-  // Add effect to handle automatic redirect to dashboard
-  useEffect(() => {
-    // After initial page load, wait a bit then redirect to dashboard using goto
-    const timer = setTimeout(() => {
-      if (iframeRef.current) {
-        console.log('Redirecting to dashboard using goto...')
-        // Use goto endpoint to navigate to dashboard (mimics clicking Home)
-        iframeRef.current.src = buildDashboardUrl()
-      }
-      setLoading(false)
-    }, 100) // Wait 0.1 seconds after initial load
-
-    return () => clearTimeout(timer)
-  }, [theme])
 
 
 
@@ -95,7 +72,7 @@ const MonitoringPage: React.FC = () => {
         <iframe
           ref={iframeRef}
           key={`grafana-${theme}`}
-          src={buildInitialGrafanaUrl()}
+          src={buildGrafanaUrl()}
           className={styles.iframe}
           title="Grafana Dashboard"
           allowFullScreen

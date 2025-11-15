@@ -201,7 +201,25 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
-			log.Printf("Proxying Chat UI login: %s %s", r.Method, r.URL.Path)
+			// Check if this is a Grafana login request by:
+			// 1. Query parameter redirectTo with "goto" (GET requests)
+			// 2. Referer header containing "/embedded/grafana" or "/monitoring"
+			// 3. Content-Type: application/json (Grafana uses JSON for login POST)
+			redirectTo := r.URL.Query().Get("redirectTo")
+			referer := r.Header.Get("Referer")
+			contentType := r.Header.Get("Content-Type")
+
+			isGrafanaRequest := (redirectTo != "" && strings.Contains(redirectTo, "goto")) ||
+				strings.Contains(referer, "/embedded/grafana") ||
+				strings.Contains(referer, "/monitoring") ||
+				strings.Contains(contentType, "application/json")
+
+			if isGrafanaRequest && grafanaStaticProxy != nil {
+				log.Printf("Proxying Grafana login: %s %s (redirectTo=%s, referer=%s, contentType=%s)", r.Method, r.URL.Path, redirectTo, referer, contentType)
+				grafanaStaticProxy.ServeHTTP(w, r)
+				return
+			}
+			log.Printf("Proxying Chat UI login: %s %s (contentType=%s)", r.Method, r.URL.Path, contentType)
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
