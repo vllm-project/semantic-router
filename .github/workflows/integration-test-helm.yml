@@ -1,18 +1,12 @@
-name: Helm Chart CI
+name:  Integration Test [Helm]
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'deploy/helm/**'
-      - '.github/workflows/helm-ci.yml'
   pull_request:
     branches:
       - main
-    paths:
-      - 'deploy/helm/**'
-      - '.github/workflows/helm-ci.yml'
   workflow_dispatch:
 
 env:
@@ -161,9 +155,6 @@ jobs:
           # CI environment: Download only essential model to avoid OOM
           # Only download all-MiniLM-L12-v2 (smallest model ~120MB)
           helm install semantic-router ${{ env.CHART_PATH }} \
-            --set initContainer.resources.limits.memory=2Gi \
-            --set initContainer.resources.requests.memory=1Gi \
-            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 10m \
@@ -272,9 +263,6 @@ jobs:
           echo "::group::Upgrade Chart"
           # Use same minimal config for upgrade test
           helm upgrade semantic-router ${{ env.CHART_PATH }} \
-            --set initContainer.resources.limits.memory=2Gi \
-            --set initContainer.resources.requests.memory=1Gi \
-            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 10m

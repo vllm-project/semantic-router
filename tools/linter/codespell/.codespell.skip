@@ -14,5 +14,7 @@
 ./website/node_modules/*
 ./website/package-lock.json
 ./candle-binding/target
+./vendor/*
 
 ./deploy/kubernetes/aibrix/aigw-resources/*
+./e2e/testcases/testdata/*
