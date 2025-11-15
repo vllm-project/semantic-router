@@ -44,25 +44,23 @@ Before starting, ensure you have the following tools installed:
 Create a local Kubernetes cluster optimized for the semantic router workload:
 
 ```bash
-# Generate kind configuration
-./tools/kind/generate-kind-config.sh
-
-# Create cluster with optimized resource settings
-kind create cluster --name semantic-router-cluster --config tools/kind/kind-config.yaml
+kind create cluster --name semantic-router-cluster
 
 # Verify cluster is ready
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-**Note**: The kind configuration provides sufficient resources (8GB+ RAM, 4+ CPU cores) for running the semantic router and AI gateway components.
-
 ## Step 2: Deploy vLLM Semantic Router
 
-Deploy the semantic router service with all required components:
+Deploy the semantic router service with all required components using Helm:
 
 ```bash
-# Deploy semantic router using Kustomize
-kubectl apply -k deploy/kubernetes/aibrix/semantic-router
+# Install with custom values from GHCR OCI registry
+helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version v0.0.0-latest \
+  --namespace vllm-semantic-router-system \
+  --create-namespace \
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/semantic-router-values/values.yaml
 
 # Wait for deployment to be ready (this may take several minutes for model downloads)
 kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semantic-router-system --timeout=600s
@@ -70,6 +68,8 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 # Verify deployment status
 kubectl get pods -n vllm-semantic-router-system
 ```
+
+**Note**: The values file contains the configuration for the semantic router, including model settings, categories, and routing rules. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/semantic-router-values/values.yaml).
 
 ## Step 3: Install vLLM AIBrix
 
@@ -93,7 +93,7 @@ Create a demo LLM to serve as the backend for the semantic router:
 
 ```bash
 # Deploy demo LLM
-kubectl apply -f deploy/kubernetes/aibrix/aigw-resources/base-model.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/base-model.yaml
 
 kubectl wait --timeout=2m -n default deployment/vllm-llama3-8b-instruct --for=condition=Available
 ```
@@ -103,7 +103,7 @@ kubectl wait --timeout=2m -n default deployment/vllm-llama3-8b-instruct --for=co
 Create the necessary Gateway API resources for the envoy gateway:
 
 ```bash
-kubectl apply -f deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml
 ```
 
 ## Testing the Deployment
@@ -162,12 +162,13 @@ To remove the entire deployment:
 
 ```bash
 # Remove Gateway API resources and Demo LLM
-kubectl delete -f deploy/kubernetes/aibrix/aigw-resources
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/gwapi-resources.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/aibrix/aigw-resources/base-model.yaml
 
 # Remove semantic router
-kubectl delete -k deploy/kubernetes/aibrix/semantic-router
+helm uninstall semantic-router -n vllm-semantic-router-system
 
-# Delete kind cluster
+# Delete kind cluster (optional)
 kind delete cluster --name semantic-router-cluster
 ```
 

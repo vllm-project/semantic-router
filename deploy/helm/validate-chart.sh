@@ -69,34 +69,14 @@ else
 fi
 echo ""
 
-# Test 3: Helm template with dev values
-log_info "Testing Helm template with dev values..."
-if helm template test-release "$CHART_PATH" -f "$CHART_PATH/values-dev.yaml" > "$TEMP_DIR/dev-template.yaml"; then
-    log_success "Helm template with dev values succeeded"
-    log_info "Output saved to $TEMP_DIR/dev-template.yaml"
-else
-    log_error "Helm template with dev values failed"
-    exit 1
-fi
-echo ""
 
-# Test 4: Helm template with prod values
-log_info "Testing Helm template with prod values..."
-if helm template test-release "$CHART_PATH" -f "$CHART_PATH/values-prod.yaml" > "$TEMP_DIR/prod-template.yaml"; then
-    log_success "Helm template with prod values succeeded"
-    log_info "Output saved to $TEMP_DIR/prod-template.yaml"
-else
-    log_error "Helm template with prod values failed"
-    exit 1
-fi
-echo ""
 
-# Test 5: Validate YAML syntax
+# Test 3: Validate YAML syntax
 log_info "Validating YAML syntax..."
 yamllint_available=false
 if command -v yamllint &> /dev/null; then
     yamllint_available=true
-    if yamllint "$CHART_PATH/values.yaml" "$CHART_PATH/values-dev.yaml" "$CHART_PATH/values-prod.yaml" 2>&1 | grep -v "too many spaces inside braces"; then
+    if yamllint "$CHART_PATH/values.yaml" 2>&1 | grep -v "too many spaces inside braces"; then
         log_warning "YAML lint found some issues (Helm templates cause expected warnings)"
     else
         log_success "YAML validation passed"
@@ -106,20 +86,17 @@ else
 fi
 echo ""
 
-# Test 6: Check required files exist
+# Test 4: Check required files exist
 log_info "Checking required files..."
 required_files=(
     "Chart.yaml"
     "values.yaml"
-    "values-dev.yaml"
-    "values-prod.yaml"
     "README.md"
     ".helmignore"
     "templates/_helpers.tpl"
     "templates/deployment.yaml"
     "templates/service.yaml"
     "templates/configmap.yaml"
-    "templates/namespace.yaml"
     "templates/pvc.yaml"
     "templates/serviceaccount.yaml"
     "templates/ingress.yaml"
@@ -143,10 +120,9 @@ if [ "$all_files_exist" = false ]; then
 fi
 echo ""
 
-# Test 7: Validate generated resources
+# Test 5: Validate generated resources
 log_info "Validating generated Kubernetes resources..."
 resource_types=(
-    "Namespace"
     "ServiceAccount"
     "PersistentVolumeClaim"
     "ConfigMap"
@@ -162,9 +138,10 @@ for resource in "${resource_types[@]}"; do
         exit 1
     fi
 done
+log_info "Note: Namespace is managed by Helm's --create-namespace flag"
 echo ""
 
-# Test 8: Validate Chart.yaml
+# Test 6: Validate Chart.yaml
 log_info "Validating Chart.yaml..."
 if [ -f "$CHART_PATH/Chart.yaml" ]; then
     chart_name=$(grep "^name:" "$CHART_PATH/Chart.yaml" | awk '{print $2}')
@@ -180,7 +157,7 @@ else
 fi
 echo ""
 
-# Test 9: Check for common Helm best practices
+# Test 7: Check for common Helm best practices
 log_info "Checking Helm best practices..."
 best_practices_passed=true
 
@@ -214,7 +191,7 @@ if [ "$best_practices_passed" = false ]; then
 fi
 echo ""
 
-# Test 10: Dry-run install (requires cluster)
+# Test 8: Dry-run install (requires cluster)
 if kubectl cluster-info &> /dev/null; then
     log_info "Testing dry-run install..."
     if helm install test-release "$CHART_PATH" --dry-run --debug > "$TEMP_DIR/dry-run.log" 2>&1; then
@@ -229,7 +206,7 @@ else
 fi
 echo ""
 
-# Test 11: Package the chart
+# Test 9: Package the chart
 log_info "Testing chart packaging..."
 if helm package "$CHART_PATH" --destination "$TEMP_DIR" > /dev/null 2>&1; then
     log_success "Chart packaged successfully"
@@ -251,6 +228,4 @@ echo ""
 echo "Next steps:"
 echo "1. Review the generated templates in $TEMP_DIR"
 echo "2. Test installation: make helm-install"
-echo "3. Test with dev config: make helm-dev"
-echo "4. Test with prod config: make helm-prod"
 echo ""
