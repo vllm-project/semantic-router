@@ -65,6 +65,11 @@ vllm_endpoints:
     weight: 1
 
 model_config:
+  "image-generator":
+    preferred_endpoints: ["ollama-endpoint"]
+    pii_policy:
+      allow_by_default: true
+    capabilities: ["image"]
   "qwen3":
     reasoning_family: "qwen3" # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]
@@ -96,7 +101,7 @@ classifier:
   category_model:
     model_id: "models/category_classifier_modernbert-base_model"
     use_modernbert: true
-    threshold: 0.6
+    threshold: 0.3
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
   pii_model:
@@ -107,7 +112,20 @@ classifier:
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
 # Categories with new use_reasoning field structure
+# Added image_generation category.
 categories:
+  - name: image_generation
+    description: "Generate images from text prompts"
+    keywords:
+      - "generate an image"
+      - "make a picture"
+      - "draw"
+      - "create an image"
+      - "produce artwork"
+    model_scores:
+      - model: image-generator
+        score: 1.0
+        use_reasoning: false
   - name: business
     system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
     # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category
@@ -200,8 +218,6 @@ categories:
       - model: qwen3
         score: 0.7
         use_reasoning: false
-
-  # ****************************
   - name: visual_analysis
     use_reasoning: true
     reasoning_description: "Visual analysis requires systematic observation and reasoning"
