@@ -1,0 +1,20 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: jaeger
+  namespace: vllm-semantic-router-system
+  labels:
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: semantic-router-stack
+spec:
+  to:
+    kind: Service
+    name: jaeger
+    weight: 100
+  port:
+    targetPort: ui
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
