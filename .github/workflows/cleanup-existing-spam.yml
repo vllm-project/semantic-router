@@ -1,0 +1,275 @@
+name: Cleanup Existing Spam
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (only report, do not delete)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      scan_issues:
+        description: 'Scan open issues'
+        required: false
+        default: 'true'
+        type: boolean
+      scan_comments:
+        description: 'Scan issue comments'
+        required: false
+        default: 'true'
+        type: boolean
+      max_issues:
+        description: 'Max number of issues to scan (0 = all)'
+        required: false
+        default: '100'
+        type: string
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan and cleanup spam
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dryRun = '${{ inputs.dry_run }}' === 'true';
+            const scanIssues = '${{ inputs.scan_issues }}' === 'true';
+            const scanComments = '${{ inputs.scan_comments }}' === 'true';
+            const maxIssues = parseInt('${{ inputs.max_issues }}') || 0;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            core.info(`Starting cleanup - Dry run: ${dryRun}, Scan issues: ${scanIssues}, Scan comments: ${scanComments}`);
+            
+            // Blocked users list
+            const blockedUsers = ["phuole818", "blaji-villeb106"];
+            
+            // Spam detection function (same as the main filter)
+            function analyzeContent(body, actor) {
+              const bodyLower = body.toLowerCase();
+              
+              // Check blocked users
+              if (blockedUsers.some(u => (actor || "").toLowerCase() === u.toLowerCase())) {
+                return { isSpam: true, reason: "Blocked user", score: 999 };
+              }
+              
+              // Attack/Insult terms
+              const attackTermsAscii = [
+                "fake stars","astroturf","bot accounts","paid stars","star farming","star boosting","shill",
+                "manipulated stars","kpi","kpi boosting","no maintainer","ignore issues","ignore prs",
+                "close pr","close issue","no response","waste of time","trash project","scam project",
+                "archive this project","unmaintained","low quality docs","unreadable docs","pitfall","avoid this project",
+                "dead project","abandoned project","team lost contact","stay away"
+              ];
+              const attackTermsCJK = [
+                "刷星","水军","kpi刷单","假号","买粉","造假","刷榜","刷人气",
+                "别踩坑","大坑","浪费时间","赶紧换","不靠谱","建议归档","建议archive",
+                "没人理你","没人管","装没看见","秒关","石沉大海","失联","团队失联","维护团队失联",
+                "问题一大堆","一塌糊涂","堪忧","离谱","看不懂","入不了门",
+                "警告","大踩雷","失望透顶","全靠刷星","社区大踩雷","死项目","远离","及早远离",
+                "异常增长","激增","数量异常","star异常","star数异常","内部号召","非自然"
+              ];
+              const insultTermsAscii = [
+                "trash","garbage","bullshit","idiot","moron","stupid","dumb","shameful","useless"
+              ];
+              const insultTermsCJK = [
+                "垃圾","辣鸡","废物","弱智","傻逼","脑残","狗屎","丢人"
+              ];
+              const techContextAscii = [
+                "bug","repro","reproduce","steps to reproduce","minimal repro","expected","actual",
+                "stack trace","traceback","stacktrace","log","logs","error","panic","poc","cve",
+                "version","v1","v2","v3","config","configuration","file","line","code snippet"
+              ];
+              const techContextCJK = [
+                "复现","复现步骤","最小复现","期望行为","实际行为","堆栈","栈追踪","日志","报错",
+                "版本","配置","文件","行号","代码片段","poc","cve"
+              ];
+              
+              const escapeRe = (s) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+              const countMatchesAscii = (terms) =>
+                terms.reduce((n, k) => n + (new RegExp(`\\b${escapeRe(k)}\\b`, "i").test(body) ? 1 : 0), 0);
+              const countMatchesCJK = (terms) =>
+                terms.reduce((n, k) => n + (body.includes(k) ? 1 : 0), 0);
+              
+              const attackHits = countMatchesAscii(attackTermsAscii) + countMatchesCJK(attackTermsCJK);
+              const insultHit = (countMatchesAscii(insultTermsAscii) + countMatchesCJK(insultTermsCJK)) > 0;
+              const techCtxHit = (countMatchesAscii(techContextAscii) + countMatchesCJK(techContextCJK)) > 0;
+              const strongCJK = /(失望透顶|离谱|警告|大踩雷|失联|死项目|远离|异常增长|激增|刷星|刷人气)/.test(body);
+              const exclaimBlk = /!{3,}/.test(body);
+              
+              let attackContribution = 0;
+              if (insultHit) attackContribution += 2;
+              if (attackHits >= 3) attackContribution += 2;
+              else if (attackHits >= 1) attackContribution += 1;
+              if ((exclaimBlk || strongCJK) && attackContribution > 0) attackContribution += 1;
+              if (techCtxHit) attackContribution = Math.min(1, attackContribution);
+              
+              const isSpam = attackContribution >= 2;
+              return { 
+                isSpam, 
+                score: attackContribution, 
+                attackHits,
+                insultHit,
+                techCtxHit,
+                reason: isSpam ? `Attack score: ${attackContribution} (attackHits: ${attackHits}, insult: ${insultHit}, tech: ${techCtxHit})` : "Clean"
+              };
+            }
+            
+            let totalScanned = 0;
+            let totalSpam = 0;
+            let totalClosed = 0;
+            let totalDeleted = 0;
+            
+            // Scan issues
+            if (scanIssues) {
+              core.info("Scanning open issues...");
+              let page = 1;
+              let hasMore = true;
+              
+              while (hasMore && (maxIssues === 0 || totalScanned < maxIssues)) {
+                const issues = await github.rest.issues.listForRepo({
+                  owner,
+                  repo,
+                  state: 'open',
+                  per_page: 100,
+                  page: page
+                });
+                
+                if (issues.data.length === 0) {
+                  hasMore = false;
+                  break;
+                }
+                
+                for (const issue of issues.data) {
+                  if (issue.pull_request) continue; // Skip PRs for now
+                  if (maxIssues > 0 && totalScanned >= maxIssues) break;
+                  
+                  totalScanned++;
+                  const body = issue.body || "";
+                  const actor = issue.user?.login || "unknown";
+                  const assoc = issue.author_association || "NONE";
+                  
+                  // Skip trusted users
+                  if (["OWNER", "MEMBER", "COLLABORATOR"].includes(assoc)) {
+                    continue;
+                  }
+                  
+                  const analysis = analyzeContent(body, actor);
+                  
+                  if (analysis.isSpam) {
+                    totalSpam++;
+                    core.warning(`Found spam issue #${issue.number} by @${actor}: ${analysis.reason}`);
+                    core.warning(`Preview: ${body.substring(0, 200)}...`);
+                    
+                    if (!dryRun) {
+                      try {
+                        await github.rest.issues.update({
+                          owner,
+                          repo,
+                          issue_number: issue.number,
+                          state: "closed",
+                          state_reason: "not_planned"
+                        });
+                        await github.rest.issues.createComment({
+                          owner,
+                          repo,
+                          issue_number: issue.number,
+                          body: "This issue has been automatically closed as spam during cleanup."
+                        });
+                        totalClosed++;
+                        core.notice(`Closed spam issue #${issue.number}`);
+                      } catch (err) {
+                        core.error(`Failed to close issue #${issue.number}: ${err.message}`);
+                      }
+                    }
+                  }
+                }
+                
+                page++;
+              }
+            }
+            
+            // Scan comments
+            if (scanComments) {
+              core.info("Scanning issue comments...");
+              let page = 1;
+              let hasMore = true;
+              let commentCount = 0;
+              
+              while (hasMore) {
+                const comments = await github.rest.issues.listCommentsForRepo({
+                  owner,
+                  repo,
+                  per_page: 100,
+                  page: page,
+                  sort: 'created',
+                  direction: 'desc'
+                });
+                
+                if (comments.data.length === 0) {
+                  hasMore = false;
+                  break;
+                }
+                
+                for (const comment of comments.data) {
+                  commentCount++;
+                  const body = comment.body || "";
+                  const actor = comment.user?.login || "unknown";
+                  const assoc = comment.author_association || "NONE";
+                  
+                  // Skip trusted users
+                  if (["OWNER", "MEMBER", "COLLABORATOR"].includes(assoc)) {
+                    continue;
+                  }
+                  
+                  const analysis = analyzeContent(body, actor);
+                  
+                  if (analysis.isSpam) {
+                    totalSpam++;
+                    core.warning(`Found spam comment #${comment.id} by @${actor}: ${analysis.reason}`);
+                    core.warning(`Preview: ${body.substring(0, 200)}...`);
+                    
+                    if (!dryRun) {
+                      try {
+                        await github.rest.issues.deleteComment({
+                          owner,
+                          repo,
+                          comment_id: comment.id
+                        });
+                        totalDeleted++;
+                        core.notice(`Deleted spam comment #${comment.id}`);
+                      } catch (err) {
+                        core.error(`Failed to delete comment #${comment.id}: ${err.message}`);
+                      }
+                    }
+                  }
+                }
+                
+                page++;
+                if (page > 10) break; // Limit to first 1000 comments to avoid timeout
+              }
+              
+              core.info(`Scanned ${commentCount} comments`);
+            }
+            
+            // Summary
+            core.notice("=".repeat(60));
+            core.notice(`Cleanup Summary (Dry run: ${dryRun})`);
+            core.notice(`Total scanned: ${totalScanned} issues`);
+            core.notice(`Total spam found: ${totalSpam}`);
+            if (!dryRun) {
+              core.notice(`Issues closed: ${totalClosed}`);
+              core.notice(`Comments deleted: ${totalDeleted}`);
+            } else {
+              core.notice("DRY RUN - No actions taken. Set dry_run to 'false' to actually clean up.");
+            }
+            core.notice("=".repeat(60));
+

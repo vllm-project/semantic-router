@@ -1,53 +1,89 @@
 name: Anti-Spam Comment Moderator
 
 on:
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited]
   issue_comment:
     types: [created, edited]
   pull_request_review_comment:
     types: [created, edited]
 
 permissions:
-  issues: write          # needed to delete issue comments
-  pull-requests: write   # needed to delete PR review comments
+  issues: write          # needed to delete/close issues and comments
+  pull-requests: write   # needed to delete/close PRs and comments
   contents: write        # needed to delete commit comments
   # (discussions not handled here; API differs)
 
 jobs:
   moderate:
-    if: ${{ github.event.action == 'created' || github.event.action == 'edited' }}
+    if: ${{ github.event.action == 'created' || github.event.action == 'edited' || github.event.action == 'opened' }}
     runs-on: ubuntu-latest
     steps:
       - name: Run spam filter
         uses: actions/github-script@v7
         with:
           script: |
-            // 1) Collect event/comment info
+            // 1) Collect event/comment/issue/PR info
             const ev = context.eventName;
             const comment = context.payload.comment || {};
-            const body    = (comment.body || "").trim();
+            const issue = context.payload.issue || {};
+            const pr = context.payload.pull_request || {};
+            
+            // Determine the content source (comment, issue body, or PR body)
+            let body, assoc, actor, itemId, itemType;
+            if (ev === "issue_comment" || ev === "pull_request_review_comment") {
+              body = (comment.body || "").trim();
+              assoc = comment.author_association || "NONE";
+              actor = comment.user?.login || "unknown";
+              itemId = comment.id;
+              itemType = "comment";
+            } else if (ev === "issues") {
+              body = (issue.body || "").trim();
+              assoc = issue.author_association || "NONE";
+              actor = issue.user?.login || "unknown";
+              itemId = issue.number;
+              itemType = "issue";
+            } else if (ev === "pull_request") {
+              body = (pr.body || "").trim();
+              assoc = pr.author_association || "NONE";
+              actor = pr.user?.login || "unknown";
+              itemId = pr.number;
+              itemType = "pr";
+            } else {
+              core.warning(`Unhandled event: ${ev}`);
+              return;
+            }
+            
             const bodyLower = body.toLowerCase();
-            const assoc   = comment.author_association || "NONE";
-            const actor   = comment.user?.login || "unknown";
-            const owner   = context.repo.owner;
-            const repo    = context.repo.repo;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
 
-            // Block specific user outright
-            if ((actor || "").toLowerCase() === "phuole818") {
+            // Block specific user outright (also block blaji-villeb106)
+            const blockedUsers = ["phuole818", "blaji-villeb106"];
+            if (blockedUsers.some(u => (actor || "").toLowerCase() === u.toLowerCase())) {
               try {
-                if (ev === "issue_comment") {
-                  await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
-                  core.notice(`Deleted comment from blocked user @${actor} (issue comment).`);
-                } else if (ev === "pull_request_review_comment") {
-                  await github.rest.pulls.deleteReviewComment({ owner, repo, comment_id: comment.id });
-                  core.notice(`Deleted comment from blocked user @${actor} (PR review comment).`);
-                } else if (ev === "commit_comment") {
-                  await github.rest.repos.deleteCommitComment({ owner, repo, comment_id: comment.id });
-                  core.notice(`Deleted comment from blocked user @${actor} (commit comment).`);
-                } else {
-                  core.warning(`Unhandled event while blocking user: ${ev}`);
+                if (itemType === "comment") {
+                  if (ev === "issue_comment") {
+                    await github.rest.issues.deleteComment({ owner, repo, comment_id: itemId });
+                    core.notice(`Deleted comment from blocked user @${actor} (issue comment).`);
+                  } else if (ev === "pull_request_review_comment") {
+                    await github.rest.pulls.deleteReviewComment({ owner, repo, comment_id: itemId });
+                    core.notice(`Deleted comment from blocked user @${actor} (PR review comment).`);
+                  } else if (ev === "commit_comment") {
+                    await github.rest.repos.deleteCommitComment({ owner, repo, comment_id: itemId });
+                    core.notice(`Deleted comment from blocked user @${actor} (commit comment).`);
+                  }
+                } else if (itemType === "issue") {
+                  await github.rest.issues.update({ owner, repo, issue_number: itemId, state: "closed", state_reason: "not_planned" });
+                  core.notice(`Closed issue from blocked user @${actor} (issue #${itemId}).`);
+                } else if (itemType === "pr") {
+                  await github.rest.pulls.update({ owner, repo, pull_number: itemId, state: "closed" });
+                  core.notice(`Closed PR from blocked user @${actor} (PR #${itemId}).`);
                 }
               } catch (err) {
-                core.setFailed(`Failed to delete blocked user's comment: ${err?.message || err}`);
+                core.setFailed(`Failed to handle blocked user's content: ${err?.message || err}`);
               }
               return;
             }
@@ -120,14 +156,16 @@ jobs:
               "fake stars","astroturf","bot accounts","paid stars","star farming","star boosting","shill",
               "manipulated stars","kpi","kpi boosting","no maintainer","ignore issues","ignore prs",
               "close pr","close issue","no response","waste of time","trash project","scam project",
-              "archive this project","unmaintained","low quality docs","unreadable docs","pitfall","avoid this project"
+              "archive this project","unmaintained","low quality docs","unreadable docs","pitfall","avoid this project",
+              "dead project","abandoned project","team lost contact","stay away"
             ];
             const attackTermsCJK = [
-              "刷星","水军","kpi刷单","假号","买粉","造假","刷榜",
+              "刷星","水军","kpi刷单","假号","买粉","造假","刷榜","刷人气",
               "别踩坑","大坑","浪费时间","赶紧换","不靠谱","建议归档","建议archive",
-              "没人理你","没人管","装没看见","秒关","石沉大海",
+              "没人理你","没人管","装没看见","秒关","石沉大海","失联","团队失联","维护团队失联",
               "问题一大堆","一塌糊涂","堪忧","离谱","看不懂","入不了门",
-              "警告","大踩雷","失望透顶","全靠刷星","社区大踩雷"
+              "警告","大踩雷","失望透顶","全靠刷星","社区大踩雷","死项目","远离","及早远离",
+              "异常增长","激增","数量异常","star异常","star数异常","内部号召","非自然"
             ];
             const insultTermsAscii = [
               "trash","garbage","bullshit","idiot","moron","stupid","dumb","shameful","useless"
@@ -154,7 +192,7 @@ jobs:
             const attackHits = countMatchesAscii(attackTermsAscii) + countMatchesCJK(attackTermsCJK);
             const insultHit  = (countMatchesAscii(insultTermsAscii) + countMatchesCJK(insultTermsCJK)) > 0;
             const techCtxHit = (countMatchesAscii(techContextAscii) + countMatchesCJK(techContextCJK)) > 0;
-            const strongCJK  = /(失望透顶|离谱|警告|大踩雷)/.test(body);
+            const strongCJK  = /(失望透顶|离谱|警告|大踩雷|失联|死项目|远离|异常增长|激增|刷星|刷人气)/.test(body);
 
             // Sentiment-lite (AFINN-style mini-lexicon)
             const afinn = {
@@ -176,37 +214,57 @@ jobs:
             if (techCtxHit) attackContribution = Math.min(1, attackContribution); // cap if technical context detected
             points += attackContribution;
 
-            core.info(`Spam score for @${actor} = ${points} (attackOnly; links/emails/phones ignored) (links:${linkCount} safe:${safeLinkCount} suspicious:${suspiciousLinkCount}, emails:${emailCount}, phones:${phoneCount}, mentions:${mentions}, sentiment:${sentiment}, attackHits:${attackHits}, insult:${insultHit}, techCtx:${techCtxHit})`);
+            core.info(`Spam score for @${actor} = ${points} (attackOnly; links/emails/phones ignored) (links:${linkCount} safe:${safeLinkCount} suspicious:${suspiciousLinkCount}, emails:${emailCount}, phones:${phoneCount}, mentions:${mentions}, sentiment:${sentiment}, attackHits:${attackHits}, insult:${insultHit}, techCtx:${techCtxHit}, itemType:${itemType})`);
 
             // Only block when attack/insult crosses threshold
             const isSpam = attackContribution >= 2; // adjust threshold if needed
             if (!isSpam) {
-              core.info("Comment not flagged as spam.");
+              core.info("Content not flagged as spam.");
               return;
             }
 
-            // 4) Delete the comment using the appropriate endpoint
+            // 4) Delete/close the spam content using the appropriate endpoint
             try {
-              if (ev === "issue_comment") {
-                await github.rest.issues.deleteComment({
-                  owner, repo, comment_id: comment.id
+              if (itemType === "comment") {
+                if (ev === "issue_comment") {
+                  await github.rest.issues.deleteComment({
+                    owner, repo, comment_id: itemId
+                  });
+                  core.notice(`Deleted spam issue comment from @${actor}.`);
+                } else if (ev === "pull_request_review_comment") {
+                  await github.rest.pulls.deleteReviewComment({
+                    owner, repo, comment_id: itemId
+                  });
+                  core.notice(`Deleted spam PR review comment from @${actor}.`);
+                } else if (ev === "commit_comment") {
+                  await github.rest.repos.deleteCommitComment({
+                    owner, repo, comment_id: itemId
+                  });
+                  core.notice(`Deleted spam commit comment from @${actor}.`);
+                }
+              } else if (itemType === "issue") {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: itemId, state: "closed", state_reason: "not_planned"
                 });
-                core.notice(`Deleted spam issue comment from @${actor}.`);
-              } else if (ev === "pull_request_review_comment") {
-                await github.rest.pulls.deleteReviewComment({
-                  owner, repo, comment_id: comment.id
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: itemId,
+                  body: "This issue has been automatically closed as spam."
                 });
-                core.notice(`Deleted spam PR review comment from @${actor}.`);
-              } else if (ev === "commit_comment") {
-                await github.rest.repos.deleteCommitComment({
-                  owner, repo, comment_id: comment.id
+                core.notice(`Closed spam issue #${itemId} from @${actor}.`);
+              } else if (itemType === "pr") {
+                await github.rest.pulls.update({
+                  owner, repo, pull_number: itemId, state: "closed"
                 });
-                core.notice(`Deleted spam commit comment from @${actor}.`);
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: itemId,
+                  body: "This pull request has been automatically closed as spam."
+                });
+                core.notice(`Closed spam PR #${itemId} from @${actor}.`);
               } else {
-                core.warning(`Unhandled event: ${ev}`);
+                core.warning(`Unhandled item type: ${itemType}`);
               }
             } catch (err) {
-              core.setFailed(`Failed to delete comment: ${err?.message || err}`);
+              core.setFailed(`Failed to handle spam content: ${err?.message || err}`);
             }
 
 
