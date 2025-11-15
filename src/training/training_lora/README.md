@@ -190,6 +190,30 @@ training_args = TrainingArguments(
 )
 ```
 
+## 🔁 Reinforcement Learning (Experimental)
+
+Training scripts can be toggled to enable RL-based fine-tuning via `config/config.yaml` under `classifier.rl_training`.
+
+Example keys:
+
+```yaml
+classifier:
+  rl_training:
+    enabled: false
+    algorithm: "ppo"
+    learning_rate: 1e-05
+    gamma: 0.99
+    batch_size: 16
+    update_epochs: 4
+    reward_metric: "accuracy"
+```
+
+Notes:
+- The repository now contains basic config parsing (Rust + Python) and a helper `rl_utils.py` that training scripts can use.
+- Full RL algorithm integration (policy updates, reward shaping, PPO loop) is currently left as an implementation task — training scripts will log the RL options and fall back to supervised LoRA training when RL is enabled.
+
+If you want, I can implement a minimal PPO trainer that uses the existing supervised model as an initial policy and performs on-policy updates using the `reward_metric`.
+
 ## 🎯 Task-Specific Details
 
 ### Intent Classification

@@ -601,6 +601,32 @@ impl Default for RouterConfig {
     }
 }
 
+/// Reinforcement Learning configuration for classifier training
+#[derive(Debug, Clone)]
+pub struct RLConfig {
+    pub enabled: bool,
+    pub algorithm: String,     // e.g., "ppo", "a2c", "dqn"
+    pub learning_rate: f32,
+    pub gamma: f32,
+    pub batch_size: usize,
+    pub update_epochs: usize,
+    pub reward_metric: String, // e.g., "accuracy", "f1", "custom"
+}
+
+impl Default for RLConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            algorithm: "ppo".to_string(),
+            learning_rate: 1e-5,
+            gamma: 0.99,
+            batch_size: 16,
+            update_epochs: 4,
+            reward_metric: "accuracy".to_string(),
+        }
+    }
+}
+
 impl GlobalConfigLoader {
     /// Load router configuration from config/config.yaml
     pub fn load_router_config() -> Result<RouterConfig, UnifiedError> {
@@ -661,6 +687,60 @@ impl GlobalConfigLoader {
         }
 
         Ok(router_config)
+    }
+
+    /// Load RL configuration for classifier training from config/config.yaml
+    pub fn load_classifier_rl_config() -> Result<RLConfig, UnifiedError> {
+        let config_path = "config/config.yaml";
+        let config_str = std::fs::read_to_string(config_path)
+            .map_err(|_| config_errors::file_not_found(config_path))?;
+
+        let mut rl_config = RLConfig::default();
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "enabled"]) {
+            if let Ok(b) = value.parse::<bool>() {
+                rl_config.enabled = b;
+            }
+        }
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "algorithm"]) {
+            rl_config.algorithm = value;
+        }
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "learning_rate"]) {
+            if let Ok(lr) = value.parse::<f32>() {
+                rl_config.learning_rate = lr;
+            }
+        }
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "gamma"]) {
+            if let Ok(g) = value.parse::<f32>() {
+                rl_config.gamma = g;
+            }
+        }
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "batch_size"]) {
+            if let Ok(bs) = value.parse::<usize>() {
+                rl_config.batch_size = bs;
+            }
+        }
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "update_epochs"]) {
+            if let Ok(ep) = value.parse::<usize>() {
+                rl_config.update_epochs = ep;
+            }
+        }
+
+        if let Some(value) = Self::extract_yaml_value(&config_str, &["classifier", "rl_training", "reward_metric"]) {
+            rl_config.reward_metric = value;
+        }
+
+        Ok(rl_config)
+    }
+
+    /// Safe loader for RL config
+    pub fn load_classifier_rl_config_safe() -> RLConfig {
+        Self::load_classifier_rl_config().unwrap_or_default()
     }
 
     /// Load router configuration with fallback to defaults

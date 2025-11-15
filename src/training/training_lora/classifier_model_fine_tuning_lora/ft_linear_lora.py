@@ -92,6 +92,11 @@ from common_lora_utils import (
     setup_logging,
     validate_lora_config,
 )
+# Import RL config helper
+try:
+    from rl_utils import load_rl_config
+except Exception:
+    load_rl_config = None
 
 # Setup logging
 logger = setup_logging()
@@ -449,6 +454,18 @@ def main(
 ):
     """Main training function for LoRA intent classification."""
     logger.info("Starting Enhanced LoRA Intent Classification Training")
+
+    # Load RL configuration (if present) and log it
+    if load_rl_config is not None:
+        try:
+            rl_cfg = load_rl_config()
+            logger.info(f"RL Configuration: {rl_cfg}")
+            if rl_cfg.get("enabled", False):
+                logger.warning(
+                    "RL training is enabled in config, but full RL integration is not implemented in this script. Supervised LoRA training will proceed as fallback."
+                )
+        except Exception as e:
+            logger.warning(f"Could not load RL config: {e}")
 
     # GPU selection and device configuration
     if gpu_id is not None:
