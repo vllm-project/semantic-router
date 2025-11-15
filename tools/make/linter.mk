@@ -46,3 +46,7 @@ shellcheck: ## Lint all shell scripts in the project
 	fi
 	@echo "Running shellcheck with config from tools/linter/shellcheck/.shellcheckrc"
 	@shellcheck -e SC2155,SC2034,SC1091 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*")
+
+mkcheck: ## Lint all Makefiles in the project
+  @$(LOG_TARGET)
+  checkmake --config=tools/linter/makefile/checkmake.ini tools/make/**/*.mk
