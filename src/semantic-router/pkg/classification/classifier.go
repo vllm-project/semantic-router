@@ -212,6 +212,9 @@ type Classifier struct {
 	mcpCategoryInitializer MCPCategoryInitializer
 	mcpCategoryInference   MCPCategoryInference
 
+	// NEW: Unified classifier for LoRA models (preferred when available)
+	UnifiedClassifier *UnifiedClassifier
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -539,7 +542,12 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 		}
 	}
 
-	// Try in-tree first if properly configured
+	// Try UnifiedClassifier (LoRA models) first - highest accuracy
+	if c.UnifiedClassifier != nil {
+		return c.classifyWithUnifiedClassifier(text)
+	}
+
+	// Try in-tree classifier if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
 		return c.classifyCategoryWithEntropyInTree(text)
 	}
@@ -582,6 +590,56 @@ func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) en
 			{
 				Category:    category,
 				Probability: 1.0,
+			},
+		},
+	}
+}
+
+// classifyWithUnifiedClassifier uses UnifiedClassifier (LoRA models) for classification
+func (c *Classifier) classifyWithUnifiedClassifier(text string) (string, float64, entropy.ReasoningDecision, error) {
+	// Use batch classification with single item
+	results, err := c.UnifiedClassifier.ClassifyBatch([]string{text})
+	if err != nil {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("unified classifier error: %w", err)
+	}
+
+	if len(results.IntentResults) == 0 {
+		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("no classification results from unified classifier")
+	}
+
+	intentResult := results.IntentResults[0]
+	category := intentResult.Category
+	confidence := float64(intentResult.Confidence)
+
+	// Build reasoning decision based on category configuration
+	reasoningDecision := c.makeReasoningDecisionForCategory(category, confidence)
+
+	return category, confidence, reasoningDecision, nil
+}
+
+// makeReasoningDecisionForCategory creates reasoning decision based on category config
+func (c *Classifier) makeReasoningDecisionForCategory(category string, confidence float64) entropy.ReasoningDecision {
+	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
+	useReasoning := false
+
+	for _, cat := range c.Config.Categories {
+		if strings.ToLower(cat.Name) == normalizedCategory {
+			if len(cat.ModelScores) > 0 && cat.ModelScores[0].UseReasoning != nil {
+				useReasoning = *cat.ModelScores[0].UseReasoning
+			}
+			break
+		}
+	}
+
+	return entropy.ReasoningDecision{
+		UseReasoning:     useReasoning,
+		Confidence:       confidence,
+		DecisionReason:   "unified_lora_classification",
+		FallbackStrategy: "lora_based_classification",
+		TopCategories: []entropy.CategoryProbability{
+			{
+				Category:    category,
+				Probability: float32(confidence),
 			},
 		},
 	}

@@ -541,6 +541,11 @@ func (s *ClassificationService) HasUnifiedClassifier() bool {
 	return s.unifiedClassifier != nil && s.unifiedClassifier.IsInitialized()
 }
 
+// GetUnifiedClassifier returns the UnifiedClassifier instance (for delegation)
+func (s *ClassificationService) GetUnifiedClassifier() *classification.UnifiedClassifier {
+	return s.unifiedClassifier
+}
+
 // GetUnifiedClassifierStats returns statistics about the unified classifier
 func (s *ClassificationService) GetUnifiedClassifierStats() map[string]interface{} {
 	if s.unifiedClassifier == nil {
