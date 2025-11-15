@@ -336,6 +336,9 @@ type PromptGuardConfig struct {
 	// Use ModernBERT for jailbreak detection
 	UseModernBERT bool `yaml:"use_modernbert"`
 
+	// Use Qwen3Guard for jailbreak detection (generative model)
+	UseQwen3Guard bool `yaml:"use_qwen3guard"`
+
 	// Path to the jailbreak type mapping file
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
 }
