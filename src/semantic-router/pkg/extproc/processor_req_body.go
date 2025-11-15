@@ -116,7 +116,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
 
-	if isAutoModel && categoryName != "" && selectedModel != "" {
+	if isAutoModel && selectedModel != "" {
 		return r.handleAutoModelRouting(openAIRequest, originalModel, categoryName, reasoningDecision, selectedModel, ctx, response)
 	} else if !isAutoModel {
 		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, ctx)
@@ -253,6 +253,9 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 	}
 
+	if categoryName == "" {
+		return modifiedBody, nil
+	}
 	// Set reasoning mode
 	modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
 	if err != nil {

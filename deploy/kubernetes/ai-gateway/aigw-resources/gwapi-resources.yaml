@@ -38,10 +38,12 @@ spec:
       kind: EnvoyProxy
       name: semantic-router
 ---
+# By default, Envoy Gateway sets the buffer limit to 32kiB which is not sufficient for AI workloads.
+# This ClientTrafficPolicy sets the buffer limit to 50MiB as an example.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: ClientTrafficPolicy
 metadata:
-  name: client-buffer-limit
+  name: semantic-router
   namespace: default
 spec:
   targetRefs:
@@ -69,13 +71,9 @@ spec:
         value: math-expert
     backendRefs:
     - name: vllm-llama3-8b-instruct
-  - matches:
-    - headers:
-      - type: Exact
-        name: x-ai-eg-model
-        value: math-expert
-    backendRefs:
-    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
   - matches:
     - headers:
       - type: Exact
@@ -83,6 +81,9 @@ spec:
         value: science-expert
     backendRefs:
     - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
   - matches:
     - headers:
       - type: Exact
@@ -90,6 +91,9 @@ spec:
         value: social-expert
     backendRefs:
     - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
   - matches:
     - headers:
       - type: Exact
@@ -97,6 +101,9 @@ spec:
         value: humanities-expert
     backendRefs:
     - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
   - matches:
     - headers:
       - type: Exact
@@ -104,6 +111,9 @@ spec:
         value: law-expert
     backendRefs:
     - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
   - matches:
     - headers:
       - type: Exact
@@ -111,6 +121,9 @@ spec:
         value: general-expert
     backendRefs:
     - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyPatchPolicy
@@ -133,7 +146,7 @@ spec:
               authority: semantic-router.vllm-semantic-router-system:50051
               clusterName: semantic-router
             timeout: 60s
-          message_timeout: 10s
+          message_timeout: 60s
           processing_mode:
             request_body_mode: BUFFERED
             request_header_mode: SEND
@@ -147,7 +160,7 @@ spec:
       op: add
       path: ''
       value:
-        connect_timeout: 10s
+        connect_timeout: 60s
         http2_protocol_options: {}
         lb_policy: ROUND_ROBIN
         load_assignment:

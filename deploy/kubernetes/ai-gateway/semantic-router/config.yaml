@@ -136,7 +136,7 @@ categories:
         score: 0.7
         use_reasoning: true
 
-default_model: base-model
+default_model: general-expert
 
 bert_model:
   model_id: models/all-MiniLM-L12-v2
