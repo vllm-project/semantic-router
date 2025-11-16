@@ -1,7 +1,11 @@
-# vLLM Semantic Router as ExtProc server for Istio Gateway 
+# vLLM Semantic Router as ExtProc server for Istio Gateway
 
-This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vsr with it. However there are differences between how different Envoy based Gateways process the ExtProc protocol, hence the deployment described here is different from the deployment of vsr alongwith other types of Envoy based Gateways as described in the other guides in this repo. There are multiple architecture options possible to combine Istio Gateway with vsr. This document describes one of the options.
- 
+This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vSR) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vSR with it. Istio is a common choice for the gateway when using Kubernetes Gateway API Inference Extension and in the LLM-D project as well as in common Kubernetes distributions such as Red Hat Openshift. In our experience, there are low level differences in how different Envoy based gateways process the ExtProc protocol to assist with LLM inference, hence this guide and some others cover the specific case of vSR working with an Istio based gateway.
+
+There are multiple deployment guides in this repo related to vSR+Istio deployments. This current document describes deployment of vSR with Istio gateway and two local LLMs served using vLLM. Additional deployment guides in this repo build on this deployment to add support for integrating LLM-D and to illustrate support for routing to remote/ public cloud LLMs. Those topics are covered by other followup deployment guides in this repo ([llm-d guide](../llmd-base/README.md) and [public llm routing guide](../llmd-base/llmd+public-llm/README.md). 
+
+With that background context in mind, we now follow this guide to describe the vSR + Istio + locally hosted LLMs use case. After this guide, the reader may then optionally choose to follow up with the additional guides linked above to deploy the more advanced use cases.
+
 ## Architecture Overview
 
 The deployment consists of:

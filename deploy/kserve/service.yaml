@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router-kserve
+  labels:
+    app: semantic-router
+    component: gateway
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9190"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: semantic-router
+    component: gateway
+  ports:
+  - name: envoy-http
+    port: 80
+    targetPort: 8801
+    protocol: TCP
+  - name: envoy-http-direct
+    port: 8801
+    targetPort: 8801
+    protocol: TCP
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  - name: metrics
+    port: 9190
+    targetPort: 9190
+    protocol: TCP
+  - name: classify-api
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: envoy-admin
+    port: 19000
+    targetPort: 19000
+    protocol: TCP
+  sessionAffinity: None

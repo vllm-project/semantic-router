@@ -1,0 +1,275 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router-kserve
+  labels:
+    app: semantic-router
+    component: gateway
+  annotations:
+    opendatahub.io/dashboard: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: semantic-router
+      component: gateway
+  template:
+    metadata:
+      labels:
+        app: semantic-router
+        component: gateway
+        app.kubernetes.io/name: semantic-router
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/part-of: vllm-semantic-router
+      annotations:
+        sidecar.istio.io/inject: "true"  # Enable Istio injection for service mesh integration with KServe
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'  # Ensure proxy is ready
+    spec:
+      serviceAccountName: semantic-router  # Create ServiceAccount if RBAC required
+      # OpenShift security context - let OpenShift assign UID/GID
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Init container to download models from HuggingFace
+      initContainers:
+      - name: model-downloader
+        image: python:3.11-slim
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          echo "Installing Hugging Face Hub..."
+          pip install --no-cache-dir --user huggingface_hub
+
+          echo "Downloading models to persistent volume..."
+          cd /app/models
+
+          # Use Python API to download models
+          python3 << 'PYEOF'
+          import os
+          from huggingface_hub import snapshot_download
+
+          models = [
+              ("LLM-Semantic-Router/category_classifier_modernbert-base_model", "category_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/pii_classifier_modernbert-base_model", "pii_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model", "jailbreak_classifier_modernbert-base_model"),
+              ("LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_presidio_token_model"),
+              ("sentence-transformers/{{EMBEDDING_MODEL}}", "{{EMBEDDING_MODEL}}")
+          ]
+
+          cache_dir = "/app/cache/hf"
+          base_dir = "/app/models"
+
+          for repo_id, local_dir_name in models:
+              local_dir = os.path.join(base_dir, local_dir_name)
+
+              # Check if model weights actually exist (not just the directory)
+              has_model = False
+              if os.path.exists(local_dir):
+                  # Look specifically for model weight files
+                  for root, dirs, files in os.walk(local_dir):
+                      for f in files:
+                          if f.endswith('.safetensors') or f.endswith('.bin') or f.startswith('pytorch_model.'):
+                              has_model = True
+                              print(f"Found model weights: {f}")
+                              break
+                      if has_model:
+                          break
+
+              # Clean up incomplete downloads
+              if os.path.exists(local_dir) and not has_model:
+                  print(f"Removing incomplete download: {local_dir_name}")
+                  import shutil
+                  shutil.rmtree(local_dir, ignore_errors=True)
+
+              if not has_model:
+                  print(f"Downloading {repo_id}...")
+                  snapshot_download(
+                      repo_id=repo_id,
+                      local_dir=local_dir,
+                      cache_dir=cache_dir
+                  )
+                  print(f"Downloaded {repo_id}")
+              else:
+                  print(f"{local_dir_name} already exists, skipping...")
+
+          print("All models downloaded successfully!")
+          PYEOF
+
+          echo "Model download complete!"
+          ls -la /app/models/
+
+          echo "Setting proper permissions..."
+          find /app/models -type f -exec chmod 644 {} \; || true
+          find /app/models -type d -exec chmod 755 {} \; || true
+
+          echo "Creating cache directories..."
+          mkdir -p /app/cache/hf /app/cache/transformers /app/cache/sentence_transformers /app/cache/xdg /app/cache/bert
+          chmod -R 777 /app/cache/ || true
+
+          echo "Model download complete!"
+        env:
+        - name: HF_HUB_CACHE
+          value: /app/cache/hf
+        - name: HF_HOME
+          value: /app/cache/hf
+        - name: TRANSFORMERS_CACHE
+          value: /app/cache/transformers
+        - name: PIP_CACHE_DIR
+          value: /tmp/pip_cache
+        - name: PYTHONUSERBASE
+          value: /tmp/python_user
+        - name: PATH
+          value: /tmp/python_user/bin:/usr/local/bin:/usr/bin:/bin
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        volumeMounts:
+        - name: models-volume
+          mountPath: /app/models
+        - name: cache-volume
+          mountPath: /app/cache
+
+      containers:
+      # Semantic Router container
+      - name: semantic-router
+        image: ghcr.io/vllm-project/semantic-router/extproc:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        ports:
+        - containerPort: 50051
+          name: grpc
+          protocol: TCP
+        - containerPort: 9190
+          name: metrics
+          protocol: TCP
+        - containerPort: 8080
+          name: classify-api
+          protocol: TCP
+        env:
+        - name: LD_LIBRARY_PATH
+          value: "/app/lib"
+        - name: HF_HOME
+          value: "/app/cache/hf"
+        - name: TRANSFORMERS_CACHE
+          value: "/app/cache/transformers"
+        - name: SENTENCE_TRANSFORMERS_HOME
+          value: "/app/cache/sentence_transformers"
+        - name: XDG_CACHE_HOME
+          value: "/app/cache/xdg"
+        - name: HOME
+          value: "/tmp/home"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: models-volume
+          mountPath: /app/models
+        - name: cache-volume
+          mountPath: /app/cache
+        livenessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 50051
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1500m"
+          limits:
+            memory: "8Gi"
+            cpu: "3"
+
+      # Envoy proxy container - routes to KServe endpoints
+      - name: envoy-proxy
+        image: envoyproxy/envoy:v1.35.3
+        ports:
+        - containerPort: 8801
+          name: envoy-http
+          protocol: TCP
+        - containerPort: 19000
+          name: envoy-admin
+          protocol: TCP
+        command: ["/usr/local/bin/envoy"]
+        args:
+        - "-c"
+        - "/etc/envoy/envoy.yaml"
+        - "--component-log-level"
+        - "ext_proc:info,router:info,http:info"
+        env:
+        - name: loglevel
+          value: "info"
+        volumeMounts:
+        - name: envoy-config-volume
+          mountPath: /etc/envoy
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        livenessProbe:
+          tcpSocket:
+            port: 8801
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8801
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+      volumes:
+      - name: config-volume
+        configMap:
+          name: semantic-router-kserve-config
+      - name: envoy-config-volume
+        configMap:
+          name: semantic-router-envoy-kserve-config
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: semantic-router-models
+      - name: cache-volume
+        persistentVolumeClaim:
+          claimName: semantic-router-cache

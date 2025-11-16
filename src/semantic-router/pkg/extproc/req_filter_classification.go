@@ -55,6 +55,10 @@ func (r *OpenAIRouter) performClassificationAndModelSelection(originalModel stri
 	if categoryName != "" {
 		selectedModel = r.Classifier.SelectBestModelForCategory(categoryName)
 		logging.Infof("Selected model for category %s: %s", categoryName, selectedModel)
+	} else {
+		// No category found, use default model
+		selectedModel = r.Config.DefaultModel
+		logging.Infof("No category classified, using default model: %s", selectedModel)
 	}
 
 	return categoryName, classificationConfidence, reasoningDecision, selectedModel

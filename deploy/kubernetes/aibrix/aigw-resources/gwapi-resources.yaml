@@ -19,7 +19,7 @@ spec:
               authority: semantic-router.vllm-semantic-router-system:50051
               clusterName: semantic-router
             timeout: 60s
-          message_timeout: 10s
+          message_timeout: 60s
           processing_mode:
             request_body_mode: BUFFERED
             request_header_mode: SEND
@@ -33,7 +33,7 @@ spec:
       op: add
       path: ''
       value:
-        connect_timeout: 10s
+        connect_timeout: 60s
         http2_protocol_options: {}
         lb_policy: ROUND_ROBIN
         load_assignment:

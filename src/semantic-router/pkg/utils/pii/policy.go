@@ -14,8 +14,18 @@ type PolicyChecker struct {
 }
 
 // IsPIIEnabled checks if PII detection is enabled and properly configured
+// For LoRA adapters, it falls back to the base model's PII policy if not found
 func (c *PolicyChecker) IsPIIEnabled(model string) bool {
 	modelConfig, exists := c.ModelConfigs[model]
+	if !exists {
+		// Try to find base model for LoRA adapters
+		baseModel := c.findBaseModelForLoRA(model)
+		if baseModel != "" {
+			logging.Infof("LoRA adapter '%s' not found in model configs, falling back to base model '%s'", model, baseModel)
+			modelConfig, exists = c.ModelConfigs[baseModel]
+		}
+	}
+
 	if !exists {
 		logging.Infof("No PII policy found for model %s, allowing request", model)
 		return false
@@ -33,6 +43,7 @@ func NewPolicyChecker(cfg *config.RouterConfig, modelConfigs map[string]config.M
 }
 
 // CheckPolicy checks if the detected PII types are allowed for the given model
+// For LoRA adapters, it falls back to the base model's PII policy if not found
 func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, []string, error) {
 	if !pc.IsPIIEnabled(model) {
 		logging.Infof("PII detection is disabled, allowing request")
@@ -40,6 +51,15 @@ func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, 
 	}
 
 	modelConfig, exists := pc.ModelConfigs[model]
+	if !exists {
+		// Try to find base model for LoRA adapters
+		baseModel := pc.findBaseModelForLoRA(model)
+		if baseModel != "" {
+			logging.Infof("LoRA adapter '%s' not found in model configs, falling back to base model '%s' for PII policy", model, baseModel)
+			modelConfig, exists = pc.ModelConfigs[baseModel]
+		}
+	}
+
 	if !exists {
 		// If no specific config, allow by default
 		logging.Infof("No PII policy found for model %s, allowing request", model)
@@ -101,4 +121,18 @@ func ExtractAllContent(userContent string, nonUserMessages []string) []string {
 	}
 	allContent = append(allContent, nonUserMessages...)
 	return allContent
+}
+
+// findBaseModelForLoRA finds the base model for a given LoRA adapter name
+// Returns empty string if the LoRA adapter is not found in any model's LoRA list
+func (pc *PolicyChecker) findBaseModelForLoRA(loraName string) string {
+	for modelName, modelConfig := range pc.ModelConfigs {
+		for _, lora := range modelConfig.LoRAs {
+			if lora.Name == loraName {
+				logging.Debugf("Found base model '%s' for LoRA adapter '%s'", modelName, loraName)
+				return modelName
+			}
+		}
+	}
+	return ""
 }

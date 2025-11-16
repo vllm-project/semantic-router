@@ -1,0 +1,235 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-kserve-config
+  labels:
+    app: semantic-router
+    component: config
+data:
+  config.yaml: |
+    bert_model:
+      model_id: models/{{EMBEDDING_MODEL}}
+      threshold: 0.6
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      similarity_threshold: 0.8
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: "fifo"
+      use_hnsw: true
+      hnsw_m: 16
+      hnsw_ef_construction: 200
+      embedding_model: "bert"
+
+    tools:
+      enabled: false  # Disabled - tools_db.json not included in KServe deployment
+      top_k: 3
+      similarity_threshold: 0.2
+      tools_db_path: "config/tools_db.json"
+      fallback_to_empty: true
+
+    prompt_guard:
+      enabled: true
+      use_modernbert: true
+      model_id: "models/jailbreak_classifier_modernbert-base_model"
+      threshold: 0.7
+      use_cpu: true
+      jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+    # vLLM Endpoints Configuration - Using KServe InferenceService with Istio
+    # IMPORTANT: Using stable ClusterIP service (not pod IP or headless service)
+    # - KServe creates headless service by default (no stable ClusterIP)
+    # - deploy.sh creates a stable ClusterIP service for consistent routing
+    # - Service ClusterIP remains stable even when predictor pods restart
+    # - Use HTTP (not HTTPS) on port 8080 - Istio handles mTLS
+    # Template variables: {{INFERENCESERVICE_NAME}}, {{PREDICTOR_SERVICE_IP}}
+    vllm_endpoints:
+      - name: "{{INFERENCESERVICE_NAME}}-endpoint"
+        address: "{{PREDICTOR_SERVICE_IP}}"  # Stable service ClusterIP (auto-populated by deploy script)
+        port: 8080  # Container port (HTTP - Istio provides mTLS)
+        weight: 1
+
+    model_config:
+      # KServe InferenceService model configuration
+      # Template variable: {{MODEL_NAME}}, {{INFERENCESERVICE_NAME}}
+      "{{MODEL_NAME}}":
+        reasoning_family: "qwen3"  # Adjust based on model family: qwen3, deepseek, gpt, gpt-oss
+        preferred_endpoints: ["{{INFERENCESERVICE_NAME}}-endpoint"]
+        pii_policy:
+          allow_by_default: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+    # Classifier configuration
+    classifier:
+      category_model:
+        model_id: "models/category_classifier_modernbert-base_model"
+        use_modernbert: true
+        threshold: 0.6
+        use_cpu: true
+        category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+      pii_model:
+        model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+        use_modernbert: true
+        threshold: 0.7
+        use_cpu: true
+        pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+    # Categories with model scoring
+    categories:
+      - name: business
+        system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices."
+        model_scores:
+          - model: {{MODEL_NAME}}
+            score: 0.7
+            use_reasoning: false
+      - name: law
+        system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions."
+        model_scores:
+          - model: granite32-8b
+            score: 0.4
+            use_reasoning: false
+      - name: psychology
+        system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches."
+        semantic_cache_enabled: true
+        semantic_cache_similarity_threshold: 0.92
+        model_scores:
+          - model: granite32-8b
+            score: 0.6
+            use_reasoning: false
+      - name: biology
+        system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology."
+        model_scores:
+          - model: granite32-8b
+            score: 0.9
+            use_reasoning: false
+      - name: chemistry
+        system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+        model_scores:
+          - model: granite32-8b
+            score: 0.6
+            use_reasoning: true
+      - name: history
+        system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+        model_scores:
+          - model: {{MODEL_NAME}}
+            score: 0.7
+            use_reasoning: false
+      - name: other
+        system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+        semantic_cache_enabled: true
+        semantic_cache_similarity_threshold: 0.75
+        model_scores:
+          - model: {{MODEL_NAME}}
+            score: 0.7
+            use_reasoning: false
+      - name: health
+        system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness."
+        semantic_cache_enabled: true
+        semantic_cache_similarity_threshold: 0.95
+        model_scores:
+          - model: granite32-8b
+            score: 0.5
+            use_reasoning: false
+      - name: economics
+        system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory."
+        model_scores:
+          - model: granite32-8b
+            score: 1.0
+            use_reasoning: false
+      - name: math
+        system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+        model_scores:
+          - model: granite32-8b
+            score: 1.0
+            use_reasoning: true
+      - name: physics
+        system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+        model_scores:
+          - model: granite32-8b
+            score: 0.7
+            use_reasoning: true
+      - name: computer science
+        system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+        model_scores:
+          - model: granite32-8b
+            score: 0.6
+            use_reasoning: false
+      - name: philosophy
+        system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought."
+        model_scores:
+          - model: granite32-8b
+            score: 0.5
+            use_reasoning: false
+      - name: engineering
+        system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering."
+        model_scores:
+          - model: {{MODEL_NAME}}
+            score: 0.7
+            use_reasoning: false
+
+    default_model: {{MODEL_NAME}}
+
+    # Reasoning family configurations
+    reasoning_families:
+      deepseek:
+        type: "chat_template_kwargs"
+        parameter: "thinking"
+      qwen3:
+        type: "chat_template_kwargs"
+        parameter: "enable_thinking"
+      gpt-oss:
+        type: "reasoning_effort"
+        parameter: "reasoning_effort"
+      gpt:
+        type: "reasoning_effort"
+        parameter: "reasoning_effort"
+
+    default_reasoning_effort: high
+
+    # API Configuration
+    api:
+      batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+          duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+          size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+    # Embedding Models Configuration (Optional)
+    # These are SEPARATE from the bert_model above and are used for the /v1/embeddings API endpoint.
+    # The bert_model (configured above) is used for semantic caching and tools similarity.
+    #
+    # To enable the embeddings API with Qwen3/Gemma models:
+    # 1. Uncomment the section below
+    # 2. Update the deployment init container to download these models
+    # 3. Note: These models are large (~600MB each) and not required for routing functionality
+    #
+    # embedding_models:
+    #   qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+    #   gemma_model_path: "models/embeddinggemma-300m"
+    #   use_cpu: true
+
+    # Observability Configuration
+    observability:
+      tracing:
+        enabled: false
+        provider: "opentelemetry"
+        exporter:
+          type: "stdout"
+          endpoint: "localhost:4317"
+          insecure: true
+        sampling:
+          type: "always_on"
+          rate: 1.0
+        resource:
+          service_name: "vllm-semantic-router"
+          service_version: "v0.1.0"
+          deployment_environment: "production"

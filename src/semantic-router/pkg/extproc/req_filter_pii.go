@@ -40,6 +40,8 @@ func (r *OpenAIRouter) isPIIDetectionEnabled(categoryName string) bool {
 	piiThreshold := float32(0.0)
 	if categoryName != "" && r.Config != nil {
 		piiThreshold = r.Config.GetPIIThresholdForCategory(categoryName)
+	} else {
+		piiThreshold = r.Config.PIIModel.Threshold
 	}
 
 	if piiThreshold == 0.0 {

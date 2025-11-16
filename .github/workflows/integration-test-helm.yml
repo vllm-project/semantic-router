@@ -1,18 +1,12 @@
-name: Helm Chart CI
+name:  Integration Test [Helm]
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'deploy/helm/**'
-      - '.github/workflows/helm-ci.yml'
   pull_request:
     branches:
       - main
-    paths:
-      - 'deploy/helm/**'
-      - '.github/workflows/helm-ci.yml'
   workflow_dispatch:
 
 env:
@@ -42,18 +36,6 @@ jobs:
           helm lint ${{ env.CHART_PATH }}
           echo "::endgroup::"
 
-      - name: Run Helm lint with dev values
-        run: |
-          echo "::group::Helm Lint (Dev Values)"
-          helm lint ${{ env.CHART_PATH }} -f ${{ env.CHART_PATH }}/values-dev.yaml
-          echo "::endgroup::"
-
-      - name: Run Helm lint with prod values
-        run: |
-          echo "::group::Helm Lint (Prod Values)"
-          helm lint ${{ env.CHART_PATH }} -f ${{ env.CHART_PATH }}/values-prod.yaml
-          echo "::endgroup::"
-
   # Template validation
   template-chart:
     name: Validate Helm Templates
@@ -75,24 +57,6 @@ jobs:
           echo "Templates generated successfully"
           echo "::endgroup::"
 
-      - name: Template with dev values
-        run: |
-          echo "::group::Template with Dev Values"
-          helm template test-release ${{ env.CHART_PATH }} \
-            -f ${{ env.CHART_PATH }}/values-dev.yaml \
-            --namespace test-namespace > /tmp/dev-template.yaml
-          echo "Dev templates generated successfully"
-          echo "::endgroup::"
-
-      - name: Template with prod values
-        run: |
-          echo "::group::Template with Prod Values"
-          helm template test-release ${{ env.CHART_PATH }} \
-            -f ${{ env.CHART_PATH }}/values-prod.yaml \
-            --namespace test-namespace > /tmp/prod-template.yaml
-          echo "Prod templates generated successfully"
-          echo "::endgroup::"
-
       - name: Validate generated YAML
         run: |
           echo "::group::Validate YAML Syntax"
@@ -111,7 +75,6 @@ jobs:
         run: |
           echo "::group::Verify Required Resources"
           required_resources=(
-            "Namespace"
             "ServiceAccount"
             "PersistentVolumeClaim"
             "ConfigMap"
@@ -128,6 +91,7 @@ jobs:
             fi
           done
           echo "All required resources found"
+          echo "Note: Namespace is managed by Helm's --create-namespace flag"
           echo "::endgroup::"
 
       - name: Upload templates as artifacts
@@ -185,15 +149,12 @@ jobs:
           kubectl get namespace vllm-semantic-router-system
           echo "::endgroup::"
 
-      - name: Install Helm chart with dev values (CI minimal config)
+      - name: Install Helm chart (CI minimal config)
         run: |
           echo "::group::Install Chart"
           # CI environment: Download only essential model to avoid OOM
           # Only download all-MiniLM-L12-v2 (smallest model ~120MB)
           helm install semantic-router ${{ env.CHART_PATH }} \
-            -f ${{ env.CHART_PATH }}/values-dev.yaml \
-            --set initContainer.resources.limits.memory=2Gi \
-            --set initContainer.resources.requests.memory=1Gi \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 10m \
@@ -302,10 +263,6 @@ jobs:
           echo "::group::Upgrade Chart"
           # Use same minimal config for upgrade test
           helm upgrade semantic-router ${{ env.CHART_PATH }} \
-            -f ${{ env.CHART_PATH }}/values-dev.yaml \
-            --set initContainer.resources.limits.memory=2Gi \
-            --set initContainer.resources.requests.memory=1Gi \
-            --set-json 'initContainer.models=[{"name":"all-MiniLM-L12-v2","repo":"sentence-transformers/all-MiniLM-L12-v2"}]' \
             --namespace vllm-semantic-router-system \
             --wait \
             --timeout 10m

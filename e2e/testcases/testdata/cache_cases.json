@@ -1,0 +1,63 @@
+[
+  {
+    "description": "Psychology question - high similarity threshold (0.92)",
+    "category": "psychology",
+    "original_question": "What is cognitive dissonance?",
+    "similar_questions": [
+      "Can you explain cognitive dissonance?",
+      "Tell me about cognitive dissonance",
+      "What does cognitive dissonance mean?",
+      "Define cognitive dissonance",
+      "Explain the concept of cognitive dissonance"
+    ]
+  },
+  {
+    "description": "Health question - very high similarity threshold (0.95)",
+    "category": "health",
+    "original_question": "What are the benefits of regular exercise?",
+    "similar_questions": [
+      "What are the advantages of exercising regularly?",
+      "Tell me the benefits of working out regularly",
+      "What are the health benefits of regular physical activity?",
+      "Why is regular exercise good for you?",
+      "What benefits does regular exercise provide?"
+    ]
+  },
+  {
+    "description": "General question - lower similarity threshold (0.75)",
+    "category": "other",
+    "original_question": "How do I make a good cup of coffee?",
+    "similar_questions": [
+      "What's the best way to brew coffee?",
+      "Can you tell me how to make great coffee?",
+      "What are the steps to make a perfect cup of coffee?",
+      "How can I brew a delicious cup of coffee?",
+      "What's the method for making good coffee?"
+    ]
+  },
+  {
+    "description": "Math question - default threshold (0.8)",
+    "category": "math",
+    "original_question": "What is the Pythagorean theorem?",
+    "similar_questions": [
+      "Can you explain the Pythagorean theorem?",
+      "Tell me about the Pythagorean theorem",
+      "What does the Pythagorean theorem state?",
+      "Explain the Pythagorean theorem to me",
+      "What is Pythagoras' theorem?"
+    ]
+  },
+  {
+    "description": "Biology question - default threshold (0.8)",
+    "category": "biology",
+    "original_question": "How does photosynthesis work?",
+    "similar_questions": [
+      "Can you explain the process of photosynthesis?",
+      "What is the photosynthesis process?",
+      "Describe how photosynthesis works",
+      "Explain photosynthesis to me",
+      "What happens during photosynthesis?"
+    ]
+  }
+]
+

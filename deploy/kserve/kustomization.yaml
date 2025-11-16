@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Set your namespace here or use: oc apply -k . -n <your-namespace>
+# namespace: your-namespace
+
+resources:
+  - serviceaccount.yaml
+  - pvc.yaml
+  - configmap-router-config.yaml
+  - configmap-envoy-config.yaml
+  - peerauthentication.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+
+commonLabels:
+  app.kubernetes.io/name: semantic-router
+  app.kubernetes.io/component: gateway
+  app.kubernetes.io/part-of: vllm-semantic-router
+
+# Optional: Add namespace creation if needed
+# - namespace.yaml

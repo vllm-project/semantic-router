@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-envoy-kserve-config
+  labels:
+    app: semantic-router
+    component: envoy
+data:
+  envoy.yaml: |
+    # Envoy configuration for KServe InferenceService integration
+    # This config routes traffic to KServe predictors based on semantic router decisions
+    static_resources:
+      listeners:
+      - name: listener_0
+        address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: 8801
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_http
+              access_log:
+              - name: envoy.access_loggers.stdout
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                  log_format:
+                    json_format:
+                      time: "%START_TIME%"
+                      protocol: "%PROTOCOL%"
+                      request_method: "%REQ(:METHOD)%"
+                      request_path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                      response_code: "%RESPONSE_CODE%"
+                      response_flags: "%RESPONSE_FLAGS%"
+                      bytes_received: "%BYTES_RECEIVED%"
+                      bytes_sent: "%BYTES_SENT%"
+                      duration: "%DURATION%"
+                      upstream_host: "%UPSTREAM_HOST%"
+                      upstream_cluster: "%UPSTREAM_CLUSTER%"
+                      upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+                      request_id: "%REQ(X-REQUEST-ID)%"
+                      selected_model: "%REQ(X-SELECTED-MODEL)%"
+                      selected_endpoint: "%REQ(X-GATEWAY-DESTINATION-ENDPOINT)%"
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: local_service
+                  domains: ["*"]
+                  routes:
+                  # Route /v1/models to semantic router for model aggregation
+                  - match:
+                      path: "/v1/models"
+                    route:
+                      cluster: semantic_router_cluster
+                      timeout: 300s
+                  # Dynamic route - destination determined by x-gateway-destination-endpoint header
+                  - match:
+                      prefix: "/"
+                    route:
+                      cluster: kserve_dynamic_cluster
+                      timeout: 300s
+              http_filters:
+              - name: envoy.filters.http.ext_proc
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                  grpc_service:
+                    envoy_grpc:
+                      cluster_name: extproc_service
+                  allow_mode_override: true
+                  processing_mode:
+                    request_header_mode: "SEND"
+                    response_header_mode: "SEND"
+                    request_body_mode: "BUFFERED"
+                    response_body_mode: "BUFFERED"
+                    request_trailer_mode: "SKIP"
+                    response_trailer_mode: "SKIP"
+                  failure_mode_allow: true
+                  message_timeout: 300s
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                  suppress_envoy_headers: true
+              http2_protocol_options:
+                max_concurrent_streams: 100
+                initial_stream_window_size: 65536
+                initial_connection_window_size: 1048576
+              stream_idle_timeout: "300s"
+              request_timeout: "300s"
+              common_http_protocol_options:
+                idle_timeout: "300s"
+
+      clusters:
+      - name: extproc_service
+        connect_timeout: 300s
+        per_connection_buffer_limit_bytes: 52428800
+        type: STATIC
+        lb_policy: ROUND_ROBIN
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config:
+              http2_protocol_options:
+                connection_keepalive:
+                  interval: 300s
+                  timeout: 300s
+        load_assignment:
+          cluster_name: extproc_service
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: 127.0.0.1
+                    port_value: 50051
+
+      # Static cluster for semantic router API
+      - name: semantic_router_cluster
+        connect_timeout: 300s
+        per_connection_buffer_limit_bytes: 52428800
+        type: STATIC
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic_router_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: 127.0.0.1
+                    port_value: 8080
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config:
+              http_protocol_options: {}
+
+      # DNS-based cluster for KServe InferenceService (headless service)
+      # Uses service DNS name with container port (8080) for Istio routing
+      # Template variables: {{INFERENCESERVICE_NAME}}, {{NAMESPACE}}
+      - name: kserve_dynamic_cluster
+        connect_timeout: 300s
+        per_connection_buffer_limit_bytes: 52428800
+        type: STRICT_DNS
+        lb_policy: ROUND_ROBIN
+        dns_lookup_family: V4_ONLY
+        load_assignment:
+          cluster_name: kserve_dynamic_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{INFERENCESERVICE_NAME}}-predictor.{{NAMESPACE}}.svc.cluster.local
+                    port_value: 8080
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config:
+              http_protocol_options: {}
+
+    admin:
+      address:
+        socket_address:
+          address: "127.0.0.1"
+          port_value: 19000

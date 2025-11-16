@@ -1,0 +1,157 @@
+name: Integration Test [Kubernetes]
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.90
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            curl \
+            build-essential \
+            pkg-config
+
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Download E2E test dependencies
+        run: |
+          cd e2e && go mod download
+
+      - name: Build E2E test binary
+        run: |
+          make build-e2e
+
+      - name: Run Integration E2E tests
+        id: e2e-test
+        run: |
+          set +e  # Don't exit on error, we want to capture the result
+          make e2e-test E2E_PROFILE=ai-gateway E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+          TEST_EXIT_CODE=$?
+          echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
+          exit ${TEST_EXIT_CODE}
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            test-report.json
+            test-report.md
+            semantic-router-logs.txt
+          retention-days: 30
+
+      - name: Create test summary from report
+        if: always()
+        run: |
+          if [ -f "test-report.md" ]; then
+            echo "=== Reading test report from test-report.md ==="
+            cat test-report.md >> $GITHUB_STEP_SUMMARY
+
+            # Add semantic-router logs section if available
+            if [ -f "semantic-router-logs.txt" ]; then
+              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+
+          ---
+
+          ### 📝 Semantic Router Logs
+
+          <details>
+          <summary>Click to view semantic-router logs</summary>
+
+          ```
+          EOF
+              # Add first 500 lines of logs to summary (to avoid exceeding GitHub limits)
+              head -n 500 semantic-router-logs.txt >> $GITHUB_STEP_SUMMARY
+
+              # Check if there are more lines
+              TOTAL_LINES=$(wc -l < semantic-router-logs.txt)
+              if [ "$TOTAL_LINES" -gt 500 ]; then
+                cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          ... (showing first 500 lines of $TOTAL_LINES total lines)
+
+          📦 Full logs are available in the workflow artifacts: semantic-router-logs.txt
+          EOF
+              fi
+
+              cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ```
+
+          </details>
+          EOF
+            fi
+
+            # Add additional context
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+
+          ---
+
+          ### 📚 Additional Resources
+
+          - **Trigger:** ${{ github.event_name }}
+          - **Branch:** `${{ github.ref_name }}`
+          - **Commit:** `${{ github.sha }}`
+          - **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - [E2E Test Framework Documentation](https://github.com/${{ github.repository }}/tree/main/e2e)
+          - [AI Gateway Profile](https://github.com/${{ github.repository }}/tree/main/e2e/profiles/ai-gateway)
+
+          ### 📦 Artifacts
+
+          - **test-report.json** - Detailed test results in JSON format
+          - **test-report.md** - Human-readable test report
+          - **semantic-router-logs.txt** - Complete semantic-router pod logs
+          - All artifacts are retained for 30 days
+          EOF
+          else
+            echo "⚠️ Test report file not found!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The E2E test framework did not generate a report file." >> $GITHUB_STEP_SUMMARY
+            echo "This might indicate that the test failed before report generation." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Clean up
+        if: always()
+        run: |
+          make e2e-cleanup || true
+
