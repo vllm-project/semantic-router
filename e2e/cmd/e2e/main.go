@@ -7,12 +7,15 @@ import (
 	"os"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/banner"
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 )
+
+const version = "v1.0.0"
 
 func main() {
 	// Parse command line flags
@@ -31,10 +34,22 @@ func main() {
 
 	flag.Parse()
 
+	// Show banner
+	if isInteractive() {
+		banner.Show(version)
+	} else {
+		banner.ShowQuick(version)
+	}
+
 	// Validate flags
 	if *setupOnly && *skipSetup {
 		fmt.Fprintf(os.Stderr, "Error: --setup-only and --skip-setup cannot be used together\n")
 		os.Exit(1)
+	}
+
+	// Setup-only mode always keeps the cluster
+	if *setupOnly {
+		*keepCluster = true
 	}
 
 	// Parse test cases
@@ -87,4 +102,18 @@ func getProfile(name string) (framework.Profile, error) {
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", name)
 	}
+}
+
+// isInteractive checks if the program is running in an interactive terminal
+func isInteractive() bool {
+	// Check if CI environment variable is set
+	if os.Getenv("CI") != "" {
+		return false
+	}
+	// Check if stdout is a terminal
+	fileInfo, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (fileInfo.Mode() & os.ModeCharDevice) != 0
 }

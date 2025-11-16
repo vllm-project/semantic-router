@@ -34,7 +34,7 @@ type ProgressiveStageResult struct {
 
 func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Starting progressive stress test: 10/20 concurrent requests")
+		fmt.Println("[Test] Starting progressive stress test: 10/20/50 concurrent requests")
 	}
 
 	// Setup service connection and get local port
@@ -45,7 +45,7 @@ func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, op
 	defer stopPortForward()
 
 	// Define concurrent request counts for each stage
-	concurrencyStages := []int{10, 20}
+	concurrencyStages := []int{10, 20, 50}
 
 	var stageResults []ProgressiveStageResult
 

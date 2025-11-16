@@ -129,15 +129,18 @@ func (r *Runner) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to setup profile: %w", err)
 		}
 
-		defer func() {
-			teardownOpts := &TeardownOptions{
-				KubeClient:  kubeClient,
-				KubeConfig:  kubeConfig,
-				ClusterName: r.opts.ClusterName,
-				Verbose:     r.opts.Verbose,
-			}
-			r.profile.Teardown(context.Background(), teardownOpts)
-		}()
+		// Only register teardown if not in setup-only mode
+		if !r.opts.SetupOnly {
+			defer func() {
+				teardownOpts := &TeardownOptions{
+					KubeClient:  kubeClient,
+					KubeConfig:  kubeConfig,
+					ClusterName: r.opts.ClusterName,
+					Verbose:     r.opts.Verbose,
+				}
+				r.profile.Teardown(context.Background(), teardownOpts)
+			}()
+		}
 	} else {
 		r.log("⏭️  Skipping profile setup (--skip-setup enabled)")
 	}

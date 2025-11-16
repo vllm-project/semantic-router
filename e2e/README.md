@@ -189,10 +189,13 @@ The following environment variables can be used to customize test execution:
 | `E2E_VERBOSE` | Enable verbose logging | `true` | `make e2e-test E2E_VERBOSE=false` |
 | `E2E_PARALLEL` | Run tests in parallel | `false` | `make e2e-test E2E_PARALLEL=true` |
 | `E2E_TESTS` | Specific test cases to run | (all tests) | `make e2e-test-specific E2E_TESTS="test1,test2"` |
-| `E2E_SETUP_ONLY` | Only setup profile without running tests | `false` | `make e2e-test E2E_SETUP_ONLY=true` |
+| `E2E_SETUP_ONLY` | Only setup profile without running tests (automatically keeps cluster) | `false` | `make e2e-test E2E_SETUP_ONLY=true` |
 | `E2E_SKIP_SETUP` | Skip setup and only run tests | `false` | `make e2e-test E2E_SKIP_SETUP=true` |
 
-**Note**: When using the binary directly (`./bin/e2e`), use command-line flags instead:
+**Note**:
+
+- When `E2E_SETUP_ONLY=true` is set, the cluster is automatically kept (no need to set `E2E_KEEP_CLUSTER=true`)
+- When using the binary directly (`./bin/e2e`), use command-line flags instead:
 
 - `-profile` instead of `E2E_PROFILE`
 - `-cluster` instead of `E2E_CLUSTER_NAME`
