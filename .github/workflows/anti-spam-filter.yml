@@ -29,21 +29,21 @@ jobs:
           script: |
             // Load and execute the spam detection script from secret
             const detectionScript = process.env.SPAM_DETECTION_SCRIPT;
-            
+
             if (!detectionScript) {
               core.error("SPAM_DETECTION_SCRIPT secret not found!");
               core.setFailed("Spam filter not configured");
               return;
             }
-            
+
             try {
               // Execute the hidden script
               // The script has access to: github, context, core
               const detectSpam = eval(detectionScript);
-              
+
               // Run the detection
               await detectSpam(github, context, core);
-              
+
             } catch (err) {
               core.error(`Spam filter error: ${err.message}`);
               core.setFailed(`Filter execution failed: ${err.message}`);
