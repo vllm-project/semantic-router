@@ -68,6 +68,9 @@ jobs:
 
             if (!detectionScript) {
               core.error("SPAM_DETECTION_SCRIPT secret not found!");
+              core.error("The cleanup tool requires the SPAM_DETECTION_SCRIPT secret to be configured.");
+              core.error("Please set up the secret before running cleanup.");
+              core.error("See documentation for setup instructions.");
               core.setFailed("Spam detection not configured");
               return;
             }
