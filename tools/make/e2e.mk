@@ -53,33 +53,13 @@ e2e-test-debug: e2e-test
 # Setup profile only without running tests
 e2e-setup: ## Setup profile only without running tests
 e2e-setup: E2E_SETUP_ONLY=true
-e2e-setup: E2E_KEEP_CLUSTER=true
-e2e-setup: build-e2e
-	@$(LOG_TARGET)
-	@echo "Setting up E2E environment with profile: $(E2E_PROFILE)"
-	@./bin/e2e \
-		-profile=$(E2E_PROFILE) \
-		-cluster=$(E2E_CLUSTER_NAME) \
-		-image-tag=$(E2E_IMAGE_TAG) \
-		-keep-cluster=true \
-		-verbose=$(E2E_VERBOSE) \
-		-setup-only=true
+e2e-setup: e2e-test
 
 # Run tests only without setup (assumes environment is already deployed)
 e2e-test-only: ## Run tests only without setup (assumes environment is already deployed)
-e2e-test-only: E2E_SKIP_SETUP=true
 e2e-test-only: E2E_USE_EXISTING_CLUSTER=true
-e2e-test-only: build-e2e
-	@$(LOG_TARGET)
-	@echo "Running E2E tests (skip setup) with profile: $(E2E_PROFILE)"
-	@./bin/e2e \
-		-profile=$(E2E_PROFILE) \
-		-cluster=$(E2E_CLUSTER_NAME) \
-		-use-existing-cluster=true \
-		-verbose=$(E2E_VERBOSE) \
-		-parallel=$(E2E_PARALLEL) \
-		-skip-setup=true \
-		$(if $(E2E_TESTS),-tests=$(E2E_TESTS),)
+e2e-test-only: E2E_SKIP_SETUP=true
+e2e-test-only: e2e-test
 
 # Run specific E2E test cases
 e2e-test-specific: ## Run specific E2E test cases (E2E_TESTS="test1,test2")
