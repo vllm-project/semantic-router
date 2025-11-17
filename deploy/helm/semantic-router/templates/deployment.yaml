@@ -70,6 +70,9 @@ spec:
         env:
         - name: HF_HUB_CACHE
           value: /tmp/hf_cache
+          {{- with .Values.initContainer.env }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
         resources:
           {{- toYaml .Values.initContainer.resources | nindent 10 }}
         volumeMounts:
