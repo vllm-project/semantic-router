@@ -5,11 +5,13 @@
 
 // Traditional model modules
 pub mod bert;
+pub mod deberta_v3;
 
 pub mod base_model;
 pub mod modernbert;
 // Re-export main traditional models
 pub use bert::TraditionalBertClassifier;
+pub use deberta_v3::DebertaV3Classifier;
 
 // Re-export traditional models
 pub use base_model::*;
@@ -19,5 +21,7 @@ pub use base_model::*;
 pub mod base_model_test;
 #[cfg(test)]
 pub mod bert_test;
+#[cfg(test)]
+pub mod deberta_v3_test;
 #[cfg(test)]
 pub mod modernbert_test;

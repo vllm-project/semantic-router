@@ -20,6 +20,10 @@ pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
 static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+// DeBERTa v3 jailbreak/prompt injection classifier (exported for use in classify.rs)
+pub static DEBERTA_JAILBREAK_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier>,
+> = OnceLock::new();
 // Unified classifier for dual-path architecture (exported for use in classify.rs)
 pub static UNIFIED_CLASSIFIER: OnceLock<
     Arc<crate::classifiers::unified::DualPathUnifiedClassifier>,
@@ -364,6 +368,65 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
     }
 }
 
+/// Initialize DeBERTa v3 jailbreak/prompt injection classifier
+///
+/// This initializes the ProtectAI DeBERTa v3 Base Prompt Injection model
+/// for detecting jailbreak attempts and prompt injection attacks.
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+/// - Caller must ensure proper memory management
+///
+/// # Returns
+/// `true` if initialization succeeds, `false` otherwise
+///
+/// # Example
+/// ```c
+/// bool success = init_deberta_jailbreak_classifier(
+///     "protectai/deberta-v3-base-prompt-injection",
+///     false  // use GPU
+/// );
+/// ```
+#[no_mangle]
+pub extern "C" fn init_deberta_jailbreak_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    println!(
+        "🔧 Initializing DeBERTa v3 jailbreak classifier: {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier::new(
+        model_id, use_cpu,
+    ) {
+        Ok(classifier) => match DEBERTA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)) {
+            Ok(_) => {
+                println!("✓ DeBERTa v3 jailbreak classifier initialized successfully");
+                true
+            }
+            Err(_) => {
+                eprintln!("Failed to set DeBERTa jailbreak classifier (already initialized)");
+                false
+            }
+        },
+        Err(e) => {
+            eprintln!(
+                "Failed to initialize DeBERTa v3 jailbreak classifier: {}",
+                e
+            );
+            false
+        }
+    }
+}
+
 /// Initialize unified classifier (complex multi-head configuration)
 ///
 /// # Safety
@@ -683,6 +746,11 @@ pub extern "C" fn init_lora_unified_classifier(
         }
     };
 
+    // Check if already initialized - return success if so
+    if PARALLEL_LORA_ENGINE.get().is_some() {
+        return true;
+    }
+
     // Load labels dynamically from model configurations
     let _intent_labels_vec = load_labels_from_model_config(intent_path).unwrap_or_else(|e| {
         eprintln!(
@@ -723,7 +791,9 @@ pub extern "C" fn init_lora_unified_classifier(
     ) {
         Ok(engine) => {
             // Store in global static variable (Arc for efficient cloning during concurrent access)
+            // Return true even if already set (race condition)
             PARALLEL_LORA_ENGINE.set(Arc::new(engine)).is_ok()
+                || PARALLEL_LORA_ENGINE.get().is_some()
         }
         Err(e) => {
             eprintln!(

@@ -3,11 +3,13 @@
 use std::ffi::c_char;
 
 /// Basic classification result structure
+/// IMPORTANT: Field order must match Go C typedef exactly!
+/// Go expects: int class, float confidence, char* label
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ClassificationResult {
-    pub confidence: f32,
     pub predicted_class: i32,
+    pub confidence: f32,
     pub label: *mut c_char,
 }
 
@@ -275,8 +277,8 @@ pub struct LoRASecurityResult {
 impl Default for ClassificationResult {
     fn default() -> Self {
         Self {
-            confidence: 0.0,
             predicted_class: -1,
+            confidence: 0.0,
             label: std::ptr::null_mut(),
         }
     }

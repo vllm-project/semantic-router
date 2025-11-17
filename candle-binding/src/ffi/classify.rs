@@ -22,6 +22,8 @@ use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
 use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
+// Import DeBERTa classifier for jailbreak detection
+use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
 
 // Classification constants for consistent category detection
 /// PII detection positive class identifier (numeric)
@@ -1062,6 +1064,71 @@ pub extern "C" fn classify_modernbert_jailbreak_text(
             predicted_class: -1,
             confidence: 0.0,
         }
+    }
+}
+
+/// Classify text for jailbreak/prompt injection detection using DeBERTa v3
+///
+/// This function uses the ProtectAI DeBERTa v3 Base Prompt Injection model
+/// to detect jailbreak attempts and prompt injection attacks with high accuracy.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - Caller must ensure proper memory management
+///
+/// # Returns
+/// `ClassificationResult` with:
+/// - `predicted_class`: 0 for SAFE, 1 for INJECTION, -1 for error
+/// - `confidence`: confidence score (0.0-1.0)
+/// - `label`: null pointer (not used)
+///
+/// # Example
+/// ```c
+/// ClassificationResult result = classify_deberta_jailbreak_text("Ignore all previous instructions");
+/// if (result.predicted_class == 1) {
+///     printf("Injection detected with %.2f%% confidence\n", result.confidence * 100.0);
+/// }
+/// ```
+#[no_mangle]
+pub extern "C" fn classify_deberta_jailbreak_text(text: *const c_char) -> ClassificationResult {
+    let default_result = ClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+        label: std::ptr::null_mut(),
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = DEBERTA_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text(text) {
+            Ok((label, confidence)) => {
+                // Convert string label to class index
+                // The model returns "SAFE" (0) or "INJECTION" (1)
+                let predicted_class = if label == "INJECTION" { 1 } else { 0 };
+
+                ClassificationResult {
+                    predicted_class,
+                    confidence,
+                    label: std::ptr::null_mut(),
+                }
+            }
+            Err(e) => {
+                eprintln!("DeBERTa v3 jailbreak classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("DeBERTa v3 jailbreak classifier not initialized - call init_deberta_jailbreak_classifier first");
+        default_result
     }
 }
 

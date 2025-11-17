@@ -53,6 +53,16 @@ async-std = { version = "1.12", features = ["attributes"] }
 name = "qwen3_example"
 path = "../examples/candle-binding/qwen3_example.rs"
 
+# Example demonstrating DeBERTa v2 Prompt Injection Detection
+[[example]]
+name = "deberta_prompt_injection_example"
+path = "../examples/candle-binding/deberta_prompt_injection_example.rs"
+
+# Example showing raw softmax confidence values
+[[example]]
+name = "test_raw_confidence"
+path = "../examples/candle-binding/test_raw_confidence.rs"
+
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.
 # To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.

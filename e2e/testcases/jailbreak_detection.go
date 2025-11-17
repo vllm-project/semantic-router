@@ -103,6 +103,11 @@ func testJailbreakDetection(ctx context.Context, client *kubernetes.Clientset, o
 			correctTests, totalTests, detectionRate)
 	}
 
+	// Return error if detection rate is 0%
+	if correctTests == 0 {
+		return fmt.Errorf("jailbreak detection test failed: 0%% accuracy (0/%d correct)", totalTests)
+	}
+
 	return nil
 }
 

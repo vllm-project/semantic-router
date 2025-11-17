@@ -92,6 +92,11 @@ func testDomainClassify(ctx context.Context, client *kubernetes.Clientset, opts 
 			correctTests, totalTests, accuracy)
 	}
 
+	// Return error if accuracy is 0%
+	if correctTests == 0 {
+		return fmt.Errorf("domain classification test failed: 0%% accuracy (0/%d correct)", totalTests)
+	}
+
 	return nil
 }
 
