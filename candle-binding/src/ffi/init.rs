@@ -10,19 +10,44 @@ use std::sync::{Arc, OnceLock};
 use crate::core::similarity::BertSimilarity;
 use crate::BertClassifier;
 
-// Global state using OnceLock for zero-cost reads after initialization
-// OnceLock<Arc<T>> pattern provides:
-// - Zero lock overhead on reads (atomic load only)
-// - Concurrent access via Arc cloning
-// - Thread-safe initialization guarantee
-// - No dependency on lazy_static
+// ============================================================================
+// GLOBAL STATE MANAGEMENT
+// ============================================================================
+//
+// Architecture:
+// - Uses `OnceLock<Arc<T>>` pattern for concurrent access
+// - OnceLock.get() = single atomic load (no mutex, no contention)
+// - Arc cloning = atomic increment (lock-free)
+// - Initialization = one-time cost, thread-safe via OnceLock
+//
+// Characteristics:
+// - Lock-free reads after initialization
+// - Concurrent classification (multiple threads can classify simultaneously)
+// - Cannot reinitialize (by design - prevents accidental reloads)
+// ============================================================================
+
 pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
 static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+
 // DeBERTa v3 jailbreak/prompt injection classifier (exported for use in classify.rs)
 pub static DEBERTA_JAILBREAK_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier>,
+> = OnceLock::new();
+
+/// Unified jailbreak classifier with automatic model type detection
+///
+/// This classifier auto-detects and loads the appropriate model architecture:
+/// - **ModernBERT**: Lock-free classification (Arc-wrapped, no mutex)
+/// - **DeBERTa V3**: Lock-free classification (Arc-wrapped, no mutex)
+/// - **Qwen3Guard**: Uses parking_lot::Mutex for generation (requires mutable state)
+///
+/// The mutex in Qwen3Guard is necessary because text generation requires mutable
+/// state (prefix cache, KV cache updates). We use parking_lot::Mutex instead of
+/// std::sync::Mutex for better performance.
+pub static UNIFIED_JAILBREAK_CLASSIFIER: OnceLock<
+    Arc<Box<dyn crate::model_architectures::jailbreak_factory::JailbreakClassifier>>,
 > = OnceLock::new();
 // Unified classifier for dual-path architecture (exported for use in classify.rs)
 pub static UNIFIED_CLASSIFIER: OnceLock<
@@ -422,6 +447,66 @@ pub extern "C" fn init_deberta_jailbreak_classifier(
                 "Failed to initialize DeBERTa v3 jailbreak classifier: {}",
                 e
             );
+            false
+        }
+    }
+}
+
+/// Initialize unified jailbreak classifier with auto-detection
+///
+/// This function automatically detects the model architecture from config.json
+/// and loads the appropriate jailbreak classifier (ModernBERT, DeBERTa v3, or Qwen3Guard).
+///
+/// # Arguments
+/// - `model_id`: HuggingFace model ID or local path
+/// - `use_cpu`: Force CPU inference
+///
+/// # Returns
+/// - `true` on success
+/// - `false` on failure
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+///
+/// # Example
+/// ```c
+/// bool success = init_unified_jailbreak_classifier(
+///     "protectai/deberta-v3-base-prompt-injection",
+///     false  // use GPU
+/// );
+/// ```
+#[no_mangle]
+pub extern "C" fn init_unified_jailbreak_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    println!(
+        "🔧 Initializing unified jailbreak classifier with auto-detection: {}",
+        model_id
+    );
+
+    match crate::model_architectures::jailbreak_factory::JailbreakModelFactory::from_model_id(
+        model_id, use_cpu,
+    ) {
+        Ok(classifier) => match UNIFIED_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)) {
+            Ok(_) => {
+                println!("✓ Unified jailbreak classifier initialized successfully");
+                true
+            }
+            Err(_) => {
+                eprintln!("Failed to set unified jailbreak classifier (already initialized)");
+                false
+            }
+        },
+        Err(e) => {
+            eprintln!("Failed to initialize unified jailbreak classifier: {}", e);
             false
         }
     }

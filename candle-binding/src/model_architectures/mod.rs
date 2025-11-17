@@ -4,6 +4,7 @@
 
 pub mod embedding;
 pub mod generative; // NEW: Generative/causal language models (Qwen3ForCausalLM)
+pub mod jailbreak_factory; // NEW: Unified jailbreak model factory with auto-detection
 pub mod lora;
 pub mod prefix_cache; // NEW: Prefix caching for fixed prompts
 pub mod traditional; // NEW: Embedding models (Qwen3, Gemma)

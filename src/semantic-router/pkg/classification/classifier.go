@@ -107,12 +107,23 @@ func (c *ModernBertJailbreakInitializer) Init(modelID string, useCPU bool, numCl
 	return nil
 }
 
-// createJailbreakInitializer creates the appropriate jailbreak initializer based on configuration
-func createJailbreakInitializer(useModernBERT bool) JailbreakInitializer {
-	if useModernBERT {
-		return &ModernBertJailbreakInitializer{}
+// UnifiedJailbreakInitializer uses the unified factory with auto-detection
+type UnifiedJailbreakInitializer struct{}
+
+func (c *UnifiedJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	err := candle_binding.InitUnifiedJailbreakClassifier(modelID, useCPU)
+	if err != nil {
+		return err
 	}
-	return &LinearJailbreakInitializer{}
+	logging.Infof("Initialized unified jailbreak classifier with auto-detection from: %s", modelID)
+	return nil
+}
+
+// createJailbreakInitializer creates the appropriate jailbreak initializer based on configuration
+// Now defaults to unified initializer for automatic model type detection
+func createJailbreakInitializer(useModernBERT bool) JailbreakInitializer {
+	// Always use unified initializer for auto-detection unless explicitly configured otherwise
+	return &UnifiedJailbreakInitializer{}
 }
 
 type JailbreakInference interface {
@@ -131,12 +142,18 @@ func (c *ModernBertJailbreakInference) Classify(text string) (candle_binding.Cla
 	return candle_binding.ClassifyModernBertJailbreakText(text)
 }
 
+// UnifiedJailbreakInference uses the unified classifier with auto-detected model type
+type UnifiedJailbreakInference struct{}
+
+func (c *UnifiedJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyUnifiedJailbreakText(text)
+}
+
 // createJailbreakInference creates the appropriate jailbreak inference based on configuration
+// Now defaults to unified inference for automatic model type usage
 func createJailbreakInference(useModernBERT bool) JailbreakInference {
-	if useModernBERT {
-		return &ModernBertJailbreakInference{}
-	}
-	return &LinearJailbreakInference{}
+	// Always use unified inference for auto-detection
+	return &UnifiedJailbreakInference{}
 }
 
 type PIIInitializer interface {

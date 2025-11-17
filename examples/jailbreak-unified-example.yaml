@@ -1,0 +1,80 @@
+# Example Configuration for Unified Jailbreak Classifier
+#
+# This configuration demonstrates how to use the new unified jailbreak classifier
+# with automatic model type detection. Simply specify the model_id and the system
+# will automatically detect whether it's ModernBERT, DeBERTa V3, or Qwen3Guard.
+
+# Example 1: DeBERTa V3 (Recommended for Production)
+# High accuracy prompt injection detection
+prompt_guard:
+  enabled: true
+  model_id: "protectai/deberta-v3-base-prompt-injection"
+  threshold: 0.5  # Adjust based on false positive tolerance
+  use_cpu: false  # Use GPU for faster inference
+  jailbreak_mapping_path: "config/jailbreak_mapping.json"
+
+# Example 2: ModernBERT (Fast inference)
+# Uncomment to use ModernBERT instead:
+# prompt_guard:
+#  enabled: true
+#  model_id: "./jailbreak_classifier_modernbert_model"
+#  threshold: 0.6
+#  use_cpu: false
+
+# Example 3: Qwen3Guard (Comprehensive safety)
+# Uncomment to use Qwen3Guard for multi-category safety detection:
+# prompt_guard:
+#  enabled: true
+#  model_id: "Qwen/Qwen3Guard-Gen-0.6B"
+#  threshold: 0.5
+#  use_cpu: false
+
+# Per-Category Thresholds (Optional)
+# You can override the global threshold for specific categories
+categories:
+  - name: "coding"
+    description: "Programming and code-related queries"
+    threshold: 0.3  # More sensitive for coding category
+    jailbreak_enabled: true
+    jailbreak_threshold: 0.4  # Category-specific jailbreak threshold
+
+  - name: "general"
+    description: "General conversation"
+    threshold: 0.5
+    jailbreak_enabled: true
+    jailbreak_threshold: 0.6  # Less sensitive for general queries
+
+# Additional Settings
+classifier:
+  # Category classification settings
+  category_model:
+    model_id: "answerdotai/ModernBERT-base"
+    threshold: 0.5
+    use_cpu: false
+    use_modernbert: true
+
+  # PII detection (separate from jailbreak)
+  pii_model:
+    model_id: "./pii_classifier_modernbert_model"
+    threshold: 0.5
+    use_cpu: false
+
+# Observability
+tracing:
+  enabled: true
+  endpoint: "http://localhost:4318"
+
+logging:
+  level: "info"
+  format: "json"
+
+# Security Event Logging
+# When jailbreak is detected, detailed logs are emitted:
+# {
+#   "event": "security_block",
+#   "reason_code": "jailbreak_detected",
+#   "jailbreak_type": "INJECTION",
+#   "confidence": 0.95,
+#   "request_id": "..."
+# }
+

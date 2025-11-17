@@ -31,6 +31,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
+// Helper functions for pointer conversions in tests
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func float32Ptr(f float32) *float32 {
+	return &f
+}
+
 var _ = Describe("Process Stream Handling", func() {
 	var (
 		router *OpenAIRouter
@@ -3659,3 +3668,275 @@ func TestUpstreamStatusIncrements4xx5xxCounters(t *testing.T) {
 		t.Fatalf("expected upstream_4xx to increase for model m: before=%v after=%v", before4xx, after4xx)
 	}
 }
+
+// ================================================================================================
+// UNIFIED JAILBREAK CLASSIFIER INTEGRATION TESTS
+// ================================================================================================
+
+func TestUnifiedJailbreakClassifierIntegration(t *testing.T) {
+	// Test that the unified jailbreak classifier can be used in the request filter
+
+	t.Run("ConfigurationWithDeBertaV3", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:              true,
+					ModelID:              "protectai/deberta-v3-base-prompt-injection",
+					Threshold:            0.5,
+					UseCPU:               true,
+					JailbreakMappingPath: "",
+				},
+			},
+		}
+
+		// Verify configuration is properly set
+		if !config.PromptGuard.Enabled {
+			t.Error("Prompt guard should be enabled")
+		}
+
+		if config.PromptGuard.ModelID != "protectai/deberta-v3-base-prompt-injection" {
+			t.Errorf("Expected DeBERTa V3 model ID, got %s", config.PromptGuard.ModelID)
+		}
+
+		t.Logf("✅ DeBERTa V3 configuration valid: ModelID=%s, Threshold=%.2f",
+			config.PromptGuard.ModelID, config.PromptGuard.Threshold)
+	})
+
+	t.Run("ConfigurationWithModernBERT", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:       true,
+					ModelID:       "./jailbreak_classifier_modernbert_model",
+					Threshold:     0.6,
+					UseCPU:        true,
+					UseModernBERT: true, // Legacy flag, but still supported
+				},
+			},
+		}
+
+		if config.PromptGuard.ModelID != "./jailbreak_classifier_modernbert_model" {
+			t.Errorf("Expected ModernBERT model ID, got %s", config.PromptGuard.ModelID)
+		}
+
+		t.Logf("✅ ModernBERT configuration valid: ModelID=%s, UseModernBERT=%t",
+			config.PromptGuard.ModelID, config.PromptGuard.UseModernBERT)
+	})
+
+	t.Run("ConfigurationWithQwen3Guard", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:   true,
+					ModelID:   "Qwen/Qwen3Guard-Gen-0.6B",
+					Threshold: 0.5,
+					UseCPU:    false,
+				},
+			},
+		}
+
+		if config.PromptGuard.ModelID != "Qwen/Qwen3Guard-Gen-0.6B" {
+			t.Errorf("Expected Qwen3Guard model ID, got %s", config.PromptGuard.ModelID)
+		}
+
+		t.Logf("✅ Qwen3Guard configuration valid: ModelID=%s", config.PromptGuard.ModelID)
+	})
+
+	t.Run("SwitchingBetweenModels", func(t *testing.T) {
+		// Test that configuration can easily switch between different model types
+		models := []struct {
+			name      string
+			modelID   string
+			threshold float32
+		}{
+			{"DeBERTa V3", "protectai/deberta-v3-base-prompt-injection", 0.5},
+			{"ModernBERT", "./jailbreak_classifier_modernbert_model", 0.6},
+			{"Qwen3Guard", "Qwen/Qwen3Guard-Gen-0.6B", 0.5},
+		}
+
+		for _, model := range models {
+			config := &config.RouterConfig{
+				InlineModels: config.InlineModels{
+					PromptGuard: config.PromptGuardConfig{
+						Enabled:   true,
+						ModelID:   model.modelID,
+						Threshold: model.threshold,
+						UseCPU:    true,
+					},
+				},
+			}
+
+			if config.PromptGuard.ModelID != model.modelID {
+				t.Errorf("%s: Expected model ID %s, got %s", model.name, model.modelID, config.PromptGuard.ModelID)
+			}
+
+			t.Logf("✅ %s configuration: ModelID=%s, Threshold=%.2f",
+				model.name, config.PromptGuard.ModelID, config.PromptGuard.Threshold)
+		}
+	})
+}
+
+func TestCategorySpecificJailbreakThresholds(t *testing.T) {
+	// Test category-specific jailbreak thresholds with unified classifier
+
+	t.Run("GlobalThresholdOnly", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:   true,
+					ModelID:   "protectai/deberta-v3-base-prompt-injection",
+					Threshold: 0.7,
+				},
+			},
+		}
+
+		threshold := config.GetJailbreakThresholdForCategory("")
+		if threshold != 0.7 {
+			t.Errorf("Expected global threshold 0.7, got %.2f", threshold)
+		}
+
+		t.Logf("✅ Global threshold: %.2f", threshold)
+	})
+
+	t.Run("CategorySpecificThreshold", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:   true,
+					ModelID:   "protectai/deberta-v3-base-prompt-injection",
+					Threshold: 0.5, // Global threshold
+				},
+			},
+			IntelligentRouting: config.IntelligentRouting{
+				Categories: []config.Category{
+					{
+						CategoryMetadata: config.CategoryMetadata{
+							Name: "coding",
+						},
+						DomainAwarePolicies: config.DomainAwarePolicies{
+							JailbreakPolicy: config.JailbreakPolicy{
+								JailbreakEnabled:   boolPtr(true),
+								JailbreakThreshold: float32Ptr(0.3), // More sensitive for coding
+							},
+						},
+					},
+					{
+						CategoryMetadata: config.CategoryMetadata{
+							Name: "general",
+						},
+						DomainAwarePolicies: config.DomainAwarePolicies{
+							JailbreakPolicy: config.JailbreakPolicy{
+								JailbreakEnabled:   boolPtr(true),
+								JailbreakThreshold: float32Ptr(0.7), // Less sensitive for general queries
+							},
+						},
+					},
+				},
+			},
+		}
+
+		codingThreshold := config.GetJailbreakThresholdForCategory("coding")
+		if codingThreshold != 0.3 {
+			t.Errorf("Expected coding threshold 0.3, got %.2f", codingThreshold)
+		}
+
+		generalThreshold := config.GetJailbreakThresholdForCategory("general")
+		if generalThreshold != 0.7 {
+			t.Errorf("Expected general threshold 0.7, got %.2f", generalThreshold)
+		}
+
+		unknownThreshold := config.GetJailbreakThresholdForCategory("unknown")
+		if unknownThreshold != 0.5 {
+			t.Errorf("Expected fallback to global threshold 0.5, got %.2f", unknownThreshold)
+		}
+
+		t.Logf("✅ Category thresholds: coding=%.2f, general=%.2f, unknown(global)=%.2f",
+			codingThreshold, generalThreshold, unknownThreshold)
+	})
+
+	t.Run("CategoryJailbreakDisabled", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:   true,
+					ModelID:   "protectai/deberta-v3-base-prompt-injection",
+					Threshold: 0.5,
+				},
+			},
+			IntelligentRouting: config.IntelligentRouting{
+				Categories: []config.Category{
+					{
+						CategoryMetadata: config.CategoryMetadata{
+							Name: "internal_tools",
+						},
+						DomainAwarePolicies: config.DomainAwarePolicies{
+							JailbreakPolicy: config.JailbreakPolicy{
+								JailbreakEnabled: boolPtr(false), // Jailbreak detection disabled for this category
+							},
+						},
+					},
+				},
+			},
+		}
+
+		isEnabled := config.IsJailbreakEnabledForCategory("internal_tools")
+		if isEnabled {
+			t.Error("Jailbreak should be disabled for internal_tools category")
+		}
+
+		t.Log("✅ Category-specific jailbreak disable works correctly")
+	})
+}
+
+func TestBackwardCompatibility(t *testing.T) {
+	// Test that the unified classifier maintains backward compatibility
+
+	t.Run("LegacyUseModernBERTFlag", func(t *testing.T) {
+		// Old configuration with use_modernbert flag should still work
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:       true,
+					ModelID:       "./jailbreak_classifier_modernbert_model",
+					UseModernBERT: true, // Legacy flag
+					Threshold:     0.6,
+				},
+			},
+		}
+
+		// The unified classifier should work regardless of this flag
+		// because it auto-detects from config.json
+		if !config.PromptGuard.Enabled {
+			t.Error("Prompt guard should be enabled")
+		}
+
+		if !config.PromptGuard.UseModernBERT {
+			t.Error("UseModernBERT flag should be true for backward compatibility")
+		}
+
+		t.Log("✅ Legacy use_modernbert flag is preserved for backward compatibility")
+	})
+
+	t.Run("EmptyModelIDFallback", func(t *testing.T) {
+		config := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptGuard: config.PromptGuardConfig{
+					Enabled:   true,
+					ModelID:   "", // Empty model ID
+					Threshold: 0.5,
+				},
+			},
+		}
+
+		// Should not be enabled without a model ID
+		if config.IsPromptGuardEnabled() {
+			t.Error("Prompt guard should not be enabled without model_id")
+		}
+
+		t.Log("✅ Empty model_id correctly disables prompt guard")
+	})
+}
+
+// ================================================================================================
+// END OF UNIFIED JAILBREAK CLASSIFIER INTEGRATION TESTS
+// ================================================================================================

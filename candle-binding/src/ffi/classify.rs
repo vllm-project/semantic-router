@@ -18,7 +18,7 @@ use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_PII_CLASSIFIER, TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
 use crate::BertClassifier;
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, CStr, CString};
 use std::sync::{Arc, OnceLock};
 
 use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
@@ -212,6 +212,58 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
         }
     } else {
         eprintln!("BERT jailbreak classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using unified jailbreak classifier (auto-detected model type)
+///
+/// This function uses the unified jailbreak classifier which automatically detects
+/// and uses the appropriate model (ModernBERT, DeBERTa v3, or Qwen3Guard).
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - Caller must free the returned label string
+#[no_mangle]
+pub extern "C" fn classify_unified_jailbreak_text(text: *const c_char) -> ClassificationResult {
+    use crate::ffi::init::UNIFIED_JAILBREAK_CLASSIFIER;
+
+    let default_result = ClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+        label: std::ptr::null_mut(),
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return default_result,
+        }
+    };
+
+    if let Some(classifier) = UNIFIED_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify(text) {
+            Ok(result) => {
+                // Allocate label string
+                let label_cstring = match CString::new(result.label) {
+                    Ok(s) => s,
+                    Err(_) => return default_result,
+                };
+
+                ClassificationResult {
+                    predicted_class: result.class as i32,
+                    confidence: result.confidence,
+                    label: label_cstring.into_raw(),
+                }
+            }
+            Err(e) => {
+                eprintln!("Error classifying with unified jailbreak classifier: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("Unified jailbreak classifier not initialized - call init_unified_jailbreak_classifier first");
         default_result
     }
 }

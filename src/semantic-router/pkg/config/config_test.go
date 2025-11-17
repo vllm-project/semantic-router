@@ -541,6 +541,123 @@ prompt_guard:
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
 			})
+
+			Context("Unified Jailbreak Classifier Support", func() {
+				It("should support DeBERTa V3 model configuration", func() {
+					configContent := `
+prompt_guard:
+  enabled: true
+  model_id: "protectai/deberta-v3-base-prompt-injection"
+  threshold: 0.5
+  use_cpu: false
+  jailbreak_mapping_path: "/path/to/jailbreak.json"
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(cfg.PromptGuard.Enabled).To(BeTrue())
+					Expect(cfg.PromptGuard.ModelID).To(Equal("protectai/deberta-v3-base-prompt-injection"))
+					Expect(cfg.PromptGuard.Threshold).To(Equal(float32(0.5)))
+					Expect(cfg.PromptGuard.UseCPU).To(BeFalse())
+					Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
+				})
+
+				It("should support ModernBERT model configuration", func() {
+					configContent := `
+prompt_guard:
+  enabled: true
+  model_id: "./jailbreak_classifier_modernbert_model"
+  threshold: 0.6
+  use_cpu: true
+  use_modernbert: true
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(cfg.PromptGuard.Enabled).To(BeTrue())
+					Expect(cfg.PromptGuard.ModelID).To(Equal("./jailbreak_classifier_modernbert_model"))
+					Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
+					Expect(cfg.PromptGuard.UseCPU).To(BeTrue())
+					Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
+				})
+
+				It("should support Qwen3Guard model configuration", func() {
+					configContent := `
+prompt_guard:
+  enabled: true
+  model_id: "Qwen/Qwen3Guard-Gen-0.6B"
+  threshold: 0.5
+  use_cpu: false
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(cfg.PromptGuard.Enabled).To(BeTrue())
+					Expect(cfg.PromptGuard.ModelID).To(Equal("Qwen/Qwen3Guard-Gen-0.6B"))
+					Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
+				})
+
+				It("should handle model ID changes for switching models", func() {
+					configContent := `
+prompt_guard:
+  enabled: true
+  model_id: "protectai/deberta-v3-base-prompt-injection"
+  threshold: 0.5
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					initialModelID := cfg.PromptGuard.ModelID
+					Expect(initialModelID).To(Equal("protectai/deberta-v3-base-prompt-injection"))
+
+					// Simulate config change to different model
+					configContent = `
+prompt_guard:
+  enabled: true
+  model_id: "./jailbreak_classifier_modernbert_model"
+  threshold: 0.6
+`
+					err = os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err = Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(cfg.PromptGuard.ModelID).To(Equal("./jailbreak_classifier_modernbert_model"))
+					Expect(cfg.PromptGuard.ModelID).NotTo(Equal(initialModelID))
+				})
+
+				It("should treat use_modernbert as deprecated but still functional", func() {
+					configContent := `
+prompt_guard:
+  enabled: true
+  model_id: "./jailbreak_classifier_modernbert_model"
+  use_modernbert: true
+`
+					err := os.WriteFile(configFile, []byte(configContent), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+
+					cfg, err := Load(configFile)
+					Expect(err).NotTo(HaveOccurred())
+
+					// use_modernbert should still be readable for backward compatibility
+					Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
+					// But auto-detection should work regardless of this flag
+					Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
+				})
+			})
 		})
 	})
 

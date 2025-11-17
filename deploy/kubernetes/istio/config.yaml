@@ -427,7 +427,7 @@ api:
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
   qwen3_model_path: "models/Qwen3-Embedding-0.6B"
-#  gemma_model_path: "models/embeddinggemma-300m"
+  # gemma_model_path: "models/embeddinggemma-300m"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
 # Observability Configuration

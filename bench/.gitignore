@@ -1,0 +1,17 @@
+# Benchmark results
+results/*.txt
+results/*.prof
+results/*.out
+
+# Test binaries
+*.test
+jailbreak_bench.test
+
+# Go coverage files
+*.coverprofile
+coverage.html
+
+# Temporary files
+*.tmp
+*.log
+
