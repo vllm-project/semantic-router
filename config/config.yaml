@@ -64,9 +64,14 @@ vllm_endpoints:
     port: 11434
     weight: 1
 
+  - name: "image-gen-endpoint"
+    address: "127.0.0.1"
+    port: 9000
+    weight: 1
+
 model_config:
   "image-generator":
-    preferred_endpoints: ["ollama-endpoint"]
+    preferred_endpoints: ["image-gen-endpoint"]
     pii_policy:
       allow_by_default: true
     capabilities: ["image"]

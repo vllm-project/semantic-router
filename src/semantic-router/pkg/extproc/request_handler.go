@@ -631,20 +631,12 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 func isImageGenerationIntent(text string) bool {
 	text = strings.ToLower(text)
 	return strings.Contains(text, "generate an image") ||
-				 strings.Contains(text, "create an image") ||
-				 strings.Contains(text, "draw me") ||
-				 strings.Contains(text, "make a picture") ||
-				 strings.Contains(text, "make an image") ||
-				 strings.Contains(text, "create a photo") ||
-				 strings.Contains(text, "image of")
-}
-
-func rewriteForOllamaImageGeneration(prompt string) ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-			"model":  "llava:7b",   // <--- send to llama-based multimodal model
-			"prompt": prompt,
-			"format": "json",       // optional
-	})
+		strings.Contains(text, "create an image") ||
+		strings.Contains(text, "draw me") ||
+		strings.Contains(text, "make a picture") ||
+		strings.Contains(text, "make an image") ||
+		strings.Contains(text, "create a photo") ||
+		strings.Contains(text, "image of")
 }
 
 // handleModelRouting handles model selection and routing logic
@@ -758,61 +750,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 					matchedModel = "image-generator"
 					categoryName = "image_generation"
 					observability.Infof("Detected image-generation intent → routing to image-generator")
-					
-					// 1. Pick endpoint
-					endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel("image-generator")
-					if !endpointFound {
-							return nil, status.Errorf(codes.Internal, "no endpoint found for image-generator")
-					}
-					
-					// 2. Rewrite request for Ollama
-					ollamaBody, err := rewriteForOllamaImageGeneration(classificationText)
-					if err != nil {
-							return nil, status.Errorf(codes.Internal, "error rewriting for ollama: %v", err)
-					}
-					observability.Infof("Rewritten request body for Ollama: %s", string(ollamaBody))
-					// 3. Return REQUEST MUTATION (not immediate response)**************
-					return &ext_proc.ProcessingResponse{
-							Response: &ext_proc.ProcessingResponse_RequestBody{
-									RequestBody: &ext_proc.BodyResponse{
-											Response: &ext_proc.CommonResponse{
-													BodyMutation: &ext_proc.BodyMutation{
-															Mutation: &ext_proc.BodyMutation_Body{
-																	Body: ollamaBody,
-															},
-													},
-													HeaderMutation: &ext_proc.HeaderMutation{
-															SetHeaders: []*core.HeaderValueOption{
-																	{
-																			Header: &core.HeaderValue{
-																					Key:      headers.GatewayDestinationEndpoint,
-																					RawValue: []byte(endpointAddress),
-																			},
-																	},
-																	{
-																			Header: &core.HeaderValue{
-																					Key:      headers.SelectedModel,
-																					RawValue: []byte("image-generator"),
-																			},
-																	},
-																	{
-																			Header: &core.HeaderValue{
-																					Key:      "Content-Type",
-																					RawValue: []byte("application/json"),
-																			},
-																	},
-															},
-													},
-											},
-									},
-							},
-					}, nil
+				} else {
+					matchedModel = r.classifyAndSelectBestModel(classificationText)
+					categoryName = r.findCategoryForClassification(classificationText)
+				}
 			}
-				
-				// --- NORMAL TEXT CLASSIFICATION ---
-				matchedModel = r.classifyAndSelectBestModel(classificationText)
-				categoryName = r.findCategoryForClassification(classificationText)
-		}
 		}
 
 		classifyTime = time.Since(classifyStart).Milliseconds()
@@ -1299,7 +1241,6 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 
 	return r.updateRequestWithTools(openAIRequest, response, ctx)
 }
-
 
 // updateRequestWithTools updates the request body with the selected tools
 func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
