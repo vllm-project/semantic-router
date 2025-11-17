@@ -21,6 +21,8 @@ import (
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp"
 )
 
+const testModelsDir = "../../../../models"
+
 func TestClassifier(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Classifier Suite")
@@ -2909,13 +2911,11 @@ func createMockModelFile(t *testing.T, dir, filename string) {
 
 func TestAutoDiscoverModels_RealModels(t *testing.T) {
 	// Test with real models directory
-	modelsDir := "../../../../../models"
+	modelsDir := testModelsDir
 
 	paths, err := AutoDiscoverModels(modelsDir)
 	if err != nil {
-		// Skip this test in environments without the real models directory
-		t.Logf("AutoDiscoverModels() failed in real-models test: %v", err)
-		t.Skip("Skipping real-models discovery test because models directory is unavailable")
+		t.Fatalf("AutoDiscoverModels() failed: %v (models directory should exist at %s)", err, modelsDir)
 	}
 
 	t.Logf("Discovered paths:")
@@ -2964,10 +2964,9 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 // TestAutoInitializeUnifiedClassifier tests the full initialization process
 func TestAutoInitializeUnifiedClassifier(t *testing.T) {
 	// Test with real models directory
-	classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
+	classifier, err := AutoInitializeUnifiedClassifier(testModelsDir)
 	if err != nil {
-		t.Logf("AutoInitializeUnifiedClassifier() failed in real-models test: %v", err)
-		t.Skip("Skipping unified classifier init test because real models are unavailable")
+		t.Fatalf("AutoInitializeUnifiedClassifier() failed: %v (models directory should exist at %s)", err, testModelsDir)
 	}
 
 	if classifier == nil {
@@ -3305,7 +3304,7 @@ var (
 // getTestClassifier returns a shared classifier instance for all integration tests
 func getTestClassifier(t *testing.T) *UnifiedClassifier {
 	globalTestClassifierOnce.Do(func() {
-		classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
+		classifier, err := AutoInitializeUnifiedClassifier(testModelsDir)
 		if err != nil {
 			t.Logf("Failed to initialize classifier: %v", err)
 			return
@@ -3323,8 +3322,11 @@ func TestUnifiedClassifier_Integration(t *testing.T) {
 	// Get shared classifier instance
 	classifier := getTestClassifier(t)
 	if classifier == nil {
-		t.Skip("Skipping integration tests - classifier not available")
-		return
+		t.Fatal("Classifier initialization failed")
+	}
+
+	if !classifier.useLoRA {
+		t.Fatal("LoRA models not detected")
 	}
 
 	t.Run("RealBatchClassification", func(t *testing.T) {
@@ -3472,7 +3474,7 @@ func TestUnifiedClassifier_Integration(t *testing.T) {
 func getBenchmarkClassifier(b *testing.B) *UnifiedClassifier {
 	// Reuse the global test classifier for benchmarks
 	globalTestClassifierOnce.Do(func() {
-		classifier, err := AutoInitializeUnifiedClassifier("../../../../../models")
+		classifier, err := AutoInitializeUnifiedClassifier(testModelsDir)
 		if err != nil {
 			b.Logf("Failed to initialize classifier: %v", err)
 			return

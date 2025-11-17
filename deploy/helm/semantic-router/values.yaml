@@ -135,6 +135,18 @@ initContainer:
     requests:
       memory: "1Gi"
       cpu: "500m"
+  # -- Additional environment variables for the init container.
+  # For example, to use a private Hugging Face model, you can pass a token
+  # and specify an endpoint using a pre-existing Kubernetes secret.
+  # env:
+  #   - name: HF_TOKEN
+  #     valueFrom:
+  #       secretKeyRef:
+  #         name: my-hf-secret
+  #         key: token
+  #   - name: HF_ENDPOINT
+  #     value: "https://huggingface.co"
+  env: []
   # -- Models to download
   models:
     - name: all-MiniLM-L12-v2
