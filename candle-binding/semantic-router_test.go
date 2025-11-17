@@ -1478,25 +1478,21 @@ func TestGetEmbeddingSmart(t *testing.T) {
 	// Initialize embedding models first
 	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping GetEmbeddingSmart tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
 
 	t.Run("ShortTextHighLatency", func(t *testing.T) {
-		// Short text with high latency priority should use Traditional BERT
+		// Short text with high latency priority should use Gemma (768) or fall back to Qwen3 (1024)
 		text := "Hello world"
 		embedding, err := GetEmbeddingSmart(text, 0.3, 0.8)
 
 		if err != nil {
-			t.Logf("GetEmbeddingSmart returned error (expected for placeholder): %v", err)
-			// This is expected since we're using placeholder implementation
-			return
+			t.Fatalf("GetEmbeddingSmart failed: %v", err)
 		}
 
-		if len(embedding) != 768 {
-			t.Errorf("Expected 768-dim embedding, got %d", len(embedding))
+		// Accept both Gemma (768) and Qwen3 (1024) dimensions due to fallback logic
+		if len(embedding) != 768 && len(embedding) != 1024 {
+			t.Errorf("Expected 768 or 1024-dim embedding, got %d", len(embedding))
 		}
 
 		t.Logf("Short text embedding generated: dim=%d", len(embedding))
@@ -1520,17 +1516,17 @@ func TestGetEmbeddingSmart(t *testing.T) {
 	})
 
 	t.Run("LongTextHighQuality", func(t *testing.T) {
-		// Long text with high quality priority should use Qwen3
+		// Long text with high quality priority should use Qwen3 (1024)
 		text := strings.Repeat("This is a very long document that requires Qwen3's 32K context support. ", 50)
 		embedding, err := GetEmbeddingSmart(text, 0.9, 0.2)
 
 		if err != nil {
-			t.Logf("GetEmbeddingSmart returned error (expected for placeholder): %v", err)
-			return
+			t.Fatalf("GetEmbeddingSmart failed: %v", err)
 		}
 
-		if len(embedding) != 768 {
-			t.Errorf("Expected 768-dim embedding, got %d", len(embedding))
+		// Accept both Qwen3 (1024) and Gemma (768) dimensions
+		if len(embedding) != 768 && len(embedding) != 1024 {
+			t.Errorf("Expected 768 or 1024-dim embedding, got %d", len(embedding))
 		}
 
 		t.Logf("Long text embedding generated: dim=%d", len(embedding))
@@ -1739,9 +1735,6 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 	// Initialize embedding models first
 	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping GetEmbeddingWithDim tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
 
@@ -1841,9 +1834,6 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 func TestEmbeddingConsistency(t *testing.T) {
 	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping consistency tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
 
@@ -1911,9 +1901,6 @@ func TestEmbeddingConsistency(t *testing.T) {
 func TestEmbeddingPriorityRouting(t *testing.T) {
 	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
 	if err != nil {
-		if isModelInitializationError(err) {
-			t.Skipf("Skipping priority routing tests due to model initialization error: %v", err)
-		}
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
 

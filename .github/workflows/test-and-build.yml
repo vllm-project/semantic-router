@@ -73,15 +73,24 @@ jobs:
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
 
-      - name: Install HuggingFace CLI
+      - name: Install HuggingFace CLI and Login (for gated models like Gemma)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
+          if [ -n "$HF_TOKEN" ]; then
+            python -c "from huggingface_hub import login; login(token='$HF_TOKEN')"
+            echo "✅ Logged in to HuggingFace - gated models (embeddinggemma) will be available"
+          else
+            echo "⚠️  HF_TOKEN not set - gated models (embeddinggemma) will not be available, tests will fall back to Qwen3"
+          fi
 
       - name: Download models (minimal on PRs)
         env:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: make download-models
 
       - name: Start Milvus service
