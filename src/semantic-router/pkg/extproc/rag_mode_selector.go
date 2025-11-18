@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/openai/openai-go"
@@ -51,16 +52,39 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 	case "always":
 		return true
 	case "adaptive":
-		return r.getAdaptiveRAGDecision(query, categoryName)
+		decision, err := r.getAdaptiveRAGDecision(query, categoryName)
+		if err != nil {
+			return decision
+		} else {
+			// TODO: Fallback to a better strategy
+			return true
+		}
 	default:
 		return false
 	}
 }
 
-func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string) bool {
+func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string) (bool, error) {
 	logProbs, err := r.getChatResponseLogProbs(query, categoryName)
-	// TODO: Implement
-	return false
+	if err != nil {
+		observability.Errorf("Error getting log probs: %s \n", err)
+		return false, err
+	}
+	tokenLength := len(logProbs.Content)
+	if tokenLength == 0 {
+		return false, fmt.Errorf("logprobs not available")
+	}
+	var totalLogProbs float64 = 0
+	for _, tokenLogProbs := range logProbs.Content {
+		prob := tokenLogProbs.Logprob
+		totalLogProbs += prob
+	}
+	perplexity := math.Exp(-(totalLogProbs / float64(tokenLength)))
+
+	if perplexity >= r.Config.Rag.ConfidenceThreshold {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string) (*openai.ChatCompletionChoiceLogprobs, error) {
