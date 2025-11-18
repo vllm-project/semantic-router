@@ -13,6 +13,10 @@ jobs:
   integration-test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false  # Continue testing other profiles even if one fails
+      matrix:
+        profile: [ai-gateway, aibrix]
 
     steps:
       - name: Check out the repo
@@ -61,11 +65,11 @@ jobs:
         run: |
           make build-e2e
 
-      - name: Run Integration E2E tests
+      - name: Run Integration E2E tests (${{ matrix.profile }})
         id: e2e-test
         run: |
           set +e  # Don't exit on error, we want to capture the result
-          make e2e-test E2E_PROFILE=ai-gateway E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
+          make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
           TEST_EXIT_CODE=$?
           echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
           exit ${TEST_EXIT_CODE}
@@ -74,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-${{ matrix.profile }}
           path: |
             test-report.json
             test-report.md
@@ -123,25 +127,26 @@ jobs:
             fi
 
             # Add additional context
-            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+            cat >> $GITHUB_STEP_SUMMARY << EOF
 
           ---
 
           ### 📚 Additional Resources
 
+          - **Profile:** \`${{ matrix.profile }}\`
           - **Trigger:** ${{ github.event_name }}
-          - **Branch:** `${{ github.ref_name }}`
-          - **Commit:** `${{ github.sha }}`
+          - **Branch:** \`${{ github.ref_name }}\`
+          - **Commit:** \`${{ github.sha }}\`
           - **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           - [E2E Test Framework Documentation](https://github.com/${{ github.repository }}/tree/main/e2e)
-          - [AI Gateway Profile](https://github.com/${{ github.repository }}/tree/main/e2e/profiles/ai-gateway)
+          - [${{ matrix.profile }} Profile](https://github.com/${{ github.repository }}/tree/main/e2e/profiles/${{ matrix.profile }})
 
           ### 📦 Artifacts
 
           - **test-report.json** - Detailed test results in JSON format
           - **test-report.md** - Human-readable test report
           - **semantic-router-logs.txt** - Complete semantic-router pod logs
-          - All artifacts are retained for 30 days
+          - All artifacts are retained for 30 days as \`test-reports-${{ matrix.profile }}\`
           EOF
           else
             echo "⚠️ Test report file not found!" >> $GITHUB_STEP_SUMMARY

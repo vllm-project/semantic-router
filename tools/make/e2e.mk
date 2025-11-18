@@ -95,6 +95,7 @@ e2e-help: ## Show help for E2E testing
 	@echo ""
 	@echo "Available Profiles:"
 	@echo "  ai-gateway  - Test Semantic Router with Envoy AI Gateway"
+	@echo "  aibrix      - Test Semantic Router with vLLM AIBrix"
 	@echo "  istio       - Test Semantic Router with Istio (coming soon)"
 	@echo ""
 	@echo "Environment Variables:"

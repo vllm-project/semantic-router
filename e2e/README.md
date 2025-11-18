@@ -13,11 +13,11 @@ The framework follows a **separation of concerns** design:
 ### Supported Profiles
 
 - **ai-gateway**: Tests Semantic Router with Envoy AI Gateway integration
+- **aibrix**: Tests Semantic Router with vLLM AIBrix integration
 - **istio**: Tests Semantic Router with Istio Gateway (future)
 - **production-stack**: Tests vLLM Production Stack configurations (future)
 - **llm-d**: Tests with LLM-D (future)
 - **dynamo**: Tests with Nvidia Dynamo (future)
-- **aibrix**: Tests with vLLM AIBrix (future)
 
 ## Directory Structure
 
