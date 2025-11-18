@@ -746,14 +746,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				classificationText = strings.Join(nonUserMessages, " ")
 			}
 			if classificationText != "" {
-				if isImageGenerationIntent(classificationText) {
-					matchedModel = "image-generator"
-					categoryName = "image_generation"
-					observability.Infof("Detected image-generation intent → routing to image-generator")
-				} else {
-					matchedModel = r.classifyAndSelectBestModel(classificationText)
-					categoryName = r.findCategoryForClassification(classificationText)
-				}
+				matchedModel = r.classifyAndSelectBestModel(classificationText)
+				categoryName = r.findCategoryForClassification(classificationText)
 			}
 		}
 
