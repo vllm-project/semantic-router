@@ -1,0 +1,126 @@
+# Base configuration shared across all test cases
+# This simulates the static parts of config.yaml that don't come from CRDs
+
+# Reasoning family configurations
+reasoning_families:
+  deepseek:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+# Global default reasoning effort level
+default_reasoning_effort: high
+
+# BERT model configuration
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# Semantic cache configuration
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  use_hnsw: true
+  hnsw_m: 16
+  hnsw_ef_construction: 200
+  embedding_model: "bert"
+
+# Tools configuration
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+# Prompt guard configuration
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Router configuration
+router:
+  high_confidence_threshold: 0.99
+  low_latency_threshold_ms: 2000
+  lora_baseline_score: 0.8
+  traditional_baseline_score: 0.7
+  embedding_baseline_score: 0.75
+  success_confidence_threshold: 0.8
+  large_batch_threshold: 4
+  lora_default_execution_time_ms: 1345
+  traditional_default_execution_time_ms: 4567
+  default_confidence_threshold: 0.95
+  default_max_latency_ms: 5000
+  default_batch_size: 4
+  default_avg_execution_time_ms: 3000
+  lora_default_confidence: 0.99
+  traditional_default_confidence: 0.95
+  lora_default_success_rate: 0.98
+  traditional_default_success_rate: 0.95
+
+# Embedding models configuration
+embedding_models:
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/embeddinggemma-300m"
+  use_cpu: true
+
+# API configuration
+api:
+  batch_classification:
+    max_batch_size: 100
+    concurrency_threshold: 5
+    max_concurrency: 8
+    metrics:
+      enabled: true
+      detailed_goroutine_tracking: true
+      high_resolution_timing: false
+      sample_rate: 1.0
+      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+# Observability configuration
+observability:
+  tracing:
+    enabled: false
+    provider: "opentelemetry"
+    exporter:
+      type: "otlp"
+      endpoint: "jaeger:4317"
+      insecure: true
+    sampling:
+      type: "always_on"
+      rate: 1.0
+    resource:
+      service_name: "vllm-semantic-router"
+      service_version: "v0.1.0"
+      deployment_environment: "development"
+

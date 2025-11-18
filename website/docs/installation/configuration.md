@@ -77,26 +77,59 @@ classifier:
 # Categories and routing rules
 categories:
 - name: math
-  model_scores:
-  - model: your-model
-    score: 1.0
-    use_reasoning: true  # Enable reasoning for math problems
-  # Optional: Category-level cache settings
-  # semantic_cache_enabled: true
-  # semantic_cache_similarity_threshold: 0.9  # Higher threshold for math
-  # Optional: Category-level jailbreak settings
-  # jailbreak_enabled: true  # Override global jailbreak detection
 - name: computer science
-  model_scores:
-  - model: your-model
-    score: 1.0
-    use_reasoning: true  # Enable reasoning for code
 - name: other
-  model_scores:
-  - model: your-model
-    score: 0.8
-    use_reasoning: false # No reasoning for general queries
-  # semantic_cache_similarity_threshold: 0.75  # Lower threshold for general queries
+
+# Decision-based routing
+decisions:
+- name: math
+  description: "Route mathematical queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "math"
+  modelRefs:
+    - model: your-model
+      use_reasoning: true  # Enable reasoning for math problems
+  # Optional: Decision-level plugins
+  # plugins:
+  #   - type: "semantic-cache"
+  #     configuration:
+  #       enabled: true
+  #       similarity_threshold: 0.9  # Higher threshold for math
+  #   - type: "jailbreak"
+  #     configuration:
+  #       enabled: true  # Override global jailbreak detection
+
+- name: computer science
+  description: "Route computer science queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "computer science"
+  modelRefs:
+    - model: your-model
+      use_reasoning: true  # Enable reasoning for code
+
+- name: other
+  description: "Route general queries"
+  priority: 5
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "other"
+  modelRefs:
+    - model: your-model
+      use_reasoning: false # No reasoning for general queries
+  # plugins:
+  #   - type: "semantic-cache"
+  #     configuration:
+  #       similarity_threshold: 0.75  # Lower threshold for general queries
 
 default_model: your-model
 
@@ -294,48 +327,77 @@ classifier:
 
 ### Categories and Routing
 
-Define how different query types are handled. Each category can have multiple models with individual reasoning settings:
+Define how different query types are handled using the Decision-based routing system:
 
 ```yaml
+# Categories define domains for classification
 categories:
 - name: math
-  model_scores:
-  - model: your-model
-    score: 1.0                     # Preference score for this model
-    use_reasoning: true            # Enable reasoning for this model on math problems
+- name: computer science
+- name: other
+
+# Decisions define routing logic with rules and model selection
+decisions:
+- name: math
+  description: "Route mathematical queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "math"
+  modelRefs:
+    - model: your-model
+      use_reasoning: true            # Enable reasoning for this model on math problems
 
 - name: computer science
-  model_scores:
-  - model: your-model
-    score: 1.0
-    use_reasoning: true            # Enable reasoning for code
+  description: "Route computer science queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "computer science"
+  modelRefs:
+    - model: your-model
+      use_reasoning: true            # Enable reasoning for code
 
 - name: other
-  model_scores:
-  - model: your-model
-    score: 0.8
-    use_reasoning: false           # No reasoning for general queries
+  description: "Route general queries"
+  priority: 5
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "other"
+  modelRefs:
+    - model: your-model
+      use_reasoning: false           # No reasoning for general queries
 
 default_model: your-model          # Fallback model
 ```
 
 ### Model-Specific Reasoning
 
-The `use_reasoning` field is configured per model within each category, allowing fine-grained control:
+The `use_reasoning` field is configured per model within each decision's modelRefs, allowing fine-grained control:
 
 ```yaml
-categories:
+decisions:
 - name: math
-  model_scores:
-  - model: gpt-oss-120b
-    score: 1.0
-    use_reasoning: true            # GPT-OSS-120b supports reasoning for math
-  - model: phi4
-    score: 0.8
-    use_reasoning: false           # phi4 doesn't support reasoning mode
-  - model: deepseek-v31
-    score: 0.9
-    use_reasoning: true            # DeepSeek supports reasoning for math
+  description: "Route mathematical queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "math"
+  modelRefs:
+    - model: gpt-oss-120b
+      use_reasoning: true            # GPT-OSS-120b supports reasoning for math
+    - model: phi4
+      use_reasoning: false           # phi4 doesn't support reasoning mode
+    - model: deepseek-v31
+      use_reasoning: true            # DeepSeek supports reasoning for math
 ```
 
 ### Model Reasoning Configuration
@@ -425,24 +487,36 @@ Set the global default reasoning effort level used when categories don't specify
 default_reasoning_effort: "high"  # Options: "low", "medium", "high"
 ```
 
-**Category-Specific Reasoning Effort:**
-Override the default effort level per category:
+**Decision-Specific Reasoning Effort:**
+Override the default effort level per decision:
 
 ```yaml
-categories:
+decisions:
 - name: math
+  description: "Route mathematical queries"
+  priority: 10
   reasoning_effort: "high"        # Use high effort for complex math
-  model_scores:
-  - model: your-model
-    score: 1.0
-    use_reasoning: true           # Enable reasoning for this model
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "math"
+  modelRefs:
+    - model: your-model
+      use_reasoning: true           # Enable reasoning for this model
 
 - name: general
+  description: "Route general queries"
+  priority: 5
   reasoning_effort: "low"         # Use low effort for general queries
-  model_scores:
-  - model: your-model
-    score: 1.0
-    use_reasoning: true           # Enable reasoning for this model
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "general"
+  modelRefs:
+    - model: your-model
+      use_reasoning: true           # Enable reasoning for this model
 ```
 
 ### Security Features
@@ -483,30 +557,59 @@ semantic_cache:
   ttl_seconds: 3600               # Cache expiration time
   eviction_policy: "fifo"         # Options: "fifo", "lru", "lfu"
 
-# Category-Level Cache Configuration (New)
-# Override global cache settings for specific categories
+# Decision-Level Cache Configuration (New)
+# Override global cache settings for specific decisions
 categories:
   - name: health
-    semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.95  # Very strict - medical accuracy critical
-    model_scores:
-      - model: your-model
-        score: 0.5
-        use_reasoning: false
-  
   - name: general_chat
-    semantic_cache_similarity_threshold: 0.75  # Relaxed for better cache hits
-    model_scores:
-      - model: your-model
-        score: 0.7
-        use_reasoning: false
-  
   - name: troubleshooting
-    # No cache settings - uses global default (0.8)
-    model_scores:
+
+decisions:
+  - name: health
+    description: "Route health queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
       - model: your-model
-        score: 0.7
         use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95  # Very strict - medical accuracy critical
+
+  - name: general_chat
+    description: "Route general chat queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general_chat"
+    modelRefs:
+      - model: your-model
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          similarity_threshold: 0.75  # Relaxed for better cache hits
+
+  - name: troubleshooting
+    description: "Route troubleshooting queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "troubleshooting"
+    modelRefs:
+      - model: your-model
+        use_reasoning: false
+    # No cache plugin - uses global default (0.8)
 
 # Tool Auto-Selection
 tools:
@@ -662,7 +765,7 @@ Different categories have different tolerance for semantic variations:
 
 ### Configuration Examples
 
-#### Example 1: Mixed Thresholds for Different Categories
+#### Example 1: Mixed Thresholds for Different Decisions
 
 ```yaml
 semantic_cache:
@@ -672,37 +775,93 @@ semantic_cache:
 
 categories:
   - name: health
-    system_prompt: "You are a health expert..."
-    semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.95  # Very strict - "headache" vs "severe headache" = different
-    model_scores:
+  - name: psychology
+  - name: general_chat
+  - name: troubleshooting
+
+decisions:
+  - name: health
+    description: "Route health queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
       - model: your-model
-        score: 0.5
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a health expert..."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95  # Very strict - "headache" vs "severe headache" = different
 
   - name: psychology
-    system_prompt: "You are a psychology expert..."
-    semantic_cache_similarity_threshold: 0.92  # Strict - clinical nuances matter
-    model_scores:
+    description: "Route psychology queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
       - model: your-model
-        score: 0.6
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a psychology expert..."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          similarity_threshold: 0.92  # Strict - clinical nuances matter
 
   - name: general_chat
-    system_prompt: "You are a helpful assistant..."
-    semantic_cache_similarity_threshold: 0.75  # Relaxed - "how's the weather" = "what's the weather"
-    model_scores:
+    description: "Route general chat queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general_chat"
+    modelRefs:
       - model: your-model
-        score: 0.7
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a helpful assistant..."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          similarity_threshold: 0.75  # Relaxed - "how's the weather" = "what's the weather"
 
   - name: troubleshooting
-    system_prompt: "You are a tech support expert..."
-    # No cache settings - uses global threshold of 0.8
-    model_scores:
+    description: "Route troubleshooting queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "troubleshooting"
+    modelRefs:
       - model: your-model
-        score: 0.7
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a tech support expert..."
+          mode: "replace"
+    # No cache plugin - uses global threshold of 0.8
 ```
 
 #### Example 2: Disable Cache for Sensitive Data
@@ -710,24 +869,41 @@ categories:
 ```yaml
 categories:
   - name: personal_data
-    system_prompt: "Handle personal information..."
-    semantic_cache_enabled: false  # Disable cache entirely for privacy
-    model_scores:
+
+decisions:
+  - name: personal_data
+    description: "Route personal data queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "personal_data"
+    modelRefs:
       - model: your-model
-        score: 0.8
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "Handle personal information..."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          enabled: false  # Disable cache entirely for privacy
 ```
 
 ### Configuration Options
 
-**Category-Level Fields:**
+**Decision-Level Plugin Fields:**
 
-- `semantic_cache_enabled` (optional, boolean): Enable/disable caching for this category. If not specified, inherits from global `semantic_cache.enabled`.
-- `semantic_cache_similarity_threshold` (optional, float 0.0-1.0): Minimum similarity score for cache hits in this category. If not specified, inherits from global `semantic_cache.similarity_threshold`.
+- `plugins[].type: "semantic-cache"` - Semantic cache plugin configuration
+  - `configuration.enabled` (optional, boolean): Enable/disable caching for this decision. If not specified, inherits from global `semantic_cache.enabled`.
+  - `configuration.similarity_threshold` (optional, float 0.0-1.0): Minimum similarity score for cache hits in this decision. If not specified, inherits from global `semantic_cache.similarity_threshold`.
 
 **Fallback Hierarchy:**
 
-1. Category-specific `semantic_cache_similarity_threshold` (if set)
+1. Decision-specific plugin `similarity_threshold` (if set)
 2. Global `semantic_cache.similarity_threshold` (if set)
 3. `bert_model.threshold` (final fallback)
 
@@ -741,7 +917,7 @@ categories:
 
 **Privacy and Compliance:**
 
-- Disable caching (`semantic_cache_enabled: false`) for categories handling:
+- Disable caching (set plugin `enabled: false`) for decisions handling:
   - Personal identifiable information (PII)
   - Financial data
   - Health records
@@ -750,9 +926,9 @@ categories:
 **Performance Tuning:**
 
 - Start with conservative (higher) thresholds
-- Monitor cache hit rates per category
-- Lower thresholds for categories with low hit rates
-- Raise thresholds for categories with incorrect cache hits
+- Monitor cache hit rates per decision
+- Lower thresholds for decisions with low hit rates
+- Raise thresholds for decisions with incorrect cache hits
 
 ## Common Configuration Examples
 
@@ -845,15 +1021,32 @@ vllm_endpoints:
 
 categories:
 - name: math
-  model_scores:
-  - model: math-model
-    score: 1.0
-    use_reasoning: true           # Enable reasoning for math
 - name: other
-  model_scores:
-  - model: general-model
-    score: 1.0
-    use_reasoning: false          # No reasoning for general queries
+
+decisions:
+- name: math
+  description: "Route mathematical queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "math"
+  modelRefs:
+    - model: math-model
+      use_reasoning: true           # Enable reasoning for math
+
+- name: other
+  description: "Route general queries"
+  priority: 5
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "other"
+  modelRefs:
+    - model: general-model
+      use_reasoning: false          # No reasoning for general queries
 ```
 
 **Load Balancing:**

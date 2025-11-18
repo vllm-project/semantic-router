@@ -14,6 +14,10 @@ var (
 	configOnce sync.Once
 	configErr  error
 	configMu   sync.RWMutex
+
+	// Config change notification channel
+	configUpdateCh chan *RouterConfig
+	configUpdateMu sync.Mutex
 )
 
 // Load loads the configuration from the specified YAML file once and caches it globally.
@@ -64,10 +68,20 @@ func Parse(configPath string) (*RouterConfig, error) {
 // Replace replaces the globally cached config. It is safe for concurrent readers.
 func Replace(newCfg *RouterConfig) {
 	configMu.Lock()
-	defer configMu.Unlock()
 	config = newCfg
-	// Do not reset configOnce to avoid racing re-parses via LoadConfig; callers should use ParseConfigFile for fresher reads.
 	configErr = nil
+	configMu.Unlock()
+
+	// Notify listeners of config change
+	configUpdateMu.Lock()
+	if configUpdateCh != nil {
+		select {
+		case configUpdateCh <- newCfg:
+		default:
+			// Channel full or no listener, skip
+		}
+	}
+	configUpdateMu.Unlock()
 }
 
 // Get returns the current configuration
@@ -75,4 +89,16 @@ func Get() *RouterConfig {
 	configMu.RLock()
 	defer configMu.RUnlock()
 	return config
+}
+
+// WatchConfigUpdates returns a channel that receives config updates
+// Only one watcher is supported at a time
+func WatchConfigUpdates() <-chan *RouterConfig {
+	configUpdateMu.Lock()
+	defer configUpdateMu.Unlock()
+
+	if configUpdateCh == nil {
+		configUpdateCh = make(chan *RouterConfig, 1)
+	}
+	return configUpdateCh
 }

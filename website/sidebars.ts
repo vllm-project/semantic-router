@@ -131,6 +131,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'api/router',
         'api/classification',
+        'api/crd-reference',
       ],
     },
     {

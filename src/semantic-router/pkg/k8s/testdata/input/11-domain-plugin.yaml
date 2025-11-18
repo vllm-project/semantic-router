@@ -1,0 +1,61 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: domain-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "gpt-4o-mini"
+  models:
+    - name: "gpt-4o-mini"
+      pricing:
+        inputTokenPrice: 0.00000015  # $0.15 per 1M - for simple legal queries
+        outputTokenPrice: 0.0000006  # $0.6 per 1M
+      loras:
+        - name: "legal-assistant"
+          description: "Legal assistant"
+
+    - name: "gpt-4o"
+      pricing:
+        inputTokenPrice: 0.0000025   # $2.5 per 1M - for complex legal analysis
+        outputTokenPrice: 0.00001    # $10 per 1M
+      loras:
+        - name: "legal-expert"
+          description: "Legal domain specialist"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: domain-plugin-route
+  namespace: default
+spec:
+  signals:
+    domains:
+      - name: "law"
+        description: "Legal questions and law-related topics"
+      - name: "business"
+        description: "Business and management related queries"
+
+  decisions:
+    - name: "legal_advice"
+      description: "Legal domain with system prompt"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: "gpt-4o"
+          use_reasoning: true
+          reasoning_effort: "high"
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a legal expert. Provide accurate legal information but remind users to consult a licensed attorney."
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.90
+

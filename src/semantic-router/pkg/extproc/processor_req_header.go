@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -33,11 +34,13 @@ type RequestContext struct {
 	TTFTSeconds  float64
 
 	// VSR decision tracking
-	VSRSelectedCategory     string // The category selected by VSR
-	VSRReasoningMode        string // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel        string // The model selected by VSR
-	VSRCacheHit             bool   // Whether this request hit the cache
-	VSRInjectedSystemPrompt bool   // Whether a system prompt was injected into the request
+	VSRSelectedCategory     string           // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName string           // The decision name from DecisionEngine evaluation
+	VSRReasoningMode        string           // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel        string           // The model selected by VSR
+	VSRCacheHit             bool             // Whether this request hit the cache
+	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
+	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation

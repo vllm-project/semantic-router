@@ -24,9 +24,15 @@ const (
 // Vector Semantic Router decision-making information for debugging and monitoring.
 // Headers are only added when the request is successful and did not hit the cache.
 const (
-	// VSRSelectedCategory indicates the category selected by VSR during classification.
+	// VSRSelectedCategory indicates the category selected by VSR during domain classification.
+	// This comes from the domain classifier (MMLU categories).
 	// Example values: "math", "business", "biology", "computer_science"
 	VSRSelectedCategory = "x-vsr-selected-category"
+
+	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
+	// This is the final routing decision made by the DecisionEngine.
+	// Example values: "math_decision", "business_decision", "thinking_decision"
+	VSRSelectedDecision = "x-vsr-selected-decision"
 
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)

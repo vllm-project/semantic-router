@@ -25,17 +25,17 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
 
-	// Check if caching is enabled for this category
+	// Check if caching is enabled for this decision
 	cacheEnabled := r.Config.SemanticCache.Enabled
 	if categoryName != "" {
-		cacheEnabled = r.Config.IsCacheEnabledForCategory(categoryName)
+		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
 	}
 
 	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
-		// Get category-specific threshold
+		// Get decision-specific threshold
 		threshold := r.Config.GetCacheSimilarityThreshold()
 		if categoryName != "" {
-			threshold = r.Config.GetCacheSimilarityThresholdForCategory(categoryName)
+			threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
 		}
 
 		// Start cache lookup span

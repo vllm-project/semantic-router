@@ -1,0 +1,81 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: domain-embedding-pool
+  namespace: default
+spec:
+  defaultModel: "gpt-4o-mini"
+  models:
+    - name: "gpt-4o-mini"
+      pricing:
+        inputTokenPrice: 0.00000015  # $0.15 per 1M - fast for research queries
+        outputTokenPrice: 0.0000006  # $0.6 per 1M
+      loras:
+        - name: "research-assistant"
+          description: "Research assistant"
+
+    - name: "gpt-4o"
+      pricing:
+        inputTokenPrice: 0.0000025   # $2.5 per 1M - better for complex research
+        outputTokenPrice: 0.00001    # $10 per 1M
+      loras:
+        - name: "research-expert"
+          description: "Advanced research specialist"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: domain-embedding-route
+  namespace: default
+spec:
+  signals:
+    embeddings:
+      - name: "research_question"
+        threshold: 0.78
+        candidates:
+          - "Can you explain the theory behind this concept?"
+          - "What are the latest research findings on this topic?"
+          - "I'm conducting research and need detailed information"
+        aggregationMethod: "max"
+
+    domains:
+      - name: "biology"
+        description: "Biology and life sciences"
+      - name: "chemistry"
+        description: "Chemistry and chemical sciences"
+      - name: "physics"
+        description: "Physics and physical sciences"
+
+  decisions:
+    - name: "biology_research"
+      description: "Biology research queries"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "research_question"
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: "gpt-4o"
+          use_reasoning: true
+          reasoning_effort: "high"
+
+    - name: "general_science_research"
+      description: "General science research"
+      priority: 80
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "research_question"
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: "gpt-4o"
+          use_reasoning: true
+          reasoning_effort: "medium"
+

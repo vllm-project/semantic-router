@@ -51,20 +51,13 @@ vllm_endpoints:
     health_check_path: "/health"
 
 model_config:
-
   "Model-A":
     use_reasoning: false
     reasoning_family: "qwen3"  # This model uses Qwen reasoning syntax
     preferred_endpoints: ["qwen-endpoint"]
-    pii_policy:
-      allow_by_default: false  # Strict PII blocking model
-      pii_types_allowed: ["EMAIL_ADDRESS"]  # Only allow emails
   "Model-B":
     use_reasoning: false
     preferred_endpoints: ["tinyllama-endpoint"]
-    pii_policy:
-      allow_by_default: true  # Permissive PII model for safe routing
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
 
 # Classifier configuration for text classification
 # Using LoRA intent classifier (preferred modern approach with lora_config.json)
@@ -83,190 +76,288 @@ classifier:
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 categories:
   - name: business
-    model_scores:
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "Business content is typically conversational"
-        reasoning_effort: low
-      - model: "Model-B"
-        score: 0.4
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.2
-        use_reasoning: false
+    description: "Business and management related queries"
+    mmlu_categories: ["business"]
   - name: law
-    model_scores:
-      - model: "Model-B"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "Legal content is typically explanatory"
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.4
-        use_reasoning: false
+    description: "Legal questions and law-related topics"
+    mmlu_categories: ["law"]
   - name: psychology
-    # Example: Strict cache threshold for psychology - clinical nuances matter
-    # semantic_cache_enabled: true
-    # semantic_cache_similarity_threshold: 0.92
-    model_scores:
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
-        reasoning_description: "Psychology content is usually explanatory"
-      - model: "Model-B"
-        score: 0.4
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.4
-        use_reasoning: false
+    description: "Psychology and mental health topics"
+    mmlu_categories: ["psychology"]
   - name: biology
-    model_scores:
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "Biological processes benefit from structured analysis"
-      - model: "Model-B"
-        score: 0.6
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.2
-        use_reasoning: false
+    description: "Biology and life sciences questions"
+    mmlu_categories: ["biology"]
   - name: chemistry
-    model_scores:
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: true
-        reasoning_description: "Chemical reactions and formulas require systematic thinking"
-        reasoning_effort: high
-      - model: "Model-B"
-        score: 0.6
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
+    description: "Chemistry and chemical sciences questions"
+    mmlu_categories: ["chemistry"]
   - name: history
-    model_scores:
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "Historical content is narrative-based"
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
-      - model: "Model-B"
-        score: 0.4
-        use_reasoning: false
+    description: "Historical questions and cultural topics"
+    mmlu_categories: ["history"]
   - name: other
-    # Example: Lower threshold for general queries - better cache hit rate
-    # semantic_cache_enabled: true
-    # semantic_cache_similarity_threshold: 0.75
-    model_scores:
-      - model: "Model-B"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "General content doesn't require reasoning"
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
   - name: health
-    # Example: Very strict cache threshold for health - word changes matter medically
-    # semantic_cache_enabled: true
-    # semantic_cache_similarity_threshold: 0.95
-    model_scores:
-      - model: "Model-B"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "Health information is typically informational"
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
+    description: "Health and medical information queries"
+    mmlu_categories: ["health"]
   - name: economics
-    model_scores:
-      - model: "Model-B"
-        score: 0.8
-        use_reasoning: false
-        reasoning_description: "Economic discussions are usually explanatory"
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.1
-        use_reasoning: false
+    description: "Economics and financial topics"
+    mmlu_categories: ["economics"]
   - name: math
-    model_scores:
-      - model: "Model-B"
-        score: 1.0
-        use_reasoning: true
-        reasoning_description: "Mathematical problems require step-by-step reasoning"
-        reasoning_effort: high
-      - model: "Model-A"
-        score: 0.9
-        use_reasoning: true
-        reasoning_description: "Mathematical problems require step-by-step reasoning"
-        reasoning_effort: high
-      - model: "Model-A"
-        score: 0.8
-        use_reasoning: false
-      - model: "Model-B"
-        score: 0.6
-        use_reasoning: false
+    description: "Mathematics and quantitative reasoning"
+    mmlu_categories: ["math"]
   - name: physics
-    model_scores:
-      - model: "Model-B"
-        score: 0.4
-        use_reasoning: true
-        reasoning_description: "Physics concepts need logical analysis"
-      - model: "Model-A"
-        score: 0.4
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.4
-        use_reasoning: false
-  - name: computer science
-    model_scores:
-      - model: "Model-B"
-        score: 0.6
-        use_reasoning: false
-        reasoning_description: "Programming and algorithms need logical reasoning"
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.1
-        use_reasoning: false
+    description: "Physics and physical sciences"
+    mmlu_categories: ["physics"]
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
   - name: philosophy
-    model_scores:
-      - model: "Model-A"
-        score: 0.6
-        use_reasoning: false
-        reasoning_description: "Philosophical discussions are conversational"
-      - model: "Model-B"
-        score: 0.2
-        use_reasoning: false
-      - model: "Model-A"
-        score: 0.2
-        use_reasoning: false
+    description: "Philosophy and ethical questions"
+    mmlu_categories: ["philosophy"]
   - name: engineering
-    model_scores:
+    description: "Engineering and technical problem-solving"
+    mmlu_categories: ["engineering"]
+
+strategy: "priority"
+
+decisions:
+  - name: "business_decision"
+    description: "Business and management related queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "law_decision"
+    description: "Legal questions and law-related topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
       - model: "Model-B"
-        score: 0.6
         use_reasoning: false
-        reasoning_description: "Engineering problems require systematic problem-solving"
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "psychology_decision"
+    description: "Psychology and mental health topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
       - model: "Model-A"
-        score: 0.6
         use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "biology_decision"
+    description: "Biology and life sciences questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    modelRefs:
       - model: "Model-A"
-        score: 0.2
         use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "chemistry_decision"
+    description: "Chemistry and chemical sciences questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: true
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "history_decision"
+    description: "Historical questions and cultural topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "health_decision"
+    description: "Health and medical information queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "economics_decision"
+    description: "Economics and financial topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: true
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "physics_decision"
+    description: "Physics and physical sciences"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: true
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "computer_science_decision"
+    description: "Computer science and programming"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "philosophy_decision"
+    description: "Philosophy and ethical questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "engineering_decision"
+    description: "Engineering and technical problem-solving"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous topics"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
 
 default_model: "Model-A"
 

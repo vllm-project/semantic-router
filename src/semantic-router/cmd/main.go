@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -31,6 +32,8 @@ func main() {
 		enableSystemPromptAPI = flag.Bool("enable-system-prompt-api", false, "Enable system prompt configuration endpoints (SECURITY: only enable in trusted environments)")
 		secure                = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
 		certPath              = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
+		kubeconfig            = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
+		namespace             = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
 	)
 	flag.Parse()
 
@@ -50,6 +53,10 @@ func main() {
 	if err != nil {
 		logging.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Set the initial configuration in the global config
+	// This is important for Kubernetes mode where the controller will update it
+	config.Replace(cfg)
 
 	// Initialize distributed tracing if enabled
 	ctx := context.Background()
@@ -114,10 +121,8 @@ func main() {
 	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
 	// Initialize embedding models if configured (Long-context support)
-	cfg, err = config.Load(*configPath)
-	if err != nil {
-		logging.Warnf("Failed to load config for embedding models: %v", err)
-	} else if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
+	// Use the already loaded config instead of calling config.Load() again
+	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
 		logging.Infof("Initializing embedding models...")
 		logging.Infof("  Qwen3 model: %s", cfg.Qwen3ModelPath)
 		logging.Infof("  Gemma model: %s", cfg.GemmaModelPath)
@@ -152,7 +157,43 @@ func main() {
 		}()
 	}
 
+	// Start Kubernetes controller if ConfigSource is kubernetes
+	if cfg.ConfigSource == config.ConfigSourceKubernetes {
+		logging.Infof("ConfigSource is kubernetes, starting Kubernetes controller")
+		go startKubernetesController(cfg, *kubeconfig, *namespace)
+	} else {
+		logging.Infof("ConfigSource is file (or not specified), using file-based configuration")
+	}
+
 	if err := server.Start(); err != nil {
 		logging.Fatalf("ExtProc server error: %v", err)
+	}
+}
+
+// startKubernetesController starts the Kubernetes controller for watching CRDs
+func startKubernetesController(staticConfig *config.RouterConfig, kubeconfig, namespace string) {
+	// Import k8s package here to avoid import errors when k8s dependencies are not available
+	// This is a lazy import pattern
+	logging.Infof("Initializing Kubernetes controller for namespace: %s", namespace)
+
+	logging.Infof("Starting Kubernetes controller for namespace: %s", namespace)
+
+	controller, err := k8s.NewController(k8s.ControllerConfig{
+		Namespace:    namespace,
+		Kubeconfig:   kubeconfig,
+		StaticConfig: staticConfig,
+		OnConfigUpdate: func(newConfig *config.RouterConfig) error {
+			config.Replace(newConfig)
+			logging.Infof("Configuration updated from Kubernetes CRDs")
+			return nil
+		},
+	})
+	if err != nil {
+		logging.Fatalf("Failed to create Kubernetes controller: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := controller.Start(ctx); err != nil {
+		logging.Fatalf("Kubernetes controller error: %v", err)
 	}
 }

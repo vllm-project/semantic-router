@@ -49,48 +49,124 @@ classifier:
 
 categories:
   - name: math
-    system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
-    model_scores:
-      - model: qwen3
-        score: 1.0
-        use_reasoning: true
-  
   - name: physics
-    system_prompt: "You are a physics expert with deep understanding of physical laws."
-    model_scores:
-      - model: qwen3
-        score: 0.7
-        use_reasoning: true
-  
   - name: computer science
-    system_prompt: "You are a computer science expert with knowledge of algorithms and data structures."
-    model_scores:
-      - model: qwen3
-        score: 0.6
-        use_reasoning: false
-  
   - name: business
-    system_prompt: "You are a senior business consultant and strategic advisor."
-    model_scores:
-      - model: qwen3
-        score: 0.7
-        use_reasoning: false
-  
   - name: health
-    system_prompt: "You are a health and medical information expert."
-    semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.95
-    model_scores:
-      - model: qwen3
-        score: 0.5
-        use_reasoning: false
-  
   - name: law
-    system_prompt: "You are a knowledgeable legal expert."
-    model_scores:
+
+decisions:
+  - name: math
+    description: "Route mathematical queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
       - model: qwen3
-        score: 0.4
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
+          mode: "replace"
+
+  - name: physics
+    description: "Route physics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: qwen3
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a physics expert with deep understanding of physical laws."
+          mode: "replace"
+
+  - name: computer science
+    description: "Route computer science queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+    modelRefs:
+      - model: qwen3
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a computer science expert with knowledge of algorithms and data structures."
+          mode: "replace"
+
+  - name: business
+    description: "Route business queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: qwen3
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a senior business consultant and strategic advisor."
+          mode: "replace"
+
+  - name: health
+    description: "Route health queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: qwen3
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a health and medical information expert."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95
+
+  - name: law
+    description: "Route legal queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
+      - model: qwen3
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a knowledgeable legal expert."
+          mode: "replace"
 
 default_model: qwen3
 ```
@@ -170,38 +246,116 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ### STEM Domains (Reasoning Enabled)
 
 ```yaml
+decisions:
 - name: math
-  use_reasoning: true  # Step-by-step solutions
-  score: 1.0           # Highest priority
+  description: "Route mathematical queries"
+  priority: 10  # Highest priority
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "math"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: true  # Step-by-step solutions
+
 - name: physics
-  use_reasoning: true  # Derivations and proofs
-  score: 0.7
+  description: "Route physics queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "physics"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: true  # Derivations and proofs
+
 - name: chemistry
-  use_reasoning: true  # Reaction mechanisms
-  score: 0.6
+  description: "Route chemistry queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "chemistry"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: true  # Reaction mechanisms
 ```
 
 ### Professional Domains (PII + Caching)
 
 ```yaml
+decisions:
 - name: health
-  semantic_cache_enabled: true
-  semantic_cache_similarity_threshold: 0.95  # Very strict
-  pii_detection_enabled: true
+  description: "Route health queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "health"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: false
+  plugins:
+    - type: "semantic-cache"
+      configuration:
+        enabled: true
+        similarity_threshold: 0.95  # Very strict
+    - type: "pii"
+      configuration:
+        enabled: true
+
 - name: law
-  score: 0.4  # Conservative routing
-  pii_detection_enabled: true
+  description: "Route legal queries"
+  priority: 5  # Conservative routing
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "law"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: false
+  plugins:
+    - type: "pii"
+      configuration:
+        enabled: true
 ```
 
 ### General Domains (Fast + Cached)
 
 ```yaml
+decisions:
 - name: business
-  use_reasoning: false  # Fast responses
-  score: 0.7
+  description: "Route business queries"
+  priority: 10
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "business"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: false  # Fast responses
+
 - name: other
-  semantic_cache_similarity_threshold: 0.75  # Relaxed
-  score: 0.7
+  description: "Route general queries"
+  priority: 5
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "other"
+  modelRefs:
+    - model: qwen3
+      use_reasoning: false
+  plugins:
+    - type: "semantic-cache"
+      configuration:
+        similarity_threshold: 0.75  # Relaxed
 ```
 
 ## Performance Characteristics

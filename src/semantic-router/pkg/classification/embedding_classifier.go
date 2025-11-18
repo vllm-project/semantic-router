@@ -59,25 +59,25 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 // Classify performs keyword-based embedding similarity classification on the given text.
 func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
 	var bestScore float32
-	var mostMatchedCategory string
+	var mostMatchedRule string
 	for _, rule := range c.rules {
 		matched, aggregatedScore, err := c.matches(text, rule) // Error handled
 		if err != nil {
 			return "", 0.0, err // Propagate error
 		}
 		if matched {
-			if len(rule.Keywords) > 0 {
-				logging.Infof("Keyword-based embedding similarity classification matched category %q with keywords: %v, confidence score %s", rule.Category, rule.Keywords, aggregatedScore)
+			if len(rule.Candidates) > 0 {
+				logging.Infof("Keyword-based embedding similarity classification matched rule %q with candidates: %v, confidence score %s", rule.Name, rule.Candidates, aggregatedScore)
 			} else {
-				logging.Infof("Keyword-based embedding similarity classification do not match category %q with keywords: %v, confidence score %s", rule.Category, rule.Keywords, aggregatedScore)
+				logging.Infof("Keyword-based embedding similarity classification do not match rule %q with candidates: %v, confidence score %s", rule.Name, rule.Candidates, aggregatedScore)
 			}
 			if aggregatedScore > bestScore {
 				bestScore = aggregatedScore
-				mostMatchedCategory = rule.Category
+				mostMatchedRule = rule.Name
 			}
 		}
 	}
-	return mostMatchedCategory, float64(bestScore), nil
+	return mostMatchedRule, float64(bestScore), nil
 }
 
 // matches checks if the text matches the given keyword rule.
@@ -86,30 +86,17 @@ func (c *EmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (b
 	if text == "" {
 		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: query must be provided")
 	}
-	if len(rule.Keywords) == 0 {
-		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: keywords must be provided")
-	}
-	// Set defaults
-	if rule.Dimension == 0 {
-		rule.Dimension = 768 // Default to full dimension
-	}
-	if rule.Model == "auto" && rule.QualityPriority == 0 && rule.LatencyPriority == 0 {
-		rule.QualityPriority = 0.5
-		rule.LatencyPriority = 0.5
+	if len(rule.Candidates) == 0 {
+		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: candidates must be provided")
 	}
 
-	// Validate dimension
-	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
-	if !validDimensions[rule.Dimension] {
-		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", rule.Dimension)
-	}
-	// Calculate batch similarity
+	// Calculate batch similarity using default model (auto) and dimension (768)
 	result, err := calculateSimilarityBatch(
 		text,
-		rule.Keywords,
-		0, // return scores for all the keywords
-		rule.Model,
-		rule.Dimension,
+		rule.Candidates,
+		0,      // return scores for all the candidates
+		"auto", // use auto model selection
+		768,    // use default dimension
 	)
 	if err != nil {
 		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: failed to calculate batch similarity: %w", err)

@@ -1,0 +1,68 @@
+processor:
+  # Ignore fields that are common to all Kubernetes resources
+  ignoreFields:
+    - "TypeMeta"
+    - "ObjectMeta"
+    - "ListMeta"
+
+  # Ignore types that are not relevant for documentation
+  ignoreTypes:
+    - "metav1.Time"
+    - "metav1.Duration"
+    - "metav1.ObjectMeta"
+    - "metav1.TypeMeta"
+    - "metav1.ListMeta"
+
+  # Source path for Go API types
+  sourcePath: "./src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
+
+render:
+  # Enable Kubebuilder markers rendering
+  kubebuilderMarkers: true
+  
+  # Group resources by Kind
+  groupByKind: true
+  
+  # Include table of contents
+  includeTableOfContents: true
+  
+  # Custom templates (optional)
+  # templatesDir: "./docs/crd-templates"
+  
+  # Output format: markdown, asciidoc, or html
+  format: markdown
+
+# Custom configuration for your CRDs
+groups:
+  - name: vllm.ai
+    displayName: "vLLM Semantic Router"
+    description: |
+      Custom Resource Definitions for vLLM Semantic Router.
+      These CRDs enable declarative configuration of intelligent routing and model pools.
+    
+    kinds:
+      - name: IntelligentRoute
+        displayName: "Intelligent Route"
+        description: |
+          IntelligentRoute defines intelligent routing rules and decisions for LLM requests.
+          It supports decision-based routing with rule combinations, model references, and plugins.
+      
+      - name: IntelligentPool
+        displayName: "Intelligent Pool"
+        description: |
+          IntelligentPool defines a pool of LLM models with their configurations.
+          It manages model endpoints, reasoning families, and model-specific settings.
+
+# Markdown rendering options
+markdown:
+  # Header level for the main title
+  headerLevel: 1
+  
+  # Include examples in the documentation
+  includeExamples: true
+  
+  # Include status subresource documentation
+  includeStatus: true
+  
+  # Code block language for YAML examples
+  codeBlockLanguage: yaml

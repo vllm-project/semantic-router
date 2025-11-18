@@ -17,10 +17,11 @@ import (
 
 // Init starts the API server
 func Init(configPath string, port int, enableSystemPromptAPI bool) error {
-	// Load configuration
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Get the global configuration instead of loading from file
+	// This ensures we use the same config as the rest of the application
+	cfg := config.Get()
+	if cfg == nil {
+		return fmt.Errorf("configuration not initialized")
 	}
 
 	// Create classification service - try to get global service with retry
@@ -39,7 +40,7 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 	}
 
 	// Initialize batch metrics configuration
-	if cfg != nil && cfg.API.BatchClassification.Metrics.Enabled {
+	if cfg.API.BatchClassification.Metrics.Enabled {
 		metricsConfig := metrics.BatchMetricsConfig{
 			Enabled:                   cfg.API.BatchClassification.Metrics.Enabled,
 			DetailedGoroutineTracking: cfg.API.BatchClassification.Metrics.DetailedGoroutineTracking,

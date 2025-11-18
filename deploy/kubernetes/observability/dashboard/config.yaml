@@ -40,8 +40,7 @@ model_config:
   "qwen3":
     reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]
-    pii_policy:
-      allow_by_default: true
+    allow_by_default: true
 
 # Classifier configuration
 classifier:

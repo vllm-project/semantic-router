@@ -13,10 +13,10 @@ import (
 )
 
 // logRoutingDecision logs routing decision with structured logging
-func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, categoryName string, reasoningEnabled bool, endpoint string) {
+func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool, endpoint string) {
 	effortForMetrics := ""
-	if reasoningEnabled && categoryName != "" {
-		effortForMetrics = r.getReasoningEffort(categoryName, selectedModel)
+	if reasoningEnabled && decisionName != "" {
+		effortForMetrics = r.getReasoningEffort(decisionName, selectedModel)
 	}
 
 	logging.LogEvent("routing_decision", map[string]interface{}{
@@ -24,7 +24,7 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 		"request_id":         ctx.RequestID,
 		"original_model":     originalModel,
 		"selected_model":     selectedModel,
-		"category":           categoryName,
+		"decision":           decisionName,
 		"reasoning_enabled":  reasoningEnabled,
 		"reasoning_effort":   effortForMetrics,
 		"selected_endpoint":  endpoint,
@@ -34,15 +34,15 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 }
 
 // recordRoutingDecision records routing decision with tracing
-func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, categoryName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
+func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
 	routingCtx, routingSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanRoutingDecision)
 
 	useReasoning := reasoningDecision.UseReasoning
 	logging.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
 		useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 
-	effortForMetrics := r.getReasoningEffort(categoryName, matchedModel)
-	metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
+	effortForMetrics := r.getReasoningEffort(decisionName, matchedModel)
+	metrics.RecordReasoningDecision(decisionName, matchedModel, useReasoning, effortForMetrics)
 
 	tracing.SetSpanAttributes(routingSpan,
 		attribute.String(tracing.AttrRoutingStrategy, "auto"),
@@ -57,8 +57,11 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, categoryName s
 }
 
 // trackVSRDecision tracks VSR decision information in context
-func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string, matchedModel string, useReasoning bool) {
+// categoryName: the category from domain classification (MMLU category)
+// decisionName: the decision name from DecisionEngine evaluation
+func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string, decisionName string, matchedModel string, useReasoning bool) {
 	ctx.VSRSelectedCategory = categoryName
+	ctx.VSRSelectedDecisionName = decisionName
 	ctx.VSRSelectedModel = matchedModel
 	if useReasoning {
 		ctx.VSRReasoningMode = "on"

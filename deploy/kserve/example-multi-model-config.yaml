@@ -70,7 +70,6 @@ data:
       "granite32-8b":
         reasoning_family: "qwen3"
         preferred_endpoints: ["granite32-8b-endpoint"]
-        pii_policy:
           allow_by_default: true
           pii_types_allowed: ["EMAIL_ADDRESS"]
 
@@ -103,143 +102,117 @@ data:
         use_cpu: true
         pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
-    # Category-based routing strategy
-    # Higher scores route to that model for the category
+    # Categories define domain metadata only (no routing logic)
     categories:
-      # Simple categories → small model
       - name: business
-        system_prompt: "You are a senior business consultant and strategic advisor."
-        model_scores:
-          - model: granite32-8b
-            score: 0.8
-            use_reasoning: false
-          # - model: granite32-78b
-          #   score: 0.6
-          #   use_reasoning: false
-
-      - name: other
-        system_prompt: "You are a helpful assistant."
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.75
-        model_scores:
-          - model: granite32-8b
-            score: 1.0
-            use_reasoning: false
-
-      # Complex reasoning categories → large model
-      - name: math
-        system_prompt: "You are a mathematics expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.7
-            use_reasoning: true
-          # - model: granite32-78b
-          #   score: 1.0
-          #   use_reasoning: true
-
-      - name: physics
-        system_prompt: "You are a physics expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.7
-            use_reasoning: true
-          # - model: granite32-78b
-          #   score: 0.9
-          #   use_reasoning: true
-
-      # Coding → specialized code model
-      - name: computer science
-        system_prompt: "You are a computer science expert."
-        model_scores:
-          # - model: granite-code
-          #   score: 1.0
-          #   use_reasoning: false
-          - model: granite32-8b
-            score: 0.8
-            use_reasoning: false
-          # - model: granite32-78b
-          #   score: 0.6
-          #   use_reasoning: false
-
-      # Other categories
+        description: "Business and management related queries"
+        mmlu_categories: ["business"]
       - name: law
-        system_prompt: "You are a knowledgeable legal expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.5
-            use_reasoning: false
-          # - model: granite32-78b
-          #   score: 0.9
-          #   use_reasoning: false
-
+        description: "Legal questions and law-related topics"
+        mmlu_categories: ["law"]
       - name: psychology
-        system_prompt: "You are a psychology expert."
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.92
-        model_scores:
-          - model: granite32-8b
-            score: 0.7
-            use_reasoning: false
-
+        description: "Psychology and mental health topics"
+        mmlu_categories: ["psychology"]
       - name: biology
-        system_prompt: "You are a biology expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.9
-            use_reasoning: false
-
+        description: "Biology and life sciences questions"
+        mmlu_categories: ["biology"]
       - name: chemistry
-        system_prompt: "You are a chemistry expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.7
-            use_reasoning: true
-          # - model: granite32-78b
-          #   score: 0.9
-          #   use_reasoning: true
-
+        description: "Chemistry and chemical sciences questions"
+        mmlu_categories: ["chemistry"]
       - name: history
-        system_prompt: "You are a historian."
-        model_scores:
-          - model: granite32-8b
-            score: 0.8
-            use_reasoning: false
-
+        description: "Historical questions and cultural topics"
+        mmlu_categories: ["history"]
+      - name: other
+        description: "General knowledge and miscellaneous topics"
+        mmlu_categories: ["other"]
       - name: health
-        system_prompt: "You are a health and medical information expert."
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.95
-        model_scores:
-          - model: granite32-8b
-            score: 0.6
-            use_reasoning: false
-          # - model: granite32-78b
-          #   score: 0.8
-          #   use_reasoning: false
-
+        description: "Health and medical information queries"
+        mmlu_categories: ["health"]
       - name: economics
-        system_prompt: "You are an economics expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.9
-            use_reasoning: false
-
+        description: "Economics and financial topics"
+        mmlu_categories: ["economics"]
+      - name: math
+        description: "Mathematics and quantitative reasoning"
+        mmlu_categories: ["math"]
+      - name: physics
+        description: "Physics and physical sciences"
+        mmlu_categories: ["physics"]
+      - name: computer_science
+        description: "Computer science and programming"
+        mmlu_categories: ["computer_science"]
       - name: philosophy
-        system_prompt: "You are a philosophy expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.6
-            use_reasoning: false
-          # - model: granite32-78b
-          #   score: 0.8
-          #   use_reasoning: false
-
+        description: "Philosophy and ethical questions"
+        mmlu_categories: ["philosophy"]
       - name: engineering
-        system_prompt: "You are an engineering expert."
-        model_scores:
-          - model: granite32-8b
-            score: 0.8
+        description: "Engineering and technical problem-solving"
+        mmlu_categories: ["engineering"]
+
+    strategy: "priority"
+
+    decisions:
+      - name: "business_decision"
+        description: "Business and management related queries"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "business"
+        modelRefs:
+          - model: "granite32-8b"
             use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a senior business consultant and strategic advisor."
+          - type: "pii"
+            configuration:
+              enabled: true
+              pii_types_allowed: []
+
+      - name: "math_decision"
+        description: "Mathematics and quantitative reasoning"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "math"
+        modelRefs:
+          - model: "granite32-8b"
+            use_reasoning: true
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a mathematics expert."
+          - type: "pii"
+            configuration:
+              enabled: true
+              pii_types_allowed: []
+
+      - name: "general_decision"
+        description: "General knowledge and miscellaneous topics"
+        priority: 50
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "other"
+        modelRefs:
+          - model: "granite32-8b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a helpful assistant."
+          - type: "semantic-cache"
+            configuration:
+              enabled: true
+              similarity_threshold: 0.75
+          - type: "pii"
+            configuration:
+              enabled: true
+              pii_types_allowed: []
 
     default_model: granite32-8b
 

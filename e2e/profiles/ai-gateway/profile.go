@@ -129,7 +129,7 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
 	// Use local Helm chart instead of remote OCI registry
 	chartPath := "deploy/helm/semantic-router"
-	valuesFile := "deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml"
+	valuesFile := "e2e/profiles/ai-gateway/values.yaml"
 
 	// Override image to use locally built image
 	imageRepo := "ghcr.io/vllm-project/semantic-router/extproc"
@@ -146,7 +146,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 			"image.pullPolicy": "Never", // Use local image, don't pull from registry
 		},
 		Wait:    true,
-		Timeout: "10m",
+		Timeout: "30m",
 	}
 
 	if err := deployer.Install(ctx, installOpts); err != nil {
@@ -164,14 +164,14 @@ func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deploye
 		Version:     "v0.0.0-latest",
 		ValuesFiles: []string{"https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"},
 		Wait:        true,
-		Timeout:     "5m",
+		Timeout:     "10m",
 	}
 
 	if err := deployer.Install(ctx, installOpts); err != nil {
 		return err
 	}
 
-	return deployer.WaitForDeployment(ctx, "envoy-gateway-system", "envoy-gateway", 5*time.Minute)
+	return deployer.WaitForDeployment(ctx, "envoy-gateway-system", "envoy-gateway", 10*time.Minute)
 }
 
 func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {
@@ -182,7 +182,7 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		Namespace:   "envoy-ai-gateway-system",
 		Version:     "v0.0.0-latest",
 		Wait:        true,
-		Timeout:     "5m",
+		Timeout:     "10m",
 	}
 
 	if err := deployer.Install(ctx, crdOpts); err != nil {
@@ -196,14 +196,14 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		Namespace:   "envoy-ai-gateway-system",
 		Version:     "v0.0.0-latest",
 		Wait:        true,
-		Timeout:     "5m",
+		Timeout:     "10m",
 	}
 
 	if err := deployer.Install(ctx, installOpts); err != nil {
 		return err
 	}
 
-	return deployer.WaitForDeployment(ctx, "envoy-ai-gateway-system", "ai-gateway-controller", 5*time.Minute)
+	return deployer.WaitForDeployment(ctx, "envoy-ai-gateway-system", "ai-gateway-controller", 10*time.Minute)
 }
 
 func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {

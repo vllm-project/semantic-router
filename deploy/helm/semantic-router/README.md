@@ -6,6 +6,43 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 
 **Homepage:** <https://github.com/vllm-project/semantic-router>
 
+## CRD Management
+
+This Helm chart includes Custom Resource Definitions (CRDs) in the `crds/` directory:
+
+- `vllm.ai_intelligentpools.yaml` - IntelligentPool CRD
+- `vllm.ai_intelligentroutes.yaml` - IntelligentRoute CRD
+
+### Generating CRDs
+
+CRDs are automatically generated from Go type definitions using `controller-gen`. To regenerate CRDs:
+
+```bash
+# From the repository root
+make generate-crd
+```
+
+This command will:
+
+1. Generate CRDs from `src/semantic-router/pkg/apis/vllm.ai/v1alpha1` types
+2. Output to `deploy/kubernetes/crds/`
+3. Copy to `deploy/helm/semantic-router/crds/` for Helm chart
+
+### CRD Installation
+
+CRDs in the `crds/` directory are automatically installed by Helm:
+
+- Installed **before** other resources during `helm install`
+- **Not managed** by Helm (no Helm labels/annotations)
+- **Not updated** during `helm upgrade` (must be updated manually)
+- **Not deleted** during `helm uninstall` (protects custom resources)
+
+To manually update CRDs:
+
+```bash
+kubectl apply -f deploy/helm/semantic-router/crds/
+```
+
 ## Maintainers
 
 | Name | Email | Url |
@@ -14,7 +51,7 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 
 ## Source Code
 
-* <https://github.com/vllm-project/semantic-router>
+- <https://github.com/vllm-project/semantic-router>
 
 ## Values
 

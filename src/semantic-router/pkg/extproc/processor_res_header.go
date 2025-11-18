@@ -54,12 +54,22 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	if isSuccessful && !ctx.VSRCacheHit && ctx != nil {
 		var setHeaders []*core.HeaderValueOption
 
-		// Add x-vsr-selected-category header
+		// Add x-vsr-selected-category header (from domain classification)
 		if ctx.VSRSelectedCategory != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{
 				Header: &core.HeaderValue{
 					Key:      headers.VSRSelectedCategory,
 					RawValue: []byte(ctx.VSRSelectedCategory),
+				},
+			})
+		}
+
+		// Add x-vsr-selected-decision header (from decision evaluation)
+		if ctx.VSRSelectedDecisionName != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRSelectedDecision,
+					RawValue: []byte(ctx.VSRSelectedDecisionName),
 				},
 			})
 		}

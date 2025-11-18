@@ -1,0 +1,81 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: ke-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-32b"
+  models:
+    - name: "qwen-2.5-32b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000002    # $2 per 1M - with header mutation
+        outputTokenPrice: 0.000004   # $4 per 1M
+      loras:
+        - name: "api-router"
+          description: "API routing specialist"
+
+    - name: "qwen-2.5-72b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M - advanced routing
+        outputTokenPrice: 0.000006   # $6 per 1M
+      loras:
+        - name: "advanced-router"
+          description: "Advanced API routing expert"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: ke-plugin-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "security"
+        operator: "OR"
+        keywords: ["security", "vulnerability", "exploit", "hack"]
+        caseSensitive: false
+
+    embeddings:
+      - name: "threat_detection"
+        threshold: 0.82
+        candidates:
+          - "I found a security vulnerability in the system"
+          - "There's a potential exploit that needs attention"
+          - "We need to patch this security issue"
+        aggregationMethod: "max"
+
+  decisions:
+    - name: "security_alert"
+      description: "Security-related queries with jailbreak protection"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "security"
+          - type: "embedding"
+            name: "threat_detection"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          use_reasoning: true
+          reasoning_effort: "high"
+      plugins:
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.90
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a security expert. Provide helpful security guidance while being cautious about potential misuse."
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "X-Security-Level"
+                value: "high"
+              - name: "X-Route-Type"
+                value: "keyword-embedding"
+

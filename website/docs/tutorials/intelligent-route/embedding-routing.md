@@ -87,7 +87,7 @@ categories:
         score: 0.9
         use_reasoning: true
     jailbreak_enabled: true
-    pii_detection_enabled: true
+    pii_enabled: true
   
   - name: product_inquiry
     system_prompt: "You are a product specialist."

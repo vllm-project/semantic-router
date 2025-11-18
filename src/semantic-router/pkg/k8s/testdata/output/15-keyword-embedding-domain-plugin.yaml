@@ -1,0 +1,260 @@
+config_source: kubernetes
+embedding_models:
+  qwen3_model_path: models/Qwen3-Embedding-0.6B
+  gemma_model_path: models/embeddinggemma-300m
+  use_cpu: true
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+classifier:
+  category_model:
+    model_id: models/category_classifier_modernbert-base_model
+    threshold: 0.6
+    use_cpu: true
+    use_modernbert: true
+    category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+  pii_model:
+    model_id: models/pii_classifier_modernbert-base_presidio_token_model
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+prompt_guard:
+  enabled: true
+  model_id: models/jailbreak_classifier_modernbert-base_model
+  threshold: 0.7
+  use_cpu: true
+  use_modernbert: true
+  jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
+semantic_cache:
+  backend_type: memory
+  enabled: true
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: fifo
+  embedding_model: bert
+observability:
+  tracing:
+    enabled: false
+    provider: opentelemetry
+    exporter:
+      type: otlp
+      endpoint: jaeger:4317
+      insecure: true
+    sampling:
+      type: always_on
+      rate: 1
+    resource:
+      service_name: vllm-semantic-router
+      service_version: v0.1.0
+      deployment_environment: development
+api:
+  batch_classification:
+    metrics:
+      sample_rate: 1
+      duration_buckets:
+        - 0.001
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+        - 30
+      size_buckets:
+        - 1
+        - 2
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+        - 200
+      enabled: true
+      detailed_goroutine_tracking: true
+clear_route_cache: false
+keyword_rules:
+  - name: compliance
+    operator: OR
+    keywords:
+      - compliance
+      - regulation
+      - audit
+      - policy
+    case_sensitive: false
+  - name: confidential
+    operator: OR
+    keywords:
+      - confidential
+      - sensitive
+      - private
+      - restricted
+    case_sensitive: false
+embedding_rules:
+  - name: business_analysis
+    threshold: 0.76
+    candidates:
+      - I need to analyze business metrics and performance
+      - Can you help me with strategic business planning?
+      - We need insights on market trends and competition
+    aggregation_method: max
+  - name: legal_review
+    threshold: 0.8
+    candidates:
+      - This document needs legal review and compliance check
+      - We need to ensure regulatory compliance
+      - Can you review this for legal implications?
+    aggregation_method: mean
+categories:
+  - name: business
+    description: Business and management
+    mmlu_categories:
+      - business
+  - name: law
+    description: Legal questions and law-related topics
+    mmlu_categories:
+      - law
+  - name: economics
+    description: Economics and financial topics
+    mmlu_categories:
+      - economics
+decisions:
+  - name: compliance_legal
+    description: Compliance and legal queries with full protection
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: compliance
+        - type: embedding
+          name: legal_review
+        - type: domain
+          name: law
+    modelRefs:
+      - model: qwen-2.5-72b
+        use_reasoning: false
+    plugins:
+      - type: pii
+        configuration:
+          enabled: true
+          pii_types_allowed:
+            - PERSON
+            - ORGANIZATION
+            - EMAIL
+            - PHONE_NUMBER
+          threshold: 0.9
+      - type: jailbreak
+        configuration:
+          enabled: true
+          threshold: 0.88
+      - type: system_prompt
+        configuration:
+          system_prompt: You are a legal compliance assistant. Provide accurate information about regulations and compliance requirements. Always remind users to consult legal professionals for specific advice.
+      - type: semantic-cache
+        configuration:
+          enabled: true
+          similarity_threshold: 0.93
+      - type: header_mutation
+        configuration:
+          add:
+            - name: X-Compliance-Level
+              value: high
+            - name: X-Audit-Required
+              value: "true"
+  - name: confidential_business
+    description: Confidential business analysis
+    priority: 90
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: confidential
+        - type: embedding
+          name: business_analysis
+        - type: domain
+          name: business
+    modelRefs:
+      - model: qwen-2.5-72b
+        use_reasoning: false
+    plugins:
+      - type: pii
+        configuration:
+          enabled: true
+          pii_types_allowed:
+            - PERSON
+            - ORGANIZATION
+            - FINANCIAL_DATA
+          threshold: 0.85
+      - type: semantic-cache
+        configuration:
+          enabled: true
+          similarity_threshold: 0.9
+      - type: header_mutation
+        configuration:
+          add:
+            - name: X-Confidentiality
+              value: high
+  - name: general_business
+    description: General business and economics queries
+    priority: 50
+    rules:
+      operator: OR
+      conditions:
+        - type: embedding
+          name: business_analysis
+        - type: domain
+          name: economics
+    modelRefs:
+      - model: qwen-2.5-72b
+        use_reasoning: false
+    plugins:
+      - type: semantic-cache
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+strategy: priority
+default_reasoning_effort: high
+reasoning_families:
+  deepseek:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  gpt:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  qwen3:
+    type: chat_template_kwargs
+    parameter: enable_thinking
+model_config:
+  qwen-2.5-32b:
+    pricing:
+      prompt_per_1m: 2
+      completion_per_1m: 4
+    reasoning_family: qwen3
+    loras:
+      - name: enterprise-assistant
+        description: Enterprise assistant
+  qwen-2.5-72b:
+    pricing:
+      prompt_per_1m: 3
+      completion_per_1m: 6
+    reasoning_family: qwen3
+    loras:
+      - name: enterprise-specialist
+        description: Enterprise domain specialist
+      - name: compliance-expert
+        description: Compliance and security expert
+default_model: qwen-2.5-32b
+vllm_endpoints: []
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: config/tools_db.json
+  fallback_to_empty: true

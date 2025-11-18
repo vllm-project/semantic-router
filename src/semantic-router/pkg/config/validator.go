@@ -85,28 +85,32 @@ func getIPAddressType(address string) string {
 
 // validateConfigStructure performs additional validation on the parsed config
 func validateConfigStructure(cfg *RouterConfig) error {
-	// Ensure all categories have at least one model with scores
-	for _, category := range cfg.Categories {
-		if len(category.ModelScores) == 0 {
-			return fmt.Errorf("category '%s' has no model_scores defined - each category must have at least one model", category.Name)
+	// In Kubernetes mode, decisions and model_config will be loaded from CRDs
+	// Skip validation for these fields during initial config parse
+	if cfg.ConfigSource == ConfigSourceKubernetes {
+		// Skip validation for decisions and model_config
+		return nil
+	}
+
+	// File mode: validate decisions have at least one model ref
+	for _, decision := range cfg.Decisions {
+		if len(decision.ModelRefs) == 0 {
+			return fmt.Errorf("decision '%s' has no modelRefs defined - each decision must have at least one model", decision.Name)
 		}
 
-		// Validate each model score has the required fields
-		for i, modelScore := range category.ModelScores {
-			if modelScore.Model == "" {
-				return fmt.Errorf("category '%s', model_scores[%d]: model name cannot be empty", category.Name, i)
+		// Validate each model ref has the required fields
+		for i, modelRef := range decision.ModelRefs {
+			if modelRef.Model == "" {
+				return fmt.Errorf("decision '%s', modelRefs[%d]: model name cannot be empty", decision.Name, i)
 			}
-			if modelScore.Score <= 0 {
-				return fmt.Errorf("category '%s', model '%s': score must be greater than 0, got %f", category.Name, modelScore.Model, modelScore.Score)
-			}
-			if modelScore.UseReasoning == nil {
-				return fmt.Errorf("category '%s', model '%s': missing required field 'use_reasoning'", category.Name, modelScore.Model)
+			if modelRef.UseReasoning == nil {
+				return fmt.Errorf("decision '%s', model '%s': missing required field 'use_reasoning'", decision.Name, modelRef.Model)
 			}
 
 			// Validate LoRA name if specified
-			if modelScore.LoRAName != "" {
-				if err := validateLoRAName(cfg, modelScore.Model, modelScore.LoRAName); err != nil {
-					return fmt.Errorf("category '%s', model '%s': %w", category.Name, modelScore.Model, err)
+			if modelRef.LoRAName != "" {
+				if err := validateLoRAName(cfg, modelRef.Model, modelRef.LoRAName); err != nil {
+					return fmt.Errorf("decision '%s', model '%s': %w", decision.Name, modelRef.Model, err)
 				}
 			}
 		}

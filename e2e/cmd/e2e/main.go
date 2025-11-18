@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/banner"
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
+	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
@@ -96,6 +97,8 @@ func getProfile(name string) (framework.Profile, error) {
 	switch name {
 	case "ai-gateway":
 		return aigateway.NewProfile(), nil
+	case "dynamic-config":
+		return dynamicconfig.NewProfile(), nil
 	// Add more profiles here as they are implemented
 	// case "istio":
 	//     return istio.NewProfile(), nil

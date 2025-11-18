@@ -17,98 +17,193 @@ classifier:
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 
-# Categories with different PII detection settings
+# Categories define domain metadata only (no routing logic)
 categories:
-  # High-security category: Strict PII detection with high threshold
   - name: healthcare
     description: "Healthcare and medical queries"
-    pii_enabled: true  # Explicitly enable (inherits from global by default)
-    pii_threshold: 0.9  # Higher threshold for stricter detection (fewer false positives)
-    system_prompt: "You are a healthcare assistant. Handle all personal information with utmost care."
-    model_scores:
-      - model: secure-llm
-        score: 0.9
-        use_reasoning: false
-
-  # Financial category: Very strict PII detection
+    mmlu_categories: ["healthcare"]
   - name: finance
     description: "Financial and banking queries"
-    pii_enabled: true
-    pii_threshold: 0.95  # Very high threshold for critical PII like SSN, credit cards
-    system_prompt: "You are a financial advisor. Never store or log any PII information."
-    model_scores:
-      - model: secure-llm
-        score: 0.9
-        use_reasoning: false
-
-  # Customer support: Balanced threshold
+    mmlu_categories: ["finance"]
   - name: customer_support
     description: "Customer support and general inquiries"
-    pii_enabled: true
-    pii_threshold: 0.8  # Slightly higher than global for customer-facing content
-    system_prompt: "You are a friendly customer support agent. Be cautious with customer information."
-    model_scores:
-      - model: general-llm
-        score: 0.8
-        use_reasoning: false
-
-  # Internal tools: Relaxed threshold (trusted environment)
+    mmlu_categories: ["customer_support"]
   - name: code_generation
     description: "Internal code generation and development tools"
-    pii_enabled: true
-    pii_threshold: 0.5  # Lower threshold to reduce false positives for code/technical content
-    system_prompt: "You are a code generation assistant for internal developers."
-    model_scores:
-      - model: general-llm
-        score: 0.9
-        use_reasoning: true
-
-  # Public documentation: Lower threshold for broader detection
+    mmlu_categories: ["code_generation"]
   - name: documentation
     description: "Public documentation and help articles"
-    pii_enabled: true
-    pii_threshold: 0.6  # Lower threshold to catch more potential PII in public content
-    system_prompt: "You are a documentation assistant. Help create clear public documentation."
-    model_scores:
-      - model: general-llm
-        score: 0.7
-        use_reasoning: false
-
-  # Testing category: Disable PII detection
+    mmlu_categories: ["documentation"]
   - name: testing
     description: "Testing and quality assurance queries"
-    pii_enabled: false  # Disable PII detection for testing purposes
-    system_prompt: "You are a QA assistant helping with test scenarios."
-    model_scores:
-      - model: general-llm
-        score: 0.6
-        use_reasoning: false
-
-  # Default category: Uses global setting
+    mmlu_categories: ["testing"]
   - name: general
     description: "General queries that don't fit into specific categories"
-    # pii_enabled not specified - will inherit from global (enabled if pii_model is configured)
-    # pii_threshold not specified - will inherit from global threshold (0.7)
-    system_prompt: "You are a helpful assistant."
-    model_scores:
-      - model: general-llm
-        score: 0.5
+    mmlu_categories: ["general"]
+
+# Decisions define routing logic with domain-based conditions
+strategy: "priority"
+
+decisions:
+  # High-security category: Strict PII detection with high threshold
+  - name: "healthcare_decision"
+    description: "Healthcare and medical queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "healthcare"
+    modelRefs:
+      - model: "secure-llm"
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a healthcare assistant. Handle all personal information with utmost care."
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.9
+          pii_types_allowed: ["GPE", "ORGANIZATION"]
+
+  # Financial category: Very strict PII detection
+  - name: "finance_decision"
+    description: "Financial and banking queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "finance"
+    modelRefs:
+      - model: "secure-llm"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a financial advisor. Never store or log any PII information."
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.95
+          pii_types_allowed: ["GPE", "ORGANIZATION"]
+
+  # Customer support: Balanced threshold
+  - name: "customer_support_decision"
+    description: "Customer support and general inquiries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "customer_support"
+    modelRefs:
+      - model: "general-llm"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a friendly customer support agent. Be cautious with customer information."
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.8
+          pii_types_allowed: []
+
+  # Internal tools: Relaxed threshold (trusted environment)
+  - name: "code_generation_decision"
+    description: "Internal code generation and development tools"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "code_generation"
+    modelRefs:
+      - model: "general-llm"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a code generation assistant for internal developers."
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.5
+          pii_types_allowed: []
+
+  # Public documentation: Lower threshold for broader detection
+  - name: "documentation_decision"
+    description: "Public documentation and help articles"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "documentation"
+    modelRefs:
+      - model: "general-llm"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a documentation assistant. Help create clear public documentation."
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.6
+          pii_types_allowed: []
+
+  # Testing category: Disable PII detection
+  - name: "testing_decision"
+    description: "Testing and quality assurance queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "testing"
+    modelRefs:
+      - model: "general-llm"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a QA assistant helping with test scenarios."
+      - type: "pii"
+        configuration:
+          enabled: false
+          pii_types_allowed: []
+
+  # Default category: Uses global setting
+  - name: "general_decision"
+    description: "General queries that don't fit into specific categories"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "general-llm"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful assistant."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
 
 # Model configuration
 model_config:
   "secure-llm":
     preferred_endpoints: ["secure-endpoint"]
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default for secure model
-      pii_types_allowed:
-        - "GPE"  # Geopolitical entities (cities, countries) are OK
-        - "ORGANIZATION"  # Organization names are OK
 
   "general-llm":
     preferred_endpoints: ["general-endpoint"]
-    pii_policy:
-      allow_by_default: true  # Allow all PII for general model
 
 # Default model for fallback
 default_model: general-llm

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
@@ -158,6 +159,15 @@ func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer
 
 // watchConfigAndReload watches the config file and reloads router on changes.
 func (s *Server) watchConfigAndReload(ctx context.Context) {
+	// Check if we're using Kubernetes config source
+	cfg := config.Get()
+	if cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
+		logging.Infof("ConfigSource is kubernetes, watching for config updates from controller")
+		// Watch for config updates from the Kubernetes controller
+		s.watchKubernetesConfigUpdates(ctx)
+		return
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logging.LogEvent("config_watcher_error", map[string]interface{}{
@@ -230,6 +240,38 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			logging.LogEvent("config_watcher_error", map[string]interface{}{
 				"stage": "watch_loop",
 				"error": err.Error(),
+			})
+		}
+	}
+}
+
+// watchKubernetesConfigUpdates watches for config updates from the Kubernetes controller
+func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
+	updateCh := config.WatchConfigUpdates()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case newCfg := <-updateCh:
+			if newCfg == nil {
+				continue
+			}
+
+			// Build a new router with the updated config
+			// Note: We pass the configPath but NewOpenAIRouter will use the global config
+			newRouter, err := NewOpenAIRouter(s.configPath)
+			if err != nil {
+				logging.LogEvent("config_reload_failed", map[string]interface{}{
+					"source": "kubernetes",
+					"error":  err.Error(),
+				})
+				continue
+			}
+
+			s.service.Swap(newRouter)
+			logging.LogEvent("config_reloaded", map[string]interface{}{
+				"source": "kubernetes",
 			})
 		}
 	}

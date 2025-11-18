@@ -39,8 +39,6 @@ model_config:
   "openai/gpt-oss-20b":
     reasoning_family: "gpt-oss"
     preferred_endpoints: ["endpoint1"]
-    pii_policy:
-      allow_by_default: true
 
 classifier:
   category_model:
@@ -58,17 +56,54 @@ classifier:
 
 categories:
   - name: math
-    system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
-    model_scores:
-      - model: openai/gpt-oss-20b
-        score: 1.0
-        use_reasoning: true
+    description: "Mathematics and quantitative reasoning"
+    mmlu_categories: ["math"]
   - name: other
-    system_prompt: "You are a helpful assistant."
-    model_scores:
-      - model: openai/gpt-oss-20b
-        score: 0.7
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+decisions:
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous topics"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful assistant."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
 
 default_model: openai/gpt-oss-20b
 

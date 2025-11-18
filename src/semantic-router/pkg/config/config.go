@@ -1,7 +1,29 @@
 package config
 
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+// ConfigSource defines where to load dynamic configuration from
+type ConfigSource string
+
+const (
+	// ConfigSourceFile loads configuration from file (default)
+	ConfigSourceFile ConfigSource = "file"
+	// ConfigSourceKubernetes loads configuration from Kubernetes CRDs
+	ConfigSourceKubernetes ConfigSource = "kubernetes"
+)
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
+	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)
+	// +optional
+	// +kubebuilder:default=file
+	ConfigSource ConfigSource `yaml:"config_source,omitempty"`
+
 	/*
 		Static: Global Configuration
 		Timing: Should be handled when starting the router.
@@ -84,8 +106,16 @@ type IntelligentRouting struct {
 	// Embedding-based classification rules
 	EmbeddingRules []EmbeddingRule `yaml:"embedding_rules,omitempty"`
 
-	// Categories for routing queries
+	// Categories for domain classification (only metadata, used by domain rules)
 	Categories []Category `yaml:"categories"`
+
+	// Decisions for routing logic (combines rules with AND/OR operators)
+	Decisions []Decision `yaml:"decisions,omitempty"`
+
+	// Strategy for selecting decision when multiple decisions match
+	// "priority" - select decision with highest priority
+	// "confidence" - select decision with highest confidence score
+	Strategy string `yaml:"strategy,omitempty"`
 
 	// Reasoning mode configuration
 	ReasoningConfig `yaml:",inline"`
@@ -196,7 +226,7 @@ type SemanticCache struct {
 
 // KeywordRule defines a rule for keyword-based classification.
 type KeywordRule struct {
-	Category      string   `yaml:"category"`
+	Name          string   `yaml:"name"` // Name is also used as category
 	Operator      string   `yaml:"operator"`
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
@@ -213,14 +243,10 @@ const (
 
 // EmbeddingRule defines a rule for keyword embedding based similarity match rule.
 type EmbeddingRule struct {
-	Category                  string            `yaml:"category"`
+	Name                      string            `yaml:"name"` // Name is also used as category
 	SimilarityThreshold       float32           `yaml:"threshold"`
-	Keywords                  []string          `yaml:"keywords"`
+	Candidates                []string          `yaml:"candidates"` // Renamed from Keywords
 	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
-	Model                     string            `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
-	Dimension                 int               `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
-	QualityPriority           float32           `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority           float32           `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
 }
 
 // APIConfig represents configuration for API endpoints
@@ -385,9 +411,6 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	// PII policy configuration for this model
-	PIIPolicy PIIPolicy `yaml:"pii_policy,omitempty"`
-
 	// Preferred endpoints for this model (optional)
 	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
 
@@ -449,26 +472,274 @@ const (
 )
 
 // Category represents a category for routing queries
+// Category represents a domain category (only metadata, used by domain rules)
 type Category struct {
 	// Metadata
 	CategoryMetadata `yaml:",inline"`
-	// Domain-aware policies
-	DomainAwarePolicies `yaml:",inline"`
-	// Model scores for this category
-	ModelScores []ModelScore `yaml:"model_scores"`
 }
 
-// ModelScore associates an LLM with its selection weight and reasoning flag within a category.
-type ModelScore struct {
-	Model string  `yaml:"model"`
-	Score float64 `yaml:"score"`
+// Decision represents a routing decision that combines multiple rules with AND/OR logic
+type Decision struct {
+	// Name is the unique identifier for this decision
+	Name string `yaml:"name"`
+
+	// Description provides information about what this decision handles
+	Description string `yaml:"description,omitempty"`
+
+	// Priority is used when strategy is "priority" - higher priority decisions are preferred
+	Priority int `yaml:"priority,omitempty"`
+
+	// Rules defines the combination of keyword/embedding/domain rules using AND/OR logic
+	Rules RuleCombination `yaml:"rules"`
+
+	// ModelRefs contains model references for this decision (currently only supports one model)
+	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
+
+	// Plugins contains policy configurations applied after rule matching
+	Plugins []DecisionPlugin `yaml:"plugins,omitempty"`
+}
+
+// ModelRef represents a reference to a model (without score field)
+type ModelRef struct {
+	Model string `yaml:"model"`
 	// Optional LoRA adapter name - when specified, this LoRA adapter name will be used
 	// as the final model name in requests instead of the base model name.
-	// This enables intent-aware LoRA routing where different LoRA adapters can be
-	// selected based on the classified category.
 	LoRAName string `yaml:"lora_name,omitempty"`
 	// Reasoning mode control on Model Level
 	ModelReasoningControl `yaml:",inline"`
+}
+
+// DecisionPlugin represents a plugin configuration for a decision
+type DecisionPlugin struct {
+	// Type specifies the plugin type: "semantic-cache", "jailbreak", "pii", "system_prompt"
+	Type string `yaml:"type" json:"type"`
+
+	// Configuration is the raw configuration for this plugin
+	// The structure depends on the plugin type
+	// When loaded from YAML, this will be a map[string]interface{}
+	// When loaded from Kubernetes CRD, this will be []byte (from runtime.RawExtension)
+	Configuration interface{} `yaml:"configuration,omitempty" json:"configuration,omitempty"`
+}
+
+// Plugin configuration structures for unmarshaling
+
+// SemanticCachePluginConfig represents configuration for semantic-cache plugin
+type SemanticCachePluginConfig struct {
+	Enabled             bool     `json:"enabled" yaml:"enabled"`
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+}
+
+// JailbreakPluginConfig represents configuration for jailbreak plugin
+type JailbreakPluginConfig struct {
+	Enabled   bool     `json:"enabled" yaml:"enabled"`
+	Threshold *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+}
+
+// PIIPluginConfig represents configuration for pii plugin
+type PIIPluginConfig struct {
+	Enabled   bool     `json:"enabled" yaml:"enabled"`
+	Threshold *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+
+	// PII Policy configuration
+	// When Enabled is true, all PII types are blocked by default unless listed in PIITypesAllowed
+	// When Enabled is false, PII detection is skipped entirely
+	PIITypesAllowed []string `json:"pii_types_allowed,omitempty" yaml:"pii_types_allowed,omitempty"`
+}
+
+// SystemPromptPluginConfig represents configuration for system_prompt plugin
+type SystemPromptPluginConfig struct {
+	Enabled      *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
+	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"` // "replace" or "insert"
+}
+
+// HeaderMutationPluginConfig represents configuration for header_mutation plugin
+type HeaderMutationPluginConfig struct {
+	Add    []HeaderPair `json:"add,omitempty" yaml:"add,omitempty"`
+	Update []HeaderPair `json:"update,omitempty" yaml:"update,omitempty"`
+	Delete []string     `json:"delete,omitempty" yaml:"delete,omitempty"`
+}
+
+// HeaderPair represents a header name-value pair
+type HeaderPair struct {
+	Name  string `json:"name" yaml:"name"`
+	Value string `json:"value" yaml:"value"`
+}
+
+// Helper methods for Decision to access plugin configurations
+
+// GetPluginConfig returns the configuration for a specific plugin type
+// Returns nil if the plugin is not found
+func (d *Decision) GetPluginConfig(pluginType string) interface{} {
+	for _, plugin := range d.Plugins {
+		if plugin.Type == pluginType {
+			return plugin.Configuration
+		}
+	}
+	return nil
+}
+
+// unmarshalPluginConfig unmarshals plugin configuration to a target struct
+// Handles both map[string]interface{} (from YAML) and []byte (from Kubernetes RawExtension)
+func unmarshalPluginConfig(config interface{}, target interface{}) error {
+	if config == nil {
+		return fmt.Errorf("plugin configuration is nil")
+	}
+
+	switch v := config.(type) {
+	case map[string]interface{}:
+		// From YAML file - convert via JSON
+		data, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal config: %w", err)
+		}
+		return json.Unmarshal(data, target)
+	case map[interface{}]interface{}:
+		// From YAML file with interface{} keys - convert to map[string]interface{} first
+		converted := convertMapToStringKeys(v)
+		data, err := json.Marshal(converted)
+		if err != nil {
+			return fmt.Errorf("failed to marshal config: %w", err)
+		}
+		return json.Unmarshal(data, target)
+	case []byte:
+		// From Kubernetes RawExtension - direct unmarshal
+		return json.Unmarshal(v, target)
+	default:
+		return fmt.Errorf("unsupported configuration type: %T", config)
+	}
+}
+
+// convertMapToStringKeys recursively converts map[interface{}]interface{} to map[string]interface{}
+func convertMapToStringKeys(m map[interface{}]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range m {
+		// Convert key to string
+		key, ok := k.(string)
+		if !ok {
+			key = fmt.Sprintf("%v", k)
+		}
+
+		// Recursively convert nested maps
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			result[key] = convertMapToStringKeys(val)
+		case []interface{}:
+			result[key] = convertSliceValues(val)
+		default:
+			result[key] = v
+		}
+	}
+	return result
+}
+
+// convertSliceValues recursively converts slice elements that are maps
+func convertSliceValues(s []interface{}) []interface{} {
+	result := make([]interface{}, len(s))
+	for i, v := range s {
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			result[i] = convertMapToStringKeys(val)
+		case []interface{}:
+			result[i] = convertSliceValues(val)
+		default:
+			result[i] = v
+		}
+	}
+	return result
+}
+
+// GetSemanticCacheConfig returns the semantic-cache plugin configuration
+func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
+	config := d.GetPluginConfig("semantic-cache")
+	if config == nil {
+		return nil
+	}
+
+	result := &SemanticCachePluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal semantic-cache config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetJailbreakConfig returns the jailbreak plugin configuration
+func (d *Decision) GetJailbreakConfig() *JailbreakPluginConfig {
+	config := d.GetPluginConfig("jailbreak")
+	if config == nil {
+		return nil
+	}
+
+	result := &JailbreakPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal jailbreak config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetPIIConfig returns the pii plugin configuration
+func (d *Decision) GetPIIConfig() *PIIPluginConfig {
+	config := d.GetPluginConfig("pii")
+	if config == nil {
+		return nil
+	}
+
+	result := &PIIPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal pii config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetSystemPromptConfig returns the system_prompt plugin configuration
+func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
+	config := d.GetPluginConfig("system_prompt")
+	if config == nil {
+		return nil
+	}
+
+	result := &SystemPromptPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal system_prompt config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetHeaderMutationConfig returns the header_mutation plugin configuration
+func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
+	config := d.GetPluginConfig("header_mutation")
+	if config == nil {
+		return nil
+	}
+
+	result := &HeaderMutationPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal header_mutation config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// RuleCombination defines how to combine multiple rule conditions with AND/OR operators
+type RuleCombination struct {
+	// Operator specifies how to combine conditions: "AND" or "OR"
+	Operator string `yaml:"operator"`
+
+	// Conditions is the list of rule references to evaluate
+	Conditions []RuleCondition `yaml:"conditions"`
+}
+
+// RuleCondition references a specific rule by type and name
+type RuleCondition struct {
+	// Type specifies the rule type: "keyword", "embedding", or "domain"
+	Type string `yaml:"type"`
+
+	// Name is the name of the rule to reference
+	Name string `yaml:"name"`
 }
 
 // ModelReasoningControl represents reasoning mode control on model level

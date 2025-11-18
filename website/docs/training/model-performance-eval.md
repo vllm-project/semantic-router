@@ -2,7 +2,7 @@
 ## Why evaluate?
 Evaluation makes routing data-driven. By measuring per-category accuracy on MMLU-Pro (and doing a quick sanity check with ARC), you can:
 
-- Select the right model for each category and rank them into categories.model_scores
+- Select the right model for each decision and configure them in decisions.modelRefs
 - Pick a sensible default_model based on overall performance
 - Decide when CoT prompting is worth the latency/cost tradeoff
 - Catch regressions when models, prompts, or parameters change
@@ -31,9 +31,9 @@ see code in [/src/training/model_eval](https://github.com/vllm-project/semantic-
 
 #### 3) Generate an updated config.yaml
 
-- Rank models per category into categories.model_scores
+- Create decisions for each category with modelRefs
 - Set default_model to the best average performer
-- Keep or apply category-level reasioning settings
+- Keep or apply decision-level reasoning settings
 
 ## 1.Prerequisites
 
@@ -244,18 +244,24 @@ python src/training/model_eval/result_to_config.py \
 
 - Reads all `analysis.json` files, extracting analysis["category_accuracy"]
 - Constructs a new config:
-  - **categories**: For each category present in results, ranks models by accuracy:
-    - **category.model_scores** = `[{ model: "Model_Name", score: 0.87 }, ...]`, highest first
+  - **categories**: Creates simplified category definitions (name only)
+  - **decisions**: For each category present in results, creates a decision with:
+    - **rules**: Domain-based routing conditions
+    - **modelRefs**: Models ranked by accuracy (no score field)
+    - **plugins**: System prompt and other configurations
   - **default_model**: the best average performer across categories
-  - **category reasoning settings**: auto-filled from a built-in mapping (you can adjust after generation) 
-    - math, physics, chemistry, CS, engineering -> high reasoning 
+  - **decision reasoning settings**: auto-filled from a built-in mapping (you can adjust after generation)
+    - math, physics, chemistry, CS, engineering -> high reasoning
     - others default -> low/medium
   - Leaves out any special “auto” placeholder models if present
 
 ### Schema alignment
 
-- **categories[].name**: the MMLU-Pro category string
-- **categories[].model_scores**: descending ranking by accuracy for that category
+- **categories[].name**: the MMLU-Pro category string (simplified, no model_scores)
+- **decisions[].name**: matches category name
+- **decisions[].modelRefs**: models ranked by accuracy for that category (no score field)
+- **decisions[].rules**: domain-based routing conditions
+- **decisions[].plugins**: system_prompt and other policy configurations
 - **default_model**: a top performer across categories (approach suffix removed, e.g., gemma3:27b from gemma3:27b:direct)
 - Keeps other config sections (semantic_cache, tools, classifier, prompt_guard) with reasonable defaults; you can edit them post-generation if your environment differs
 
@@ -264,7 +270,7 @@ python src/training/model_eval/result_to_config.py \
 - This script only work with results from **MMLU_Pro** Evaluation.
 - Existing config.yaml can be overwritten. Consider writing to a temp file first and diffing:
   - `--output-file config/config.eval.yaml`
-- If your production config.yaml carries **environment-specific settings (endpoints, pricing, policies)**, port the evaluated `categories[].model_scores` and `default_model` back into your canonical config.
+- If your production config.yaml carries **environment-specific settings (endpoints, pricing, policies)**, port the evaluated `decisions[].modelRefs` and `default_model` back into your canonical config.
 
 ### Example config.eval.yaml
 see more about config at [configuration](https://vllm-semantic-router.com/docs/installation/configuration)
@@ -310,35 +316,75 @@ classifier:
     pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
 categories:
 - name: business
-  use_reasoning: false
-  reasoning_description: Business content is typically conversational
-  reasoning_effort: low
-  model_scores:
-  - model: phi4
-    score: 0.2
-  - model: qwen3-0.6B
-    score: 0.0
 - name: law
-  use_reasoning: false
-  reasoning_description: Legal content is typically explanatory
-  reasoning_effort: medium
-  model_scores:
+- name: engineering
+
+decisions:
+- name: business
+  description: "Route business queries"
+  priority: 10
+  reasoning_effort: low
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "business"
+  modelRefs:
   - model: phi4
-    score: 0.8
+    use_reasoning: false
   - model: qwen3-0.6B
-    score: 0.2
+    use_reasoning: false
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        enabled: true
+        system_prompt: "Business content is typically conversational"
+        mode: "replace"
+
+- name: law
+  description: "Route legal queries"
+  priority: 10
+  reasoning_effort: medium
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "law"
+  modelRefs:
+  - model: phi4
+    use_reasoning: false
+  - model: qwen3-0.6B
+    use_reasoning: false
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        enabled: true
+        system_prompt: "Legal content is typically explanatory"
+        mode: "replace"
 
 # Ignore some categories here
 
 - name: engineering
-  use_reasoning: true
-  reasoning_description: Engineering problems require systematic problem-solving
+  description: "Route engineering queries"
+  priority: 10
   reasoning_effort: high
-  model_scores:
+  rules:
+    operator: "OR"
+    conditions:
+      - type: "domain"
+        name: "engineering"
+  modelRefs:
   - model: phi4
-    score: 0.6
+    use_reasoning: true
   - model: qwen3-0.6B
-    score: 0.2
+    use_reasoning: true
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        enabled: true
+        system_prompt: "Engineering problems require systematic problem-solving"
+        mode: "replace"
+
 default_reasoning_effort: medium
 default_model: phi4
 ```

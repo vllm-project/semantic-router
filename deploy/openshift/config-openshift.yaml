@@ -44,15 +44,9 @@ model_config:
   "Model-A":
     reasoning_family: "qwen3"
     preferred_endpoints: ["model-a-endpoint"]
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: ["EMAIL_ADDRESS"]
   "Model-B":
     reasoning_family: "qwen3"
     preferred_endpoints: ["model-b-endpoint"]
-    pii_policy:
-      allow_by_default: false
-      pii_types_allowed: ["EMAIL_ADDRESS"]
 
 # Classifier configuration
 classifier:
@@ -69,98 +63,281 @@ classifier:
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
-# Categories
+# Categories - now only contain metadata for domain classification
 categories:
   - name: business
-    system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development."
-    model_scores:
-      - model: Model-B
-        score: 0.7
-        use_reasoning: false
   - name: law
-    system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures."
-    model_scores:
-      - model: Model-B
-        score: 0.4
-        use_reasoning: false
   - name: psychology
-    system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, and therapeutic approaches."
-    model_scores:
-      - model: Model-B
-        score: 0.6
-        use_reasoning: false
   - name: biology
-    system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, and evolution."
-    model_scores:
-      - model: Model-A
-        score: 0.9
-        use_reasoning: false
   - name: chemistry
-    system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques."
-    model_scores:
-      - model: Model-A
-        score: 0.6
-        use_reasoning: true
   - name: history
-    system_prompt: "You are a historian with expertise across different time periods and cultures."
-    model_scores:
-      - model: Model-A
-        score: 0.7
-        use_reasoning: false
   - name: other
-    system_prompt: "You are a helpful and knowledgeable assistant."
-    model_scores:
-      - model: Model-A
-        score: 0.7
-        use_reasoning: false
   - name: health
-    system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, and treatments."
-    model_scores:
-      - model: Model-B
-        score: 0.5
-        use_reasoning: false
   - name: economics
-    system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, and financial markets."
-    model_scores:
-      - model: Model-A
-        score: 1.0
-        use_reasoning: false
   - name: math
-    system_prompt: "You are a mathematics expert. Provide step-by-step solutions and explain mathematical concepts clearly."
-    model_scores:
-      - model: Model-A
-        score: 1.0
-        use_reasoning: true
   - name: physics
-    system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena."
-    model_scores:
-      - model: Model-A
-        score: 0.7
-        use_reasoning: true
   - name: computer science
-    system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, and software engineering."
-    model_scores:
-      - model: Model-A
-        score: 0.6
-        use_reasoning: false
   - name: philosophy
-    system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions and ethical theories."
-    model_scores:
-      - model: Model-B
-        score: 0.5
-        use_reasoning: false
   - name: engineering
-    system_prompt: "You are an engineering expert across multiple disciplines."
-    model_scores:
-      - model: Model-A
-        score: 0.8
-        use_reasoning: true
   - name: general
-    system_prompt: "You are a knowledgeable assistant for general questions."
-    model_scores:
-      - model: Model-A
-        score: 0.5
+
+# Decisions - define routing logic with rules, model selection, and plugins
+decisions:
+  - name: business
+    description: "Route business and management queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: Model-B
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development."
+          mode: "replace"
+  - name: law
+    description: "Route legal queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
+      - model: Model-B
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures."
+          mode: "replace"
+  - name: psychology
+    description: "Route psychology queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
+      - model: Model-B
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, and therapeutic approaches."
+          mode: "replace"
+  - name: biology
+    description: "Route biology queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, and evolution."
+          mode: "replace"
+  - name: chemistry
+    description: "Route chemistry queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques."
+          mode: "replace"
+  - name: history
+    description: "Route history queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a historian with expertise across different time periods and cultures."
+          mode: "replace"
+  - name: other
+    description: "Route general queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a helpful and knowledgeable assistant."
+          mode: "replace"
+  - name: health
+    description: "Route health and medical queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: Model-B
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, and treatments."
+          mode: "replace"
+  - name: economics
+    description: "Route economics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, and financial markets."
+          mode: "replace"
+  - name: math
+    description: "Route mathematics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions and explain mathematical concepts clearly."
+          mode: "replace"
+  - name: physics
+    description: "Route physics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena."
+          mode: "replace"
+  - name: computer_science
+    description: "Route computer science queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, and software engineering."
+          mode: "replace"
+  - name: philosophy
+    description: "Route philosophy queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: Model-B
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions and ethical theories."
+          mode: "replace"
+  - name: engineering
+    description: "Route engineering queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are an engineering expert across multiple disciplines."
+          mode: "replace"
+  - name: general
+    description: "Route general queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: Model-A
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a knowledgeable assistant for general questions."
+          mode: "replace"
 
 # Observability
 observability:

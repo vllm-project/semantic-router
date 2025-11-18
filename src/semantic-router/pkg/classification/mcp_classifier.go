@@ -401,123 +401,6 @@ func (c *Classifier) initializeMCPCategoryClassifier() error {
 	return nil
 }
 
-// classifyCategoryMCP performs category classification using MCP
-func (c *Classifier) classifyCategoryMCP(text string) (string, float64, error) {
-	result, err := c.classifyCategoryMCPWithRouting(text)
-	if err != nil {
-		return "", 0.0, err
-	}
-	return result.CategoryName, float64(result.Confidence), nil
-}
-
-// classifyCategoryMCPWithRouting performs category classification using MCP and returns routing information
-func (c *Classifier) classifyCategoryMCPWithRouting(text string) (*MCPClassificationResult, error) {
-	if !c.IsMCPCategoryEnabled() {
-		return nil, fmt.Errorf("MCP category classification is not properly configured")
-	}
-
-	if c.mcpCategoryInference == nil {
-		return nil, fmt.Errorf("MCP category inference is not initialized")
-	}
-
-	// Create context with timeout
-	ctx := context.Background()
-	if c.Config.MCPCategoryModel.TimeoutSeconds > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.Config.MCPCategoryModel.TimeoutSeconds)*time.Second)
-		defer cancel()
-	}
-
-	// Classify via MCP - need to call the raw client to get model/reasoning info
-	start := time.Now()
-
-	// Get MCP classifier to access raw response
-	mcpClassifier, ok := c.mcpCategoryInference.(*MCPCategoryClassifier)
-	if !ok {
-		return nil, fmt.Errorf("MCP category inference is not MCPCategoryClassifier type")
-	}
-
-	// Call MCP tool directly to get full response
-	arguments := map[string]interface{}{
-		"text": text,
-	}
-
-	mcpResult, err := mcpClassifier.client.CallTool(ctx, mcpClassifier.toolName, arguments)
-	metrics.RecordClassifierLatency("category_mcp", time.Since(start).Seconds())
-
-	if err != nil {
-		return nil, fmt.Errorf("MCP tool call failed: %w", err)
-	}
-
-	if mcpResult.IsError {
-		return nil, fmt.Errorf("MCP tool returned error: %v", mcpResult.Content)
-	}
-
-	if len(mcpResult.Content) == 0 {
-		return nil, fmt.Errorf("MCP tool returned empty content")
-	}
-
-	// Extract text content
-	var responseText string
-	firstContent := mcpResult.Content[0]
-	if textContent, ok := mcp.AsTextContent(firstContent); ok {
-		responseText = textContent.Text
-	} else {
-		return nil, fmt.Errorf("MCP tool returned non-text content")
-	}
-
-	// Parse JSON response with routing information using the API type
-	var response api.ClassifyResponse
-	if err := json.Unmarshal([]byte(responseText), &response); err != nil {
-		return nil, fmt.Errorf("failed to parse MCP response: %w", err)
-	}
-
-	logging.Infof("MCP classification result: class=%d, confidence=%.4f, model=%s, use_reasoning=%v",
-		response.Class, response.Confidence, response.Model, response.UseReasoning)
-
-	// Check threshold
-	threshold := c.Config.MCPCategoryModel.Threshold
-	if threshold == 0 {
-		threshold = DefaultMCPThreshold
-	}
-
-	if response.Confidence < threshold {
-		logging.Infof("MCP classification confidence (%.4f) below threshold (%.4f)",
-			response.Confidence, threshold)
-		return &MCPClassificationResult{
-			Class:        response.Class,
-			Confidence:   response.Confidence,
-			Model:        response.Model,
-			UseReasoning: response.UseReasoning,
-		}, nil
-	}
-
-	// Map class index to category name
-	var categoryName string
-	if c.CategoryMapping != nil {
-		name, ok := c.CategoryMapping.GetCategoryFromIndex(response.Class)
-		if ok {
-			categoryName = c.translateMMLUToGeneric(name)
-		} else {
-			categoryName = fmt.Sprintf("category_%d", response.Class)
-		}
-	} else {
-		categoryName = fmt.Sprintf("category_%d", response.Class)
-	}
-
-	metrics.RecordCategoryClassification(categoryName)
-	logging.Infof("MCP classified as category: %s (class=%d), routing: model=%s, reasoning=%v",
-		categoryName, response.Class, response.Model, response.UseReasoning)
-
-	return &MCPClassificationResult{
-		Class:        response.Class,
-		Confidence:   response.Confidence,
-		CategoryName: categoryName,
-		Model:        response.Model,
-		UseReasoning: response.UseReasoning,
-	}, nil
-}
-
 // classifyCategoryWithEntropyMCP performs category classification with entropy using MCP
 func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float64, entropy.ReasoningDecision, error) {
 	if !c.IsMCPCategoryEnabled() {
@@ -562,14 +445,14 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 		}
 	}
 
-	// Build category reasoning map from configuration
+	// Build category reasoning map from decisions configuration
 	categoryReasoningMap := make(map[string]bool)
-	for _, category := range c.Config.Categories {
+	for _, decision := range c.Config.Decisions {
 		useReasoning := false
-		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
-			useReasoning = *category.ModelScores[0].UseReasoning
+		if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
+			useReasoning = *decision.ModelRefs[0].UseReasoning
 		}
-		categoryReasoningMap[strings.ToLower(category.Name)] = useReasoning
+		categoryReasoningMap[strings.ToLower(decision.Name)] = useReasoning
 	}
 
 	// Determine threshold

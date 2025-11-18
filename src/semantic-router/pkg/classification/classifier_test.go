@@ -14,7 +14,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -46,438 +45,6 @@ type MockCategoryInitializer struct{ InitError error }
 func (m *MockCategoryInitializer) Init(_ string, useCPU bool, numClasses ...int) error {
 	return m.InitError
 }
-
-var _ = Describe("category classification and model selection", func() {
-	var (
-		classifier              *Classifier
-		mockCategoryInitializer *MockCategoryInitializer
-		mockCategoryModel       *MockCategoryInference
-	)
-
-	BeforeEach(func() {
-		mockCategoryInitializer = &MockCategoryInitializer{InitError: nil}
-		mockCategoryModel = &MockCategoryInference{}
-		cfg := &config.RouterConfig{}
-		cfg.CategoryModel.ModelID = "model-id"
-		cfg.CategoryMappingPath = "category-mapping-path"
-		cfg.CategoryModel.Threshold = 0.5
-		classifier, _ = newClassifierWithOptions(cfg,
-			withCategory(&CategoryMapping{
-				CategoryToIdx: map[string]int{"technology": 0, "sports": 1, "politics": 2},
-				IdxToCategory: map[string]string{"0": "technology", "1": "sports", "2": "politics"},
-			}, mockCategoryInitializer, mockCategoryModel),
-		)
-	})
-
-	Describe("initialize category classifier", func() {
-		It("should succeed", func() {
-			err := classifier.initializeCategoryClassifier()
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		Context("when category mapping is not initialized", func() {
-			It("should return error", func() {
-				classifier.CategoryMapping = nil
-				err := classifier.initializeCategoryClassifier()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
-			})
-		})
-
-		Context("when not enough categories", func() {
-			It("should return error", func() {
-				classifier.CategoryMapping = &CategoryMapping{
-					CategoryToIdx: map[string]int{"technology": 0},
-					IdxToCategory: map[string]string{"0": "technology"},
-				}
-				err := classifier.initializeCategoryClassifier()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("not enough categories for classification"))
-			})
-		})
-
-		Context("when initialize category classifier fails", func() {
-			It("should return error", func() {
-				mockCategoryInitializer.InitError = errors.New("initialize category classifier failed")
-				err := classifier.initializeCategoryClassifier()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("initialize category classifier failed"))
-			})
-		})
-	})
-
-	Describe("classify category with entropy", func() {
-		type row struct {
-			ModelID             string
-			CategoryMappingPath string
-			CategoryMapping     *CategoryMapping
-		}
-
-		DescribeTable("when category classification is not properly configured",
-			func(r row) {
-				classifier.Config.CategoryModel.ModelID = r.ModelID
-				classifier.Config.CategoryMappingPath = r.CategoryMappingPath
-				classifier.CategoryMapping = r.CategoryMapping
-				_, _, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
-			},
-			Entry("ModelID is empty", row{ModelID: ""}),
-			Entry("CategoryMappingPath is empty", row{CategoryMappingPath: ""}),
-			Entry("CategoryMapping is nil", row{CategoryMapping: nil}),
-		)
-
-		Context("when classification succeeds with high confidence", func() {
-			It("should return the correct category", func() {
-				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-					Class:         2,
-					Confidence:    0.95,
-					Probabilities: []float32{0.02, 0.03, 0.95},
-					NumClasses:    3,
-				}
-
-				category, score, _, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal("politics"))
-				Expect(score).To(BeNumerically("~", 0.95, 0.001))
-			})
-		})
-
-		Context("when classification confidence is below threshold", func() {
-			It("should return empty category", func() {
-				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-					Class:         0,
-					Confidence:    0.3,
-					Probabilities: []float32{0.3, 0.35, 0.35},
-					NumClasses:    3,
-				}
-
-				category, score, _, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal(""))
-				Expect(score).To(BeNumerically("~", 0.3, 0.001))
-			})
-		})
-
-		Context("when model inference fails", func() {
-			It("should return empty category with zero score", func() {
-				mockCategoryModel.classifyWithProbsError = errors.New("model inference failed")
-
-				category, score, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("classification error"))
-				Expect(category).To(Equal(""))
-				Expect(score).To(BeNumerically("~", 0.0, 0.001))
-			})
-		})
-
-		Context("when input is empty or invalid", func() {
-			It("should handle empty text gracefully", func() {
-				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-					Class:         0,
-					Confidence:    0.8,
-					Probabilities: []float32{0.8, 0.1, 0.1},
-					NumClasses:    3,
-				}
-
-				category, score, _, err := classifier.ClassifyCategoryWithEntropy("")
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal("technology"))
-				Expect(score).To(BeNumerically("~", 0.8, 0.001))
-			})
-		})
-
-		Context("when class index is not found in category mapping", func() {
-			It("should handle invalid category mapping gracefully", func() {
-				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-					Class:         9,
-					Confidence:    0.8,
-					Probabilities: []float32{0.1, 0.1, 0.0},
-					NumClasses:    3,
-				}
-
-				category, score, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal(""))
-				Expect(score).To(BeNumerically("~", 0.8, 0.001))
-			})
-		})
-	})
-
-	Describe("category classification with entropy", func() {
-		Context("when category mapping is not initialized", func() {
-			It("should return error", func() {
-				classifier.CategoryMapping = nil
-				_, _, _, err := classifier.ClassifyCategoryWithEntropy("Some text")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("category classification is not properly configured"))
-			})
-		})
-
-		Context("when classification succeeds with probabilities", func() {
-			It("should return category and entropy decision", func() {
-				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-					Class:         2,
-					Confidence:    0.95,
-					Probabilities: []float32{0.02, 0.03, 0.95},
-					NumClasses:    3,
-				}
-
-				// Add UseReasoning configuration for the categories
-				classifier.Config.Categories = []config.Category{
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "technology"},
-						ModelScores: []config.ModelScore{{
-							Model:                 "phi4",
-							Score:                 0.8,
-							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-						}},
-					},
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "sports"},
-						ModelScores: []config.ModelScore{{
-							Model:                 "phi4",
-							Score:                 0.8,
-							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-						}},
-					},
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "politics"},
-						ModelScores: []config.ModelScore{{
-							Model:                 "deepseek-v31",
-							Score:                 0.9,
-							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
-						}},
-					},
-				}
-
-				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("This is about politics")
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal("politics"))
-				Expect(confidence).To(BeNumerically("~", 0.95, 0.001))
-				Expect(reasoningDecision.UseReasoning).To(BeTrue()) // Politics uses reasoning
-				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
-			})
-		})
-
-		Context("when classification confidence is below threshold", func() {
-			It("should return empty category but still provide entropy decision", func() {
-				mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-					Class:         0,
-					Confidence:    0.3,
-					Probabilities: []float32{0.3, 0.35, 0.35},
-					NumClasses:    3,
-				}
-
-				classifier.Config.Categories = []config.Category{
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "technology"},
-						ModelScores: []config.ModelScore{{
-							Model:                 "phi4",
-							Score:                 0.8,
-							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-						}},
-					},
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "sports"},
-						ModelScores: []config.ModelScore{{
-							Model:                 "deepseek-v31",
-							Score:                 0.9,
-							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
-						}},
-					},
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "politics"},
-						ModelScores: []config.ModelScore{{
-							Model:                 "deepseek-v31",
-							Score:                 0.9,
-							ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
-						}},
-					},
-				}
-
-				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Ambiguous text")
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal(""))
-				Expect(confidence).To(BeNumerically("~", 0.3, 0.001))
-				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
-			})
-		})
-
-		Context("when model inference fails", func() {
-			It("should return error", func() {
-				mockCategoryModel.classifyWithProbsError = errors.New("model inference failed")
-
-				category, confidence, reasoningDecision, err := classifier.ClassifyCategoryWithEntropy("Some text")
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("classification error"))
-				Expect(category).To(Equal(""))
-				Expect(confidence).To(BeNumerically("~", 0.0, 0.001))
-				Expect(reasoningDecision.UseReasoning).To(BeFalse())
-			})
-		})
-	})
-
-	BeforeEach(func() {
-		classifier.Config.Categories = []config.Category{
-			{
-				CategoryMetadata: config.CategoryMetadata{Name: "technology"},
-				ModelScores: []config.ModelScore{
-					{Model: "model-a", Score: 0.9},
-					{Model: "model-b", Score: 0.8},
-				},
-			},
-			{
-				CategoryMetadata: config.CategoryMetadata{Name: "sports"},
-				ModelScores:      []config.ModelScore{},
-			},
-		}
-		classifier.Config.DefaultModel = "default-model"
-	})
-
-	Describe("select best model for category", func() {
-		It("should return the best model", func() {
-			model := classifier.SelectBestModelForCategory("technology")
-			Expect(model).To(Equal("model-a"))
-		})
-
-		Context("when category is not found", func() {
-			It("should return the default model", func() {
-				model := classifier.SelectBestModelForCategory("non-existent-category")
-				Expect(model).To(Equal("default-model"))
-			})
-		})
-
-		Context("when no best model is found", func() {
-			It("should return the default model", func() {
-				model := classifier.SelectBestModelForCategory("sports")
-				Expect(model).To(Equal("default-model"))
-			})
-		})
-	})
-
-	Describe("select best model from list", func() {
-		It("should return the best model", func() {
-			model := classifier.SelectBestModelFromList([]string{"model-a"}, "technology")
-			Expect(model).To(Equal("model-a"))
-		})
-
-		Context("when candidate models are empty", func() {
-			It("should return the default model", func() {
-				model := classifier.SelectBestModelFromList([]string{}, "technology")
-				Expect(model).To(Equal("default-model"))
-			})
-		})
-
-		Context("when category is not found", func() {
-			It("should return the first candidate model", func() {
-				model := classifier.SelectBestModelFromList([]string{"model-a"}, "non-existent-category")
-				Expect(model).To(Equal("model-a"))
-			})
-		})
-
-		Context("when the model is not in the candidate models", func() {
-			It("should return the first candidate model", func() {
-				model := classifier.SelectBestModelFromList([]string{"model-c"}, "technology")
-				Expect(model).To(Equal("model-c"))
-			})
-		})
-	})
-
-	Describe("internal helper methods", func() {
-		type row struct {
-			query string
-			want  *config.Category
-		}
-
-		DescribeTable("find category",
-			func(r row) {
-				cat := classifier.findCategory(r.query)
-				if r.want == nil {
-					Expect(cat).To(BeNil())
-				} else {
-					Expect(cat.CategoryMetadata.Name).To(Equal(r.want.Name))
-				}
-			},
-			Entry("should find category case-insensitively", row{query: "TECHNOLOGY", want: &config.Category{CategoryMetadata: config.CategoryMetadata{Name: "technology"}}}),
-			Entry("should return nil for non-existent category", row{query: "non-existent", want: nil}),
-		)
-
-		Describe("select best model internal", func() {
-			It("should select best model without filter", func() {
-				cat := &config.Category{
-					CategoryMetadata: config.CategoryMetadata{Name: "test"},
-					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 0.9},
-						{Model: "model-b", Score: 0.8},
-					},
-				}
-
-				bestModel, score := classifier.selectBestModelInternal(cat, nil)
-
-				Expect(bestModel).To(Equal("model-a"))
-				Expect(score).To(BeNumerically("~", 0.9, 0.001))
-			})
-
-			It("should select best model with filter", func() {
-				cat := &config.Category{
-					CategoryMetadata: config.CategoryMetadata{Name: "test"},
-					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 0.9},
-						{Model: "model-b", Score: 0.8},
-						{Model: "model-c", Score: 0.7},
-					},
-				}
-				filter := func(model string) bool {
-					return model == "model-b" || model == "model-c"
-				}
-
-				bestModel, score := classifier.selectBestModelInternal(cat, filter)
-
-				Expect(bestModel).To(Equal("model-b"))
-				Expect(score).To(BeNumerically("~", 0.8, 0.001))
-			})
-
-			It("should return empty when no models match filter", func() {
-				cat := &config.Category{
-					CategoryMetadata: config.CategoryMetadata{Name: "test"},
-					ModelScores: []config.ModelScore{
-						{Model: "model-a", Score: 0.9},
-						{Model: "model-b", Score: 0.8},
-					},
-				}
-				filter := func(model string) bool {
-					return model == "non-existent-model"
-				}
-
-				bestModel, score := classifier.selectBestModelInternal(cat, filter)
-
-				Expect(bestModel).To(Equal(""))
-				Expect(score).To(BeNumerically("~", -1.0, 0.001))
-			})
-
-			It("should return empty when category has no models", func() {
-				cat := &config.Category{
-					CategoryMetadata: config.CategoryMetadata{Name: "test"},
-					ModelScores:      []config.ModelScore{},
-				}
-
-				bestModel, score := classifier.selectBestModelInternal(cat, nil)
-
-				Expect(bestModel).To(Equal(""))
-				Expect(score).To(BeNumerically("~", -1.0, 0.001))
-			})
-		})
-	})
-})
 
 type MockJailbreakInferenceResponse struct {
 	classifyResult candle_binding.ClassResult
@@ -1013,49 +580,6 @@ var _ = Describe("PII detection", func() {
 	})
 })
 
-var _ = Describe("get models for category", func() {
-	var c *Classifier
-
-	BeforeEach(func() {
-		c, _ = newClassifierWithOptions(&config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				Categories: []config.Category{
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "Toxicity"},
-						ModelScores: []config.ModelScore{
-							{Model: "m1"}, {Model: "m2"},
-						},
-					},
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "Toxicity"}, // duplicate name, should be ignored by "first wins"
-						ModelScores:      []config.ModelScore{{Model: "mX"}},
-					},
-					{
-						CategoryMetadata: config.CategoryMetadata{Name: "Jailbreak"},
-						ModelScores:      []config.ModelScore{{Model: "jb1"}},
-					},
-				},
-			},
-		})
-	})
-
-	type row struct {
-		query string
-		want  []string
-	}
-
-	DescribeTable("lookup behavior",
-		func(r row) {
-			got := c.GetModelsForCategory(r.query)
-			Expect(got).To(Equal(r.want))
-		},
-
-		Entry("case-insensitive match", row{query: "toxicity", want: []string{"m1", "m2"}}),
-		Entry("no match returns nil slice", row{query: "NotExist", want: nil}),
-		Entry("another category", row{query: "JAILBREAK", want: []string{"jb1"}}),
-	)
-})
-
 func TestUpdateBestModel(t *testing.T) {
 	classifier := &Classifier{}
 
@@ -1073,40 +597,14 @@ func TestUpdateBestModel(t *testing.T) {
 	}
 }
 
-func TestForEachModelScore(t *testing.T) {
-	c := &Classifier{}
-	cat := &config.Category{
-		ModelScores: []config.ModelScore{
-			{Model: "model-a", Score: 0.9},
-			{Model: "model-b", Score: 0.8},
-			{Model: "model-c", Score: 0.7},
-		},
-	}
-
-	var models []string
-	c.forEachModelScore(cat, func(ms config.ModelScore) {
-		models = append(models, ms.Model)
-	})
-
-	expected := []string{"model-a", "model-b", "model-c"}
-	if len(models) != len(expected) {
-		t.Fatalf("expected %d models, got %d", len(expected), len(models))
-	}
-	for i, m := range expected {
-		if models[i] != m {
-			t.Errorf("expected model %s at index %d, got %s", m, i, models[i])
-		}
-	}
-}
-
 // --- Current Regex Implementation ---
 // This uses the currently modified keyword_classifier.go with regex matching.
 
 func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	rulesConfig := []config.KeywordRule{
-		{Category: "cat-and", Operator: "AND", Keywords: []string{"apple", "banana"}, CaseSensitive: false},
-		{Category: "cat-or", Operator: "OR", Keywords: []string{"orange", "grape"}, CaseSensitive: true},
-		{Category: "cat-nor", Operator: "NOR", Keywords: []string{"disallowed"}, CaseSensitive: false},
+		{Name: "cat-and", Operator: "AND", Keywords: []string{"apple", "banana"}, CaseSensitive: false},
+		{Name: "cat-or", Operator: "OR", Keywords: []string{"orange", "grape"}, CaseSensitive: true},
+		{Name: "cat-nor", Operator: "NOR", Keywords: []string{"disallowed"}, CaseSensitive: false},
 	}
 
 	testTextAndMatch := "I like apple and banana"
@@ -1146,7 +644,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 
 	// Scenario: Keywords with varying lengths
 	rulesConfigLongKeywords := []config.KeywordRule{
-		{Category: "long-kw", Operator: "OR", Keywords: []string{"supercalifragilisticexpialidocious", "pneumonoultramicroscopicsilicovolcanoconiosis"}, CaseSensitive: false},
+		{Name: "long-kw", Operator: "OR", Keywords: []string{"supercalifragilisticexpialidocious", "pneumonoultramicroscopicsilicovolcanoconiosis"}, CaseSensitive: false},
 	}
 	classifierLongKeywords, err := NewKeywordClassifier(rulesConfigLongKeywords)
 	if err != nil {
@@ -1161,7 +659,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 
 	// Scenario: Texts with varying lengths
 	rulesConfigShortText := []config.KeywordRule{
-		{Category: "short-text", Operator: "OR", Keywords: []string{"short"}, CaseSensitive: false},
+		{Name: "short-text", Operator: "OR", Keywords: []string{"short"}, CaseSensitive: false},
 	}
 	classifierShortText, err := NewKeywordClassifier(rulesConfigShortText)
 	if err != nil {
@@ -1175,7 +673,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 	})
 
 	rulesConfigLongText := []config.KeywordRule{
-		{Category: "long-text", Operator: "OR", Keywords: []string{"endword"}, CaseSensitive: false},
+		{Name: "long-text", Operator: "OR", Keywords: []string{"endword"}, CaseSensitive: false},
 	}
 	classifierLongText, err := NewKeywordClassifier(rulesConfigLongText)
 	if err != nil {
@@ -1195,7 +693,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 		manyKeywords[i] = fmt.Sprintf("keyword%d", i)
 	}
 	rulesConfigManyKeywords := []config.KeywordRule{
-		{Category: "many-kw", Operator: "OR", Keywords: manyKeywords, CaseSensitive: false},
+		{Name: "many-kw", Operator: "OR", Keywords: manyKeywords, CaseSensitive: false},
 	}
 	classifierManyKeywords, err := NewKeywordClassifier(rulesConfigManyKeywords)
 	if err != nil {
@@ -1210,7 +708,7 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 
 	// Scenario: Keywords with many escaped characters
 	rulesConfigComplexKeywords := []config.KeywordRule{
-		{Category: "complex-kw", Operator: "OR", Keywords: []string{"user.name@domain.com", "C:\\Program Files\\"}, CaseSensitive: false},
+		{Name: "complex-kw", Operator: "OR", Keywords: []string{"user.name@domain.com", "C:\\Program Files\\"}, CaseSensitive: false},
 	}
 	classifierComplexKeywords, err := NewKeywordClassifier(rulesConfigComplexKeywords)
 	if err != nil {
@@ -1223,149 +721,6 @@ func BenchmarkKeywordClassifierRegex(b *testing.B) {
 		}
 	})
 }
-
-var _ = Describe("generic category mapping (MMLU-Pro -> generic)", func() {
-	var (
-		classifier              *Classifier
-		mockCategoryInitializer *MockCategoryInitializer
-		mockCategoryModel       *MockCategoryInference
-	)
-
-	BeforeEach(func() {
-		mockCategoryInitializer = &MockCategoryInitializer{InitError: nil}
-		mockCategoryModel = &MockCategoryInference{}
-
-		cfg := &config.RouterConfig{}
-		cfg.CategoryModel.ModelID = "model-id"
-		cfg.CategoryMappingPath = "category-mapping-path"
-		cfg.CategoryModel.Threshold = 0.5
-
-		// Define generic categories with MMLU-Pro mappings
-		cfg.Categories = []config.Category{
-			{
-				CategoryMetadata: config.CategoryMetadata{
-					Name:           "tech",
-					MMLUCategories: []string{"computer science", "engineering"},
-				},
-				ModelScores: []config.ModelScore{{
-					Model: "phi4",
-					Score: 0.9,
-					ModelReasoningControl: config.ModelReasoningControl{
-						UseReasoning:    lo.ToPtr(false),
-						ReasoningEffort: "low",
-					},
-				}},
-			},
-			{
-				CategoryMetadata: config.CategoryMetadata{
-					Name:           "finance",
-					MMLUCategories: []string{"economics"},
-				},
-				ModelScores: []config.ModelScore{{
-					Model: "gemma3:27b",
-					Score: 0.8,
-					ModelReasoningControl: config.ModelReasoningControl{
-						UseReasoning: lo.ToPtr(true),
-					},
-				}},
-			},
-			{
-				CategoryMetadata: config.CategoryMetadata{
-					Name: "politics",
-					// No explicit mmlu_categories -> identity fallback when label exists in mapping
-				},
-				ModelScores: []config.ModelScore{{
-					Model: "gemma3:27b",
-					Score: 0.6,
-					ModelReasoningControl: config.ModelReasoningControl{
-						UseReasoning: lo.ToPtr(false),
-					},
-				}},
-			},
-		}
-
-		// Category mapping represents labels coming from the MMLU-Pro model
-		categoryMapping := &CategoryMapping{
-			CategoryToIdx: map[string]int{
-				"computer science": 0,
-				"economics":        1,
-				"politics":         2,
-			},
-			IdxToCategory: map[string]string{
-				"0": "Computer Science", // different case to assert case-insensitive mapping
-				"1": "economics",
-				"2": "politics",
-			},
-		}
-
-		var err error
-		classifier, err = newClassifierWithOptions(
-			cfg,
-			withCategory(categoryMapping, mockCategoryInitializer, mockCategoryModel),
-		)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
-	It("builds expected MMLU<->generic maps", func() {
-		Expect(classifier.MMLUToGeneric).To(HaveKeyWithValue("computer science", "tech"))
-		Expect(classifier.MMLUToGeneric).To(HaveKeyWithValue("engineering", "tech"))
-		Expect(classifier.MMLUToGeneric).To(HaveKeyWithValue("economics", "finance"))
-		// identity fallback for a generic name that exists as an MMLU label
-		Expect(classifier.MMLUToGeneric).To(HaveKeyWithValue("politics", "politics"))
-
-		Expect(classifier.GenericToMMLU).To(HaveKey("tech"))
-		Expect(classifier.GenericToMMLU["tech"]).To(ConsistOf("computer science", "engineering"))
-		Expect(classifier.GenericToMMLU).To(HaveKeyWithValue("finance", ConsistOf("economics")))
-		Expect(classifier.GenericToMMLU).To(HaveKeyWithValue("politics", ConsistOf("politics")))
-	})
-
-	It("translates ClassifyCategoryWithEntropy result to generic category", func() {
-		// Model returns class index 0 -> "Computer Science" (MMLU) which maps to generic "tech"
-		mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-			Class:         0,
-			Confidence:    0.92,
-			Probabilities: []float32{0.92, 0.05, 0.03},
-			NumClasses:    3,
-		}
-
-		category, score, _, err := classifier.ClassifyCategoryWithEntropy("This text is about GPUs and compilers")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(category).To(Equal("tech"))
-		Expect(score).To(BeNumerically("~", 0.92, 0.001))
-	})
-
-	It("translates names in entropy flow and returns generic top category", func() {
-		// Probabilities favor index 0 -> generic should be "tech"
-		mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-			Class:         0,
-			Confidence:    0.88,
-			Probabilities: []float32{0.7, 0.2, 0.1},
-			NumClasses:    3,
-		}
-
-		category, confidence, decision, err := classifier.ClassifyCategoryWithEntropy("Economic policies in computer science education")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(category).To(Equal("tech"))
-		Expect(confidence).To(BeNumerically("~", 0.88, 0.001))
-		Expect(decision.TopCategories).ToNot(BeEmpty())
-		Expect(decision.TopCategories[0].Category).To(Equal("tech"))
-	})
-
-	It("falls back to identity when no mapping exists for an MMLU label", func() {
-		// index 2 -> "politics" (no explicit mapping provided, but present in MMLU set)
-		mockCategoryModel.classifyWithProbsResult = candle_binding.ClassResultWithProbs{
-			Class:         2,
-			Confidence:    0.91,
-			Probabilities: []float32{0.04, 0.05, 0.91},
-			NumClasses:    3,
-		}
-
-		category, score, _, err := classifier.ClassifyCategoryWithEntropy("This is a political debate")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(category).To(Equal("politics"))
-		Expect(score).To(BeNumerically("~", 0.91, 0.001))
-	})
-})
 
 func TestKeywordClassifier(t *testing.T) {
 	tests := []struct {
@@ -1381,12 +736,12 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-1",
 			rules: []config.KeywordRule{
 				{
-					Category: "test-category-1",
+					Name:     "test-category-1",
 					Operator: "AND",
 					Keywords: []string{"keyword1", "keyword2"},
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1398,12 +753,12 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-3", // Falls through to NOR
 			rules: []config.KeywordRule{
 				{
-					Category: "test-category-1",
+					Name:     "test-category-1",
 					Operator: "AND",
 					Keywords: []string{"keyword1", "keyword2"},
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1415,13 +770,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-2",
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-2",
+					Name:          "test-category-2",
 					Operator:      "OR",
 					Keywords:      []string{"keyword3", "keyword4"},
 					CaseSensitive: true,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1433,13 +788,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-3", // Falls through to NOR
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-2",
+					Name:          "test-category-2",
 					Operator:      "OR",
 					Keywords:      []string{"keyword3", "keyword4"},
 					CaseSensitive: true,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1451,7 +806,7 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-3",
 			rules: []config.KeywordRule{
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1463,7 +818,7 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "", // Fails NOR, and no other rules match
 			rules: []config.KeywordRule{
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1475,13 +830,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-3", // Fails case-sensitive OR, falls through to NOR
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-2",
+					Name:          "test-category-2",
 					Operator:      "OR",
 					Keywords:      []string{"keyword3", "keyword4"},
 					CaseSensitive: true,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1493,13 +848,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-3", // "secret" rule (test-category-secret) won't match, falls through to NOR
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-secret",
+					Name:          "test-category-secret",
 					Operator:      "OR",
 					Keywords:      []string{"secret"},
 					CaseSensitive: false,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1511,13 +866,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-secret", // Should match new "secret" rule
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-secret",
+					Name:          "test-category-secret",
 					Operator:      "OR",
 					Keywords:      []string{"secret"},
 					CaseSensitive: false,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1529,13 +884,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-dot", // Should match new "1.0" rule
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-dot",
+					Name:          "test-category-dot",
 					Operator:      "OR",
 					Keywords:      []string{"1.0"},
 					CaseSensitive: false,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1547,13 +902,13 @@ func TestKeywordClassifier(t *testing.T) {
 			expected: "test-category-asterisk", // Should match new "*" rule
 			rules: []config.KeywordRule{
 				{
-					Category:      "test-category-asterisk",
+					Name:          "test-category-asterisk",
 					Operator:      "OR",
 					Keywords:      []string{"*"},
 					CaseSensitive: false,
 				},
 				{
-					Category: "test-category-3",
+					Name:     "test-category-3",
 					Operator: "NOR",
 					Keywords: []string{"keyword5", "keyword6"},
 				},
@@ -1563,7 +918,7 @@ func TestKeywordClassifier(t *testing.T) {
 			name: "Unsupported operator should return error",
 			rules: []config.KeywordRule{
 				{
-					Category: "bad-operator",
+					Name:     "bad-operator",
 					Operator: "UNKNOWN", // Invalid operator
 					Keywords: []string{"test"},
 				},
@@ -2301,233 +1656,6 @@ var _ = Describe("MCP Category Classifier", func() {
 					Expect(ok).To(BeFalse())
 					Expect(desc).To(Equal(""))
 				})
-			})
-		})
-	})
-})
-
-var _ = Describe("Classifier MCP Methods", func() {
-	var (
-		classifier *Classifier
-		mockClient *MockMCPClient
-	)
-
-	BeforeEach(func() {
-		mockClient = &MockMCPClient{}
-		cfg := &config.RouterConfig{}
-		cfg.MCPCategoryModel.Enabled = true
-		cfg.MCPCategoryModel.ToolName = "classify_text"
-		cfg.MCPCategoryModel.Threshold = 0.5
-		cfg.MCPCategoryModel.TimeoutSeconds = 30
-
-		// Add Categories configuration for entropy-based tests
-		cfg.Categories = []config.Category{
-			{
-				CategoryMetadata: config.CategoryMetadata{Name: "tech"},
-				ModelScores: []config.ModelScore{{
-					Model:                 "phi4",
-					Score:                 0.8,
-					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-				}},
-			},
-			{
-				CategoryMetadata: config.CategoryMetadata{Name: "sports"},
-				ModelScores: []config.ModelScore{{
-					Model:                 "phi4",
-					Score:                 0.8,
-					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(false)},
-				}},
-			},
-			{
-				CategoryMetadata: config.CategoryMetadata{Name: "politics"},
-				ModelScores: []config.ModelScore{{
-					Model:                 "deepseek-v31",
-					Score:                 0.9,
-					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: lo.ToPtr(true)},
-				}},
-			},
-		}
-
-		// Create MCP classifier manually and inject mock client
-		mcpClassifier := &MCPCategoryClassifier{
-			client:   mockClient,
-			toolName: "classify_text",
-			config:   cfg,
-		}
-
-		classifier = &Classifier{
-			Config:                 cfg,
-			mcpCategoryInitializer: mcpClassifier,
-			mcpCategoryInference:   mcpClassifier,
-			CategoryMapping: &CategoryMapping{
-				CategoryToIdx: map[string]int{"tech": 0, "sports": 1, "politics": 2},
-				IdxToCategory: map[string]string{"0": "tech", "1": "sports", "2": "politics"},
-				CategorySystemPrompts: map[string]string{
-					"tech":     "You are a technology expert. Include practical examples.",
-					"sports":   "You are a sports expert. Provide game analysis.",
-					"politics": "You are a politics expert. Provide balanced perspectives.",
-				},
-				CategoryDescriptions: map[string]string{
-					"tech":     "Technology and computing topics",
-					"sports":   "Sports and athletics",
-					"politics": "Political topics and governance",
-				},
-			},
-		}
-	})
-
-	Describe("IsMCPCategoryEnabled", func() {
-		It("should return true when properly configured", func() {
-			Expect(classifier.IsMCPCategoryEnabled()).To(BeTrue())
-		})
-
-		It("should return false when not enabled", func() {
-			classifier.Config.MCPCategoryModel.Enabled = false
-			Expect(classifier.IsMCPCategoryEnabled()).To(BeFalse())
-		})
-
-		// Note: tool_name is now optional and will be auto-discovered if not specified.
-		// IsMCPCategoryEnabled only checks if MCP is enabled, not specific configuration details.
-		// Runtime checks (like initializer != nil or successful connection) are handled
-		// separately in the actual initialization and classification methods.
-	})
-
-	Describe("classifyCategoryMCP", func() {
-		Context("when MCP is not enabled", func() {
-			It("should return error", func() {
-				classifier.Config.MCPCategoryModel.Enabled = false
-				_, _, err := classifier.classifyCategoryMCP("test text")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("not properly configured"))
-			})
-		})
-
-		Context("when classification succeeds with high confidence", func() {
-			It("should return category name", func() {
-				mockClient.callToolResult = &mcp.CallToolResult{
-					IsError: false,
-					Content: []mcp.Content{
-						mcp.TextContent{
-							Type: "text",
-							Text: `{"class": 2, "confidence": 0.95, "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
-						},
-					},
-				}
-
-				category, confidence, err := classifier.classifyCategoryMCP("test text")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal("politics"))
-				Expect(confidence).To(BeNumerically("~", 0.95, 0.001))
-			})
-		})
-
-		Context("when confidence is below threshold", func() {
-			It("should return empty category", func() {
-				mockClient.callToolResult = &mcp.CallToolResult{
-					IsError: false,
-					Content: []mcp.Content{
-						mcp.TextContent{
-							Type: "text",
-							Text: `{"class": 1, "confidence": 0.3, "model": "openai/gpt-oss-20b", "use_reasoning": false}`,
-						},
-					},
-				}
-
-				category, confidence, err := classifier.classifyCategoryMCP("test text")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal(""))
-				Expect(confidence).To(BeNumerically("~", 0.3, 0.001))
-			})
-		})
-
-		Context("when class index is not in mapping", func() {
-			It("should return generic category name", func() {
-				mockClient.callToolResult = &mcp.CallToolResult{
-					IsError: false,
-					Content: []mcp.Content{
-						mcp.TextContent{
-							Type: "text",
-							Text: `{"class": 99, "confidence": 0.85, "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
-						},
-					},
-				}
-
-				category, confidence, err := classifier.classifyCategoryMCP("test text")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal("category_99"))
-				Expect(confidence).To(BeNumerically("~", 0.85, 0.001))
-			})
-		})
-
-		Context("when MCP call fails", func() {
-			It("should return error", func() {
-				mockClient.callToolError = errors.New("network error")
-
-				_, _, err := classifier.classifyCategoryMCP("test text")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("MCP tool call failed"))
-			})
-		})
-	})
-
-	Describe("classifyCategoryWithEntropyMCP", func() {
-		Context("when MCP returns probabilities", func() {
-			It("should return category with entropy decision", func() {
-				mockClient.callToolResult = &mcp.CallToolResult{
-					IsError: false,
-					Content: []mcp.Content{
-						mcp.TextContent{
-							Type: "text",
-							Text: `{"class": 2, "confidence": 0.95, "probabilities": [0.02, 0.03, 0.95], "model": "openai/gpt-oss-20b", "use_reasoning": true}`,
-						},
-					},
-				}
-
-				category, confidence, reasoningDecision, err := classifier.classifyCategoryWithEntropyMCP("test text")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal("politics"))
-				Expect(confidence).To(BeNumerically("~", 0.95, 0.001))
-				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
-			})
-		})
-
-		Context("when confidence is below threshold", func() {
-			It("should return empty category but provide entropy decision", func() {
-				mockClient.callToolResult = &mcp.CallToolResult{
-					IsError: false,
-					Content: []mcp.Content{
-						mcp.TextContent{
-							Type: "text",
-							Text: `{"class": 0, "confidence": 0.3, "probabilities": [0.3, 0.35, 0.35], "model": "openai/gpt-oss-20b", "use_reasoning": false}`,
-						},
-					},
-				}
-
-				category, confidence, reasoningDecision, err := classifier.classifyCategoryWithEntropyMCP("test text")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(category).To(Equal(""))
-				Expect(confidence).To(BeNumerically("~", 0.3, 0.001))
-				Expect(len(reasoningDecision.TopCategories)).To(BeNumerically(">", 0))
-			})
-		})
-	})
-
-	Describe("initializeMCPCategoryClassifier", func() {
-		Context("when MCP is not enabled", func() {
-			It("should return error", func() {
-				classifier.Config.MCPCategoryModel.Enabled = false
-				err := classifier.initializeMCPCategoryClassifier()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("not properly configured"))
-			})
-		})
-
-		Context("when initializer is nil", func() {
-			It("should return error", func() {
-				classifier.mcpCategoryInitializer = nil
-				err := classifier.initializeMCPCategoryClassifier()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("initializer is not set"))
 			})
 		})
 	})
@@ -3578,12 +2706,10 @@ var _ = Describe("EmbeddingClassifier", func() {
 		}
 
 		rules := []config.EmbeddingRule{{
-			Category:                  "cat1",
-			Keywords:                  []string{"science", "math"},
+			Name:                      "cat1",
+			Candidates:                []string{"science", "math"},
 			AggregationMethodConfiged: config.AggregationMethodMean,
 			SimilarityThreshold:       0.8,
-			Model:                     "auto",
-			Dimension:                 768,
 		}}
 
 		clf, err := NewEmbeddingClassifier(rules)
@@ -3601,12 +2727,10 @@ var _ = Describe("EmbeddingClassifier", func() {
 		}
 
 		rules := []config.EmbeddingRule{{
-			Category:                  "cat2",
-			Keywords:                  []string{"x", "y"},
+			Name:                      "cat2",
+			Candidates:                []string{"x", "y"},
 			AggregationMethodConfiged: config.AggregationMethodMax,
 			SimilarityThreshold:       0.5,
-			Model:                     "auto",
-			Dimension:                 512,
 		}}
 
 		clf, err := NewEmbeddingClassifier(rules)
@@ -3624,12 +2748,10 @@ var _ = Describe("EmbeddingClassifier", func() {
 		}
 
 		rules := []config.EmbeddingRule{{
-			Category:                  "cat3",
-			Keywords:                  []string{"p", "q"},
+			Name:                      "cat3",
+			Candidates:                []string{"p", "q"},
 			AggregationMethodConfiged: config.AggregationMethodAny,
 			SimilarityThreshold:       0.7,
-			Model:                     "auto",
-			Dimension:                 256,
 		}}
 
 		clf, err := NewEmbeddingClassifier(rules)
@@ -3647,12 +2769,10 @@ var _ = Describe("EmbeddingClassifier", func() {
 		}
 
 		rules := []config.EmbeddingRule{{
-			Category:                  "cat4",
-			Keywords:                  []string{"z"},
+			Name:                      "cat4",
+			Candidates:                []string{"z"},
 			AggregationMethodConfiged: config.AggregationMethodMean,
 			SimilarityThreshold:       0.1,
-			Model:                     "auto",
-			Dimension:                 768,
 		}}
 
 		clf, err := NewEmbeddingClassifier(rules)

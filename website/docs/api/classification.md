@@ -1,4 +1,4 @@
-# Classification API Reference
+# Admin API Reference
 
 The Classification API provides direct access to the Semantic Router's classification models for intent detection, PII identification, and security analysis. This API is useful for testing, debugging, and standalone classification tasks.
 
@@ -581,23 +581,51 @@ categories:
   - name: tech
     # Map generic "tech" to multiple MMLU-Pro categories
     mmlu_categories: ["computer science", "engineering"]
-    model_scores:
-      - model: phi4
-        score: 0.9
-      - model: mistral-small3.1
-        score: 0.7
   - name: finance
     # Map generic "finance" to MMLU economics
     mmlu_categories: ["economics"]
-    model_scores:
-      - model: gemma3:27b
-        score: 0.8
   - name: politics
     # If mmlu_categories is omitted and the name matches an MMLU category,
     # the router falls back to identity mapping automatically.
-    model_scores:
+
+decisions:
+  - name: tech
+    description: "Route technical queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "tech"
+    modelRefs:
+      - model: phi4
+        use_reasoning: false
+      - model: mistral-small3.1
+        use_reasoning: false
+
+  - name: finance
+    description: "Route finance queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "finance"
+    modelRefs:
       - model: gemma3:27b
-        score: 0.6
+        use_reasoning: false
+
+  - name: politics
+    description: "Route politics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "politics"
+    modelRefs:
+      - model: gemma3:27b
+        use_reasoning: false
 ```
 
 Notes:
@@ -626,14 +654,26 @@ Notes:
     {
       "name": "business",
       "description": "Business and commercial content",
-      "reasoning_enabled": false,
       "threshold": 0.6
     },
     {
       "name": "math",
       "description": "Mathematical problems and concepts",
-      "reasoning_enabled": true,
       "threshold": 0.6
+    }
+  ],
+  "decisions": [
+    {
+      "name": "business",
+      "description": "Route business queries",
+      "priority": 10,
+      "reasoning_enabled": false
+    },
+    {
+      "name": "math",
+      "description": "Route mathematical queries",
+      "priority": 10,
+      "reasoning_enabled": true
     }
   ],
   "pii_types": [

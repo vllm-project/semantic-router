@@ -19,34 +19,36 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 		return modifiedBody, nil
 	}
 
-	// Try to get the most up-to-date category configuration from global config first
+	// Try to get the most up-to-date decision configuration from global config first
 	globalConfig := config.Get()
-	var category *config.Category
+	var decision *config.Decision
 	if globalConfig != nil {
-		category = globalConfig.GetCategoryByName(categoryName)
+		decision = globalConfig.GetDecisionByName(categoryName)
 	}
 
 	// If not found in global config, fall back to router's config
-	if category == nil {
-		category = r.Classifier.GetCategoryByName(categoryName)
+	if decision == nil {
+		decision = r.Classifier.GetDecisionByName(categoryName)
 	}
 
-	if category == nil || category.SystemPrompt == "" {
+	// Get system prompt configuration from plugins
+	systemPromptConfig := decision.GetSystemPromptConfig()
+	if decision == nil || systemPromptConfig == nil || systemPromptConfig.SystemPrompt == "" {
 		return modifiedBody, nil
 	}
 
-	if !category.IsSystemPromptEnabled() {
-		logging.Infof("System prompt disabled for category: %s", categoryName)
+	if !decision.IsSystemPromptEnabled() {
+		logging.Infof("System prompt disabled for decision: %s", categoryName)
 		return modifiedBody, nil
 	}
 
 	// Start system prompt injection span
 	promptCtx, promptSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSystemPromptInjection)
 
-	mode := category.GetSystemPromptMode()
+	mode := decision.GetSystemPromptMode()
 	var injected bool
 	var err error
-	modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, category.SystemPrompt, mode)
+	modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, systemPromptConfig.SystemPrompt, mode)
 	if err != nil {
 		logging.Errorf("Error adding system prompt to request: %v", err)
 		tracing.RecordError(promptSpan, err)

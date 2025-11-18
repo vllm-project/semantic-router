@@ -17,24 +17,47 @@ classifier:
 
 # Define your generic categories and map them to MMLU-Pro categories.
 # The classifier will translate predicted MMLU categories into these generic names.
+# Categories now only contain metadata - routing logic is defined in decisions below.
 categories:
   - name: tech
     mmlu_categories: ["computer science", "engineering"]
-    model_scores:
-      - model: phi4
-        score: 0.9
-      - model: mistral-small3.1
-        score: 0.7
   - name: finance
     mmlu_categories: ["economics"]
-    model_scores:
-      - model: gemma3:27b
-        score: 0.8
   - name: politics
     # If omitted, identity mapping applies when this name matches MMLU
-    model_scores:
+
+# Decisions define routing logic by combining rules and model selection
+decisions:
+  - name: tech
+    description: "Route technology-related queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "tech"
+    modelRefs:
+      - model: phi4
+  - name: finance
+    description: "Route finance and economics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "finance"
+    modelRefs:
       - model: gemma3:27b
-        score: 0.6
+  - name: politics
+    description: "Route politics-related queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "politics"
+    modelRefs:
+      - model: gemma3:27b
 
 # A default model is recommended for fallback
 default_model: mistral-small3.1

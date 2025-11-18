@@ -33,13 +33,25 @@ var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
 // NewOpenAIRouter creates a new OpenAI API router instance
 func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
-	// Always parse fresh config for router construction (supports live reload)
-	cfg, err := config.Parse(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+	var cfg *config.RouterConfig
+	var err error
+
+	// Check if we should use the global config (Kubernetes mode) or parse from file
+	globalCfg := config.Get()
+	if globalCfg != nil && globalCfg.ConfigSource == config.ConfigSourceKubernetes {
+		// Use the global config that's managed by the Kubernetes controller
+		cfg = globalCfg
+		logging.Infof("Using Kubernetes-managed configuration")
+	} else {
+		// Parse fresh config from file for file-based configuration (supports live reload)
+		cfg, err = config.Parse(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config: %w", err)
+		}
+		// Update global config reference for packages that rely on config.GetConfig()
+		config.Replace(cfg)
+		logging.Debugf("Parsed configuration from file: %s", configPath)
 	}
-	// Update global config reference for packages that rely on config.GetConfig()
-	config.Replace(cfg)
 
 	// Load category mapping if classifier is enabled
 	var categoryMapping *classification.CategoryMapping
@@ -134,7 +146,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Create utility components
-	piiChecker := pii.NewPolicyChecker(cfg, cfg.ModelConfig)
+	piiChecker := pii.NewPolicyChecker(cfg)
 
 	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
 	if err != nil {

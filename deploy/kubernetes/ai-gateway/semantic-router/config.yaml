@@ -1,9 +1,6 @@
 model_config:
   "base-model":
     reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
-    # preferred_endpoints omitted - let upstream handle endpoint selection
-    pii_policy:
-      allow_by_default: false
     # Define available LoRA adapters for this base model
     # These names must match the LoRA modules registered with vLLM at startup
     loras:
@@ -20,123 +17,413 @@ model_config:
       - name: "general-expert"
         description: "General-purpose adapter for diverse topics"
 
-# Categories with LoRA routing
-# Each category uses the base-model model with a specific LoRA adapter
+default_model: general-expert
+
+# Categories - now only contain metadata for domain classification
 categories:
   - name: business
-    system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
-    # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category
-    # jailbreak_threshold: 0.8  # Optional: Override global jailbreak threshold per category
-    model_scores:
-      - model: base-model  # Base model name (for endpoint selection and PII policy)
-        lora_name: social-expert  # LoRA adapter name (used as final model name in request)
-        score: 0.7
-        use_reasoning: false  # Business performs better without reasoning
   - name: law
-    system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
-    model_scores:
-      - model: base-model
-        lora_name: law-expert
-        score: 0.4
-        use_reasoning: false
   - name: psychology
-    system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
-    semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.92  # High threshold for psychology - sensitive to nuances
-    model_scores:
-      - model: base-model
-        lora_name: humanities-expert
-        score: 0.6
-        use_reasoning: false
   - name: biology
-    system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
-    model_scores:
-      - model: base-model
-        lora_name: science-expert
-        score: 0.9
-        use_reasoning: false
   - name: chemistry
-    system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
-    model_scores:
-      - model: base-model
-        lora_name: science-expert
-        score: 0.6
-        use_reasoning: true  # Enable reasoning for complex chemistry
   - name: history
-    system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
-    model_scores:
-      - model: base-model
-        lora_name: humanities-expert
-        score: 0.7
-        use_reasoning: false
   - name: other
-    system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
-    semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.75  # Lower threshold for general chat - less sensitive
-    model_scores:
-      - model: base-model
-        lora_name: general-expert
-        score: 0.7
-        use_reasoning: false
   - name: health
-    system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
-    semantic_cache_enabled: true
-    semantic_cache_similarity_threshold: 0.95  # High threshold for health - very sensitive to word changes
-    model_scores:
-      - model: base-model
-        lora_name: science-expert
-        score: 0.5
-        use_reasoning: false
   - name: economics
-    system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
-    model_scores:
+  - name: math
+  - name: physics
+  - name: computer science
+  - name: philosophy
+  - name: engineering
+  - name: urgent request
+  - name: technical_support
+  - name: product_info
+
+# Decisions - define routing logic with rules, model selection, and plugins
+decisions:
+  - name: business
+    description: "Route business and management queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
       - model: base-model
         lora_name: social-expert
-        score: 1.0
         use_reasoning: false
-  - name: math
-    system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
-    model_scores:
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+          mode: "replace"
+  - name: law
+    description: "Route legal queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
       - model: base-model
-        lora_name: math-expert
-        score: 1.0
-        use_reasoning: true  # Enable reasoning for complex math
-  - name: physics
-    system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
-    model_scores:
-      - model: base-model
-        lora_name: science-expert
-        score: 0.7
-        use_reasoning: true  # Enable reasoning for physics
-  - name: computer science
-    system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
-    model_scores:
-      - model: base-model
-        lora_name: science-expert
-        score: 0.6
+        lora_name: law-expert
         use_reasoning: false
-  - name: philosophy
-    system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
-    model_scores:
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+          mode: "replace"
+  - name: psychology
+    description: "Route psychology queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
       - model: base-model
         lora_name: humanities-expert
-        score: 0.5
         use_reasoning: false
-  - name: engineering
-    system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
-    model_scores:
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+  - name: biology
+    description: "Route biology queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    modelRefs:
       - model: base-model
         lora_name: science-expert
-        score: 0.7
         use_reasoning: false
-  - name: thinking
-    system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
-    model_scores:
-      - model: general-expert
-        score: 0.7
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+          mode: "replace"
+  - name: chemistry
+    description: "Route chemistry queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: base-model
+        lora_name: science-expert
         use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+          mode: "replace"
+  - name: history
+    description: "Route history queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: base-model
+        lora_name: humanities-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+          mode: "replace"
+  - name: other
+    description: "Route general queries"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: base-model
+        lora_name: general-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.75
+  - name: health
+    description: "Route health and medical queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: base-model
+        lora_name: science-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+          mode: "replace"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95
+  - name: economics
+    description: "Route economics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: base-model
+        lora_name: social-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+          mode: "replace"
+  - name: math
+    description: "Route mathematics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: base-model
+        lora_name: math-expert
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+          mode: "replace"
+  - name: physics
+    description: "Route physics queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: base-model
+        lora_name: science-expert
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+          mode: "replace"
+  - name: computer_science
+    description: "Route computer science queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+    modelRefs:
+      - model: base-model
+        lora_name: science-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+          mode: "replace"
+  - name: philosophy
+    description: "Route philosophy queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: base-model
+        lora_name: humanities-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+          mode: "replace"
+  - name: engineering
+    description: "Route engineering queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: base-model
+        lora_name: science-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+          mode: "replace"
+  - name: urgent_request
+    description: "Route urgent and emergency requests"
+    priority: 20
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "urgent request"
+    modelRefs:
+      - model: general-expert
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
+          mode: "replace"
+  - name: technical_support
+    description: "Route technical support queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "technical_support"
+    modelRefs:
+      - model: general-expert
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a technical support specialist. Provide detailed, step-by-step guidance for technical issues. Use clear explanations and include relevant troubleshooting steps."
+          mode: "replace"
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+  - name: product_info
+    description: "Route product information queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "product_info"
+    modelRefs:
+      - model: general-expert
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          system_prompt: "You are a product specialist. Provide accurate information about products, features, pricing, and availability. Be helpful and informative."
+          mode: "replace"
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
 
-default_model: general-expert
+keyword_rules:
+  # Keyword Rule 1: Emergency/Urgent Requests
+  # Use case: Fast routing for time-sensitive queries that need immediate attention
+  # Examples: "URGENT: server down", "EMERGENCY: data loss", "CRITICAL: security breach"
+  - name: "urgent request"
+    operator: "OR"
+    keywords: ["urgent", "emergency", "critical", "asap", "immediately", "help!", "sos"]
+    case_sensitive: false
+
+  # Keyword Rule 2: Programming Language Detection
+  # Use case: Route code-related queries to appropriate handlers based on language
+  # Examples: "python error", "java exception", "golang panic", "rust compiler error"
+  - name: "computer science"
+    operator: "OR"
+    keywords: ["python", "java", "golang", "rust", "javascript", "typescript", "c++", "ruby", "php"]
+    case_sensitive: false
+
+# Embedding-based classification rules
+# These rules use semantic similarity between query text and candidates
+embedding_rules:
+  # Embedding Rule 1: Customer Complaint/Feedback Detection
+  # Use case: Identify negative sentiment and complaints regardless of exact wording
+  # Examples: "I'm disappointed with the service", "This product doesn't work as expected",
+  #           "Not satisfied with my purchase", "The quality is poor"
+  - name: "technical_support"
+    threshold: 0.72
+    candidates:
+      - "I'm not satisfied with the product quality"
+      - "The service didn't meet my expectations"
+      - "I'm experiencing issues and need help"
+      - "Something is broken and not working properly"
+      - "I'm disappointed with the performance"
+      - "This is not what I expected when I ordered"
+    aggregation_method: "max"  # Use max to catch any strong complaint signal
+    model: "auto"
+    dimension: 768
+    quality_priority: 0.8  # High quality needed for sentiment detection
+    latency_priority: 0.2
+
+  # Embedding Rule 2: Account/Billing Related Queries
+  # Use case: Route financial and account queries even with varied phrasing
+  # Examples: "How much do I owe?", "Check my balance", "Update payment method",
+  #           "Why was I charged twice?", "Cancel my subscription"
+  - name: "product_info"
+    threshold: 0.68
+    candidates:
+      - "I need to check my account balance and payment history"
+      - "How can I update my billing information and payment method"
+      - "I was charged incorrectly and need a refund"
+      - "I want to cancel my subscription and stop recurring payments"
+      - "What are the fees and charges on my account"
+      - "I need to review my invoice and transaction details"
+    aggregation_method: "avg"  # Use avg for balanced matching across billing topics
+    model: "qwen3"  # Use high-quality model for financial queries
+    dimension: 1024
 
 bert_model:
   model_id: models/all-MiniLM-L12-v2
@@ -194,12 +481,6 @@ classifier:
     threshold: 0.7
     use_cpu: true
     pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
-
-keyword_rules:
-  - category: "thinking"
-    operator: "OR"
-    keywords: ["urgent", "immediate", "asap", "think", "careful"]
-    case_sensitive: false
 
 
 # Router Configuration for Dual-Path Selection

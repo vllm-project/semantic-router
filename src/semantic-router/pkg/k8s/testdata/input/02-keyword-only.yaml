@@ -1,0 +1,70 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: keyword-pool
+  namespace: default
+spec:
+  defaultModel: "gemma-2-9b"
+  models:
+    - name: "gemma-2-9b"
+      pricing:
+        inputTokenPrice: 0.0000004   # $0.4 per 1M input tokens - fast for simple keyword matching
+        outputTokenPrice: 0.0000008  # $0.8 per 1M output tokens
+      loras:
+        - name: "greeting-handler"
+          description: "Optimized for greeting responses"
+
+    - name: "gemma-2-27b"
+      pricing:
+        inputTokenPrice: 0.000002    # $2 per 1M input tokens - better for complex urgent requests
+        outputTokenPrice: 0.000004   # $4 per 1M output tokens
+      loras:
+        - name: "urgent-specialist"
+          description: "Specialized in handling urgent requests"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: keyword-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "urgent"
+        operator: "OR"
+        keywords: ["urgent", "emergency", "critical", "asap"]
+        caseSensitive: false
+      - name: "greeting"
+        operator: "OR"
+        keywords: ["hello", "hi", "hey", "greetings"]
+        caseSensitive: false
+
+  decisions:
+    - name: "urgent_request"
+      description: "Handle urgent requests with larger model"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "urgent"
+      modelRefs:
+        - model: "gemma-2-27b"
+          loraName: "urgent-specialist"
+          useReasoning: false
+
+    - name: "greeting_response"
+      description: "Handle greetings with fast small model"
+      priority: 50
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "greeting"
+      modelRefs:
+        - model: "gemma-2-9b"
+          loraName: "greeting-handler"
+          useReasoning: false
+

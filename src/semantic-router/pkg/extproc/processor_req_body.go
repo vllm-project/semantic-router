@@ -64,46 +64,34 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
-	// Perform classification and model selection once at the beginning
-	categoryName, classificationConfidence, reasoningDecision, selectedModel := r.performClassificationAndModelSelection(originalModel, userContent, nonUserMessages)
+	// Perform decision evaluation and model selection once at the beginning
+	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
+	decisionName, classificationConfidence, reasoningDecision, selectedModel := r.performDecisionEvaluationAndModelSelection(originalModel, userContent, nonUserMessages, ctx)
 
-	// Perform security checks with category-specific settings
-	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages, categoryName); shouldReturn {
+	// Perform security checks with decision-specific settings
+	if response, shouldReturn := r.performSecurityChecks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
 		return response, nil
 	}
 
-	// Perform PII detection and policy check (if PII policy is enabled for the category)
-	// For auto models: this may modify selectedModel if the initially selected model violates PII policy
-	// For non-auto models: this checks if the specified model passes PII policy
-	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
-	modelToCheck := selectedModel
-	if !isAutoModel || selectedModel == "" {
-		// For non-auto models or when no model was selected, check the original model
-		modelToCheck = originalModel
-	}
-
-	allowedModel, piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, categoryName, modelToCheck, isAutoModel)
+	// Perform PII detection and policy check (if PII policy is enabled for the decision)
+	piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName)
 	if piiResponse != nil {
 		// PII policy violation - return error response
 		return piiResponse, nil
 	}
-	// Use the allowed model (may be different from selectedModel if PII policy required a change)
-	if allowedModel != "" {
-		selectedModel = allowedModel
-	}
 
-	// Handle caching with category-specific settings
-	if response, shouldReturn := r.handleCaching(ctx, categoryName); shouldReturn {
+	// Handle caching with decision-specific settings
+	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
 		return response, nil
 	}
 
 	// Handle model selection and routing with pre-computed classification results and selected model
-	return r.handleModelRouting(openAIRequest, originalModel, categoryName, classificationConfidence, reasoningDecision, selectedModel, ctx)
+	return r.handleModelRouting(openAIRequest, originalModel, decisionName, classificationConfidence, reasoningDecision, selectedModel, ctx)
 }
 
 // handleModelRouting handles model selection and routing logic
-// categoryName, classificationConfidence, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
-func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, categoryName string, classificationConfidence float64, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+// decisionName, classificationConfidence, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
+func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, classificationConfidence float64, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
@@ -117,7 +105,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
 
 	if isAutoModel && selectedModel != "" {
-		return r.handleAutoModelRouting(openAIRequest, originalModel, categoryName, reasoningDecision, selectedModel, ctx, response)
+		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
 	} else if !isAutoModel {
 		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, ctx)
 	}
@@ -128,9 +116,9 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 }
 
 // handleAutoModelRouting handles routing for auto model selection
-func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, categoryName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext, response *ext_proc.ProcessingResponse) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Using Auto Model Selection (model=%s), category=%s, selected=%s",
-		originalModel, categoryName, selectedModel)
+func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext, response *ext_proc.ProcessingResponse) (*ext_proc.ProcessingResponse, error) {
+	logging.Infof("Using Auto Model Selection (model=%s), decision=%s, selected=%s",
+		originalModel, decisionName, selectedModel)
 
 	matchedModel := selectedModel
 
@@ -141,10 +129,11 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	}
 
 	// Record routing decision with tracing
-	r.recordRoutingDecision(ctx, categoryName, originalModel, matchedModel, reasoningDecision)
+	r.recordRoutingDecision(ctx, decisionName, originalModel, matchedModel, reasoningDecision)
 
 	// Track VSR decision information
-	r.trackVSRDecision(ctx, categoryName, matchedModel, reasoningDecision.UseReasoning)
+	// categoryName is already set in ctx.VSRSelectedCategory by performDecisionEvaluationAndModelSelection
+	r.trackVSRDecision(ctx, ctx.VSRSelectedCategory, decisionName, matchedModel, reasoningDecision.UseReasoning)
 
 	// Track model routing metrics
 	metrics.RecordModelRouting(originalModel, matchedModel)
@@ -153,16 +142,16 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	selectedEndpoint := r.selectEndpointForModel(ctx, matchedModel)
 
 	// Modify request body with new model, reasoning mode, and system prompt
-	modifiedBody, err := r.modifyRequestBodyForAutoRouting(openAIRequest, matchedModel, categoryName, reasoningDecision.UseReasoning, ctx)
+	modifiedBody, err := r.modifyRequestBodyForAutoRouting(openAIRequest, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create response with mutations
-	response = r.createRoutingResponse(matchedModel, selectedEndpoint, modifiedBody)
+	response = r.createRoutingResponse(matchedModel, selectedEndpoint, modifiedBody, ctx)
 
 	// Log routing decision
-	r.logRoutingDecision(ctx, "auto_routing", originalModel, matchedModel, categoryName, reasoningDecision.UseReasoning, selectedEndpoint)
+	r.logRoutingDecision(ctx, "auto_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning, selectedEndpoint)
 
 	// Handle route cache clearing
 	if r.shouldClearRouteCache() {
@@ -241,7 +230,7 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 }
 
 // modifyRequestBodyForAutoRouting modifies the request body for auto routing
-func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.ChatCompletionNewParams, matchedModel string, categoryName string, useReasoning bool, ctx *RequestContext) ([]byte, error) {
+func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.ChatCompletionNewParams, matchedModel string, decisionName string, useReasoning bool, ctx *RequestContext) ([]byte, error) {
 	// Modify the model in the request
 	openAIRequest.Model = matchedModel
 
@@ -253,19 +242,19 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 	}
 
-	if categoryName == "" {
+	if decisionName == "" {
 		return modifiedBody, nil
 	}
 	// Set reasoning mode
-	modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, categoryName)
+	modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, decisionName)
 	if err != nil {
 		logging.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
 		metrics.RecordRequestError(matchedModel, "serialization_error")
 		return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
 	}
 
-	// Add category-specific system prompt if configured
-	modifiedBody, err = r.addSystemPromptIfConfigured(modifiedBody, categoryName, matchedModel, ctx)
+	// Add decision-specific system prompt if configured
+	modifiedBody, err = r.addSystemPromptIfConfigured(modifiedBody, decisionName, matchedModel, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +263,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 }
 
 // createRoutingResponse creates a routing response with mutations
-func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modifiedBody []byte) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modifiedBody []byte, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	bodyMutation := &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{
 			Body: modifiedBody,
@@ -282,6 +271,9 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	}
 
 	setHeaders := []*core.HeaderValueOption{}
+	removeHeaders := []string{"content-length"}
+
+	// Add standard routing headers
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -299,8 +291,21 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 		})
 	}
 
+	// Apply header mutations from decision's header_mutation plugin
+	if ctx.VSRSelectedDecision != nil {
+		pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+		if len(pluginSetHeaders) > 0 {
+			setHeaders = append(setHeaders, pluginSetHeaders...)
+			logging.Infof("Applied %d header mutations from decision %s", len(pluginSetHeaders), ctx.VSRSelectedDecision.Name)
+		}
+		if len(pluginRemoveHeaders) > 0 {
+			removeHeaders = append(removeHeaders, pluginRemoveHeaders...)
+			logging.Infof("Applied %d header deletions from decision %s", len(pluginRemoveHeaders), ctx.VSRSelectedDecision.Name)
+		}
+	}
+
 	headerMutation := &ext_proc.HeaderMutation{
-		RemoveHeaders: []string{"content-length"},
+		RemoveHeaders: removeHeaders,
 		SetHeaders:    setHeaders,
 	}
 

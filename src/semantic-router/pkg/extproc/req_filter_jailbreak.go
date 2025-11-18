@@ -18,17 +18,17 @@ func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent st
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 
-	// Check if jailbreak detection is enabled for this category
+	// Check if jailbreak detection is enabled for this decision
 	jailbreakEnabled := r.Classifier.IsJailbreakEnabled()
 	if categoryName != "" && r.Config != nil {
-		// Use category-specific setting if available
-		jailbreakEnabled = jailbreakEnabled && r.Config.IsJailbreakEnabledForCategory(categoryName)
+		// Use decision-specific setting if available
+		jailbreakEnabled = jailbreakEnabled && r.Config.IsJailbreakEnabledForDecision(categoryName)
 	}
 
-	// Get category-specific threshold
+	// Get decision-specific threshold
 	jailbreakThreshold := r.Config.PromptGuard.Threshold
 	if categoryName != "" && r.Config != nil {
-		jailbreakThreshold = r.Config.GetJailbreakThresholdForCategory(categoryName)
+		jailbreakThreshold = r.Config.GetJailbreakThresholdForDecision(categoryName)
 	}
 
 	// Perform jailbreak detection on all message content

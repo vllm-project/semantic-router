@@ -10,6 +10,7 @@ markdown-lint: ## Lint all markdown files in the project
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
+		--ignore website/docs/api/crd-reference.md \
 		--ignore models
 
 markdown-lint-fix: ## Auto-fix markdown lint issues

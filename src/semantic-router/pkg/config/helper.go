@@ -59,18 +59,18 @@ func (c *RouterConfig) GetCategoryDescriptions() []string {
 	return descriptions
 }
 
-// GetModelForCategoryIndex returns the best LLM model name for the category at the given index
-func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
-	if index < 0 || index >= len(c.Categories) {
+// GetModelForDecisionIndex returns the best LLM model name for the decision at the given index
+func (c *RouterConfig) GetModelForDecisionIndex(index int) string {
+	if index < 0 || index >= len(c.Decisions) {
 		return c.DefaultModel
 	}
 
-	category := c.Categories[index]
-	if len(category.ModelScores) > 0 {
-		return category.ModelScores[0].Model
+	decision := c.Decisions[index]
+	if len(decision.ModelRefs) > 0 {
+		return decision.ModelRefs[0].Model
 	}
 
-	// Fall back to default model if category has no models
+	// Fall back to default model if decision has no models
 	return c.DefaultModel
 }
 
@@ -90,22 +90,31 @@ func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, c
 	return 0, 0, "", false
 }
 
-// GetModelPIIPolicy returns the PII policy for a given model
-// If the model is not found in the config, returns a default policy that allows all PII
-func (c *RouterConfig) GetModelPIIPolicy(modelName string) PIIPolicy {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.PIIPolicy
+// GetDecisionPIIPolicy returns the PII policy for a given decision
+// If the decision doesn't have a PII plugin or policy config, returns a default policy that allows all PII
+func (d *Decision) GetDecisionPIIPolicy() PIIPolicy {
+	piiConfig := d.GetPIIConfig()
+	if piiConfig == nil {
+		// Default policy allows all PII (no PII plugin configured)
+		return PIIPolicy{
+			AllowByDefault: true,
+			PIITypes:       []string{},
+		}
 	}
-	// Default policy allows all PII
+
+	// When PII plugin is enabled, default behavior is to block all PII (AllowByDefault: false)
+	// unless specific types are listed in PIITypesAllowed
+	allowByDefault := !piiConfig.Enabled
+
 	return PIIPolicy{
-		AllowByDefault: true,
-		PIITypes:       []string{},
+		AllowByDefault: allowByDefault,
+		PIITypes:       piiConfig.PIITypesAllowed,
 	}
 }
 
-// IsModelAllowedForPIIType checks if a model is allowed to process a specific PII type
-func (c *RouterConfig) IsModelAllowedForPIIType(modelName string, piiType string) bool {
-	policy := c.GetModelPIIPolicy(modelName)
+// IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
+func (d *Decision) IsDecisionAllowedForPIIType(piiType string) bool {
+	policy := d.GetDecisionPIIPolicy()
 
 	// If allow_by_default is true, all PII types are allowed unless explicitly denied
 	if policy.AllowByDefault {
@@ -116,10 +125,10 @@ func (c *RouterConfig) IsModelAllowedForPIIType(modelName string, piiType string
 	return slices.Contains(policy.PIITypes, piiType)
 }
 
-// IsModelAllowedForPIITypes checks if a model is allowed to process any of the given PII types
-func (c *RouterConfig) IsModelAllowedForPIITypes(modelName string, piiTypes []string) bool {
+// IsDecisionAllowedForPIITypes checks if a decision is allowed to process any of the given PII types
+func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string) bool {
 	for _, piiType := range piiTypes {
-		if !c.IsModelAllowedForPIIType(modelName, piiType) {
+		if !d.IsDecisionAllowedForPIIType(piiType) {
 			return false
 		}
 	}
@@ -238,40 +247,40 @@ func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (stri
 	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
 }
 
-// GetModelReasoningForCategory returns whether a specific model supports reasoning in a given category
-func (c *RouterConfig) GetModelReasoningForCategory(categoryName string, modelName string) bool {
-	for _, category := range c.Categories {
-		if category.Name == categoryName {
-			for _, modelScore := range category.ModelScores {
-				if modelScore.Model == modelName {
-					return modelScore.UseReasoning != nil && *modelScore.UseReasoning
+// GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
+func (c *RouterConfig) GetModelReasoningForDecision(decisionName string, modelName string) bool {
+	for _, decision := range c.Decisions {
+		if decision.Name == decisionName {
+			for _, modelRef := range decision.ModelRefs {
+				if modelRef.Model == modelName {
+					return modelRef.UseReasoning != nil && *modelRef.UseReasoning
 				}
 			}
 		}
 	}
-	return false // Default to false if category or model not found
+	return false // Default to false if decision or model not found
 }
 
-// GetBestModelForCategory returns the best scoring model for a given category
-func (c *RouterConfig) GetBestModelForCategory(categoryName string) (string, bool) {
-	for _, category := range c.Categories {
-		if category.Name == categoryName {
-			if len(category.ModelScores) > 0 {
-				useReasoning := category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning
-				return category.ModelScores[0].Model, useReasoning
+// GetBestModelForDecision returns the best model for a given decision (first model in ModelRefs)
+func (c *RouterConfig) GetBestModelForDecision(decisionName string) (string, bool) {
+	for _, decision := range c.Decisions {
+		if decision.Name == decisionName {
+			if len(decision.ModelRefs) > 0 {
+				useReasoning := decision.ModelRefs[0].UseReasoning != nil && *decision.ModelRefs[0].UseReasoning
+				return decision.ModelRefs[0].Model, useReasoning
 			}
 		}
 	}
-	return "", false // Return empty string and false if category not found or has no models
+	return "", false // Return empty string and false if decision not found or has no models
 }
 
 // ValidateEndpoints validates that all configured models have at least one endpoint
 func (c *RouterConfig) ValidateEndpoints() error {
-	// Get all models from categories
+	// Get all models from decisions
 	allCategoryModels := make(map[string]bool)
-	for _, category := range c.Categories {
-		for _, modelScore := range category.ModelScores {
-			allCategoryModels[modelScore.Model] = true
+	for _, decision := range c.Decisions {
+		for _, modelRef := range decision.ModelRefs {
+			allCategoryModels[modelRef.Model] = true
 		}
 	}
 
@@ -291,22 +300,27 @@ func (c *RouterConfig) ValidateEndpoints() error {
 	return nil
 }
 
-// IsSystemPromptEnabled returns whether system prompt injection is enabled for a category
-func (c *Category) IsSystemPromptEnabled() bool {
-	// If SystemPromptEnabled is explicitly set, use that value
-	if c.SystemPromptEnabled != nil {
-		return *c.SystemPromptEnabled
+// IsSystemPromptEnabled returns whether system prompt injection is enabled for a decision
+func (d *Decision) IsSystemPromptEnabled() bool {
+	config := d.GetSystemPromptConfig()
+	if config == nil {
+		return false
+	}
+	// If Enabled is explicitly set, use that value
+	if config.Enabled != nil {
+		return *config.Enabled
 	}
 	// Default to true if SystemPrompt is not empty
-	return c.SystemPrompt != ""
+	return config.SystemPrompt != ""
 }
 
 // GetSystemPromptMode returns the system prompt injection mode, defaulting to "replace"
-func (c *Category) GetSystemPromptMode() string {
-	if c.SystemPromptMode == "" {
+func (d *Decision) GetSystemPromptMode() string {
+	config := d.GetSystemPromptConfig()
+	if config == nil || config.Mode == "" {
 		return "replace" // Default mode
 	}
-	return c.SystemPromptMode
+	return config.Mode
 }
 
 // GetCategoryByName returns a category by name
@@ -319,67 +333,89 @@ func (c *RouterConfig) GetCategoryByName(name string) *Category {
 	return nil
 }
 
-// IsCacheEnabledForCategory returns whether semantic caching is enabled for a specific category
-// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
-func (c *RouterConfig) IsCacheEnabledForCategory(categoryName string) bool {
-	category := c.GetCategoryByName(categoryName)
-	if category != nil && category.SemanticCacheEnabled != nil {
-		return *category.SemanticCacheEnabled
+// GetDecisionByName returns a decision by name
+func (c *RouterConfig) GetDecisionByName(name string) *Decision {
+	for i := range c.Decisions {
+		if c.Decisions[i].Name == name {
+			return &c.Decisions[i]
+		}
+	}
+	return nil
+}
+
+// IsCacheEnabledForDecision returns whether semantic caching is enabled for a specific decision
+func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetSemanticCacheConfig()
+		if config != nil {
+			return config.Enabled
+		}
 	}
 	// Fall back to global setting
 	return c.Enabled
 }
 
-// GetCacheSimilarityThresholdForCategory returns the effective cache similarity threshold for a category
-// Priority: category-specific > global semantic_cache > bert_model threshold
-func (c *RouterConfig) GetCacheSimilarityThresholdForCategory(categoryName string) float32 {
-	category := c.GetCategoryByName(categoryName)
-	if category != nil && category.SemanticCacheSimilarityThreshold != nil {
-		return *category.SemanticCacheSimilarityThreshold
+// GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
+func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetSemanticCacheConfig()
+		if config != nil && config.SimilarityThreshold != nil {
+			return *config.SimilarityThreshold
+		}
 	}
 	// Fall back to global cache threshold or bert threshold
 	return c.GetCacheSimilarityThreshold()
 }
 
-// IsJailbreakEnabledForCategory returns whether jailbreak detection is enabled for a specific category
-// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
-func (c *RouterConfig) IsJailbreakEnabledForCategory(categoryName string) bool {
-	category := c.GetCategoryByName(categoryName)
-	if category != nil && category.JailbreakEnabled != nil {
-		return *category.JailbreakEnabled
+// IsJailbreakEnabledForDecision returns whether jailbreak detection is enabled for a specific decision
+func (c *RouterConfig) IsJailbreakEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetJailbreakConfig()
+		if config != nil {
+			return config.Enabled
+		}
 	}
 	// Fall back to global setting
 	return c.PromptGuard.Enabled
 }
 
-// GetJailbreakThresholdForCategory returns the effective jailbreak detection threshold for a category
-// Priority: category-specific > global prompt_guard threshold
-func (c *RouterConfig) GetJailbreakThresholdForCategory(categoryName string) float32 {
-	category := c.GetCategoryByName(categoryName)
-	if category != nil && category.JailbreakThreshold != nil {
-		return *category.JailbreakThreshold
+// GetJailbreakThresholdForDecision returns the effective jailbreak detection threshold for a decision
+func (c *RouterConfig) GetJailbreakThresholdForDecision(decisionName string) float32 {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetJailbreakConfig()
+		if config != nil && config.Threshold != nil {
+			return *config.Threshold
+		}
 	}
 	// Fall back to global threshold
 	return c.PromptGuard.Threshold
 }
 
-// IsPIIEnabledForCategory returns whether PII detection is enabled for a specific category
-// If the category has an explicit setting, it takes precedence; otherwise, uses global setting
-func (c *RouterConfig) IsPIIEnabledForCategory(categoryName string) bool {
-	category := c.GetCategoryByName(categoryName)
-	if category != nil && category.PIIEnabled != nil {
-		return *category.PIIEnabled
+// IsPIIEnabledForDecision returns whether PII detection is enabled for a specific decision
+func (c *RouterConfig) IsPIIEnabledForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetPIIConfig()
+		if config != nil {
+			return config.Enabled
+		}
 	}
 	// Fall back to global setting
 	return c.IsPIIClassifierEnabled()
 }
 
-// GetPIIThresholdForCategory returns the effective PII detection threshold for a category
-// Priority: category-specific > global classifier.pii_model threshold
-func (c *RouterConfig) GetPIIThresholdForCategory(categoryName string) float32 {
-	category := c.GetCategoryByName(categoryName)
-	if category != nil && category.PIIThreshold != nil {
-		return *category.PIIThreshold
+// GetPIIThresholdForDecision returns the effective PII detection threshold for a decision
+func (c *RouterConfig) GetPIIThresholdForDecision(decisionName string) float32 {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetPIIConfig()
+		if config != nil && config.Threshold != nil {
+			return *config.Threshold
+		}
 	}
 	// Fall back to global threshold
 	return c.PIIModel.Threshold

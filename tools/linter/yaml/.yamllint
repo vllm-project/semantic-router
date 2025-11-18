@@ -6,6 +6,7 @@ ignore: |
   .git
   .github
   node_modules
+  .crd-ref-docs.yaml
   deploy/helm
   .venv
 

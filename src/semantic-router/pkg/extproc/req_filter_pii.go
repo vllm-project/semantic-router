@@ -15,41 +15,45 @@ import (
 )
 
 // performPIIDetection performs PII detection and policy check
-// Returns (allowedModel, errorResponse).
-// - If errorResponse is not nil, the request should be blocked.
-// - If allowedModel is not empty, it's the model that passes PII policy (may be different from selectedModel)
-// - isAutoModel indicates whether this is an auto model (true) or a specified model (false)
-func (r *OpenAIRouter) performPIIDetection(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string, selectedModel string, isAutoModel bool) (string, *ext_proc.ProcessingResponse) {
-	// Check if PII detection is enabled for this category
-	if !r.isPIIDetectionEnabled(categoryName) {
-		return selectedModel, nil
+// Returns errorResponse if the request should be blocked, nil otherwise
+func (r *OpenAIRouter) performPIIDetection(ctx *RequestContext, userContent string, nonUserMessages []string, decisionName string) *ext_proc.ProcessingResponse {
+	// Check if PII detection is enabled for this decision
+	if !r.isPIIDetectionEnabled(decisionName) {
+		return nil
 	}
 
 	// Detect PII in content
-	detectedPII := r.detectPIIWithTracing(ctx, userContent, nonUserMessages, categoryName)
+	detectedPII := r.detectPIIWithTracing(ctx, userContent, nonUserMessages, decisionName)
 	if len(detectedPII) == 0 {
-		return selectedModel, nil
+		return nil
 	}
 
-	// Check PII policy and find alternative model if needed
-	return r.checkPIIPolicyAndFindAlternative(ctx, selectedModel, detectedPII, categoryName, isAutoModel)
+	// Check PII policy
+	return r.checkPIIPolicy(ctx, detectedPII, decisionName)
 }
 
-// isPIIDetectionEnabled checks if PII detection is enabled for the given category
-func (r *OpenAIRouter) isPIIDetectionEnabled(categoryName string) bool {
+// isPIIDetectionEnabled checks if PII detection is enabled for the given decision
+func (r *OpenAIRouter) isPIIDetectionEnabled(decisionName string) bool {
+	// Use PIIChecker to check if PII detection is enabled for this decision
+	// This checks if the decision has a PII plugin with enabled: true
+	if !r.PIIChecker.IsPIIEnabled(decisionName) {
+		return false
+	}
+
+	// Also check if there's a valid threshold configured
 	piiThreshold := float32(0.0)
-	if categoryName != "" && r.Config != nil {
-		piiThreshold = r.Config.GetPIIThresholdForCategory(categoryName)
+	if decisionName != "" && r.Config != nil {
+		piiThreshold = r.Config.GetPIIThresholdForDecision(decisionName)
 	} else {
 		piiThreshold = r.Config.PIIModel.Threshold
 	}
 
 	if piiThreshold == 0.0 {
-		logging.Infof("PII detection disabled for category: %s", categoryName)
+		logging.Infof("PII detection disabled for decision %s: threshold is 0", decisionName)
 		return false
 	}
 
-	logging.Infof("PII detection enabled for category %s (threshold: %.3f)", categoryName, piiThreshold)
+	logging.Infof("PII detection enabled for decision %s (threshold: %.3f)", decisionName, piiThreshold)
 	return true
 }
 
@@ -83,90 +87,29 @@ func (r *OpenAIRouter) detectPIIWithTracing(ctx *RequestContext, userContent str
 	return detectedPII
 }
 
-// checkPIIPolicyAndFindAlternative checks if the selected model passes PII policy
-// and finds an alternative model if needed
-func (r *OpenAIRouter) checkPIIPolicyAndFindAlternative(ctx *RequestContext, selectedModel string, detectedPII []string, categoryName string, isAutoModel bool) (string, *ext_proc.ProcessingResponse) {
-	// Check if PII policy is enabled for this model
-	if selectedModel == "" || !r.PIIChecker.IsPIIEnabled(selectedModel) {
-		return selectedModel, nil
-	}
-
-	// Check if the selected model passes PII policy
-	allowed, deniedPII, err := r.PIIChecker.CheckPolicy(selectedModel, detectedPII)
+// checkPIIPolicy checks if the decision allows the detected PII types
+func (r *OpenAIRouter) checkPIIPolicy(ctx *RequestContext, detectedPII []string, decisionName string) *ext_proc.ProcessingResponse {
+	// Check if the decision passes PII policy
+	allowed, deniedPII, err := r.PIIChecker.CheckPolicy(decisionName, detectedPII)
 	if err != nil {
-		logging.Errorf("Error checking PII policy for model %s: %v", selectedModel, err)
-		return selectedModel, nil
+		logging.Errorf("Error checking PII policy for decision %s: %v", decisionName, err)
+		return nil
 	}
 
 	if allowed {
-		return selectedModel, nil
+		return nil
 	}
 
-	// Model violates PII policy - find alternative or return error
-	logging.Warnf("Model %s violates PII policy, finding alternative", selectedModel)
-
-	if isAutoModel && categoryName != "" {
-		// For auto models, try to find an alternative model from the same category
-		return r.findAlternativeModelForPII(ctx, selectedModel, detectedPII, categoryName)
-	}
-
-	// For non-auto models, return error (no alternative available)
-	return r.createPIIViolationResponse(ctx, selectedModel, deniedPII)
-}
-
-// findAlternativeModelForPII finds an alternative model that passes PII policy
-func (r *OpenAIRouter) findAlternativeModelForPII(ctx *RequestContext, originalModel string, detectedPII []string, categoryName string) (string, *ext_proc.ProcessingResponse) {
-	alternativeModels := r.Classifier.GetModelsForCategory(categoryName)
-	allowedModels := r.PIIChecker.FilterModelsForPII(alternativeModels, detectedPII)
-
-	if len(allowedModels) > 0 {
-		// Select the best allowed model from this category
-		allowedModel := r.Classifier.SelectBestModelFromList(allowedModels, categoryName)
-		logging.Infof("Selected alternative model %s that passes PII policy", allowedModel)
-		metrics.RecordRoutingReasonCode("pii_policy_alternative_selected", allowedModel)
-		return allowedModel, nil
-	}
-
-	// No alternative models pass PII policy, try default model
-	logging.Warnf("No models in category %s pass PII policy, trying default", categoryName)
-	return r.tryDefaultModelForPII(ctx, detectedPII)
-}
-
-// tryDefaultModelForPII tries to use the default model if it passes PII policy
-func (r *OpenAIRouter) tryDefaultModelForPII(ctx *RequestContext, detectedPII []string) (string, *ext_proc.ProcessingResponse) {
-	defaultModel := r.Config.DefaultModel
-
-	// Check if default model passes policy
-	defaultAllowed, defaultDeniedPII, _ := r.PIIChecker.CheckPolicy(defaultModel, detectedPII)
-	if defaultAllowed {
-		return defaultModel, nil
-	}
-
-	// Default model also violates PII policy
-	logging.Errorf("Default model %s also violates PII policy, returning error", defaultModel)
-	logging.LogEvent("routing_block", map[string]interface{}{
-		"reason_code": "pii_policy_denied_default_model",
-		"request_id":  ctx.RequestID,
-		"model":       defaultModel,
-		"denied_pii":  defaultDeniedPII,
-	})
-	metrics.RecordRequestError(defaultModel, "pii_policy_denied")
-
-	piiResponse := http.CreatePIIViolationResponse(defaultModel, defaultDeniedPII, ctx.ExpectStreamingResponse)
-	return "", piiResponse
-}
-
-// createPIIViolationResponse creates an error response for PII policy violation
-func (r *OpenAIRouter) createPIIViolationResponse(ctx *RequestContext, model string, deniedPII []string) (string, *ext_proc.ProcessingResponse) {
-	logging.Warnf("Model %s violates PII policy, returning error", model)
+	// Decision violates PII policy - return error
+	logging.Warnf("Decision %s violates PII policy, blocking request", decisionName)
 	logging.LogEvent("routing_block", map[string]interface{}{
 		"reason_code": "pii_policy_denied",
 		"request_id":  ctx.RequestID,
-		"model":       model,
+		"decision":    decisionName,
 		"denied_pii":  deniedPII,
 	})
-	metrics.RecordRequestError(model, "pii_policy_denied")
+	metrics.RecordRequestError(decisionName, "pii_policy_denied")
 
-	piiResponse := http.CreatePIIViolationResponse(model, deniedPII, ctx.ExpectStreamingResponse)
-	return "", piiResponse
+	piiResponse := http.CreatePIIViolationResponse(decisionName, deniedPII, ctx.ExpectStreamingResponse)
+	return piiResponse
 }

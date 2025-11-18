@@ -11,7 +11,7 @@ import (
 
 // preppedKeywordRule stores preprocessed keywords for efficient matching.
 type preppedKeywordRule struct {
-	Category          string
+	Name              string // Name is also used as category
 	Operator          string
 	CaseSensitive     bool
 	OriginalKeywords  []string         // For logging/returning original case
@@ -33,11 +33,11 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 		case "AND", "OR", "NOR":
 			// Valid operator
 		default:
-			return nil, fmt.Errorf("unsupported keyword rule operator: %q for category %q", rule.Operator, rule.Category)
+			return nil, fmt.Errorf("unsupported keyword rule operator: %q for rule %q", rule.Operator, rule.Name)
 		}
 
 		preppedRule := preppedKeywordRule{
-			Category:         rule.Category,
+			Name:             rule.Name,
 			Operator:         rule.Operator,
 			CaseSensitive:    rule.CaseSensitive,
 			OriginalKeywords: rule.Keywords,
@@ -94,11 +94,11 @@ func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
 		}
 		if matched {
 			if len(keywords) > 0 {
-				logging.Infof("Keyword-based classification matched category %q with keywords: %v", rule.Category, keywords)
+				logging.Infof("Keyword-based classification matched rule %q with keywords: %v", rule.Name, keywords)
 			} else {
-				logging.Infof("Keyword-based classification matched category %q with a NOR rule.", rule.Category)
+				logging.Infof("Keyword-based classification matched rule %q with a NOR rule.", rule.Name)
 			}
-			return rule.Category, 1.0, nil
+			return rule.Name, 1.0, nil
 		}
 	}
 	return "", 0.0, nil
@@ -120,7 +120,7 @@ func (c *KeywordClassifier) matches(text string, rule preppedKeywordRule) (bool,
 	case "AND":
 		for i, re := range regexpsToUse {
 			if re == nil {
-				return false, nil, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Category, i)
+				return false, nil, fmt.Errorf("nil regular expression found in rule %q at index %d. This indicates a failed compilation during initialization", rule.Name, i)
 			}
 			if !re.MatchString(text) {
 				return false, nil, nil
@@ -131,7 +131,7 @@ func (c *KeywordClassifier) matches(text string, rule preppedKeywordRule) (bool,
 	case "OR":
 		for i, re := range regexpsToUse {
 			if re == nil {
-				return false, nil, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Category, i)
+				return false, nil, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Name, i)
 			}
 			if re.MatchString(text) {
 				return true, []string{rule.OriginalKeywords[i]}, nil
@@ -141,7 +141,7 @@ func (c *KeywordClassifier) matches(text string, rule preppedKeywordRule) (bool,
 	case "NOR":
 		for i, re := range regexpsToUse {
 			if re == nil {
-				return false, nil, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Category, i)
+				return false, nil, fmt.Errorf("nil regular expression found in rule for category %q at index %d. This indicates a failed compilation during initialization", rule.Name, i)
 			}
 			if re.MatchString(text) {
 				return false, nil, nil

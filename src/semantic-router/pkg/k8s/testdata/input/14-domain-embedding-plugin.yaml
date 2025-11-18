@@ -1,0 +1,81 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: de-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "gpt-4o-mini"
+  models:
+    - name: "gpt-4o-mini"
+      pricing:
+        inputTokenPrice: 0.00000015  # $0.15 per 1M - for simple financial queries
+        outputTokenPrice: 0.0000006  # $0.6 per 1M
+      loras:
+        - name: "finance-assistant"
+          description: "Financial assistant"
+
+    - name: "gpt-4o"
+      pricing:
+        inputTokenPrice: 0.0000025   # $2.5 per 1M - for complex financial analysis
+        outputTokenPrice: 0.00001    # $10 per 1M
+      loras:
+        - name: "financial-advisor"
+          description: "Financial domain specialist"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: de-plugin-route
+  namespace: default
+spec:
+  signals:
+    embeddings:
+      - name: "financial_advice"
+        threshold: 0.78
+        candidates:
+          - "I need advice on investment strategies"
+          - "Can you help me with financial planning?"
+          - "What should I do with my retirement savings?"
+        aggregationMethod: "max"
+
+    domains:
+      - name: "economics"
+        description: "Economics and financial topics"
+      - name: "business"
+        description: "Business and management"
+
+  decisions:
+    - name: "investment_advice"
+      description: "Financial advice with comprehensive protection"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "financial_advice"
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: "gpt-4o"
+          use_reasoning: true
+          reasoning_effort: "high"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.85
+            pii_types_allowed: ["CREDIT_CARD", "BANK_ACCOUNT", "SSN"]
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a financial information assistant. Provide general financial education but remind users this is not professional financial advice."
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.85
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92
+

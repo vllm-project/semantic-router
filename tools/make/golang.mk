@@ -46,6 +46,11 @@ install-controller-gen: ## Install controller-gen for code generation
 generate-crd: install-controller-gen ## Generate CRD manifests using controller-gen
 	@echo "Generating CRD manifests..."
 	@cd src/semantic-router && controller-gen crd:crdVersions=v1,allowDangerousTypes=true paths=./pkg/apis/vllm.ai/v1alpha1 output:crd:artifacts:config=../../deploy/kubernetes/crds
+	@echo "Copying CRDs to Helm chart..."
+	@mkdir -p deploy/helm/semantic-router/crds
+	@cp deploy/kubernetes/crds/vllm.ai_intelligentpools.yaml deploy/helm/semantic-router/crds/
+	@cp deploy/kubernetes/crds/vllm.ai_intelligentroutes.yaml deploy/helm/semantic-router/crds/
+	@echo "✅ CRDs generated and copied to Helm chart"
 
 generate-deepcopy: install-controller-gen ## Generate deepcopy methods using controller-gen
 	@echo "Generating deepcopy methods..."

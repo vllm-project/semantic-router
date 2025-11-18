@@ -38,12 +38,17 @@ func (s *ClassificationAPIServer) handleGetSystemPrompts(w http.ResponseWriter, 
 	}
 
 	var systemPrompts []SystemPromptInfo
-	for _, category := range cfg.Categories {
+	for _, decision := range cfg.Decisions {
+		systemPromptConfig := decision.GetSystemPromptConfig()
+		prompt := ""
+		if systemPromptConfig != nil {
+			prompt = systemPromptConfig.SystemPrompt
+		}
 		systemPrompts = append(systemPrompts, SystemPromptInfo{
-			Category: category.Name,
-			Prompt:   category.SystemPrompt,
-			Enabled:  category.IsSystemPromptEnabled(),
-			Mode:     category.GetSystemPromptMode(),
+			Category: decision.Name,
+			Prompt:   prompt,
+			Enabled:  decision.IsSystemPromptEnabled(),
+			Mode:     decision.GetSystemPromptMode(),
 		})
 	}
 
@@ -85,50 +90,78 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 
 	// Create a copy of the config to modify
 	newCfg := *cfg
-	newCategories := make([]config.Category, len(cfg.Categories))
-	copy(newCategories, cfg.Categories)
-	newCfg.Categories = newCategories
+	newDecisions := make([]config.Decision, len(cfg.Decisions))
+	copy(newDecisions, cfg.Decisions)
+	newCfg.Decisions = newDecisions
 
 	updated := false
 	if req.Category == "" {
-		// Update all categories
-		for i := range newCfg.Categories {
-			if newCfg.Categories[i].SystemPrompt != "" {
-				if req.Enabled != nil {
-					newCfg.Categories[i].SystemPromptEnabled = req.Enabled
+		// Update all decisions
+		for i := range newCfg.Decisions {
+			systemPromptConfig := newCfg.Decisions[i].GetSystemPromptConfig()
+			if systemPromptConfig != nil && systemPromptConfig.SystemPrompt != "" {
+				// Update the plugin configuration
+				for j := range newCfg.Decisions[i].Plugins {
+					if newCfg.Decisions[i].Plugins[j].Type == "system_prompt" {
+						// Convert Configuration to map[string]interface{}
+						configMap, ok := newCfg.Decisions[i].Plugins[j].Configuration.(map[string]interface{})
+						if !ok {
+							// If not a map, create a new one
+							configMap = make(map[string]interface{})
+						}
+						if req.Enabled != nil {
+							configMap["enabled"] = *req.Enabled
+						}
+						if req.Mode != "" {
+							configMap["mode"] = req.Mode
+						}
+						newCfg.Decisions[i].Plugins[j].Configuration = configMap
+						updated = true
+						break
+					}
 				}
-				if req.Mode != "" {
-					newCfg.Categories[i].SystemPromptMode = req.Mode
-				}
-				updated = true
 			}
 		}
 	} else {
-		// Update specific category
-		for i := range newCfg.Categories {
-			if newCfg.Categories[i].Name == req.Category {
-				if newCfg.Categories[i].SystemPrompt == "" {
-					http.Error(w, fmt.Sprintf("Category '%s' has no system prompt configured", req.Category), http.StatusBadRequest)
+		// Update specific decision
+		for i := range newCfg.Decisions {
+			if newCfg.Decisions[i].Name == req.Category {
+				systemPromptConfig := newCfg.Decisions[i].GetSystemPromptConfig()
+				if systemPromptConfig == nil || systemPromptConfig.SystemPrompt == "" {
+					http.Error(w, fmt.Sprintf("Decision '%s' has no system prompt configured", req.Category), http.StatusBadRequest)
 					return
 				}
-				if req.Enabled != nil {
-					newCfg.Categories[i].SystemPromptEnabled = req.Enabled
+				// Update the plugin configuration
+				for j := range newCfg.Decisions[i].Plugins {
+					if newCfg.Decisions[i].Plugins[j].Type == "system_prompt" {
+						// Convert Configuration to map[string]interface{}
+						configMap, ok := newCfg.Decisions[i].Plugins[j].Configuration.(map[string]interface{})
+						if !ok {
+							// If not a map, create a new one
+							configMap = make(map[string]interface{})
+						}
+						if req.Enabled != nil {
+							configMap["enabled"] = *req.Enabled
+						}
+						if req.Mode != "" {
+							configMap["mode"] = req.Mode
+						}
+						newCfg.Decisions[i].Plugins[j].Configuration = configMap
+						updated = true
+						break
+					}
 				}
-				if req.Mode != "" {
-					newCfg.Categories[i].SystemPromptMode = req.Mode
-				}
-				updated = true
 				break
 			}
 		}
 		if !updated {
-			http.Error(w, fmt.Sprintf("Category '%s' not found", req.Category), http.StatusNotFound)
+			http.Error(w, fmt.Sprintf("Decision '%s' not found", req.Category), http.StatusNotFound)
 			return
 		}
 	}
 
 	if !updated {
-		http.Error(w, "No categories with system prompts found to update", http.StatusBadRequest)
+		http.Error(w, "No decisions with system prompts found to update", http.StatusBadRequest)
 		return
 	}
 
@@ -136,14 +169,19 @@ func (s *ClassificationAPIServer) handleUpdateSystemPrompts(w http.ResponseWrite
 	s.config = &newCfg
 	s.classificationSvc.UpdateConfig(&newCfg)
 
-	// Return the updated system prompts
+	// Return the updated system prompts from decisions
 	var systemPrompts []SystemPromptInfo
-	for _, category := range newCfg.Categories {
+	for _, decision := range newCfg.Decisions {
+		systemPromptConfig := decision.GetSystemPromptConfig()
+		prompt := ""
+		if systemPromptConfig != nil {
+			prompt = systemPromptConfig.SystemPrompt
+		}
 		systemPrompts = append(systemPrompts, SystemPromptInfo{
-			Category: category.Name,
-			Prompt:   category.SystemPrompt,
-			Enabled:  category.IsSystemPromptEnabled(),
-			Mode:     category.GetSystemPromptMode(),
+			Category: decision.Name,
+			Prompt:   prompt,
+			Enabled:  decision.IsSystemPromptEnabled(),
+			Mode:     decision.GetSystemPromptMode(),
 		})
 	}
 

@@ -112,22 +112,22 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	return modifiedBody, nil
 }
 
-// getReasoningEffort returns the reasoning effort level for a given category and model
+// getReasoningEffort returns the reasoning effort level for a given decision and model
 func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string) string {
 	// Handle case where Config is nil (e.g., in tests)
 	if r.Config == nil {
 		return "medium"
 	}
 
-	// Find the category and model configuration
-	for _, category := range r.Config.Categories {
-		if category.Name == categoryName {
-			// Find the specific model in the category's model scores
-			for _, modelScore := range category.ModelScores {
-				if modelScore.Model == modelName {
+	// Find the decision and model configuration
+	for _, decision := range r.Config.Decisions {
+		if decision.Name == categoryName {
+			// Find the specific model in the decision's model refs
+			for _, modelRef := range decision.ModelRefs {
+				if modelRef.Model == modelName {
 					// Use model-specific effort if configured
-					if modelScore.ReasoningEffort != "" {
-						return modelScore.ReasoningEffort
+					if modelRef.ReasoningEffort != "" {
+						return modelRef.ReasoningEffort
 					}
 					break
 				}

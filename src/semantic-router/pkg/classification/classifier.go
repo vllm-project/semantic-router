@@ -8,6 +8,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -511,6 +512,97 @@ func (c *Classifier) initializePIIClassifier() error {
 	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU)
 }
 
+// EvaluateAllRules evaluates all rule types and returns matched rule names
+// Returns (matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules)
+// matchedKeywordRules: list of matched keyword rule category names
+// matchedEmbeddingRules: list of matched embedding rule category names
+// matchedDomainRules: list of matched domain rule category names (from category classification)
+func (c *Classifier) EvaluateAllRules(text string) ([]string, []string, []string, error) {
+	var matchedKeywordRules []string
+	var matchedEmbeddingRules []string
+	var matchedDomainRules []string
+
+	// Evaluate keyword rules - check each rule individually
+	if c.keywordClassifier != nil {
+		category, _, err := c.keywordClassifier.Classify(text)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("keyword rule evaluation failed: %w", err)
+		}
+		if category != "" {
+			matchedKeywordRules = append(matchedKeywordRules, category)
+		}
+	}
+
+	// Evaluate embedding rules - check each rule individually
+	if c.keywordEmbeddingClassifier != nil {
+		category, _, err := c.keywordEmbeddingClassifier.Classify(text)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("embedding rule evaluation failed: %w", err)
+		}
+		if category != "" {
+			matchedEmbeddingRules = append(matchedEmbeddingRules, category)
+		}
+	}
+
+	// Evaluate domain rules (category classification)
+	if c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil {
+		result, err := c.categoryInference.Classify(text)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("domain rule evaluation failed: %w", err)
+		}
+		// Map class index to category name
+		if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
+			if categoryName != "" {
+				matchedDomainRules = append(matchedDomainRules, categoryName)
+			}
+		}
+	}
+
+	return matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules, nil
+}
+
+// EvaluateDecisionWithEngine evaluates all decisions using the DecisionEngine
+// Returns the best matching decision based on the configured strategy
+func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.DecisionResult, error) {
+	// Check if decisions are configured
+	if len(c.Config.Decisions) == 0 {
+		return nil, fmt.Errorf("no decisions configured")
+	}
+
+	// Evaluate all rules
+	matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules, err := c.EvaluateAllRules(text)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate rules: %w", err)
+	}
+
+	logging.Infof("Rule evaluation results: keyword=%v, embedding=%v, domain=%v",
+		matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules)
+
+	// Create decision engine
+	engine := decision.NewDecisionEngine(
+		c.Config.KeywordRules,
+		c.Config.EmbeddingRules,
+		c.Config.Categories,
+		c.Config.Decisions,
+		c.Config.Strategy,
+	)
+
+	// Evaluate decisions
+	result, err := engine.EvaluateDecisions(
+		matchedKeywordRules,
+		matchedEmbeddingRules,
+		matchedDomainRules,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("decision evaluation failed: %w", err)
+	}
+
+	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v",
+		result.Decision.Name, result.Confidence, result.MatchedRules)
+
+	return result, nil
+}
+
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
 	// Try keyword classifier first
@@ -559,15 +651,15 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 
 // makeReasoningDecisionForKeywordCategory creates a reasoning decision for keyword-matched categories
 func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) entropy.ReasoningDecision {
-	// Find the category configuration
+	// Find the decision configuration
 	normalizedCategory := strings.ToLower(strings.TrimSpace(category))
 	useReasoning := false
 
-	for _, cat := range c.Config.Categories {
-		if strings.ToLower(cat.Name) == normalizedCategory {
-			// Check if the category has reasoning enabled in its best model
-			if len(cat.ModelScores) > 0 && cat.ModelScores[0].UseReasoning != nil {
-				useReasoning = *cat.ModelScores[0].UseReasoning
+	for _, decision := range c.Config.Decisions {
+		if strings.ToLower(decision.Name) == normalizedCategory {
+			// Check if the decision has reasoning enabled in its best model
+			if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
+				useReasoning = *decision.ModelRefs[0].UseReasoning
 			}
 			break
 		}
@@ -618,16 +710,16 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		}
 	}
 
-	// Build category reasoning map from configuration
-	// Use the best model's reasoning capability for each category
+	// Build decision reasoning map from configuration
+	// Use the best model's reasoning capability for each decision
 	categoryReasoningMap := make(map[string]bool)
-	for _, category := range c.Config.Categories {
+	for _, decision := range c.Config.Decisions {
 		useReasoning := false
-		if len(category.ModelScores) > 0 && category.ModelScores[0].UseReasoning != nil {
+		if len(decision.ModelRefs) > 0 && decision.ModelRefs[0].UseReasoning != nil {
 			// Use the first (best) model's reasoning capability
-			useReasoning = *category.ModelScores[0].UseReasoning
+			useReasoning = *decision.ModelRefs[0].UseReasoning
 		}
-		categoryReasoningMap[strings.ToLower(category.Name)] = useReasoning
+		categoryReasoningMap[strings.ToLower(decision.Name)] = useReasoning
 	}
 
 	// Make entropy-based reasoning decision
@@ -854,39 +946,38 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 	return hasPII, analysisResults, nil
 }
 
-// SelectBestModelForCategory selects the best model from a category based on score and TTFT
+// SelectBestModelForCategory selects the best model from a decision based on score and TTFT
 func (c *Classifier) SelectBestModelForCategory(categoryName string) string {
-	cat := c.findCategory(categoryName)
-	if cat == nil {
-		logging.Warnf("Could not find matching category %s in config, using default model", categoryName)
+	decision := c.findDecision(categoryName)
+	if decision == nil {
+		logging.Warnf("Could not find matching decision %s in config, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
-	bestModel, bestScore := c.selectBestModelInternal(cat, nil)
+	bestModel, bestScore := c.selectBestModelInternalForDecision(decision, nil)
 
 	if bestModel == "" {
-		logging.Warnf("No models found for category %s, using default model", categoryName)
+		logging.Warnf("No models found for decision %s, using default model", categoryName)
 		return c.Config.DefaultModel
 	}
 
-	logging.Infof("Selected model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
+	logging.Infof("Selected model %s for decision %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
-// findCategory finds the category configuration by name (case-insensitive)
-func (c *Classifier) findCategory(categoryName string) *config.Category {
-	for i, category := range c.Config.Categories {
-		if strings.EqualFold(category.Name, categoryName) {
-			return &c.Config.Categories[i]
+// findDecision finds the decision configuration by name (case-insensitive)
+func (c *Classifier) findDecision(decisionName string) *config.Decision {
+	for i, decision := range c.Config.Decisions {
+		if strings.EqualFold(decision.Name, decisionName) {
+			return &c.Config.Decisions[i]
 		}
 	}
 	return nil
 }
 
-// GetCategoryByName returns the category configuration by name (case-insensitive)
-// This is a public method that can be used by other packages to get category information
-func (c *Classifier) GetCategoryByName(categoryName string) *config.Category {
-	return c.findCategory(categoryName)
+// GetDecisionByName returns the decision configuration by name (case-insensitive)
+func (c *Classifier) GetDecisionByName(decisionName string) *config.Decision {
+	return c.findDecision(decisionName)
 }
 
 // GetCategorySystemPrompt returns the system prompt for a specific category if available.
@@ -955,78 +1046,70 @@ func (c *Classifier) translateMMLUToGeneric(mmluCategory string) string {
 	return mmluCategory
 }
 
-// selectBestModelInternal performs the core model selection logic
+// selectBestModelInternalForDecision performs the core model selection logic for decisions
 //
 // modelFilter is optional - if provided, only models passing the filter will be considered
-func (c *Classifier) selectBestModelInternal(cat *config.Category, modelFilter func(string) bool) (string, float64) {
+func (c *Classifier) selectBestModelInternalForDecision(decision *config.Decision, modelFilter func(string) bool) (string, float64) {
 	bestModel := ""
-	bestScore := -1.0
 
-	c.forEachModelScore(cat, func(modelScore config.ModelScore) {
-		model := modelScore.Model
-		if modelFilter != nil && !modelFilter(model) {
-			return
+	// With new architecture, we only support one model per decision (first ModelRef)
+	if len(decision.ModelRefs) > 0 {
+		modelRef := decision.ModelRefs[0]
+		model := modelRef.Model
+
+		if modelFilter == nil || modelFilter(model) {
+			// Use LoRA name if specified, otherwise use the base model name
+			finalModelName := model
+			if modelRef.LoRAName != "" {
+				finalModelName = modelRef.LoRAName
+				logging.Debugf("Using LoRA adapter '%s' for base model '%s'", finalModelName, model)
+			}
+			bestModel = finalModelName
 		}
-		// Use LoRA name if specified, otherwise use the base model name
-		// This enables intent-aware LoRA routing where the final model name
-		// in the request becomes the LoRA adapter name
-		finalModelName := model
-		if modelScore.LoRAName != "" {
-			finalModelName = modelScore.LoRAName
-			logging.Debugf("Using LoRA adapter '%s' for base model '%s'", finalModelName, model)
-		}
-		c.updateBestModel(modelScore.Score, finalModelName, &bestScore, &bestModel)
-	})
-
-	return bestModel, bestScore
-}
-
-// forEachModelScore traverses the ModelScores document of the category and executes the callback for each element.
-func (c *Classifier) forEachModelScore(cat *config.Category, fn func(modelScore config.ModelScore)) {
-	for _, modelScore := range cat.ModelScores {
-		fn(modelScore)
 	}
+
+	return bestModel, 1.0 // Return score 1.0 since we don't have scores anymore
 }
 
-// SelectBestModelFromList selects the best model from a list of candidate models for a given category
+// SelectBestModelFromList selects the best model from a list of candidate models for a given decision
 func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryName string) string {
 	if len(candidateModels) == 0 {
 		return c.Config.DefaultModel
 	}
 
-	cat := c.findCategory(categoryName)
-	if cat == nil {
-		// Return first candidate if category not found
+	decision := c.findDecision(categoryName)
+	if decision == nil {
+		// Return first candidate if decision not found
 		return candidateModels[0]
 	}
 
-	bestModel, bestScore := c.selectBestModelInternal(cat,
+	bestModel, bestScore := c.selectBestModelInternalForDecision(decision,
 		func(model string) bool {
 			return slices.Contains(candidateModels, model)
 		})
 
 	if bestModel == "" {
-		logging.Warnf("No suitable model found from candidates for category %s, using first candidate", categoryName)
+		logging.Warnf("No suitable model found from candidates for decision %s, using first candidate", categoryName)
 		return candidateModels[0]
 	}
 
-	logging.Infof("Selected best model %s for category %s with score %.4f", bestModel, categoryName, bestScore)
+	logging.Infof("Selected best model %s for decision %s with score %.4f", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
-// GetModelsForCategory returns all models that are configured for the given category
-// If a ModelScore has a LoRAName specified, the LoRA name is returned instead of the base model name
+// GetModelsForCategory returns all models that are configured for the given decision
+// If a ModelRef has a LoRAName specified, the LoRA name is returned instead of the base model name
 func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	var models []string
 
-	for _, category := range c.Config.Categories {
-		if strings.EqualFold(category.Name, categoryName) {
-			for _, modelScore := range category.ModelScores {
+	for _, decision := range c.Config.Decisions {
+		if strings.EqualFold(decision.Name, categoryName) {
+			for _, modelRef := range decision.ModelRefs {
 				// Use LoRA name if specified, otherwise use the base model name
-				if modelScore.LoRAName != "" {
-					models = append(models, modelScore.LoRAName)
+				if modelRef.LoRAName != "" {
+					models = append(models, modelRef.LoRAName)
 				} else {
-					models = append(models, modelScore.Model)
+					models = append(models, modelRef.Model)
 				}
 			}
 			break

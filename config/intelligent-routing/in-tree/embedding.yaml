@@ -54,8 +54,6 @@ model_config:
   "qwen3":
     reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]
-    pii_policy:
-      allow_by_default: true
 
 # Classifier configuration
 classifier:
@@ -126,44 +124,115 @@ embedding_rules:
     quality_priority: 0.5
     latency_priority: 0.5
 
-# Categories with model scores
+# Categories define domain metadata only (no routing logic)
 categories:
-  # Embedding-based categories
   - name: technical_support
-    system_prompt: "You are a technical support specialist. Provide detailed, step-by-step guidance for technical issues. Use clear explanations and include relevant troubleshooting steps."
-    model_scores:
-      - model: qwen3
-        score: 0.9
-        use_reasoning: true
-    jailbreak_enabled: true
-    pii_detection_enabled: true
-
+    description: "Technical support and troubleshooting queries"
+    mmlu_categories: ["technical_support"]
   - name: product_inquiry
-    system_prompt: "You are a product specialist. Provide accurate information about products, features, pricing, and availability. Be helpful and informative."
-    model_scores:
-      - model: qwen3
-        score: 0.85
-        use_reasoning: false
-    jailbreak_enabled: true
-    pii_detection_enabled: false
-
+    description: "Product information and specifications"
+    mmlu_categories: ["product_inquiry"]
   - name: account_management
-    system_prompt: "You are an account management assistant. Help users with account-related tasks such as password resets, profile updates, and subscription management. Prioritize security and privacy."
-    model_scores:
-      - model: qwen3
-        score: 0.88
-        use_reasoning: false
-    jailbreak_enabled: true
-    pii_detection_enabled: true
-
+    description: "Account and subscription management"
+    mmlu_categories: ["account_management"]
   - name: general_inquiry
-    system_prompt: "You are a helpful general assistant. Answer questions clearly and concisely. If you need more information, ask clarifying questions."
-    model_scores:
-      - model: qwen3
-        score: 0.75
+    description: "General questions and information requests"
+    mmlu_categories: ["general_inquiry"]
+
+strategy: "priority"
+
+decisions:
+  - name: "technical_support_decision"
+    description: "Technical support and troubleshooting queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "technical_support"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a technical support specialist. Provide detailed, step-by-step guidance for technical issues. Use clear explanations and include relevant troubleshooting steps."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "product_inquiry_decision"
+    description: "Product information and specifications"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "product_inquiry"
+    modelRefs:
+      - model: "qwen3"
         use_reasoning: false
-    jailbreak_enabled: true
-    pii_detection_enabled: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a product specialist. Provide accurate information about products, features, pricing, and availability. Be helpful and informative."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: false
+          pii_types_allowed: []
+
+  - name: "account_management_decision"
+    description: "Account and subscription management"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "account_management"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an account management assistant. Help users with account-related tasks such as password resets, profile updates, and subscription management. Prioritize security and privacy."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "general_inquiry_decision"
+    description: "General questions and information requests"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "general_inquiry"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful general assistant. Answer questions clearly and concisely. If you need more information, ask clarifying questions."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: false
+          pii_types_allowed: []
 
 # Embedding Models Configuration
 # These models provide intelligent embedding generation with automatic routing:

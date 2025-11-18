@@ -35,8 +35,6 @@ spec:
         image: {{ .Values.initContainer.image }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
-        # Allow up to 10 minutes for model downloads in CI environments
-        # This prevents the init container from being killed prematurely
         command: ["/bin/bash", "-c"]
         args:
         - |
@@ -53,7 +51,7 @@ spec:
           # Remove .cache directory to ensure fresh download
           rm -rf "{{ .name }}/.cache" 2>/dev/null || true
           # Download with ignore_patterns to exclude ONNX-only files if pytorch model exists
-          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', local_dir_use_symlinks=False, ignore_patterns=['*.onnx', '*.msgpack', '*.h5', '*.tflite'] if '{{ .name }}' == 'all-MiniLM-L12-v2' else None)"
+          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', ignore_patterns=['*.onnx', '*.msgpack', '*.h5', '*.tflite'] if '{{ .name }}' == 'all-MiniLM-L12-v2' else None)"
 
           # Check for required model files
           echo "Checking {{ .name }} for required files:"
