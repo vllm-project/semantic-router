@@ -19,107 +19,371 @@ config:
         - name: "general-expert"
           description: "General-purpose adapter for diverse topics"
 
-  # Categories with LoRA routing
-  # Each category uses the vllm-llama3-8b-instruct model with a specific LoRA adapter
+  # Categories - now only contain metadata for domain classification
   categories:
     - name: business
-      system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
-      # jailbreak_enabled: true  # Optional: Override global jailbreak detection per category
-      # jailbreak_threshold: 0.8  # Optional: Override global jailbreak threshold per category
-      model_scores:
-        - model: vllm-llama3-8b-instruct  # Base model name (for endpoint selection and PII policy)
-          score: 0.7
-          use_reasoning: false  # Business performs better without reasoning
     - name: law
-      system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.4
-          use_reasoning: false
     - name: psychology
-      system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
-      semantic_cache_enabled: true
-      semantic_cache_similarity_threshold: 0.92  # High threshold for psychology - sensitive to nuances
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.6
-          use_reasoning: false
     - name: biology
-      system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.9
-          use_reasoning: false
     - name: chemistry
-      system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.6
-          use_reasoning: true  # Enable reasoning for complex chemistry
     - name: history
-      system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.7
-          use_reasoning: false
     - name: other
-      system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
-      semantic_cache_enabled: true
-      semantic_cache_similarity_threshold: 0.75  # Lower threshold for general chat - less sensitive
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.7
-          use_reasoning: false
     - name: health
-      system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
-      semantic_cache_enabled: true
-      semantic_cache_similarity_threshold: 0.95  # High threshold for health - very sensitive to word changes
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.5
-          use_reasoning: false
     - name: economics
-      system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 1.0
-          use_reasoning: false
     - name: math
-      system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 1.0
-          use_reasoning: true  # Enable reasoning for complex math
     - name: physics
-      system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.7
-          use_reasoning: true  # Enable reasoning for physics
     - name: computer science
-      system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.6
-          use_reasoning: false
     - name: philosophy
-      system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.5
-          use_reasoning: false
     - name: engineering
-      system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
-      model_scores:
-        - model: vllm-llama3-8b-instruct
-          score: 0.7
-          use_reasoning: false
     - name: thinking
-      system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
-      model_scores:
+
+  # Decisions - define routing logic with rules, model selection, and plugins
+  decisions:
+    - name: business_decision
+      description: "Business and management related queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
         - model: vllm-llama3-8b-instruct
-          score: 0.7
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+            mode: "replace"
+
+    - name: law_decision
+      description: "Legal questions and law-related topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+            mode: "replace"
+
+    - name: psychology_decision
+      description: "Psychology and mental health topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "psychology"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+            mode: "replace"
+
+    - name: biology_decision
+      description: "Biology and life sciences questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+            mode: "replace"
+
+    - name: chemistry_decision
+      description: "Chemistry and chemical sciences questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
           use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+            mode: "replace"
+
+    - name: history_decision
+      description: "Historical questions and cultural topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+            mode: "replace"
+
+    - name: other_decision
+      description: "General knowledge and miscellaneous topics"
+      priority: 5
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.75
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+            mode: "replace"
+
+    - name: health_decision
+      description: "Health and medical information queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.95
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+            mode: "replace"
+
+    - name: economics_decision
+      description: "Economics and financial topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+            mode: "replace"
+
+    - name: math_decision
+      description: "Mathematics and quantitative reasoning"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+            mode: "replace"
+
+    - name: physics_decision
+      description: "Physics and physical sciences"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+            mode: "replace"
+
+    - name: computer_science_decision
+      description: "Computer science and programming"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+            mode: "replace"
+
+    - name: philosophy_decision
+      description: "Philosophy and ethical questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "philosophy"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+            mode: "replace"
+
+    - name: engineering_decision
+      description: "Engineering and technical problem-solving"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+            mode: "replace"
+
+    - name: thinking_decision
+      description: "Complex reasoning and multi-step thinking"
+      priority: 15
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "thinking"
+      modelRefs:
+        - model: vllm-llama3-8b-instruct
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
+            mode: "replace"
+
+  # Strategy for selecting between multiple matching decisions
+  # Options: "priority" (use decision with highest priority) or "confidence" (use decision with highest confidence)
+  strategy: "priority"
 
   default_model: vllm-llama3-8b-instruct
 

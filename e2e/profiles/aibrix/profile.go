@@ -458,7 +458,7 @@ func (p *Profile) kubectlDelete(ctx context.Context, kubeConfig, manifest string
 }
 
 func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {
-	args = append(args, "--kubeconfig", kubeConfig)
+	args = append([]string{"--kubeconfig", kubeConfig}, args...)
 	cmd := exec.CommandContext(ctx, "kubectl", args...)
 	if p.verbose {
 		cmd.Stdout = os.Stdout
