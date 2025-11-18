@@ -1,5 +1,7 @@
 # Stage 1: Build frontend with Node.js
 FROM node:20-alpine AS frontend-builder
+ENV http_proxy=http://proxy.iil.intel.com:911
+ENV https_proxy=http://proxy.iil.intel.com:911
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
@@ -11,7 +13,8 @@ RUN npm run build
 # Stage 2: Build backend with Go
 FROM golang:1.24 AS backend-builder
 WORKDIR /app
-
+ENV http_proxy=http://proxy.iil.intel.com:911
+ENV https_proxy=http://proxy.iil.intel.com:911
 # Use Chinese Go proxy to avoid network timeout issues
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GOSUMDB=sum.golang.google.cn
@@ -31,6 +34,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s
 
 # Stage 3: Final runtime image
 FROM alpine:3.19
+ENV http_proxy=http://proxy.iil.intel.com:911
+ENV https_proxy=http://proxy.iil.intel.com:911
 RUN apk --no-cache add ca-certificates wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend

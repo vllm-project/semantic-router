@@ -45,17 +45,28 @@ prompt_guard:
 # Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
-  - name: "endpoint1"
-    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
-    port: 8002
-    weight: 1
+  - name: "math-endpoint"  
+    address: "172.28.0.30"      # 数学模型服务器 IP  
+    port: 8006                # 数学模型端口  
+    weight: 1  
+    
+  - name: "text-endpoint"  
+    address: "172.28.0.30"      # 文字模型服务器 IP  
+    port: 8007                # 文字模型端口  
+    weight: 1  
 
-model_config:
-  "qwen3":
-    reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
-    preferred_endpoints: ["endpoint1"]  # Optional: omit to let upstream handle endpoint selection
-    pii_policy:
-      allow_by_default: true
+model_config:  
+  "DeepSeek-R1-Distill-Qwen-7B":  
+    reasoning_family: "deepseek"    # DeepSeek 使用 deepseek reasoning 语法  
+    preferred_endpoints: ["math-endpoint"]  
+    pii_policy:  
+      allow_by_default: true  
+    
+  "qwen3":  
+    reasoning_family: "qwen3"       # Qwen3 使用 qwen3 reasoning 语法  
+    preferred_endpoints: ["text-endpoint"]  
+    pii_policy:  
+      allow_by_default: true  
 
 # Classifier configuration
 classifier:
@@ -139,7 +150,7 @@ categories:
   - name: math
     system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
     model_scores:
-      - model: qwen3
+      - model: DeepSeek-R1-Distill-Qwen-7B
         score: 1.0
         use_reasoning: true  # Enable reasoning for complex math
   - name: physics
