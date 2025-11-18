@@ -19,6 +19,8 @@ services:
       - OTEL_SERVICE_NAME=vllm-semantic-router
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
+      - NO_PROXY=envoy-proxy,mongo,semantic-router,localhost,127.0.0.1  
+      - no_proxy=envoy-proxy,mongo,semantic-router,localhost,127.0.0.1
     networks:
       - semantic-network
     healthcheck:
@@ -27,11 +29,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-
+    depends_on:  
+      mock-vllm-1:  
+        condition: service_healthy
+      mock-vllm-2:  
+        condition: service_healthy
+        
   # Envoy Proxy Service
   envoy:
     image: envoyproxy/envoy:v1.31.7
     container_name: envoy-proxy
+    environment:
+      - NO_PROXY=envoy-proxy,mongo,semantic-router,localhost,127.0.0.1  
+      - no_proxy=envoy-proxy,mongo,semantic-router,localhost,127.0.0.1
     security_opt:
       - label=disable
     ports:
@@ -52,24 +62,99 @@ services:
       retries: 5
       start_period: 10s
 
-  # Mock vLLM service for testing profile
-  mock-vllm:
-    build:
-      context: ../../tools/mock-vllm
-      dockerfile: Dockerfile
-    container_name: mock-vllm
-    profiles: ["testing"]
-    ports:
-      - "8000:8000"
-    networks:
-      semantic-network:
-        ipv4_address: 172.28.0.10
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
+  # Mock vLLM service for testing profile  
+  mock-vllm-1:  
+    image: amr-registry.caas.intel.com/intelanalytics/llm-scaler-vllm:temp-b6-better  
+    container_name: mock-vllm-1
+    profiles: ["testing"]  
+    privileged: true  
+    networks:  
+      semantic-network:  
+        ipv4_address: 172.28.0.30
+    devices:  
+      - /dev/dri:/dev/dri  # GPU 设备  
+    volumes:  
+      - /home/intel/LLM/:/llm/models/  
+      - /home/intel/LLM2/:/llm/models2/  
+    environment:  
+      - no_proxy=localhost,127.0.0.1  
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1  
+      - VLLM_WORKER_MULTIPROC_METHOD=spawn  
+      - ZE_AFFINITY_MASK=0
+    shm_size: "32g"  
+    entrypoint: /bin/bash  
+    command: >  
+      -c "numactl -C 0-15 python3 -m vllm.entrypoints.openai.api_server  
+      --model /llm/models/DeepSeek-R1-Distill-Qwen-7B/  
+      --served-model-name DeepSeek-R1-Distill-Qwen-7B  
+      --dtype=float16  
+      --enforce-eager  
+      --port 8006  
+      --host 0.0.0.0  
+      --trust-remote-code  
+      --disable-sliding-window  
+      --gpu-memory-util=0.9  
+      --no-enable-prefix-caching  
+      --max-num-batched-tokens=2000  
+      --disable-log-requests  
+      --max-model-len=3000  
+      --block-size 64  
+      -tp=1  
+      -pp=1  
+      --quantization fp8"  
+    healthcheck:  
+      test: ["CMD", "curl", "-fsS", "http://localhost:8006/health"]  
+      interval: 10s  
+      timeout: 5s  
+      retries: 5  
+      start_period: 30s  # 增加启动时间,因为加载大模型需要更长时间
+
+  # Mock vLLM service for testing profile  
+  mock-vllm-2:  
+    image: amr-registry.caas.intel.com/intelanalytics/llm-scaler-vllm:temp-b6-better  
+    container_name: mock-vllm-2 
+    profiles: ["testing"]  
+    privileged: true  
+    networks:  
+      semantic-network:  
+        ipv4_address: 172.28.0.31
+    devices:  
+      - /dev/dri:/dev/dri  # GPU 设备  
+    volumes:  
+      - /home/intel/LLM/:/llm/models/  
+      - /home/intel/LLM2/:/llm/models2/  
+    environment:  
+      - no_proxy=localhost,127.0.0.1  
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1  
+      - VLLM_WORKER_MULTIPROC_METHOD=spawn
+      - ZE_AFFINITY_MASK=1
+    shm_size: "32g"  
+    entrypoint: /bin/bash  
+    command: >  
+      -c "numactl -C 0-15 python3 -m vllm.entrypoints.openai.api_server  
+      --model /llm/models/Qwen3-8B/  
+      --served-model-name qwen3  
+      --dtype=float16  
+      --enforce-eager  
+      --port 8007  
+      --host 0.0.0.0  
+      --trust-remote-code  
+      --disable-sliding-window  
+      --gpu-memory-util=0.9  
+      --no-enable-prefix-caching  
+      --max-num-batched-tokens=2000  
+      --disable-log-requests  
+      --max-model-len=3000  
+      --block-size 64  
+      -tp=1  
+      -pp=1  
+      --quantization fp8"  
+    healthcheck:  
+      test: ["CMD", "curl", "-fsS", "http://localhost:8007/health"]  
+      interval: 10s  
+      timeout: 5s  
+      retries: 5  
+      start_period: 30s  # 增加启动时间,因为加载大模型需要更长时间
 
   # Jaeger for distributed tracing (OTLP gRPC + UI)
   jaeger:
@@ -105,6 +190,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - PROMETHEUS_URL=prometheus:9090
+      - GF_SECURITY_ALLOW_EMBEDDING=true
     ports:
       - "3000:3000"
     volumes:
@@ -135,9 +221,10 @@ services:
     networks:
       - semantic-network
 
+
   # Chat UI (Hugging Face) replacing Open WebUI
   chat-ui:
-    image: ghcr.io/huggingface/chat-ui-db:latest
+    image: ghcr.io/huggingface/chat-ui-db:sha-a2b39bc
     container_name: chat-ui
     ports:
       - "3002:3000"  # Expose Chat UI on host 3002
@@ -152,7 +239,10 @@ services:
       # Optional theming (override as needed)
       - PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-HuggingChat}
       - PUBLIC_APP_ASSETS=${PUBLIC_APP_ASSETS:-chatui}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - PUBLIC_APP_DATA_SHARING=1
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - NO_PROXY=envoy-proxy,mongo,semantic-router,localhost,127.0.0.1  
+      - no_proxy=envoy-proxy,mongo,semantic-router,localhost,127.0.0.1
     depends_on:
       envoy:
         condition: service_started
@@ -161,13 +251,14 @@ services:
       mongo:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (res) => process.exit(res.statusCode === 200 ? 0 : 1))\""]  
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
     networks:
       - semantic-network
+      
 
   # Open WebUI Pipelines server (executes Python pipelines)
   pipelines:
@@ -195,6 +286,7 @@ services:
     image: mongo:7
     container_name: mongo
     restart: unless-stopped
+    command: ["mongod", "--setParameter", "logLevel=2"]
     volumes:
       - mongo-data:/data/db
     networks:
@@ -243,6 +335,8 @@ services:
       - TARGET_OPENWEBUI_URL=http://openwebui:8080
       - TARGET_CHATUI_URL=http://chat-ui:3000
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
+      - NO_PROXY=grafana,chat-ui,semantic-router,prometheus,jaeger,openwebui,mongo,localhost,127.0.0.1  
+      - no_proxy=grafana,chat-ui,semantic-router,prometheus,jaeger,openwebui,mongo,localhost,127.0.0.1
     volumes:
       - ../../config:/app/config:rw,z
     ports:
