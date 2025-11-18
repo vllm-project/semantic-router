@@ -650,10 +650,18 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				effortForMetrics := r.getReasoningEffort(categoryName)
 				metrics.RecordReasoningDecision(categoryName, matchedModel, useReasoning, effortForMetrics)
 
-				// Check rag for this category
-				ragDecision := r.getRAGDecision(userContent, categoryName) // true or false
-				observability.Infof("Category '%s' has RAG Decision '%s'", categoryName, ragDecision)
-				// metrics stuff
+				
+				// Create a deep copy of the request for RAG decision (re-parse to ensure independence)
+				ragRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
+				if err != nil {
+					observability.Errorf("Error parsing request for RAG decision: %v", err)
+					// Continue without RAG
+					ragDecision := false
+				} else {
+					ragDecision := r.getRAGDecision(userContent, categoryName, matchedModel, ragRequest) // Pass by value (deep copy)
+					observability.Infof("Category '%s' has RAG Decision '%s'", categoryName, ragDecision)
+				}
+				
 
 				// Track VSR decision information
 				ctx.VSRSelectedCategory = categoryName

@@ -34,7 +34,7 @@ func (r *OpenAIRouter) getRAGStrategy(categoryName string) string {
 }
 
 // getRAGDecision determines if RAG should be used based on the query and category
-func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
+func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matchedModel string, openAIRequest *openai.ChatCompletionNewParams) bool {
 	// Create a strategy to decision map with string keys and bool values
 
 	ragStrategy := r.getRAGStrategy(categoryName)
@@ -52,8 +52,8 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 	case "always":
 		return true
 	case "adaptive":
-		decision, err := r.getAdaptiveRAGDecision(query, categoryName)
-		if err != nil {
+		decision, err := r.getAdaptiveRAGDecision(query, categoryName, openAIRequest)
+		if err == nil {
 			return decision
 		} else {
 			// TODO: Fallback to a better strategy
@@ -64,8 +64,8 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string) bool {
 	}
 }
 
-func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string) (bool, error) {
-	logProbs, err := r.getChatResponseLogProbs(query, categoryName)
+func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
+	logProbs, err := r.getChatResponseLogProbs(query, categoryName, matchedModel, openAIRequest)
 	if err != nil {
 		observability.Errorf("Error getting log probs: %s \n", err)
 		return false, err
@@ -87,9 +87,20 @@ func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string)
 	return false, nil
 }
 
-func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string) (*openai.ChatCompletionChoiceLogprobs, error) {
+func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string, matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (*openai.ChatCompletionChoiceLogprobs, error) {
 	// TODO: Implement
-	return nil, fmt.Errorf("not implemented")
+	chatCompletionsClient, err := r.getClientForMatchedModel(matchedModel)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to create chatCompletionsClient")
+	}
+	
+	// send the openAIRequest
+	logProbs, err := chatCompletionsClient.queryModelForLogProbs(openAIRequest, categoryName, matchedModel)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching log probs: %w", err)
+	}
+
+	return logProbs, nil
 }
 
 func (r *OpenAIRouter) getVectorDBForCategory(categoryName string) vectordb.VectorDbBackend {
@@ -112,4 +123,18 @@ func (r *OpenAIRouter) getRAGChunks(categoryName string, query string) ([]string
 		return nil, fmt.Errorf("no vector DB backend found for category %s", categoryName)
 	}
 	return vector_db.Query(query)
+}
+
+func (r *OpenAIRouter) getClientForMatchedModel(matchedModel string) (ChatCompletionClient, error) {
+	// Select the best endpoint for this model
+	endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
+	var chatCompletionClientOptions NewChatCompletionClientOptions
+	if endpointFound {
+		chatCompletionClientOptions = NewChatCompletionClientOptions {
+			Endpoint: endpointAddress,
+		}
+	} else {
+		return nil, fmt.Errorf("no endpoint found for matched model: %s", matchedModel)
+	}
+	return *NewChatCompletionClient(chatCompletionClientOptions)
 }
