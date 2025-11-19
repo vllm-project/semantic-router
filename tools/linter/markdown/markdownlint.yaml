@@ -51,5 +51,8 @@ MD009: false
 # MD005/list-indent Inconsistent indentation for list items
 MD005: false
 
+# MD032/blanks-around-lists Lists should be surrounded by blank lines
+MD032: false
+
 # MD060/table-column-style Table column style
 MD060: false
