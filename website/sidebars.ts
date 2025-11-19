@@ -55,6 +55,7 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/ai-gateway',
             'installation/k8s/production-stack',
             'installation/k8s/aibrix',
+            'installation/k8s/gateway-api-inference-extension',
           ],
         },
         'installation/docker-compose',
