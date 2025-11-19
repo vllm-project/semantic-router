@@ -158,3 +158,9 @@ dashboard/frontend/index.html.old
 
 # Kind cluster configuration
 tools/kind/kind-config.yaml
+
+# Local test files
+test-report.md
+test-report.json
+e2e/e2e
+e2e-tests/llm_katan_pids.txt

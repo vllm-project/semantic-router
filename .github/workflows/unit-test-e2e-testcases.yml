@@ -3,7 +3,7 @@ name: E2E Testcases Unit Tests
 on:
   pull_request:
     paths:
-      - "e2e-tests/testcases/**"
+      - "e2e/testcases/**"
       - "src/semantic-router/pkg/classification/**"
       - "src/semantic-router/pkg/config/**"
       - "candle-binding/**"
@@ -31,7 +31,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: e2e-tests/testcases/go.sum
+          cache-dependency-path: e2e/testcases/go.sum
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -71,14 +71,14 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
         run: |
-          cd e2e-tests/testcases
+          cd e2e/testcases
           echo "Running keyword routing tests..."
           go test -v -coverprofile=coverage-keyword.out -covermode=atomic -coverpkg=github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification
 
       - name: Generate coverage report
         if: always()
         run: |
-          cd e2e-tests/testcases
+          cd e2e/testcases
           go tool cover -func=coverage-keyword.out > coverage-summary.txt
           echo "=== Full Coverage Summary ==="
           cat coverage-summary.txt
@@ -96,7 +96,7 @@ jobs:
       - name: Check coverage threshold
         if: always()
         run: |
-          cd e2e-tests/testcases
+          cd e2e/testcases
           COVERAGE_PERCENT=$(echo $COVERAGE | sed 's/%//')
           THRESHOLD=80
 
@@ -111,7 +111,7 @@ jobs:
         uses: codecov/codecov-action@v4
         if: always()
         with:
-          files: ./e2e-tests/testcases/coverage-keyword.out
+          files: ./e2e/testcases/coverage-keyword.out
           flags: e2e-testcases-keyword
           name: keyword-routing-coverage
           fail_ci_if_error: false
@@ -141,7 +141,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if embedding tests exist (for future PRs)
     if: |
-      contains(github.event.pull_request.changed_files, 'e2e-tests/testcases/embedding_routing_test.go') ||
+      contains(github.event.pull_request.changed_files, 'e2e/testcases/embedding_routing_test.go') ||
       github.event_name == 'workflow_dispatch'
 
     steps:
@@ -168,7 +168,7 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
         run: |
-          cd e2e-tests/testcases
+          cd e2e/testcases
           if [ -f "embedding_routing_test.go" ] && ! [[ "$(basename embedding_routing_test.go)" =~ \.skip$ ]]; then
             echo "Running embedding routing tests..."
             go test -v -run "Embedding Routing" -coverprofile=coverage-embedding.out -covermode=atomic
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if hybrid tests exist (for future PRs)
     if: |
-      contains(github.event.pull_request.changed_files, 'e2e-tests/testcases/hybrid_routing_test.go') ||
+      contains(github.event.pull_request.changed_files, 'e2e/testcases/hybrid_routing_test.go') ||
       github.event_name == 'workflow_dispatch'
 
     steps:
@@ -208,7 +208,7 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
         run: |
-          cd e2e-tests/testcases
+          cd e2e/testcases
           if [ -f "hybrid_routing_test.go" ] && ! [[ "$(basename hybrid_routing_test.go)" =~ \.skip$ ]]; then
             echo "Running hybrid routing tests..."
             go test -v -run "Hybrid Routing" -coverprofile=coverage-hybrid.out -covermode=atomic
@@ -244,7 +244,7 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
         run: |
-          cd e2e-tests/testcases
+          cd e2e/testcases
           echo "Running tests with race detector..."
           go test -race -v || {
             echo "❌ Race conditions detected!"
@@ -270,7 +270,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          working-directory: e2e-tests/testcases
+          working-directory: e2e/testcases
           args: --timeout=5m
 
   summary:

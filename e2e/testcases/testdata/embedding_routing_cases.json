@@ -1,0 +1,182 @@
+[
+  {
+    "name": "Math query - equation solving",
+    "description": "Test embedding similarity for equation solving queries",
+    "query": "How do I solve the quadratic equation x^2 + 5x + 6 = 0?",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Math query - calculation",
+    "description": "Test embedding similarity for calculation queries",
+    "query": "Calculate the sum of 15 and 27",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Math query - addition",
+    "description": "Test embedding similarity for simple addition",
+    "query": "What is 5 plus 3?",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Science query - physics",
+    "description": "Test embedding similarity for physics queries",
+    "query": "Explain Newton's laws of motion",
+    "expected_category": "science",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Science query - chemistry",
+    "description": "Test embedding similarity for chemistry queries",
+    "query": "What is the periodic table of elements?",
+    "expected_category": "science",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Science query - biology",
+    "description": "Test embedding similarity for biology queries",
+    "query": "How does photosynthesis work in plants?",
+    "expected_category": "science",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Mean aggregation - all keywords similar",
+    "description": "Test mean aggregation with high similarity across all keywords",
+    "query": "solve this mathematical equation",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Max aggregation - one keyword highly similar",
+    "description": "Test max aggregation with one high similarity keyword",
+    "query": "calculate this for me",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "max",
+    "model_type": "bert"
+  },
+  {
+    "name": "Threshold test - just above threshold",
+    "description": "Test query that barely meets similarity threshold",
+    "query": "find the answer to this math problem",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Threshold test - below threshold",
+    "description": "Test query that does not meet similarity threshold",
+    "query": "what is the weather like today",
+    "expected_category": "",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Model qwen3 - math query",
+    "description": "Test with qwen3 embedding model",
+    "query": "solve the equation 2x + 5 = 11",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "qwen3"
+  },
+  {
+    "name": "Model gemma - science query",
+    "description": "Test with gemma embedding model",
+    "query": "explain the concept of gravity",
+    "expected_category": "science",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "gemma"
+  },
+  {
+    "name": "Matryoshka 128 - compressed embeddings",
+    "description": "Test with 128-dimensional Matryoshka embeddings",
+    "query": "calculate the derivative of x^2",
+    "expected_category": "math",
+    "min_similarity": 0.65,
+    "aggregation_method": "mean",
+    "model_type": "matryoshka-128"
+  },
+  {
+    "name": "Matryoshka 256 - medium embeddings",
+    "description": "Test with 256-dimensional Matryoshka embeddings",
+    "query": "what is the integral of sin(x)",
+    "expected_category": "math",
+    "min_similarity": 0.7,
+    "aggregation_method": "mean",
+    "model_type": "matryoshka-256"
+  },
+  {
+    "name": "Matryoshka 768 - full embeddings",
+    "description": "Test with 768-dimensional Matryoshka embeddings",
+    "query": "solve the differential equation",
+    "expected_category": "math",
+    "min_similarity": 0.75,
+    "aggregation_method": "mean",
+    "model_type": "matryoshka-768"
+  },
+  {
+    "name": "Semantic variation - paraphrased query",
+    "description": "Test semantically similar but differently worded query",
+    "query": "I need to find the solution to a mathematical problem",
+    "expected_category": "math",
+    "min_similarity": 0.65,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Semantic variation - synonym usage",
+    "description": "Test query using synonyms",
+    "query": "compute the total of these numbers",
+    "expected_category": "math",
+    "min_similarity": 0.65,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Long query - detailed question",
+    "description": "Test embedding matching with long, detailed query",
+    "query": "I'm working on a complex physics problem that involves calculating the trajectory of a projectile under the influence of gravity, can you help me understand the equations?",
+    "expected_category": "science",
+    "min_similarity": 0.6,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Short query - minimal context",
+    "description": "Test embedding matching with very short query",
+    "query": "solve equation",
+    "expected_category": "math",
+    "min_similarity": 0.75,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  },
+  {
+    "name": "Multilingual - mixed language query",
+    "description": "Test embedding with query containing multiple languages",
+    "query": "Help me solve this equation por favor",
+    "expected_category": "math",
+    "min_similarity": 0.6,
+    "aggregation_method": "mean",
+    "model_type": "bert"
+  }
+]

@@ -1,0 +1,122 @@
+[
+  {
+    "name": "Keyword priority - urgent keyword wins",
+    "description": "Query contains both keyword and semantic match, keyword should win",
+    "query": "urgent: please calculate this equation",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Keyword priority - emergency keyword wins",
+    "description": "Emergency keyword takes priority over embedding similarity",
+    "query": "emergency help with solving this problem",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Embedding fallback - no keyword match",
+    "description": "When no keyword matches, should fall back to embedding",
+    "query": "how do I solve this quadratic equation",
+    "expected_category": "math",
+    "expected_routing_method": "embedding",
+    "expected_confidence": 0.85
+  },
+  {
+    "name": "Embedding fallback - semantic similarity",
+    "description": "Semantically similar query without exact keywords",
+    "query": "what is the result of 5 plus 3",
+    "expected_category": "math",
+    "expected_routing_method": "embedding",
+    "expected_confidence": 0.75
+  },
+  {
+    "name": "MCP fallback - complex query",
+    "description": "Complex query that doesn't match keyword or embedding",
+    "query": "I need help with understanding the implications of quantum mechanics on modern computing",
+    "expected_category": "science",
+    "expected_routing_method": "mcp",
+    "expected_confidence": 0.65
+  },
+  {
+    "name": "Priority test - keyword beats embedding",
+    "description": "Same category available via keyword and embedding, keyword wins",
+    "query": "solve this equation urgently",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Priority test - embedding beats MCP",
+    "description": "Same category available via embedding and MCP, embedding wins",
+    "query": "calculate the derivative of x squared",
+    "expected_category": "math",
+    "expected_routing_method": "embedding",
+    "expected_confidence": 0.8
+  },
+  {
+    "name": "No match - fallback chain exhausted",
+    "description": "Query doesn't match any routing method",
+    "query": "random unrelated text that matches nothing",
+    "expected_category": "",
+    "expected_routing_method": "none",
+    "expected_confidence": 0.0
+  },
+  {
+    "name": "Confidence test - keyword always 1.0",
+    "description": "Keyword matches should always have confidence 1.0",
+    "query": "urgent request for help",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Confidence test - embedding variable",
+    "description": "Embedding confidence varies based on similarity",
+    "query": "compute the sum of these numbers",
+    "expected_category": "math",
+    "expected_routing_method": "embedding",
+    "expected_confidence": 0.72
+  },
+  {
+    "name": "Short-circuit test - keyword match stops search",
+    "description": "Once keyword matches, embedding and MCP should not be tried",
+    "query": "urgent",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Same category different methods - keyword priority",
+    "description": "Math category available via both keyword and embedding",
+    "query": "solve equation",
+    "expected_category": "math",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Mixed query - multiple potential matches",
+    "description": "Query has elements matching multiple categories",
+    "query": "urgent scientific calculation needed",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Long query - keyword in context",
+    "description": "Long query with keyword embedded in context",
+    "query": "I have been working on this problem for hours and it's becoming urgent that I find a solution to this mathematical equation",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  },
+  {
+    "name": "Ambiguous query - relies on priority",
+    "description": "Query could match multiple routing methods",
+    "query": "emergency calculation required",
+    "expected_category": "urgent_request",
+    "expected_routing_method": "keyword",
+    "expected_confidence": 1.0
+  }
+]
