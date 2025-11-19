@@ -206,5 +206,45 @@
     "expected_category": "urgent_request",
     "expected_confidence": 1.0,
     "matched_keywords": ["urgent"]
+  },
+  {
+    "name": "NOR operator - clean text passes",
+    "description": "Test NOR operator with text containing no spam keywords",
+    "query": "I need help with my account",
+    "expected_category": "exclude_spam",
+    "expected_confidence": 1.0,
+    "matched_keywords": []
+  },
+  {
+    "name": "NOR operator - buy now fails",
+    "description": "Test NOR operator rejects text with 'buy now' spam keyword",
+    "query": "Click here to buy now and save money",
+    "expected_category": "",
+    "expected_confidence": 0.0,
+    "matched_keywords": []
+  },
+  {
+    "name": "NOR operator - free money fails",
+    "description": "Test NOR operator rejects text with 'free money' spam keyword",
+    "query": "Get free money with this amazing offer",
+    "expected_category": "",
+    "expected_confidence": 0.0,
+    "matched_keywords": []
+  },
+  {
+    "name": "NOR operator - multiple spam keywords fails",
+    "description": "Test NOR operator rejects text with multiple spam keywords",
+    "query": "Buy now and get free money today",
+    "expected_category": "",
+    "expected_confidence": 0.0,
+    "matched_keywords": []
+  },
+  {
+    "name": "NOR operator - partial word no match",
+    "description": "Test NOR operator allows text with partial keyword match (buying vs buy)",
+    "query": "I am buying a new product",
+    "expected_category": "exclude_spam",
+    "expected_confidence": 1.0,
+    "matched_keywords": []
   }
 ]
