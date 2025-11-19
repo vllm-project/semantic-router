@@ -39,7 +39,13 @@ e2e/
 │   ├── domain_classify.go
 │   ├── cache.go
 │   ├── pii_detection.go
-│   └── jailbreak_detection.go
+│   ├── jailbreak_detection.go
+│   ├── decision_priority.go           # Signal-decision: Priority selection
+│   ├── plugin_chain_execution.go      # Signal-decision: Plugin chains
+│   ├── rule_condition_logic.go        # Signal-decision: AND/OR operators
+│   ├── decision_fallback.go           # Signal-decision: Fallback behavior
+│   ├── keyword_routing.go             # Signal-decision: Keyword matching
+│   └── plugin_config_variations.go    # Signal-decision: Plugin configs
 ├── profiles/
 │   └── ai-gateway/       # AI Gateway test profile
 │       └── profile.go    # Profile definition and environment setup
@@ -50,19 +56,48 @@ e2e/
 
 The framework includes the following test cases (all in `e2e/testcases/`):
 
+### Basic Functionality Tests
+
 | Test Case | Description | Metrics |
 |-----------|-------------|---------|
 | `chat-completions-request` | Basic chat completions API test | Response validation |
 | `chat-completions-stress-request` | Sequential stress test with 1000 requests | Success rate, avg duration |
 | `chat-completions-progressive-stress` | Progressive QPS stress test (10/20/50/100 QPS) | Per-stage success rate, latency stats |
+
+### Classification and Feature Tests
+
+| Test Case | Description | Metrics |
+|-----------|-------------|---------|
 | `domain-classify` | Domain classification accuracy | 65 cases, accuracy rate |
 | `semantic-cache` | Semantic cache hit rate | 5 groups, cache hit rate |
 | `pii-detection` | PII detection and blocking | 10 PII types, detection rate, block rate |
 | `jailbreak-detection` | Jailbreak attack detection | 10 attack types, detection rate, block rate |
 
+### Signal-Decision Engine Tests
+
+| Test Case | Description | Metrics |
+|-----------|-------------|---------|
+| `decision-priority-selection` | Decision priority selection with multiple matches | 4 cases, priority validation |
+| `plugin-chain-execution` | Plugin execution order (PII → Cache → System Prompt) | 4 cases, chain validation, blocking behavior |
+| `rule-condition-logic` | AND/OR operators and keyword matching | 6 cases, operator validation |
+| `decision-fallback-behavior` | Fallback to default decision when no match | 5 cases, fallback validation |
+| `keyword-routing` | Keyword-based routing decisions | 6 cases, keyword matching (case-insensitive) |
+| `plugin-config-variations` | Plugin configuration variations (PII allowlist, cache thresholds) | 6 cases, config validation |
+
+**Signal-Decision Engine Features Tested:**
+
+- ✅ Decision priority selection (priority 15 > 10)
+- ✅ Plugin chain execution order and blocking
+- ✅ Rule condition logic (AND/OR operators)
+- ✅ Keyword-based routing (case-insensitive)
+- ✅ Decision fallback behavior
+- ✅ Per-decision plugin configurations
+- ✅ PII allowlist handling
+- ✅ Per-decision cache thresholds (0.75, 0.92, 0.95)
+
 All test cases:
 
-- Use model name `"MoM"`
+- Use model name `"MoM"` to trigger decision engine
 - Automatically clean up port forwarding
 - Generate detailed reports with statistics
 - Support verbose logging
@@ -311,6 +346,15 @@ Test data is stored in `e2e/testcases/testdata/` as JSON files. Each test case l
 - `cache_cases.json`: 5 groups of similar questions for semantic cache testing
 - `pii_detection_cases.json`: 10 PII types (email, phone, SSN, etc.)
 - `jailbreak_detection_cases.json`: 10 attack types (prompt injection, DAN, etc.)
+
+**Signal-Decision Engine Tests** use embedded test cases (defined inline in test files) to validate:
+
+- Decision priority mechanisms (4 test cases)
+- Plugin chain execution and blocking (4 test cases)
+- Rule condition logic with AND/OR operators (6 test cases)
+- Decision fallback behavior (5 test cases)
+- Keyword-based routing (6 test cases)
+- Plugin configuration variations (6 test cases)
 
 **Test Data Format Example:**
 

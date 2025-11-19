@@ -107,12 +107,27 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
 	return []string{
+		// Basic functionality tests
 		"chat-completions-request",
 		"chat-completions-stress-request",
+
+		// Classification and routing tests
 		"domain-classify",
+
+		// Feature tests
 		"semantic-cache",
 		"pii-detection",
 		"jailbreak-detection",
+
+		// Signal-Decision engine tests (new architecture)
+		"decision-priority-selection", // Priority-based routing
+		"plugin-chain-execution",      // Plugin ordering and blocking
+		"rule-condition-logic",        // AND/OR operators
+		"decision-fallback-behavior",  // Fallback to default
+		"keyword-routing",             // Keyword-based decisions
+		"plugin-config-variations",    // Plugin configuration testing
+
+		// Load tests
 		"chat-completions-progressive-stress",
 	}
 }

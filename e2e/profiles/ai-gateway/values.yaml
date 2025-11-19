@@ -367,7 +367,7 @@ config:
         operator: "OR"
         conditions:
           - type: "keyword"
-            rule_name: "thinking"
+            name: "thinking"
       modelRefs:
         - model: base-model
           lora_name: general-expert
@@ -383,7 +383,7 @@ config:
             system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
             mode: "replace"
 
-    - name: general_decision
+    - name: other_decision
       description: "General knowledge and miscellaneous topics"
       priority: 1
       rules:
@@ -474,7 +474,7 @@ config:
       pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
   keyword_rules:
-    - category: "thinking"
+    - name: "thinking"
       operator: "OR"
       keywords: ["urgent", "immediate", "asap", "think", "careful"]
       case_sensitive: false

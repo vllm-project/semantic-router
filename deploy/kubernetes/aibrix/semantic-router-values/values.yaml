@@ -367,6 +367,8 @@ config:
         conditions:
           - type: "domain"
             name: "thinking"
+          - type: "keyword"
+            name: "thinking"
       modelRefs:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
@@ -445,7 +447,7 @@ config:
       pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
   keyword_rules:
-    - category: "thinking"
+    - name: "thinking"
       operator: "OR"
       keywords: ["urgent", "immediate", "asap", "think", "careful"]
       case_sensitive: false

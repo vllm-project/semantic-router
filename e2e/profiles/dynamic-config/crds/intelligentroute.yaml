@@ -32,10 +32,43 @@ spec:
         description: "Philosophy and ethical questions"
       - name: "engineering"
         description: "Engineering and technical problem-solving"
+      - name: "thinking"
+        description: "Queries requiring careful thought or urgent attention"
       - name: "other"
         description: "General knowledge and miscellaneous topics"
 
+    keywords:
+      - name: "thinking"
+        operator: "OR"
+        keywords: ["urgent", "immediate", "asap", "think", "careful"]
+        case_sensitive: false
+
   decisions:
+    - name: "thinking_decision"
+      priority: 15
+      description: "Queries requiring careful thought or urgent attention"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "thinking"
+          - type: "keyword"
+            name: "thinking"
+      modelRefs:
+        - model: "base-model"
+          loraName: "math-expert"
+          useReasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a thoughtful assistant trained to approach problems systematically. When handling urgent matters or complex questions, break down the problem into clear steps, consider multiple angles, and provide thorough, well-reasoned responses. Take your time to think through implications and edge cases."
+            mode: "replace"
+
     - name: "business_decision"
       priority: 10
       description: "Business and management related queries"
@@ -328,6 +361,27 @@ spec:
         conditions:
           - type: "domain"
             name: "engineering"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+            mode: "replace"
+
+    - name: "other_decision"
+      priority: 1
+      description: "General knowledge and miscellaneous topics"
+      signals:
+        operator: "OR"
+        conditions:
           - type: "domain"
             name: "other"
       modelRefs:
@@ -339,6 +393,10 @@ spec:
           configuration:
             enabled: true
             pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.75
         - type: "system_prompt"
           configuration:
             enabled: true
