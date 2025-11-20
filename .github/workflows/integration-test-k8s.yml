@@ -18,11 +18,11 @@ on:
 jobs:
   integration-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
-        profile: [ai-gateway, aibrix, routing-strategies]
+        profile: [ai-gateway, aibrix, routing-strategies, llm-d]
 
     steps:
       - name: Check out the repo
@@ -165,4 +165,3 @@ jobs:
         if: always()
         run: |
           make e2e-cleanup || true
-
