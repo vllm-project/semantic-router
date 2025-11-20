@@ -1,37 +1,129 @@
-FROM golang:1.24
+# =========================================================================
+# Nodejs Stage
+# =========================================================================
+FROM node:20-bookworm-slim AS node_builder
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install Base env
-RUN apt-get update && apt-get install -y \
-    make \
-    build-essential \
-    pkg-config \
-    python3 \
-    libssl-dev \
-    ca-certificates \
-    python3-pip
+RUN set -eux; \
+    npm install -g markdownlint-cli; \
+    npm cache clean --force; \
+    rm -rf /tmp/*
 
-# Install Node.js and npm
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
-    apt-get install -y nodejs
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+# =========================================================================
+# Golang Stage
+# =========================================================================
+FROM golang:1.24-bookworm AS go_builder
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Markdown
-RUN npm install -g markdownlint-cli
+ARG GOLANGCI_LINT_VERSION=v2.5.0
 
-# Install pre-commit and tools
-RUN pip install --break-system-packages pre-commit
+RUN set -eux; \
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}; \
+    mv /go/bin/golangci-lint /usr/local/bin/golangci-lint; \
+    strip --strip-unneeded /usr/local/bin/golangci-lint 2>/dev/null || true; \
+    rm -rf /go/pkg/mod /go/pkg/sumdb
 
-# Yamllint
-RUN pip install --break-system-packages yamllint
+# prune non-essential Go docs/tests to save some space while keeping stdlib
+RUN set -eux; \
+    rm -rf /usr/local/go/api /usr/local/go/doc /usr/local/go/misc /usr/local/go/test
 
-# CodeSpell
-RUN pip install --break-system-packages codespell
+# drop Go build cache/obj if present (not needed for gofmt/golangci-lint runtime)
+RUN set -eux; \
+    rm -rf /usr/local/go/pkg/obj || true
 
-# Shellcheck
-RUN pip install --break-system-packages shellcheck-py
 
-# Golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
+# =========================================================================
+# Rust Stage
+# =========================================================================
+FROM rust:bookworm AS rust_builder
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG RUSTUP_MIRROR
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo
+
+RUN set -eux; \
+    if [ -n "${RUSTUP_MIRROR:-}" ]; then \
+      export RUSTUP_DIST_SERVER="$RUSTUP_MIRROR" RUSTUP_UPDATE_ROOT="$RUSTUP_MIRROR/rustup"; \
+    fi; \
+    rustup set profile minimal; \
+    rustup toolchain install stable --component rustfmt; \
+    rustup default stable; \
+    # drop rust docs/manpages to reduce size, keep stdlib/toolchain intact
+    find ${RUSTUP_HOME}/toolchains -type d \( -name doc -o -name man \) -prune -exec rm -rf {} +; \
+    rm -rf ${CARGO_HOME}/registry ${CARGO_HOME}/git ${RUSTUP_HOME}/tmp
+
+
+# =========================================================================
+# Python Stage
+# =========================================================================
+FROM python:3.11-bookworm AS python_builder
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ENV PRE_COMMIT_HOME=/opt/pre-commit
+
+RUN set -eux; \
+    python -m venv /opt/py-tools; \
+    /opt/py-tools/bin/pip install --upgrade pip; \
+    /opt/py-tools/bin/pip install --no-cache-dir pre-commit yamllint codespell; \
+    /opt/py-tools/bin/pip cache purge >/dev/null 2>&1 || true; \
+    find /opt/py-tools -type d -name '__pycache__' -prune -exec rm -rf {} +; \
+    find /opt/py-tools -name '*.pyc' -delete
+
+
+# =========================================================================
+# Final Stage
+# =========================================================================
+FROM python:3.11-slim-bookworm
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG APT_MIRROR
+
+ENV LANG=C.UTF-8 \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PRE_COMMIT_HOME=/opt/pre-commit \
+    NODE_PATH=/usr/local/lib/node_modules \
+    PATH=/usr/local/go/bin:/usr/local/cargo/bin:/opt/py-tools/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+
+RUN set -eux; \
+    if [ -n "${APT_MIRROR:-}" ]; then \
+      rm -f /etc/apt/sources.list.d/debian.sources || true; \
+      SEC_MIRROR="${APT_MIRROR/debian/debian-security}"; \
+      echo "deb ${APT_MIRROR} bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list; \
+      echo "deb ${APT_MIRROR} bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list; \
+      echo "deb ${SEC_MIRROR} bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list; \
+    fi
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        make \
+        gcc \
+        g++ \
+        libc6-dev \
+        pkg-config \
+        libssl-dev \
+        shellcheck; \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy tools and runtimes from the builder stage
+COPY --from=python_builder /opt/py-tools /opt/py-tools
+COPY --from=go_builder /usr/local/go /usr/local/go
+COPY --from=go_builder /usr/local/bin/golangci-lint /usr/local/bin/golangci-lint
+COPY --from=rust_builder /usr/local/rustup /usr/local/rustup
+COPY --from=rust_builder /usr/local/cargo /usr/local/cargo
+COPY --from=node_builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=node_builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+RUN set -eux; \
+    ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm; \
+    ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx; \
+    ln -sf /usr/local/lib/node_modules/markdownlint-cli/markdownlint.js /usr/local/bin/markdownlint
+
+WORKDIR /app
