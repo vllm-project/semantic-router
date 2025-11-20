@@ -6,13 +6,11 @@ on:
       - main
     paths:
       - 'deploy/helm/**'
-      - '.github/workflows/helm-publish.yml'
   push:
     branches:
       - main
     paths:
       - 'deploy/helm/**'
-      - '.github/workflows/helm-publish.yml'
   workflow_dispatch:
 
 env:
