@@ -1,0 +1,51 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: llm-katan-claude
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/common
+
+nameSuffix: -claude
+
+patches:
+  - target:
+      kind: Deployment
+      name: llm-katan
+    patch: |-
+      - op: add
+        path: /spec/selector/matchLabels/app
+        value: "llm-katan-claude"
+      - op: add
+        path: /spec/template/metadata/labels/app
+        value: "llm-katan-claude"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: YLLM_SERVED_MODEL_NAME
+          value: "claude-3-haiku-20240307"
+      - op: add
+        path: /spec/template/metadata/labels/model-alias
+        value: "claude-3-haiku"
+  - target:
+      kind: Service
+      name: llm-katan
+    patch: |-
+      - op: add
+        path: /spec/selector/app
+        value: "llm-katan-claude"
+      - op: add
+        path: /metadata/labels/model-alias
+        value: "claude-3-haiku"
+  # Update PVC reference in deployment to match suffixed PVC name
+  - target:
+      kind: Deployment
+      name: llm-katan
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0/persistentVolumeClaim/claimName
+        value: llm-katan-models-claude

@@ -170,6 +170,135 @@ setup: create-cluster deploy ## Complete setup: create cluster and deploy
 cleanup: undeploy delete-cluster ## Complete cleanup: undeploy and delete cluster
 	@echo "$(GREEN)[SUCCESS]$(NC) Complete cleanup finished!"
 
+##@ LLM Katan Kubernetes
+
+# LLM Katan configuration
+LLM_KATAN_NAMESPACE ?= llm-katan-system
+LLM_KATAN_BASE_PATH ?= deploy/kubernetes/llm-katan
+LLM_KATAN_OVERLAY ?= gpt35
+LLM_KATAN_IMAGE ?= $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
+
+.PHONY: kube-deploy-llm-katan kube-deploy-llm-katan-gpt35 kube-deploy-llm-katan-claude \
+	kube-undeploy-llm-katan kube-status-llm-katan kube-logs-llm-katan \
+	kube-port-forward-llm-katan kube-test-llm-katan kube-load-llm-katan-image \
+	kube-deploy-llm-katan-multi help-kube-llm-katan
+
+# Deploy llm-katan with specified overlay
+kube-deploy-llm-katan: ## Deploy llm-katan to cluster (OVERLAY=gpt35|claude, default: gpt35)
+	@echo "$(BLUE)[INFO]$(NC) Deploying llm-katan with overlay: $(LLM_KATAN_OVERLAY)"
+	@if ! kubectl cluster-info &>/dev/null; then \
+		echo "$(RED)[ERROR]$(NC) Kubernetes cluster is not accessible"; \
+		echo "$(BLUE)[INFO]$(NC) Run 'make create-cluster' first"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)[INFO]$(NC) Applying Kubernetes manifests..."
+	@kubectl apply -k $(LLM_KATAN_BASE_PATH)/overlays/$(LLM_KATAN_OVERLAY)
+	@echo "$(BLUE)[INFO]$(NC) Waiting for namespace to be ready..."
+	@kubectl wait --for=condition=Ready namespace/$(LLM_KATAN_NAMESPACE) --timeout=60s || true
+	@echo "$(BLUE)[INFO]$(NC) Waiting for deployment to be ready..."
+	@kubectl wait --for=condition=Available deployment/llm-katan-$(LLM_KATAN_OVERLAY) \
+		-n $(LLM_KATAN_NAMESPACE) --timeout=600s || echo "$(YELLOW)[WARNING]$(NC) Deployment not ready yet, check status with: make kube-status-llm-katan"
+	@echo "$(GREEN)[SUCCESS]$(NC) LLM Katan deployment completed!"
+	@echo "$(BLUE)[INFO]$(NC) Deployment status:"
+	@kubectl get pods -n $(LLM_KATAN_NAMESPACE) -l app=llm-katan-$(LLM_KATAN_OVERLAY) -o wide
+
+# Deploy llm-katan with gpt35 overlay
+kube-deploy-llm-katan-gpt35: ## Deploy llm-katan with GPT-3.5 overlay
+	@$(MAKE) kube-deploy-llm-katan LLM_KATAN_OVERLAY=gpt35
+	@echo "$(GREEN)[SUCCESS]$(NC) GPT-3.5 simulation deployed!"
+	@echo "$(BLUE)[INFO]$(NC) Test with: make kube-test-llm-katan LLM_KATAN_OVERLAY=gpt35"
+
+# Deploy llm-katan with claude overlay
+kube-deploy-llm-katan-claude: ## Deploy llm-katan with Claude overlay
+	@$(MAKE) kube-deploy-llm-katan LLM_KATAN_OVERLAY=claude
+	@echo "$(GREEN)[SUCCESS]$(NC) Claude simulation deployed!"
+	@echo "$(BLUE)[INFO]$(NC) Test with: make kube-test-llm-katan LLM_KATAN_OVERLAY=claude"
+
+# Deploy both overlays for multi-model testing
+kube-deploy-llm-katan-multi: ## Deploy both gpt35 and claude overlays
+	@echo "$(BLUE)[INFO]$(NC) Deploying multiple llm-katan instances..."
+	@$(MAKE) kube-deploy-llm-katan-gpt35
+	@echo ""
+	@$(MAKE) kube-deploy-llm-katan-claude
+	@echo ""
+	@echo "$(GREEN)[SUCCESS]$(NC) Multi-model deployment completed!"
+	@echo "$(BLUE)[INFO]$(NC) Available models:"
+	@kubectl get pods -n $(LLM_KATAN_NAMESPACE) -o wide
+
+# Remove llm-katan from the cluster
+kube-undeploy-llm-katan: ## Remove llm-katan from cluster (OVERLAY=gpt35|claude|all, default: gpt35)
+	@echo "$(BLUE)[INFO]$(NC) Removing llm-katan overlay: $(LLM_KATAN_OVERLAY)"
+	@if [ "$(LLM_KATAN_OVERLAY)" = "all" ]; then \
+		echo "$(BLUE)[INFO]$(NC) Removing all llm-katan deployments..."; \
+		kubectl delete -k $(LLM_KATAN_BASE_PATH)/overlays/gpt35 --ignore-not-found=true; \
+		kubectl delete -k $(LLM_KATAN_BASE_PATH)/overlays/claude --ignore-not-found=true; \
+	else \
+		kubectl delete -k $(LLM_KATAN_BASE_PATH)/overlays/$(LLM_KATAN_OVERLAY) --ignore-not-found=true; \
+	fi
+	@echo "$(GREEN)[SUCCESS]$(NC) LLM Katan undeployment completed"
+
+# Show llm-katan deployment status
+kube-status-llm-katan: ## Show llm-katan deployment status
+	@echo "$(BLUE)[INFO]$(NC) LLM Katan deployment status"
+	@echo "$(BLUE)[INFO]$(NC) Namespace: $(LLM_KATAN_NAMESPACE)"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Pods:"
+	@kubectl get pods -n $(LLM_KATAN_NAMESPACE) -o wide || echo "$(RED)[ERROR]$(NC) Cannot get pods"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Services:"
+	@kubectl get services -n $(LLM_KATAN_NAMESPACE) || echo "$(RED)[ERROR]$(NC) Cannot get services"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) PVCs:"
+	@kubectl get pvc -n $(LLM_KATAN_NAMESPACE) || echo "$(RED)[ERROR]$(NC) Cannot get PVCs"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Deployments:"
+	@kubectl get deployments -n $(LLM_KATAN_NAMESPACE) || echo "$(RED)[ERROR]$(NC) Cannot get deployments"
+
+# Show llm-katan logs
+kube-logs-llm-katan: ## Show llm-katan logs (OVERLAY=gpt35|claude, default: gpt35)
+	@echo "$(BLUE)[INFO]$(NC) Showing llm-katan logs for overlay: $(LLM_KATAN_OVERLAY)"
+	@kubectl logs -n $(LLM_KATAN_NAMESPACE) -l app=llm-katan-$(LLM_KATAN_OVERLAY) -f
+
+# Port forward llm-katan API
+kube-port-forward-llm-katan: ## Port forward llm-katan API (OVERLAY=gpt35|claude, PORT=8000)
+	@$(eval PORT ?= 8000)
+	@echo "$(BLUE)[INFO]$(NC) Port forwarding llm-katan API (overlay: $(LLM_KATAN_OVERLAY))"
+	@echo "$(YELLOW)[INFO]$(NC) Access API at: http://localhost:$(PORT)"
+	@echo "$(YELLOW)[INFO]$(NC) Health check: curl http://localhost:$(PORT)/health"
+	@echo "$(YELLOW)[INFO]$(NC) Models: curl http://localhost:$(PORT)/v1/models"
+	@echo "$(YELLOW)[INFO]$(NC) Press Ctrl+C to stop port forwarding"
+	@kubectl port-forward -n $(LLM_KATAN_NAMESPACE) svc/llm-katan-$(LLM_KATAN_OVERLAY) $(PORT):8000
+
+# Test llm-katan deployment
+kube-test-llm-katan: ## Test llm-katan deployment (OVERLAY=gpt35|claude, default: gpt35)
+	@echo "$(BLUE)[INFO]$(NC) Testing llm-katan deployment (overlay: $(LLM_KATAN_OVERLAY))"
+	@echo "$(BLUE)[INFO]$(NC) Checking pod status..."
+	@kubectl get pods -n $(LLM_KATAN_NAMESPACE) -l app=llm-katan-$(LLM_KATAN_OVERLAY) -o wide
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Checking service..."
+	@kubectl get svc -n $(LLM_KATAN_NAMESPACE) llm-katan-$(LLM_KATAN_OVERLAY)
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Checking pod readiness..."
+	@kubectl wait --for=condition=Ready pod -l app=llm-katan-$(LLM_KATAN_OVERLAY) \
+		-n $(LLM_KATAN_NAMESPACE) --timeout=60s || echo "$(RED)[ERROR]$(NC) Pod not ready"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Testing API endpoint (requires port-forward in another terminal)..."
+	@echo "$(YELLOW)[INFO]$(NC) Run in another terminal: make kube-port-forward-llm-katan LLM_KATAN_OVERLAY=$(LLM_KATAN_OVERLAY)"
+	@echo "$(YELLOW)[INFO]$(NC) Then test with: curl http://localhost:8000/health"
+	@echo "$(GREEN)[SUCCESS]$(NC) Deployment test completed"
+
+# Load llm-katan image into kind cluster
+kube-load-llm-katan-image: ## Load llm-katan Docker image into kind cluster
+	@echo "$(BLUE)[INFO]$(NC) Loading llm-katan Docker image into kind cluster"
+	@if ! kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$"; then \
+		echo "$(RED)[ERROR]$(NC) Cluster $(KIND_CLUSTER_NAME) does not exist"; \
+		echo "$(BLUE)[INFO]$(NC) Run 'make create-cluster' first"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)[INFO]$(NC) Loading image: $(LLM_KATAN_IMAGE)"
+	@kind load docker-image $(LLM_KATAN_IMAGE) --name $(KIND_CLUSTER_NAME)
+	@echo "$(GREEN)[SUCCESS]$(NC) LLM Katan image loaded successfully"
+
 # Help target
 help-kube: ## Show Kubernetes makefile help
 	@echo "$(BLUE)Configuration variables:$(NC)"

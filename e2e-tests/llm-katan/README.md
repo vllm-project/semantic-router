@@ -38,6 +38,25 @@ docker run -p 8000:8000 ghcr.io/vllm-project/semantic-router/llm-katan:latest \
   llm-katan --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 ```
 
+#### Option 3: Kubernetes
+
+```bash
+# Quick start with make targets
+make kube-deploy-llm-katan-gpt35    # Deploy GPT-3.5 simulation
+make kube-deploy-llm-katan-claude   # Deploy Claude simulation
+make kube-deploy-llm-katan-multi    # Deploy both models
+
+# Or manually with kubectl
+kubectl apply -k e2e-tests/llm-katan/deploy/kubernetes/overlays/gpt35
+kubectl apply -k e2e-tests/llm-katan/deploy/kubernetes/overlays/claude
+
+# Port forward and test
+make kube-port-forward-llm-katan LLM_KATAN_OVERLAY=gpt35
+curl http://localhost:8000/health
+```
+
+**📚 For comprehensive Kubernetes deployment guide, see [deploy/docs/README.md](deploy/docs/README.md)**
+
 ### Setup
 
 #### HuggingFace Token (Required)
