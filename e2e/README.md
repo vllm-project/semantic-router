@@ -77,7 +77,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 
 | Test Case | Description | Metrics |
 |-----------|-------------|---------|
-| `decision-priority-selection` | Decision priority selection with multiple matches | 4 cases, priority validation |
+| `decision-priority-selection` | Decision priority selection with multiple matches | 4 cases, priority validation (indirect) |
 | `plugin-chain-execution` | Plugin execution order (PII → Cache → System Prompt) | 4 cases, chain validation, blocking behavior |
 | `rule-condition-logic` | AND/OR operators and keyword matching | 6 cases, operator validation |
 | `decision-fallback-behavior` | Fallback to default decision when no match | 5 cases, fallback validation |
@@ -86,7 +86,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 
 **Signal-Decision Engine Features Tested:**
 
-- ✅ Decision priority selection (priority 15 > 10)
+- ✅ Decision priority selection (priority 15 > 10) - validated by checking which decision wins when multiple match
 - ✅ Plugin chain execution order and blocking
 - ✅ Rule condition logic (AND/OR operators)
 - ✅ Keyword-based routing (case-insensitive)

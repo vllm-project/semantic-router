@@ -35,7 +35,6 @@ config:
     - name: computer science
     - name: philosophy
     - name: engineering
-    - name: thinking
 
   # Decisions - define routing logic with rules, model selection, and plugins
   decisions:
@@ -365,8 +364,6 @@ config:
       rules:
         operator: "OR"
         conditions:
-          - type: "domain"
-            name: "thinking"
           - type: "keyword"
             name: "thinking"
       modelRefs:

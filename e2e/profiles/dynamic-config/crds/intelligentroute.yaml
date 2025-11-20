@@ -32,8 +32,6 @@ spec:
         description: "Philosophy and ethical questions"
       - name: "engineering"
         description: "Engineering and technical problem-solving"
-      - name: "thinking"
-        description: "Queries requiring careful thought or urgent attention"
       - name: "other"
         description: "General knowledge and miscellaneous topics"
 
@@ -41,7 +39,7 @@ spec:
       - name: "thinking"
         operator: "OR"
         keywords: ["urgent", "immediate", "asap", "think", "careful"]
-        case_sensitive: false
+        caseSensitive: false
 
   decisions:
     - name: "thinking_decision"
@@ -50,8 +48,6 @@ spec:
       signals:
         operator: "OR"
         conditions:
-          - type: "domain"
-            name: "thinking"
           - type: "keyword"
             name: "thinking"
       modelRefs:
@@ -400,5 +396,5 @@ spec:
         - type: "system_prompt"
           configuration:
             enabled: true
-            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+            system_prompt: "You are a knowledgeable AI assistant with broad expertise across many domains. Provide accurate, helpful, and well-structured responses to general questions. When uncertain, acknowledge limitations and suggest where to find authoritative information."
             mode: "replace"
