@@ -96,6 +96,7 @@ e2e-help: ## Show help for E2E testing
 	@echo "Available Profiles:"
 	@echo "  ai-gateway  - Test Semantic Router with Envoy AI Gateway"
 	@echo "  aibrix      - Test Semantic Router with vLLM AIBrix"
+	@echo "  llm-d       - Test Semantic Router with LLM-D"
 	@echo "  istio       - Test Semantic Router with Istio (coming soon)"
 	@echo ""
 	@echo "Environment Variables:"
@@ -127,4 +128,3 @@ e2e-help: ## Show help for E2E testing
 	@echo "  2. make e2e-test-only                            # Run all tests"
 	@echo "  3. make e2e-test-only E2E_TESTS=\"test1\"          # Run specific test"
 	@echo "  4. make e2e-cleanup                              # Clean up when done"
-

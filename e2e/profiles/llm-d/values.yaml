@@ -1,0 +1,69 @@
+# Profile revision 2025-11-21: math -> phi4-mini; cs/default -> llama3-8b; removed global HTTPRoute catch-all.
+config:
+  # Allow Envoy to re-run route matching after Semantic Router sets x-selected-model.
+  # Without this, Gateway API routes that depend on that header won't be chosen and return 404.
+  clear_route_cache: true
+  default_model: llama3-8b
+  # Enable domain classification to return the x-vsr-selected-category header
+  classifier:
+    category_model:
+      model_id: models/category_classifier_modernbert-base_model
+      threshold: 0.6
+      use_modernbert: true
+      category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+    pii_model:
+      model_id: ""
+      threshold: 1.0
+      use_modernbert: false
+      pii_mapping_path: ""
+  # Optional domains used by decision rules
+  categories:
+    - name: math
+      description: "Mathematics, arithmetic, calculation"
+    - name: computer science
+      description: "Computer networks, programming, systems"
+  decisions:
+    - name: math_route
+      priority: 20
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: math
+      modelRefs:
+        - model: phi4-mini
+          use_reasoning: false
+    - name: cs_route
+      priority: 10
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: computer science
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+    - name: default_route
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+  semantic_cache:
+    enabled: false
+  prompt_guard:
+    enabled: false
+  tools:
+    enabled: false
+  bert_model:
+    model_id: models/all-MiniLM-L12-v2
+    threshold: 0.6
+    use_cpu: true
+
+# Keep consistent with the default chart: initContainer, model downloads, and PVC use chart defaults
+image:
+  pullPolicy: IfNotPresent
