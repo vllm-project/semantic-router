@@ -31,6 +31,9 @@ class ServerConfig:
 
         # Apply environment variable overrides
         self.model_name = os.getenv("YLLM_MODEL", self.model_name)
+        self.served_model_name = os.getenv(
+            "YLLM_SERVED_MODEL_NAME", self.served_model_name
+        )
         self.port = int(os.getenv("YLLM_PORT", str(self.port)))
         self.backend = os.getenv("YLLM_BACKEND", self.backend)
         self.host = os.getenv("YLLM_HOST", self.host)
