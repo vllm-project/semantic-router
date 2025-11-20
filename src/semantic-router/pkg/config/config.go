@@ -294,11 +294,16 @@ type Category struct {
 
 type RagConfig struct {
 	// Enabled bool `yaml:"enabled"` // maybe delete this
-	DefaultStrategy     string          `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
-	ConfidenceThreshold float64         `yaml:"confidence_threshold"`   // Confidence threshold below which RAG is required (for adaptive)
-	KnowledgeBases      []KnowledgeBase `yaml:"knowledge_bases,omitempty"`
-	RetrievalParams     RetrievalParams `yaml:"retrieval_params,omitempty"`  // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
-	RagTemplatePath     string          `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
+	DefaultStrategy string                    `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
+	KnowledgeBases  []KnowledgeBase           `yaml:"knowledge_bases,omitempty"`
+	RetrievalParams RetrievalParams           `yaml:"retrieval_params,omitempty"`  // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
+	RagTemplatePath string                    `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
+	DecisionConfig  AdaptiveRagDecisionConfig `yaml:"decision_config,omitempty"`   // Configurations for adaptive strategy
+}
+
+type AdaptiveRagDecisionConfig struct {
+	DecisionMechanism   string  `yaml:"decision_mechanism,omitempty"` // Mechanism to use to make adaptive RAG decision (logprobs)
+	ConfidenceThreshold float64 `yaml:"confidence_threshold"`         // Confidence threshold below which RAG is required (for logprobs)
 }
 
 type KnowledgeBase struct {

@@ -52,11 +52,16 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matched
 	case "always":
 		return true
 	case "adaptive":
-		decision, err := r.getAdaptiveRAGDecision(query, categoryName, openAIRequest)
-		if err == nil {
-			return decision
-		} else {
-			// TODO: Fallback to a better strategy
+		switch r.Config.Rag.DecisionConfig.DecisionMechanism {
+		case "logprobs":
+			decision, err := r.getAdaptiveRAGDecisionFromLogProbs(query, categoryName)
+			if err != nil {
+				return decision
+			} else {
+				// TODO: Fallback to a better strategy
+				return true
+			}
+		default:
 			return true
 		}
 	default:
@@ -64,7 +69,7 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matched
 	}
 }
 
-func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
+func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(query string, categoryName string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
 	logProbs, err := r.getChatResponseLogProbs(query, categoryName, matchedModel, openAIRequest)
 	if err != nil {
 		observability.Errorf("Error getting log probs: %s \n", err)
@@ -81,7 +86,7 @@ func (r *OpenAIRouter) getAdaptiveRAGDecision(query string, categoryName string,
 	}
 	perplexity := math.Exp(-(totalLogProbs / float64(tokenLength)))
 
-	if perplexity >= r.Config.Rag.ConfidenceThreshold {
+	if perplexity >= r.Config.Rag.DecisionConfig.ConfidenceThreshold {
 		return true, nil
 	}
 	return false, nil
@@ -93,7 +98,7 @@ func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create chatCompletionsClient")
 	}
-	
+
 	// send the openAIRequest
 	logProbs, err := chatCompletionsClient.queryModelForLogProbs(openAIRequest, categoryName, matchedModel)
 	if err != nil {
