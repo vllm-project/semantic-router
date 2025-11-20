@@ -1,6 +1,12 @@
 name: Publish Helm Chart
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm-publish.yml'
   push:
     branches:
       - main
