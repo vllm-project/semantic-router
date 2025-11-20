@@ -52,9 +52,11 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matched
 	case "always":
 		return true
 	case "adaptive":
+		observability.Infof("Category '%s' has Adaptive RAG strategy configured", categoryName)
 		switch r.Config.Rag.DecisionConfig.DecisionMechanism {
 		case "logprobs":
-			decision, err := r.getAdaptiveRAGDecisionFromLogProbs(query, categoryName)
+			decision, err := r.getAdaptiveRAGDecisionFromLogProbs(query, categoryName, matchedModel, openAIRequest)
+
 			if err != nil {
 				return decision
 			} else {
@@ -69,7 +71,8 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matched
 	}
 }
 
-func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(query string, categoryName string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
+func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(query string, categoryName string, matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
+	observability.Infof("Getting adaptive RAG Decision")
 	logProbs, err := r.getChatResponseLogProbs(query, categoryName, matchedModel, openAIRequest)
 	if err != nil {
 		observability.Errorf("Error getting log probs: %s \n", err)
@@ -85,22 +88,25 @@ func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(query string, category
 		totalLogProbs += prob
 	}
 	perplexity := math.Exp(-(totalLogProbs / float64(tokenLength)))
+	observability.Infof("Perplexity Score: '%s' ", perplexity)
 
-	if perplexity >= r.Config.Rag.DecisionConfig.ConfidenceThreshold {
-		return true, nil
-	}
+	// if perplexity >= r.Config.Rag.DecisionConfig.ConfidenceThreshold {
+	// 	return true, nil
+	// }
+
 	return false, nil
 }
 
 func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string, matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (*openai.ChatCompletionChoiceLogprobs, error) {
 	// TODO: Implement
+	observability.Infof("Getting chat response log probs")
 	chatCompletionsClient, err := r.getClientForMatchedModel(matchedModel)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to create chatCompletionsClient")
+		return nil, fmt.Errorf("unable to create chatCompletionsClient")
 	}
 
 	// send the openAIRequest
-	logProbs, err := chatCompletionsClient.queryModelForLogProbs(openAIRequest, categoryName, matchedModel)
+	logProbs, err := chatCompletionsClient.queryModelForLogProbs(openAIRequest, matchedModel)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching log probs: %w", err)
 	}
@@ -130,16 +136,24 @@ func (r *OpenAIRouter) getRAGChunks(categoryName string, query string) ([]string
 	return vector_db.Query(query)
 }
 
-func (r *OpenAIRouter) getClientForMatchedModel(matchedModel string) (ChatCompletionClient, error) {
+func (r *OpenAIRouter) getClientForMatchedModel(matchedModel string) (*ChatCompletionClient, error) {
 	// Select the best endpoint for this model
 	endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(matchedModel)
 	var chatCompletionClientOptions NewChatCompletionClientOptions
 	if endpointFound {
-		chatCompletionClientOptions = NewChatCompletionClientOptions {
+		endpointAddress := normalizeURL(endpointAddress)
+		chatCompletionClientOptions = NewChatCompletionClientOptions{
 			Endpoint: endpointAddress,
 		}
 	} else {
 		return nil, fmt.Errorf("no endpoint found for matched model: %s", matchedModel)
 	}
-	return *NewChatCompletionClient(chatCompletionClientOptions)
+	return NewChatCompletionClient(chatCompletionClientOptions), nil
+}
+
+func normalizeURL(u string) string {
+	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return u + "/v1"
+	}
+	return "http://" + u + "/v1"
 }

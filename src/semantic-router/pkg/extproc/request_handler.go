@@ -653,10 +653,11 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 				
 				// Create a deep copy of the request for RAG decision (re-parse to ensure independence)
 				ragRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
+				var ragDecision bool
 				if err != nil {
 					observability.Errorf("Error parsing request for RAG decision: %v", err)
 					// Continue without RAG
-					ragDecision := false
+					ragDecision = false
 				} else {
 					ragDecision := r.getRAGDecision(userContent, categoryName, matchedModel, ragRequest) // Pass by value (deep copy)
 					observability.Infof("Category '%s' has RAG Decision '%s'", categoryName, ragDecision)

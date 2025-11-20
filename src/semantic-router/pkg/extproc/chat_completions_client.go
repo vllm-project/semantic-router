@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"context"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 )
 
 type NewChatCompletionClientOptions struct {
@@ -21,10 +23,12 @@ func NewChatCompletionClient(options NewChatCompletionClientOptions) *ChatComple
 	}
 }
 
-func (c *ChatCompletionClient) queryModelForLogProbs(openAIRequest *openai.ChatCompletionNewParams, categoryName string, matchedModel string) (*openai.ChatCompletionChoiceLogprobs, error) {
+func (c *ChatCompletionClient) queryModelForLogProbs(openAIRequest *openai.ChatCompletionNewParams, matchedModel string) (*openai.ChatCompletionChoiceLogprobs, error) {
+	observability.Infof("Querying '%s' for log probs", matchedModel)
+	openAIRequest.Model = openai.ChatModel(matchedModel)
 	openAIRequest.Logprobs = openai.Bool(true)
 	openAIRequest.TopLogprobs = openai.Int(5)
-	openAIRequest.MaxCompletionTokens = openai.Int(5)
+	openAIRequest.MaxCompletionTokens = openai.Int(100)
 	
 	ctx := context.Background()
 
@@ -37,6 +41,8 @@ func (c *ChatCompletionClient) queryModelForLogProbs(openAIRequest *openai.ChatC
 	if len(resp.Choices) == 0 {
 		return nil, fmt.Errorf("no choices returned")
 	}
-
-	return resp.Choices[0].Logprobs, nil
+	
+	logprobs := resp.Choices[0].Logprobs
+	observability.Debugf("Full logprobs: %+v", logprobs)
+	return &logprobs, nil
 }
