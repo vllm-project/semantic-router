@@ -32,6 +32,7 @@ spec:
                 "pii_classifier_modernbert-base_model"
                 "jailbreak_classifier_modernbert-base_model"
                 "pii_classifier_modernbert-base_presidio_token_model"
+                "Qwen3-Embedding-0.6B"
               )
               mkdir -p /app/models
               cd /app/models
@@ -92,19 +93,30 @@ spec:
                 echo "PII token classifier model already exists, skipping..."
               fi
 
+              # Download Qwen3 Embedding model
+              if [ ! -f "Qwen3-Embedding-0.6B/model.safetensors" ]; then
+                echo "Downloading Qwen3-Embedding-0.6B model (missing model weights)..."
+                rm -rf Qwen3-Embedding-0.6B
+                hf download Qwen/Qwen3-Embedding-0.6B --local-dir Qwen3-Embedding-0.6B
+                echo "Downloaded Qwen3-Embedding-0.6B files:"
+                ls -la Qwen3-Embedding-0.6B/
+              else
+                echo "Qwen3-Embedding-0.6B model already exists with weights, skipping..."
+              fi
+
               echo "All missing models downloaded successfully!"
               ls -la /app/models/
           env:
             - name: HF_HUB_CACHE
               value: /tmp/hf_cache
-          # Reduced resource requirements for init container
+          # Increased resource requirements for init container to prevent timeouts during model download
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
               memory: "1Gi"
               cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
           volumeMounts:
             - name: models-volume
               mountPath: /app/models
@@ -137,25 +149,25 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 50051
-            initialDelaySeconds: 60
+            initialDelaySeconds: 300  # Wait 5 minutes for model loading
             periodSeconds: 30
             timeoutSeconds: 10
-            failureThreshold: 3
+            failureThreshold: 5  # Allow more failures
           readinessProbe:
             tcpSocket:
               port: 50051
-            initialDelaySeconds: 90
+            initialDelaySeconds: 300  # Wait 5 minutes for model loading
             periodSeconds: 30
             timeoutSeconds: 10
-            failureThreshold: 3
-          # Significantly reduced resource requirements for kind cluster
+            failureThreshold: 5  # Allow more failures
+          # Increased memory for multiple models including Qwen3-Embedding-0.6B
           resources:
             requests:
-              memory: "3Gi"  # Reduced from 8Gi
-              cpu: "1"  # Reduced from 2
+              memory: "4Gi"  # Increased to handle all models
+              cpu: "1"
             limits:
-              memory: "6Gi"  # Reduced from 12Gi
-              cpu: "2"  # Reduced from 4
+              memory: "8Gi"  # Increased to prevent OOMKill
+              cpu: "2"
       volumes:
         - name: config-volume
           configMap:

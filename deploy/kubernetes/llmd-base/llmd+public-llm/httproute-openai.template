@@ -27,6 +27,6 @@ spec:
         - name: Host
           value: "api.openai.com"
         - name: Authorization
-          value: "Bearer %(OPENAI_API_KEY)s"
+          value: "Bearer {{OPENAI_API_KEY}}"
     timeouts:
       request: 300s
