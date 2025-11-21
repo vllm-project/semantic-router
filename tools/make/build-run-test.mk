@@ -15,6 +15,29 @@ build-router: $(if $(CI),rust-ci,rust)
 	@mkdir -p bin
 	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
 
+# Build vsr CLI
+build-cli: ## Build the vsr CLI tool
+	@$(LOG_TARGET)
+	@mkdir -p bin
+	@cd src/semantic-router && go build -o ../../bin/vsr cmd/vsr/main.go
+	@echo "vsr CLI built successfully: bin/vsr"
+
+# Build all (router + CLI)
+build-all: ## Build both router and CLI
+build-all: build-router build-cli
+
+# Install vsr CLI to system
+install-cli: ## Install vsr CLI to /usr/local/bin
+install-cli: build-cli
+	@cp bin/vsr /usr/local/bin/vsr
+	@chmod +x /usr/local/bin/vsr
+	@echo "vsr installed to /usr/local/bin/vsr"
+
+# Test CLI
+test-cli: ## Run CLI unit tests  
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go test -v ./cmd/vsr/commands/...
+
 # Run the router
 run-router: ## Run the router with the specified config
 run-router: build-router download-models
@@ -141,7 +164,7 @@ start-llm-katan:
 test-e2e-vllm: ## Run e2e tests with LLM Katan servers (make sure servers are running)
 test-e2e-vllm:
 	@echo "Running e2e tests with LLM Katan servers..."
-	@echo "⚠️  Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
+	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
 	@python3 e2e-tests/run_all_tests.py
 
 # Note: Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
