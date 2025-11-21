@@ -1,12 +1,10 @@
 package deployment
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 )
@@ -70,23 +68,10 @@ func DeployDocker(configPath string, withObservability bool) error {
 		cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d")
 	}
 
-	// Capture stderr for error classification
-	var stderr bytes.Buffer
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		errMsg := stderr.String()
-		friendlyMsg := classifyDockerError(errMsg)
-
-		if friendlyMsg != "" {
-			cli.Error(fmt.Sprintf("Deployment failed: %s", friendlyMsg))
-			cli.Info("Details: " + strings.TrimSpace(errMsg))
-			return fmt.Errorf("docker deployment failed")
-		}
-
-		// If no classification matched, print raw error
-		fmt.Fprint(os.Stderr, errMsg)
 		return fmt.Errorf("failed to deploy with docker-compose: %w", err)
 	}
 
@@ -95,31 +80,6 @@ func DeployDocker(configPath string, withObservability bool) error {
 	cli.Info("View logs with: vsr logs")
 
 	return nil
-}
-
-func classifyDockerError(errMsg string) string {
-	errMsg = strings.ToLower(errMsg)
-
-	if strings.Contains(errMsg, "error during connect") ||
-		strings.Contains(errMsg, "connection refused") ||
-		strings.Contains(errMsg, "daemon is not running") ||
-		strings.Contains(errMsg, "dockerdesktoplinuxengine") {
-		return "Docker Engine is not running or not reachable.\n   Please ensure Docker Desktop or the Docker daemon is started."
-	}
-
-	if strings.Contains(errMsg, "permission denied") {
-		return "Permission denied when accessing Docker.\n   Please ensure you have permissions to run Docker (try 'sudo' or add user to 'docker' group)."
-	}
-
-	if strings.Contains(errMsg, "no such image") || strings.Contains(errMsg, "pull access denied") {
-		return "Failed to pull required images.\n   Please check your internet connection and ensure you have access to the required repositories."
-	}
-
-	if strings.Contains(errMsg, "port is already allocated") || strings.Contains(errMsg, "address already in use") {
-		return "Port conflict detected.\n   Please check if another service is using port 8080 or other required ports."
-	}
-
-	return ""
 }
 
 // DeployKubernetes deploys to Kubernetes
