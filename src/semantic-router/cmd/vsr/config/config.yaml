@@ -1,0 +1,81 @@
+# vLLM Semantic Router Configuration
+
+# BERT model for semantic similarity
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# vLLM endpoints - your backend models
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
+# Model configuration
+model_config:
+  "your-model":
+    preferred_endpoints: ["endpoint1"]
+    pricing:
+      currency: "USD"
+      prompt_per_1m: 0.50
+      completion_per_1m: 1.50
+
+# Categories (Metadata)
+categories:
+- name: math
+  description: "Mathematics related queries"
+- name: coding
+  description: "Programming and code generation"
+
+# Routing Rules
+keyword_rules:
+- name: math_keywords
+  operator: "OR"
+  keywords: ["math", "calculus", "algebra"]
+
+# Routing Decisions
+decisions:
+- name: math_decision
+  description: "Route math queries to model"
+  priority: 10
+  rules:
+    operator: "AND"
+    conditions:
+    - type: "keyword"
+      name: "math_keywords"
+  modelRefs:
+  - model: your-model
+    use_reasoning: true
+
+default_model: your-model
+
+# Classification models
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+
+# Security features (optional)
+prompt_guard:
+  enabled: false
+  use_modernbert: true
+  threshold: 0.7
+  use_cpu: true
+
+# Semantic caching (optional)
+semantic_cache:
+  enabled: false
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"

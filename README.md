@@ -91,7 +91,24 @@ Watch the quick demo of the dashboard below:
 
 ## Quick Start 🚀
 
-Get up and running in seconds with our interactive setup script:
+### Using VSR CLI (Recommended)
+
+The `vsr` CLI tool is the easiest way to manage your Semantic Router.
+
+1. **Install the CLI:**
+   ```bash
+   make install-cli
+   ```
+
+2. **Initialize and Deploy:**
+   ```bash
+   vsr init
+   vsr deploy docker
+   ```
+
+### Using Quickstart Script
+
+Alternatively, get up and running in seconds with our interactive setup script:
 
 ```bash
 bash ./scripts/quickstart.sh
