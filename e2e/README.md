@@ -16,7 +16,7 @@ The framework follows a **separation of concerns** design:
 - **aibrix**: Tests Semantic Router with vLLM AIBrix integration
 - **istio**: Tests Semantic Router with Istio Gateway (future)
 - **production-stack**: Tests vLLM Production Stack configurations (future)
-- **llm-d**: Tests with LLM-D (future)
+- **llm-d**: Tests Semantic Router with LLM-D distributed inference
 - **dynamo**: Tests with Nvidia Dynamo (future)
 
 ## Directory Structure
