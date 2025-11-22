@@ -201,9 +201,18 @@ kubectl patch deployment inference-gateway-istio   --type='json'   -p='[
 kubectl exec -it deploy/inference-gateway-istio -- printenv | grep OPENAI_API_KEY
 ```
 
-## Step 13: Create HTTPRoutes for Local LLM and for the OpenAI target   
+## Step 13: Patch the OPENAI_API_KEY into the HTTPRoute for OpenAI    
 
-Deploy the HTTPRoute manifest for the openai route destination. In the provided manifest note again that we match on the contents of the x-selected-model and also setup the injection of the OpenAI api key as a bearer token for enabling the access into OpenAI api for this route. For the local LLM we use a route similar to the llm-d guide since we want the prompt query to also get routed via the inferencepool and LLM-D scheduler for the Llama pool which will then pick one of the multiple endpoints in the pool serving the Llama LLM in this example. 
+Patch the OPEN_AI_API_KEY from your environment into a template file to generate the manifest for the HTTPRoute representing the OpenAI target. Note that you can skip step 12 by doing this step but for now we also listed step 12 in case you have other automation options for generating the httproute manifest while templating in the value of the OPENAI_API_KEY. 
+
+```bash
+## Patch the OPENAI_API_KEY into the template to create the httproute manifest file 
+sed "s/{{OPENAI_API_KEY}}/$OPENAI_API_KEY/g" deploy/kubernetes/llmd-base/llmd+public-llm/httproute-openai.template  > deploy/kubernetes/llmd-base/llmd+public-llm/httproute-openai.yaml
+```
+
+## Step 14: Create HTTPRoutes for Local LLM and for the OpenAI target   
+
+Now deploy the HTTPRoute manifest for the openai route destination. In the manifest note again that we match on the contents of the x-selected-model and also setup the injection of the OpenAI api key as a bearer token for enabling the access into OpenAI api for this route. For the local LLM we use a route similar to the llm-d guide since we want the prompt query to also get routed via the inferencepool and LLM-D scheduler for the Llama pool which will then pick one of the multiple endpoints in the pool serving the Llama LLM in this example. 
 
 ```bash
 ##  HTTpRoute for OpenAI
@@ -216,7 +225,7 @@ kc apply -f deploy/kubernetes/llmd-base/llmd+public-llm/httproute-openai.yaml
 kubectl apply -f deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
 ```
 
-## Step 14: Testing the Deployment
+## Step 15: Testing the Deployment
 To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
 
 ```bash
