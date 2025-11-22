@@ -38,6 +38,12 @@ static_resources:
             - name: local_service
               domains: ["*"]
               routes:
+              # Route for Gemini image generation
+              - match:
+                  path: "/v1/images/generations"
+                route:
+                  cluster: gemini_cluster
+                  timeout: 300s
               # Single route using original destination cluster
               - match:
                   prefix: "/"
@@ -97,6 +103,27 @@ static_resources:
               socket_address:
                 address: 127.0.0.1
                 port_value: 50051
+
+  # Gemini cluster with TLS support
+  - name: gemini_cluster
+    connect_timeout: 30s
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: gemini_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: generativelanguage.googleapis.com
+                port_value: 443
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: generativelanguage.googleapis.com
 
   # Dynamic vLLM cluster using original destination
   - name: vllm_dynamic_cluster

@@ -103,18 +103,12 @@ model_config:
 
 # Classifier configuration
 classifier:
-  # category_model:
-  #   model_id: "models/category_classifier_modernbert-base_model"
-  #   use_modernbert: true
-  #   threshold: 0.3
-  #   use_cpu: true
-  #   category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
   category_model:
-    model_id: "models/category_classifier_bert_image_gen"  # Local model path
-    use_modernbert: false
-    threshold: 0.9
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.3
     use_cpu: true
-    category_mapping_path: "models/category_classifier_bert_image_gen/category_mapping.json"
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
   pii_model:
     model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
     use_modernbert: true

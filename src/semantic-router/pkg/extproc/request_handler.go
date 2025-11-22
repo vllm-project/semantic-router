@@ -305,6 +305,9 @@ type RequestContext struct {
 	VSRCacheHit             bool   // Whether this request hit the cache
 	VSRInjectedSystemPrompt bool   // Whether a system prompt was injected into the request
 
+	// Gemini image generation routing
+	RouteToGemini bool // Whether to route this request to Gemini image generation API
+
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 }
@@ -378,6 +381,12 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.handleModelsRequest(path)
 	}
 
+	// Check if this is an image generation request to Gemini
+	if method == "POST" && path == "/v1/images/generations" {
+		ctx.RouteToGemini = true
+		observability.Infof("Detected Gemini image generation request: %s", path)
+	}
+
 	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
@@ -440,6 +449,11 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Also set the model on context early so error metrics can label it
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
+	}
+
+	// Handle Gemini image generation routing
+	if ctx.RouteToGemini {
+		return r.handleGeminiImageGeneration(ctx, openAIRequest)
 	}
 
 	// Get content from messages
@@ -626,6 +640,92 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	}
 
 	return nil, false
+}
+
+func (r *OpenAIRouter) handleGeminiImageGeneration(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
+	observability.Infof("Handling Gemini image generation request")
+
+	var prompt string
+	for _, msg := range openAIRequest.Messages {
+		if msg.OfUser != nil {
+			if msg.OfUser.Content.OfString.Value != "" {
+				prompt = msg.OfUser.Content.OfString.Value
+				break
+			} else if len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
+				var parts []string
+				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+					if part.OfText != nil {
+						parts = append(parts, part.OfText.Text)
+					}
+				}
+				prompt = strings.Join(parts, " ")
+				break
+			}
+		}
+	}
+
+	if prompt == "" {
+		observability.Errorf("No prompt found in request for Gemini image generation")
+		metrics.RecordRequestError(ctx.RequestModel, "missing_prompt")
+		return nil, status.Errorf(codes.InvalidArgument, "no prompt found in request")
+	}
+
+	geminiRequest := map[string]interface{}{
+		"model":           "imagen-3.0-generate-002",
+		"prompt":          prompt,
+		"response_format": "b64_json",
+		"n":               1,
+	}
+
+	transformedBody, err := json.Marshal(geminiRequest)
+	if err != nil {
+		observability.Errorf("Error marshaling Gemini request: %v", err)
+		metrics.RecordRequestError(ctx.RequestModel, "serialization_error")
+		return nil, status.Errorf(codes.Internal, "error creating Gemini request: %v", err)
+	}
+
+	bodyMutation := &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{
+			Body: transformedBody,
+		},
+	}
+
+	setHeaders := []*core.HeaderValueOption{
+		{
+			Header: &core.HeaderValue{
+				Key:      ":path",
+				RawValue: []byte("/v1beta/openai/images/generations"),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      "Host",
+				RawValue: []byte("generativelanguage.googleapis.com"),
+			},
+		},
+	}
+
+	headerMutation := &ext_proc.HeaderMutation{
+		RemoveHeaders: []string{"content-length"},
+		SetHeaders:    setHeaders,
+	}
+
+	observability.Infof("Transformed request for Gemini: prompt=%s", prompt)
+
+	// Return response with transformed body and headers
+	response := &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status:         ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: headerMutation,
+					BodyMutation:   bodyMutation,
+				},
+			},
+		},
+	}
+
+	return response, nil
 }
 
 func isImageGenerationIntent(text string) bool {
