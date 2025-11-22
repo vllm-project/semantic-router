@@ -290,8 +290,8 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 		}, nil
 	}
 
-	// Perform PII detection using the existing classifier
-	piiTypes, err := s.classifier.ClassifyPII(req.Text)
+	// Perform PII detection using the classifier with full details
+	detections, err := s.classifier.ClassifyPIIWithDetails(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("PII detection failed: %w", err)
 	}
@@ -300,17 +300,19 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 
 	// Build response
 	response := &PIIResponse{
-		HasPII:           len(piiTypes) > 0,
+		HasPII:           len(detections) > 0,
 		Entities:         []PIIEntity{},
 		ProcessingTimeMs: processingTime,
 	}
 
-	// Convert PII types to entities (simplified for now)
-	for _, piiType := range piiTypes {
+	// Convert PII detections to API entities with actual confidence scores
+	for _, detection := range detections {
 		entity := PIIEntity{
-			Type:       piiType,
-			Value:      "[DETECTED]", // Placeholder - would need actual entity extraction
-			Confidence: 0.9,          // Placeholder - would need actual confidence
+			Type:       detection.EntityType,
+			Value:      "[DETECTED]",                  // Redacted for security
+			Confidence: float64(detection.Confidence), // Actual confidence from model
+			StartPos:   detection.Start,
+			EndPos:     detection.End,
 		}
 		response.Entities = append(response.Entities, entity)
 	}
