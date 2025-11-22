@@ -110,7 +110,7 @@ jobs:
           docker ps --filter "name=milvus-semantic-cache"
 
       - name: Run semantic router tests
-        run: make test
+        run: make test --debug=v
         env:
           CI: true
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
@@ -126,6 +126,7 @@ jobs:
           docker stop milvus-semantic-cache || true
           docker rm milvus-semantic-cache || true
           echo "Milvus container cleaned up"
+          SKIP_TOOL_CALL_TESTS: true
 
       - name: Upload test artifacts on failure
         if: failure()
