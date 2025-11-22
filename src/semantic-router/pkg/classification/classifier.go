@@ -884,6 +884,67 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	return result, nil
 }
 
+// ClassifyPIIWithDetails performs PII token classification and returns full entity details including confidence scores
+func (c *Classifier) ClassifyPIIWithDetails(text string) ([]PIIDetection, error) {
+	return c.ClassifyPIIWithDetailsAndThreshold(text, c.Config.PIIModel.Threshold)
+}
+
+// ClassifyPIIWithDetailsAndThreshold performs PII token classification with a custom threshold and returns full entity details
+func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold float32) ([]PIIDetection, error) {
+	if !c.IsPIIEnabled() {
+		return []PIIDetection{}, fmt.Errorf("PII detection is not properly configured")
+	}
+
+	if text == "" {
+		return []PIIDetection{}, nil
+	}
+
+	// Use PII token classifier for entity detection
+	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
+	start := time.Now()
+	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
+	metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
+	if err != nil {
+		return nil, fmt.Errorf("PII token classification error: %w", err)
+	}
+
+	if len(tokenResult.Entities) > 0 {
+		logging.Infof("PII token classification found %d entities", len(tokenResult.Entities))
+	}
+
+	// Convert token entities to PII detections, filtering by threshold
+	var detections []PIIDetection
+	for _, entity := range tokenResult.Entities {
+		if entity.Confidence >= threshold {
+			detection := PIIDetection{
+				EntityType: entity.EntityType,
+				Start:      entity.Start,
+				End:        entity.End,
+				Text:       entity.Text,
+				Confidence: entity.Confidence,
+			}
+			detections = append(detections, detection)
+			logging.Infof("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
+				entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
+		}
+	}
+
+	if len(detections) > 0 {
+		// Log unique PII types for compatibility with existing logs
+		uniqueTypes := make(map[string]bool)
+		for _, d := range detections {
+			uniqueTypes[d.EntityType] = true
+		}
+		types := make([]string, 0, len(uniqueTypes))
+		for t := range uniqueTypes {
+			types = append(types, t)
+		}
+		logging.Infof("Detected PII types: %v", types)
+	}
+
+	return detections, nil
+}
+
 // DetectPIIInContent performs PII classification on all provided content
 func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 	var detectedPII []string
