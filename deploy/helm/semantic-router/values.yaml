@@ -167,6 +167,9 @@ initContainer:
       repo: LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model
     - name: pii_classifier_modernbert-base_presidio_token_model
       repo: LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model
+    # LoRA PII detector (for auto-detection feature)
+    - name: lora_pii_detector_bert-base-uncased_model
+      repo: LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model
 
 
 # Autoscaling configuration

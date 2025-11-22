@@ -140,35 +140,55 @@ func createJailbreakInference(useModernBERT bool) JailbreakInference {
 }
 
 type PIIInitializer interface {
-	Init(modelID string, useCPU bool) error
+	Init(modelID string, useCPU bool, numClasses int) error
 }
 
-type ModernBertPIIInitializer struct{}
+type PIIInitializerImpl struct {
+	usedModernBERT bool // Track which init path succeeded for inference routing
+}
 
-func (c *ModernBertPIIInitializer) Init(modelID string, useCPU bool) error {
+func (c *PIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
+	// Try auto-detecting Candle BERT init first - checks for lora_config.json
+	// This enables LoRA PII models when available
+	success := candle_binding.InitCandleBertTokenClassifier(modelID, numClasses, useCPU)
+	if success {
+		c.usedModernBERT = false
+		logging.Infof("Initialized PII token classifier with auto-detection (LoRA or Traditional BERT)")
+		return nil
+	}
+
+	// Fallback to ModernBERT-specific init for backward compatibility
+	// This handles models with incomplete configs (missing hidden_act, etc.)
+	logging.Infof("Auto-detection failed, falling back to ModernBERT PII initializer")
 	err := candle_binding.InitModernBertPIITokenClassifier(modelID, useCPU)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize PII token classifier (both auto-detect and ModernBERT): %w", err)
 	}
-	logging.Infof("Initialized ModernBERT PII token classifier for entity detection")
+	c.usedModernBERT = true
+	logging.Infof("Initialized ModernBERT PII token classifier (fallback mode)")
 	return nil
 }
 
-// createPIIInitializer creates the appropriate PII initializer (currently only ModernBERT)
-func createPIIInitializer() PIIInitializer { return &ModernBertPIIInitializer{} }
+// createPIIInitializer creates the PII initializer (auto-detecting)
+func createPIIInitializer() PIIInitializer {
+	return &PIIInitializerImpl{}
+}
 
 type PIIInference interface {
 	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
 }
 
-type ModernBertPIIInference struct{}
+type PIIInferenceImpl struct{}
 
-func (c *ModernBertPIIInference) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
-	return candle_binding.ClassifyModernBertPIITokens(text, configPath)
+func (c *PIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
+	return candle_binding.ClassifyCandleBertTokens(text)
 }
 
-// createPIIInference creates the appropriate PII inference (currently only ModernBERT)
-func createPIIInference() PIIInference { return &ModernBertPIIInference{} }
+// createPIIInference creates the PII inference (auto-detecting)
+func createPIIInference() PIIInference {
+	return &PIIInferenceImpl{}
+}
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
 type JailbreakDetection struct {
@@ -348,7 +368,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add in-tree classifier if configured
 	if cfg.CategoryModel.ModelID != "" {
-		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.UseModernBERT), createCategoryInference(cfg.UseModernBERT)))
+		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.CategoryModel.UseModernBERT), createCategoryInference(cfg.CategoryModel.UseModernBERT)))
 	}
 
 	// Add MCP classifier if configured
@@ -509,7 +529,8 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU)
+	// Pass numClasses to support auto-detection
+	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
 }
 
 // EvaluateAllRules evaluates all rule types and returns matched rule names

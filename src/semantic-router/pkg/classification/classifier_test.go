@@ -287,7 +287,7 @@ var _ = Describe("jailbreak detection", func() {
 
 type MockPIIInitializer struct{ InitError error }
 
-func (m *MockPIIInitializer) Init(_ string, useCPU bool) error { return m.InitError }
+func (m *MockPIIInitializer) Init(_ string, useCPU bool, numClasses int) error { return m.InitError }
 
 type MockPIIInferenceResponse struct {
 	classifyTokensResult candle_binding.TokenClassificationResult
