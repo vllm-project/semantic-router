@@ -40,6 +40,32 @@ test-semantic-router: build-router
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
+# Run embedding model integration tests (performance, memory, concurrency)
+# These tests validate the embedding model infrastructure
+test-embedding: ## Run embedding model integration tests (requires embedding models)
+test-embedding: build-router download-models-lora
+	@$(LOG_TARGET)
+	@echo "Running embedding model integration tests (performance, memory, concurrency)..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	export SR_TEST_MODE=true && \
+		cd src/semantic-router && \
+		if [ "$$CI" = "true" ]; then \
+			echo "CI detected: running with -short flag for reduced iterations"; \
+			CGO_ENABLED=1 go test -tags=integration -v -short -run "TestEmbedding_" ./test/integration -timeout 20m; \
+		else \
+			CGO_ENABLED=1 go test -tags=integration -v -run "TestEmbedding_" ./test/integration -timeout 15m; \
+		fi
+
+# Run embedding model benchmarks
+bench-embedding: ## Run embedding model benchmarks (requires embedding models)
+bench-embedding: build-router download-models-lora
+	@$(LOG_TARGET)
+	@echo "Running embedding model benchmarks..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	export SR_TEST_MODE=true && \
+		cd src/semantic-router && \
+		CGO_ENABLED=1 go test -tags=integration -v -run=^$$ -bench="BenchmarkEmbedding_" ./test/integration -benchmem -benchtime=3s -timeout 20m
+
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
 #   1. Run test-binding-minimal with minimal models

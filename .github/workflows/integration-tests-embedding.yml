@@ -1,0 +1,149 @@
+name: Integration Tests
+
+# Run integration tests on:
+# - Nightly schedule (comprehensive validation)
+# - Manual trigger (for debugging/pre-merge validation)
+# - Push to main (after PR merge)
+# - Pull requests that modify relevant paths (embedding infrastructure)
+on:
+  schedule:
+    # Run nightly at 3:00 AM UTC (after main test-and-build at 2:00 AM)
+    - cron: "0 3 * * *"
+
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Integration test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all         # All integration tests
+          - embedding   # Only embedding tests
+          - cache       # Only cache integration tests (future)
+
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+    # Only run if relevant files changed
+    paths:
+      - 'candle-binding/**'
+      - 'src/semantic-router/test/integration/**'
+      - 'src/semantic-router/pkg/classification/**'
+      - '.github/workflows/integration-tests-embedding.yml'
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            make \
+            build-essential \
+            pkg-config
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+          key: ${{ runner.os }}-cargo-integration-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-integration-
+            ${{ runner.os }}-cargo-
+
+      - name: Cache Go dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Cache Integration Test Models
+        uses: actions/cache@v4
+        with:
+          path: |
+            models/Qwen3-Embedding-0.6B/
+            models/embeddinggemma-300m/
+            models/lora_*_model/
+          key: ${{ runner.os }}-integration-models-${{ hashFiles('tools/make/models.mk') }}
+          restore-keys: |
+            ${{ runner.os }}-integration-models-
+        continue-on-error: true
+
+      - name: Build Rust library (CPU-only, no CUDA)
+        run: make rust-ci
+
+      - name: Build Go router
+        run: make build-router
+
+      - name: Install HuggingFace CLI
+        run: |
+          pip install -U "huggingface_hub[cli]" hf_transfer
+
+      - name: Download embedding models
+        env:
+          HF_HUB_ENABLE_HF_TRANSFER: 1
+          HF_HUB_DISABLE_TELEMETRY: 1
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "Downloading models for integration tests..."
+          make download-models-lora
+
+      - name: Run embedding integration tests
+        run: make test-embedding
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+        timeout-minutes: 30
+
+      - name: Run embedding benchmarks (nightly only)
+        if: github.event_name == 'schedule'
+        run: make bench-embedding
+        env:
+          CI: true
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+        timeout-minutes: 45
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: |
+            **/*.log
+            **/test-output.*
+          retention-days: 7
+
+      - name: Notify on failure
+        if: failure() && github.event_name == 'schedule'
+        run: |
+          echo "::error::Integration tests failed on nightly run. Please investigate."
