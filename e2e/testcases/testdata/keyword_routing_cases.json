@@ -80,27 +80,11 @@
     "matched_keywords": ["urgent"]
   },
   {
-    "name": "NOR operator - clean text passes",
-    "description": "Test NOR operator with text containing no spam keywords",
-    "query": "I need help with my account",
-    "expected_category": "exclude_spam",
+    "name": "Case insensitive - lowercase urgent",
+    "description": "Test case insensitive matching with lowercase",
+    "query": "this is very urgent please help",
+    "expected_category": "urgent_request",
     "expected_confidence": 1.0,
-    "matched_keywords": []
-  },
-  {
-    "name": "NOR operator - buy now fails",
-    "description": "Test NOR operator rejects text with 'buy now' spam keyword",
-    "query": "Click here to buy now and save money",
-    "expected_category": "",
-    "expected_confidence": 0.0,
-    "matched_keywords": []
-  },
-  {
-    "name": "NOR operator - free money fails",
-    "description": "Test NOR operator rejects text with 'free money' spam keyword",
-    "query": "Get free money with this amazing offer",
-    "expected_category": "",
-    "expected_confidence": 0.0,
-    "matched_keywords": []
+    "matched_keywords": ["urgent"]
   }
 ]

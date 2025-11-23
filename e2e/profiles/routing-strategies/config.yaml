@@ -73,7 +73,7 @@ classifier:
 keyword_rules:
   - category: "urgent_request"
     operator: "OR"
-    keywords: ["urgent", "immediate", "asap"]
+    keywords: ["urgent", "immediate", "asap", "emergency"]
     case_sensitive: false
   - category: "sensitive_data"
     operator: "AND"
@@ -154,7 +154,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "keyword"
           name: "urgent_request"
     modelRefs:
       - model: "qwen3"
@@ -174,7 +174,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "keyword"
           name: "sensitive_data"
     modelRefs:
       - model: "qwen3"
@@ -198,7 +198,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "keyword"
           name: "exclude_spam"
     modelRefs:
       - model: "qwen3"
@@ -218,7 +218,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "keyword"
           name: "regex_pattern_match"
     modelRefs:
       - model: "qwen3"

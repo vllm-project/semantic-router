@@ -202,12 +202,12 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 
 func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {
 	// Apply base model
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml"); err != nil {
+	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml"); err != nil {
 		return fmt.Errorf("failed to apply base model: %w", err)
 	}
 
 	// Apply gateway API resources
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml"); err != nil {
+	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml"); err != nil {
 		return fmt.Errorf("failed to apply gateway API resources: %w", err)
 	}
 
@@ -295,8 +295,8 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 
 func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
 	// Delete in reverse order
-	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml")
-	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml")
+	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml")
+	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml")
 	return nil
 }
 
