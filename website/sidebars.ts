@@ -56,6 +56,8 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/production-stack',
             'installation/k8s/aibrix',
             'installation/k8s/gateway-api-inference-extension',
+            'installation/k8s/istio',
+            'installation/k8s/llm-d',
           ],
         },
         'installation/docker-compose',
@@ -105,6 +107,21 @@ const sidebars: SidebarsConfig = {
             'tutorials/observability/metrics',
             'tutorials/observability/distributed-tracing',
             'tutorials/observability/open-webui-integration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Integration',
+          items: [
+            'tutorials/integration/production-stack-integration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'MCP Classification',
+          items: [
+            'tutorials/mcp-classification/overview',
+            'tutorials/mcp-classification/protocol',
           ],
         },
       ],
