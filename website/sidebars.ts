@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
           label: 'Architecture',
           items: [
             'overview/architecture/system-architecture',
+            'overview/architecture/gateway-integrations',
             'overview/architecture/envoy-extproc',
             'overview/architecture/router-implementation',
           ],
