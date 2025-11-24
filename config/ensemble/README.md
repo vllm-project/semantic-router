@@ -9,6 +9,16 @@ The ensemble orchestration feature allows you to:
 - Combine their outputs using various aggregation strategies
 - Improve reliability, accuracy, and cost-performance trade-offs
 
+## Architecture
+
+The ensemble service runs as an **independent OpenAI-compatible API server** (default port: 8081). The semantic router extproc sets ensemble headers and routes requests to this service, which then queries multiple model endpoints and returns the aggregated response.
+
+```
+Client Request → Semantic Router ExtProc → Ensemble Service → Model Endpoints
+                        ↓                           ↓
+                 (Set Headers)              (Parallel Queries + Aggregation)
+```
+
 ## Configuration
 
 ### Basic Setup
@@ -52,10 +62,27 @@ Control ensemble behavior using HTTP headers:
 | `x-ensemble-strategy` | Aggregation strategy | `voting` |
 | `x-ensemble-min-responses` | Minimum responses required | `2` |
 
-### Example Request
+### Service Startup
+
+When ensemble is enabled, the router automatically starts the ensemble service:
 
 ```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
+# Start the router (includes ensemble service on port 8081 if enabled)
+./bin/router -config=config/config.yaml
+```
+
+To specify a custom ensemble port:
+
+```bash
+./bin/router -config=config/config.yaml -ensemble-port=8082
+```
+
+### Example Request
+
+Send requests directly to the ensemble service:
+
+```bash
+curl -X POST http://localhost:8081/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "x-ensemble-enable: true" \
   -H "x-ensemble-models: model-a,model-b,model-c" \

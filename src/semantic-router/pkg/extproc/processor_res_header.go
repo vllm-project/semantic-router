@@ -106,34 +106,6 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			},
 		})
 
-		// Add ensemble metadata headers if ensemble was used
-		if ctx.VSREnsembleUsed {
-			setHeaders = append(setHeaders, &core.HeaderValueOption{
-				Header: &core.HeaderValue{
-					Key:      headers.VSREnsembleUsed,
-					RawValue: []byte("true"),
-				},
-			})
-			
-			if ctx.VSREnsembleModelsQueried > 0 {
-				setHeaders = append(setHeaders, &core.HeaderValueOption{
-					Header: &core.HeaderValue{
-						Key:      headers.VSREnsembleModelsQueried,
-						RawValue: []byte(strconv.Itoa(ctx.VSREnsembleModelsQueried)),
-					},
-				})
-			}
-			
-			if ctx.VSREnsembleResponsesReceived > 0 {
-				setHeaders = append(setHeaders, &core.HeaderValueOption{
-					Header: &core.HeaderValue{
-						Key:      headers.VSREnsembleResponsesReceived,
-						RawValue: []byte(strconv.Itoa(ctx.VSREnsembleResponsesReceived)),
-					},
-				})
-			}
-		}
-
 		// Create header mutation if we have headers to add
 		if len(setHeaders) > 0 {
 			headerMutation = &ext_proc.HeaderMutation{

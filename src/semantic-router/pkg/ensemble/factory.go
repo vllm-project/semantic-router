@@ -56,6 +56,16 @@ func (f *Factory) RegisterEndpoint(modelName, endpointURL string) {
 	logging.Infof("Registered ensemble endpoint: %s -> %s", modelName, endpointURL)
 }
 
+// GetDefaultStrategy returns the configured default strategy
+func (f *Factory) GetDefaultStrategy() Strategy {
+	return f.config.DefaultStrategy
+}
+
+// GetDefaultMinResponses returns the configured default minimum responses
+func (f *Factory) GetDefaultMinResponses() int {
+	return f.config.DefaultMinResponses
+}
+
 // Execute performs ensemble orchestration for the given request
 func (f *Factory) Execute(req *Request) *Response {
 	if !f.config.Enabled {

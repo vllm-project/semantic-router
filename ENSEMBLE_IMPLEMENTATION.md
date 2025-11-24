@@ -4,6 +4,19 @@
 
 This document summarizes the implementation of ensemble orchestration support in the semantic-router. The feature enables parallel model inference with configurable aggregation strategies, allowing improved reliability, accuracy, and flexible cost-performance trade-offs.
 
+## Architecture
+
+The ensemble service is implemented as an **independent OpenAI-compatible API server** that runs alongside the semantic router. This design allows:
+- Clean separation of concerns (extproc doesn't handle multiple downstream endpoints)
+- Scalable deployment (ensemble service can be scaled independently)
+- Flexibility (can be used standalone or integrated with semantic router)
+
+```
+Client → Semantic Router ExtProc → Ensemble Service (Port 8081) → Model Endpoints
+              ↓                            ↓
+        (Set Headers)              (Parallel Query + Aggregation)
+```
+
 ## Implementation Summary
 
 ### Files Created
@@ -17,14 +30,17 @@ This document summarizes the implementation of ensemble orchestration support in
    - Parallel model querying with semaphore-based concurrency control
    - Multiple aggregation strategies implementation
    - Authentication header forwarding
+   - Helper methods for default values
 
 3. **src/semantic-router/pkg/ensemble/factory_test.go**
    - Comprehensive test suite covering all factory operations
    - 100% test coverage for core ensemble functionality
 
-4. **src/semantic-router/pkg/extproc/req_filter_ensemble.go**
-   - Request filter for ensemble orchestration in extproc flow
-   - Integration with OpenAIRouter
+4. **src/semantic-router/pkg/ensembleserver/server.go**
+   - Independent HTTP server for ensemble orchestration
+   - OpenAI-compatible /v1/chat/completions endpoint
+   - Health check endpoint
+   - Header-based control of ensemble behavior
 
 5. **config/ensemble/ensemble-example.yaml**
    - Example configuration file demonstrating all ensemble options
@@ -46,19 +62,9 @@ This document summarizes the implementation of ensemble orchestration support in
 3. **config/config.yaml**
    - Added ensemble configuration section (disabled by default)
 
-4. **src/semantic-router/pkg/extproc/router.go**
-   - Added EnsembleFactory field to OpenAIRouter
-   - Initialize ensemble factory from configuration
-
-5. **src/semantic-router/pkg/extproc/processor_req_header.go**
-   - Parse ensemble headers from incoming requests
-   - Added ensemble fields to RequestContext
-
-6. **src/semantic-router/pkg/extproc/processor_req_body.go**
-   - Integrate ensemble request handling into request flow
-
-7. **src/semantic-router/pkg/extproc/processor_res_header.go**
-   - Add ensemble metadata to response headers
+4. **src/semantic-router/cmd/main.go**
+   - Start ensemble server when enabled in configuration
+   - Support for -ensemble-port flag (default: 8081)
 
 ## Key Features
 

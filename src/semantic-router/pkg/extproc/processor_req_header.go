@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,15 +41,6 @@ type RequestContext struct {
 	VSRCacheHit             bool             // Whether this request hit the cache
 	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
-
-	// Ensemble tracking
-	EnsembleEnabled         bool     // Whether ensemble mode is requested
-	EnsembleModels          []string // List of models to query in ensemble mode
-	EnsembleStrategy        string   // Aggregation strategy for ensemble
-	EnsembleMinResponses    int      // Minimum number of successful responses required
-	VSREnsembleUsed         bool     // Whether ensemble was actually used
-	VSREnsembleModelsQueried int    // Number of models queried in ensemble
-	VSREnsembleResponsesReceived int // Number of successful responses received
 
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
@@ -116,37 +106,6 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			ctx.ExpectStreamingResponse = true
 			logging.Infof("Client expects streaming response based on Accept header")
 		}
-	}
-
-	// Parse ensemble headers if present
-	if enableHeader, ok := ctx.Headers[headers.EnsembleEnable]; ok && strings.ToLower(enableHeader) == "true" {
-		ctx.EnsembleEnabled = true
-		
-		// Parse models list (comma-separated)
-		if modelsHeader, ok := ctx.Headers[headers.EnsembleModels]; ok && modelsHeader != "" {
-			models := strings.Split(modelsHeader, ",")
-			for _, model := range models {
-				trimmedModel := strings.TrimSpace(model)
-				if trimmedModel != "" {
-					ctx.EnsembleModels = append(ctx.EnsembleModels, trimmedModel)
-				}
-			}
-		}
-		
-		// Parse strategy
-		if strategyHeader, ok := ctx.Headers[headers.EnsembleStrategy]; ok && strategyHeader != "" {
-			ctx.EnsembleStrategy = strategyHeader
-		}
-		
-		// Parse min responses
-		if minRespHeader, ok := ctx.Headers[headers.EnsembleMinResponses]; ok && minRespHeader != "" {
-			if minResp, err := strconv.Atoi(minRespHeader); err == nil && minResp > 0 {
-				ctx.EnsembleMinResponses = minResp
-			}
-		}
-		
-		logging.Infof("Ensemble mode requested: models=%v, strategy=%s, minResponses=%d",
-			ctx.EnsembleModels, ctx.EnsembleStrategy, ctx.EnsembleMinResponses)
 	}
 
 	// Check if this is a GET request to /v1/models

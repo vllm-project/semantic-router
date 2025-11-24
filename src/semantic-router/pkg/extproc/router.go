@@ -12,7 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ensemble"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -27,7 +26,6 @@ type OpenAIRouter struct {
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
-	EnsembleFactory      *ensemble.Factory
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -167,29 +165,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		_ = autoSvc
 	}
 
-	// Initialize ensemble factory if enabled
-	var ensembleFactory *ensemble.Factory
-	if cfg.Ensemble.Enabled {
-		ensembleConfig := &ensemble.Config{
-			Enabled:               cfg.Ensemble.Enabled,
-			DefaultStrategy:       ensemble.Strategy(cfg.Ensemble.DefaultStrategy),
-			DefaultMinResponses:   cfg.Ensemble.DefaultMinResponses,
-			TimeoutSeconds:        cfg.Ensemble.TimeoutSeconds,
-			MaxConcurrentRequests: cfg.Ensemble.MaxConcurrentRequests,
-		}
-		ensembleFactory = ensemble.NewFactory(ensembleConfig)
-
-		// Register endpoint mappings from config
-		for modelName, endpoint := range cfg.Ensemble.EndpointMappings {
-			ensembleFactory.RegisterEndpoint(modelName, endpoint)
-		}
-
-		logging.Infof("Ensemble mode enabled with strategy: %s, min responses: %d",
-			ensembleConfig.DefaultStrategy, ensembleConfig.DefaultMinResponses)
-	} else {
-		logging.Infof("Ensemble mode is disabled")
-	}
-
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -197,7 +172,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
-		EnsembleFactory:      ensembleFactory,
 	}
 
 	return router, nil

@@ -15,6 +15,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ensembleserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -153,6 +154,19 @@ func main() {
 			logging.Infof("Starting API server on port %d", *apiPort)
 			if err := apiserver.Init(*configPath, *apiPort, *enableSystemPromptAPI); err != nil {
 				logging.Errorf("Start API server error: %v", err)
+			}
+		}()
+	}
+
+	// Start Ensemble server if enabled in configuration
+	ensemblePort := flag.Int("ensemble-port", 8081, "Port to listen on for Ensemble API")
+	flag.Parse() // Re-parse to pick up ensemble-port
+	
+	if cfg.Ensemble.Enabled {
+		go func() {
+			logging.Infof("Starting Ensemble server on port %d", *ensemblePort)
+			if err := ensembleserver.Init(cfg, *ensemblePort); err != nil {
+				logging.Errorf("Start Ensemble server error: %v", err)
 			}
 		}()
 	}

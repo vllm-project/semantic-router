@@ -61,11 +61,6 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.RequestModel = originalModel
 	}
 
-	// Check if ensemble mode is requested
-	if response, shouldReturn := r.handleEnsembleRequest(ctx); shouldReturn {
-		return response, nil
-	}
-
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
 
