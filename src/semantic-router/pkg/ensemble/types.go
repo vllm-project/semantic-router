@@ -57,6 +57,9 @@ type Request struct {
 	// OriginalRequest is the original OpenAI API request body
 	OriginalRequest []byte
 
+	// Headers contains HTTP headers to forward to model endpoints (e.g., Authorization)
+	Headers map[string]string
+
 	// Context for cancellation and timeout
 	Context context.Context
 }

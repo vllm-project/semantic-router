@@ -24,12 +24,13 @@ func (r *OpenAIRouter) handleEnsembleRequest(ctx *RequestContext) (*ext_proc.Pro
 
 	logging.Infof("Processing ensemble request with %d models: %v", len(ctx.EnsembleModels), ctx.EnsembleModels)
 
-	// Build ensemble request
+	// Build ensemble request with headers for authentication
 	ensembleReq := &ensemble.Request{
 		Models:           ctx.EnsembleModels,
 		Strategy:         ensemble.Strategy(ctx.EnsembleStrategy),
 		MinResponses:     ctx.EnsembleMinResponses,
 		OriginalRequest:  ctx.OriginalRequestBody,
+		Headers:          ctx.Headers, // Forward original request headers for authentication
 		Context:          ctx.TraceContext,
 	}
 

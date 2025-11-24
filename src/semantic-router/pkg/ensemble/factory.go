@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,11 +118,11 @@ func (f *Factory) Execute(req *Request) *Response {
 		}
 	}
 
-	// Build metadata
+	// Build metadata (only include successful responses)
 	metadata.TotalLatencyMs = totalLatency
 	metadata.ModelLatenciesMs = make(map[string]int64)
 	metadata.ConfidenceScores = make(map[string]float64)
-	for _, resp := range responses {
+	for _, resp := range successfulResponses {
 		metadata.ModelLatenciesMs[resp.ModelName] = resp.Latency.Milliseconds()
 		if resp.Confidence > 0 {
 			metadata.ConfidenceScores[resp.ModelName] = resp.Confidence
@@ -145,8 +146,12 @@ func (f *Factory) queryModels(req *Request) []ModelResponse {
 	responses := make([]ModelResponse, len(req.Models))
 	var wg sync.WaitGroup
 
-	// Limit concurrent requests
-	semaphore := make(chan struct{}, f.config.MaxConcurrentRequests)
+	// Limit concurrent requests (ensure at least 1)
+	maxConcurrent := f.config.MaxConcurrentRequests
+	if maxConcurrent <= 0 {
+		maxConcurrent = 10 // Default to 10 if not set or invalid
+	}
+	semaphore := make(chan struct{}, maxConcurrent)
 
 	for i, modelName := range req.Models {
 		wg.Add(1)
@@ -157,7 +162,7 @@ func (f *Factory) queryModels(req *Request) []ModelResponse {
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			responses[idx] = f.queryModel(req.Context, model, req.OriginalRequest)
+			responses[idx] = f.queryModel(req.Context, model, req.OriginalRequest, req.Headers)
 		}(i, modelName)
 	}
 
@@ -166,7 +171,7 @@ func (f *Factory) queryModels(req *Request) []ModelResponse {
 }
 
 // queryModel queries a single model endpoint
-func (f *Factory) queryModel(ctx context.Context, modelName string, requestBody []byte) ModelResponse {
+func (f *Factory) queryModel(ctx context.Context, modelName string, requestBody []byte, headers map[string]string) ModelResponse {
 	startTime := time.Now()
 	
 	endpoint, ok := f.endpoints[modelName]
@@ -199,6 +204,15 @@ func (f *Factory) queryModel(ctx context.Context, modelName string, requestBody 
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Forward authentication and other headers from original request
+	for key, value := range headers {
+		// Forward authorization and other important headers
+		lowerKey := strings.ToLower(key)
+		if lowerKey == "authorization" || lowerKey == "x-api-key" || strings.HasPrefix(lowerKey, "x-") {
+			httpReq.Header.Set(key, value)
+		}
+	}
 
 	// Execute request
 	resp, err := f.httpClient.Do(httpReq)
