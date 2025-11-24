@@ -351,6 +351,11 @@ type PromptGuardConfig struct {
 	Enabled bool `yaml:"enabled"`
 
 	// Model ID for the jailbreak classification model
+	// Supports automatic model type detection from config.json:
+	// - ModernBERT models (e.g., "answerdotai/ModernBERT-base")
+	// - DeBERTa V3 models (e.g., "protectai/deberta-v3-base-prompt-injection")
+	// - Qwen3Guard models (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+	// The model architecture is automatically detected and the appropriate classifier is loaded
 	ModelID string `yaml:"model_id"`
 
 	// Threshold for jailbreak detection (0.0-1.0)
@@ -359,7 +364,8 @@ type PromptGuardConfig struct {
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
 
-	// Use ModernBERT for jailbreak detection
+	// Use ModernBERT for jailbreak detection (deprecated - now auto-detected from model config)
+	// This field is kept for backward compatibility but is no longer used
 	UseModernBERT bool `yaml:"use_modernbert"`
 
 	// Path to the jailbreak type mapping file
@@ -476,6 +482,8 @@ const (
 type Category struct {
 	// Metadata
 	CategoryMetadata `yaml:",inline"`
+	// Domain-aware policies for this category
+	DomainAwarePolicies `yaml:",inline"`
 }
 
 // Decision represents a routing decision that combines multiple rules with AND/OR logic

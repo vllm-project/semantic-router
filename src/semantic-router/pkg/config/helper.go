@@ -428,3 +428,35 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	}
 	return c.Threshold
 }
+
+// IsJailbreakEnabledForCategory returns whether jailbreak detection is enabled for a specific category
+func (c *RouterConfig) IsJailbreakEnabledForCategory(categoryName string) bool {
+	if categoryName == "" {
+		// Empty category name means use global setting
+		return c.PromptGuard.Enabled
+	}
+	category := c.GetCategoryByName(categoryName)
+	if category != nil {
+		if category.JailbreakPolicy.JailbreakEnabled != nil {
+			return *category.JailbreakPolicy.JailbreakEnabled
+		}
+	}
+	// Fall back to global setting
+	return c.PromptGuard.Enabled
+}
+
+// GetJailbreakThresholdForCategory returns the effective jailbreak detection threshold for a category
+func (c *RouterConfig) GetJailbreakThresholdForCategory(categoryName string) float32 {
+	if categoryName == "" {
+		// Empty category name means use global threshold
+		return c.PromptGuard.Threshold
+	}
+	category := c.GetCategoryByName(categoryName)
+	if category != nil {
+		if category.JailbreakPolicy.JailbreakThreshold != nil {
+			return *category.JailbreakPolicy.JailbreakThreshold
+		}
+	}
+	// Fall back to global threshold
+	return c.PromptGuard.Threshold
+}

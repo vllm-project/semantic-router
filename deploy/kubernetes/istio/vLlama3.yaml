@@ -10,7 +10,7 @@ spec:
   resources:
     requests:
       storage: 40Gi
-#  storageClassName: default
+  # storageClassName: default
   volumeMode: Filesystem
 ---
 apiVersion: apps/v1
@@ -38,7 +38,7 @@ spec:
       #      - name: shm
       #  emptyDir:
       #    medium: Memory
-            #          sizeLimit: "2Gi"
+      #          sizeLimit: "2Gi"
       containers:
       - name: llama-8b
         image: vllm/vllm-openai:latest
@@ -66,8 +66,8 @@ spec:
         volumeMounts:
         - mountPath: /root/.cache/huggingface
           name: cache-volume
-            #        - name: shm
-            #          mountPath: /dev/shm
+          #        - name: shm
+          #          mountPath: /dev/shm
         livenessProbe:
           httpGet:
             path: /health
