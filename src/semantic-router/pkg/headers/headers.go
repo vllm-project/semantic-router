@@ -19,6 +19,38 @@ const (
 	SelectedModel = "x-selected-model"
 )
 
+// Ensemble Headers
+// These headers control ensemble orchestration behavior for multi-model inference.
+const (
+	// EnsembleEnable controls whether ensemble mode is enabled for this request.
+	// Value: "true" or "false"
+	EnsembleEnable = "x-ensemble-enable"
+
+	// EnsembleModels specifies comma-separated list of models to query in ensemble mode.
+	// Example: "model-a,model-b,model-c"
+	EnsembleModels = "x-ensemble-models"
+
+	// EnsembleStrategy specifies the aggregation strategy for combining model outputs.
+	// Values: "voting", "weighted", "first_success", "score_averaging", "reranking"
+	EnsembleStrategy = "x-ensemble-strategy"
+
+	// EnsembleMinResponses specifies minimum number of successful responses required.
+	// Value: integer as string (e.g., "2")
+	EnsembleMinResponses = "x-ensemble-min-responses"
+
+	// VSREnsembleUsed indicates that ensemble mode was used for this request.
+	// Value: "true"
+	VSREnsembleUsed = "x-vsr-ensemble-used"
+
+	// VSREnsembleModelsQueried indicates the number of models queried in ensemble mode.
+	// Value: integer as string
+	VSREnsembleModelsQueried = "x-vsr-ensemble-models-queried"
+
+	// VSREnsembleResponsesReceived indicates the number of successful responses received.
+	// Value: integer as string
+	VSREnsembleResponsesReceived = "x-vsr-ensemble-responses-received"
+)
+
 // VSR Decision Tracking Headers
 // These headers are added to successful responses (HTTP 200-299) to track
 // Vector Semantic Router decision-making information for debugging and monitoring.
