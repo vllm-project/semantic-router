@@ -6,8 +6,8 @@ use std::ffi::c_char;
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ClassificationResult {
-    pub confidence: f32,
     pub predicted_class: i32,
+    pub confidence: f32,
     pub label: *mut c_char,
 }
 
@@ -15,8 +15,8 @@ pub struct ClassificationResult {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ClassificationResultWithProbs {
-    pub confidence: f32,
     pub predicted_class: i32,
+    pub confidence: f32,
     pub label: *mut c_char,
     pub probabilities: *mut f32,
     pub num_classes: i32,

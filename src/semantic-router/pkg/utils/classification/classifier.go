@@ -337,7 +337,9 @@ func (c *Classifier) initializeCategoryClassifier() error {
 		return fmt.Errorf("not enough categories for classification, need at least 2, got %d", numClasses)
 	}
 
-	return c.categoryInitializer.Init(c.Config.Classifier.CategoryModel.ModelID, c.Config.Classifier.CategoryModel.UseCPU, numClasses)
+	modelID := c.Config.Classifier.CategoryModel.ModelID
+	observability.Infof("Initializing category classifier with model from config: %s (numClasses: %d, useCPU: %v)", modelID, numClasses, c.Config.Classifier.CategoryModel.UseCPU)
+	return c.categoryInitializer.Init(modelID, c.Config.Classifier.CategoryModel.UseCPU, numClasses)
 }
 
 // ClassifyCategory performs category classification on the given text

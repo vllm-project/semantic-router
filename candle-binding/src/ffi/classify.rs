@@ -21,7 +21,7 @@ use crate::BertClassifier;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
-use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
+use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER, BERT_CLASSIFIER, BERT_PII_CLASSIFIER, BERT_JAILBREAK_CLASSIFIER};
 
 /// Load id2label mapping from model config.json file
 /// Returns HashMap mapping class index (as string) to label name
@@ -36,9 +36,6 @@ pub fn load_id2label_from_config(
 
 // Legacy classifiers for backward compatibility using OnceLock pattern
 // These are kept for old API paths but new code should use the dual-path architecture
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 
 /// Classify text using basic classifier
 ///
@@ -62,10 +59,22 @@ pub extern "C" fn classify_text(text: *const c_char) -> ClassificationResult {
     if let Some(classifier) = BERT_CLASSIFIER.get() {
         let classifier = classifier.clone(); // Cheap Arc clone for concurrent access
         match classifier.classify_text(text) {
-            Ok((class_idx, confidence)) => ClassificationResult {
-                predicted_class: class_idx as i32,
-                confidence,
-                label: std::ptr::null_mut(),
+            Ok((class_idx, confidence)) => {
+                // Validate the result 
+                let num_classes = classifier.num_classes();
+                if class_idx >= num_classes {
+                    eprintln!("Error: Invalid class index {} (expected < {})", class_idx, num_classes);
+                    default_result
+                } else if !confidence.is_finite() || confidence < 0.0 || confidence > 1.0 {
+                    eprintln!("Error: Invalid confidence value {} (expected 0.0-1.0)", confidence);
+                    default_result
+                } else {
+                    ClassificationResult {
+                        predicted_class: class_idx as i32,
+                        confidence,
+                        label: std::ptr::null_mut(),
+                    }
+                }
             },
             Err(e) => {
                 eprintln!("Error classifying text: {e}");

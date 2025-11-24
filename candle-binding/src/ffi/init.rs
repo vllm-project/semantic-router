@@ -17,9 +17,9 @@ use crate::BertClassifier;
 // - Thread-safe initialization guarantee
 // - No dependency on lazy_static
 pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 // Unified classifier for dual-path architecture (exported for use in classify.rs)
 pub static UNIFIED_CLASSIFIER: OnceLock<
     Arc<crate::classifiers::unified::DualPathUnifiedClassifier>,
