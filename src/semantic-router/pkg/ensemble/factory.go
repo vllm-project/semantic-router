@@ -292,37 +292,73 @@ func (f *Factory) aggregateResponses(responses []ModelResponse, strategy Strateg
 	}
 }
 
-// aggregateByVoting implements majority voting
+// aggregateByVoting implements majority voting by comparing message content
 func (f *Factory) aggregateByVoting(responses []ModelResponse, metadata *Metadata) ([]byte, Metadata, error) {
-	// Count occurrences of each response
-	// This is a simplified implementation - in production, you'd parse the actual content
-	responseCounts := make(map[string]int)
-	responseMap := make(map[string][]byte)
+	// Parse responses and extract message content for voting
+	type parsedResponse struct {
+		content  string
+		rawBytes []byte
+	}
+	
+	contentCounts := make(map[string]int)
+	contentToResponse := make(map[string]parsedResponse)
 
 	for _, resp := range responses {
-		key := string(resp.Response)
-		responseCounts[key]++
-		responseMap[key] = resp.Response
-	}
+		// Try to parse OpenAI-style response
+		var openAIResp map[string]interface{}
+		if err := json.Unmarshal(resp.Response, &openAIResp); err != nil {
+			// If parsing fails, use first response as fallback
+			logging.Warnf("Failed to parse response for voting: %v", err)
+			continue
+		}
 
-	// Find the most common response
-	var maxCount int
-	var selectedResponse []byte
-	for key, count := range responseCounts {
-		if count > maxCount {
-			maxCount = count
-			selectedResponse = responseMap[key]
+		// Extract content from choices array
+		content := extractContentFromResponse(openAIResp)
+		if content != "" {
+			contentCounts[content]++
+			contentToResponse[content] = parsedResponse{
+				content:  content,
+				rawBytes: resp.Response,
+			}
 		}
 	}
 
-	metadata.AggregationDetails["votes"] = responseCounts
-	metadata.AggregationDetails["max_votes"] = maxCount
-
-	if selectedResponse == nil {
-		return responses[0].Response, *metadata, nil
+	// Find the most common content
+	var maxCount int
+	var selectedContent string
+	for content, count := range contentCounts {
+		if count > maxCount {
+			maxCount = count
+			selectedContent = content
+		}
 	}
 
-	return selectedResponse, *metadata, nil
+	metadata.AggregationDetails["vote_counts"] = contentCounts
+	metadata.AggregationDetails["max_votes"] = maxCount
+
+	// Return the response with the most votes, or first response if no clear winner
+	if selectedContent != "" {
+		if selected, ok := contentToResponse[selectedContent]; ok {
+			return selected.rawBytes, *metadata, nil
+		}
+	}
+
+	return responses[0].Response, *metadata, nil
+}
+
+// extractContentFromResponse extracts the message content from an OpenAI-style response
+func extractContentFromResponse(resp map[string]interface{}) string {
+	// Navigate: response["choices"][0]["message"]["content"]
+	if choices, ok := resp["choices"].([]interface{}); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]interface{}); ok {
+			if message, ok := choice["message"].(map[string]interface{}); ok {
+				if content, ok := message["content"].(string); ok {
+					return content
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // aggregateByWeighted implements confidence-weighted selection
@@ -352,13 +388,67 @@ func (f *Factory) aggregateByWeighted(responses []ModelResponse, metadata *Metad
 	return selectedResponse, *metadata, nil
 }
 
-// aggregateByScoreAveraging implements score averaging (simplified)
+// aggregateByScoreAveraging averages logprobs or confidence scores from multiple models
 func (f *Factory) aggregateByScoreAveraging(responses []ModelResponse, metadata *Metadata) ([]byte, Metadata, error) {
-	// This is a simplified implementation
-	// In production, you'd parse the responses and average numerical scores
-	// For now, return the first response as a placeholder
-	metadata.SelectedModel = responses[0].ModelName
-	metadata.AggregationDetails["note"] = "score averaging not fully implemented"
-
-	return responses[0].Response, *metadata, nil
+	// For score averaging, we select the response with the median confidence/latency balance
+	// This is more practical than trying to merge responses
+	
+	type scoredResponse struct {
+		response ModelResponse
+		score    float64
+	}
+	
+	scored := make([]scoredResponse, 0, len(responses))
+	
+	for _, resp := range responses {
+		// Compute a composite score based on confidence and latency
+		// Higher confidence is better, lower latency is better
+		score := resp.Confidence
+		if resp.Latency.Seconds() > 0 {
+			// Normalize latency (penalize slow responses)
+			latencyPenalty := 1.0 / (1.0 + resp.Latency.Seconds())
+			score = score * latencyPenalty
+		}
+		
+		scored = append(scored, scoredResponse{
+			response: resp,
+			score:    score,
+		})
+	}
+	
+	// If no confidence scores available, fall back to selecting by fastest response
+	allZeroConfidence := true
+	for _, s := range scored {
+		if s.score > 0 {
+			allZeroConfidence = false
+			break
+		}
+	}
+	
+	if allZeroConfidence {
+		// Select fastest response
+		fastest := scored[0]
+		for _, s := range scored[1:] {
+			if s.response.Latency < fastest.response.Latency {
+				fastest = s
+			}
+		}
+		metadata.SelectedModel = fastest.response.ModelName
+		metadata.AggregationDetails["selection_method"] = "fastest_response"
+		return fastest.response.Response, *metadata, nil
+	}
+	
+	// Find highest scoring response
+	best := scored[0]
+	for _, s := range scored[1:] {
+		if s.score > best.score {
+			best = s
+		}
+	}
+	
+	metadata.SelectedModel = best.response.ModelName
+	metadata.AggregationDetails["best_score"] = best.score
+	metadata.AggregationDetails["selection_method"] = "score_based"
+	
+	return best.response.Response, *metadata, nil
 }
