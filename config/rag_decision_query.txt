@@ -1,0 +1,7 @@
+<instruction>
+Do you have enough information to answer the user’s question in the "question" tags accurately and confidently? Answer with only Yes or No. 
+<instruction>
+
+<question>
+%s
+</question>
