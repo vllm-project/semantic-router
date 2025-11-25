@@ -103,6 +103,8 @@ set(SOURCES
     # Classifiers module
     cpp/src/classifiers/text_classifier.cpp
     cpp/src/classifiers/token_classifier.cpp
+    cpp/src/classifiers/lora_adapter.cpp
+    cpp/src/classifiers/lora_classifier.cpp
     
     # Embeddings module
     cpp/src/embeddings/embedding_generator.cpp
@@ -123,6 +125,8 @@ set(HEADERS
     # Classifier headers
     cpp/include/classifiers/text_classifier.h
     cpp/include/classifiers/token_classifier.h
+    cpp/include/classifiers/lora_adapter.h
+    cpp/include/classifiers/lora_classifier.h
     
     # Embedding headers
     cpp/include/embeddings/embedding_generator.h

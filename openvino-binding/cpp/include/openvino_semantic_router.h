@@ -357,6 +357,91 @@ OVTokenClassificationResult ov_classify_modernbert_tokens(const char* text, cons
 OVEmbeddingResult ov_get_modernbert_embedding(const char* text, int max_length);
 
 // ================================================================================================
+// LORA ADAPTER SUPPORT (BERT AND MODERNBERT)
+// ================================================================================================
+
+/**
+ * @brief Task type enumeration for LoRA multi-task classification
+ */
+typedef enum {
+    OV_TASK_INTENT = 0,
+    OV_TASK_PII = 1,
+    OV_TASK_SECURITY = 2,
+    OV_TASK_CLASSIFICATION = 3
+} OVTaskType;
+
+
+/**
+ * @brief Initialize BERT LoRA classifier
+ * @param base_model_path Path to base BERT model (.xml file)
+ * @param lora_adapters_path Path to directory containing LoRA adapter models
+ * @param device Device name ("CPU", "GPU", etc.)
+ * @return true if initialization succeeded, false otherwise
+ */
+bool ov_init_bert_lora_classifier(
+    const char* base_model_path,
+    const char* lora_adapters_path,
+    const char* device
+);
+
+/**
+ * @brief Check if BERT LoRA classifier is initialized
+ * @return true if initialized, false otherwise
+ */
+bool ov_is_bert_lora_classifier_initialized();
+
+/**
+ * @brief Initialize ModernBERT LoRA classifier
+ * @param base_model_path Path to base ModernBERT model (.xml file)
+ * @param lora_adapters_path Path to directory containing LoRA adapter models
+ * @param device Device name ("CPU", "GPU", etc.)
+ * @return true if initialization succeeded, false otherwise
+ */
+bool ov_init_modernbert_lora_classifier(
+    const char* base_model_path,
+    const char* lora_adapters_path,
+    const char* device
+);
+
+/**
+ * @brief Check if ModernBERT LoRA classifier is initialized
+ * @return true if initialized, false otherwise
+ */
+bool ov_is_modernbert_lora_classifier_initialized();
+
+/**
+ * @brief Classify text using BERT LoRA adapter for a specific task
+ * @param text Input text
+ * @param task Task type
+ * @return Classification result
+ */
+OVClassificationResult ov_classify_bert_lora_task(const char* text, OVTaskType task);
+
+/**
+ * @brief Classify text using ModernBERT LoRA adapter for a specific task
+ * @param text Input text
+ * @param task Task type
+ * @return Classification result
+ */
+OVClassificationResult ov_classify_modernbert_lora_task(const char* text, OVTaskType task);
+
+/**
+ * @brief Token classification using BERT LoRA (for PII detection, NER, etc.)
+ * @param text Input text
+ * @param task Task type (should be PII or similar token classification task)
+ * @return Token classification result (caller must free using ov_free_token_classification_result)
+ */
+OVTokenClassificationResult ov_classify_bert_lora_tokens(const char* text, OVTaskType task);
+
+/**
+ * @brief Token classification using ModernBERT LoRA (for PII detection, NER, etc.)
+ * @param text Input text
+ * @param task Task type (should be PII or similar token classification task)
+ * @return Token classification result (caller must free using ov_free_token_classification_result)
+ */
+OVTokenClassificationResult ov_classify_modernbert_lora_tokens(const char* text, OVTaskType task);
+
+// ================================================================================================
 // UTILITY FUNCTIONS
 // ================================================================================================
 

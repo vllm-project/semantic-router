@@ -7,6 +7,7 @@ High-performance Go bindings for semantic routing using Intel® OpenVINO™ Tool
 - 🚀 **High Performance**: Optimized inference with OpenVINO on Intel hardware
 - 🔍 **Semantic Search**: BERT embeddings and cosine similarity
 - 📊 **Classification**: Text classification with confidence scores
+- 🧩 **LoRA Adapter Support**: Parameter-efficient fine-tuning for BERT and ModernBERT
 - 🏷️ **Token Classification**: Named entity recognition and PII detection
 - 🔄 **Batch Processing**: Efficient batch similarity computation
 - 💻 **Multi-Device**: Support for CPU, GPU, VPU, and other Intel accelerators

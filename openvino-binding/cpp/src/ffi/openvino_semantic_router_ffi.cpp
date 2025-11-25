@@ -9,6 +9,7 @@
 #include "../../include/core/model_manager.h"
 #include "../../include/classifiers/text_classifier.h"
 #include "../../include/classifiers/token_classifier.h"
+#include "../../include/classifiers/lora_classifier.h"
 #include "../../include/embeddings/embedding_generator.h"
 #include "../../include/utils/preprocessing.h"
 
@@ -28,6 +29,8 @@ static std::unique_ptr<classifiers::TextClassifier> g_text_classifier;
 static std::unique_ptr<classifiers::TokenClassifier> g_token_classifier;
 static std::unique_ptr<embeddings::EmbeddingGenerator> g_embedding_generator;
 static std::unique_ptr<embeddings::EmbeddingGenerator> g_similarity_generator;
+static std::unique_ptr<classifiers::LoRAClassifier> g_bert_lora_classifier;
+static std::unique_ptr<classifiers::LoRAClassifier> g_modernbert_lora_classifier;
 
 // ================================================================================================
 // INITIALIZATION FUNCTIONS
@@ -504,3 +507,231 @@ OVClassificationResultWithProbs ov_classify_modernbert_text_with_probabilities(c
     return ov_classify_text_with_probabilities(text);
 }
 
+// ================================================================================================
+// LORA ADAPTER SUPPORT (BERT AND MODERNBERT)
+// ================================================================================================
+
+bool ov_init_bert_lora_classifier(
+    const char* base_model_path,
+    const char* lora_adapters_path,
+    const char* device
+) {
+    try {
+        // Validate input parameters
+        if (!base_model_path || !lora_adapters_path || !device ||
+            strlen(base_model_path) == 0 || strlen(lora_adapters_path) == 0) {
+            std::cerr << "Error: Invalid input parameters (empty or null)" << std::endl;
+            return false;
+        }
+        
+        // Check if model file exists
+        if (!std::filesystem::exists(base_model_path)) {
+            std::cerr << "Error: Model file not found: " << base_model_path << std::endl;
+            return false;
+        }
+        
+        if (!g_bert_lora_classifier) {
+            g_bert_lora_classifier = std::make_unique<classifiers::LoRAClassifier>();
+        }
+        
+        // Default task configuration: Intent, PII, Security
+        std::unordered_map<classifiers::TaskType, int> task_configs = {
+            {classifiers::TaskType::Intent, 2},      // Binary classification
+            {classifiers::TaskType::PII, 2},         // Binary classification
+            {classifiers::TaskType::Security, 2}     // Binary classification
+        };
+        
+        return g_bert_lora_classifier->initialize(
+            base_model_path,
+            lora_adapters_path,
+            task_configs,
+            device,
+            "bert"
+        );
+    } catch (const std::exception& e) {
+        std::cerr << "Error initializing BERT LoRA classifier: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool ov_is_bert_lora_classifier_initialized() {
+    return g_bert_lora_classifier != nullptr && g_bert_lora_classifier->isInitialized();
+}
+
+bool ov_init_modernbert_lora_classifier(
+    const char* base_model_path,
+    const char* lora_adapters_path,
+    const char* device
+) {
+    try {
+        // Validate input parameters
+        if (!base_model_path || !lora_adapters_path || !device ||
+            strlen(base_model_path) == 0 || strlen(lora_adapters_path) == 0) {
+            std::cerr << "Error: Invalid input parameters (empty or null)" << std::endl;
+            return false;
+        }
+        
+        // Check if model file exists
+        if (!std::filesystem::exists(base_model_path)) {
+            std::cerr << "Error: Model file not found: " << base_model_path << std::endl;
+            return false;
+        }
+        
+        if (!g_modernbert_lora_classifier) {
+            g_modernbert_lora_classifier = std::make_unique<classifiers::LoRAClassifier>();
+        }
+        
+        // Default task configuration: Intent, PII, Security
+        std::unordered_map<classifiers::TaskType, int> task_configs = {
+            {classifiers::TaskType::Intent, 2},      // Binary classification
+            {classifiers::TaskType::PII, 2},         // Binary classification
+            {classifiers::TaskType::Security, 2}     // Binary classification
+        };
+        
+        return g_modernbert_lora_classifier->initialize(
+            base_model_path,
+            lora_adapters_path,
+            task_configs,
+            device,
+            "modernbert"
+        );
+    } catch (const std::exception& e) {
+        std::cerr << "Error initializing ModernBERT LoRA classifier: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool ov_is_modernbert_lora_classifier_initialized() {
+    return g_modernbert_lora_classifier != nullptr && g_modernbert_lora_classifier->isInitialized();
+}
+
+// Helper function to convert OVTaskType to TaskType
+static classifiers::TaskType convertTaskType(OVTaskType task) {
+    switch (task) {
+        case OV_TASK_INTENT: return classifiers::TaskType::Intent;
+        case OV_TASK_PII: return classifiers::TaskType::PII;
+        case OV_TASK_SECURITY: return classifiers::TaskType::Security;
+        case OV_TASK_CLASSIFICATION: return classifiers::TaskType::Classification;
+        default: return classifiers::TaskType::Classification;
+    }
+}
+
+OVClassificationResult ov_classify_bert_lora_task(const char* text, OVTaskType task) {
+    OVClassificationResult result{};
+    result.predicted_class = -1;
+    result.confidence = 0.0f;
+    
+    if (!g_bert_lora_classifier || !g_bert_lora_classifier->isInitialized()) {
+        std::cerr << "BERT LoRA classifier not initialized" << std::endl;
+        return result;
+    }
+    
+    try {
+        auto cpp_task = convertTaskType(task);
+        auto cpp_result = g_bert_lora_classifier->classifyTask(text, cpp_task);
+        
+        result.predicted_class = cpp_result.predicted_class;
+        result.confidence = cpp_result.confidence;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in BERT LoRA task classification: " << e.what() << std::endl;
+    }
+    
+    return result;
+}
+
+OVClassificationResult ov_classify_modernbert_lora_task(const char* text, OVTaskType task) {
+    OVClassificationResult result{};
+    result.predicted_class = -1;
+    result.confidence = 0.0f;
+    
+    if (!g_modernbert_lora_classifier || !g_modernbert_lora_classifier->isInitialized()) {
+        std::cerr << "ModernBERT LoRA classifier not initialized" << std::endl;
+        return result;
+    }
+    
+    try {
+        auto cpp_task = convertTaskType(task);
+        auto cpp_result = g_modernbert_lora_classifier->classifyTask(text, cpp_task);
+        
+        result.predicted_class = cpp_result.predicted_class;
+        result.confidence = cpp_result.confidence;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in ModernBERT LoRA task classification: " << e.what() << std::endl;
+    }
+    
+    return result;
+}
+
+OVTokenClassificationResult ov_classify_bert_lora_tokens(const char* text, OVTaskType task) {
+    OVTokenClassificationResult result{};
+    result.entities = nullptr;
+    result.num_entities = 0;
+    
+    if (!g_bert_lora_classifier || !g_bert_lora_classifier->isInitialized()) {
+        std::cerr << "BERT LoRA classifier not initialized" << std::endl;
+        return result;
+    }
+    
+    try {
+        classifiers::TaskType cpp_task = static_cast<classifiers::TaskType>(task);
+        auto cpp_result = g_bert_lora_classifier->classifyTokens(text, cpp_task);
+        
+        // Convert entities to OVTokenEntity format
+        if (!cpp_result.entities.empty()) {
+            result.num_entities = static_cast<int>(cpp_result.entities.size());
+            result.entities = new OVTokenEntity[result.num_entities];
+            
+            for (int i = 0; i < result.num_entities; ++i) {
+                const auto& entity = cpp_result.entities[i];
+                result.entities[i].entity_type = strdup(entity.type.c_str());
+                result.entities[i].text = strdup(entity.text.c_str());
+                result.entities[i].start = entity.start_token;
+                result.entities[i].end = entity.end_token;
+                result.entities[i].confidence = entity.confidence;
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in BERT LoRA token classification: " << e.what() << std::endl;
+    }
+    
+    return result;
+}
+
+OVTokenClassificationResult ov_classify_modernbert_lora_tokens(const char* text, OVTaskType task) {
+    OVTokenClassificationResult result{};
+    result.entities = nullptr;
+    result.num_entities = 0;
+    
+    if (!g_modernbert_lora_classifier || !g_modernbert_lora_classifier->isInitialized()) {
+        std::cerr << "ModernBERT LoRA classifier not initialized" << std::endl;
+        return result;
+    }
+    
+    try {
+        classifiers::TaskType cpp_task = static_cast<classifiers::TaskType>(task);
+        auto cpp_result = g_modernbert_lora_classifier->classifyTokens(text, cpp_task);
+        
+        // Convert entities to OVTokenEntity format
+        if (!cpp_result.entities.empty()) {
+            result.num_entities = static_cast<int>(cpp_result.entities.size());
+            result.entities = new OVTokenEntity[result.num_entities];
+            
+            for (int i = 0; i < result.num_entities; ++i) {
+                const auto& entity = cpp_result.entities[i];
+                result.entities[i].entity_type = strdup(entity.type.c_str());
+                result.entities[i].text = strdup(entity.text.c_str());
+                result.entities[i].start = entity.start_token;
+                result.entities[i].end = entity.end_token;
+                result.entities[i].confidence = entity.confidence;
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in ModernBERT LoRA token classification: " << e.what() << std::endl;
+    }
+    
+    return result;
+}

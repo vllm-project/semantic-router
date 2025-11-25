@@ -852,6 +852,294 @@ func GetModernBertEmbedding(text string, maxLength int) ([]float32, error) {
 }
 
 // ================================================================================================
+// LORA ADAPTER SUPPORT (BERT AND MODERNBERT)
+// ================================================================================================
+
+// TaskType represents the task type for LoRA multi-task classification
+type TaskType int
+
+const (
+	TaskIntent         TaskType = 0
+	TaskPII            TaskType = 1
+	TaskSecurity       TaskType = 2
+	TaskClassification TaskType = 3
+)
+
+var (
+	bertLoRAInitOnce sync.Once
+	bertLoRAInitErr  error
+
+	modernbertLoRAInitOnce sync.Once
+	modernbertLoRAInitErr  error
+)
+
+// InitBertLoRAClassifier initializes the BERT LoRA classifier
+//
+// Parameters:
+//   - baseModelPath: Path to base BERT model (.xml file)
+//   - loraAdaptersPath: Path to directory containing LoRA adapter models
+//   - device: Device name ("CPU", "GPU", etc.)
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+func InitBertLoRAClassifier(baseModelPath string, loraAdaptersPath string, device string) error {
+	var err error
+	bertLoRAInitOnce.Do(func() {
+		if baseModelPath == "" {
+			err = fmt.Errorf("base model path cannot be empty")
+			return
+		}
+
+		if loraAdaptersPath == "" {
+			err = fmt.Errorf("lora adapters path cannot be empty")
+			return
+		}
+
+		if device == "" {
+			device = "CPU"
+		}
+
+		log.Printf("Initializing BERT LoRA classifier: %s with adapters from %s on %s",
+			baseModelPath, loraAdaptersPath, device)
+
+		cBaseModelPath := C.CString(baseModelPath)
+		defer C.free(unsafe.Pointer(cBaseModelPath))
+
+		cLoRAPath := C.CString(loraAdaptersPath)
+		defer C.free(unsafe.Pointer(cLoRAPath))
+
+		cDevice := C.CString(device)
+		defer C.free(unsafe.Pointer(cDevice))
+
+		success := C.ov_init_bert_lora_classifier(cBaseModelPath, cLoRAPath, cDevice)
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize BERT LoRA classifier")
+			return
+		}
+
+		log.Printf("✓ BERT LoRA classifier initialized successfully")
+	})
+
+	bertLoRAInitErr = err
+	return err
+}
+
+// IsBertLoRAClassifierInitialized checks if BERT LoRA classifier is initialized
+func IsBertLoRAClassifierInitialized() bool {
+	return bool(C.ov_is_bert_lora_classifier_initialized())
+}
+
+// InitModernBertLoRAClassifier initializes the ModernBERT LoRA classifier
+//
+// Parameters:
+//   - baseModelPath: Path to base ModernBERT model (.xml file)
+//   - loraAdaptersPath: Path to directory containing LoRA adapter models
+//   - device: Device name ("CPU", "GPU", etc.)
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+func InitModernBertLoRAClassifier(baseModelPath string, loraAdaptersPath string, device string) error {
+	var err error
+	modernbertLoRAInitOnce.Do(func() {
+		if baseModelPath == "" {
+			err = fmt.Errorf("base model path cannot be empty")
+			return
+		}
+
+		if loraAdaptersPath == "" {
+			err = fmt.Errorf("lora adapters path cannot be empty")
+			return
+		}
+
+		if device == "" {
+			device = "CPU"
+		}
+
+		log.Printf("Initializing ModernBERT LoRA classifier: %s with adapters from %s on %s",
+			baseModelPath, loraAdaptersPath, device)
+
+		cBaseModelPath := C.CString(baseModelPath)
+		defer C.free(unsafe.Pointer(cBaseModelPath))
+
+		cLoRAPath := C.CString(loraAdaptersPath)
+		defer C.free(unsafe.Pointer(cLoRAPath))
+
+		cDevice := C.CString(device)
+		defer C.free(unsafe.Pointer(cDevice))
+
+		success := C.ov_init_modernbert_lora_classifier(cBaseModelPath, cLoRAPath, cDevice)
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize ModernBERT LoRA classifier")
+			return
+		}
+
+		log.Printf("✓ ModernBERT LoRA classifier initialized successfully")
+	})
+
+	modernbertLoRAInitErr = err
+	return err
+}
+
+// IsModernBertLoRAClassifierInitialized checks if ModernBERT LoRA classifier is initialized
+func IsModernBertLoRAClassifierInitialized() bool {
+	return bool(C.ov_is_modernbert_lora_classifier_initialized())
+}
+
+// ClassifyBertLoRATask classifies text using BERT LoRA adapter for a specific task
+//
+// Parameters:
+//   - text: Input text
+//   - task: Task type (TaskIntent, TaskPII, TaskSecurity)
+//
+// Returns:
+//   - ClassResult: Classification result
+//   - error: Non-nil if classification fails
+func ClassifyBertLoRATask(text string, task TaskType) (ClassResult, error) {
+	if bertLoRAInitErr != nil {
+		return ClassResult{}, fmt.Errorf("BERT LoRA classifier not initialized: %v", bertLoRAInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.ov_classify_bert_lora_task(cText, C.OVTaskType(task))
+
+	if result.predicted_class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text with BERT LoRA")
+	}
+
+	return ClassResult{
+		Class:      int(result.predicted_class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyModernBertLoRATask classifies text using ModernBERT LoRA adapter for a specific task
+//
+// Parameters:
+//   - text: Input text
+//   - task: Task type (TaskIntent, TaskPII, TaskSecurity)
+//
+// Returns:
+//   - ClassResult: Classification result
+//   - error: Non-nil if classification fails
+func ClassifyModernBertLoRATask(text string, task TaskType) (ClassResult, error) {
+	if modernbertLoRAInitErr != nil {
+		return ClassResult{}, fmt.Errorf("ModernBERT LoRA classifier not initialized: %v", modernbertLoRAInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.ov_classify_modernbert_lora_task(cText, C.OVTaskType(task))
+
+	if result.predicted_class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text with ModernBERT LoRA")
+	}
+
+	return ClassResult{
+		Class:      int(result.predicted_class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyBertLoRATokens performs token-level classification using BERT LoRA (for PII detection, NER, etc.)
+//
+// Parameters:
+//   - text: Input text
+//   - task: Task type (should be TaskPII or similar token classification task)
+//
+// Returns:
+//   - TokenClassificationResult: Token classification result with detected entities
+//   - error: Non-nil if classification fails
+func ClassifyBertLoRATokens(text string, task TaskType) (TokenClassificationResult, error) {
+	if bertLoRAInitErr != nil {
+		return TokenClassificationResult{}, fmt.Errorf("BERT LoRA classifier not initialized: %v", bertLoRAInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.ov_classify_bert_lora_tokens(cText, C.OVTaskType(task))
+
+	// Convert C result to Go
+	goResult := TokenClassificationResult{
+		Entities: make([]TokenEntity, int(result.num_entities)),
+	}
+
+	if result.num_entities > 0 && result.entities != nil {
+		// Convert C array to Go slice
+		entities := (*[1 << 28]C.OVTokenEntity)(unsafe.Pointer(result.entities))[:result.num_entities:result.num_entities]
+
+		for i := 0; i < int(result.num_entities); i++ {
+			entity := entities[i]
+			goResult.Entities[i] = TokenEntity{
+				EntityType: C.GoString(entity.entity_type),
+				Text:       C.GoString(entity.text),
+				Start:      int(entity.start),
+				End:        int(entity.end),
+				Confidence: float32(entity.confidence),
+			}
+			// Free C strings
+			C.free(unsafe.Pointer(entity.entity_type))
+			C.free(unsafe.Pointer(entity.text))
+		}
+		// Free entities array
+		C.free(unsafe.Pointer(result.entities))
+	}
+
+	return goResult, nil
+}
+
+// ClassifyModernBertLoRATokens performs token-level classification using ModernBERT LoRA (for PII detection, NER, etc.)
+//
+// Parameters:
+//   - text: Input text
+//   - task: Task type (should be TaskPII or similar token classification task)
+//
+// Returns:
+//   - TokenClassificationResult: Token classification result with detected entities
+//   - error: Non-nil if classification fails
+func ClassifyModernBertLoRATokens(text string, task TaskType) (TokenClassificationResult, error) {
+	if modernbertLoRAInitErr != nil {
+		return TokenClassificationResult{}, fmt.Errorf("ModernBERT LoRA classifier not initialized: %v", modernbertLoRAInitErr)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.ov_classify_modernbert_lora_tokens(cText, C.OVTaskType(task))
+
+	// Convert C result to Go
+	goResult := TokenClassificationResult{
+		Entities: make([]TokenEntity, int(result.num_entities)),
+	}
+
+	if result.num_entities > 0 && result.entities != nil {
+		// Convert C array to Go slice
+		entities := (*[1 << 28]C.OVTokenEntity)(unsafe.Pointer(result.entities))[:result.num_entities:result.num_entities]
+
+		for i := 0; i < int(result.num_entities); i++ {
+			entity := entities[i]
+			goResult.Entities[i] = TokenEntity{
+				EntityType: C.GoString(entity.entity_type),
+				Text:       C.GoString(entity.text),
+				Start:      int(entity.start),
+				End:        int(entity.end),
+				Confidence: float32(entity.confidence),
+			}
+			// Free C strings
+			C.free(unsafe.Pointer(entity.entity_type))
+			C.free(unsafe.Pointer(entity.text))
+		}
+		// Free entities array
+		C.free(unsafe.Pointer(result.entities))
+	}
+
+	return goResult, nil
+}
+
+// ================================================================================================
 // UTILITY FUNCTIONS
 // ================================================================================================
 
