@@ -53,15 +53,15 @@ config:
       pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
   keyword_rules:
-    - category: "urgent_request"
+    - name: "urgent_request"
       operator: "OR"
       keywords: ["urgent", "immediate", "asap", "emergency"]
       case_sensitive: false
-    - category: "sensitive_data"
+    - name: "sensitive_data"
       operator: "AND"
       keywords: ["SSN", "social security number", "credit card"]
       case_sensitive: false
-    - category: "exclude_spam"
+    - name: "exclude_spam"
       operator: "NOR"
       keywords: ["buy now", "free money"]
       case_sensitive: false
@@ -135,7 +135,7 @@ config:
       rules:
         operator: "AND"
         conditions:
-          - type: "domain"
+          - type: "keyword"
             name: "urgent_request"
       modelRefs:
         - model: "qwen3"
@@ -155,7 +155,7 @@ config:
       rules:
         operator: "AND"
         conditions:
-          - type: "domain"
+          - type: "keyword"
             name: "sensitive_data"
       modelRefs:
         - model: "qwen3"
@@ -179,7 +179,7 @@ config:
       rules:
         operator: "AND"
         conditions:
-          - type: "domain"
+          - type: "keyword"
             name: "exclude_spam"
       modelRefs:
         - model: "qwen3"
