@@ -1,11 +1,16 @@
 name: Test And Build
 
 on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
   schedule:
     # Run nightly at 2:00 AM UTC
     - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual triggering
-  pull_request: # Run on all pull requests
 
 jobs:
   test-and-build:
