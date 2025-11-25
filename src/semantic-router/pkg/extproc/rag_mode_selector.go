@@ -53,27 +53,35 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matched
 		return true
 	case "adaptive":
 		observability.Infof("Category '%s' has Adaptive RAG strategy configured", categoryName)
+		defaultDecision := false // TODO: Get default from configs
+		decision := defaultDecision
+		var decisionErr error
+
 		switch r.Config.Rag.DecisionConfig.DecisionMechanism {
 		case "logprobs":
-			decision, err := r.getAdaptiveRAGDecisionFromLogProbs(query, categoryName, matchedModel, openAIRequest)
-
-			if err != nil {
-				return decision
-			} else {
-				// TODO: Fallback to a better strategy
-				return true
-			}
+			decision, decisionErr = r.getAdaptiveRAGDecisionFromLogProbs(matchedModel, openAIRequest)
+		case "reflect":
+			decision, decisionErr = r.getAdaptiveRAGDecisionByReflection(matchedModel, openAIRequest)
+		case "classify":
+			// TODO: Implement. Use a classifier on the query to identify if it requires RAG.
+			_ = query // We will use query soon, but do this for now to get rid of the unused warning
 		default:
-			return true
+			return defaultDecision
+		}
+
+		if decisionErr != nil {
+			return decision
+		} else {
+			return defaultDecision
 		}
 	default:
 		return false
 	}
 }
 
-func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(query string, categoryName string, matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
+func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
 	observability.Infof("Getting adaptive RAG Decision")
-	logProbs, err := r.getChatResponseLogProbs(query, categoryName, matchedModel, openAIRequest)
+	logProbs, err := r.getChatResponseLogProbs(matchedModel, openAIRequest)
 	if err != nil {
 		observability.Errorf("Error getting log probs: %s \n", err)
 		return false, err
@@ -97,8 +105,7 @@ func (r *OpenAIRouter) getAdaptiveRAGDecisionFromLogProbs(query string, category
 	return false, nil
 }
 
-func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string, matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (*openai.ChatCompletionChoiceLogprobs, error) {
-	// TODO: Implement
+func (r *OpenAIRouter) getChatResponseLogProbs(matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (*openai.ChatCompletionChoiceLogprobs, error) {
 	observability.Infof("Getting chat response log probs")
 	chatCompletionsClient, err := r.getClientForMatchedModel(matchedModel)
 	if err != nil {
@@ -112,6 +119,11 @@ func (r *OpenAIRouter) getChatResponseLogProbs(query string, categoryName string
 	}
 
 	return logProbs, nil
+}
+
+func (r *OpenAIRouter) getAdaptiveRAGDecisionByReflection(matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
+	// TODO: Implement
+	return false, fmt.Errorf("not implemented")
 }
 
 func (r *OpenAIRouter) getVectorDBForCategory(categoryName string) vectordb.VectorDbBackend {

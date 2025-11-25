@@ -302,9 +302,9 @@ type RagConfig struct {
 }
 
 type AdaptiveRagDecisionConfig struct {
-	DecisionMechanism       string  `yaml:"decision_mechanism,omitempty"`         // Mechanism to use to make adaptive RAG decision (logprobs)
+	DecisionMechanism       string  `yaml:"decision_mechanism,omitempty"`         // Mechanism to use to make adaptive RAG decision (logprobs, reflect)
 	ConfidenceThreshold     float64 `yaml:"confidence_threshold"`                 // Confidence threshold below which RAG is required (for logprobs)
-	RagDecisionTemplatePath string  `yaml:"rag_decision_template_path,omitempty"` // Path to RAG decision template if doing decision query mechanism
+	RagDecisionTemplatePath string  `yaml:"rag_decision_template_path,omitempty"` // Path to RAG decision template if doing decision query mechanism (for reflect)
 }
 
 type KnowledgeBase struct {
