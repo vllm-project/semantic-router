@@ -59,6 +59,10 @@ const (
 	// Value: "true"
 	VSRPIIViolation = "x-vsr-pii-violation"
 
+	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
+	// Value: "EMAIL_ADDRESS,US_SSN" (example)
+	VSRPIITypes = "x-vsr-pii-types"
+
 	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
 	// Value: "true"
 	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"

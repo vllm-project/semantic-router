@@ -9,6 +9,7 @@ use crate::ffi::memory::{
     allocate_lora_intent_array, allocate_lora_pii_array, allocate_lora_security_array,
     allocate_modernbert_token_entity_array,
 };
+use crate::ffi::types::BertTokenEntity;
 use crate::ffi::types::*;
 use crate::model_architectures::traditional::bert::{
     TRADITIONAL_BERT_CLASSIFIER, TRADITIONAL_BERT_TOKEN_CLASSIFIER,
@@ -654,25 +655,65 @@ pub extern "C" fn classify_candle_bert_tokens(
 
                 let entities_ptr = unsafe { allocate_bert_token_entity_array(&token_entities) };
 
-                BertTokenClassificationResult {
+                return BertTokenClassificationResult {
                     entities: entities_ptr,
                     num_entities: token_entities.len() as i32,
-                }
+                };
             }
             Err(e) => {
                 println!("Candle BERT token classification failed: {}", e);
-                BertTokenClassificationResult {
+                return BertTokenClassificationResult {
                     entities: std::ptr::null_mut(),
                     num_entities: 0,
-                }
+                };
             }
         }
-    } else {
-        println!("TraditionalBertTokenClassifier not initialized - call init function first");
-        BertTokenClassificationResult {
-            entities: std::ptr::null_mut(),
-            num_entities: 0,
+    }
+
+    // Fallback to ModernBERT token classifier (for PII detection with ModernBERT models)
+    if let Some(classifier) = TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_tokens(text) {
+            Ok(token_results) => {
+                // Filter non-background classes; Go layer applies confidence threshold
+                // Keep real positions (start, end) for accurate entity extraction
+                let token_entities: Vec<(String, String, f32, usize, usize)> = token_results
+                    .iter()
+                    .filter(|(_, class_idx, _, _, _)| *class_idx > 0)
+                    .map(|(token, class_idx, confidence, start, end)| {
+                        (
+                            token.clone(),
+                            format!("class_{}", class_idx),
+                            *confidence,
+                            *start,
+                            *end,
+                        )
+                    })
+                    .collect();
+
+                let entities_ptr =
+                    unsafe { allocate_modernbert_token_entity_array(&token_entities) };
+
+                return BertTokenClassificationResult {
+                    entities: entities_ptr as *mut BertTokenEntity,
+                    num_entities: token_entities.len() as i32,
+                };
+            }
+            Err(e) => {
+                println!("ModernBERT token classification failed: {}", e);
+                return BertTokenClassificationResult {
+                    entities: std::ptr::null_mut(),
+                    num_entities: 0,
+                };
+            }
         }
+    }
+
+    // No classifier available
+    println!("No token classifier initialized (Traditional BERT, ModernBERT, or LoRA) - call init function first");
+    BertTokenClassificationResult {
+        entities: std::ptr::null_mut(),
+        num_entities: 0,
     }
 }
 

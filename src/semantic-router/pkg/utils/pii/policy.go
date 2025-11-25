@@ -69,7 +69,8 @@ func (pc *PolicyChecker) CheckPolicy(decisionName string, detectedPII []string) 
 		}
 
 		// If allow_by_default is false, check if this PII type is explicitly allowed
-		isAllowed := slices.Contains(policy.PIITypes, piiType)
+		// Support both exact matches and BIO-tag stripping (B-PERSON, I-PERSON → PERSON)
+		isAllowed := isPIITypeAllowed(piiType, policy.PIITypes)
 		if !isAllowed {
 			deniedPII = append(deniedPII, piiType)
 		}
@@ -82,6 +83,29 @@ func (pc *PolicyChecker) CheckPolicy(decisionName string, detectedPII []string) 
 
 	logging.Infof("PII policy check passed for decision %s", decisionName)
 	return true, nil, nil
+}
+
+// isPIITypeAllowed checks if a PII type is in the allowed list.
+// Supports exact matching and BIO-tag stripping (e.g., "B-ORGANIZATION" matches "ORGANIZATION").
+// Uses exact string matching only - no regex/wildcards.
+func isPIITypeAllowed(piiType string, allowedTypes []string) bool {
+	// Try exact match first
+	if slices.Contains(allowedTypes, piiType) {
+		return true
+	}
+
+	// Strip BIO prefix (B-, I-, O-, E-) and match base type
+	if len(piiType) > 2 && piiType[1] == '-' {
+		prefix := piiType[0]
+		if prefix == 'B' || prefix == 'I' || prefix == 'O' || prefix == 'E' {
+			baseType := piiType[2:]
+			if slices.Contains(allowedTypes, baseType) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // ExtractAllContent extracts all content from user and non-user messages for PII analysis
