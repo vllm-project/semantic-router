@@ -138,7 +138,7 @@ config:
           - type: "keyword"
             name: "urgent_request"
       modelRefs:
-        - model: "qwen3"
+        - model: "base-model"
           use_reasoning: false
       plugins:
         - type: "system_prompt"
@@ -158,7 +158,7 @@ config:
           - type: "keyword"
             name: "sensitive_data"
       modelRefs:
-        - model: "qwen3"
+        - model: "base-model"
           use_reasoning: false
       plugins:
         - type: "system_prompt"
@@ -182,7 +182,7 @@ config:
           - type: "keyword"
             name: "exclude_spam"
       modelRefs:
-        - model: "qwen3"
+        - model: "base-model"
           use_reasoning: false
       plugins:
         - type: "system_prompt"
@@ -203,7 +203,7 @@ config:
           - type: "domain"
             name: "business"
       modelRefs:
-        - model: "qwen3"
+        - model: "base-model"
           use_reasoning: false
       plugins:
         - type: "system_prompt"
@@ -223,7 +223,7 @@ config:
           - type: "domain"
             name: "other"
       modelRefs:
-        - model: "qwen3"
+        - model: "base-model"
           use_reasoning: false
       plugins:
         - type: "system_prompt"
@@ -258,7 +258,7 @@ config:
     lora_default_success_rate: 0.98
     traditional_default_success_rate: 0.95
 
-  default_model: qwen3
+  default_model: base-model
 
   # Reasoning family configurations
   reasoning_families:
