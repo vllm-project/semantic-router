@@ -3,9 +3,11 @@ package extproc
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectordb"
 )
@@ -122,8 +124,48 @@ func (r *OpenAIRouter) getChatResponseLogProbs(matchedModel string, openAIReques
 }
 
 func (r *OpenAIRouter) getAdaptiveRAGDecisionByReflection(matchedModel string, openAIRequest *openai.ChatCompletionNewParams) (bool, error) {
-	// TODO: Implement
-	return false, fmt.Errorf("not implemented")
+	observability.Infof("Getting RAG decision through reflection")
+
+	chatCompletionsClient, err := r.getClientForMatchedModel(matchedModel)
+	if err != nil {
+		return false, fmt.Errorf("unable to create chatCompletionsClient")
+	}
+
+	ragDecisionTemplatePath := r.Config.Rag.DecisionConfig.RagDecisionTemplatePath
+	template, err := loadRAGDecisionTemplate(ragDecisionTemplatePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to load the RAG decision template")
+	}
+
+	lastUserMessage := getLastUserMessage(openAIRequest.Messages)
+	if lastUserMessage == nil {
+		observability.Debugf("No user message found")
+		return false, fmt.Errorf("no user message found")
+	}
+
+	updateMessageContentWithRAGDecisionTemplate(&lastUserMessage.Content, template)
+
+	resp, err := chatCompletionsClient.queryModel(openAIRequest, matchedModel)
+	if err != nil {
+		return false, fmt.Errorf("error fetching log probs: %w", err)
+	}
+
+	respLower := strings.ToLower(resp)
+	yes := "yes"
+	no := "no"
+	hasYes := strings.Contains(respLower, yes)
+	hasNo := strings.Contains(respLower, no)
+
+	if hasYes && !hasNo {
+		// Yes implies the model has sufficient information and does not need RAG
+		observability.Debugf("Model does not require RAG")
+		return false, nil
+	} else if hasNo && !hasYes {
+		// No implies the model does not ave sufficient information and needs RAG
+		observability.Debugf("Model requires RAG")
+		return true, nil
+	}
+	return false, fmt.Errorf("unclear RAG decision response through reflection")
 }
 
 func (r *OpenAIRouter) getVectorDBForCategory(categoryName string) vectordb.VectorDbBackend {
@@ -168,4 +210,43 @@ func normalizeURL(u string) string {
 		return u + "/v1"
 	}
 	return "http://" + u + "/v1"
+}
+
+func getLastUserMessage(messages []openai.ChatCompletionMessageParamUnion) *openai.ChatCompletionUserMessageParam {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if !param.IsOmitted(messages[i].OfUser) {
+			return messages[i].OfUser
+		}
+	}
+	return nil
+}
+
+func loadRAGDecisionTemplate(filePath string) (string, error) {
+	templateOnce.Do(func() {
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			templateFileErr = err
+			return
+		}
+		ragTemplate = string(content)
+	})
+	return ragTemplate, templateFileErr
+}
+
+func updateMessageContentWithRAGDecisionTemplate(content *openai.ChatCompletionUserMessageParamContentUnion, template string) {
+	if !param.IsOmitted(content.OfString) {
+		// Add to the beginning of the string
+		messageContent := content.OfString.String()
+		decisionMessage := fmt.Sprintf(template, messageContent)
+		content.OfString = param.NewOpt(decisionMessage)
+	} else if !param.IsOmitted(content.OfArrayOfContentParts) {
+		// Add to beginning of array
+		if len(content.OfArrayOfContentParts) > 0 && !param.IsOmitted(content.OfArrayOfContentParts[0].OfText) {
+			messageContent := content.OfArrayOfContentParts[0].OfText.Text
+			decisionMessage := fmt.Sprintf(template, messageContent)
+			content.OfArrayOfContentParts[0].OfText = &openai.ChatCompletionContentPartTextParam{
+				Text: decisionMessage,
+			}
+		}
+	}
 }
