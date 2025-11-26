@@ -338,7 +338,6 @@ func (c *RedisCache) createIndex() error {
 			FieldType: redis.SearchFieldTypeNumeric,
 		},
 	).Result()
-
 	if err != nil {
 		return fmt.Errorf("failed to create Redis index: %w", err)
 	}
@@ -403,7 +402,6 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte) e
 			Limit:       1,
 		},
 	).Result()
-
 	if err != nil {
 		logging.Infof("RedisCache.UpdateWithResponse: search failed with query '%s': %v", query, err)
 		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
@@ -529,7 +527,6 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 			"timestamp":                     time.Now().Unix(),
 		},
 	).Err()
-
 	if err != nil {
 		logging.Debugf("RedisCache.addEntry: HSet failed: %v", err)
 		return fmt.Errorf("failed to store cache entry: %w", err)
@@ -603,7 +600,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 			},
 		},
 	).Result()
-
 	if err != nil {
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
