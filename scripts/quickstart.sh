@@ -158,16 +158,37 @@ download_models() {
     info_msg "📥 Downloading AI models..."
     echo
 
-    # Use minimal model set for faster setup
-    export CI_MINIMAL_MODELS=false
+    # Try full model set first (includes embeddinggemma-300m which may require auth)
+    # If that fails (e.g., 401 on gated models), fall back to minimal set
+    if [ "${CI_MINIMAL_MODELS:-}" = "true" ]; then
+        info_msg "CI_MINIMAL_MODELS=true detected, using minimal model set"
+        export CI_MINIMAL_MODELS=true
+    else
+        info_msg "Attempting to download full model set (includes embeddinggemma-300m)..."
+        export CI_MINIMAL_MODELS=false
+    fi
 
     # Download models and save output to log (visible in real-time)
     if make download-models 2>&1 | tee /tmp/download-models-output.log; then
         success_msg "✅ Models downloaded successfully!"
     else
-        error_msg "❌ Failed to download models!"
-        info_msg "📋 Check logs: cat /tmp/download-models-output.log"
-        exit 1
+        # Check if failure was due to gated model (embeddinggemma-300m)
+        if grep -q "embeddinggemma.*401\|embeddinggemma.*Unauthorized\|embeddinggemma.*GatedRepoError" /tmp/download-models-output.log 2>/dev/null; then
+            info_msg "⚠️  Full model download failed (gated model requires auth)"
+            info_msg "📋 Falling back to minimal model set..."
+            export CI_MINIMAL_MODELS=true
+            if make download-models 2>&1 | tee /tmp/download-models-output.log; then
+                success_msg "✅ Minimal models downloaded successfully!"
+            else
+                error_msg "❌ Failed to download even minimal models!"
+                info_msg "📋 Check logs: cat /tmp/download-models-output.log"
+                exit 1
+            fi
+        else
+            error_msg "❌ Failed to download models!"
+            info_msg "📋 Check logs: cat /tmp/download-models-output.log"
+            exit 1
+        fi
     fi
     echo
 }
