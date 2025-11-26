@@ -22,38 +22,20 @@ import (
 )
 
 const (
-	kindNamespace        = "default"
-	semanticNamespace    = "vllm-semantic-router-system"
-	gatewayNamespace     = "istio-system"
-	inferenceGatewayName = "inference-gateway"
-	istioVersion         = "1.28.0"
-	gatewayCRDURL        = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
-	inferenceCRDURL      = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.1.0/manifests.yaml"
+	kindNamespace     = "default"
+	semanticNamespace = "vllm-semantic-router-system"
+	gatewayNamespace  = "istio-system"
+	istioVersion      = "1.28.0"
+	gatewayCRDURL     = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
+	inferenceCRDURL   = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.1.0/manifests.yaml"
 )
 
 type Profile struct {
-	verbose     bool
-	useExisting bool
-	skipSetup   bool
-	versions    struct {
-		istio               string
-		gateway             string
-		inference           string
-		inferenceController string
-	}
+	verbose bool
 }
 
 func NewProfile() *Profile {
-	p := &Profile{}
-	p.versions.istio = istioVersion
-	p.versions.gateway = gatewayCRDURL
-	p.versions.inference = inferenceCRDURL
-	ctrlURL := os.Getenv("GAIE_CONTROLLER_URL")
-	if ctrlURL == "" {
-		ctrlURL = inferenceCRDURL
-	}
-	p.versions.inferenceController = ctrlURL
-	return p
+	return &Profile{}
 }
 
 func (p *Profile) Name() string {
@@ -66,16 +48,9 @@ func (p *Profile) Description() string {
 
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
-	p.useExisting = strings.EqualFold(os.Getenv("LLMD_USE_EXISTING"), "true") || os.Getenv("LLMD_USE_EXISTING") == "1"
-	p.skipSetup = strings.EqualFold(os.Getenv("LLMD_SKIP_SETUP"), "true") || os.Getenv("LLMD_SKIP_SETUP") == "1"
 
-	fmt.Printf("[Profile] llm-d setup start (istio=%s, gatewayCRD=%s, inferenceCRD=%s, controller=%s, useExisting=%v, skipSetup=%v)\n",
-		p.versions.istio, p.versions.gateway, p.versions.inference, p.versions.inferenceController, p.useExisting, p.skipSetup)
-
-	if p.skipSetup {
-		fmt.Println("[Profile] LLMD_SKIP_SETUP set; skipping deploy steps, running verification only")
-		return p.verifyEnvironment(ctx, opts)
-	}
+	fmt.Printf("[Profile] llm-d setup start (istio=%s, gatewayCRD=%s, inferenceCRD=%s)\\n",
+		istioVersion, gatewayCRDURL, inferenceCRDURL)
 
 	rollback := []func(){}
 	rollbackAll := func() {
@@ -221,27 +196,17 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 }
 
 func (p *Profile) GetTestCases() []string {
-	tests := []string{
-		"llmd-health-check",
-		"llmd-distributed-inference",
-		"llmd-auto-routing",
-		"llmd-failover-recovery",
-		"llmd-performance-baseline",
+	// Shared router testcases that we also want to validate in the llm-d environment
+	shared := []string{
+		"chat-completions-request",
+		"chat-completions-stress-request",
+		"chat-completions-progressive-stress",
+		"domain-classify",
 	}
-	if strings.EqualFold(os.Getenv("LLMD_PERF_SKIP"), "true") || os.Getenv("LLMD_PERF_SKIP") == "1" {
-		var filtered []string
-		for _, t := range tests {
-			if t == "llmd-performance-baseline" {
-				continue
-			}
-			filtered = append(filtered, t)
-		}
-		if p.verbose {
-			fmt.Println("[Profile] LLMD_PERF_SKIP set; skipping llmd-performance-baseline test")
-		}
-		return filtered
-	}
-	return tests
+
+	// For llm-d we currently only reuse shared router testcases.
+	// llm-d-specific HA/traffic semantics are expected to be covered in LLM-D / infra tests.
+	return shared
 }
 
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
