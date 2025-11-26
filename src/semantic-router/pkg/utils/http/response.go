@@ -18,7 +18,7 @@ import (
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
-func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string, category string) *ext_proc.ProcessingResponse {
+func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string, category string, matchedKeywords []string) *ext_proc.ProcessingResponse {
 	// Record PII violation metrics
 	metrics.RecordPIIViolations(model, deniedPII)
 
@@ -133,6 +133,16 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 			},
 		},
 		Body: responseBody,
+	}
+
+	// Add matched keywords header if provided
+	if len(matchedKeywords) > 0 {
+		immediateResponse.Headers.SetHeaders = append(immediateResponse.Headers.SetHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedKeywords,
+				RawValue: []byte(strings.Join(matchedKeywords, ",")),
+			},
+		})
 	}
 
 	return &ext_proc.ProcessingResponse{
@@ -314,7 +324,7 @@ func splitContentIntoChunks(content string) []string {
 }
 
 // CreateCacheHitResponse creates an immediate response from cache
-func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string) *ext_proc.ProcessingResponse {
+func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
 
@@ -478,37 +488,50 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		}
 	}
 
+	// Build headers including VSR decision headers for cache hits
+	setHeaders := []*core.HeaderValueOption{
+		{
+			Header: &core.HeaderValue{
+				Key:      "content-type",
+				RawValue: []byte(contentType),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRCacheHit,
+				RawValue: []byte("true"),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedCategory,
+				RawValue: []byte(category),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedDecision,
+				RawValue: []byte(decisionName),
+			},
+		},
+	}
+
+	// Add matched keywords header if provided
+	if len(matchedKeywords) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedKeywords,
+				RawValue: []byte(strings.Join(matchedKeywords, ",")),
+			},
+		})
+	}
+
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{
 			Code: typev3.StatusCode_OK,
 		},
 		Headers: &ext_proc.HeaderMutation{
-			SetHeaders: []*core.HeaderValueOption{
-				{
-					Header: &core.HeaderValue{
-						Key:      "content-type",
-						RawValue: []byte(contentType),
-					},
-				},
-				{
-					Header: &core.HeaderValue{
-						Key:      headers.VSRCacheHit,
-						RawValue: []byte("true"),
-					},
-				},
-				{
-					Header: &core.HeaderValue{
-						Key:      headers.VSRSelectedCategory,
-						RawValue: []byte(category),
-					},
-				},
-				{
-					Header: &core.HeaderValue{
-						Key:      headers.VSRSelectedDecision,
-						RawValue: []byte(decisionName),
-					},
-				},
-			},
+			SetHeaders: setHeaders,
 		},
 		Body: responseBody,
 	}

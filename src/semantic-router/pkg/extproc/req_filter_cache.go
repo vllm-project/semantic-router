@@ -68,6 +68,13 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		} else if found {
 			// Mark this request as a cache hit
 			ctx.VSRCacheHit = true
+
+			// Set VSR decision context even for cache hits so headers are populated
+			// The categoryName passed here is the decision name from classification
+			if categoryName != "" {
+				ctx.VSRSelectedDecisionName = categoryName
+			}
+
 			// Log cache hit
 			logging.LogEvent("cache_hit", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -77,7 +84,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 				"threshold":  threshold,
 			})
 			// Return immediate response from cache
-			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName)
+			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords)
 			ctx.TraceContext = spanCtx
 			return response, true
 		}

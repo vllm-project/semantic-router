@@ -38,7 +38,7 @@ func TestCreateCacheHitResponse_NonStreaming(t *testing.T) {
 	}
 
 	// Test non-streaming response
-	response := CreateCacheHitResponse(cachedResponse, false, "math", "math_decision")
+	response := CreateCacheHitResponse(cachedResponse, false, "math", "math_decision", nil)
 
 	// Verify response structure
 	if response == nil {
@@ -139,7 +139,7 @@ func TestCreateCacheHitResponse_Streaming(t *testing.T) {
 	}
 
 	// Test streaming response
-	response := CreateCacheHitResponse(cachedResponse, true, "math", "math_decision")
+	response := CreateCacheHitResponse(cachedResponse, true, "math", "math_decision", nil)
 
 	// Verify response structure
 	if response == nil {
@@ -307,7 +307,7 @@ func TestCreateCacheHitResponse_StreamingWithInvalidJSON(t *testing.T) {
 	// Test with invalid JSON
 	invalidJSON := []byte("invalid json")
 
-	response := CreateCacheHitResponse(invalidJSON, true, "other", "other_decision")
+	response := CreateCacheHitResponse(invalidJSON, true, "other", "other_decision", nil)
 
 	// Verify response structure
 	if response == nil {
