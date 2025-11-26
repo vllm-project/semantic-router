@@ -759,6 +759,44 @@ development:
 			Expect(stats.HitCount).To(Equal(int64(0)))
 			Expect(stats.MissCount).To(Equal(int64(0)))
 		})
+
+		It("should keep existing HNSW nodes searchable after eviction", func() {
+			cacheWithHNSW := NewInMemoryCache(InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: 0.1,
+				MaxEntries:          2,
+				TTLSeconds:          60, // Set TTL long enough to avoid expiration during test
+				EvictionPolicy:      FIFOEvictionPolicyType,
+				UseHNSW:             true,
+				HNSWM:               4,
+				HNSWEfConstruction:  8,
+				HNSWEfSearch:        8,
+				EmbeddingModel:      "bert",
+			})
+			defer cacheWithHNSW.Close()
+
+			err := cacheWithHNSW.AddEntry("req-1", "test-model", "first query text", []byte("request-1"), []byte("response-1"))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = cacheWithHNSW.AddEntry("req-2", "test-model", "second query text", []byte("request-2"), []byte("response-2"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Sanity check: the second entry should be retrievable before any eviction occurs.
+			resp, found, err := cacheWithHNSW.FindSimilar("test-model", "second query text")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(resp).To(Equal([]byte("response-2")))
+
+			// Adding a third entry triggers eviction (max entries = 2).
+			err = cacheWithHNSW.AddEntry("req-3", "test-model", "third query text", []byte("request-3"), []byte("response-3"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Entry 2 should still be searchable even after eviction reshuffles the slice.
+			resp, found, err = cacheWithHNSW.FindSimilar("test-model", "second query text")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(resp).To(Equal([]byte("response-2")))
+		})
 	})
 
 	Describe("Cache Backend Types", func() {

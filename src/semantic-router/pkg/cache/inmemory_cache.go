@@ -49,6 +49,7 @@ type InMemoryCache struct {
 	evictionPolicy      EvictionPolicy
 	hnswIndex           *HNSWIndex
 	useHNSW             bool
+	hnswNeedsRebuild    bool   // true while the HNSW graph is stale relative to entries
 	hnswEfSearch        int    // Search-time ef parameter
 	embeddingModel      string // "bert", "qwen3", or "gemma"
 }
@@ -177,8 +178,8 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Remove expired entries to maintain cache hygiene
-	c.cleanupExpiredEntries()
+	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
+	c.cleanupExpiredEntriesDeferred()
 
 	// Check if eviction is needed before adding the new entry
 	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
@@ -201,10 +202,8 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 	c.entries = append(c.entries, entry)
 	entryIndex := len(c.entries) - 1
 
-	// Add to HNSW index if enabled
-	if c.useHNSW && c.hnswIndex != nil {
-		c.hnswIndex.addNode(entryIndex, embedding, c.entries)
-	}
+	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
+	c.addEntryToHNSWIndex(entryIndex, embedding)
 
 	logging.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t)",
 		len(c.entries), len(embedding), c.useHNSW)
@@ -269,8 +268,8 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Clean up expired entries before adding new one
-	c.cleanupExpiredEntries()
+	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
+	c.cleanupExpiredEntriesDeferred()
 
 	// Check if eviction is needed before adding the new entry
 	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
@@ -293,10 +292,8 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 	c.entries = append(c.entries, entry)
 	entryIndex := len(c.entries) - 1
 
-	// Add to HNSW index if enabled
-	if c.useHNSW && c.hnswIndex != nil {
-		c.hnswIndex.addNode(entryIndex, embedding, c.entries)
-	}
+	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
+	c.addEntryToHNSWIndex(entryIndex, embedding)
 
 	logging.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t)",
 		len(c.entries), len(requestBody), len(responseBody), c.useHNSW)
@@ -353,7 +350,20 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	now := time.Now()
 
 	// Use HNSW index for fast search if enabled
-	if c.useHNSW && c.hnswIndex != nil && len(c.hnswIndex.nodes) > 0 {
+	if c.useHNSW && c.hnswIndex != nil {
+		// Defensive check and rebuild HNSW index if marked as needing rebuild.
+		if c.hnswNeedsRebuild {
+			logging.Debugf("InMemoryCache.FindSimilar: HNSW index marked as needing rebuild, rebuilding now")
+			// Usually this is not reachable since we rebuild during insertions.
+			c.mu.RUnlock()
+			c.mu.Lock()
+			if c.hnswNeedsRebuild { // Double-check under write lock
+				c.rebuildHNSWIndex()
+			}
+			c.mu.Unlock()
+			c.mu.RLock()
+		}
+
 		// Search using HNSW index with configured ef parameter
 		candidateIndices := c.hnswIndex.searchKNN(queryEmbedding, 10, c.hnswEfSearch, c.entries)
 
@@ -538,9 +548,25 @@ func (c *InMemoryCache) GetStats() CacheStats {
 	return stats
 }
 
-// cleanupExpiredEntries removes entries that have exceeded their TTL and updates the cache entry count metric to keep metrics in sync.
-// Caller must hold a write lock
+// cleanupExpiredEntries removes entries that have exceeded their TTL and immediately rebuilds HNSW if HNSW is enabled and cleanup occurs.
+//
+// Caller must hold a write lock.
 func (c *InMemoryCache) cleanupExpiredEntries() {
+	c.cleanupExpiredEntriesInternal(false)
+}
+
+// cleanupExpiredEntriesDeferred removes expired entries.
+//
+// If HNSW is enabled and cleanup occurs, it marks HNSW as needing rebuild but defers the rebuild until next call to addEntryToHNSWIndex or rebuildHNSWIndex.
+// This is used in write paths that already plan to mutate the slice again (evictions, appends) so we only rebuild once per batch.
+//
+// Caller must hold a write lock.
+func (c *InMemoryCache) cleanupExpiredEntriesDeferred() {
+	c.cleanupExpiredEntriesInternal(true)
+}
+
+// cleanupExpiredEntriesInternal optionally postpones HNSW rebuild until the caller finishes batching updates.
+func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
 	if c.ttlSeconds <= 0 {
 		return
 	}
@@ -572,9 +598,14 @@ func (c *InMemoryCache) cleanupExpiredEntries() {
 	cleanupTime := time.Now()
 	c.lastCleanupTime = &cleanupTime
 
-	// Rebuild HNSW index if entries were removed
+	// Rebuild HNSW index if entries were removed and deferRebuild is false
 	if expiredCount > 0 && c.useHNSW && c.hnswIndex != nil {
-		c.rebuildHNSWIndex()
+		logging.Debugf("InMemoryCache: TTL cleanup removed entries, marking HNSW index as needing rebuild")
+		c.hnswNeedsRebuild = true
+		c.hnswIndex.markStale()
+		if !deferRebuild {
+			c.rebuildHNSWIndex()
+		}
 	}
 
 	// Update metrics after cleanup
@@ -609,7 +640,28 @@ func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
 	}
 }
 
-// evictOne removes one entry based on the configured eviction policy
+// addEntryToHNSWIndex adds a new entry to the HNSW index, rebuilding if hnswNeedsRebuild is true.
+// If HNSW is disabled, this is a no-op.
+//
+// Caller must hold a write lock.
+func (c *InMemoryCache) addEntryToHNSWIndex(entryIndex int, embedding []float32) {
+	if !c.useHNSW || c.hnswIndex == nil {
+		return
+	}
+
+	if c.hnswNeedsRebuild {
+		logging.Debugf("InMemoryCache.addEntryToHNSWIndex: HNSW index marked as needing rebuild, rebuilding now")
+		c.rebuildHNSWIndex() // Rebuild HNSW index if stale
+	} else {
+		logging.Debugf("InMemoryCache.addEntryToHNSWIndex: adding new node to HNSW index for entryIndex=%d", entryIndex)
+		c.hnswIndex.addNode(entryIndex, embedding, c.entries) // Not stale, just add the new node
+	}
+}
+
+// evictOne removes one entry based on the configured eviction policy.
+// It marks HNSW as needing rebuild if HNSW is enabled and an eviction occurs. HNSW will be rebuilt on next call to addEntryToHNSWIndex or rebuildHNSWIndex.
+//
+// Caller must hold a write lock.
 func (c *InMemoryCache) evictOne() {
 	if len(c.entries) == 0 {
 		return
@@ -625,8 +677,9 @@ func (c *InMemoryCache) evictOne() {
 	// If using HNSW, we need to rebuild the index after eviction
 	// For simplicity, we'll mark that a rebuild is needed
 	if c.useHNSW && c.hnswIndex != nil {
-		// Remove the node from HNSW index
-		// Note: HNSW doesn't support efficient deletion, so we'll rebuild on next search if needed
+		logging.Debugf("InMemoryCache.evictOne: HNSW index marked as needing rebuild due to eviction")
+		// Note: HNSW doesn't support efficient deletion, leave the rebuild for the next insertion so we only rebuild once for eviction + append.
+		c.hnswNeedsRebuild = true
 		c.hnswIndex.markStale()
 	}
 
@@ -642,10 +695,11 @@ func (c *InMemoryCache) evictOne() {
 
 // ===== HNSW Index Implementation =====
 
-// rebuildHNSWIndex rebuilds the HNSW index from scratch
-// Caller must hold a write lock
+// rebuildHNSWIndex rebuilds the HNSW index from scratch.
+// Caller must hold a write lock.
 func (c *InMemoryCache) rebuildHNSWIndex() {
-	if c.hnswIndex == nil {
+	if !c.useHNSW || c.hnswIndex == nil {
+		c.hnswNeedsRebuild = false
 		return
 	}
 
@@ -665,6 +719,7 @@ func (c *InMemoryCache) rebuildHNSWIndex() {
 	}
 
 	logging.Debugf("InMemoryCache: HNSW index rebuilt with %d nodes", len(c.hnswIndex.nodes))
+	c.hnswNeedsRebuild = false
 }
 
 // newHNSWIndex creates a new HNSW index
@@ -698,7 +753,9 @@ func (h *HNSWIndex) selectLevel() int {
 	return int(r * h.ml)
 }
 
-// addNode adds a new node to the HNSW index
+// addNode adds a new node to the HNSW index.
+//
+// For InMemoryCache, it is called via addEntryToHNSWIndex to keep in sync with entries slice.
 func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []CacheEntry) {
 	level := h.selectLevel()
 
