@@ -2,6 +2,7 @@ package classification
 
 import (
 	"fmt"
+	"os"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -90,13 +91,21 @@ func (c *EmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (b
 		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: candidates must be provided")
 	}
 
-	// Calculate batch similarity using default model (auto) and dimension (768)
+	// Determine model type: Check for test override via environment variable
+	// This allows CI/tests to force a specific model (e.g., "qwen3") when Gemma isn't available
+	// Production uses "auto" by default (respects Rust heuristic: Gemma for short texts, Qwen3 for long)
+	modelType := "auto" // Default: use Rust auto-selection heuristic
+	if testModel := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); testModel != "" {
+		modelType = testModel
+		logging.Infof("Embedding model override from env: %s", modelType)
+	}
+
 	result, err := calculateSimilarityBatch(
 		text,
 		rule.Candidates,
-		0,      // return scores for all the candidates
-		"auto", // use auto model selection
-		768,    // use default dimension
+		0,         // return scores for all the candidates
+		modelType, // use model type (auto or override)
+		768,       // use default dimension
 	)
 	if err != nil {
 		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: failed to calculate batch similarity: %w", err)

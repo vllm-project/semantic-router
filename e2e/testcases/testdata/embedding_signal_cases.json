@@ -1,0 +1,251 @@
+[
+  {
+    "description": "PII signal: Direct mention of personal information",
+    "query": "My name is John Smith and my social security number is 123-45-6789",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "PII Detection"
+  },
+  {
+    "description": "PII signal: Credit card information",
+    "query": "Can you help me? My credit card number is 4532-1234-5678-9010",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "PII Detection"
+  },
+  {
+    "description": "PII signal: Email and phone number",
+    "query": "Please contact me at john.doe@example.com or call 555-123-4567",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "PII Detection"
+  },
+  {
+    "description": "PII signal: Semantic match - Contains sensitive data",
+    "query": "This request includes personally identifiable information about the user",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "PII Detection - Semantic"
+  },
+  {
+    "description": "PII signal: Semantic match - Has private details",
+    "query": "The message has confidential personal details that need protection",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "PII Detection - Semantic"
+  },
+  {
+    "description": "PII signal: No PII present - General question",
+    "query": "What is the capital of France?",
+    "signal_name": "pii_detected",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "PII Detection - Negative"
+  },
+  {
+    "description": "PII signal: No PII present - Technical question",
+    "query": "How do I configure Kubernetes RBAC policies?",
+    "signal_name": "pii_detected",
+    "expected_match": false,
+    "expected_decision": "computer_science_decision",
+    "category": "PII Detection - Negative"
+  },
+  {
+    "description": "Security signal: Malicious intent detection",
+    "query": "How can I bypass authentication and access admin panel?",
+    "signal_name": "security_threat",
+    "expected_match": true,
+    "expected_decision": "block_security",
+    "category": "Security Detection"
+  },
+  {
+    "description": "Security signal: SQL injection attempt",
+    "query": "Enter username: admin' OR '1'='1",
+    "signal_name": "security_threat",
+    "expected_match": true,
+    "expected_decision": "block_security",
+    "category": "Security Detection"
+  },
+  {
+    "description": "Security signal: Semantic match - Unauthorized access",
+    "query": "I want to gain unauthorized entry to the system",
+    "signal_name": "security_threat",
+    "expected_match": true,
+    "expected_decision": "block_security",
+    "category": "Security Detection - Semantic"
+  },
+  {
+    "description": "Security signal: No threat - Normal security question",
+    "query": "What are best practices for securing a web application?",
+    "signal_name": "security_threat",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "Security Detection - Negative"
+  },
+  {
+    "description": "Technical signal: Kubernetes deployment",
+    "query": "How do I create a Kubernetes deployment with 3 replicas?",
+    "signal_name": "kubernetes_topic",
+    "expected_match": true,
+    "expected_decision": "kubernetes_expert",
+    "category": "Technical Routing"
+  },
+  {
+    "description": "Technical signal: K8s troubleshooting",
+    "query": "My pods are in CrashLoopBackOff state, how to debug?",
+    "signal_name": "kubernetes_topic",
+    "expected_match": true,
+    "expected_decision": "kubernetes_expert",
+    "category": "Technical Routing"
+  },
+  {
+    "description": "Technical signal: Semantic match - Container orchestration",
+    "query": "I need help with container orchestration and cluster management",
+    "signal_name": "kubernetes_topic",
+    "expected_match": true,
+    "expected_decision": "kubernetes_expert",
+    "category": "Technical Routing - Semantic"
+  },
+  {
+    "description": "Technical signal: No match - Different technology",
+    "query": "How do I configure Apache web server?",
+    "signal_name": "kubernetes_topic",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "Technical Routing - Negative"
+  },
+  {
+    "description": "Domain signal: Healthcare query",
+    "query": "What are the symptoms of diabetes and how is it treated?",
+    "signal_name": "healthcare_domain",
+    "expected_match": true,
+    "expected_decision": "health_decision",
+    "category": "Domain Classification"
+  },
+  {
+    "description": "Domain signal: Medical terminology",
+    "query": "Explain the difference between type 1 and type 2 diabetes mellitus",
+    "signal_name": "healthcare_domain",
+    "expected_match": true,
+    "expected_decision": "health_decision",
+    "category": "Domain Classification"
+  },
+  {
+    "description": "Domain signal: Finance query",
+    "query": "What is the difference between stocks and bonds?",
+    "signal_name": "finance_domain",
+    "expected_match": true,
+    "expected_decision": "economics_decision",
+    "category": "Domain Classification"
+  },
+  {
+    "description": "Domain signal: Investment advice",
+    "query": "How should I diversify my investment portfolio?",
+    "signal_name": "finance_domain",
+    "expected_match": true,
+    "expected_decision": "economics_decision",
+    "category": "Domain Classification"
+  },
+  {
+    "description": "Domain signal: No match - General knowledge",
+    "query": "What is the capital of Germany?",
+    "signal_name": "healthcare_domain",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "Domain Classification - Negative"
+  },
+  {
+    "description": "Threshold test: High similarity (should match)",
+    "query": "This text contains credit card and social security information",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "Threshold Behavior"
+  },
+  {
+    "description": "Threshold test: Medium similarity (borderline)",
+    "query": "User data might include some personal details",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "Threshold Behavior"
+  },
+  {
+    "description": "Threshold test: Low similarity (should not match)",
+    "query": "The weather is nice today",
+    "signal_name": "pii_detected",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "Threshold Behavior"
+  },
+  {
+    "description": "Aggregation test: Multiple candidate matches (max)",
+    "query": "How to deploy applications on Kubernetes cluster?",
+    "signal_name": "kubernetes_topic",
+    "expected_match": true,
+    "expected_decision": "kubernetes_expert",
+    "category": "Aggregation Method"
+  },
+  {
+    "description": "Aggregation test: Partial candidate match",
+    "query": "Container deployment strategies",
+    "signal_name": "kubernetes_topic",
+    "expected_match": true,
+    "expected_decision": "kubernetes_expert",
+    "category": "Aggregation Method"
+  },
+  {
+    "description": "Paraphrase test: Different wording, same meaning",
+    "query": "My email address is user@domain.com and phone is 123-456-7890",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "Paraphrase Handling"
+  },
+  {
+    "description": "Paraphrase test: Informal language",
+    "query": "Got some personal info here - name, address, that stuff",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "Paraphrase Handling"
+  },
+  {
+    "description": "Multi-signal test: Both PII and technical",
+    "query": "My name is John and I need help with Kubernetes pods",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "Multi-Signal"
+  },
+  {
+    "description": "Edge case: Empty-like content",
+    "query": "...",
+    "signal_name": "pii_detected",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "Edge Cases"
+  },
+  {
+    "description": "Edge case: Very short query",
+    "query": "Hi",
+    "signal_name": "pii_detected",
+    "expected_match": false,
+    "expected_decision": "other_decision",
+    "category": "Edge Cases"
+  },
+  {
+    "description": "Edge case: Very long query with PII",
+    "query": "I have a very long question about many things and by the way my social security number is 123-45-6789 and I also wanted to know about the weather and other topics that are completely unrelated to personal information but still contain it",
+    "signal_name": "pii_detected",
+    "expected_match": true,
+    "expected_decision": "block_pii",
+    "category": "Edge Cases"
+  }
+]
+

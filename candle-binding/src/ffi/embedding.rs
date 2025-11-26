@@ -295,7 +295,7 @@ pub extern "C" fn init_embedding_models(
         }
         Err(_) => {
             eprintln!("WARNING: ModelFactory already initialized");
-            false
+            true // Return success - idempotent behavior
         }
     }
 }

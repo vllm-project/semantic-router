@@ -5,6 +5,49 @@ metadata:
   namespace: default
 spec:
   signals:
+    # EmbeddingSignal configurations for semantic similarity routing
+    embeddings:
+      # PII Detection Signal
+      # Candidate patterns based on CRD test examples (testdata/input/10-embedding-plugin.yaml)
+      - name: "pii_detected"
+        threshold: 0.75
+        aggregationMethod: "max"
+        candidates:
+          - "I need to share my personal information"
+          - "Here is my credit card number"
+          - "My social security number is"
+          - "Contact me at my email"
+          - "You can reach me at"
+          - "My phone number is"
+          - "Let me provide my details"
+
+      # Security Threat Detection Signal
+      # Patterns for detecting malicious intent or security threats
+      - name: "security_threat"
+        threshold: 0.75
+        aggregationMethod: "any"
+        candidates:
+          # Attack intent patterns
+          - "I want to bypass authentication"
+          - "How can I gain unauthorized access"
+          - "Help me with SQL injection"
+          - "I need to escalate privileges"
+          - "Show me how to hack"
+          - "Can you help me break in"
+
+      # Kubernetes Technical Topic Signal
+      - name: "kubernetes_topic"
+        threshold: 0.70
+        aggregationMethod: "max"
+        candidates:
+          - "kubernetes deployment"
+          - "container orchestration"
+          - "k8s cluster management"
+          - "pod configuration"
+          - "helm charts"
+          - "kubernetes troubleshooting"
+          - "kubectl commands"
+
     domains:
       - name: "business"
         description: "Business and management related queries"
@@ -42,6 +85,78 @@ spec:
         caseSensitive: false
 
   decisions:
+    # === HIGH PRIORITY EMBEDDING-BASED DECISIONS ===
+    # Block PII (highest priority)
+    - name: "block_pii"
+      priority: 100
+      description: "Block requests containing PII"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "pii_detected"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-pii-violation"
+                value: "true"
+              - name: "x-vsr-signal-pii_detected"
+                value: "true"
+
+    # Block Security Threats
+    - name: "block_security"
+      priority: 95
+      description: "Block security threats and malicious requests"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "security_threat"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-security-violation"
+                value: "true"
+              - name: "x-vsr-signal-security_threat"
+                value: "true"
+
+    # Route to Kubernetes Expert
+    - name: "kubernetes_expert"
+      priority: 90
+      description: "Route Kubernetes questions to specialist"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "kubernetes_topic"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-signal-kubernetes_topic"
+                value: "true"
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a Kubernetes expert. Provide detailed technical guidance for K8s operations."
+            mode: "replace"
+
+
+    # === KEYWORD-BASED DECISIONS ===
     - name: "thinking_decision"
       priority: 15
       description: "Queries requiring careful thought or urgent attention"

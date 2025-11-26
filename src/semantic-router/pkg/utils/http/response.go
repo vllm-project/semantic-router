@@ -16,7 +16,7 @@ import (
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
-func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool) *ext_proc.ProcessingResponse {
+func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string) *ext_proc.ProcessingResponse {
 	// Record PII violation metrics
 	metrics.RecordPIIViolations(model, deniedPII)
 
@@ -105,6 +105,13 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 					Header: &core.HeaderValue{
 						Key:      headers.VSRPIIViolation,
 						RawValue: []byte("true"),
+					},
+				},
+				{
+					// Add decision header so tests can verify the decision was made
+					Header: &core.HeaderValue{
+						Key:      headers.VSRSelectedDecision,
+						RawValue: []byte(decisionName),
 					},
 				},
 			},

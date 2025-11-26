@@ -116,12 +116,13 @@ func (p *Profile) GetTestCases() []string {
 		"pii-detection",
 		"jailbreak-detection",
 
-		// Signal-Decision engine tests (new architecture)
+		// Signal-Decision engine tests
 		"decision-priority-selection", // Priority-based routing
 		"plugin-chain-execution",      // Plugin ordering and blocking
 		"rule-condition-logic",        // AND/OR operators
 		"decision-fallback-behavior",  // Fallback to default
 		"plugin-config-variations",    // Plugin configuration testing
+		"embedding-signal-routing",    // EmbeddingSignal-based semantic similarity routing
 
 		// Load tests
 		"chat-completions-progressive-stress",
@@ -241,8 +242,13 @@ func (p *Profile) deployCRDs(ctx context.Context, opts *framework.SetupOptions) 
 		return fmt.Errorf("failed to apply IntelligentRoute CRD: %w", err)
 	}
 
-	// Wait a bit for CRDs to be processed
-	time.Sleep(5 * time.Second)
+	// Wait for CRDs to be processed by the controller
+	time.Sleep(15 * time.Second)
+
+	// Verify CRDs are visible
+	if err := p.verifyCRDsExist(ctx, opts.KubeConfig); err != nil {
+		return fmt.Errorf("CRD verification failed: %w", err)
+	}
 
 	return nil
 }
@@ -252,6 +258,22 @@ func (p *Profile) kubectlApply(ctx context.Context, kubeconfig, manifestPath str
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func (p *Profile) verifyCRDsExist(ctx context.Context, kubeconfig string) error {
+	// Verify IntelligentPool exists
+	cmd := exec.CommandContext(ctx, "kubectl", "get", "intelligentpool", "ai-gateway-pool", "-n", "default", "--kubeconfig", kubeconfig)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("IntelligentPool 'ai-gateway-pool' not found: %w", err)
+	}
+
+	// Verify IntelligentRoute exists
+	cmd = exec.CommandContext(ctx, "kubectl", "get", "intelligentroute", "ai-gateway-route", "-n", "default", "--kubeconfig", kubeconfig)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("IntelligentRoute 'ai-gateway-route' not found: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
@@ -313,9 +335,22 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 	// Check all deployments are healthy
 	p.log("Verifying all deployments are healthy...")
 
-	// Check semantic-router deployment
-	if err := helpers.CheckDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router", p.verbose); err != nil {
-		return fmt.Errorf("semantic-router deployment not healthy: %w", err)
+	// Wait for semantic-router deployment to become ready
+	semanticRouterReady := false
+	for i := 0; i < 12; i++ { // 12 * 10s = 120 seconds max wait
+		if err := helpers.CheckDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router", p.verbose); err == nil {
+			break
+		}
+		if i < 11 { // Don't sleep on last iteration
+			time.Sleep(10 * time.Second)
+		}
+	}
+
+	if !semanticRouterReady {
+		// Final check to get the actual error
+		if err := helpers.CheckDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router", p.verbose); err != nil {
+			return fmt.Errorf("semantic-router deployment not healthy after 120s: %w", err)
+		}
 	}
 
 	// Check envoy-gateway deployment

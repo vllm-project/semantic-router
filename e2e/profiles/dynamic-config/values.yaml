@@ -2,6 +2,11 @@
 # This configuration uses Kubernetes CRDs for dynamic configuration
 # Static parts are defined here, dynamic parts (model_config, decisions, categories) come from CRDs
 
+# Environment variables for the semantic-router container
+env:
+  - name: EMBEDDING_MODEL_OVERRIDE
+    value: "qwen3"  # Force qwen3 for tests (Gemma requires HF_TOKEN)
+
 config:
   # Set config source to kubernetes to enable CRD-based configuration
   config_source: kubernetes
@@ -122,8 +127,17 @@ config:
 
   embedding_models:
     qwen3_model_path: "models/Qwen3-Embedding-0.6B"
-    gemma_model_path: "models/embeddinggemma-300m"
+    gemma_model_path: ""  # Empty = fallback to Qwen3 (embeddinggemma requires HF_TOKEN)
     use_cpu: true
+
+# Increase memory limits for embedding model support
+resources:
+  limits:
+    memory: "10Gi"  # Increased from default 6Gi to handle Qwen3 + all classification models
+    cpu: "2"
+  requests:
+    memory: "6Gi"   # Increased from default 3Gi
+    cpu: "1"
 
   observability:
     tracing:

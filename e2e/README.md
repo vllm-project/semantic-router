@@ -14,6 +14,7 @@ The framework follows a **separation of concerns** design:
 
 - **ai-gateway**: Tests Semantic Router with Envoy AI Gateway integration
 - **aibrix**: Tests Semantic Router with vLLM AIBrix integration
+- **dynamic-config**: Tests Semantic Router with Kubernetes CRD-based configuration (IntelligentRoute/IntelligentPool)
 - **istio**: Tests Semantic Router with Istio service mesh integration
 - **production-stack**: Tests vLLM Production Stack configurations (future)
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
@@ -45,10 +46,18 @@ e2e/
 │   ├── rule_condition_logic.go        # Signal-decision: AND/OR operators
 │   ├── decision_fallback.go           # Signal-decision: Fallback behavior
 │   ├── keyword_routing.go             # Signal-decision: Keyword matching
-│   └── plugin_config_variations.go    # Signal-decision: Plugin configs
+│   ├── plugin_config_variations.go    # Signal-decision: Plugin configs
+│   └── embedding_signal_routing.go    # Signal-decision: Embedding signals
 ├── profiles/
-│   └── ai-gateway/       # AI Gateway test profile
-│       └── profile.go    # Profile definition and environment setup
+│   ├── ai-gateway/       # AI Gateway test profile
+│   │   └── profile.go    # Profile definition and environment setup
+│   ├── aibrix/           # AIBrix test profile
+│   │   └── profile.go
+│   └── dynamic-config/   # Dynamic CRD-based configuration profile
+│       ├── profile.go
+│       └── crds/         # IntelligentRoute and IntelligentPool CRDs
+│           ├── intelligentroute.yaml
+│           └── intelligentpool.yaml
 └── README.md
 ```
 
@@ -83,6 +92,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `decision-fallback-behavior` | Fallback to default decision when no match | 5 cases, fallback validation |
 | `keyword-routing` | Keyword-based routing decisions | 6 cases, keyword matching (case-insensitive) |
 | `plugin-config-variations` | Plugin configuration variations (PII allowlist, cache thresholds) | 6 cases, config validation |
+| `embedding-signal-routing` | EmbeddingSignal CRD routing with semantic similarity | 31 cases, PII/security/technical/domain routing accuracy |
 
 **Signal-Decision Engine Features Tested:**
 
@@ -94,6 +104,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 - ✅ Per-decision plugin configurations
 - ✅ PII allowlist handling
 - ✅ Per-decision cache thresholds (0.75, 0.92, 0.95)
+- ✅ Embedding signal routing (semantic similarity-based routing via IntelligentRoute CRD)
 
 All test cases:
 
@@ -346,6 +357,7 @@ Test data is stored in `e2e/testcases/testdata/` as JSON files. Each test case l
 - `cache_cases.json`: 5 groups of similar questions for semantic cache testing
 - `pii_detection_cases.json`: 10 PII types (email, phone, SSN, etc.)
 - `jailbreak_detection_cases.json`: 10 attack types (prompt injection, DAN, etc.)
+- `embedding_signal_cases.json`: 31 test cases for EmbeddingSignal routing (PII, security, technical, domain classification)
 
 **Signal-Decision Engine Tests** use embedded test cases (defined inline in test files) to validate:
 
@@ -355,6 +367,49 @@ Test data is stored in `e2e/testcases/testdata/` as JSON files. Each test case l
 - Decision fallback behavior (5 test cases)
 - Keyword-based routing (6 test cases)
 - Plugin configuration variations (6 test cases)
+
+### Embedding Signal Routing
+
+The `embedding-signal-routing` test validates the `IntelligentRoute` CRD with `EmbeddingSignal` configurations. This test:
+
+**Features Tested:**
+
+- Semantic similarity-based routing using embedding models (Qwen3/Gemma)
+- PII detection via embedding signals (semantic patterns like "share my credit card")
+- Security threat detection (SQL injection, unauthorized access attempts)
+- Technical domain routing (Kubernetes, container orchestration)
+- Domain classification (healthcare, finance, general knowledge)
+- Threshold behavior (0.75 similarity threshold)
+- Aggregation methods (max similarity across multiple candidates)
+- Paraphrase handling (different wording, same intent)
+- Multi-signal evaluation (multiple signals in one request)
+
+**Test Categories:**
+
+- PII Detection (7 cases): Semantic PII pattern matching
+- Security Threats (4 cases): Malicious intent detection
+- Technical Topics (4 cases): Kubernetes-specific routing
+- Domain Classification (4 cases): Healthcare, finance domains
+- Threshold Tests (3 cases): Similarity boundary testing
+- Aggregation Tests (2 cases): Multi-candidate matching
+- Paraphrase Tests (2 cases): Intent recognition
+- Multi-signal (1 case): Combined signal evaluation
+- Edge Cases (4 cases): Empty content, short/long queries
+
+**Profile Support:**
+
+- ✅ `dynamic-config` profile (uses CRDs)
+- ❌ `ai-gateway` profile (uses static YAML config)
+- ❌ `aibrix` profile (uses static YAML config)
+
+**Requirements:**
+
+- Embedding models must be initialized (Qwen3 or Gemma)
+- `EMBEDDING_MODEL_OVERRIDE=qwen3` environment variable for consistent test results
+- IntelligentRoute CRD with EmbeddingSignal definitions
+- Model requests must use `"model": "auto"` to trigger decision evaluation
+
+**Note:** This test differs from `pii-detection` (which uses regex/NER plugins) and `domain-classify` (which uses academic domain routing). Embedding signals use semantic similarity to detect **intent** rather than exact patterns.
 
 **Test Data Format Example:**
 
