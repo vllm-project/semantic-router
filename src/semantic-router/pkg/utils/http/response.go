@@ -233,7 +233,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 }
 
 // CreateCacheHitResponse creates an immediate response from cache
-func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.ProcessingResponse {
+func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, vsrDecisionName string) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
 
@@ -283,25 +283,38 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.P
 		responseBody = cachedResponse
 	}
 
+	// Build headers including VSR decision headers for cache hits
+	setHeaders := []*core.HeaderValueOption{
+		{
+			Header: &core.HeaderValue{
+				Key:      "content-type",
+				RawValue: []byte(contentType),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRCacheHit,
+				RawValue: []byte("true"),
+			},
+		},
+	}
+
+	// Add VSR decision header if provided
+	if vsrDecisionName != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedDecision,
+				RawValue: []byte(vsrDecisionName),
+			},
+		})
+	}
+
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{
 			Code: typev3.StatusCode_OK,
 		},
 		Headers: &ext_proc.HeaderMutation{
-			SetHeaders: []*core.HeaderValueOption{
-				{
-					Header: &core.HeaderValue{
-						Key:      "content-type",
-						RawValue: []byte(contentType),
-					},
-				},
-				{
-					Header: &core.HeaderValue{
-						Key:      headers.VSRCacheHit,
-						RawValue: []byte("true"),
-					},
-				},
-			},
+			SetHeaders: setHeaders,
 		},
 		Body: responseBody,
 	}
