@@ -504,6 +504,19 @@ embedding_models:
   gemma_model_path: "models/embeddinggemma-300m"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
+# Ensemble Configuration
+# Enables multi-model inference with configurable aggregation strategies
+ensemble:
+  enabled: false  # Enable ensemble mode (disabled by default)
+  default_strategy: "voting"  # voting, weighted, first_success, score_averaging, reranking
+  default_min_responses: 2  # Minimum number of successful responses required
+  timeout_seconds: 30  # Maximum time to wait for model responses
+  max_concurrent_requests: 10  # Limit parallel model queries
+  endpoint_mappings:  # Map model names to OpenAI-compatible API endpoints
+    # Example:
+    # model-a: "http://localhost:8001/v1/chat/completions"
+    # model-b: "http://localhost:8002/v1/chat/completions"
+
 # Observability Configuration
 observability:
   tracing:

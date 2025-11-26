@@ -1,0 +1,40 @@
+# Example Ensemble Configuration
+# This configuration demonstrates how to enable and use ensemble orchestration
+
+# Enable ensemble mode
+ensemble:
+  enabled: true  # Set to true to enable ensemble orchestration
+  
+  # Default aggregation strategy when not specified in request headers
+  # Options: voting, weighted, first_success, score_averaging, reranking
+  default_strategy: "voting"
+  
+  # Minimum number of successful model responses required
+  default_min_responses: 2
+  
+  # Maximum time to wait for model responses (seconds)
+  timeout_seconds: 30
+  
+  # Maximum number of parallel model queries
+  max_concurrent_requests: 10
+  
+  # Map model names to their OpenAI-compatible API endpoints
+  # Each endpoint should be the full URL to the chat completions endpoint
+  endpoint_mappings:
+    model-a: "http://localhost:8001/v1/chat/completions"
+    model-b: "http://localhost:8002/v1/chat/completions"
+    model-c: "http://localhost:8003/v1/chat/completions"
+
+# Example Usage:
+# 
+# To use ensemble mode, include the following headers in your request:
+# 
+# x-ensemble-enable: true
+# x-ensemble-models: model-a,model-b,model-c
+# x-ensemble-strategy: voting
+# x-ensemble-min-responses: 2
+# 
+# The response will include metadata headers:
+# x-vsr-ensemble-used: true
+# x-vsr-ensemble-models-queried: 3
+# x-vsr-ensemble-responses-received: 3

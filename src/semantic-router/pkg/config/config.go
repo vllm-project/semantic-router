@@ -81,6 +81,9 @@ type RouterOptions struct {
 
 	// Gateway route cache clearing
 	ClearRouteCache bool `yaml:"clear_route_cache"`
+
+	// Ensemble configuration for multi-model inference
+	Ensemble EnsembleConfig `yaml:"ensemble,omitempty"`
 }
 
 // InlineModels represents the configuration for models that are built into the binary
@@ -811,4 +814,27 @@ type PIIDetectionPolicy struct {
 	// PIIThreshold defines the confidence threshold for PII detection (0.0-1.0)
 	// If nil, uses the global threshold from Classifier.PIIModel.Threshold
 	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
+}
+
+// EnsembleConfig represents configuration for ensemble orchestration
+type EnsembleConfig struct {
+	// Enabled controls whether ensemble mode is available
+	Enabled bool `yaml:"enabled"`
+
+	// DefaultStrategy is the default aggregation strategy
+	// Values: "voting", "weighted", "first_success", "score_averaging", "reranking"
+	DefaultStrategy string `yaml:"default_strategy,omitempty"`
+
+	// DefaultMinResponses is the default minimum number of responses required
+	DefaultMinResponses int `yaml:"default_min_responses,omitempty"`
+
+	// TimeoutSeconds is the maximum time to wait for model responses
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
+
+	// MaxConcurrentRequests limits parallel model queries
+	MaxConcurrentRequests int `yaml:"max_concurrent_requests,omitempty"`
+
+	// EndpointMappings maps model names to their OpenAI-compatible API endpoints
+	// Example: {"model-a": "http://localhost:8001/v1/chat/completions"}
+	EndpointMappings map[string]string `yaml:"endpoint_mappings,omitempty"`
 }
