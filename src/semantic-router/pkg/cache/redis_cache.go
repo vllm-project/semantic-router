@@ -419,9 +419,9 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte) e
 	logging.Infof("UpdateWithResponse: found %d result(s) for request_id=%s", results.Total, requestID)
 
 	doc := results.Docs[0]
-	model, _ := doc.Fields["model"]
-	queryStr, _ := doc.Fields["query"]
-	requestBodyStr, _ := doc.Fields["request_body"]
+	model := fmt.Sprint(doc.Fields["model"])
+	queryStr := fmt.Sprint(doc.Fields["query"])
+	requestBodyStr := fmt.Sprint(doc.Fields["request_body"])
 
 	// Extract document ID from the result
 	docID := doc.ID
@@ -639,7 +639,13 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	}
 
 	var distance float64
-	fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance)
+	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
+		logging.Infof("RedisCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
 
 	// Convert distance to similarity score based on metric type
 	var similarity float32
