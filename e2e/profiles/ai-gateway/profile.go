@@ -124,7 +124,6 @@ func (p *Profile) GetTestCases() []string {
 		"plugin-chain-execution",      // Plugin ordering and blocking
 		"rule-condition-logic",        // AND/OR operators
 		"decision-fallback-behavior",  // Fallback to default
-		"keyword-routing",             // Keyword-based decisions
 		"plugin-config-variations",    // Plugin configuration testing
 
 		// Load tests

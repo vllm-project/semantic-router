@@ -1,18 +1,6 @@
 name: Integration Test [Docker Compose]
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths-ignore:
-      - 'website/**'
-      - '**/*.md'
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'website/**'
-      - '**/*.md'
   workflow_dispatch: # Allow manual triggering
 
 jobs:

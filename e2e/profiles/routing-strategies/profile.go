@@ -1,4 +1,4 @@
-package dynamicconfig
+package routingstrategies
 
 import (
 	"context"
@@ -7,58 +7,58 @@ import (
 	"os/exec"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-// Profile implements the Dynamic Config test profile
-// This profile tests Kubernetes CRD-based dynamic configuration
+// Profile implements the Routing Strategies test profile
 type Profile struct {
 	verbose bool
 }
 
-// NewProfile creates a new Dynamic Config profile
+// NewProfile creates a new Routing Strategies profile
 func NewProfile() *Profile {
 	return &Profile{}
 }
 
 // Name returns the profile name
 func (p *Profile) Name() string {
-	return "dynamic-config"
+	return "routing-strategies"
 }
 
-// Description returns a description of what this profile tests
+// Description returns the profile description
 func (p *Profile) Description() string {
-	return "Tests Kubernetes CRD-based dynamic configuration with IntelligentPool and IntelligentRoute"
+	return "Tests different routing strategies including keyword-based routing"
 }
 
-// Setup deploys all required components for Dynamic Config testing
+// Setup deploys all required components for Routing Strategies testing
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Setting up Dynamic Config test environment")
+	p.log("Setting up Routing Strategies test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
-	// Step 1: Deploy Semantic Router with Kubernetes config source
-	p.log("Step 1/5: Deploying Semantic Router with Kubernetes config source")
+	// Step 1: Deploy Semantic Router with keyword routing configuration
+	p.log("Step 1/4: Deploying Semantic Router with keyword routing config")
 	if err := p.deploySemanticRouter(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy semantic router: %w", err)
 	}
 
 	// Step 2: Deploy Envoy Gateway
-	p.log("Step 2/5: Deploying Envoy Gateway")
+	p.log("Step 2/4: Deploying Envoy Gateway")
 	if err := p.deployEnvoyGateway(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy envoy gateway: %w", err)
 	}
 
 	// Step 3: Deploy Envoy AI Gateway
-	p.log("Step 3/5: Deploying Envoy AI Gateway")
+	p.log("Step 3/4: Deploying Envoy AI Gateway")
 	if err := p.deployEnvoyAIGateway(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy envoy ai gateway: %w", err)
 	}
@@ -69,62 +69,45 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 		return fmt.Errorf("failed to deploy gateway resources: %w", err)
 	}
 
-	// Step 5: Deploy CRDs (IntelligentPool and IntelligentRoute)
-	p.log("Step 5/5: Deploying IntelligentPool and IntelligentRoute CRDs")
-	if err := p.deployCRDs(ctx, opts); err != nil {
-		return fmt.Errorf("failed to deploy CRDs: %w", err)
-	}
-
-	// Step 6: Verify all components are ready
-	p.log("Step 6/6: Verifying all components are ready")
+	// Step 5: Verify all components are ready
+	p.log("Step 5/5: Verifying all components are ready")
 	if err := p.verifyEnvironment(ctx, opts); err != nil {
 		return fmt.Errorf("failed to verify environment: %w", err)
 	}
 
-	p.log("Dynamic Config test environment setup complete")
+	p.log("Routing Strategies test environment setup complete")
 	return nil
 }
 
-// Teardown cleans up resources created during setup
+// Teardown cleans up all deployed resources
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Tearing down Dynamic Config test environment")
+	p.log("Tearing down Routing Strategies test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
-	// Uninstall in reverse order
-	_ = deployer.Uninstall(ctx, "envoy-ai-gateway", "envoy-ai-gateway-system")
-	_ = deployer.Uninstall(ctx, "eg", "envoy-gateway-system")
-	_ = deployer.Uninstall(ctx, "semantic-router", "vllm-semantic-router-system")
+	// Clean up in reverse order
+	p.log("Cleaning up Gateway API resources")
+	p.cleanupGatewayResources(ctx, opts)
 
-	p.log("Dynamic Config test environment teardown complete")
+	p.log("Uninstalling Envoy AI Gateway")
+	deployer.Uninstall(ctx, "aieg-crd", "envoy-ai-gateway-system")
+	deployer.Uninstall(ctx, "aieg", "envoy-ai-gateway-system")
+
+	p.log("Uninstalling Envoy Gateway")
+	deployer.Uninstall(ctx, "eg", "envoy-gateway-system")
+
+	p.log("Uninstalling Semantic Router")
+	deployer.Uninstall(ctx, "semantic-router", "vllm-semantic-router-system")
+
+	p.log("Routing Strategies test environment teardown complete")
 	return nil
 }
 
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
 	return []string{
-		// Basic functionality tests
-		"chat-completions-request",
-		"chat-completions-stress-request",
-
-		// Classification and routing tests
-		"domain-classify",
-
-		// Feature tests
-		"semantic-cache",
-		"pii-detection",
-		"jailbreak-detection",
-
-		// Signal-Decision engine tests (new architecture)
-		"decision-priority-selection", // Priority-based routing
-		"plugin-chain-execution",      // Plugin ordering and blocking
-		"rule-condition-logic",        // AND/OR operators
-		"decision-fallback-behavior",  // Fallback to default
-		"plugin-config-variations",    // Plugin configuration testing
-
-		// Load tests
-		"chat-completions-progressive-stress",
+		"keyword-routing",
 	}
 }
 
@@ -138,9 +121,9 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 }
 
 func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
-	// Use local Helm chart with dynamic config values
+	// Use local Helm chart with keyword routing configuration
 	chartPath := "deploy/helm/semantic-router"
-	valuesFile := "e2e/profiles/dynamic-config/values.yaml"
+	valuesFile := "e2e/profiles/routing-strategies/values.yaml"
 
 	// Override image to use locally built image
 	imageRepo := "ghcr.io/vllm-project/semantic-router/extproc"
@@ -200,8 +183,9 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		return err
 	}
 
+	// Install AI Gateway
 	installOpts := helm.InstallOptions{
-		ReleaseName: "envoy-ai-gateway",
+		ReleaseName: "aieg",
 		Chart:       "oci://docker.io/envoyproxy/ai-gateway-helm",
 		Namespace:   "envoy-ai-gateway-system",
 		Version:     "v0.0.0-latest",
@@ -218,40 +202,16 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 
 func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {
 	// Apply base model
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml"); err != nil {
+	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml"); err != nil {
 		return fmt.Errorf("failed to apply base model: %w", err)
 	}
 
 	// Apply gateway API resources
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml"); err != nil {
+	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml"); err != nil {
 		return fmt.Errorf("failed to apply gateway API resources: %w", err)
 	}
 
 	return nil
-}
-
-func (p *Profile) deployCRDs(ctx context.Context, opts *framework.SetupOptions) error {
-	// Apply IntelligentPool CRD
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "e2e/profiles/dynamic-config/crds/intelligentpool.yaml"); err != nil {
-		return fmt.Errorf("failed to apply IntelligentPool CRD: %w", err)
-	}
-
-	// Apply IntelligentRoute CRD
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "e2e/profiles/dynamic-config/crds/intelligentroute.yaml"); err != nil {
-		return fmt.Errorf("failed to apply IntelligentRoute CRD: %w", err)
-	}
-
-	// Wait a bit for CRDs to be processed
-	time.Sleep(5 * time.Second)
-
-	return nil
-}
-
-func (p *Profile) kubectlApply(ctx context.Context, kubeconfig, manifestPath string) error {
-	cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", manifestPath, "--kubeconfig", kubeconfig)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
@@ -333,8 +293,33 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 	return nil
 }
 
+func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
+	// Delete in reverse order
+	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml")
+	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml")
+	return nil
+}
+
+func (p *Profile) kubectlApply(ctx context.Context, kubeConfig, manifest string) error {
+	return p.runKubectl(ctx, kubeConfig, "apply", "-f", manifest)
+}
+
+func (p *Profile) kubectlDelete(ctx context.Context, kubeConfig, manifest string) error {
+	return p.runKubectl(ctx, kubeConfig, "delete", "-f", manifest)
+}
+
+func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {
+	args = append(args, "--kubeconfig", kubeConfig)
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
+	if p.verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	return cmd.Run()
+}
+
 func (p *Profile) log(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Printf("[dynamic-config] "+format+"\n", args...)
+		fmt.Printf("[Routing-Strategies] "+format+"\n", args...)
 	}
 }

@@ -1,0 +1,316 @@
+# Semantic Router Configuration for Routing Strategies E2E Tests
+config:
+  bert_model:
+    model_id: models/all-MiniLM-L12-v2
+    threshold: 0.6
+    use_cpu: true
+
+  semantic_cache:
+    enabled: true
+    backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
+    similarity_threshold: 0.8
+    max_entries: 1000  # Only applies to memory backend
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+    # HNSW index configuration (for memory backend only)
+    use_hnsw: true  # Enable HNSW index for faster similarity search
+    hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
+    hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
+
+    # Embedding model for semantic similarity matching
+    # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+    # Default: "bert" (fastest, lowest memory)
+    embedding_model: "bert"
+
+  tools:
+    enabled: true
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
+
+  prompt_guard:
+    enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+    use_modernbert: true
+    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+  # Classifier configuration
+  classifier:
+    category_model:
+      model_id: "models/category_classifier_modernbert-base_model"
+      use_modernbert: true
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    pii_model:
+      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+      use_modernbert: true
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+  keyword_rules:
+    - name: "urgent_request"
+      operator: "OR"
+      keywords: ["urgent", "immediate", "asap", "emergency"]
+      case_sensitive: false
+    - name: "sensitive_data"
+      operator: "AND"
+      keywords: ["SSN", "social security number", "credit card"]
+      case_sensitive: false
+    - name: "exclude_spam"
+      operator: "NOR"
+      keywords: ["buy now", "free money"]
+      case_sensitive: false
+
+  # Categories define domain metadata only (no routing logic)
+  categories:
+    - name: urgent_request
+      description: "Urgent and time-sensitive requests"
+      mmlu_categories: ["urgent_request"]
+    - name: sensitive_data
+      description: "Requests involving sensitive personal data"
+      mmlu_categories: ["sensitive_data"]
+    - name: exclude_spam
+      description: "Potential spam or suspicious requests"
+      mmlu_categories: ["exclude_spam"]
+    - name: business
+      description: "Business and management related queries"
+      mmlu_categories: ["business"]
+    - name: law
+      description: "Legal questions and law-related topics"
+      mmlu_categories: ["law"]
+    - name: psychology
+      description: "Psychology and mental health topics"
+      mmlu_categories: ["psychology"]
+    - name: biology
+      description: "Biology and life sciences questions"
+      mmlu_categories: ["biology"]
+    - name: chemistry
+      description: "Chemistry and chemical sciences questions"
+      mmlu_categories: ["chemistry"]
+    - name: history
+      description: "Historical questions and cultural topics"
+      mmlu_categories: ["history"]
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+      mmlu_categories: ["other"]
+    - name: health
+      description: "Health and medical information queries"
+      mmlu_categories: ["health"]
+    - name: economics
+      description: "Economics and financial topics"
+      mmlu_categories: ["economics"]
+    - name: math
+      description: "Mathematics and quantitative reasoning"
+      mmlu_categories: ["math"]
+    - name: physics
+      description: "Physics and physical sciences"
+      mmlu_categories: ["physics"]
+    - name: computer_science
+      description: "Computer science and programming"
+      mmlu_categories: ["computer_science"]
+    - name: philosophy
+      description: "Philosophy and ethical questions"
+      mmlu_categories: ["philosophy"]
+    - name: engineering
+      description: "Engineering and technical problem-solving"
+      mmlu_categories: ["engineering"]
+
+  strategy: "priority"
+
+  # NOTE: vLLM endpoints will be set via environment variables in the container
+  # For E2E tests, we don't need to configure them in the Helm values
+  vllm_endpoints: []
+
+  model_config: {}
+
+  decisions:
+    - name: "urgent_request_decision"
+      description: "Urgent and time-sensitive requests"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "urgent_request"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions."
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: "sensitive_data_decision"
+      description: "Requests involving sensitive personal data"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "sensitive_data"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations."
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.6
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: "exclude_spam_decision"
+      description: "Potential spam or suspicious requests"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "exclude_spam"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a content moderation assistant. This request has been flagged as potential spam. Please verify the legitimacy of the request before proceeding."
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    # Standard category decisions
+    - name: "business_decision"
+      description: "Business and management related queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices."
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: "general_decision"
+      description: "General knowledge and miscellaneous topics"
+      priority: 50
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.75
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+  # Router Configuration for Dual-Path Selection
+  router:
+    high_confidence_threshold: 0.99
+    low_latency_threshold_ms: 2000
+    lora_baseline_score: 0.8
+    traditional_baseline_score: 0.7
+    embedding_baseline_score: 0.75
+    success_confidence_threshold: 0.8
+    large_batch_threshold: 4
+    lora_default_execution_time_ms: 1345
+    traditional_default_execution_time_ms: 4567
+    default_confidence_threshold: 0.95
+    default_max_latency_ms: 5000
+    default_batch_size: 4
+    default_avg_execution_time_ms: 3000
+    lora_default_confidence: 0.99
+    traditional_default_confidence: 0.95
+    lora_default_success_rate: 0.98
+    traditional_default_success_rate: 0.95
+
+  default_model: base-model
+
+  # Reasoning family configurations
+  reasoning_families:
+    deepseek:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    gpt:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  default_reasoning_effort: high
+
+  # API Configuration
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets:
+          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+  # Embedding Models Configuration
+  embedding_models:
+    qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+    gemma_model_path: "models/embeddinggemma-300m"
+    use_cpu: true
+
+  # Observability Configuration
+  observability:
+    tracing:
+      enabled: true
+      provider: "opentelemetry"
+      exporter:
+        type: "otlp"
+        endpoint: "jaeger:4317"
+        insecure: true
+      sampling:
+        type: "always_on"
+        rate: 1.0
+      resource:
+        service_name: "vllm-semantic-router"
+        service_version: "v0.1.0"
+        deployment_environment: "development"
