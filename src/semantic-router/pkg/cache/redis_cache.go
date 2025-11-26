@@ -264,7 +264,7 @@ func (c *RedisCache) createIndex() error {
 	logging.Debugf("RedisCache.createIndex: auto-detected embedding dimension: %d", actualDimension)
 
 	// Determine distance metric for Redis
-	distanceMetric := "COSINE"
+	var distanceMetric string
 	switch c.config.Index.VectorField.MetricType {
 	case "L2":
 		distanceMetric = "L2"
