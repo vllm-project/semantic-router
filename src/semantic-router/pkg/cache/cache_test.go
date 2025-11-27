@@ -275,7 +275,7 @@ development:
 			Context("with unsupported backend type", func() {
 				It("should return error for unsupported backend type", func() {
 					config := CacheConfig{
-						BackendType:         "redis", // Unsupported
+						BackendType:         "unsupported_type", // Unsupported
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
@@ -492,7 +492,7 @@ development:
 			It("should return information about available backends", func() {
 				backends := GetAvailableCacheBackends()
 
-				Expect(backends).To(HaveLen(2)) // Memory and Milvus
+				Expect(backends).To(HaveLen(3)) // Memory, Milvus, and Redis
 
 				// Check memory backend info
 				memoryBackend := backends[0]
@@ -509,6 +509,14 @@ development:
 				Expect(milvusBackend.Description).To(ContainSubstring("Milvus vector database"))
 				Expect(milvusBackend.Features).To(ContainElement("Highly scalable"))
 				Expect(milvusBackend.Features).To(ContainElement("Persistent storage"))
+
+				// Check Redis backend info
+				redisBackend := backends[2]
+				Expect(redisBackend.Type).To(Equal(RedisCacheType))
+				Expect(redisBackend.Name).To(Equal("Redis Vector Database"))
+				Expect(redisBackend.Description).To(ContainSubstring("Redis with vector search"))
+				Expect(redisBackend.Features).To(ContainElement("Fast in-memory performance"))
+				Expect(redisBackend.Features).To(ContainElement("TTL support"))
 			})
 		})
 	})

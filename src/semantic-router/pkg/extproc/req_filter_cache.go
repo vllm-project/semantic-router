@@ -31,12 +31,18 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
 	}
 
+	logging.Infof("handleCaching: requestQuery='%s' (len=%d), cacheEnabled=%v, r.Cache.IsEnabled()=%v",
+		requestQuery, len(requestQuery), cacheEnabled, r.Cache.IsEnabled())
+
 	if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
 		// Get decision-specific threshold
 		threshold := r.Config.GetCacheSimilarityThreshold()
 		if categoryName != "" {
 			threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
 		}
+
+		logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
+			requestModel, requestQuery, threshold)
 
 		// Start cache lookup span
 		spanCtx, span := tracing.StartSpan(ctx.TraceContext, tracing.SpanCacheLookup)
@@ -46,6 +52,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		// Try to find a similar cached response using category-specific threshold
 		cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
 		lookupTime := time.Since(startTime).Milliseconds()
+
+		logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
 		tracing.SetSpanAttributes(span,
 			attribute.String(tracing.AttrCacheKey, requestQuery),

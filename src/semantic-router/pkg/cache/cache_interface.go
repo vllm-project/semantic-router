@@ -64,6 +64,9 @@ const (
 	// MilvusCacheType specifies the Milvus vector database backend
 	MilvusCacheType CacheBackendType = "milvus"
 
+	// RedisCacheType specifies the Redis vector database backend
+	RedisCacheType CacheBackendType = "redis"
+
 	// HybridCacheType specifies the hybrid HNSW + Milvus backend
 	HybridCacheType CacheBackendType = "hybrid"
 )
