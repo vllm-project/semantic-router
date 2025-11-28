@@ -417,14 +417,11 @@ func (c *MilvusCache) CheckConnection() error {
 		defer cancel()
 	}
 
-	// Check if we can query the collection to verify connection
-	hasCollection, err := c.client.HasCollection(ctx, c.collectionName)
+	// Simple connection check - list collections to verify connectivity
+	// We don't check if specific collection exists here as it may not be created yet
+	_, err := c.client.ListCollections(ctx)
 	if err != nil {
 		return fmt.Errorf("milvus connection check failed: %w", err)
-	}
-
-	if !hasCollection {
-		return fmt.Errorf("milvus collection '%s' does not exist", c.collectionName)
 	}
 
 	return nil
