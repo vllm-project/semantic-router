@@ -40,7 +40,7 @@ type RouterConfig struct {
 	Categories []Category `yaml:"categories"`
 
 	// Rag Configurations for knowledge bases
-	Rag RagConfig `yaml:"rag,omitempty"`
+	Rag *RagConfig `yaml:"rag,omitempty"`
 
 	// Default LLM model to use if no match is found
 	DefaultModel string `yaml:"default_model"`
@@ -212,6 +212,9 @@ type ModelParams struct {
 	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
 	// If empty, the model doesn't support reasoning mode
 	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+
+	// Model-wise configurations for adaptive RAG strategy
+	RAGDecisionConfig *AdaptiveRagDecisionConfig `yaml:"decision_config,omitempty"`
 }
 
 // ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
@@ -294,17 +297,18 @@ type Category struct {
 
 type RagConfig struct {
 	// Enabled bool `yaml:"enabled"` // maybe delete this
-	DefaultStrategy string                    `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
-	KnowledgeBases  []KnowledgeBase           `yaml:"knowledge_bases,omitempty"`
-	RetrievalParams RetrievalParams           `yaml:"retrieval_params,omitempty"`  // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
-	RagTemplatePath string                    `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
-	DecisionConfig  AdaptiveRagDecisionConfig `yaml:"decision_config,omitempty"`   // Configurations for adaptive strategy
+	DefaultStrategy string                     `yaml:"rag_strategy,omitempty"` // Configurable rag strategy for a category (never, adaptive, always)
+	KnowledgeBases  []KnowledgeBase            `yaml:"knowledge_bases,omitempty"`
+	RetrievalParams RetrievalParams            `yaml:"retrieval_params,omitempty"`  // Should this be per knowledge base? (i.e in some cases we want to retrieve more chunks that others)
+	RagTemplatePath string                     `yaml:"rag_template_path,omitempty"` // Path to RAG prompt template
+	DecisionConfig  *AdaptiveRagDecisionConfig `yaml:"decision_config,omitempty"`   // Configurations for adaptive strategy
 }
 
 type AdaptiveRagDecisionConfig struct {
 	DecisionMechanism       string  `yaml:"decision_mechanism,omitempty"`         // Mechanism to use to make adaptive RAG decision (logprobs, reflect)
 	ConfidenceThreshold     float64 `yaml:"confidence_threshold"`                 // Confidence threshold below which RAG is required (for logprobs)
 	RagDecisionTemplatePath string  `yaml:"rag_decision_template_path,omitempty"` // Path to RAG decision template if doing decision query mechanism (for reflect)
+	DefaultDecision         bool    `yaml:"default_decision,omitempty"`           // Default RAG decision
 }
 
 type KnowledgeBase struct {
@@ -356,6 +360,19 @@ func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFami
 	}
 
 	return &familyConfig
+}
+
+func (rc *RouterConfig) GetAdaptiveRAGDecisionConfigForModel(modelName string) *AdaptiveRagDecisionConfig {
+	if rc == nil || rc.Rag == nil || rc.Rag.DecisionConfig == nil {
+		return nil
+	}
+	if modelConfig, okc := rc.ModelConfig[modelName]; okc {
+		modelDecisionConfig := modelConfig.RAGDecisionConfig
+		if modelDecisionConfig != nil {
+			return modelDecisionConfig
+		}
+	}
+	return rc.Rag.DecisionConfig
 }
 
 // Legacy functions - can be removed once migration is complete

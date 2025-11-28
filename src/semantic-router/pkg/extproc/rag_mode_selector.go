@@ -55,11 +55,12 @@ func (r *OpenAIRouter) getRAGDecision(query string, categoryName string, matched
 		return true
 	case "adaptive":
 		observability.Infof("Category '%s' has Adaptive RAG strategy configured", categoryName)
-		defaultDecision := false // TODO: Get default from configs
-		decision := defaultDecision
+		decisionConfig := r.Config.GetAdaptiveRAGDecisionConfigForModel(matchedModel)
+		defaultDecision := decisionConfig.DefaultDecision
+		var decision bool
 		var decisionErr error
 
-		switch r.Config.Rag.DecisionConfig.DecisionMechanism {
+		switch decisionConfig.DecisionMechanism {
 		case "logprobs":
 			decision, decisionErr = r.getAdaptiveRAGDecisionFromLogProbs(matchedModel, openAIRequest)
 		case "reflect":
