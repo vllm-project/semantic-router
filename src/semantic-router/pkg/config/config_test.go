@@ -206,6 +206,56 @@ tools:
 			})
 		})
 
+		Context("with observability metrics configuration", func() {
+			It("should default to enabled when metrics block is omitted", func() {
+				configContent := `
+observability:
+  tracing:
+    enabled: false
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.Observability.Metrics.Enabled).To(BeNil())
+			})
+
+			It("should honor explicit metrics disable flag", func() {
+				configContent := `
+observability:
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.Observability.Metrics.Enabled).NotTo(BeNil())
+				Expect(*cfg.Observability.Metrics.Enabled).To(BeFalse())
+			})
+
+			It("should honor explicit metrics enable flag", func() {
+				configContent := `
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: false
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.Observability.Metrics.Enabled).NotTo(BeNil())
+				Expect(*cfg.Observability.Metrics.Enabled).To(BeTrue())
+			})
+		})
+
 		Context("with invalid YAML syntax", func() {
 			BeforeEach(func() {
 				invalidYAML := `

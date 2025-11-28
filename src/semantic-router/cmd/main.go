@@ -102,15 +102,26 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Start metrics server
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		metricsAddr := fmt.Sprintf(":%d", *metricsPort)
-		logging.Infof("Starting metrics server on %s", metricsAddr)
-		if metricsErr := http.ListenAndServe(metricsAddr, nil); metricsErr != nil {
-			logging.Errorf("Metrics server error: %v", metricsErr)
-		}
-	}()
+	// Start metrics server if enabled
+	metricsEnabled := true
+	if cfg.Observability.Metrics.Enabled != nil {
+		metricsEnabled = *cfg.Observability.Metrics.Enabled
+	}
+	if *metricsPort <= 0 {
+		metricsEnabled = false
+	}
+	if metricsEnabled {
+		go func() {
+			http.Handle("/metrics", promhttp.Handler())
+			metricsAddr := fmt.Sprintf(":%d", *metricsPort)
+			logging.Infof("Starting metrics server on %s", metricsAddr)
+			if metricsErr := http.ListenAndServe(metricsAddr, nil); metricsErr != nil {
+				logging.Errorf("Metrics server error: %v", metricsErr)
+			}
+		}()
+	} else {
+		logging.Infof("Metrics server disabled")
+	}
 
 	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)

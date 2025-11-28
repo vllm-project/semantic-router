@@ -506,6 +506,8 @@ embedding_models:
 
 # Observability Configuration
 observability:
+  metrics:
+    enabled: true  # Set to false to disable the Prometheus /metrics endpoint
   tracing:
     enabled: true  # Enable distributed tracing for docker-compose stack
     provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry

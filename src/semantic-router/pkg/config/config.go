@@ -262,6 +262,15 @@ type APIConfig struct {
 type ObservabilityConfig struct {
 	// Tracing configuration for distributed tracing
 	Tracing TracingConfig `yaml:"tracing"`
+	// Metrics configuration for Prometheus metrics endpoint
+	Metrics MetricsConfig `yaml:"metrics"`
+}
+
+// MetricsConfig represents configuration for metrics endpoint
+type MetricsConfig struct {
+	// Enabled controls whether the Prometheus metrics endpoint is served
+	// When omitted, defaults to true
+	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
 // TracingConfig represents configuration for distributed tracing
