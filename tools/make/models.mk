@@ -106,7 +106,9 @@ download-models-full: ## Download all models used in local development and docs
 		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
 		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
 	fi
-
+	@if [ ! -f "models/binary_classification/.downloaded" ] || [ ! -d "models/binary_classification" ]; then \
+		hf download rd3111/binary_classification --local-dir models/binary_classification && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/binary_classification/.downloaded; \
+	fi
 # Download only LoRA and advanced embedding models (for CI after minimal tests)
 download-models-lora:
 download-models-lora: ## Download LoRA adapters and advanced embedding models only
