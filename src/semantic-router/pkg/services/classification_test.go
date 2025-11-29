@@ -269,3 +269,276 @@ func BenchmarkClassificationService_GetUnifiedClassifierStats(b *testing.B) {
 		_ = service.GetUnifiedClassifierStats()
 	}
 }
+
+// NEW TESTS
+func TestClassificationService_ImageGenerationClassification(t *testing.T) {
+	// Load config
+	cfg, err := config.LoadConfig("../../config/config.yaml")
+	if err != nil {
+		t.Skipf("Skipping test - config not available: %v", err)
+		return
+	}
+
+	// Update to use your new model
+	cfg.Classifier.CategoryModel.ModelID = "../../models/image_class"
+	cfg.Classifier.CategoryModel.CategoryMappingPath = "../../models/image_class/category_mapping.json"
+	cfg.Classifier.PIIModel.PIIMappingPath = "../../" + cfg.Classifier.PIIModel.PIIMappingPath
+	cfg.PromptGuard.JailbreakMappingPath = "../../" + cfg.PromptGuard.JailbreakMappingPath
+	
+	// Load mappings
+	categoryMapping, err := classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	if err != nil {
+		t.Skipf("Skipping test - category mapping not available: %v", err)
+		return
+	}
+
+	piiMapping, _ := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	jailbreakMapping, _ := classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
+
+	// Initialize classifier with all required parameters
+	classifier, err := classification.NewClassifier(
+		cfg,
+		categoryMapping,
+		piiMapping,
+		jailbreakMapping,
+	)
+	if err != nil {
+		t.Skipf("Skipping test - classifier initialization failed: %v", err)
+		return
+	}
+
+	service := NewClassificationService(classifier, cfg)
+
+	tests := []struct {
+    name             string
+    text             string
+    expectedCategory string
+    minConfidence    float64
+		}{
+			{
+					name:             "Image_generation_dog",
+					text:             "Generate a picture of a dog",
+					expectedCategory: "image_generation",
+					minConfidence:    0.50,
+			},
+			{
+					name:             "Image_generation_dragon",
+					text:             "generate an image of a dragon",
+					expectedCategory: "image_generation",
+					minConfidence:    0.50,
+			},
+			{
+					name:             "Image_generation_sunset",
+					text:             "create a sunset photo with cinematic lighting",
+					expectedCategory: "image_generation",
+					minConfidence:    0.50,
+			},
+			{
+					name:             "Image_generation_paint",
+					text:             "paint a portrait in oil style",
+					expectedCategory: "image_generation",
+					minConfidence:    0.50,
+			},
+			{
+					name:             "Not_image_ml",
+					text:             "what is machine learning",
+					expectedCategory: "not_image_generation",
+					minConfidence:    0.50,
+			},
+			{
+					name:             "Not_image_python",
+					text:             "how do I install python",
+					expectedCategory: "not_image_generation",
+					minConfidence:    0.50,
+			},
+			{
+					name:             "Not_image_physics",
+					text:             "explain quantum physics",
+					expectedCategory: "not_image_generation",
+					minConfidence:    0.50,
+			},
+	}
+
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// ClassifyCategory returns 3 values based on the error
+			result, confidence, err := service.classifier.ClassifyCategory(tt.text)
+			if err != nil {
+				t.Errorf("Classification failed: %v", err)
+				return
+			}
+
+			// Log details for debugging
+			t.Logf("Input: %s", tt.text)
+			t.Logf("Predicted: %s (confidence: %.4f)", result, confidence)
+			t.Logf("Expected: %s (min confidence: %.2f)", tt.expectedCategory, tt.minConfidence)
+
+			// Check category
+			if result != tt.expectedCategory {
+				t.Errorf("FAILED: Expected category '%s', got '%s'", 
+					tt.expectedCategory, result)
+			}
+
+			// Check confidence
+			if confidence < tt.minConfidence {
+				t.Errorf("FAILED: Confidence too low: %.4f < %.2f", 
+					confidence, tt.minConfidence)
+			}
+
+			// If test passes
+			if result == tt.expectedCategory && confidence >= tt.minConfidence {
+				t.Logf("✓ PASSED")
+			}
+		})
+	}
+}
+
+// Test to expose raw predictions for debugging
+func TestClassificationService_DebugLogitsAndProbs(t *testing.T) {
+	cfg, err := config.LoadConfig("../../config/config.yaml")
+	if err != nil {
+		t.Skipf("Skipping test - config not available: %v", err)
+		return
+	}
+
+	cfg.Classifier.CategoryModel.ModelID = "models/image_class"
+	cfg.Classifier.CategoryModel.CategoryMappingPath = "models/image_class/category_mapping.json"
+
+	categoryMapping, err := classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	if err != nil {
+		t.Skipf("Skipping test - category mapping not available: %v", err)
+		return
+	}
+
+	piiMapping, _ := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	jailbreakMapping, _ := classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
+
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	if err != nil {
+		t.Skipf("Skipping test - classifier initialization failed: %v", err)
+		return
+	}
+
+	service := NewClassificationService(classifier, cfg)
+
+	testCases := []struct {
+		text              string
+		expectImageGen    bool
+	}{
+		{"Generate a picture of a dog", true},
+		{"what is machine learning", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.text, func(t *testing.T) {
+			result, confidence, err := service.classifier.ClassifyCategory(tc.text)
+			if err != nil {
+				t.Errorf("Classification failed: %v", err)
+				return
+			}
+
+			t.Logf("=== DEBUG OUTPUT ===")
+			t.Logf("Text: %s", tc.text)
+			t.Logf("Result Category: %s", result)
+			t.Logf("Result Confidence: %.6f", confidence)
+			t.Logf("Expected image_generation: %v", tc.expectImageGen)
+
+			// Check if prediction matches expectation
+			isImageGen := result == "image_generation"
+			if isImageGen != tc.expectImageGen {
+				t.Errorf("PREDICTION MISMATCH!")
+				t.Errorf("  Expected image_generation=%v", tc.expectImageGen)
+				t.Errorf("  Got category=%s", result)
+				t.Errorf("  Confidence=%.4f", confidence)
+				t.Errorf("  This indicates a bug in the classifier!")
+			}
+		})
+	}
+}
+
+// Test label mapping is loaded correctly
+func TestClassificationService_LabelMapping(t *testing.T) {
+	cfg, err := config.LoadConfig("../../config/config.yaml")
+	if err != nil {
+		t.Skipf("Skipping test - config not available: %v", err)
+		return
+	}
+
+	cfg.Classifier.CategoryModel.ModelID = "models/image_class"
+	cfg.Classifier.CategoryModel.CategoryMappingPath = "models/image_class/category_mapping.json"
+
+	categoryMapping, err := classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	if err != nil {
+		t.Skipf("Skipping test - category mapping not available: %v", err)
+		return
+	}
+
+	t.Logf("Category Mapping Loaded:")
+	t.Logf("  category_to_idx: %v", categoryMapping.CategoryToIdx)
+	t.Logf("  idx_to_category: %v", categoryMapping.IdxToCategory)
+
+	// Verify the mapping is correct
+	if categoryMapping.IdxToCategory["0"] != "not_image_generation" {
+		t.Errorf("Expected idx 0 -> 'not_image_generation', got '%s'", categoryMapping.IdxToCategory["0"])
+	}
+	if categoryMapping.IdxToCategory["1"] != "image_generation" {
+		t.Errorf("Expected idx 1 -> 'image_generation', got '%s'", categoryMapping.IdxToCategory["1"])
+	}
+
+	piiMapping, _ := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	jailbreakMapping, _ := classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
+
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	if err != nil {
+		t.Skipf("Skipping test - classifier initialization failed: %v", err)
+		return
+	}
+
+	// Verify basic prediction works
+	result, confidence, err := classifier.ClassifyCategory("test")
+	if err != nil {
+		t.Errorf("Basic classification failed: %v", err)
+	} else {
+		t.Logf("Basic prediction works - category: %s, confidence: %.4f", 
+			result, confidence)
+	}
+}
+
+// Helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// Benchmark the classification performance
+func BenchmarkClassificationService_ImageGenerationClassification(b *testing.B) {
+	cfg, err := config.LoadConfig("../../config/config.yaml")
+	if err != nil {
+		b.Skipf("Skipping benchmark - config not available: %v", err)
+		return
+	}
+
+	cfg.Classifier.CategoryModel.ModelID = "models/image_class"
+	cfg.Classifier.CategoryModel.CategoryMappingPath = "models/image_class/category_mapping.json"
+
+	categoryMapping, _ := classification.LoadCategoryMapping(cfg.Classifier.CategoryModel.CategoryMappingPath)
+	piiMapping, _ := classification.LoadPIIMapping(cfg.Classifier.PIIModel.PIIMappingPath)
+	jailbreakMapping, _ := classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
+
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+	if err != nil {
+		b.Skipf("Skipping benchmark - classifier initialization failed: %v", err)
+		return
+	}
+
+	service := NewClassificationService(classifier, cfg)
+	text := "Generate a picture of a dog"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = service.classifier.ClassifyCategory(text)
+	}
+}
