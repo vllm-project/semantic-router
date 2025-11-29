@@ -229,6 +229,12 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 	backendSpan.End()
 	ctx.TraceContext = backendCtx
 
+	// Store the selected endpoint in context (for routing/logging purposes)
+	ctx.SelectedEndpoint = endpointAddress
+
+	// Increment active request count for queue depth estimation (model-level)
+	metrics.IncrementModelActiveRequests(model)
+
 	return endpointAddress
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
@@ -85,6 +86,16 @@ func main() {
 				logging.Errorf("Failed to shutdown tracing: %v", shutdownErr)
 			}
 		}()
+	}
+
+	// Initialize windowed metrics if enabled
+	if cfg.Observability.Metrics.WindowedMetrics.Enabled {
+		logging.Infof("Initializing windowed metrics for load balancing...")
+		if err := metrics.InitializeWindowedMetrics(cfg.Observability.Metrics.WindowedMetrics); err != nil {
+			logging.Warnf("Failed to initialize windowed metrics: %v", err)
+		} else {
+			logging.Infof("Windowed metrics initialized successfully")
+		}
 	}
 
 	// Set up signal handling for graceful shutdown
