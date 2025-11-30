@@ -14,35 +14,35 @@ import (
 
 // MCPTestCase represents a test case for MCP classification
 type MCPTestCase struct {
-	Description           string  `json:"description"`
-	Query                 string  `json:"query"`
-	ExpectedCategory      string  `json:"expected_category"`
-	ExpectedModel         string  `json:"expected_model,omitempty"`
-	ExpectedUseReasoning  *bool   `json:"expected_use_reasoning,omitempty"`
-	ExpectedConfidenceMin float64 `json:"expected_confidence_min,omitempty"`
-	ValidateProbabilitySum bool   `json:"validate_probability_sum,omitempty"`
-	ValidateNoNegatives   bool    `json:"validate_no_negatives,omitempty"`
-	SimulateMCPFailure    bool    `json:"simulate_mcp_failure,omitempty"`
-	SimulateMCPTimeout    bool    `json:"simulate_mcp_timeout,omitempty"`
-	SimulateMCPError      bool    `json:"simulate_mcp_error,omitempty"`
-	VerifyInTreeUsed      bool    `json:"verify_in_tree_used,omitempty"`
-	TestRecovery          bool    `json:"test_recovery,omitempty"`
+	Description            string  `json:"description"`
+	Query                  string  `json:"query"`
+	ExpectedCategory       string  `json:"expected_category"`
+	ExpectedModel          string  `json:"expected_model,omitempty"`
+	ExpectedUseReasoning   *bool   `json:"expected_use_reasoning,omitempty"`
+	ExpectedConfidenceMin  float64 `json:"expected_confidence_min,omitempty"`
+	ValidateProbabilitySum bool    `json:"validate_probability_sum,omitempty"`
+	ValidateNoNegatives    bool    `json:"validate_no_negatives,omitempty"`
+	SimulateMCPFailure     bool    `json:"simulate_mcp_failure,omitempty"`
+	SimulateMCPTimeout     bool    `json:"simulate_mcp_timeout,omitempty"`
+	SimulateMCPError       bool    `json:"simulate_mcp_error,omitempty"`
+	VerifyInTreeUsed       bool    `json:"verify_in_tree_used,omitempty"`
+	TestRecovery           bool    `json:"test_recovery,omitempty"`
 }
 
 // MCPTestResult tracks the result of a single MCP test
 type MCPTestResult struct {
-	Description      string
-	Query            string
-	ExpectedCategory string
-	ActualCategory   string
-	ExpectedModel    string
-	ActualModel      string
+	Description       string
+	Query             string
+	ExpectedCategory  string
+	ActualCategory    string
+	ExpectedModel     string
+	ActualModel       string
 	ExpectedReasoning *bool
 	ActualReasoning   *bool
-	Confidence       float64
-	Probabilities    []float64
-	Success          bool
-	Error            string
+	Confidence        float64
+	Probabilities     []float64
+	Success           bool
+	Error             string
 }
 
 // loadMCPTestCases loads test cases from a JSON file

@@ -77,12 +77,12 @@ func testMCPModelReasoning(ctx context.Context, client *kubernetes.Clientset, op
 	// Report statistics
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"total_tests":                   totalTests,
-			"successful_tests":              successfulTests,
-			"accuracy_rate":                 fmt.Sprintf("%.2f%%", accuracy),
+			"total_tests":                    totalTests,
+			"successful_tests":               successfulTests,
+			"accuracy_rate":                  fmt.Sprintf("%.2f%%", accuracy),
 			"model_recommendations_followed": modelRecommendationsFollowed,
-			"reasoning_decisions_correct":   reasoningDecisionsCorrect,
-			"failed_tests":                  totalTests - successfulTests,
+			"reasoning_decisions_correct":    reasoningDecisionsCorrect,
+			"failed_tests":                   totalTests - successfulTests,
 		})
 	}
 
