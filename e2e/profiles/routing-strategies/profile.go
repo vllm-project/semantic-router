@@ -364,7 +364,7 @@ func (p *Profile) startMCPServers(ctx context.Context) error {
 	p.log("Starting stdio MCP server (keyword-based)")
 	p.mcpStdioProcess = exec.CommandContext(ctx,
 		"python3",
-		"examples/mcp-classifier-server/server_keyword.py.py")
+		"examples/mcp-classifier-server/server_keyword.py")
 
 	// Capture output for debugging
 	if p.verbose {
