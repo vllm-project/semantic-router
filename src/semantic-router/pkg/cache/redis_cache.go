@@ -115,22 +115,6 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		Protocol: 2, // Use RESP2 protocol for compatibility
 	})
 
-	// Test connection
-	ctx := context.Background()
-	if config.Connection.Timeout > 0 {
-		timeout := time.Duration(config.Connection.Timeout) * time.Second
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-		logging.Debugf("RedisCache: connection timeout set to %s", timeout)
-	}
-
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		logging.Debugf("RedisCache: failed to connect: %v", err)
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
-	}
-	logging.Debugf("RedisCache: successfully connected to Redis")
-
 	cache := &RedisCache{
 		client:              redisClient,
 		config:              config,
@@ -139,6 +123,13 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 	}
+
+	// Test connection using the new CheckConnection method
+	if err := cache.CheckConnection(); err != nil {
+		logging.Debugf("RedisCache: failed to connect: %v", err)
+		return nil, err
+	}
+	logging.Debugf("RedisCache: successfully connected to Redis")
 
 	// Set up the index for vector search
 	logging.Debugf("RedisCache: initializing index '%s'", config.Index.Name)
@@ -348,6 +339,31 @@ func (c *RedisCache) createIndex() error {
 // IsEnabled returns the current cache activation status
 func (c *RedisCache) IsEnabled() bool {
 	return c.enabled
+}
+
+// CheckConnection verifies the Redis connection is healthy
+func (c *RedisCache) CheckConnection() error {
+	if !c.enabled {
+		return nil
+	}
+
+	if c.client == nil {
+		return fmt.Errorf("redis client is not initialized")
+	}
+
+	ctx := context.Background()
+	if c.config != nil && c.config.Connection.Timeout > 0 {
+		timeout := time.Duration(c.config.Connection.Timeout) * time.Second
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	if err := c.client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis connection check failed: %w", err)
+	}
+
+	return nil
 }
 
 // AddPendingRequest stores a request that is awaiting its response

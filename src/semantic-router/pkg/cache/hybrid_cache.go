@@ -191,6 +191,21 @@ func (h *HybridCache) IsEnabled() bool {
 	return h.enabled
 }
 
+// CheckConnection verifies the cache backend connection is healthy
+// For hybrid cache, this checks the Milvus connection
+func (h *HybridCache) CheckConnection() error {
+	if !h.enabled {
+		return nil
+	}
+
+	if h.milvusCache == nil {
+		return fmt.Errorf("milvus cache is not initialized")
+	}
+
+	// Delegate to Milvus cache connection check
+	return h.milvusCache.CheckConnection()
+}
+
 // RebuildFromMilvus rebuilds the in-memory HNSW index from persistent Milvus storage
 // This is called on startup to recover the index after a restart
 func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
