@@ -113,6 +113,11 @@ jobs:
 
           echo "Milvus is ready at localhost:19530"
           docker ps --filter "name=milvus-semantic-cache"
+      
+      - name: Start Redis service
+        run: |
+          echo "Starting Redis Stack..."
+          make start-redis
 
       - name: Run semantic router tests
         run: make test
@@ -123,6 +128,13 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
           MILVUS_URI: localhost:19530
           SKIP_MILVUS_TESTS: false
+          SKIP_REDIS_TESTS: false
+
+      - name: Clean Redis service
+        if: always()
+        run: |
+          echo "Stopping Redis container and cleaning data..."
+          make clean-redis
 
       - name: Stop Milvus service
         if: always()
