@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
-        profile: [ai-gateway, aibrix, routing-strategies, llm-d]
+        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio]
 
     steps:
       - name: Check out the repo

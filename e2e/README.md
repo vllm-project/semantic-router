@@ -14,7 +14,7 @@ The framework follows a **separation of concerns** design:
 
 - **ai-gateway**: Tests Semantic Router with Envoy AI Gateway integration
 - **aibrix**: Tests Semantic Router with vLLM AIBrix integration
-- **istio**: Tests Semantic Router with Istio Gateway (future)
+- **istio**: Tests Semantic Router with Istio service mesh integration
 - **production-stack**: Tests vLLM Production Stack configurations (future)
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
 - **dynamo**: Tests with Nvidia Dynamo (future)
@@ -517,3 +517,186 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 ```
 
 See `profiles/ai-gateway/` for a complete example.
+
+## Profile Details
+
+### Istio Profile
+
+The Istio profile tests Semantic Router deployment and functionality in an Istio service mesh environment. It validates both Istio-specific features (sidecars, mTLS, tracing) and general Semantic Router functionality through Istio Gateway + VirtualService routing.
+
+**What it Tests:**
+
+- **Istio-Specific Features:**
+  - Istio sidecar injection and health
+  - Traffic routing through Istio ingress gateway
+  - Mutual TLS (mTLS) between services
+  - Distributed tracing and observability
+
+- **Semantic Router Features (through Istio):**
+  - Chat completions API and stress testing
+  - Domain classification and routing
+  - Semantic cache, PII detection, jailbreak detection
+  - Signal-Decision engine (priority, plugins, keywords, fallback)
+
+**Prerequisites:**
+
+- Docker and Kind (managed by E2E framework)
+- Helm (for installing Istio components)
+
+**Components Deployed:**
+
+1. **Istio Control Plane** (`istio-system` namespace):
+   - `istiod` - Istio control plane
+   - `istio-ingressgateway` - Ingress gateway for external traffic
+
+2. **Semantic Router** (`semantic-router` namespace):
+   - Deployed via Helm with Istio sidecar injection enabled
+   - Namespace labeled with `istio-injection=enabled`
+
+3. **Istio Resources**:
+   - `Gateway` - Configures ingress gateway on port 80
+   - `VirtualService` - Routes traffic to Semantic Router service
+   - `DestinationRule` - Enables mTLS with `ISTIO_MUTUAL` mode
+
+**Test Cases:**
+
+**Istio-Specific Tests (4):**
+
+| Test Case | Description | What it Validates |
+|-----------|-------------|-------------------|
+| `istio-sidecar-health-check` | Verify Envoy sidecar injection | - Istio-proxy container exists<br>- Sidecar is healthy and ready<br>- Namespace has `istio-injection=enabled` label |
+| `istio-traffic-routing` | Test routing through Istio gateway | - Gateway and VirtualService exist<br>- Requests route correctly to Semantic Router<br>- Istio/Envoy headers present in responses |
+| `istio-mtls-verification` | Verify mutual TLS configuration | - DestinationRule has `ISTIO_MUTUAL` mode<br>- mTLS certificates present in istio-proxy<br>- PeerAuthentication policy (if configured) |
+| `istio-tracing-observability` | Check distributed tracing and metrics | - Trace headers propagated<br>- Envoy metrics exposed<br>- Telemetry configuration<br>- Access logs enabled |
+
+**Common Functionality Tests (through Istio Gateway):**
+
+These tests validate that Semantic Router features work correctly when routed through Istio Gateway and VirtualService:
+
+- `chat-completions-request` - Basic API functionality
+- `chat-completions-stress-request` - Sequential stress (1000 requests)
+- `domain-classify` - Classification accuracy (65 cases)
+- `semantic-cache` - Cache hit rate (5 groups)
+- `pii-detection` - PII detection and blocking (10 types)
+- `jailbreak-detection` - Attack detection (10 types)
+- `decision-priority-selection` - Priority-based routing (4 cases)
+- `plugin-chain-execution` - Plugin ordering (4 cases)
+- `rule-condition-logic` - AND/OR operators (6 cases)
+- `decision-fallback-behavior` - Fallback handling (5 cases)
+- `keyword-routing` - Keyword matching (6 cases)
+- `plugin-config-variations` - Config variations (6 cases)
+- `chat-completions-progressive-stress` - Progressive QPS stress test
+
+**Total: 17 test cases** (4 Istio-specific + 13 common functionality)
+
+**Usage:**
+
+```bash
+# Run all Istio tests
+make e2e-test E2E_PROFILE=istio
+
+# Run specific Istio tests
+make e2e-test-specific E2E_PROFILE=istio E2E_TESTS="istio-sidecar-health-check,istio-mtls-verification"
+
+# Run with verbose output
+./bin/e2e -profile istio -verbose
+
+# Keep cluster for debugging
+make e2e-test E2E_PROFILE=istio E2E_KEEP_CLUSTER=true
+```
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────┐
+│         Istio Ingress Gateway            │
+│      (istio-system namespace)            │
+│   Port 80 → semantic-router service      │
+└────────────┬────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│    Semantic Router Pod                   │
+│  (semantic-router namespace)             │
+│  ┌─────────────┐  ┌──────────────────┐  │
+│  │   Main      │  │  Istio-Proxy     │  │
+│  │ Container   │◄─┤  (Envoy Sidecar) │  │
+│  │             │  │                  │  │
+│  │  :8801      │  │  mTLS, Tracing   │  │
+│  └─────────────┘  └──────────────────┘  │
+└─────────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│         Istiod (Control Plane)           │
+│  - Config distribution                   │
+│  - Certificate management (mTLS)         │
+│  - Sidecar injection                     │
+└─────────────────────────────────────────┘
+```
+
+**Key Features Tested:**
+
+**Istio Integration:**
+
+- ✅ **Automatic Sidecar Injection**: Istio automatically injects Envoy proxy sidecars into pods
+- ✅ **Traffic Management**: Requests route through Istio Gateway → VirtualService → Semantic Router
+- ✅ **Security (mTLS)**: Automatic mutual TLS encryption and authentication between services
+- ✅ **Observability**: Distributed tracing, metrics collection, and access logs
+- ✅ **Service Mesh Integration**: Semantic Router operates correctly within Istio mesh
+
+**Test Coverage:**
+
+Istio-Specific Tests (4):
+
+- ✅ **istio-sidecar-health-check**: Validates sidecar injection and health
+- ✅ **istio-traffic-routing**: Tests routing through Gateway and VirtualService
+- ✅ **istio-mtls-verification**: Confirms mTLS configuration and certificates
+- ✅ **istio-tracing-observability**: Validates distributed tracing and metrics
+
+Common Functionality Tests (13):
+
+- ✅ **Chat Completions**: API functionality and stress testing
+- ✅ **Classification**: Domain-based routing with 65 test cases
+- ✅ **Security Features**: PII detection, jailbreak detection, semantic cache
+- ✅ **Signal-Decision Engine**: Priority routing, plugin chains, keyword matching, fallback behavior
+- ✅ **Load Handling**: Progressive stress testing (10-100 QPS)
+
+**Total: 17 comprehensive test cases validating both Istio integration and Semantic Router functionality through the service mesh**
+
+**Setup Steps (Automated by Profile):**
+
+1. Install Istio control plane using Helm (base, istiod, ingress gateway)
+2. Create namespace with `istio-injection=enabled` label
+3. Deploy Semantic Router via Helm (sidecar auto-injected)
+4. Create Istio Gateway and VirtualService for traffic routing
+5. Create DestinationRule for mTLS configuration
+6. Verify all components are ready
+
+**Troubleshooting:**
+
+If tests fail, check:
+
+```bash
+# Check Istio installation
+kubectl get pods -n istio-system
+
+# Check sidecar injection
+kubectl get pods -n semantic-router -o jsonpath='{.items[*].spec.containers[*].name}'
+
+# Check Istio resources
+kubectl get gateway,virtualservice,destinationrule -n semantic-router
+
+# Check mTLS configuration
+kubectl get destinationrule semantic-router -n semantic-router -o yaml
+
+# View Istio proxy logs
+kubectl logs -n semantic-router <pod-name> -c istio-proxy
+```
+
+**Related Resources:**
+
+- [Istio Documentation](https://istio.io/latest/docs/)
+- [Istio Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/)
+- [Istio Security (mTLS)](https://istio.io/latest/docs/concepts/security/)
+- [Istio Observability](https://istio.io/latest/docs/concepts/observability/)

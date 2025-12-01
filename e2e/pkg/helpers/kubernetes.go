@@ -38,8 +38,14 @@ func CheckDeployment(ctx context.Context, client *kubernetes.Clientset, namespac
 
 // GetEnvoyServiceName finds the Envoy service name in the envoy-gateway-system namespace
 // using label selectors to match the Gateway-owned service
+// Deprecated: Use GetServiceByLabelInNamespace for more flexibility
 func GetEnvoyServiceName(ctx context.Context, client *kubernetes.Clientset, labelSelector string, verbose bool) (string, error) {
-	services, err := client.CoreV1().Services("envoy-gateway-system").List(ctx, metav1.ListOptions{
+	return GetServiceByLabelInNamespace(ctx, client, "envoy-gateway-system", labelSelector, verbose)
+}
+
+// GetServiceByLabelInNamespace finds a service by label selector in a specific namespace
+func GetServiceByLabelInNamespace(ctx context.Context, client *kubernetes.Clientset, namespace string, labelSelector string, verbose bool) (string, error) {
+	services, err := client.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
 	})
 	if err != nil {
@@ -47,13 +53,13 @@ func GetEnvoyServiceName(ctx context.Context, client *kubernetes.Clientset, labe
 	}
 
 	if len(services.Items) == 0 {
-		return "", fmt.Errorf("no service found with selector %s in envoy-gateway-system namespace", labelSelector)
+		return "", fmt.Errorf("no service found with selector %s in %s namespace", labelSelector, namespace)
 	}
 
 	// Return the first matching service (should only be one)
 	serviceName := services.Items[0].Name
 	if verbose {
-		fmt.Printf("[Helper] Found Envoy service: %s (matched by labels: %s)\n", serviceName, labelSelector)
+		fmt.Printf("[Helper] Found service: %s (matched by labels: %s in namespace: %s)\n", serviceName, labelSelector, namespace)
 	}
 
 	return serviceName, nil
