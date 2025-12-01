@@ -38,7 +38,7 @@ type ChatCompletionRequest struct {
 	Model       string                 `json:"model"`
 	Messages    []ChatMessage          `json:"messages"`
 	MaxTokens   int                    `json:"max_tokens,omitempty"`
-	Temperature float64               `json:"temperature,omitempty"`
+	Temperature float64                `json:"temperature,omitempty"`
 	Stream      bool                   `json:"stream,omitempty"`
 	ExtraBody   map[string]interface{} `json:"extra_body,omitempty"`
 }
@@ -171,4 +171,3 @@ func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt stri
 
 	return &chatResp, nil
 }
-
