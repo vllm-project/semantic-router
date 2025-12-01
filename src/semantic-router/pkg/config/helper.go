@@ -157,7 +157,19 @@ func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
 
 // IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled
 func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	return c.PromptGuard.Enabled && c.PromptGuard.ModelID != "" && c.PromptGuard.JailbreakMappingPath != ""
+	if !c.PromptGuard.Enabled || c.PromptGuard.JailbreakMappingPath == "" {
+		return false
+	}
+
+	// Check configuration based on whether using vLLM or Candle
+	if c.PromptGuard.UseVLLM {
+		// For vLLM: need endpoint address and model name
+		return c.PromptGuard.ClassifierVLLMEndpoint.Address != "" &&
+			c.PromptGuard.VLLMModelName != ""
+	}
+
+	// For Candle: need model ID
+	return c.PromptGuard.ModelID != ""
 }
 
 // GetEndpointsForModel returns all endpoints that can serve the specified model

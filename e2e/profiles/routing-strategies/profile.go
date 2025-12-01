@@ -20,7 +20,9 @@ import (
 
 // Profile implements the Routing Strategies test profile
 type Profile struct {
-	verbose bool
+	verbose         bool
+	mcpStdioProcess *exec.Cmd
+	mcpHTTPProcess  *exec.Cmd
 }
 
 // NewProfile creates a new Routing Strategies profile
@@ -70,9 +72,17 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	}
 
 	// Step 5: Verify all components are ready
-	p.log("Step 5/5: Verifying all components are ready")
+	p.log("Step 5/6: Verifying all components are ready")
 	if err := p.verifyEnvironment(ctx, opts); err != nil {
 		return fmt.Errorf("failed to verify environment: %w", err)
+	}
+
+	// Step 6: Start MCP servers for testing (optional - tests will skip if unavailable)
+	p.log("Step 6/6: Starting MCP classification servers (optional)")
+	if err := p.startMCPServers(ctx); err != nil {
+		p.log("Warning: MCP servers not started: %v", err)
+		p.log("MCP-related tests will be skipped")
+		// Don't fail setup - MCP tests are optional
 	}
 
 	p.log("Routing Strategies test environment setup complete")
@@ -83,6 +93,15 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	p.verbose = opts.Verbose
 	p.log("Tearing down Routing Strategies test environment")
+
+	// Stop MCP servers first
+	p.log("Stopping MCP servers")
+	if p.mcpStdioProcess != nil {
+		p.mcpStdioProcess.Process.Kill()
+	}
+	if p.mcpHTTPProcess != nil {
+		p.mcpHTTPProcess.Process.Kill()
+	}
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
@@ -108,6 +127,13 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"keyword-routing",
+		// MCP tests are registered but not run by default
+		// To run MCP tests, use: E2E_TESTS="mcp-stdio-classification,mcp-http-classification,..."
+		// "mcp-stdio-classification",
+		// "mcp-http-classification",
+		// "mcp-model-reasoning",
+		// "mcp-probability-distribution",
+		// "mcp-fallback-behavior",
 	}
 }
 
@@ -322,4 +348,65 @@ func (p *Profile) log(format string, args ...interface{}) {
 	if p.verbose {
 		fmt.Printf("[Routing-Strategies] "+format+"\n", args...)
 	}
+}
+
+func (p *Profile) startMCPServers(ctx context.Context) error {
+	p.log("Starting MCP classification servers")
+
+	// Check if Python 3 is available
+	if _, err := exec.LookPath("python3"); err != nil {
+		p.log("Warning: python3 not found, skipping MCP server startup")
+		p.log("MCP tests will be skipped or may fail")
+		return nil
+	}
+
+	// Start stdio MCP server (keyword-based classifier)
+	p.log("Starting stdio MCP server (keyword-based)")
+	p.mcpStdioProcess = exec.CommandContext(ctx,
+		"python3",
+		"examples/mcp-classifier-server/server_keyword.py")
+
+	// Capture output for debugging
+	if p.verbose {
+		p.mcpStdioProcess.Stdout = os.Stdout
+		p.mcpStdioProcess.Stderr = os.Stderr
+	}
+
+	if err := p.mcpStdioProcess.Start(); err != nil {
+		p.log("Warning: failed to start stdio MCP server: %v", err)
+		// Continue without stdio server - tests may skip or fail gracefully
+	} else {
+		p.log("Stdio MCP server started (PID: %d)", p.mcpStdioProcess.Process.Pid)
+	}
+
+	// Start HTTP MCP server (embedding-based classifier)
+	p.log("Starting HTTP MCP server (embedding-based)")
+	p.mcpHTTPProcess = exec.CommandContext(ctx,
+		"python3",
+		"examples/mcp-classifier-server/server_embedding.py",
+		"--port", "8090")
+
+	// Capture output for debugging
+	if p.verbose {
+		p.mcpHTTPProcess.Stdout = os.Stdout
+		p.mcpHTTPProcess.Stderr = os.Stderr
+	}
+
+	if err := p.mcpHTTPProcess.Start(); err != nil {
+		p.log("Warning: failed to start HTTP MCP server: %v", err)
+		// If stdio server failed too, return error
+		if p.mcpStdioProcess == nil {
+			return fmt.Errorf("failed to start any MCP servers: %w", err)
+		}
+		p.log("Continuing with only stdio MCP server")
+	} else {
+		p.log("HTTP MCP server started (PID: %d)", p.mcpHTTPProcess.Process.Pid)
+	}
+
+	// Wait for servers to be ready
+	p.log("Waiting for MCP servers to initialize...")
+	time.Sleep(3 * time.Second)
+
+	p.log("MCP servers started successfully")
+	return nil
 }
