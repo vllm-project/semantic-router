@@ -20,6 +20,11 @@ type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active
 	IsEnabled() bool
 
+	// CheckConnection verifies the cache backend connection is healthy
+	// Returns nil if the connection is healthy, error otherwise
+	// For local caches (in-memory), this may be a no-op
+	CheckConnection() error
+
 	// AddPendingRequest stores a request awaiting its response
 	AddPendingRequest(requestID string, model string, query string, requestBody []byte) error
 

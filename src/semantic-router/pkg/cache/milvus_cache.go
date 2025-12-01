@@ -154,7 +154,6 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		logging.Debugf("MilvusCache: failed to connect: %v", err)
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
-	logging.Debugf("MilvusCache: successfully connected to Milvus")
 
 	cache := &MilvusCache{
 		client:              milvusClient,
@@ -164,6 +163,14 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 	}
+
+	// Test connection using the new CheckConnection method
+	if err := cache.CheckConnection(); err != nil {
+		logging.Debugf("MilvusCache: connection check failed: %v", err)
+		milvusClient.Close()
+		return nil, err
+	}
+	logging.Debugf("MilvusCache: successfully connected to Milvus")
 
 	// Set up the collection for caching
 	logging.Debugf("MilvusCache: initializing collection '%s'", config.Collection.Name)
@@ -390,6 +397,34 @@ func (c *MilvusCache) createCollection() error {
 // IsEnabled returns the current cache activation status
 func (c *MilvusCache) IsEnabled() bool {
 	return c.enabled
+}
+
+// CheckConnection verifies the Milvus connection is healthy
+func (c *MilvusCache) CheckConnection() error {
+	if !c.enabled {
+		return nil
+	}
+
+	if c.client == nil {
+		return fmt.Errorf("milvus client is not initialized")
+	}
+
+	ctx := context.Background()
+	if c.config != nil && c.config.Connection.Timeout > 0 {
+		timeout := time.Duration(c.config.Connection.Timeout) * time.Second
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	// Simple connection check - list collections to verify connectivity
+	// We don't check if specific collection exists here as it may not be created yet
+	_, err := c.client.ListCollections(ctx)
+	if err != nil {
+		return fmt.Errorf("milvus connection check failed: %w", err)
+	}
+
+	return nil
 }
 
 // AddPendingRequest stores a request that is awaiting its response

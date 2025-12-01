@@ -131,6 +131,13 @@ func (c *InMemoryCache) IsEnabled() bool {
 	return c.enabled
 }
 
+// CheckConnection verifies the cache connection is healthy
+// For in-memory cache, this is always healthy (no external connection)
+func (c *InMemoryCache) CheckConnection() error {
+	// In-memory cache has no external connection to check
+	return nil
+}
+
 // generateEmbedding generates an embedding using the configured model
 func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 	// Normalize to lowercase for case-insensitive comparison
@@ -1098,11 +1105,4 @@ func (h *maxHeap) bubbleDown(i int) {
 		h.data[i], h.data[largest] = h.data[largest], h.data[i]
 		i = largest
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

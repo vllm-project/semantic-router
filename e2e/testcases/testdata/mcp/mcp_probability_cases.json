@@ -1,0 +1,50 @@
+[
+  {
+    "description": "Probability distribution should sum to ~1.0",
+    "query": "What is quantum entanglement?",
+    "expected_category": "science",
+    "validate_probability_sum": true,
+    "validate_no_negatives": true,
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "Math probability distribution should be valid",
+    "query": "Calculate the integral of e^x",
+    "expected_category": "math",
+    "validate_probability_sum": true,
+    "validate_no_negatives": true,
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "Technology probability distribution should be valid",
+    "query": "What is Docker containerization?",
+    "expected_category": "technology",
+    "validate_probability_sum": true,
+    "validate_no_negatives": true,
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "History probability distribution should be valid",
+    "query": "Who was Napoleon Bonaparte?",
+    "expected_category": "history",
+    "validate_probability_sum": true,
+    "validate_no_negatives": true,
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "General probability distribution should be valid",
+    "query": "How's it going?",
+    "expected_category": "general",
+    "validate_probability_sum": true,
+    "validate_no_negatives": true,
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "Ambiguous query should have lower entropy",
+    "query": "Can you help me?",
+    "expected_category": "general",
+    "validate_probability_sum": true,
+    "validate_no_negatives": true,
+    "expected_confidence_min": 0.5
+  }
+]
