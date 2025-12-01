@@ -350,20 +350,44 @@ type PromptGuardConfig struct {
 	// Enable prompt guard jailbreak detection
 	Enabled bool `yaml:"enabled"`
 
-	// Model ID for the jailbreak classification model
+	// Model ID for the jailbreak classification model (Candle model path)
+	// Ignored when use_vllm is true
 	ModelID string `yaml:"model_id"`
 
 	// Threshold for jailbreak detection (0.0-1.0)
 	Threshold float32 `yaml:"threshold"`
 
-	// Use CPU for inference
+	// Use CPU for inference (Candle CPU flag)
+	// Ignored when use_vllm is true
 	UseCPU bool `yaml:"use_cpu"`
 
-	// Use ModernBERT for jailbreak detection
+	// Use ModernBERT for jailbreak detection (Candle ModernBERT flag)
+	// Ignored when use_vllm is true
 	UseModernBERT bool `yaml:"use_modernbert"`
 
 	// Path to the jailbreak type mapping file
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
+
+	// Use vLLM REST API instead of Candle for guardrail/safety checks
+	// When true, ModelID, UseCPU, and UseModernBERT are ignored
+	// When false (default), uses Candle-based classification
+	UseVLLM bool `yaml:"use_vllm,omitempty"`
+
+	// Dedicated vLLM endpoint configuration for PromptGuard
+	// This is separate from vllm_endpoints (which are for backend inference)
+	ClassifierVLLMEndpoint ClassifierVLLMEndpoint `yaml:"classifier_vllm_endpoint,omitempty"`
+
+	// Model name on vLLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+	VLLMModelName string `yaml:"vllm_model_name,omitempty"`
+
+	// Timeout for vLLM API calls in seconds
+	// Default: 30 seconds if not specified
+	VLLMTimeoutSeconds int `yaml:"vllm_timeout_seconds,omitempty"`
+
+	// Response parser type (optional, auto-detected from model name if not set)
+	// Options: "qwen3guard", "json", "simple", "auto"
+	// "auto" tries multiple parsers (OR logic)
+	ResponseParserType string `yaml:"response_parser_type,omitempty"`
 }
 
 // ToolsConfig represents configuration for automatic tool selection
@@ -383,6 +407,26 @@ type ToolsConfig struct {
 
 	// Fallback behavior: if true, return empty tools on failure; if false, return error
 	FallbackToEmpty bool `yaml:"fallback_to_empty"`
+}
+
+// ClassifierVLLMEndpoint represents a vLLM endpoint configuration for classifiers
+// This is separate from VLLMEndpoint (which is for backend inference)
+type ClassifierVLLMEndpoint struct {
+	// Address of the vLLM endpoint (IP address)
+	Address string `yaml:"address"`
+
+	// Port of the vLLM endpoint
+	Port int `yaml:"port"`
+
+	// Optional name identifier for the endpoint (for logging and debugging)
+	Name string `yaml:"name,omitempty"`
+
+	// Use chat template format for models requiring chat format (e.g., Qwen3Guard)
+	UseChatTemplate bool `yaml:"use_chat_template,omitempty"`
+
+	// Custom prompt template (supports %s placeholder for the prompt)
+	// If empty, uses default formatting
+	PromptTemplate string `yaml:"prompt_template,omitempty"`
 }
 
 // VLLMEndpoint represents a vLLM backend endpoint configuration

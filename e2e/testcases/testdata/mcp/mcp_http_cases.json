@@ -1,0 +1,50 @@
+[
+  {
+    "description": "Math calculus query via HTTP should classify correctly",
+    "query": "What is the limit of 1/x as x approaches infinity?",
+    "expected_category": "math",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Science biology query via HTTP should classify correctly",
+    "query": "What is DNA replication?",
+    "expected_category": "science",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Technology networking query via HTTP should classify correctly",
+    "query": "Explain TCP/IP protocol",
+    "expected_category": "technology",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "History modern history query via HTTP should classify correctly",
+    "query": "What was the Cold War?",
+    "expected_category": "history",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "General conversation via HTTP should classify correctly",
+    "query": "That's interesting, tell me more",
+    "expected_category": "general",
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "Math algebra query via HTTP should classify correctly",
+    "query": "Solve for x: 2x + 5 = 15",
+    "expected_category": "math",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Science chemistry query via HTTP should classify correctly",
+    "query": "What is the periodic table?",
+    "expected_category": "science",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Technology AI query via HTTP should classify correctly",
+    "query": "What is machine learning?",
+    "expected_category": "technology",
+    "expected_confidence_min": 0.7
+  }
+]

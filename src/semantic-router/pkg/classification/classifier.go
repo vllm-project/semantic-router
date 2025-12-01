@@ -131,12 +131,23 @@ func (c *ModernBertJailbreakInference) Classify(text string) (candle_binding.Cla
 	return candle_binding.ClassifyModernBertJailbreakText(text)
 }
 
-// createJailbreakInference creates the appropriate jailbreak inference based on configuration
-func createJailbreakInference(useModernBERT bool) JailbreakInference {
+// createJailbreakInferenceCandle creates Candle-based jailbreak inference
+func createJailbreakInferenceCandle(useModernBERT bool) JailbreakInference {
 	if useModernBERT {
 		return &ModernBertJailbreakInference{}
 	}
 	return &LinearJailbreakInference{}
+}
+
+// createJailbreakInference creates the appropriate jailbreak inference based on configuration
+// Checks UseVLLM flag to decide between vLLM or Candle implementation
+func createJailbreakInference(cfg *config.PromptGuardConfig) (JailbreakInference, error) {
+	if cfg.UseVLLM {
+		// Use vLLM-based inference
+		return NewVLLMJailbreakInference(cfg)
+	}
+	// Use Candle-based inference
+	return createJailbreakInferenceCandle(cfg.UseModernBERT), nil
 }
 
 type PIIInitializer interface {
@@ -341,8 +352,20 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 // At runtime, in-tree classifier will be tried first, with MCP as a fallback,
 // allowing flexible deployment scenarios such as gradual migration.
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
+	// Create jailbreak inference (vLLM or Candle)
+	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
+	}
+
+	// Create jailbreak initializer (only needed for Candle, nil for vLLM)
+	var jailbreakInitializer JailbreakInitializer
+	if !cfg.PromptGuard.UseVLLM {
+		jailbreakInitializer = createJailbreakInitializer(cfg.PromptGuard.UseModernBERT)
+	}
+
 	options := []option{
-		withJailbreak(jailbreakMapping, createJailbreakInitializer(cfg.PromptGuard.UseModernBERT), createJailbreakInference(cfg.PromptGuard.UseModernBERT)),
+		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
 		withPII(piiMapping, createPIIInitializer(), createPIIInference()),
 	}
 
@@ -405,13 +428,37 @@ func (c *Classifier) initializeCategoryClassifier() error {
 
 // IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured
 func (c *Classifier) IsJailbreakEnabled() bool {
-	return c.Config.PromptGuard.Enabled && c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != "" && c.JailbreakMapping != nil
+	if !c.Config.PromptGuard.Enabled || c.JailbreakMapping == nil {
+		return false
+	}
+
+	// Check configuration based on whether using vLLM or Candle
+	if c.Config.PromptGuard.UseVLLM {
+		// For vLLM: need endpoint, model name, and mapping path
+		return c.Config.PromptGuard.ClassifierVLLMEndpoint.Address != "" &&
+			c.Config.PromptGuard.VLLMModelName != "" &&
+			c.Config.PromptGuard.JailbreakMappingPath != ""
+	}
+
+	// For Candle: need model ID and mapping path
+	return c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != ""
 }
 
 // initializeJailbreakClassifier initializes the jailbreak classification model
 func (c *Classifier) initializeJailbreakClassifier() error {
-	if !c.IsJailbreakEnabled() || c.jailbreakInitializer == nil {
+	if !c.IsJailbreakEnabled() {
 		return fmt.Errorf("jailbreak detection is not properly configured")
+	}
+
+	// Skip initialization if using vLLM (no Candle model to initialize)
+	if c.Config.PromptGuard.UseVLLM {
+		logging.Infof("Using vLLM for jailbreak detection, skipping Candle initialization")
+		return nil
+	}
+
+	// For Candle-based inference, need initializer
+	if c.jailbreakInitializer == nil {
+		return fmt.Errorf("jailbreak initializer is required for Candle-based inference")
 	}
 
 	numClasses := c.JailbreakMapping.GetJailbreakTypeCount()
