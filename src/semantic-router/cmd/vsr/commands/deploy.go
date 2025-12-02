@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/deployment"
 )
@@ -11,20 +12,23 @@ import (
 // NewDeployCmd creates the deploy command
 func NewDeployCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "deploy [local|docker|kubernetes]",
+		Use:   "deploy [local|docker|kubernetes|helm]",
 		Short: "Deploy the router to specified environment",
 		Long: `Deploy the vLLM Semantic Router to different environments.
 
 Supported environments:
   local       - Run router as local process
   docker      - Deploy using Docker Compose
-  kubernetes  - Deploy to Kubernetes cluster`,
+  kubernetes  - Deploy to Kubernetes cluster
+  helm        - Deploy using Helm chart`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := args[0]
 			configPath := cmd.Parent().Flag("config").Value.String()
 			withObs, _ := cmd.Flags().GetBool("with-observability")
 			namespace, _ := cmd.Flags().GetString("namespace")
+			releaseName, _ := cmd.Flags().GetString("release-name")
+			setValues, _ := cmd.Flags().GetStringArray("set")
 
 			switch env {
 			case "local":
@@ -33,6 +37,8 @@ Supported environments:
 				return deployment.DeployDocker(configPath, withObs)
 			case "kubernetes":
 				return deployment.DeployKubernetes(configPath, namespace, withObs)
+			case "helm":
+				return deployment.DeployHelm(configPath, namespace, releaseName, withObs, setValues)
 			default:
 				return fmt.Errorf("unknown environment: %s", env)
 			}
@@ -41,6 +47,8 @@ Supported environments:
 
 	cmd.Flags().Bool("with-observability", true, "Deploy with Grafana/Prometheus observability stack")
 	cmd.Flags().String("namespace", "default", "Kubernetes namespace for deployment")
+	cmd.Flags().String("release-name", "", "Helm release name (default: semantic-router)")
+	cmd.Flags().StringArray("set", []string{}, "Set values for Helm chart (can be used multiple times)")
 	cmd.Flags().Bool("dry-run", false, "Show commands without executing")
 
 	return cmd
@@ -49,20 +57,45 @@ Supported environments:
 // NewUndeployCmd creates the undeploy command
 func NewUndeployCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "undeploy [local|docker|kubernetes]",
+		Use:   "undeploy [local|docker|kubernetes|helm]",
 		Short: "Remove router deployment",
-		Args:  cobra.ExactArgs(1),
+		Long: `Remove the vLLM Semantic Router deployment from the specified environment.
+
+Examples:
+  # Undeploy local router
+  vsr undeploy local
+
+  # Undeploy Docker deployment
+  vsr undeploy docker
+
+  # Undeploy Docker and remove volumes
+  vsr undeploy docker --volumes
+
+  # Undeploy Kubernetes and wait for cleanup
+  vsr undeploy kubernetes --wait
+
+  # Undeploy from specific namespace
+  vsr undeploy kubernetes --namespace production --wait
+
+  # Undeploy Helm release
+  vsr undeploy helm --namespace production --wait`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := args[0]
 			namespace, _ := cmd.Flags().GetString("namespace")
+			removeVolumes, _ := cmd.Flags().GetBool("volumes")
+			wait, _ := cmd.Flags().GetBool("wait")
+			releaseName, _ := cmd.Flags().GetString("release-name")
 
 			switch env {
 			case "local":
 				return deployment.UndeployLocal()
 			case "docker":
-				return deployment.UndeployDocker()
+				return deployment.UndeployDocker(removeVolumes)
 			case "kubernetes":
-				return deployment.UndeployKubernetes(namespace)
+				return deployment.UndeployKubernetes(namespace, wait)
+			case "helm":
+				return deployment.UndeployHelm(namespace, releaseName, wait)
 			default:
 				return fmt.Errorf("unknown environment: %s", env)
 			}
@@ -70,6 +103,9 @@ func NewUndeployCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("namespace", "default", "Kubernetes namespace")
+	cmd.Flags().String("release-name", "", "Helm release name (default: semantic-router)")
+	cmd.Flags().Bool("volumes", false, "Remove volumes (Docker only)")
+	cmd.Flags().Bool("wait", false, "Wait for complete cleanup (Kubernetes/Helm only)")
 	return cmd
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -51,9 +52,10 @@ Available resources:
 }
 
 func displayModels(cfg *config.RouterConfig, format string) error {
-	if format == "json" {
+	switch format {
+	case "json":
 		return cli.PrintJSON(cfg.ModelConfig)
-	} else if format == "yaml" {
+	case "yaml":
 		return cli.PrintYAML(cfg.ModelConfig)
 	}
 
@@ -83,9 +85,10 @@ func displayModels(cfg *config.RouterConfig, format string) error {
 }
 
 func displayCategories(cfg *config.RouterConfig, format string) error {
-	if format == "json" {
+	switch format {
+	case "json":
 		return cli.PrintJSON(cfg.Categories)
-	} else if format == "yaml" {
+	case "yaml":
 		return cli.PrintYAML(cfg.Categories)
 	}
 
@@ -106,9 +109,10 @@ func displayCategories(cfg *config.RouterConfig, format string) error {
 }
 
 func displayDecisions(cfg *config.RouterConfig, format string) error {
-	if format == "json" {
+	switch format {
+	case "json":
 		return cli.PrintJSON(cfg.Decisions)
-	} else if format == "yaml" {
+	case "yaml":
 		return cli.PrintYAML(cfg.Decisions)
 	}
 
@@ -135,9 +139,10 @@ func displayDecisions(cfg *config.RouterConfig, format string) error {
 }
 
 func displayEndpoints(cfg *config.RouterConfig, format string) error {
-	if format == "json" {
+	switch format {
+	case "json":
 		return cli.PrintJSON(cfg.VLLMEndpoints)
-	} else if format == "yaml" {
+	case "yaml":
 		return cli.PrintYAML(cfg.VLLMEndpoints)
 	}
 

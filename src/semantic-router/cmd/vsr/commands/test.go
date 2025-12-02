@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 )
 
@@ -47,12 +48,11 @@ Example:
 }
 
 type ClassificationResult struct {
-	Category   string  `json:"category"`
-	Model      string  `json:"model"`
-	Confidence float64 `json:"confidence"`
-	PIIFound   bool    `json:"pii_found,omitempty"`
-	Jailbreak  bool    `json:"jailbreak,omitempty"`
-	Error      string  `json:"error,omitempty"`
+	Classification struct {
+		Category   string  `json:"category"`
+		Confidence float64 `json:"confidence"`
+	} `json:"classification"`
+	RecommendedModel string `json:"recommended_model"`
 }
 
 func callClassificationAPI(endpoint, prompt string) (*ClassificationResult, error) {
@@ -67,7 +67,7 @@ func callClassificationAPI(endpoint, prompt string) (*ClassificationResult, erro
 
 	// Make HTTP request
 	resp, err := http.Post(
-		fmt.Sprintf("%s/v1/classify", endpoint),
+		fmt.Sprintf("%s/api/v1/classify/intent", endpoint),
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -90,30 +90,23 @@ func callClassificationAPI(endpoint, prompt string) (*ClassificationResult, erro
 }
 
 func displayTestResult(result *ClassificationResult, format string) error {
-	if format == "json" {
+	switch format {
+	case "json":
 		return cli.PrintJSON(result)
-	} else if format == "yaml" {
+	case "yaml":
 		return cli.PrintYAML(result)
 	}
 
 	// Table format
 	fmt.Println("\nTest Results:")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Printf("Category:    %s\n", result.Category)
-	fmt.Printf("Model:       %s\n", result.Model)
-	fmt.Printf("Confidence:  %.2f\n", result.Confidence)
+	fmt.Printf("Category:    %s\n", result.Classification.Category)
+	fmt.Printf("Model:       %s\n", result.RecommendedModel)
+	fmt.Printf("Confidence:  %.2f\n", result.Classification.Confidence)
 
-	if result.PIIFound {
-		cli.Warning("PII Detected: Sensitive information found")
-	} else {
-		cli.Success("PII Check: Clean")
-	}
-
-	if result.Jailbreak {
-		cli.Error("Jailbreak Attempt: Blocked")
-	} else {
-		cli.Success("Jailbreak Check: Safe")
-	}
+	// PII and Jailbreak are not part of the intent response
+	cli.Success("PII Check: Not performed in intent classification")
+	cli.Success("Jailbreak Check: Not performed in intent classification")
 
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 

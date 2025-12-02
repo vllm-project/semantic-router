@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -20,26 +22,50 @@ func (e ValidationError) Error() string {
 
 // ValidateConfig performs semantic validation on the configuration
 func ValidateConfig(cfg *config.RouterConfig) error {
-	var errors []ValidationError
+	var validationErrors []ValidationError
 
 	// Validate model consistency
 	if err := validateModelConsistency(cfg); err != nil {
-		errors = append(errors, err.(ValidationError))
+		var target ValidationError
+		if errors.As(err, &target) {
+			validationErrors = append(validationErrors, target)
+		}
 	}
-
-	// Validate endpoint reachability (optional, can be slow)
-	// Commented out for now as it makes validation slow
-	// if err := validateEndpointReachability(cfg); err != nil {
-	// 	errors = append(errors, err.(ValidationError))
-	// }
 
 	// Validate categories
 	if err := validateCategories(cfg); err != nil {
-		errors = append(errors, err.(ValidationError))
+		var target ValidationError
+		if errors.As(err, &target) {
+			validationErrors = append(validationErrors, target)
+		}
 	}
 
-	if len(errors) > 0 {
-		return errors[0] // Return first error
+	// Validate category mapping path
+	if err := validateCategoryMappingPath(cfg); err != nil {
+		var target ValidationError
+		if errors.As(err, &target) {
+			validationErrors = append(validationErrors, target)
+		}
+	}
+
+	// Validate jailbreak
+	if err := validateJailbreak(cfg); err != nil {
+		var target ValidationError
+		if errors.As(err, &target) {
+			validationErrors = append(validationErrors, target)
+		}
+	}
+
+	// Validate PII
+	if err := validatePII(cfg); err != nil {
+		var target ValidationError
+		if errors.As(err, &target) {
+			validationErrors = append(validationErrors, target)
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		return validationErrors[0] // Return first error
 	}
 
 	return nil
@@ -76,6 +102,69 @@ func validateCategories(cfg *config.RouterConfig) error {
 		return ValidationError{
 			Field:   "categories",
 			Message: "at least one category must be defined",
+		}
+	}
+
+	for _, category := range cfg.Categories {
+		if len(category.ModelScores) == 0 {
+			return ValidationError{
+				Field:   fmt.Sprintf("categories.%s", category.Name),
+				Message: "model_scores must be defined for each category",
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateCategoryMappingPath(cfg *config.RouterConfig) error {
+	if cfg.CategoryMappingPath == "" {
+		return ValidationError{
+			Field:   "category_mapping_path",
+			Message: "category_mapping_path must be defined",
+		}
+	}
+	if _, err := os.Stat(cfg.CategoryMappingPath); os.IsNotExist(err) {
+		return ValidationError{
+			Field:   "category_mapping_path",
+			Message: fmt.Sprintf("category_mapping.json file not found at %s", cfg.CategoryMappingPath),
+		}
+	}
+	return nil
+}
+
+func validateJailbreak(cfg *config.RouterConfig) error {
+	if cfg.PromptGuard.Enabled {
+		if cfg.PromptGuard.JailbreakMappingPath == "" {
+			return ValidationError{
+				Field:   "prompt_guard.jailbreak_mapping_path",
+				Message: "jailbreak_mapping_path must be defined when prompt_guard is enabled",
+			}
+		}
+		if _, err := os.Stat(cfg.PromptGuard.JailbreakMappingPath); os.IsNotExist(err) {
+			return ValidationError{
+				Field:   "prompt_guard.jailbreak_mapping_path",
+				Message: fmt.Sprintf("jailbreak_type_mapping.json file not found at %s", cfg.PromptGuard.JailbreakMappingPath),
+			}
+		}
+	}
+
+	return nil
+}
+
+func validatePII(cfg *config.RouterConfig) error {
+	if cfg.PromptGuard.Enabled {
+		if cfg.PIIMappingPath == "" {
+			return ValidationError{
+				Field:   "pii_mapping_path",
+				Message: "pii_mapping_path must be defined when prompt_guard is enabled",
+			}
+		}
+		if _, err := os.Stat(cfg.PIIMappingPath); os.IsNotExist(err) {
+			return ValidationError{
+				Field:   "pii_mapping_path",
+				Message: fmt.Sprintf("pii_type_mapping.json file not found at %s", cfg.PIIMappingPath),
+			}
 		}
 	}
 

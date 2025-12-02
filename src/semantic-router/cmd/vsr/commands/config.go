@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"gopkg.in/yaml.v3"
 )
 
 // NewConfigCmd creates the config command
@@ -143,13 +144,13 @@ func newConfigSetCmd() *cobra.Command {
 			}
 
 			var configData map[string]interface{}
-			if err := yaml.Unmarshal(data, &configData); err != nil {
-				return fmt.Errorf("failed to parse config: %w", err)
+			if unmarshalErr := yaml.Unmarshal(data, &configData); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse config: %w", unmarshalErr)
 			}
 
 			// Set the value using dot notation
-			if err := setNestedValue(configData, key, value); err != nil {
-				return err
+			if setErr := setNestedValue(configData, key, value); setErr != nil {
+				return setErr
 			}
 
 			// Write back to file
@@ -158,7 +159,7 @@ func newConfigSetCmd() *cobra.Command {
 				return fmt.Errorf("failed to serialize config: %w", err)
 			}
 
-			if err := os.WriteFile(configPath, newData, 0644); err != nil {
+			if err := os.WriteFile(configPath, newData, 0o644); err != nil {
 				return fmt.Errorf("failed to write config: %w", err)
 			}
 
@@ -187,8 +188,8 @@ func newConfigGetCmd() *cobra.Command {
 			}
 
 			var configData map[string]interface{}
-			if err := yaml.Unmarshal(data, &configData); err != nil {
-				return fmt.Errorf("failed to parse config: %w", err)
+			if unmarshalErr := yaml.Unmarshal(data, &configData); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse config: %w", unmarshalErr)
 			}
 
 			// Get the value
