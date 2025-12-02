@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestCrossPlatformPaths verifies Issue #2 fix: cross-platform path handling
+// TestCrossPlatformPaths verifies cross-platform path handling using os.TempDir
 func TestCrossPlatformPaths(t *testing.T) {
 	t.Run("getPIDFilePath returns absolute path", func(t *testing.T) {
 		pidFilePath := getPIDFilePath()

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// TestSignalHandling verifies Issue #3 fix: graceful shutdown on Ctrl+C
+// TestSignalHandling verifies graceful shutdown on interrupt signal
 func TestSignalHandling(t *testing.T) {
 	t.Run("signal channel receives interrupt", func(t *testing.T) {
 		// Create signal channel
@@ -54,7 +54,7 @@ func TestSignalHandling(t *testing.T) {
 			sigChan <- os.Interrupt
 		}()
 
-		// Wait for signal and kill process (Issue #3 fix)
+		// Wait for signal and kill process gracefully
 		done := make(chan error)
 		go func() {
 			done <- cmd.Wait()

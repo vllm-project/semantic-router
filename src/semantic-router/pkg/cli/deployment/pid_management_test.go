@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// TestPIDFilePermissions verifies Issue #5 fix: restrictive permissions (0600)
+// TestPIDFilePermissions verifies restrictive file permissions (0600) for security
 func TestPIDFilePermissions(t *testing.T) {
 	pidFilePath := getPIDFilePath()
 	logFilePath := getLogFilePath()
@@ -79,7 +79,7 @@ func TestPIDFilePermissions(t *testing.T) {
 	})
 }
 
-// TestPIDFileRaceCondition verifies Issue #1 fix: process killed if PID write fails
+// TestPIDFileRaceCondition verifies process cleanup when PID file write fails
 func TestPIDFileRaceCondition(t *testing.T) {
 	pidFilePath := getPIDFilePath()
 	logFilePath := getLogFilePath()
@@ -110,9 +110,9 @@ func TestPIDFileRaceCondition(t *testing.T) {
 
 		pid := cmd.Process.Pid
 
-		// Write PID file (simulating Issue #1 fix)
+		// Write PID file and cleanup on failure
 		if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0o600); err != nil {
-			// In the actual code, we kill the process if PID write fails
+			// Kill the process if PID write fails to prevent orphaned processes
 			_ = cmd.Process.Kill()
 			t.Fatalf("Failed to write PID file: %v", err)
 		}
@@ -124,8 +124,8 @@ func TestPIDFileRaceCondition(t *testing.T) {
 	})
 
 	t.Run("simulate PID write failure scenario", func(t *testing.T) {
-		// This test verifies the logic would work correctly
-		// In real scenario, if PID write fails, process should be killed
+		// Verify that process is killed if we cannot track it via PID file
+		// Prevents orphaned processes that cannot be managed
 
 		logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
@@ -148,7 +148,7 @@ func TestPIDFileRaceCondition(t *testing.T) {
 		writeErr := os.WriteFile(invalidPath, []byte(fmt.Sprintf("%d", pid)), 0o600)
 
 		if writeErr != nil {
-			// This is the Issue #1 fix: kill process if we can't track it
+			// Kill process if we can't track it via PID file
 			_ = cmd.Process.Kill()
 
 			// Verify process is killed

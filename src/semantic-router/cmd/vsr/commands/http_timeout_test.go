@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// TestHTTPTimeout verifies Issue #4 fix: 30-second HTTP timeout prevents hanging
+// TestHTTPTimeout verifies 30-second HTTP timeout prevents hanging requests
 func TestHTTPTimeout(t *testing.T) {
 	t.Run("request times out after 30 seconds", func(t *testing.T) {
 		// Create a server that never responds
@@ -18,7 +18,7 @@ func TestHTTPTimeout(t *testing.T) {
 		}))
 		defer hangingServer.Close()
 
-		// Create HTTP client with timeout (Issue #4 fix)
+		// Create HTTP client with 30-second timeout
 		client := &http.Client{
 			Timeout: 30 * time.Second,
 		}
@@ -96,7 +96,7 @@ func TestHTTPTimeout(t *testing.T) {
 	})
 }
 
-// TestInputValidation verifies Issue #6 fix: 10k character limit on prompts
+// TestInputValidation verifies 10k character limit on prompts
 func TestInputValidation(t *testing.T) {
 	t.Run("prompt under 10k characters is valid", func(t *testing.T) {
 		prompt := "This is a valid prompt"
