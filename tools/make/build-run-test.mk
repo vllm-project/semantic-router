@@ -30,13 +30,14 @@ run-router-e2e: build-router download-models
 		./bin/router -config=config/testing/config.e2e.yaml
 
 # Unit test semantic-router
-# By default, Milvus tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false
+# By default, Milvus and Redis tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false and/or SKIP_REDIS_TESTS=false
 # Example: make test-semantic-router SKIP_MILVUS_TESTS=false
 test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false to enable Milvus tests)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
+	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 

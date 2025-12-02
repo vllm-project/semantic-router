@@ -81,9 +81,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 
 	// Handle caching with decision-specific settings
+	logging.Infof("About to call handleCaching - decisionName=%s, cacheEnabled=%v", decisionName, r.Config.SemanticCache.Enabled)
 	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
+		logging.Infof("handleCaching returned a response, returning immediately")
 		return response, nil
 	}
+	logging.Infof("handleCaching returned no cached response, continuing to model routing")
 
 	// Handle model selection and routing with pre-computed classification results and selected model
 	return r.handleModelRouting(openAIRequest, originalModel, decisionName, classificationConfidence, reasoningDecision, selectedModel, ctx)

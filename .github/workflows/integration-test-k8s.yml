@@ -4,19 +4,25 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'website/**'
+      - '**/*.md'
   push:
     branches:
       - main
+    paths-ignore:
+      - 'website/**'
+      - '**/*.md'
   workflow_dispatch: # Allow manual triggering
 
 jobs:
   integration-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
-        profile: [ai-gateway, aibrix]
+        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio]
 
     steps:
       - name: Check out the repo
@@ -159,4 +165,3 @@ jobs:
         if: always()
         run: |
           make e2e-cleanup || true
-

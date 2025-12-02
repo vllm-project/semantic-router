@@ -51,6 +51,17 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		}
 		return NewMilvusCache(options)
 
+	case RedisCacheType:
+		logging.Debugf("Creating Redis cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
+			config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
+		options := RedisCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			ConfigPath:          config.BackendConfigPath,
+		}
+		return NewRedisCache(options)
+
 	case HybridCacheType:
 		logging.Debugf("Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
 			config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
@@ -110,6 +121,16 @@ func ValidateCacheConfig(config CacheConfig) error {
 			return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
 		}
 		logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+	case RedisCacheType:
+		if config.BackendConfigPath == "" {
+			return fmt.Errorf("backend_config_path is required for Redis cache backend")
+		}
+		// Ensure the Redis configuration file exists
+		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+			logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
+			return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
+		}
+		logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
 	}
 
 	return nil
@@ -159,6 +180,19 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"Distributed architecture",
 				"Advanced indexing",
 				"High availability",
+				"TTL support",
+			},
+		},
+		{
+			Type:        RedisCacheType,
+			Name:        "Redis Vector Database",
+			Description: "High-performance semantic cache powered by Redis with vector search",
+			Features: []string{
+				"Fast in-memory performance",
+				"Persistent storage with AOF/RDB",
+				"Scalable with Redis Cluster",
+				"HNSW and FLAT indexing",
+				"Wide ecosystem support",
 				"TTL support",
 			},
 		},

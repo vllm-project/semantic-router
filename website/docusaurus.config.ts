@@ -11,7 +11,7 @@ const config: Config = {
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
-  url: 'https://your-docusaurus-test-site.com',
+  url: 'https://vllm-semantic-router.com',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
@@ -63,6 +63,12 @@ const config: Config = {
         theme: {
           customCss: './src/css/custom.css',
         },
+        sitemap: {
+          changefreq: 'weekly',
+          priority: 0.5,
+          filename: 'sitemap.xml',
+          ignorePatterns: ['/tags/**', '/search'],
+        },
       } satisfies Preset.Options,
     ],
   ],
@@ -82,8 +88,25 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
+    metadata: [
+      { name: 'description', content: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models' },
+      { name: 'keywords', content: 'LLM, Semantic Router, Mixture of Models, vLLM, Routing, AI Gateway, Envoy, ExtProc' },
+      { name: 'author', content: 'vLLM Semantic Router Team' },
+      { property: 'og:title', content: 'vLLM Semantic Router' },
+      { property: 'og:description', content: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models' },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:site_name', content: 'vLLM Semantic Router' },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: 'vLLM Semantic Router' },
+      { name: 'twitter:description', content: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models' },
+
+      // GEO metadata config
+      { name: 'geo.region', content: 'US-CA' },
+      { name: 'geo.placename', content: 'San Francisco' },
+      { name: 'geo.position', content: '37.7749;-122.4194' },
+      { name: 'ICBM', content: '37.7749, -122.4194' },
+    ],
     navbar: {
       title: 'vLLM Semantic Router',
       logo: {
@@ -235,6 +258,34 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
   } satisfies Preset.ThemeConfig,
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'alternate',
+        hreflang: 'en',
+        href: 'https://vllm-semantic-router.com/',
+      },
+    },
+    {
+      tagName: 'script',
+      attributes: { type: 'application/ld+json' },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        'name': 'vLLM Semantic Router',
+        'applicationCategory': 'AIInfrastructure',
+        'operatingSystem': 'Cross-platform',
+        'description': 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models',
+        'url': 'https://vllm-semantic-router.com',
+        'publisher': {
+          '@type': 'Organization',
+          'name': 'vLLM Semantic Router Team',
+          'url': 'https://github.com/vllm-project/semantic-router',
+        },
+      }),
+    },
+  ],
 }
 
 export default config

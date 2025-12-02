@@ -1,0 +1,42 @@
+[
+  {
+    "description": "Complex math should trigger reasoning",
+    "query": "Solve this differential equation: dy/dx = 3x^2",
+    "expected_category": "math",
+    "expected_model": "openai/gpt-oss-20b",
+    "expected_use_reasoning": true,
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Simple math should not trigger reasoning",
+    "query": "What is 5 + 3?",
+    "expected_category": "math",
+    "expected_model": "openai/gpt-oss-20b",
+    "expected_use_reasoning": false,
+    "expected_confidence_min": 0.8
+  },
+  {
+    "description": "Complex science should trigger reasoning",
+    "query": "Explain quantum entanglement and its implications for information theory",
+    "expected_category": "science",
+    "expected_model": "openai/gpt-oss-20b",
+    "expected_use_reasoning": true,
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Simple science should not trigger reasoning",
+    "query": "What color is the sky?",
+    "expected_category": "science",
+    "expected_model": "openai/gpt-oss-20b",
+    "expected_use_reasoning": false,
+    "expected_confidence_min": 0.8
+  },
+  {
+    "description": "Complex technology should trigger reasoning",
+    "query": "Design a distributed system architecture for high availability",
+    "expected_category": "technology",
+    "expected_model": "openai/gpt-oss-20b",
+    "expected_use_reasoning": true,
+    "expected_confidence_min": 0.7
+  }
+]

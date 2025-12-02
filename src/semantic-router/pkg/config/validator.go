@@ -60,6 +60,39 @@ func validateVLLMEndpoints(endpoints []VLLMEndpoint) error {
 	return nil
 }
 
+// validateClassifierVLLMEndpoint validates a classifier vLLM endpoint configuration
+func validateClassifierVLLMEndpoint(endpoint ClassifierVLLMEndpoint) error {
+	if endpoint.Address == "" {
+		return fmt.Errorf("classifier_vllm_endpoint.address is required")
+	}
+	if err := validateIPAddress(endpoint.Address); err != nil {
+		return fmt.Errorf("classifier_vllm_endpoint address validation failed: %w", err)
+	}
+	if endpoint.Port < 1 || endpoint.Port > 65535 {
+		return fmt.Errorf("classifier_vllm_endpoint.port must be between 1 and 65535, got: %d", endpoint.Port)
+	}
+	return nil
+}
+
+// validateVLLMClassifierConfig validates vLLM classifier configuration when use_vllm is true
+func validateVLLMClassifierConfig(cfg *PromptGuardConfig) error {
+	if !cfg.UseVLLM {
+		return nil // Skip validation if not using vLLM
+	}
+
+	// Validate endpoint
+	if err := validateClassifierVLLMEndpoint(cfg.ClassifierVLLMEndpoint); err != nil {
+		return fmt.Errorf("prompt_guard vLLM configuration validation failed: %w", err)
+	}
+
+	// Validate model name
+	if cfg.VLLMModelName == "" {
+		return fmt.Errorf("prompt_guard.vllm_model_name is required when use_vllm is true")
+	}
+
+	return nil
+}
+
 // isValidIPv4 checks if the address is a valid IPv4 address
 func isValidIPv4(address string) bool {
 	ip := net.ParseIP(address)
@@ -118,6 +151,11 @@ func validateConfigStructure(cfg *RouterConfig) error {
 
 	// Validate vLLM endpoints address formats
 	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
+		return err
+	}
+
+	// Validate vLLM classifier configurations
+	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err
 	}
 

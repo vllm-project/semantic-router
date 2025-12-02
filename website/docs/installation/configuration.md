@@ -60,6 +60,17 @@ model_config:
       allow_by_default: true
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
     preferred_endpoints: ["endpoint1"]
+  # Example: DeepSeek model with custom name
+  "ds-v31-custom":
+    reasoning_family: "deepseek"  # Uses DeepSeek reasoning syntax
+    preferred_endpoints: ["endpoint1"]
+  # Example: Qwen3 model with custom name
+  "my-qwen3-model":
+    reasoning_family: "qwen3"     # Uses Qwen3 reasoning syntax
+    preferred_endpoints: ["endpoint2"]
+  # Example: Model without reasoning support
+  "phi4":
+    preferred_endpoints: ["endpoint1"]
 
 # Classification models
 classifier:
@@ -154,23 +165,9 @@ reasoning_families:
 # Global default reasoning effort level
 default_reasoning_effort: "medium"
 
-# Model configurations - assign reasoning families to specific models
-model_config:
-  # Example: DeepSeek model with custom name
-  "ds-v31-custom":
-    reasoning_family: "deepseek"  # This model uses DeepSeek reasoning syntax
-    preferred_endpoints: ["endpoint1"]
-  
-  # Example: Qwen3 model with custom name
-  "my-qwen3-model":
-    reasoning_family: "qwen3"     # This model uses Qwen3 reasoning syntax  
-    preferred_endpoints: ["endpoint2"]
-  
-  # Example: Model without reasoning support
-  "phi4":
-    # No reasoning_family field - this model doesn't support reasoning mode
-    preferred_endpoints: ["endpoint1"]
 ```
+
+Assign reasoning families inside the same `model_config` block above—use `reasoning_family` per model (see `ds-v31-custom` and `my-qwen3-model` in the example). Models without reasoning syntax simply omit the field (e.g., `phi4`).
 
 ## Configuration Recipes (presets)
 
@@ -205,6 +202,23 @@ vllm_endpoints:
 model_config:
   "llama2-7b":            # Model name - must match vLLM --served-model-name
     preferred_endpoints: ["my_endpoint"]
+  "qwen3":               # Another model served by the same endpoint
+    preferred_endpoints: ["my_endpoint"]
+```
+
+### Example: Llama / Qwen Backend Configuration
+
+```yaml
+vllm_endpoints:
+  - name: "local-vllm"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "llama2-7b":
+    preferred_endpoints: ["local-vllm"]
+  "qwen3":
+    preferred_endpoints: ["local-vllm"]
 ```
 
 #### Address Format Requirements
@@ -240,20 +254,19 @@ address: "127.0.0.1:8080"     # ❌ Use separate 'port' field
 
 #### Model Name Consistency
 
-The model names in the `models` array must **exactly match** the `--served-model-name` parameter used when starting your vLLM server:
+Model names in `model_config` must **exactly match** the `--served-model-name` parameter used when starting your vLLM server:
 
 ```bash
-# vLLM server command:
-vllm serve meta-llama/Llama-2-7b-hf --served-model-name llama2-7b
+# vLLM server command (examples):
+vllm serve meta-llama/Llama-2-7b-hf --served-model-name llama2-7b --port 8000
+vllm serve Qwen/Qwen3-1.8B --served-model-name qwen3 --port 8000
 
 # config.yaml must reference the model in model_config:
 model_config:
   "llama2-7b":  # ✅ Matches --served-model-name
     preferred_endpoints: ["your-endpoint"]
-
-vllm_endpoints:
-  "llama2-7b":             # ✅ Matches --served-model-name
-    # ... configuration
+  "qwen3":      # ✅ Matches --served-model-name
+    preferred_endpoints: ["your-endpoint"]
 ```
 
 ### Model Settings

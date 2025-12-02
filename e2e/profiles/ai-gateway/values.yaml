@@ -383,6 +383,48 @@ config:
             system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
             mode: "replace"
 
+    - name: urgent_request
+      description: "Urgent requests requiring immediate attention"
+      priority: 30
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "urgent_keywords"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are handling an urgent request. Prioritize quick and direct responses."
+            mode: "replace"
+
+    - name: sensitive_data
+      description: "Queries containing sensitive data keywords (SSN and credit card)"
+      priority: 40
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "sensitive_keywords"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are handling a query with sensitive data. Be cautious and provide security-focused guidance."
+            mode: "replace"
+
     - name: other_decision
       description: "General knowledge and miscellaneous topics"
       priority: 1
@@ -478,7 +520,17 @@ config:
   keyword_rules:
     - name: "thinking"
       operator: "OR"
-      keywords: ["urgent", "immediate", "asap", "think", "careful"]
+      keywords: ["think", "careful"]
+      case_sensitive: false
+
+    - name: "urgent_keywords"
+      operator: "OR"
+      keywords: ["urgent", "immediate", "asap", "emergency"]
+      case_sensitive: false
+
+    - name: "sensitive_keywords"
+      operator: "AND"
+      keywords: ["SSN", "credit card"]
       case_sensitive: false
 
 

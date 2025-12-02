@@ -14,10 +14,10 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 Semantic Router depends on the following software:
 
-- **Go**: V1.24.1 or higher (matches the module requirements)
-- **Rust**: V1.90.0 or higher (for Candle bindings)
-- **Python**: V3.8 or higher (for model downloads)
-- **HuggingFace CLI**: Required for fetching models (`pip install huggingface_hub`)
+- **Go**: v1.24.1 or higher (matches the module requirements)
+- **Rust**: v1.90.0 or higher (for Candle bindings)
+- **Python**: v3.8 or higher (for model downloads)
+- **HuggingFace CLI**: Required for fetching models
 
 ## Local Installation
 
@@ -102,7 +102,7 @@ This downloads the CPU-optimized BERT models for:
 
 ### 5. Configure Backend Endpoints
 
-Edit `config/config.yaml` to point to your LLM endpoints:
+Edit `config/config.yaml` to point to your vLLM or OpenAI-compatible backend:
 
 ```yaml
 # Example: Configure your vLLM or Ollama endpoints
@@ -118,6 +118,8 @@ model_config:
       allow_by_default: false  # Deny all PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
     preferred_endpoints: ["your-endpoint"]
+
+default_model: "your-model-name"
 ```
 
 :::note[**Important: Address Format Requirements**]
@@ -138,26 +140,57 @@ The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain n
 :::
 
 :::note[**Important: Model Name Consistency**]
-The model name in your configuration **must exactly match** the `--served-model-name` parameter used when starting your vLLM server:
+The model name in `model_config` must **exactly match** the `--served-model-name` used when starting vLLM. If they don't match, the router won't route requests to your model.
+
+If `--served-model-name` is not set, you can also use the default `id` returned by `/v1/models` (e.g., `Qwen/Qwen3-1.8B`) as the key in `model_config` and for `default_model`.
+:::
+
+#### Example: Llama Model
 
 ```bash
-# When starting vLLM server:
-vllm serve microsoft/phi-4 --port 11434 --served-model-name your-model-name
-
-# The config.yaml must reference the model in model_config:
-model_config:
-  "your-model-name":  # ✅ Must match --served-model-name
-    preferred_endpoints: ["your-endpoint"]
-
-vllm_endpoints:
-  "your-model-name":             # ✅ Must match --served-model-name
-    # ... configuration
+# Start vLLM with Llama
+vllm serve meta-llama/Llama-2-7b-hf --port 8000 --served-model-name llama2-7b
 ```
 
-If these names don't match, the router won't be able to route requests to your model.
+```yaml
+# config.yaml
+vllm_endpoints:
+  - name: "llama-endpoint"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
 
-The default configuration includes example endpoints that you should update for your setup.
-:::
+model_config:
+  "llama2-7b":                    # Must match --served-model-name
+    preferred_endpoints: ["llama-endpoint"]
+
+default_model: "llama2-7b"
+```
+
+#### Example: Qwen Model
+
+```bash
+# Start vLLM with Qwen
+vllm serve Qwen/Qwen3-1.8B --port 8000 --served-model-name qwen3
+```
+
+```yaml
+# config.yaml
+vllm_endpoints:
+  - name: "qwen-endpoint"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+
+model_config:
+  "qwen3":                        # Must match --served-model-name
+    reasoning_family: "qwen3"     # Enable Qwen3 reasoning syntax
+    preferred_endpoints: ["qwen-endpoint"]
+
+default_model: "qwen3"
+```
+
+For more configuration options, see the [Configuration Guide](configuration.md).
 
 ## Running the Router
 
@@ -192,9 +225,31 @@ curl -X POST http://localhost:8801/v1/chat/completions \
   }'
 ```
 
-:::tip[VSR Decision Tracking]
-The router automatically adds response headers (`x-vsr-selected-category`, `x-vsr-selected-reasoning`, `x-vsr-selected-model`) to help you understand how requests are being processed. Use `curl -i` to see these headers in action. See [VSR Headers Documentation](../troubleshooting/vsr-headers.md) for details.
+Using `"model": "MoM"` (Mixture of Models) lets the router automatically select the best model based on the query category.
+
+:::tip[VSR Decision Headers]
+Use `curl -i` to see routing decision headers (`x-vsr-selected-category`, `x-vsr-selected-model`). See [VSR Headers](../troubleshooting/vsr-headers.md) for details.
 :::
+
+### 3. Monitoring (Optional)
+
+By default, the router exposes Prometheus metrics at `:9190/metrics`. To disable monitoring:
+
+**Option A: CLI flag**
+
+```bash
+./bin/router -metrics-port=0
+```
+
+**Option B: Configuration**
+
+```yaml
+observability:
+  metrics:
+    enabled: false
+```
+
+When disabled, the `/metrics` endpoint won't start, but all other functionality remains unaffected.
 
 ## Next Steps
 
@@ -206,7 +261,7 @@ After successful installation:
 
 ## Getting Help
 
-- **Issues**: Report bugs on [GitHub Issues](https://github.com/your-org/semantic-router/issues)
+- **Issues**: Report bugs on [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
 - **Documentation**: Full documentation at [Read the Docs](https://vllm-semantic-router.com/)
 
 You now have a working Semantic Router that runs entirely on CPU and intelligently routes requests to specialized models!

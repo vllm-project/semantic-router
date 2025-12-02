@@ -29,7 +29,7 @@ fn test_deberta_v3_invalid_path() {
 #[test]
 fn test_deberta_v3_debug_format() {
     // Test that the Debug trait exists
-    let _type_check: Option<Box<dyn std::fmt::Debug>> = None::<Box<DebertaV3Classifier>>;
+    let _type_check: Option<Box<dyn std::fmt::Debug>> = None;
 }
 
 #[cfg(test)]

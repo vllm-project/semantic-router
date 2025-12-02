@@ -189,6 +189,94 @@ development:
 				})
 			})
 
+			Context("with Redis backend", func() {
+				var redisConfigPath string
+
+				BeforeEach(func() {
+					if os.Getenv("SKIP_REDIS_TESTS") == "true" {
+						Skip("Redis tests skipped due to SKIP_REDIS_TESTS=true")
+					}
+
+					redisConfigPath = filepath.Join(tempDir, "redis.yaml")
+					redisConfig := `
+connection:
+  host: "localhost"
+  port: 6379
+  database: 0
+  timeout: 30
+
+index:
+  name: "test_semantic_cache"
+  prefix: "doc:"
+  vector_field:
+    name: "embedding"
+    dimension: 384
+    metric_type: "COSINE"
+  index_type: "HNSW"
+  params:
+    M: 16
+    efConstruction: 64
+
+search:
+  topk: 1
+
+logging:
+  enable_query_log: false
+  enable_metrics: false
+
+development:
+  drop_index_on_startup: true
+  auto_create_index: true
+  verbose_errors: true
+`
+					err := os.WriteFile(redisConfigPath, []byte(redisConfig), 0o644)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should create Redis cache backend successfully with valid config", func() {
+					config := CacheConfig{
+						BackendType:         RedisCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+						BackendConfigPath:   redisConfigPath,
+						EmbeddingModel:      "bert",
+					}
+
+					backend, err := NewCacheBackend(config)
+
+					if err != nil {
+						if strings.Contains(err.Error(), "failed to connect to Redis") ||
+							strings.Contains(err.Error(), "connection refused") ||
+							strings.Contains(err.Error(), "failed to initialize index") {
+							Skip("Redis server not available: " + err.Error())
+						}
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						Expect(backend).NotTo(BeNil())
+						Expect(backend.IsEnabled()).To(BeTrue())
+						Expect(backend.Close()).To(Succeed())
+					}
+				})
+
+				It("should handle disabled Redis cache", func() {
+					config := CacheConfig{
+						BackendType:         RedisCacheType,
+						Enabled:             false,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+						BackendConfigPath:   redisConfigPath,
+						EmbeddingModel:      "bert",
+					}
+
+					backend, err := NewCacheBackend(config)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(backend).NotTo(BeNil())
+					Expect(backend.IsEnabled()).To(BeFalse())
+					Expect(backend.Close()).To(Succeed())
+				})
+			})
+
 			Context("Milvus connection timeouts", func() {
 				It("should respect connection timeout when endpoint is unreachable", func() {
 					unreachableConfigPath := filepath.Join(tempDir, "milvus-unreachable.yaml")
@@ -275,7 +363,7 @@ development:
 			Context("with unsupported backend type", func() {
 				It("should return error for unsupported backend type", func() {
 					config := CacheConfig{
-						BackendType:         "redis", // Unsupported
+						BackendType:         "unsupported_type", // Unsupported
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
@@ -492,7 +580,7 @@ development:
 			It("should return information about available backends", func() {
 				backends := GetAvailableCacheBackends()
 
-				Expect(backends).To(HaveLen(2)) // Memory and Milvus
+				Expect(backends).To(HaveLen(3)) // Memory, Milvus, and Redis
 
 				// Check memory backend info
 				memoryBackend := backends[0]
@@ -509,6 +597,14 @@ development:
 				Expect(milvusBackend.Description).To(ContainSubstring("Milvus vector database"))
 				Expect(milvusBackend.Features).To(ContainElement("Highly scalable"))
 				Expect(milvusBackend.Features).To(ContainElement("Persistent storage"))
+
+				// Check Redis backend info
+				redisBackend := backends[2]
+				Expect(redisBackend.Type).To(Equal(RedisCacheType))
+				Expect(redisBackend.Name).To(Equal("Redis Vector Database"))
+				Expect(redisBackend.Description).To(ContainSubstring("Redis with vector search"))
+				Expect(redisBackend.Features).To(ContainElement("Fast in-memory performance"))
+				Expect(redisBackend.Features).To(ContainElement("TTL support"))
 			})
 		})
 	})
@@ -758,6 +854,44 @@ development:
 			Expect(stats.TotalEntries).To(Equal(0))
 			Expect(stats.HitCount).To(Equal(int64(0)))
 			Expect(stats.MissCount).To(Equal(int64(0)))
+		})
+
+		It("should keep existing HNSW nodes searchable after eviction", func() {
+			cacheWithHNSW := NewInMemoryCache(InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: 0.1,
+				MaxEntries:          2,
+				TTLSeconds:          60, // Set TTL long enough to avoid expiration during test
+				EvictionPolicy:      FIFOEvictionPolicyType,
+				UseHNSW:             true,
+				HNSWM:               4,
+				HNSWEfConstruction:  8,
+				HNSWEfSearch:        8,
+				EmbeddingModel:      "bert",
+			})
+			defer cacheWithHNSW.Close()
+
+			err := cacheWithHNSW.AddEntry("req-1", "test-model", "first query text", []byte("request-1"), []byte("response-1"))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = cacheWithHNSW.AddEntry("req-2", "test-model", "second query text", []byte("request-2"), []byte("response-2"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Sanity check: the second entry should be retrievable before any eviction occurs.
+			resp, found, err := cacheWithHNSW.FindSimilar("test-model", "second query text")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(resp).To(Equal([]byte("response-2")))
+
+			// Adding a third entry triggers eviction (max entries = 2).
+			err = cacheWithHNSW.AddEntry("req-3", "test-model", "third query text", []byte("request-3"), []byte("response-3"))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Entry 2 should still be searchable even after eviction reshuffles the slice.
+			resp, found, err = cacheWithHNSW.FindSimilar("test-model", "second query text")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(resp).To(Equal([]byte("response-2")))
 		})
 	})
 
