@@ -2,8 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -104,10 +107,31 @@ Examples:
 				cli.Info("Dashboard URL: " + dashboardURL)
 			}
 
-			// For K8s/Helm, keep port-forward alive
+			// For K8s/Helm, keep port-forward alive (Issue #3: Add signal handling)
 			if portForwardCmd != nil {
 				cli.Info("\nPort forwarding active. Press Ctrl+C to stop.")
-				_ = portForwardCmd.Wait()
+
+				// Handle interrupt signal for graceful shutdown
+				sigChan := make(chan os.Signal, 1)
+				signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+				// Wait for either process exit or interrupt signal
+				done := make(chan error)
+				go func() {
+					done <- portForwardCmd.Wait()
+				}()
+
+				select {
+				case <-sigChan:
+					cli.Info("Stopping port forwarding...")
+					if portForwardCmd.Process != nil {
+						_ = portForwardCmd.Process.Kill()
+					}
+				case err := <-done:
+					if err != nil {
+						cli.Warning(fmt.Sprintf("Port forwarding exited with error: %v", err))
+					}
+				}
 			}
 
 			return nil

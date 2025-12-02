@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -30,6 +31,12 @@ Example:
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			prompt := strings.Join(args, " ")
+
+			// Issue #6: Add input validation
+			if len(prompt) > 10000 {
+				return fmt.Errorf("prompt too long (max 10000 characters, got %d)", len(prompt))
+			}
+
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			outputFormat := cmd.Parent().Flag("output").Value.String()
 
@@ -65,8 +72,13 @@ func callClassificationAPI(endpoint, prompt string) (*ClassificationResult, erro
 		return nil, err
 	}
 
+	// Issue #4: Add HTTP timeout to prevent hanging
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
 	// Make HTTP request
-	resp, err := http.Post(
+	resp, err := client.Post(
 		fmt.Sprintf("%s/api/v1/classify/intent", endpoint),
 		"application/json",
 		bytes.NewBuffer(jsonData),

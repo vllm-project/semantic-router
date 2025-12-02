@@ -288,7 +288,10 @@ func TestIsDockerRunning(t *testing.T) {
 }
 
 func TestPIDFileOperations(t *testing.T) {
-	// Test PID file path constant
+	// Test PID file path functions
+	pidFilePath := getPIDFilePath()
+	logFilePath := getLogFilePath()
+
 	if pidFilePath == "" {
 		t.Error("pidFilePath should not be empty")
 	}
@@ -297,7 +300,7 @@ func TestPIDFileOperations(t *testing.T) {
 		t.Error("logFilePath should not be empty")
 	}
 
-	// Verify paths are absolute or in /tmp
+	// Verify paths are absolute
 	if !filepath.IsAbs(pidFilePath) {
 		t.Errorf("pidFilePath should be absolute, got: %s", pidFilePath)
 	}
@@ -309,24 +312,31 @@ func TestPIDFileOperations(t *testing.T) {
 
 func TestDeployLocalPIDFileCreation(t *testing.T) {
 	// This is an integration test that would require actually running DeployLocal
-	// For now, we just verify the constants are set correctly
+	// For now, we just verify the functions return valid paths
 	t.Run("verify PID file path", func(t *testing.T) {
-		expectedPath := "/tmp/vsr-local-deployment.pid"
-		if pidFilePath != expectedPath {
-			t.Errorf("pidFilePath = %q, expected %q", pidFilePath, expectedPath)
+		pidFilePath := getPIDFilePath()
+		if pidFilePath == "" {
+			t.Error("getPIDFilePath() returned empty string")
+		}
+		if !filepath.IsAbs(pidFilePath) {
+			t.Errorf("getPIDFilePath() should return absolute path, got: %s", pidFilePath)
 		}
 	})
 
 	t.Run("verify log file path", func(t *testing.T) {
-		expectedPath := "/tmp/vsr-local-deployment.log"
-		if logFilePath != expectedPath {
-			t.Errorf("logFilePath = %q, expected %q", logFilePath, expectedPath)
+		logFilePath := getLogFilePath()
+		if logFilePath == "" {
+			t.Error("getLogFilePath() returned empty string")
+		}
+		if !filepath.IsAbs(logFilePath) {
+			t.Errorf("getLogFilePath() should return absolute path, got: %s", logFilePath)
 		}
 	})
 }
 
 func TestUndeployLocalWithNoPIDFile(t *testing.T) {
 	// Ensure PID file doesn't exist
+	pidFilePath := getPIDFilePath()
 	os.Remove(pidFilePath)
 
 	// Call UndeployLocal - it should handle missing PID file gracefully

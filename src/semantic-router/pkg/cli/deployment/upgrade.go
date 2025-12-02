@@ -15,6 +15,9 @@ import (
 func UpgradeLocal(configPath string) error {
 	cli.Info("Upgrading local router...")
 
+	// Get cross-platform file path
+	pidFilePath := getPIDFilePath()
+
 	// Check if PID file exists (router is running)
 	if _, err := os.Stat(pidFilePath); os.IsNotExist(err) {
 		cli.Warning("No running local router found")
