@@ -14,10 +14,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const (
-	pidFilePath = "/tmp/vsr-local-deployment.pid"
-	logFilePath = "/tmp/vsr-local-deployment.log"
-)
+// getPIDFilePath returns the cross-platform PID file path
+func getPIDFilePath() string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("vsr-local-deployment-%d.pid", os.Getuid()))
+}
+
+// getLogFilePath returns the cross-platform log file path
+func getLogFilePath() string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("vsr-local-deployment-%d.log", os.Getuid()))
+}
 
 // DeploymentStatus represents the status of a deployment
 type DeploymentStatus struct {
@@ -58,8 +63,12 @@ func DeployLocal(configPath string) error {
 
 	cli.Info(fmt.Sprintf("Starting router with config: %s", absConfigPath))
 
-	// Open log file for output
-	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	// Get cross-platform file paths
+	pidFilePath := getPIDFilePath()
+	logFilePath := getLogFilePath()
+
+	// Open log file for output (Issue #5: restrictive permissions 0600)
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
@@ -74,10 +83,12 @@ func DeployLocal(configPath string) error {
 		return fmt.Errorf("failed to start router: %w", err)
 	}
 
-	// Store PID for later management
+	// Store PID for later management (Issue #1: kill process if PID file write fails)
 	pid := cmd.Process.Pid
-	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0o644); err != nil {
-		cli.Warning(fmt.Sprintf("Failed to write PID file: %v", err))
+	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0o600); err != nil {
+		// Kill process if we can't track it
+		_ = cmd.Process.Kill()
+		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
 	cli.Success(fmt.Sprintf("Router started (PID: %d)", pid))
@@ -299,6 +310,10 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 // UndeployLocal stops the local router process
 func UndeployLocal() error {
 	cli.Info("Stopping local router...")
+
+	// Get cross-platform file paths
+	pidFilePath := getPIDFilePath()
+	logFilePath := getLogFilePath()
 
 	// Check if PID file exists
 	if _, err := os.Stat(pidFilePath); os.IsNotExist(err) {
@@ -609,6 +624,10 @@ func DetectLocalDeployment() *DeploymentStatus {
 		IsRunning: false,
 	}
 
+	// Get cross-platform file paths
+	pidFilePath := getPIDFilePath()
+	logFilePath := getLogFilePath()
+
 	// Check if PID file exists
 	if _, err := os.Stat(pidFilePath); err == nil {
 		pidBytes, err := os.ReadFile(pidFilePath)
@@ -832,6 +851,8 @@ func detectDeploymentType(namespace string) string {
 
 // fetchLocalLogs fetches logs from local deployment
 func fetchLocalLogs(follow bool, tail int, since string, grep string) error {
+	logFilePath := getLogFilePath()
+
 	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("log file not found: %s", logFilePath)
 	}

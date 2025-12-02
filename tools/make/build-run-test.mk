@@ -19,7 +19,7 @@ build-router: $(if $(CI),rust-ci,rust)
 build-cli: ## Build the vsr CLI tool
 	@$(LOG_TARGET)
 	@mkdir -p bin
-	@cd src/semantic-router && go build -o ../../bin/vsr cmd/vsr/main.go
+	@cd src/semantic-router && go build -ldflags="-r $(PWD)/candle-binding/target/release" -o ../../bin/vsr cmd/vsr/main.go
 	@echo "vsr CLI built successfully: bin/vsr"
 
 # Build all (router + CLI)
