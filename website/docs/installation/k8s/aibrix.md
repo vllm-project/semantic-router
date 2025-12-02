@@ -56,6 +56,7 @@ Deploy the semantic router service with all required components using Helm:
 
 ```bash
 # Install with custom values from GHCR OCI registry
+# (Optional) If you use a registry mirror/proxy, append: --set global.imageRegistry=<your-registry>
 helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
   --version v0.0.0-latest \
   --namespace vllm-semantic-router-system \

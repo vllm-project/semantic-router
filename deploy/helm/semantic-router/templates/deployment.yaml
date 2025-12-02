@@ -26,22 +26,23 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- $registry := trimSuffix "/" (default "" .Values.global.imageRegistry) }}
+      {{- $prefix := ternary "" (printf "%s/" $registry) (eq $registry "") }}
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- if .Values.initContainer.enabled }}
       initContainers:
       - name: model-downloader
-        image: {{ .Values.initContainer.image }}
+        {{- $initImage := .Values.initContainer.image }}
+        image: "{{ $prefix }}{{ $initImage.repository }}:{{ $initImage.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ $initImage.pullPolicy | default "IfNotPresent" }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
         command: ["/bin/bash", "-c"]
         args:
         - |
           set -e
-          echo "Installing Hugging Face Hub..."
-          pip install -U --no-cache-dir "huggingface_hub>=0.19.0"
-
           echo "Downloading models to persistent volume..."
           cd /app/models
 
@@ -79,7 +80,7 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Chart.Name }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        image: "{{ $prefix }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         {{- with .Values.args }}
         args:
