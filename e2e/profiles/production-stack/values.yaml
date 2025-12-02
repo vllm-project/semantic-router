@@ -1,0 +1,168 @@
+# Semantic Router Configuration for Production Stack
+# Minimal configuration for HA/LB/Monitoring tests
+config:
+  # Allow Envoy to re-run route matching after Semantic Router sets x-selected-model
+  clear_route_cache: true
+  default_model: general-expert
+
+  # Model configuration - base model with LoRA adapters
+  model_config:
+    "base-model":
+      reasoning_family: "qwen3"
+      loras:
+        - name: "science-expert"
+          description: "Specialized for science domains"
+        - name: "social-expert"
+          description: "Optimized for social sciences"
+        - name: "math-expert"
+          description: "Fine-tuned for mathematics"
+        - name: "law-expert"
+          description: "Specialized for legal questions"
+        - name: "humanities-expert"
+          description: "Optimized for humanities"
+        - name: "general-expert"
+          description: "General-purpose adapter"
+
+  # Classifier configuration - required for domain-classify test
+  classifier:
+    category_model:
+      model_id: models/category_classifier_modernbert-base_model
+      use_modernbert: true
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+    pii_model:
+      # Required for pii-detection test
+      model_id: models/lora_pii_detector_bert-base-uncased_model
+      use_modernbert: false
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+
+  # Categories required for domain-classify test cases
+  categories:
+    - name: business
+      description: "Business, corporate strategy, management, finance"
+    - name: philosophy
+      description: "Philosophical traditions, ethics, logic"
+    - name: biology
+      description: "Molecular biology, genetics, cell biology"
+    - name: health
+      description: "Anatomy, physiology, diseases, treatments"
+    - name: computer science
+      description: "Algorithms, data structures, programming"
+    - name: engineering
+      description: "Engineering disciplines, design, problem-solving"
+    - name: psychology
+      description: "Cognitive processes, behavioral patterns"
+    - name: math
+      description: "Mathematics, algebra, calculus, geometry"
+    - name: chemistry
+      description: "Chemical reactions, molecular structures"
+    - name: physics
+      description: "Physical laws, mechanics, thermodynamics"
+    - name: history
+      description: "Historical events, time periods, cultures"
+    - name: law
+      description: "Legal principles, case law, statutory interpretation"
+    - name: economics
+      description: "Microeconomics, macroeconomics, financial markets"
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+
+  # Simple default decision - routes all requests to base model
+  decisions:
+    - name: default_decision
+      description: "Default route for all requests"
+      priority: 1
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.8
+
+  strategy: "priority"
+
+  # BERT model for embeddings
+  bert_model:
+    model_id: models/all-MiniLM-L12-v2
+    threshold: 0.6
+    use_cpu: true
+
+  # Semantic cache - required for semantic-cache test
+  semantic_cache:
+    enabled: true
+    backend_type: "memory"
+    similarity_threshold: 0.8
+    max_entries: 1000
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+    use_hnsw: true
+    hnsw_m: 16
+    hnsw_ef_construction: 200
+    embedding_model: "bert"
+
+  # Tools - disabled (not needed for production-stack tests)
+  tools:
+    enabled: false
+
+  # Prompt guard - required for jailbreak-detection test
+  prompt_guard:
+    enabled: true
+    use_modernbert: true
+    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+  # Router configuration - minimal settings
+  router:
+    high_confidence_threshold: 0.99
+    low_latency_threshold_ms: 2000
+    default_confidence_threshold: 0.95
+    default_max_latency_ms: 5000
+
+  # Reasoning family configurations
+  reasoning_families:
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+
+  default_reasoning_effort: high
+
+  # API Configuration
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets:
+          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+  # Observability Configuration
+  observability:
+    tracing:
+      enabled: false
+
+# Keep consistent with the default chart: initContainer, model downloads, and PVC use chart defaults
+image:
+  pullPolicy: IfNotPresent
