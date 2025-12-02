@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/cmd/vsr/commands"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -51,11 +52,20 @@ For detailed help on any command, use:
 	rootCmd.AddCommand(commands.NewConfigCmd())
 	rootCmd.AddCommand(commands.NewGetCmd())
 	rootCmd.AddCommand(commands.NewDeployCmd())
+	rootCmd.AddCommand(commands.NewUndeployCmd())
+	rootCmd.AddCommand(commands.NewUpgradeCmd())
 	rootCmd.AddCommand(commands.NewStatusCmd())
 	rootCmd.AddCommand(commands.NewLogsCmd())
+	rootCmd.AddCommand(commands.NewModelCmd())
+	rootCmd.AddCommand(commands.NewDebugCmd())
+	rootCmd.AddCommand(commands.NewHealthCmd())
+	rootCmd.AddCommand(commands.NewDiagnoseCmd())
+	rootCmd.AddCommand(commands.NewDashboardCmd())
+	rootCmd.AddCommand(commands.NewMetricsCmd())
 	rootCmd.AddCommand(commands.NewTestCmd())
 	rootCmd.AddCommand(commands.NewInstallCmd())
 	rootCmd.AddCommand(commands.NewInitCmd())
+	rootCmd.AddCommand(commands.NewCompletionCmd())
 
 	// Execute
 	if err := rootCmd.Execute(); err != nil {

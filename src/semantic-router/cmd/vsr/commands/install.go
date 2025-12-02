@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 )
 
@@ -64,7 +65,7 @@ Available templates:
 func initializeConfig(outputPath, template string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -77,7 +78,7 @@ func initializeConfig(outputPath, template string) error {
 	templateContent := getTemplate(template)
 
 	// Write to file
-	if err := os.WriteFile(outputPath, []byte(templateContent), 0644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(templateContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
