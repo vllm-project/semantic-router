@@ -36,11 +36,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate date tag for nightly builds
-        id: date
-        if: inputs.is_nightly == true
-        run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -48,5 +43,4 @@ jobs:
           file: ./Dockerfile.precommit
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
-          tags: |
-            ${{ inputs.is_nightly != true && format('ghcr.io/{0}/semantic-router/precommit:latest', env.REPOSITORY_OWNER_LOWER) || '' }}
+          tags: ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/precommit:latest
