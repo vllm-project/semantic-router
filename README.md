@@ -94,18 +94,52 @@ Watch the quick demo of the dashboard below:
 
 ### Using VSR CLI (Recommended)
 
-The `vsr` CLI tool is the easiest way to manage your Semantic Router.
+The `vsr` CLI tool provides a unified interface for managing the vLLM Semantic Router across all environments. It reduces setup time from hours to minutes with intelligent auto-detection, comprehensive diagnostics, and beautiful CLI output.
 
-1. **Install the CLI:**
-   ```bash
-   make install-cli
-   ```
+#### Installation
 
-2. **Initialize and Deploy:**
-   ```bash
-   vsr init
-   vsr deploy docker
-   ```
+```bash
+# Clone and build
+cd semantic-router/src/semantic-router
+make build-cli
+export PATH=$PATH:$(pwd)/bin
+
+# Verify installation
+vsr --version
+```
+
+#### Get Started in 4 Commands
+
+```bash
+vsr init                    # Initialize configuration
+make download-models        # Download AI models
+vsr config validate        # Validate setup
+vsr deploy docker          # Deploy with Docker Compose
+```
+
+#### Key Features
+
+- **Multi-Environment Support**: Deploy to Local, Docker, Kubernetes, or Helm
+- **Model Management**: Download, validate, list, and inspect models
+- **Health Monitoring**: Status checks, diagnostics, and health reports
+- **Debug Tools**: Interactive debugging and troubleshooting
+- **Dashboard Integration**: Auto-detect and open dashboard in browser
+- **Enhanced Logging**: Multi-environment log fetching with filtering
+
+#### Common Commands
+
+```bash
+vsr status                  # Check deployment status
+vsr logs --follow          # View logs in real-time
+vsr health                 # Quick health check
+vsr dashboard              # Open dashboard
+vsr model list             # List available models
+vsr debug                  # Run diagnostics
+vsr upgrade docker         # Upgrade deployment
+vsr undeploy docker        # Stop deployment
+```
+
+For complete CLI documentation, see [src/semantic-router/cmd/vsr/README.md](src/semantic-router/cmd/vsr/README.md) or [Quick Start Guide](src/semantic-router/cmd/vsr/QUICKSTART.md).
 
 ### Using Quickstart Script
 
