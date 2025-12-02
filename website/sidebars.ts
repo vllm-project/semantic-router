@@ -131,6 +131,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',
         'proposals/production-stack-integration',
