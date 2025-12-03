@@ -168,7 +168,7 @@ initContainer:
     - name: lora_intent_classifier_bert-base-uncased_model
       repo: LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model
     - name: category_classifier_modernbert-base_model
-      repo: LLM-Semantic-Router/category_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/category_classifier_modernbert-base_trained_model
     - name: pii_classifier_modernbert-base_model
       repo: LLM-Semantic-Router/pii_classifier_modernbert-base_model
     - name: jailbreak_classifier_modernbert-base_model

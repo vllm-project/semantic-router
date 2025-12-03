@@ -3,6 +3,7 @@ package testcases
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,9 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
 )
+
+//go:embed testdata/decision_fallback_cases.json
+var decisionFallbackCasesJSON []byte
 
 func init() {
 	pkgtestcases.Register("decision-fallback-behavior", pkgtestcases.TestCase{
@@ -27,6 +31,12 @@ type DecisionFallbackCase struct {
 	ExpectedDecision string `json:"expected_decision"`
 	ShouldFallback   bool   `json:"should_fallback"`
 	Description      string `json:"description"`
+}
+
+// DecisionFallbackTestData holds the test cases loaded from JSON
+type DecisionFallbackTestData struct {
+	Description string                 `json:"description"`
+	TestCases   []DecisionFallbackCase `json:"test_cases"`
 }
 
 // DecisionFallbackResult tracks the result of a single fallback test
@@ -52,38 +62,15 @@ func testDecisionFallback(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 	defer stopPortForward()
 
-	// Define test cases
-	testCases := []DecisionFallbackCase{
-		{
-			Query:            "What is the weather like today?",
-			ExpectedDecision: "other_decision", // Generic fallback
-			ShouldFallback:   true,
-			Description:      "Weather query should fall back to general/other decision",
-		},
-		{
-			Query:            "Tell me a joke",
-			ExpectedDecision: "other_decision",
-			ShouldFallback:   true,
-			Description:      "Entertainment query should fall back to general decision",
-		},
-		{
-			Query:            "Random unclassified query about nothing specific",
-			ExpectedDecision: "other_decision",
-			ShouldFallback:   true,
-			Description:      "Unclassified query should fall back to general decision",
-		},
-		{
-			Query:            "What is 15 * 23?",
-			ExpectedDecision: "math_decision",
-			ShouldFallback:   false,
-			Description:      "Math query should match specific decision, not fallback",
-		},
-		{
-			Query:            "Explain photosynthesis",
-			ExpectedDecision: "biology_decision",
-			ShouldFallback:   false,
-			Description:      "Biology query should match specific decision, not fallback",
-		},
+	// Load test cases from embedded JSON
+	var testData DecisionFallbackTestData
+	if err := json.Unmarshal(decisionFallbackCasesJSON, &testData); err != nil {
+		return fmt.Errorf("failed to parse decision fallback test cases: %w", err)
+	}
+	testCases := testData.TestCases
+
+	if opts.Verbose {
+		fmt.Printf("[Test] Loaded %d test cases from testdata/decision_fallback_cases.json\n", len(testCases))
 	}
 
 	// Run fallback tests

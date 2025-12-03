@@ -1,23 +1,159 @@
 [
   {
     "category": "biology",
+    "question": "What is the process by which plants convert sunlight into energy?"
+  },
+  {
+    "category": "health",
+    "question": "The creatine kinase reaction is:"
+  },
+  {
+    "category": "computer science",
+    "question": "Which of the following is true of mutation-based fuzzing?"
+  },
+  {
+    "category": "philosophy",
+    "question": "Which of the following is another name for the fallacy of amphiboly?"
+  },
+  {
+    "category": "engineering",
+    "question": "A 125/250-volt three-wire system has a load on the positive side of 500 amp, on the negative side of 450 amp, the neutral current therefore being 50 amp. If each machine of the balancer set has an efficiency of 86 percent, calculate the current for each of these machines and for the main generator."
+  },
+  {
+    "category": "psychology",
+    "question": "If asked how tall a person across the street is, you can give anaccurate estimation. Discuss this perceptual phenomenon."
+  },
+  {
+    "category": "math",
+    "question": "A group of 10 people is split into 3 different committees of 3, 4, and 3 people, respectively. In how many ways can this be done?"
+  },
+  {
+    "category": "chemistry",
+    "question": "A proposed mechanism for a reaction is as follows: NO2 + F2 \u2192NO2F + F Slow step. F + NO2 \u2192 NO2F Fast step. What is the order of the overall reaction?"
+  },
+  {
+    "category": "biology",
     "question": "Flower length varies between two strains of a certain plant. This is due to a specific number ofpolygenes. Using the data given below, find approximately how many genes are in the series. Group Mean (X) Variance (s^2) Cause of variation Strain A 21 mm 1.43 mm^2 Environment Strain B 39 1.16 Environment F_1 (A \u00d7 B) 30 1.80 Environment F_2 (F_1 \u00d7 F_1) 30 5.10 Genes, environment"
   },
   {
-    "category": "biology",
-    "question": "In chloroplasts, a certain protein is found in the lumen of the thylakoid (thylakoid space). It is transcribed in the nucleus and synthesized on cytoplasmic ribosomes. How many membrane bilayers must this protein cross to reach its final location?"
+    "category": "psychology",
+    "question": "What seems to be the case when the folk saying \"opposites attract\" (i.e., dissimilar attitudes tend to cause liking) when it is considered in light of current research?"
   },
   {
     "category": "biology",
-    "question": "Distinguish between covalent and ionic bonds."
+    "question": "In an isolated mountain village, the gene frequencies of A, B, andO blood alleles are 0.95, 0.04, and 0.01, respectively. If thetotal population is 424, calculate the number of individualswith O, A, B, and AB type blood."
+  },
+  {
+    "category": "history",
+    "question": "What were the main causes of the agricultural revolution?"
+  },
+  {
+    "category": "history",
+    "question": "How did the invention of the printing press change society?"
+  },
+  {
+    "category": "physics",
+    "question": "A heavy rock and a light rock in free fall (zero air resistance) have the same acceleration. The heavy rock doesn't have a greater acceleration because the"
   },
   {
     "category": "biology",
-    "question": "Why isn't a biome map of the earth a true representationof thevegetation formations found on land?"
+    "question": "How can one demonstrate that amino acids are used tobuild proteinsin cells, while the proteins already in the cell are usedin catabolism?"
+  },
+  {
+    "category": "other",
+    "question": "Tell me a joke."
+  },
+  {
+    "category": "engineering",
+    "question": "600 gal/hr of water is pumped to a height of 25 ft through a pipewith a 2 in. inside diameter, 0.0007 ft. surface roughness, and a total length of 625 ft. The pipeline has valvesand other fittings which may be considered as equivalentto 300 pipe diameters. There is also an additional pressure loss of 8 ft. of water in thepipeline. Determine the power needed to drive the pump ifit is 65 percent efficient."
+  },
+  {
+    "category": "biology",
+    "question": "Describe the development of seed."
   },
   {
     "category": "business",
-    "question": " There are three main types of buying situations in an organization, referred to by Robinson, Faris, and Wind (1967) as _____________."
+    "question": "If a plumber is paid $4.50 per hour for all time worked up to 40 hours, and 1(3/4) time for work m excess of 40 hours. What is his pay for a 50-hour work week?"
+  },
+  {
+    "category": "psychology",
+    "question": "How is aversion therapy used in treating a patient with a particularfetish ?"
+  },
+  {
+    "category": "law",
+    "question": "What is the difference between civil and criminal law?"
+  },
+  {
+    "category": "math",
+    "question": "Eleven pencils cost as much as three pens. If seven pens cost $\\$ 9.24$, what is the cost, in cents, of one pencil?"
+  },
+  {
+    "category": "physics",
+    "question": "A skier is filmed by a motion-picture photographer who notices him traveling down a ski run. The skier travels 36 ft during the fourth second of the filming and 48 ft during the sixth second. What distance did he cover in the eight seconds of filming? Assume that the acceleration is uniform throughout."
+  },
+  {
+    "category": "math",
+    "question": "Is the cumulative distribution function of the standard gaussian distribution $F(x)=1/\\sqrt{2 \\pi} \\int_{-\\infty}^x e^{-t^2/2} dt$ is log-concave?  Return 1 for yes and 0 for no."
+  },
+  {
+    "category": "math",
+    "question": "There are 72 students on the dance team, and 4 over 9 take tap lessons. How many students take tap lessons?"
+  },
+  {
+    "category": "health",
+    "question": "Enzyme assay can be used to identify carriers of:"
+  },
+  {
+    "category": "math",
+    "question": "The graph of the equation $x + 2y + 3 = 0$ is perpendicular to the graph of the equation $ax + 2y + 3 = 0$. What is the value of $a$?"
+  },
+  {
+    "category": "health",
+    "question": "Which statement about protein digestion and absorption is most correct?\n"
+  },
+  {
+    "category": "economics",
+    "question": "If Real GDP = $200 billion and the price index = 200 Nominal GDP is"
+  },
+  {
+    "category": "chemistry",
+    "question": "In one of the experiments on gravitational sedimentation equilibrium, the number ofgambogeparticles in water at 20\u00b0C were monitored. (Gambogeis a yellow pigment not soluble in water.) The following data was obtained: Height in\\mum: 0 25 50 75 100 Mean no. of particles: 203 166 136 112 91 Assuming that thegambogeparticles had a mean volume equal to 9.78 \u00d7 10^-21 m^3 and a density equal to 1351 kg/m^3, calculate the Boltzmann constant."
+  },
+  {
+    "category": "engineering",
+    "question": "Air is introduced through a nozzle into a tank of water to form astream of bubbles. If the bubbles are intended to have a diameterof 2 mm, calculate by how much the pressure of theair at the nozzle must exceed that of the surrounding water. Assume that \\sigma = 72.7 \u00d7 10^-3 N m^-1."
+  },
+  {
+    "category": "other",
+    "question": "About ___ % of adolescent males have homosexual experiences during their teenage years."
+  },
+  {
+    "category": "biology",
+    "question": "How do anesthetics act to reduce or eliminate thesensation of pain?"
+  },
+  {
+    "category": "chemistry",
+    "question": "A flask containing H_2 at 0\u00b0C was sealed off at a pressure of 1 atm and the gas was found to weigh, 4512 g. Calculate the number of moles and the number of molecules of H_2 present."
+  },
+  {
+    "category": "economics",
+    "question": "Consumer preferences determine what will be produced in purecapitalism. For what types of goods might this system ofexpressing individual wants be inadequate?"
+  },
+  {
+    "category": "physics",
+    "question": "A 100-W tungsten lamp operates at a temperature of 1800\u00b0K. How many photons does it emit per second in the interval 5000A\u00b0 to 5001A, in the blackbody approximation?"
+  },
+  {
+    "category": "history",
+    "question": "What were the main features of feudal society?"
+  },
+  {
+    "category": "philosophy",
+    "question": "When someone tries to support a proposition with information that really has nothing to do with the claim being made, that person has probably committed which of the following fallacies?"
+  },
+  {
+    "category": "physics",
+    "question": "A sound wave with frequency f travels through air at speed v. With what speed will a sound wave with frequency 4f travel through the air?"
   },
   {
     "category": "business",
@@ -25,43 +161,103 @@
   },
   {
     "category": "business",
-    "question": "On July 7, Magee Data stock sold at a high of 23(1/8) and a low of 22(5/8). Giant Industrials sold for a high of 24(1/4) and a low of 23(1/2). Mr. Taylor purchased 300 shares of Magee Data at the high of the day and 400 shares of Giant Industrials at the low of the day. What was the cost of his purchase?"
+    "question": "You are willing to buy a new machine for $1,000 because it will save you $150 annually for the next 10 years. What is the rate of return on this investment?"
+  },
+  {
+    "category": "psychology",
+    "question": "Discuss echoic memory. How does its nature differ from that of a tape recorder?"
+  },
+  {
+    "category": "economics",
+    "question": "The demand for which of the following products is likely to be the most elastic?"
+  },
+  {
+    "category": "law",
+    "question": "In which situation would the defendant most likely be guilty of murder?"
   },
   {
     "category": "business",
-    "question": "From this information compute: a) The current ratio. b) The quick asset ratio. c) The net working capital. 1. Current Assets: Current Liabilities Cash $22,150 Accounts Payable $28,500 Marketable Securities 16,000 Notes Payable 20,000 Other Bills Payable 10,000 Accounts Receivable 30,450 Inventories 25,000 Total $93,600 Total $58,500"
+    "question": "Of what is individual freedom to schedule work an example?"
   },
   {
-    "category": "chemistry",
-    "question": "Another application of the relationship given in Problem $1-48$ has to do with the excitedstate energies and lifetimes of atoms and molecules. If we know that the lifetime of an excited state is $10^{-9} \\mathrm{~s}$, then what is the uncertainty in the energy of this state?\n"
+    "category": "math",
+    "question": "Coloring the edges of a complete graph with n vertices in 2 colors (red and blue), what is the smallest n that guarantees there is either a 4-clique in red or a 4-clique in blue?"
+  },
+  {
+    "category": "psychology",
+    "question": "As used in personnel selection, \u201cadverse impact\u201d means that"
+  },
+  {
+    "category": "law",
+    "question": "How does the burden of proof differ between civil and criminal cases?"
   },
   {
     "category": "chemistry",
     "question": "To measure the wavelength of lines in atomic emission and absorption spectra, one uses a spectroscope. Two lines in the yellow emission spectra of hot Na metal, the so-called sodium-D lines, are used to calibrate this instrument. If the wavelength of one of these lines is 5890 \\AA, find the energy of the electronic transition associated with this line, h = 6.62 \u00d7 10^-27 erg-sec."
   },
   {
-    "category": "chemistry",
-    "question": "A solution contains 1 mg per ml of myosin and 10^14 latex particles per ml. When a given volume of this solution is dried on a grid and viewed under the electron microscope, a typical field contains 122 protein molecules and 10 latex particles. Calculate the molecular weight of myosin."
+    "category": "physics",
+    "question": "The line width of a He-Ne laser is 10^3 Hz. The operating wavelength is 6328A\u00b0 and the power is 1milliwatt. (a) How many photons are emitted per second? (b) If the output beam is 1 mm in diameter, at what temperature would a blackbody have to be in order to emit the same number of photons from an equal area and over the same frequency interval as the laser?"
+  },
+  {
+    "category": "philosophy",
+    "question": "What is the difference between ethics and morality?"
   },
   {
     "category": "chemistry",
-    "question": "The barometric formula relates the pressure of a gas of molar mass $M$ at an altitude $h$ to its pressure $p_0$ at sea level. Derive this relation by showing that the change in pressure $\\mathrm{d} p$ for an infinitesimal change in altitude $\\mathrm{d} h$ where the density is $\\rho$ is $\\mathrm{d} p=-\\rho g \\mathrm{~d} h$. Remember that $\\rho$ depends on the pressure. Evaluate the pressure difference between the top and bottom of a laboratory vessel of height 15 cm."
+    "question": "A sealed glass bulb contained helium at a pressure of 750 mm Hg and 27\u00b0C. The bulb was packed in dry ice at - 73\u00b0C. What was the resultant pressure of the helium?"
+  },
+  {
+    "category": "engineering",
+    "question": "The \u0475 -irelation of a nonlinear resistor is given by \u0475 (t) = (1/2)i^2 (t) Is this resistor voltage-controlled? Current-controlled?"
   },
   {
     "category": "computer science",
-    "question": "Consider the following equations concerning a stack module that has the operations Push, Pop, Top, and IsEmpty. Which of the equations does NOT represent the conventional semantics of a stack?"
+    "question": "Explain what is known as the 'Count and/or Compare' methodof stopping a computer job."
+  },
+  {
+    "category": "chemistry",
+    "question": "Calculate the heat of combustion of hydrogen gas at 1500\u00b0K, given that \\DeltaH\u00b0 for the reaction 2H_2(g) + O_2 (g) = 2H_2O(g) is - 115,595.8 cal at 25\u00b0C = 298\u00b0K."
+  },
+  {
+    "category": "health",
+    "question": "In a healthy person maintaining energy balance in equilibrium (i.e. mathematical equality of energy intake and energy expenditure) is generally achieved on a:\n"
+  },
+  {
+    "category": "law",
+    "question": "Bill purchased a can of Sipep from the Ajax Minimart. After he finished drinking the Sipep, Bill noticed that the can contained dead insects stuck on the inside bottom of the can. In a strict product liability tort action against Ajax, Bill must prove, among other things, that:"
   },
   {
     "category": "computer science",
-    "question": "Let a undirected graph G with edges E = {<0,1>,<4,1>,<2,0>,<2,1>,<2,3>,<1,3>}, which <A,B> represent Node A is connected to Node B. What is the minimum vertex cover of G? Represent the vertex cover in a list of ascending order."
+    "question": "An online store uses 6-bit binary sequences to identify each unique item for sale. The store plans to increase the number of items it sells and is considering using 7-bit binary sequences. Which of the following best describes the result of using 7-bit sequences instead of 6- bit sequences?"
+  },
+  {
+    "category": "business",
+    "question": "What is the difference between a merger and an acquisition?"
+  },
+  {
+    "category": "philosophy",
+    "question": "Another name for the fallacy of accident is"
+  },
+  {
+    "category": "other",
+    "question": "Which of these television series was not set in the United States?"
   },
   {
     "category": "computer science",
-    "question": "What would you do in PCA to get the same projection as SVD?"
+    "question": "What is the output for the following FORTRAN program? DIMENSION A (8) , PTR (8) DATA A/'A', 'S', 'E', 'Q', 'N', 'U', 'T', '1'/ DATA PTR/4,7,2,6,6,3,0,5/ I = PTR (1) 20IF (I.EQ.0) GO TO 30 WRITE (5,100) A (I) 100FORMAT (1X,A1) I = PTR (I) GO TO 20 30CONTINUE STOP END"
   },
   {
-    "category": "computer science",
-    "question": "Which Nmap scan is does not completely open a TCP connection?"
+    "category": "philosophy",
+    "question": "Explain the concept of free will versus determinism."
+  },
+  {
+    "category": "biology",
+    "question": "A gal^+ / gal^- cell is produced by an abortive transduction. Will it grow in a medium in whichgalactoseis the sole carbon source?"
+  },
+  {
+    "category": "other",
+    "question": "The covariance between Stock A and the market index is 88, while their standard deviations are respectively 19% and 14%. What is the beta of Stock A?"
   },
   {
     "category": "economics",
@@ -73,11 +269,51 @@
   },
   {
     "category": "economics",
-    "question": "Which of the following statements are true concerning a comparison between ARCH(q) and GARCH(1,1) models?\n\ni) The ARCH(q) model is likely to be the more parsimonious\n\n\nii) The ARCH(q) model is the more likely to violate non-negativity constraints\n\n\niii) The ARCH(q) model can allow for an infinite number of previous lags of squared\n\nreturns to affect the current conditional variance\n\n\niv) The GARCH(1,1) model will usually be sufficient to capture all of the dependence\n\nin the conditional variance"
+    "question": "The price elasticity of demand for a product is greater if"
+  },
+  {
+    "category": "physics",
+    "question": "The collisional cross section of $\\mathrm{N}_2$ is $0.43 \\mathrm{~nm}^2$. What is the diffusion coefficient of $\\mathrm{N}_2$ at a pressure of $1 \\mathrm{~atm}$ and a temperature of $298 \\mathrm{~K}$ ?"
+  },
+  {
+    "category": "psychology",
+    "question": "What is areinforcer?"
+  },
+  {
+    "category": "psychology",
+    "question": "Ethnic identity refers to"
+  },
+  {
+    "category": "biology",
+    "question": "Why must mosses and liverworts (phylumBryophyta) always live in close association with the water?"
+  },
+  {
+    "category": "computer science",
+    "question": "Given a color image of size 28 x 28 x 3 pixels, how many convolutional filters in the first layer of a Convolutional Neural Network if the first layer's output tensor has size 26 x 26 x 64?"
+  },
+  {
+    "category": "chemistry",
+    "question": "The +1 oxidation state is more stable than the +3 oxidation state for which group 13 element?"
+  },
+  {
+    "category": "chemistry",
+    "question": "Another application of the relationship given in Problem $1-48$ has to do with the excitedstate energies and lifetimes of atoms and molecules. If we know that the lifetime of an excited state is $10^{-9} \\mathrm{~s}$, then what is the uncertainty in the energy of this state?\n"
+  },
+  {
+    "category": "math",
+    "question": "In how many ways can 8 people be seated at 5 identical round tables? Each table must have at least 1 person seated."
+  },
+  {
+    "category": "physics",
+    "question": "A number (2N + 1) of sheets of material are stacked together, each with axis rotated by (\\pi / 4N) with respect to the previous one. The first and last arepolarizers, the remainder are half-wave plates. Find the ratio of final to incident light intensity."
+  },
+  {
+    "category": "business",
+    "question": "What is the formula for calculating return on investment?"
   },
   {
     "category": "economics",
-    "question": "What is meant by psychic income?"
+    "question": "What is the law of supply and demand?"
   },
   {
     "category": "engineering",
@@ -89,27 +325,167 @@
   },
   {
     "category": "engineering",
-    "question": "Air is introduced through a nozzle into a tank of water to form astream of bubbles. If the bubbles are intended to have a diameterof 2 mm, calculate by how much the pressure of theair at the nozzle must exceed that of the surrounding water. Assume that \\sigma = 72.7 \u00d7 10^-3 N m^-1."
+    "question": "A short dipole has a radiation resistance R_r=\\surd(\\mu_0 / \\epsilon_0) [(\\betal)^2 / 6\\pi] ohms. FindA_emthe maximum effectiveaperture of this dipole."
+  },
+  {
+    "category": "business",
+    "question": " There are three main types of buying situations in an organization, referred to by Robinson, Faris, and Wind (1967) as _____________."
+  },
+  {
+    "category": "other",
+    "question": "Which of the following would NOT be considered a barrier to diffusion of a cultural trait?"
+  },
+  {
+    "category": "history",
+    "question": "This question refers to the following information.\n\"Indeed, as both the fatwas of distinguished [scholars] who base their opinion on reason and tradition alike and the consensus of the Sunni community agree that the ancient obligation of extirpation, extermination, and expulsion of evil innovation must be the aim of our exalted aspiration, for \"Religious zeal is a victory for the Faith of God the Beneficent\"; then, in accordance with the words of the Prophet (Peace upon him!) \"Whosoever introduces evil innovation into our order must be expelled\" and \"Whosoever does aught against our order must be expelled,\" action has become necessary and exigent\u2026\"\nLetter from Ottoman Sultan Selim I to Safavid Shah Ismail I, 1514\nThe Safavids drew the ire of Islamic empires such as the Ottoman and the Mughal Empires primarily because the Safavids"
+  },
+  {
+    "category": "physics",
+    "question": "A silicate crown prism of apex angle 15\u00b0 is to be combined with a prism of silicate flint so as to be achromatic for rays of wavelength 400m\\muand 700m\\mu. For crown glass, n_400 = 1.522, n_700 = 1.504. For flint glass, n_400 = 1.662, n_700 = 1.613 (n denotes the index of refraction of the prism). Find the apex angle of the flint prism."
+  },
+  {
+    "category": "economics",
+    "question": "If GNP = $2,000 billion and the velocity of money is 4, what isthe money supply?"
+  },
+  {
+    "category": "history",
+    "question": "What were the effects of colonialism on indigenous populations?"
+  },
+  {
+    "category": "psychology",
+    "question": "A woman transmits color blindness to her son although she herself displays normal color vision. The defect transmitted by this woman represents a characteristic of her"
+  },
+  {
+    "category": "health",
+    "question": "A 35-year-old female develops nausea and vomiting after she underwent a cholecystectomy for protracted ileus. Her body mass index was 23\u00a0kg/m2\u00a0before surgery, and, except for the cholecystitis, she was in good health. The patient remains unable to eat 6\u00a0days after surgery. Which of the following forms of nutritional support is most appropriate for this patient? "
+  },
+  {
+    "category": "math",
+    "question": "Find the order of the factor group (Z_11 x Z_15)/(<1, 1>)"
+  },
+  {
+    "category": "psychology",
+    "question": "What are the four chief characteristics of an instinct according to Freudian theory ?"
+  },
+  {
+    "category": "economics",
+    "question": "How does inflation affect purchasing power?"
+  },
+  {
+    "category": "business",
+    "question": "Let's assume that the 10-year annual return for the S&P 500 (market portfolio) is 10%, while the average annual return on Treasury bills (a good proxy for the risk-free rate) is 5%. Whats the market Treynor Ratio? Return the numeric value between 0 and 1."
   },
   {
     "category": "engineering",
     "question": "A linear time-invariant resistor of 4\\Omega has a current through it given byi(t) = sin\\pit. If E(0) = 0, find the energy dissipated in the resistor at t = 1, 2, 3, 4, 5, 6 sec."
   },
   {
-    "category": "health",
-    "question": "Which of these factors increases the risk for lung cancer?\n"
+    "category": "law",
+    "question": "What is the purpose of a contract in legal terms?"
+  },
+  {
+    "category": "math",
+    "question": "In triangle RST, X is located on the side RS, Y is located on the side RT, Z is located on the side ST, and XY and XZ are midsegments of \u25b3RST. If the length of side XY is 7, the length of side RT is 13, and the measure of angle YXZ is 124\u00b0, what is the length of side XZ?"
+  },
+  {
+    "category": "economics",
+    "question": "Which of the following statements are true concerning a comparison between ARCH(q) and GARCH(1,1) models?\n\ni) The ARCH(q) model is likely to be the more parsimonious\n\n\nii) The ARCH(q) model is the more likely to violate non-negativity constraints\n\n\niii) The ARCH(q) model can allow for an infinite number of previous lags of squared\n\nreturns to affect the current conditional variance\n\n\niv) The GARCH(1,1) model will usually be sufficient to capture all of the dependence\n\nin the conditional variance"
+  },
+  {
+    "category": "business",
+    "question": "How do you calculate the break-even point for a product?"
   },
   {
     "category": "health",
-    "question": "A 27-year-old woman comes to the physician because of a 3-year history of chronic diarrhea and intermittent, crampy, lower abdominal pain. The pain is usually relieved with defecation and does not occur at night or interfere with sleep. She says she is frustrated by her symptoms and has stopped traveling because of her frequent, urgent need to use the bathroom. She has no history of serious illness and takes no medications. Her temperature is 37\u00b0C (98.6\u00b0F), pulse is 70/min, respirations are 14/min, and blood pressure is 120/80 mm Hg. The lower abdomen is mildly tender to palpation; there is no rebound tenderness or guarding. The remainder of the examination shows no abnormalities. Results of laboratory studies are within the reference ranges. Test of the stool for occult blood is negative. Antigliadin antibodies are not present. Which of the following is the most appropriate pharmacotherapy?"
+    "question": "What is the function of the cardiovascular system?"
+  },
+  {
+    "category": "law",
+    "question": "Late one night, co-defendants broke into a warehouse and proceeded to load the large crates of appliances onto their truck. As they were leaving, one of the co-defendants inadvertently threw his cigarette butt into a refuse pile of old cardboard boxes and papers. Soon afterward, the refuse ignited into a small fire. Although the co-defendants had time to douse the fire without any danger to themselves, neither did so. Instead, they climbed into the truck and fled. Meanwhile, the fire quickly spread, engulfing the entire warehouse in flames. At common law, the co-defendants should be found guilty of"
+  },
+  {
+    "category": "computer science",
+    "question": "What would you do in PCA to get the same projection as SVD?"
+  },
+  {
+    "category": "law",
+    "question": "Explain the concept of negligence in tort law."
+  },
+  {
+    "category": "history",
+    "question": "This question refers to the following information.\n\"I was once a tool of oppression\nAnd as green as a sucker could be\nAnd monopolies banded together\nTo beat a poor hayseed like me.\n\"The railroads and old party bosses\nTogether did sweetly agree;\nAnd they thought there would be little trouble\nIn working a hayseed like me. . . .\"\n\u2014\"The Hayseed\"\nWhich of the following is an accomplishment of the political movement that was organized around sentiments similar to the one in the song lyrics above?"
+  },
+  {
+    "category": "other",
+    "question": "What is a fun fact about nature?"
+  },
+  {
+    "category": "computer science",
+    "question": "Consider Convolutional Neural Network D2 which takes input images of size 32x32 with 1 colour channels. The first layer of D2 uses 4 filters of size 5x5, a stride of 2, and zero-padding of width 1. Consider CNN D2 which takes input images of size 32x32 with 1 colour channels. The first layer of D2 uses 4 filters of size 5x5, a stride of 2, and zero-padding of width 1. What is the total number of weights defined for the entire activation output of this first layer? (ie. If you flattened all filters and channels into a single vector)"
+  },
+  {
+    "category": "psychology",
+    "question": "A participant in a single-trial free-recall task is presented with a list of words, one at a time, in the following order: house, flower, dog, table, license, water, computer, salad. In accord with the serial position curve, which of the following words is the participant most likely to forget?"
+  },
+  {
+    "category": "economics",
+    "question": "What is a margin requirement?"
+  },
+  {
+    "category": "other",
+    "question": "Corbet Co. purchased a copyright near the beginning of the current year from an author for $20000. The legal life of the copyright is equivalent to the life of the author plus 50 years. Corbet expects to sell the book for five years. What amount should Corbet report as amortization expense related to the copyright at the end of the current year?"
+  },
+  {
+    "category": "computer science",
+    "question": "Statement 1| For a continuous random variable x and its probability distribution function p(x), it holds that 0 \u2264 p(x) \u2264 1 for all x. Statement 2| Decision tree is learned by minimizing information gain."
+  },
+  {
+    "category": "math",
+    "question": "In how many ways can a group of 10 people be divided into 3 non-empty subsets?"
+  },
+  {
+    "category": "psychology",
+    "question": "When we convert total number of errors on a test to percent correct, or vice versa, we are performing which type of transformation"
+  },
+  {
+    "category": "health",
+    "question": "How does the human immune system fight infections?"
+  },
+  {
+    "category": "business",
+    "question": "A noninterest-bearing note with a face value of $600 and a term of 30 days dated April 5 was discounted April 15 at a rate of 5%. What were the proceeds?"
+  },
+  {
+    "category": "history",
+    "question": "What was NOT a deciding factor in the development of Mesopotamian civilization?"
+  },
+  {
+    "category": "other",
+    "question": "Simmons gives her child a gift of publicly traded stock with a basis of $40,000 and a fair market value of $30,000. No gift tax is paid. The child subsequently sells the stock for $36,000. What is the child\u2019s recognized gain or loss, if any?"
+  },
+  {
+    "category": "computer science",
+    "question": "Calculate the number of parity bits required in order to code aninformation consisting of one binary bit on each input line, intothe Hamming code, if each input information has: a) 8 bits, and, b) 4 bits."
+  },
+  {
+    "category": "psychology",
+    "question": "To decrease hostility between groups of junior high school students, you would be best advised to:"
+  },
+  {
+    "category": "engineering",
+    "question": "A 3.5m \u00d7 2m vertical plate is subjected to a constant heat flux of 800 W/m^2. The back of the plate is insulated and the ambient air temperature is 30\u00b0C. Determine the average surface temperature of the plate, assuming that all the incident radiation is lost by free convection to the surrounding air. Physical Properties of Air at Atmopheric Pressure (SI Units) T (\u00b0C) T (K) \\rho (kg/m^3) C_p (kJ/kg\\bulletK) \\mu \u00d7 105 (Pa\\bullets,or kg/m\\bullets) k (W/m\\bulletk) Pr \\beta\u00d710^3 (1/K) g\\beta\\rho^2/\\mu^2 (1/K\\bulletm^3) - 17.8 255.4 1.379 1.0048 1.62 0.02250 0.720 3.92 2.79 \u00d7 10^8 0 273.2 1.293 1.0048 1.72 0.02423 0.715 3.65 2.04 \u00d7 10^8 10.0 283.2 1.246 1.0048 1.78 0.02492 0.713 3.53 1.72 \u00d7 10^8 37.8 311.0 1.137 1.0048 1.90 0.02700 0.705 3.22 1.12 \u00d7 108 65.6 338.8 1.043 1.0090 2.03 0.02925 0.702 2.95 0.775 \u00d7 10^8 93.3 366.5 0.964 1.0090 2.15 0.03115 0.694 2.74 0.534 \u00d7 10^8 121.1 394.3 0.895 1.0132 2.27 0.03323 0.692 2.54 0.386 \u00d7 10^8 148.9 422.1 0.838 1.0174 2.37 0.03531 0.689 2.38 0.289 \u00d7 10^8 176.7 449.9 0.785 1.0216 2.50 0.03721 0.687 2.21 0.214 \u00d7 10^8 204.4 477.6 0.740 1.0258 2.60 0.03894 0.686 2.09 0.168 \u00d7 10^8 232.2 505.4 0.700 1.0300 2.71 0.04084 0.684 1.98 0.130 \u00d7 10^8 260.0 533.2 0.662 1.0341 2.80 0.04258 0.680 1.87 1.104 \u00d7 10^8"
   },
   {
     "category": "health",
     "question": "Examination of a patient indicates that they have a medially directed strabismus (squint). This could be due to damage to the"
   },
   {
-    "category": "health",
-    "question": "A male neonate, who was born at 36 weeks' gestation 2 hours ago in the labor and delivery unit of the hospital, now shows signs of respiratory difficulty. The mother, an 18-year-old primigravid woman, smoked one pack of cigarettes daily throughout her pregnancy. She received prenatal care during most of the pregnancy. One episode of chlamydial cervicitis was detected during the last trimester and treated with azithromycin. The neonate was born via cesarean delivery due to fetal heart rate decelerations. The amniotic fluid was stained with light particulate meconium. Apgar scores were 9 and 9 at 1 and 5 minutes, respectively. The patient is 50 cm (20 in; 50th percentile) long and weighs 3005 g (6 lb 10 oz; 50th percentile); head circumference is 35 cm (14 in; 50th percentile). The infant's vital signs now are temperature 36.6\u00b0C (97.8\u00b0F), pulse 150/min, and respirations 70/min. Pulse oximetry on room air shows an oxygen saturation of 95%. Physical examination discloses mild subcostal and intercostal retractions. Chest x-ray shows prominent pulmonary vascular markings and fluid in the intralobar fissures. Which of the following is the most likely diagnosis?"
+    "category": "physics",
+    "question": "What is the maximum efficiency of a steam engine if the temperature of the input steam is 175\u00b0 C and the temperature of the exhaust is 75\u00b0 C?"
+  },
+  {
+    "category": "chemistry",
+    "question": "The barometric formula relates the pressure of a gas of molar mass $M$ at an altitude $h$ to its pressure $p_0$ at sea level. Derive this relation by showing that the change in pressure $\\mathrm{d} p$ for an infinitesimal change in altitude $\\mathrm{d} h$ where the density is $\\rho$ is $\\mathrm{d} p=-\\rho g \\mathrm{~d} h$. Remember that $\\rho$ depends on the pressure. Evaluate the pressure difference between the top and bottom of a laboratory vessel of height 15 cm."
   },
   {
     "category": "history",
@@ -121,11 +497,119 @@
   },
   {
     "category": "history",
-    "question": "This question refers to the following information.\n\"Indeed, as both the fatwas of distinguished [scholars] who base their opinion on reason and tradition alike and the consensus of the Sunni community agree that the ancient obligation of extirpation, extermination, and expulsion of evil innovation must be the aim of our exalted aspiration, for \"Religious zeal is a victory for the Faith of God the Beneficent\"; then, in accordance with the words of the Prophet (Peace upon him!) \"Whosoever introduces evil innovation into our order must be expelled\" and \"Whosoever does aught against our order must be expelled,\" action has become necessary and exigent\u2026\"\nLetter from Ottoman Sultan Selim I to Safavid Shah Ismail I, 1514\nThe Safavids drew the ire of Islamic empires such as the Ottoman and the Mughal Empires primarily because the Safavids"
+    "question": "How did the industrial revolution transform manufacturing?"
+  },
+  {
+    "category": "psychology",
+    "question": "A psychologist emphasizes that parents should use appropriate consequences when dealing with their children\u2019s misbehavior. In addition, the psychologist explains that the goal of misbehavior can be to confirm an assumed disability, or to get attention, power, or revenge. Which of the following theoretical orientations is being used"
+  },
+  {
+    "category": "health",
+    "question": "A 52-year-old woman has had dyspnea and hemoptysis for 1 month. She has a history of rheumatic fever as a child and has had a cardiac murmur since early adulthood. Her temperature is 36.7\u00b0C (98\u00b0F), pulse is 130/min and irregularly irregular, respirations are 20/min, and blood pressure is 98/60 mm Hg. Jugular venous pressure is not increased. Bilateral crackles are heard at the lung bases. There is an opening snap followed by a low-pitched diastolic murmur at the third left intercostal space. An x-ray of the chest shows left atrial enlargement, a straight left cardiac border, and pulmonary venous engorgement. Which of the following is the most likely explanation for these findings?"
+  },
+  {
+    "category": "philosophy",
+    "question": "Stevenson\u2019s primary aim in this paper is to:"
+  },
+  {
+    "category": "psychology",
+    "question": "In a study of brain development, two groups of rats were reared in a laboratory setting. In Group I, each rat was raised in isolation with no toys, while in Group II, rats were divided into small groups and given toys to play with. Which of the following statements most accurately reflects the probable findings of this study?"
+  },
+  {
+    "category": "philosophy",
+    "question": "What is the nature of consciousness?"
+  },
+  {
+    "category": "engineering",
+    "question": "The feedback factor of a Wien bridge oscillator using Op-Amp is"
+  },
+  {
+    "category": "psychology",
+    "question": "Group A consists of people whose measured interests are highly similar to the interests of engineers, Group B consists of people whose measured interests are highly dissimilar to those of engineers. Which of the following statements would be justified, given that both Group A and Group B entered engineering"
+  },
+  {
+    "category": "biology",
+    "question": "Discuss how the quantitative measurements of the dioxy-ribonucleic acid content of cells is evidence that DNA is the genetic material."
+  },
+  {
+    "category": "other",
+    "question": "Which of the following has provided the most information about the structure of Earth's core, mantle, and lower crust?"
+  },
+  {
+    "category": "computer science",
+    "question": "What is the output of the following program? main ( ) { intx = 5; inty = 5; printf(\"%d%d\\textbackslashn\", x++, x); printf(\"%d%d\\textbackslashn\", ++y, y); }"
+  },
+  {
+    "category": "philosophy",
+    "question": "The \"Flower Sermon\" is associated with which form of Buddhism?"
+  },
+  {
+    "category": "biology",
+    "question": "There are two highly inbred strains of laboratory mice whose adult body weights are very different. Assume that the mouse's body weight is under the control of three pairs of contrasting genes: A vs. a, B vs. b and D vs. d. Assume further that each capital letter gene is responsible for contributing 5.0 grams to the total body weight, and that lowercase letters contribute 2.5 grams to total body weight. The average weight of mice in Strain I is 30 grams, while that of Strain II mice is 15 grams. (a) What are the most likely genotypes of these two strains? (b) Suppose Strain I and Strain II are crossed. What will be the phenotype of the F_1 progeny?"
+  },
+  {
+    "category": "business",
+    "question": "Explain the concept of market segmentation."
+  },
+  {
+    "category": "other",
+    "question": "________ advertising campaigns are focused on gathering support for a particular message or cause."
+  },
+  {
+    "category": "chemistry",
+    "question": "Without referring to a table, place the following hydro-carbons in order of increasing boiling points. (a) methane(d)neopentane (b) n-hexane(e) 2,3-dimethylbutane (c) n-undecane"
+  },
+  {
+    "category": "physics",
+    "question": "When you brush your hair and scrape electrons from your hair, the charge of your hair becomes"
+  },
+  {
+    "category": "computer science",
+    "question": "Let a undirected graph G with edges E = {<0,1>,<4,1>,<2,0>,<2,1>,<2,3>,<1,3>}, which <A,B> represent Node A is connected to Node B. What is the minimum vertex cover of G? Represent the vertex cover in a list of ascending order."
+  },
+  {
+    "category": "business",
+    "question": "You are considering the purchase of a machine which will give you an annual return of $1,000 a year for 20 years. The return will be received uniformly and continuously over the years. How much can you pay for the machine and still obtain at least a 10 percent effective annual return on your investment in the machine?"
+  },
+  {
+    "category": "economics",
+    "question": "One aspect of Marxian economics is that some of the pre-dictions of Marx were proven wrong. As a result of this, some radical economists have only adopted the tools of Marxian analysis, without necessarily accepting Marx's con-clusions . In the nineteenth century, other Marxists became 'revisionists'. Explain briefly what distinguishes a re-visionist from a Marxist."
   },
   {
     "category": "history",
-    "question": "Which of the following is the last to be occupied by human beings?"
+    "question": "What were the causes of urbanization in the modern era?"
+  },
+  {
+    "category": "law",
+    "question": "What are the main elements required to form a valid contract?"
+  },
+  {
+    "category": "health",
+    "question": "A 23-year-old woman comes to the physician for genetic counseling prior to conception. Her brother and maternal uncle had Duchenne muscular dystrophy (DMD) and died at the ages of 28 and 17 years, respectively. Genetic analysis was not performed on either relative prior to death. Serum studies show a muscle creatine kinase concentration of 120 U/L (N=22\u2013 198). The patient's 50-year-old mother has a serum muscle creatine kinase concentration of 300 U/L. Which of the following is the most appropriate assessment of this patient's carrier status for this disease?"
+  },
+  {
+    "category": "computer science",
+    "question": "Neural networks:"
+  },
+  {
+    "category": "business",
+    "question": "The marketing research firm of Burrows, Heller and Larimer wants to estimate the proportions of men and women who are familiar with a shoe polish. In a sample (random) of 100 men and 200 women it is found that 20 men and 60 women had used this particular shoe polish. Compute a 95% confidence interval for the difference in pro portions between men and women familiar with the product. Use this to test the hypothesis that the proportions are equal."
+  },
+  {
+    "category": "chemistry",
+    "question": "The contribution of molecular vibrations to the molar internal energy $U_{\\mathrm{m}}$ of a gas of nonlinear $N$-atom molecules is (zero-point vibrational energy not included) $U_{\\mathrm{m}, \\mathrm{vib}}=R \\sum_{s=1}^{3 N-6} \\theta_s /\\left(e^{\\theta_s / T}-1\\right)$, where $\\theta_s \\equiv h \\nu_s / k$ and $\\nu_s$ is the vibrational frequency of normal mode $s$. Calculate the contribution to $U_{\\mathrm{m}, \\text { vib }}$ at $25^{\\circ} \\mathrm{C}$ of a normal mode with wavenumber $\\widetilde{v} \\equiv v_s / c$ of $900 \\mathrm{~cm}^{-1}$."
+  },
+  {
+    "category": "health",
+    "question": "A 27-year-old woman comes to the physician because of a 3-year history of chronic diarrhea and intermittent, crampy, lower abdominal pain. The pain is usually relieved with defecation and does not occur at night or interfere with sleep. She says she is frustrated by her symptoms and has stopped traveling because of her frequent, urgent need to use the bathroom. She has no history of serious illness and takes no medications. Her temperature is 37\u00b0C (98.6\u00b0F), pulse is 70/min, respirations are 14/min, and blood pressure is 120/80 mm Hg. The lower abdomen is mildly tender to palpation; there is no rebound tenderness or guarding. The remainder of the examination shows no abnormalities. Results of laboratory studies are within the reference ranges. Test of the stool for occult blood is negative. Antigliadin antibodies are not present. Which of the following is the most appropriate pharmacotherapy?"
+  },
+  {
+    "category": "philosophy",
+    "question": " Which of the following propositions is an immediate (one-step) consequence in PL of the given premises?\n(N \u2283 ~O) \u2283 (O \u2228 Q)\nP \u2283 (N \u2283 ~O)\nN \u2283 P"
+  },
+  {
+    "category": "chemistry",
+    "question": "Which of the following indicates that a reaction is spontaneous?"
   },
   {
     "category": "law",
@@ -133,23 +617,39 @@
   },
   {
     "category": "law",
-    "question": "In 1996, a developer purchased a 100-acre tract located in a northern county in a state. Shortly thereafter, the developer prepared a subdivision plan that created 100 one-acre residential building lots on this tract. In 1997, the subdivision plan was recorded with the county recorder's office. During the next few years, the developer sold 60 residential lots to individual purchasers. Each deed specified that every lot designated on the subdivision plan was to be recorded in the county recorder's office. Each deed also provided the following:\"No house trailer or mobile home shall be built or maintained on any lot within the subdivision. \"In 2003, the developer conveyed the remaining 40 lots to a builder by deed that included language identical to that contained in the first 60 deeds. This deed from the developer to the builder was recorded. By 2008, the builder had sold all of the 40 lots. Each of these deeds identified each lot as being a part of the subdivision, but did not include the clause relating to mobile homes. On January 30, 2009, a buyer, who had purchased one of the residential lots from the builder, placed a mobile home on his property. Which of the following statements is LEAST accurate with respect to the buyer's deed?"
+    "question": "A man was under custodial interrogation as a suspect in the murder of a child. The police initially gave him a written list of his Miranda rights. They told him to read the list out loud, which he did. They then asked him if he understood the right to remain silent and to have a lawyer present and he nodded affirmatively. He refused to sign the writing but did not ask for an attorney. During the next three hours they interrogated him and got few answers; he was largely silent but did respond at times with a \"no\" or \"yes\" or a nod of the head. Then one of the detectives asked him if he was ready to ask God for forgiveness for killing the child. His eyes welled with tears and he said \"yes.\" This opened further questioning leading to his admission of guilt. He would not sign a written confession or a waiver of the right to remain silent. He was arrested for murder and moved to suppress the confession. Will the court suppress the confession as being involuntarily given?"
+  },
+  {
+    "category": "psychology",
+    "question": "Which of the following explanations of why a 17-year-old drives his car at or below the speed limit best illustrates Kohlberg's conventional level of morality?"
+  },
+  {
+    "category": "engineering",
+    "question": "Determine the mass and specific volume of argon gas in a vessel at 150kPaand 20\u00b0C. The vessel is spherical and has a radius of 5m."
+  },
+  {
+    "category": "economics",
+    "question": "If the demand for dollars rises while the supply of dollars falls then the"
   },
   {
     "category": "law",
-    "question": "A company offered to sell several loads of landscaping stones at a specified price and itemized terms. The offeree sent a notification to the offeror stating, \"We have received your offer to sell landscaping stone per specified terms this date.\" The offeror shipped the goods upon receiving that notification. On the date of shipment, the offeree posted an acceptance form with slight modifications to the terms. After the goods arrived, the offeree called the offeror's manager and told him that the company was unable to accept the offer at this time, he was shipping the goods back, and to \"ignore any paperwork we sent.\" The offeror sued the offeree for breach of contract. Who will prevail?"
+    "question": "How does the appeals process work in the legal system?"
   },
   {
-    "category": "law",
-    "question": "Generally, erotic materials are protected by the First Amendment for a person's personal use and possession. However, certain erotic material can reach a point where it steps over the boundaries of First Amendment protection. The Supreme Court has held that if material is obscene it does not mandate First Amendment protection. Which of the following most accurately represents one of the prongs of the three-pronged test enunciated by the U.S. Supreme Court's for determining whether a film, book, video or pictorial is obscene and therefore not subject to protection?"
+    "category": "philosophy",
+    "question": "What is the difference between deductive and inductive reasoning?"
+  },
+  {
+    "category": "physics",
+    "question": "The Space Shuttle orbits 300 km above Earth\u2019s surface; Earth\u2019s radius is 6,400 km. What is the gravitational acceleration experienced by the Space Shuttle?"
   },
   {
     "category": "math",
     "question": "Use the Runge-Kutta method with $h=0.1$ to find approximate values for the solution of the initial value problem $y' + 2y = x^3e^{-2x}$ with y(0)=1 at $x=0.2$."
   },
   {
-    "category": "math",
-    "question": "Random variable X is normally distributed, with a mean of 25 and a standard deviation of 4. Which of the following is the approximate interquartile range for this distribution?"
+    "category": "chemistry",
+    "question": "For the reaction Cd(Hg) + Hg_2SO_4(s) + (8/3)H_2O \\rightleftarrows CdSO_4 \\bullet (8/3)H_2O(s) + 3Hg(l) the voltage as a function of temperature is given by \\epsilon = 1.01845 - (4.1 \u00d7 10^-5)(\\texttheta - 20) - (9.5 \u00d7 10^-7)(\\texttheta - 20)^2 where \\texttheta is the temperature in \u00b0C. Calculate the value of \\DeltaS at 25\u00b0C given that one mole of CdSO_4. (8/3) H_2O is formed and \\DeltaS =nF(d\\epsilon/dT) wheren = 2 andF = 9.648456 \u00d7 10^4 C mol^-1"
   },
   {
     "category": "math",
@@ -157,43 +657,279 @@
   },
   {
     "category": "math",
-    "question": "Eleven pencils cost as much as three pens. If seven pens cost $\\$ 9.24$, what is the cost, in cents, of one pencil?"
-  },
-  {
-    "category": "other",
-    "question": "Greene is the sole shareholder of Seagull, a calendar-year S corporation. Greene's basis at the beginning of the year is $15,000. Seagull reported an ordinary loss of $5,000 and $2,000 of municipal bond interest for the year. Seagull distributed cash of $6,000 to Greene on November 1. What is Greene's basis in Seagull at the end of the year?"
-  },
-  {
-    "category": "other",
-    "question": "Which of the following statements about audit sampling risks is correct for a nonissuer?"
-  },
-  {
-    "category": "other",
-    "question": "The covariance between Stock A and the market index is 88, while their standard deviations are respectively 19% and 14%. What is the beta of Stock A?"
-  },
-  {
-    "category": "other",
-    "question": "Which of the following has provided the most information about the structure of Earth's core, mantle, and lower crust?"
+    "question": "What is the quadratic formula and how is it derived?"
   },
   {
     "category": "philosophy",
-    "question": "Which of the following is another name for the fallacy of amphiboly?"
+    "question": " Shapiro claims that surveys have been confirmed by longitudinal studies that indicate that"
+  },
+  {
+    "category": "history",
+    "question": "How did technological advances affect warfare through history?"
+  },
+  {
+    "category": "business",
+    "question": "A farmer buys a new tractor for $40,000 and expects to use it for 20 years, after which the tractor will have a salvage value of $10,000. What is the straight-line depreciation that can be taken for the first year of ownership?"
+  },
+  {
+    "category": "computer science",
+    "question": "Consider the following equations concerning a stack module that has the operations Push, Pop, Top, and IsEmpty. Which of the equations does NOT represent the conventional semantics of a stack?"
+  },
+  {
+    "category": "history",
+    "question": "What role did religion play in ancient societies?"
+  },
+  {
+    "category": "history",
+    "question": "From which of the following primates do humans descend?"
+  },
+  {
+    "category": "chemistry",
+    "question": "To measure the wavelength of lines in atomic emission and absorption spectra, one uses a spectroscope. Two lines in the yellow emission spectra of hot Na metal, the so-called sodium-D lines, are used to calibrate this instrument. If the wavelength of one of these lines is 5890 \\AA, find the energy of the electronic transition associated with this line, h = 6.62 \u00d7 10^-27 erg-sec."
+  },
+  {
+    "category": "law",
+    "question": "What is the difference between a misdemeanor and a felony?"
+  },
+  {
+    "category": "economics",
+    "question": "What is the difference between microeconomics and macroeconomics?"
+  },
+  {
+    "category": "other",
+    "question": "Which of these evangelists is a cousin of rocker Jerry Lee Lewis?"
+  },
+  {
+    "category": "engineering",
+    "question": "A key is used to fasten a pulley having a 3(1/2) in. long hub, delivering a torque of 1250 lbs.-ft. to a shaft 2(1/2) in., in diameter. If the pulley is made of ASTM 25 gray cast-iron, the shaft and key of cold drawn AISI 1020 and hot rolled 1010 steel respectively, determine the following under conditions of moderate shock: (a) the least permissible key length. (b) the key length, considering the key and shaft to be of the same material."
+  },
+  {
+    "category": "chemistry",
+    "question": "Assume all gases are perfect unless stated otherwise. Unless otherwise stated, thermodynamic data are for 298.15 K. When $120 \\mathrm{mg}$ of naphthalene, $\\mathrm{C}_{10} \\mathrm{H}_8(\\mathrm{~s})$, was burned in a bomb calorimeter the temperature rose by $3.05 \\mathrm{~K}$. By how much will the temperature rise when $10 \\mathrm{mg}$ of phenol, $\\mathrm{C}_6 \\mathrm{H}_5 \\mathrm{OH}(\\mathrm{s})$, is burned in the calorimeter under the same conditions?"
+  },
+  {
+    "category": "business",
+    "question": "What is the difference between fixed and variable costs?"
+  },
+  {
+    "category": "history",
+    "question": "How did ancient civilizations develop writing systems?"
+  },
+  {
+    "category": "computer science",
+    "question": "Three of the following are classic security properties; which one is not?"
+  },
+  {
+    "category": "law",
+    "question": "A very drunk man was sitting in a bar drinking. A businessman customer came and sat beside him. They did not know each other. The businessman had slightly grazed against the drunk man's body. \"Man, are you trying to kill me or something?'' said the very drunk man. The businessman did not think anything of it, since he had barely grazed the drunkard. The drunk continued to bully the businessman, calling him made-up names, and saying things that were nonsensical to the businessman and to others at the bar who were listening to the drunk's boisterous and irrational rants. The drunk then took a gun out of his pocket and shot the businessman, killing him. At trial, the defense argued that the man could not form the specific intent to premeditate for first degree murder. Which of the following crimes is the defendant most likely guilty of under these facts?"
+  },
+  {
+    "category": "engineering",
+    "question": "Compute the heat absorbed by a body which is exposed to anelectric heater releasing energy at the rate of 1850 W/m. The absorbing body accepts 95% of the radiation falling bove2.7\\mum and 30% of radiation below 2.7\\mum. The dia-meterof the heating element is 25 mm while the two bodiesare 10 cm apart."
+  },
+  {
+    "category": "economics",
+    "question": "In a private closed economy which of the following statements is true?"
+  },
+  {
+    "category": "engineering",
+    "question": "Find theeigenvaluesof matrices (a)\\vert31\\vert \\vert13\\vert (b)\\vert221\\vert \\vert131\\vert \\vert122\\vert (c)\\vert2- 10\\vert \\vert946\\vert \\vert- 80- 3\\vert"
+  },
+  {
+    "category": "other",
+    "question": "How are you doing today?"
+  },
+  {
+    "category": "computer science",
+    "question": "Consider the paper Native Client: A Sandbox for Portable, Untrusted x86 Native Code by Yee et al. Ben Bitdiddle notes that NaCl uses Intel x86 segmentation to ensure that the sandboxed module does not read or write memory outside its own data area, and does not execute instructions outside its own code. Ben thinks that with these restrictions alone, executing the sandboxed module must be safe; that is, he thinks validation is not needed. Ben is wrong. Circle the types of x86 machine instructions that the validator always forbids in sandboxed code. Please ignore trampoline and springboard code."
+  },
+  {
+    "category": "health",
+    "question": "Which of the following causes female pseudohermaphroditism?"
+  },
+  {
+    "category": "computer science",
+    "question": "How is an ARRAY declared inPL/I? Explain using examples."
   },
   {
     "category": "philosophy",
-    "question": " Which of the following propositions is an immediate (one-step) consequence in PL of the given premises?\n(N \u2283 ~O) \u2283 (O \u2228 Q)\nP \u2283 (N \u2283 ~O)\nN \u2283 P"
+    "question": "Which of the following best describes the fallacy of poisoning the well?"
   },
   {
-    "category": "philosophy",
-    "question": "What was Clarence Darrow's belief about life's meaning?"
-  },
-  {
-    "category": "philosophy",
-    "question": "\" _Ad lazarum_ \" is a specific kind of"
+    "category": "business",
+    "question": "Under the Truth-In-Lending regulations, what must a retailer indicate on the sales contract as the annual interest rate if he charges 1(1 / 2)% interest per month on the unpaid balance of each customer's account?"
   },
   {
     "category": "physics",
-    "question": "The collisional cross section of $\\mathrm{N}_2$ is $0.43 \\mathrm{~nm}^2$. What is the diffusion coefficient of $\\mathrm{N}_2$ at a pressure of $1 \\mathrm{~atm}$ and a temperature of $298 \\mathrm{~K}$ ?"
+    "question": "An atom emits a photon of green light \\lambda = 5200 \\AA in \\tau = 2 \u00d7 10^-10 sec, Estimate the spread of wavelengths in the photon."
+  },
+  {
+    "category": "philosophy",
+    "question": "According to Butler, it is impossible to:"
+  },
+  {
+    "category": "history",
+    "question": "Which of the following is the last to be occupied by human beings?"
+  },
+  {
+    "category": "economics",
+    "question": "If real GNP is expanding at a steady annual rate of 2 percent andthe nominal money stock at a steady annual rate of 5 per-cent, what is the effect on the average price level if the incomevelocity of circulation of money is unchanged?"
+  },
+  {
+    "category": "law",
+    "question": "Explain the concept of intellectual property rights."
+  },
+  {
+    "category": "biology",
+    "question": "What characteristics of arthropods have been of primary importance in their evolutionary success?"
+  },
+  {
+    "category": "engineering",
+    "question": "If the horse power requiredto pumpwater through a pipe lineis 3HP, find the mass flow rate assuming the flow to be steadyand isothermal. Also assume that there is no friction lossin the pipe line."
+  },
+  {
+    "category": "economics",
+    "question": "What is meant by psychic income?"
+  },
+  {
+    "category": "chemistry",
+    "question": "Before the advent of pH meters,aurologist collected 1.3 litersof urine from a hospitalized patient over the course of a day. In order to calculate what the pH was a laboratory techniciandetermined the number of equi-valents of acid presentin the sample. A given sample of urine contains 1.3 \u00d7 10^-6 equivalents of dissociated acid.What is the pHof thissample?"
+  },
+  {
+    "category": "law",
+    "question": "What is the role of precedent in common law systems?"
+  },
+  {
+    "category": "math",
+    "question": "A soft drink dispenser can be adjusted to deliver any fixed number of ounces. If the machine is operating with a standard deviation in delivery equal to 0.3 ounce, what should be the mean setting so that a 12-ounce cup will overflow less than 1% of the time? Assume a normal distribution for ounces delivered."
+  },
+  {
+    "category": "math",
+    "question": "A number\u2019s prime factors are 2, 5, 7, 13, and 31. Which of the following must be a factor of the number?"
+  },
+  {
+    "category": "math",
+    "question": "Sam paid $8.28 for 18 stamps. At this rate, how much would it cost Sam to buy 12 stamps?"
+  },
+  {
+    "category": "law",
+    "question": "Maine's famous aphorism that 'the movement of progressive societies has hitherto been a movement from Status to Contract' is often misunderstood. In what way?"
+  },
+  {
+    "category": "health",
+    "question": "Which diseases are not less frequent among vegetarians?\n"
+  },
+  {
+    "category": "other",
+    "question": "Tell me something interesting."
+  },
+  {
+    "category": "health",
+    "question": "Which of these factors increases the risk for lung cancer?\n"
+  },
+  {
+    "category": "biology",
+    "question": "Which of the following are traits that are affected by more than one gene?"
+  },
+  {
+    "category": "philosophy",
+    "question": "What is the meaning of a good life in philosophy?"
+  },
+  {
+    "category": "math",
+    "question": "The probability that there will be an accident on Highway 48 each day depends on the weather. If the weather is dry that day, there is a 0.2% chance of an accident on Highway 48; if the weather is wet that day, there is a 1.0% chance of an accident. Today, the weather station announced that there is a 20% chance of the weather being wet. What is the probability that there will be an accident on Highway 48 today?"
+  },
+  {
+    "category": "biology",
+    "question": "Why isn't a biome map of the earth a true representationof thevegetation formations found on land?"
+  },
+  {
+    "category": "computer science",
+    "question": "Statement 1| Traditional machine learning results assume that the train and test sets are independent and identically distributed. Statement 2| In 2017, COCO models were usually pretrained on ImageNet."
+  },
+  {
+    "category": "chemistry",
+    "question": "A solution contains 1 mg per ml of myosin and 10^14 latex particles per ml. When a given volume of this solution is dried on a grid and viewed under the electron microscope, a typical field contains 122 protein molecules and 10 latex particles. Calculate the molecular weight of myosin."
+  },
+  {
+    "category": "history",
+    "question": "By analyzing the levels of 13C in bones, researchers can establish whether an individual ate:"
+  },
+  {
+    "category": "philosophy",
+    "question": " Construct a complete truth table for the following pairs of propositions. Then, using the truth tables, determine whether the statements are logically equivalent or contradictory. If neither, determine whether they are consistent or inconsistent. Justify your answers.\n(~M \u2283 ~N) \u2228 (O \u2261 N) and (~M \u00b7 N) \u00b7 [(~O \u2228 ~N) \u00b7 (O \u2228 N)]"
+  },
+  {
+    "category": "psychology",
+    "question": "A behavior that is elicited automatically by an environmental stimulus is called a(n)"
+  },
+  {
+    "category": "physics",
+    "question": "Find the mass and weight of the air at $20^{\\circ} C$ in a living room with a $4.0 m \\times 5.0 m$ floor and a ceiling 3.0 m high, and the mass and weight of an equal volume of water. (Unit: 10 ^ 5 N)"
+  },
+  {
+    "category": "health",
+    "question": "Which of the following statements about methods of evaluating protein quality in human nutrition is correct?\n"
+  },
+  {
+    "category": "history",
+    "question": "How did the development of agriculture lead to settled societies?"
+  },
+  {
+    "category": "physics",
+    "question": "A particle of mass m is repelled from the origin by a force f = k/x^3 where x is the distance from the origin. Solve the equation of motion if the particle is initially at rest at a distance x_0 from the origin."
+  },
+  {
+    "category": "economics",
+    "question": "Differentiate between apparent unemployment and disguised unemployment or underemployment."
+  },
+  {
+    "category": "other",
+    "question": "Which of the following scenarios does not include a producer?"
+  },
+  {
+    "category": "math",
+    "question": "To determine the average number of children living in single-family homes, a researcher picks a simple random sample of 50 such homes. However, even after one follow-up visit the interviewer is unable to make contact with anyone in 8 of these homes. Concerned about nonresponse bias, the researcher picks another simple random sample and instructs the interviewer to keep trying until contact is made with someone in a total of 50 homes. The average number of children is determined to be 1.73. Is this estimate probably too low or too high?"
+  },
+  {
+    "category": "economics",
+    "question": "Explain the concept of gross domestic product."
+  },
+  {
+    "category": "engineering",
+    "question": "Air is moving as a steady flow through a duct having a constant rectangular cross section measuring 2 by 1 ft. At a position 20 ft from the end, the pressure is 18psia, and the temperature is 500\u00b0F. The fluid leaves the ductsubsonically at a pressure of 14.7psia. If there is 40lbmof fluid flow/sec, what is the heat transfer per pound mass of fluid between the afore-mentioned section and the exit ? Assume a constant specific head c_p of 0.26 Btu/lbm/\u00b0F and neglect friction. TABLE 1 RAYLEIGH LINE (For a perfect gas with k = 1.4) M (T_0 / T_0\\textasteriskcentered) (T / T\\textasteriskcentered) (p / p\\textasteriskcentered) (p_0 / p_0\\textasteriskcentered) (V / V\\textasteriskcentered) 0.22 0.206 0.244 2.25 1.23 0.109 0.24 0.239 0.284 2.22 1.22 0.128 0.26 0.274 0.325 2.19 1.21 0.148 0.28 0.310 0.367 2.16 1.21 0.170 0.46 0.630 0.725 1.85 1.13 0.392 0.48 0.661 0.759 1.81 1.12 0.418 0.50 0.691 0.790 1.78 1.11 0.444 0.52 0.720 0.820 1.74 1.10 0.471 TABLE 2 ONE DIMENSIONAL ISENTROPIC RELATIONS (For a perfect gas with k = 1.4) M (A / A\\textasteriskcentered) (p / p_0) (\\rho / \\rho_0) (T / T_0) 0.22 2.71 0.967 0.976 0.990 0.24 2.50 0.961 0.972 0.989 0.26 2.32 0.954 0.967 0.987 0.28 2.17 0.947 0.962 0.985 0.46 1.42 0.865 0.902 0.959 0.48 1.38 0.854 0.893 0.956 0.50 1.34 0.843 0.885 0.952 0.52 1.30 0.832 0.877 0.949"
+  },
+  {
+    "category": "history",
+    "question": "The earliest-known use of bronze is found in:"
+  },
+  {
+    "category": "business",
+    "question": "From this information compute: a) The current ratio. b) The quick asset ratio. c) The net working capital. 1. Current Assets: Current Liabilities Cash $22,150 Accounts Payable $28,500 Marketable Securities 16,000 Notes Payable 20,000 Other Bills Payable 10,000 Accounts Receivable 30,450 Inventories 25,000 Total $93,600 Total $58,500"
+  },
+  {
+    "category": "biology",
+    "question": "Distinguish between covalent and ionic bonds."
+  },
+  {
+    "category": "computer science",
+    "question": "Which of the following statements about circuits is (are) true?\nI. Combinational circuits may have feedback; sequential circuits do not.\nII. Combinational circuits have a \"memoryless\" property; sequential circuits do not.\nIII. Both sequential and combinational circuits must be controlled by an external clock."
+  },
+  {
+    "category": "physics",
+    "question": "Microscopic slush in water tends to make the water"
+  },
+  {
+    "category": "history",
+    "question": "The appropriateness and usefulness of pedestrian survey depends on:"
+  },
+  {
+    "category": "chemistry",
+    "question": "At 100\u00b0C and 720 mm Hg or 720 torr, what is the density of carbon dioxide, CO_2 ?"
+  },
+  {
+    "category": "computer science",
+    "question": "Which Nmap scan is does not completely open a TCP connection?"
   },
   {
     "category": "physics",
@@ -212,15 +948,99 @@
     "question": "How is aversion therapy used in treating a patient with a particularfetish ?"
   },
   {
-    "category": "psychology",
-    "question": "Providing education and job training to adolescents and young adults who have recently been released from a drug treatment program is an example of:"
+    "category": "law",
+    "question": "How does the jury system function in trials?"
   },
   {
     "category": "psychology",
-    "question": "A female psychologist provides a 2-month course of brief behavior therapy for a driving phobia to a male client. Six months after termination they meet at an art opening reception and begin to date. Over the next few months, the relationship progresses and they become sexual. In this situation, the psychologist has acted:"
+    "question": "What is the difference between classical and operant conditioning?"
   },
   {
     "category": "psychology",
-    "question": "Which of the following explanations of why a 17-year-old drives his car at or below the speed limit best illustrates Kohlberg's conventional level of morality?"
+    "question": "The first standardized measure of assessment was:"
+  },
+  {
+    "category": "psychology",
+    "question": "Discuss three ways in which concepts can be attained."
+  },
+  {
+    "category": "business",
+    "question": "What is the purpose of a profit and loss statement?"
+  },
+  {
+    "category": "history",
+    "question": "What were the main trading routes in ancient times?"
+  },
+  {
+    "category": "law",
+    "question": "What are the main types of property ownership?"
+  },
+  {
+    "category": "other",
+    "question": "Which of the following statements about audit sampling risks is correct for a nonissuer?"
+  },
+  {
+    "category": "economics",
+    "question": "List the three main characteristics of monopolistic competition and discuss briefly the implications of these characteristics."
+  },
+  {
+    "category": "biology",
+    "question": "IfDNAaseis added to a bacterial cell, the DNA is hydrolyzed , the cell cannot make any more proteins and eventually dies. IfDNAaseis added to RNA viruses, they continue to produce new proteins. Explain."
+  },
+  {
+    "category": "engineering",
+    "question": "A sinusoidal voltage having a frequency of 1 MHz and a peak value of 10 volts is applied to the plates of a parallel plate capacitor which are 2 cm. apart. If an electron is released from one plate at an instant when the applied voltage is zero, find the position of the electron at any subsequent time t. Assume that the initial velocity of the electron is 10^6 m/sec in the X-direction, which is perpendicular to the plates. No magnetic field is present."
+  },
+  {
+    "category": "engineering",
+    "question": "A signal source operating at 50MHz has an output impedance of 20 ohms. It is to supply power through a coaxial line to a load impedance of 150 + j40 ohms. Is it possible to design a quarter-wave transformer to match the source to the load?"
+  },
+  {
+    "category": "history",
+    "question": "How did the invention of the wheel affect transportation?"
+  },
+  {
+    "category": "law",
+    "question": "A customer at a fish market was leaving the store after purchasing an assortment of shrimp, oysters, and scallops. He was walking along the sidewalk in front of the store when he slipped on a piece of eel. He brought suit against the owner of the market claiming that he suffered leg and back injuries. The owner, although admitting that the customer was injured by slipping on the eel, denied negligence and claimed that the customer was contributorily negligent. At trial, the owner calls a witness to testify that before the fall he heard someone call out to the customer, \"Watch it, buddy, you're going to step on that piece of fish. \"The witness's testimony is"
+  },
+  {
+    "category": "philosophy",
+    "question": " According to Nathanson, criminals who commit murder forfeit their right to"
+  },
+  {
+    "category": "engineering",
+    "question": "Air flowing through a nozzle encounters a shock. The Mach number upstream of the shock isM_x= 1.8, and the static temperature downstream of the shock is T_y = 800\u00b0R. How much has the velocity changed across the shock ? Assume \\gamma = 1.4."
+  },
+  {
+    "category": "engineering",
+    "question": "The errors mainly caused by human mistakes are"
+  },
+  {
+    "category": "physics",
+    "question": "What is the difference between velocity and acceleration?"
+  },
+  {
+    "category": "biology",
+    "question": "Certain nerve gases are known to cause a breakdown of cholinesterase. How would these gases affect the human body and why?"
+  },
+  {
+    "category": "math",
+    "question": "How do you calculate the area of a circle?"
+  },
+  {
+    "category": "chemistry",
+    "question": "The normal boiling point of benzene is 80.10\u00b0C. When 1 mole of a solute is dissolved in 1000 g of benzene, the boiling point of the resulting solution is 82.73\u00b0C. When 1.2 g of elemental sulfur is dissolved in 50 g of benzene, the boiling point of the solution is 80.36\u00b0C. What is the molecular weight of sulfur?"
+  },
+  {
+    "category": "economics",
+    "question": "What is meant by income elasticity of demand?"
+  },
+  {
+    "category": "health",
+    "question": "A 72-year-old woman who has smoked 20 cigarettes daily for the past 38 years begins using eyedrops for glaucoma. Three days later, she has a marked increase in shortness of breath while walking up a flight of stairs. Which of the following drugs is the most likely cause of the development of shortness of breath in this patient?"
+  },
+  {
+    "category": "health",
+    "question": "The regional lymphatic drainage of the left side of the tip of the tongue is to the"
   }
 ]

@@ -89,6 +89,40 @@ func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 	return piiType, ok
 }
 
+// TranslatePIIType translates a PII type from Rust binding format to named type.
+// Handles formats like "class_6" → "DATE_TIME" and passes through already-named types.
+// Also strips BIO prefixes (B-PERSON → PERSON).
+func (pm *PIIMapping) TranslatePIIType(rawType string) string {
+	if pm == nil {
+		return rawType
+	}
+
+	// Check if it's already a known label (exact match or in IdxToLabel values)
+	for _, label := range pm.IdxToLabel {
+		if rawType == label {
+			return rawType // Already a proper label name
+		}
+	}
+
+	// Check if it's in class_X format
+	if len(rawType) > 6 && rawType[:6] == "class_" {
+		indexStr := rawType[6:]
+		if label, ok := pm.IdxToLabel[indexStr]; ok {
+			return label
+		}
+	}
+
+	// Strip BIO prefix if present (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME)
+	if len(rawType) > 2 && rawType[1] == '-' {
+		prefix := rawType[0]
+		if prefix == 'B' || prefix == 'I' || prefix == 'O' || prefix == 'E' {
+			return rawType[2:]
+		}
+	}
+
+	return rawType
+}
+
 // GetJailbreakTypeFromIndex converts a class index to jailbreak type name using the mapping
 func (jm *JailbreakMapping) GetJailbreakTypeFromIndex(classIndex int) (string, bool) {
 	jailbreakType, ok := jm.IdxToLabel[fmt.Sprintf("%d", classIndex)]

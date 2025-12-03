@@ -110,6 +110,6 @@ func (r *OpenAIRouter) checkPIIPolicy(ctx *RequestContext, detectedPII []string,
 	})
 	metrics.RecordRequestError(decisionName, "pii_policy_denied")
 
-	piiResponse := http.CreatePIIViolationResponse(decisionName, deniedPII, ctx.ExpectStreamingResponse, decisionName)
+	piiResponse := http.CreatePIIViolationResponse(decisionName, deniedPII, ctx.ExpectStreamingResponse, decisionName, ctx.VSRSelectedCategory)
 	return piiResponse
 }

@@ -17,7 +17,7 @@ import (
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
-func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string) *ext_proc.ProcessingResponse {
+func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string, category string) *ext_proc.ProcessingResponse {
 	// Record PII violation metrics
 	metrics.RecordPIIViolations(model, deniedPII)
 
@@ -121,6 +121,12 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 					Header: &core.HeaderValue{
 						Key:      headers.VSRSelectedDecision,
 						RawValue: []byte(decisionName),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRSelectedCategory,
+						RawValue: []byte(category),
 					},
 				},
 			},
@@ -249,7 +255,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 }
 
 // CreateCacheHitResponse creates an immediate response from cache
-func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.ProcessingResponse {
+func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string) *ext_proc.ProcessingResponse {
 	var responseBody []byte
 	var contentType string
 
@@ -315,6 +321,18 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.P
 					Header: &core.HeaderValue{
 						Key:      headers.VSRCacheHit,
 						RawValue: []byte("true"),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRSelectedCategory,
+						RawValue: []byte(category),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRSelectedDecision,
+						RawValue: []byte(decisionName),
 					},
 				},
 			},
