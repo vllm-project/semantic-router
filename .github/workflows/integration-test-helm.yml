@@ -15,6 +15,10 @@ on:
       - '**/*.md'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   HELM_VERSION: v3.14.0
   KIND_VERSION: v0.22.0

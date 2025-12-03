@@ -1,0 +1,88 @@
+name: CI Changes
+on:
+  workflow_call:
+    outputs:
+      core:
+        value: ${{ jobs.filter.outputs.core }}
+      dashboard:
+        value: ${{ jobs.filter.outputs.dashboard }}
+      website:
+        value: ${{ jobs.filter.outputs.website }}
+      docs:
+        value: ${{ jobs.filter.outputs.docs }}
+      helm:
+        value: ${{ jobs.filter.outputs.helm }}
+      e2e:
+        value: ${{ jobs.filter.outputs.e2e }}
+      ci:
+        value: ${{ jobs.filter.outputs.ci }}
+      docker:
+        value: ${{ jobs.filter.outputs.docker }}
+      make:
+        value: ${{ jobs.filter.outputs.make }}
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.changes.outputs.core }}
+      dashboard: ${{ steps.changes.outputs.dashboard }}
+      website: ${{ steps.changes.outputs.website }}
+      docs: ${{ steps.changes.outputs.docs }}
+      helm: ${{ steps.changes.outputs.helm }}
+      e2e: ${{ steps.changes.outputs.e2e }}
+      ci: ${{ steps.changes.outputs.ci }}
+      docker: ${{ steps.changes.outputs.docker }}
+      make: ${{ steps.changes.outputs.make }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          token: ${{ github.token }}
+          filters: |
+            core:
+              - 'src/**'
+              - 'candle-binding/**'
+              - 'bench/**'
+              - 'config/**'
+              - 'scripts/**'
+              - 'examples/**'
+              - 'e2e/**'
+              - 'tools/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'pyproject.toml'
+              - 'e2e-tests/llm-katan/**'
+            dashboard:
+              - 'dashboard/**'
+            website:
+              - 'website/**'
+            docs:
+              - 'docs/**'
+              - '**/*.md'
+              - '**/*.mdx'
+            helm:
+              - 'deploy/helm/**'
+            e2e:
+              - 'e2e-tests/**'
+              - 'e2e/**'
+              - 'scripts/quickstart.sh'
+              - 'deploy/docker-compose/**'
+              - 'deploy/kubernetes/**'
+              - 'deploy/kserve/**'
+              - 'deploy/openshift/**'
+            ci:
+              - '.github/workflows/**'
+            docker:
+              - 'Dockerfile*'
+              - 'docker/**'
+              - 'docker-compose*'
+              - 'deploy/docker-compose/**'
+            make:
+              - 'Makefile'
+              - 'tools/make/**'

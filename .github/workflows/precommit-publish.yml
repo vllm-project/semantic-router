@@ -8,6 +8,10 @@ on:
     paths:
       - 'Dockerfile.precommit'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build_and_push:
     if: github.repository == 'vllm-project/semantic-router'
