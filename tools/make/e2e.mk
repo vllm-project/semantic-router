@@ -98,6 +98,7 @@ e2e-help: ## Show help for E2E testing
 	@echo "  aibrix      - Test Semantic Router with vLLM AIBrix"
 	@echo "  istio       - Test Semantic Router with Istio service mesh"
 	@echo "  llm-d       - Test Semantic Router with LLM-D"
+	@echo "  production-stack - Test Semantic Router in production-like stack (HA/LB/Obs)"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  E2E_PROFILE              - Test profile to run (default: ai-gateway)"
