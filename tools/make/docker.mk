@@ -108,31 +108,39 @@ docker-push-llm-katan:
 REBUILD ?=
 BUILD_FLAG=$(if $(REBUILD),--build,)
 
+# Compose command: use podman compose (plugin) for podman, docker compose (plugin) for docker
+# Both use COMPOSE_FILE and COMPOSE_PROJECT_NAME environment variables automatically
+ifeq ($(CONTAINER_RUNTIME),podman)
+COMPOSE_CMD = podman compose
+else
+COMPOSE_CMD = $(CONTAINER_RUNTIME) compose
+endif
+
 # Docker compose shortcuts (no rebuild by default)
 docker-compose-up: ## Start services (default includes llm-katan; REBUILD=1 to rebuild)
 docker-compose-up:
 	@$(LOG_TARGET)
-	@echo "Starting services with docker-compose (default includes llm-katan) (REBUILD=$(REBUILD))..."
-	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
+	@echo "Starting services with $(COMPOSE_CMD) (default includes llm-katan) (REBUILD=$(REBUILD))..."
+	@$(COMPOSE_CMD) --profile llm-katan up -d $(BUILD_FLAG)
 
 docker-compose-up-testing: ## Start with testing profile (REBUILD=1 optional)
 docker-compose-up-testing:
 	@$(LOG_TARGET)
-	@echo "Starting services with testing profile (REBUILD=$(REBUILD))..."
-	@docker compose --profile testing up -d $(BUILD_FLAG)
+	@echo "Starting services with $(COMPOSE_CMD) (testing profile) (REBUILD=$(REBUILD))..."
+	@$(COMPOSE_CMD) --profile testing up -d $(BUILD_FLAG)
 
 docker-compose-up-llm-katan: ## Start with llm-katan profile (REBUILD=1 optional)
 docker-compose-up-llm-katan:
 	@$(LOG_TARGET)
-	@echo "Starting services with llm-katan profile (REBUILD=$(REBUILD))..."
-	@docker compose --profile llm-katan up -d $(BUILD_FLAG)
+	@echo "Starting services with $(COMPOSE_CMD) (llm-katan profile) (REBUILD=$(REBUILD))..."
+	@$(COMPOSE_CMD) --profile llm-katan up -d $(BUILD_FLAG)
 
 # Start core services only (closer to production; excludes llm-katan)
 docker-compose-up-core: ## Start core services only (no llm-katan)
 docker-compose-up-core:
 	@$(LOG_TARGET)
-	@echo "Starting core services (no llm-katan) (REBUILD=$(REBUILD))..."
-	@docker compose up -d $(BUILD_FLAG)
+	@echo "Starting core services with $(COMPOSE_CMD) (no llm-katan) (REBUILD=$(REBUILD))..."
+	@$(COMPOSE_CMD) up -d $(BUILD_FLAG)
 
 # Explicit rebuild targets for convenience
 docker-compose-rebuild: ## Force rebuild then start
@@ -150,31 +158,32 @@ docker-compose-rebuild-llm-katan: docker-compose-up-llm-katan
 docker-compose-down:
 docker-compose-down: ## Stop services (default includes llm-katan)
 	@$(LOG_TARGET)
-	@echo "Stopping docker-compose services (default includes llm-katan)..."
-	@docker compose --profile llm-katan down
+	@echo "Stopping services with $(COMPOSE_CMD) (default includes llm-katan)..."
+	@$(COMPOSE_CMD) --profile llm-katan down
 
 docker-compose-down-core: ## Stop core services only (no llm-katan)
 docker-compose-down-core:
 	@$(LOG_TARGET)
-	@echo "Stopping core services only (no llm-katan)..."
-	@docker compose down
+	@echo "Stopping core services with $(COMPOSE_CMD) (no llm-katan)..."
+	@$(COMPOSE_CMD) down
 
 docker-compose-down-testing: ## Stop services with testing profile
 docker-compose-down-testing:
 	@$(LOG_TARGET)
-	@echo "Stopping services with testing profile..."
-	@docker compose --profile testing down
+	@echo "Stopping services with $(COMPOSE_CMD) (testing profile)..."
+	@$(COMPOSE_CMD) --profile testing down
 
 docker-compose-down-llm-katan: ## Stop services with llm-katan profile
 docker-compose-down-llm-katan:
 	@$(LOG_TARGET)
-	@echo "Stopping services with llm-katan profile..."
-	@docker compose --profile llm-katan down
+	@echo "Stopping services with $(COMPOSE_CMD) (llm-katan profile)..."
+	@$(COMPOSE_CMD) --profile llm-katan down
 
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
 	@echo "Environment Variables:"
-	@echo "  DOCKER_REGISTRY - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
-	@echo "  DOCKER_TAG      - Docker tag (default: latest)"
-	@echo "  SERVED_NAME     - Served model name for custom runs"
+	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker, can be set to podman)"
+	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
+	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
+	@echo "  SERVED_NAME       - Served model name for custom runs"
