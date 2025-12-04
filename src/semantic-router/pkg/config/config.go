@@ -262,15 +262,43 @@ type APIConfig struct {
 type ObservabilityConfig struct {
 	// Tracing configuration for distributed tracing
 	Tracing TracingConfig `yaml:"tracing"`
-	// Metrics configuration for Prometheus metrics endpoint
+
+	// Metrics configuration for enhanced metrics collection
 	Metrics MetricsConfig `yaml:"metrics"`
 }
 
-// MetricsConfig represents configuration for metrics endpoint
+// MetricsConfig represents configuration for metrics collection
 type MetricsConfig struct {
 	// Enabled controls whether the Prometheus metrics endpoint is served
 	// When omitted, defaults to true
 	Enabled *bool `yaml:"enabled,omitempty"`
+
+	// Enable windowed metrics collection for load balancing
+	WindowedMetrics WindowedMetricsConfig `yaml:"windowed_metrics"`
+}
+
+// WindowedMetricsConfig represents configuration for time-windowed metrics
+type WindowedMetricsConfig struct {
+	// Enable windowed metrics collection
+	Enabled bool `yaml:"enabled"`
+
+	// Time windows to track (in duration format, e.g., "1m", "5m", "15m", "1h", "24h")
+	// Default: ["1m", "5m", "15m", "1h", "24h"]
+	TimeWindows []string `yaml:"time_windows,omitempty"`
+
+	// Update interval for windowed metrics computation (e.g., "10s", "30s")
+	// Default: "10s"
+	UpdateInterval string `yaml:"update_interval,omitempty"`
+
+	// Enable model-level metrics tracking
+	ModelMetrics bool `yaml:"model_metrics"`
+
+	// Enable queue depth estimation
+	QueueDepthEstimation bool `yaml:"queue_depth_estimation"`
+
+	// Maximum number of models to track (to prevent cardinality explosion)
+	// Default: 100
+	MaxModels int `yaml:"max_models,omitempty"`
 }
 
 // TracingConfig represents configuration for distributed tracing

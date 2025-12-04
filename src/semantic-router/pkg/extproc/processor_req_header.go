@@ -42,6 +42,9 @@ type RequestContext struct {
 	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
+	// Endpoint tracking for windowed metrics
+	SelectedEndpoint string // The endpoint address selected for this request
+
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 }
