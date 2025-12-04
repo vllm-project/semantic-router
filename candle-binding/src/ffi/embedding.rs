@@ -29,7 +29,7 @@ enum PaddingSide {
 }
 
 /// Global singleton for ModelFactory
-static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
+pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
 
 /// Generic internal helper for single text embedding generation
 ///
@@ -77,14 +77,18 @@ where
 
     // Apply Matryoshka truncation if requested
     let result = if let Some(dim) = target_dim {
-        if dim > embedding_vec.len() {
-            return Err(format!(
-                "Target dimension {} exceeds model dimension {}",
+        // Gracefully degrade to model's max dimension if requested dimension is too large
+        let actual_dim = if dim > embedding_vec.len() {
+            eprintln!(
+                "WARNING: Requested dimension {} exceeds model dimension {}, using full dimension",
                 dim,
                 embedding_vec.len()
-            ));
-        }
-        embedding_vec[..dim].to_vec()
+            );
+            embedding_vec.len()
+        } else {
+            dim
+        };
+        embedding_vec[..actual_dim].to_vec()
     } else {
         embedding_vec
     };
@@ -185,15 +189,19 @@ where
 
     // Apply Matryoshka truncation if requested
     let result_embeddings = if let Some(dim) = target_dim {
-        if dim > embedding_dim {
-            return Err(format!(
-                "Target dimension {} exceeds model dimension {}",
+        // Gracefully degrade to model's max dimension if requested dimension is too large
+        let actual_dim = if dim > embedding_dim {
+            eprintln!(
+                "WARNING: Requested dimension {} exceeds model dimension {}, using full dimension",
                 dim, embedding_dim
-            ));
-        }
+            );
+            embedding_dim
+        } else {
+            dim
+        };
         embeddings_data
             .into_iter()
-            .map(|emb| emb[..dim].to_vec())
+            .map(|emb| emb[..actual_dim].to_vec())
             .collect()
     } else {
         embeddings_data
@@ -207,11 +215,11 @@ where
 /// # Safety
 /// - `qwen3_model_path` and `gemma_model_path` must be valid null-terminated C strings or null
 /// - Must be called before any embedding generation functions
-/// - Can only be called once (subsequent calls will be ignored)
+/// - Can only be called once (subsequent calls will return true as already initialized)
 ///
 /// # Returns
-/// - `true` if initialization succeeded
-/// - `false` if initialization failed or already initialized
+/// - `true` if initialization succeeded or already initialized
+/// - `false` if initialization failed
 #[no_mangle]
 pub extern "C" fn init_embedding_models(
     qwen3_model_path: *const c_char,
@@ -219,6 +227,12 @@ pub extern "C" fn init_embedding_models(
     use_cpu: bool,
 ) -> bool {
     use candle_core::Device;
+
+    // Check if already initialized (OnceLock can only be set once)
+    if GLOBAL_MODEL_FACTORY.get().is_some() {
+        eprintln!("WARNING: ModelFactory already initialized");
+        return true; // Already initialized, return success
+    }
 
     // Parse model paths
     let qwen3_path = if qwen3_model_path.is_null() {
