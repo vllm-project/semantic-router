@@ -1,0 +1,202 @@
+# Example Fusion Policy Configuration
+# This file demonstrates how to configure the Signal Fusion Engine
+
+# Fusion configuration
+fusion:
+  # Enable the fusion engine (set to false to use existing decision engine)
+  enabled: true
+
+  # Fusion policies (evaluated in priority order, first match wins)
+  policies:
+    # Priority 200: Safety blocks (highest priority)
+    - name: "block-ssn"
+      description: "Block requests containing Social Security Number patterns"
+      priority: 200
+      condition: "regex.ssn.matched"
+      action: "block"
+      message: "Request contains Social Security Number pattern. This is not allowed for privacy reasons."
+
+    - name: "block-credit-card"
+      description: "Block requests containing credit card number patterns"
+      priority: 200
+      condition: "regex.credit_card.matched"
+      action: "block"
+      message: "Request contains credit card number pattern. This is not allowed for security reasons."
+
+    # Priority 150: High-confidence routing
+    - name: "route-k8s-expert"
+      description: "Route Kubernetes-related queries to specialized models"
+      priority: 150
+      condition: "(keyword.kubernetes.matched || keyword.k8s.matched) && bert.category == 'computer_science'"
+      action: "route"
+      models:
+        - "k8s-expert-model"
+        - "devops-model"
+
+    - name: "route-security-expert"
+      description: "Route security-related queries to hardened models"
+      priority: 150
+      condition: "(regex.cve.matched || keyword.security.matched) && similarity.threat.score > 0.7"
+      action: "route"
+      models:
+        - "security-hardened-model"
+
+    - name: "route-database-expert"
+      description: "Route database queries to specialized models"
+      priority: 150
+      condition: "keyword.database.matched && bert.category == 'computer_science'"
+      action: "route"
+      models:
+        - "database-expert-model"
+        - "sql-model"
+
+    # Priority 100: Category boosting
+    - name: "boost-reasoning"
+      description: "Boost reasoning category for multi-step thinking requests"
+      priority: 100
+      condition: "similarity.multi_step.score > 0.75"
+      action: "boost_category"
+      category: "reasoning"
+      boost_weight: 1.5
+
+    - name: "boost-code-generation"
+      description: "Boost computer science category for code generation"
+      priority: 100
+      condition: "keyword.code.matched && similarity.programming.score > 0.6"
+      action: "boost_category"
+      category: "computer_science"
+      boost_weight: 1.3
+
+    # Priority 50: Consensus requirements
+    - name: "route-math-expert-consensus"
+      description: "Route to math expert only with high confidence from multiple signals"
+      priority: 50
+      condition: "bert.category == 'math' && similarity.equation.score > 0.8 && bert.confidence > 0.9"
+      action: "route"
+      models:
+        - "math-reasoning-model"
+
+    # Priority 0: Default fallthrough
+    - name: "default-fallthrough"
+      description: "Fallback to existing decision engine for unmatched requests"
+      priority: 0
+      condition: "true"
+      action: "fallthrough"
+
+  # Regex patterns (referenced in policies as regex.{name}.matched)
+  regex_patterns:
+    - name: "ssn"
+      pattern: '\b\d{3}-\d{2}-\d{4}\b'
+      description: "US Social Security Number (format: XXX-XX-XXXX)"
+
+    - name: "credit_card"
+      pattern: '\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b'
+      description: "Credit card number (16 digits with optional separators)"
+
+    - name: "cve"
+      pattern: 'CVE-\d{4}-\d{4,7}'
+      description: "CVE (Common Vulnerabilities and Exposures) ID"
+
+    - name: "email"
+      pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+      description: "Email address"
+
+  # Similarity concepts (referenced in policies as similarity.{name}.score)
+  similarity_concepts:
+    - name: "multi_step"
+      description: "Multi-step reasoning or thorough explanation requests"
+      candidates:
+        - "step by step"
+        - "break down the problem"
+        - "explain thoroughly"
+        - "walk me through"
+        - "analyze systematically"
+      threshold: 0.75
+      aggregation: "mean"
+
+    - name: "threat"
+      description: "Security threat or vulnerability discussions"
+      candidates:
+        - "security threat"
+        - "attack vector"
+        - "vulnerability"
+        - "exploit"
+        - "penetration testing"
+      threshold: 0.7
+      aggregation: "max"
+
+    - name: "programming"
+      description: "Code writing or programming tasks"
+      candidates:
+        - "write code"
+        - "implement function"
+        - "create class"
+        - "code snippet"
+        - "programming task"
+      threshold: 0.6
+      aggregation: "mean"
+
+    - name: "equation"
+      description: "Mathematical equations or formulas"
+      candidates:
+        - "solve equation"
+        - "calculate formula"
+        - "mathematical expression"
+        - "algebraic equation"
+      threshold: 0.8
+      aggregation: "max"
+
+# Keyword rules (referenced in fusion policies as keyword.{name}.matched)
+keyword_rules:
+  - name: "kubernetes"
+    keywords:
+      - "kubernetes"
+      - "k8s"
+      - "kubectl"
+      - "helm"
+      - "pod"
+      - "container"
+      - "deployment"
+    operator: "OR"
+    case_sensitive: false
+
+  - name: "k8s"
+    keywords:
+      - "kubernetes"
+      - "k8s"
+    operator: "OR"
+    case_sensitive: false
+
+  - name: "security"
+    keywords:
+      - "security"
+      - "vulnerability"
+      - "exploit"
+      - "CVE"
+      - "attack"
+      - "penetration"
+    operator: "OR"
+    case_sensitive: false
+
+  - name: "database"
+    keywords:
+      - "database"
+      - "SQL"
+      - "PostgreSQL"
+      - "MySQL"
+      - "MongoDB"
+      - "query"
+      - "schema"
+    operator: "OR"
+    case_sensitive: false
+
+  - name: "code"
+    keywords:
+      - "code"
+      - "programming"
+      - "function"
+      - "class"
+      - "implement"
+      - "algorithm"
+    operator: "OR"
+    case_sensitive: false
