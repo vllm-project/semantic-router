@@ -22,7 +22,7 @@ use crate::BertClassifier;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
-use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
+use crate::ffi::init::{LORA_INTENT_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
 
@@ -734,7 +734,32 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
             Err(_) => return default_result,
         }
     };
-    // Use TraditionalBertClassifier for Candle BERT text classification
+
+    // Try LoRA intent classifier first (preferred for higher accuracy)
+    if let Some(classifier) = LORA_INTENT_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_with_index(text) {
+            Ok((class_idx, confidence, ref intent)) => {
+                // Allocate C string for intent label
+                let label_ptr = unsafe { allocate_c_string(intent) };
+
+                return ClassificationResult {
+                    predicted_class: class_idx as i32,
+                    confidence,
+                    label: label_ptr,
+                };
+            }
+            Err(e) => {
+                eprintln!(
+                    "LoRA intent classifier error: {}, falling back to Traditional BERT",
+                    e
+                );
+                // Don't return - fall through to Traditional BERT classifier
+            }
+        }
+    }
+
+    // Fallback to Traditional BERT classifier
     if let Some(classifier) = TRADITIONAL_BERT_CLASSIFIER.get() {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -758,7 +783,7 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
             }
         }
     } else {
-        println!("TraditionalBertClassifier not initialized - call init_bert_classifier first");
+        println!("No classifier initialized - call init_candle_bert_classifier first");
         ClassificationResult {
             predicted_class: -1,
             confidence: 0.0,

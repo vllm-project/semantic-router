@@ -113,6 +113,40 @@ impl IntentLoRAClassifier {
         })
     }
 
+    /// Classify intent and return (class_index, confidence, intent_label) for FFI
+    pub fn classify_with_index(&self, text: &str) -> Result<(usize, f32, String)> {
+        // Use real BERT model for classification
+        let (predicted_class, confidence) =
+            self.bert_classifier.classify_text(text).map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "intent classification",
+                    format!("Classification failed: {}", e),
+                    text
+                );
+                candle_core::Error::from(unified_err)
+            })?;
+
+        // Map class index to intent label - fail if class not found
+        let intent = if predicted_class < self.intent_labels.len() {
+            self.intent_labels[predicted_class].clone()
+        } else {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "intent classification",
+                format!(
+                    "Invalid class index {} not found in labels (max: {})",
+                    predicted_class,
+                    self.intent_labels.len()
+                ),
+                text
+            );
+            return Err(candle_core::Error::from(unified_err));
+        };
+
+        Ok((predicted_class, confidence, intent))
+    }
+
     /// Parallel classification for multiple texts using rayon
     ///
     /// # Performance

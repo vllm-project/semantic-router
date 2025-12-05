@@ -499,8 +499,17 @@ impl HighPerformanceBertClassifier {
 
         // Load tokenizer
         let tokenizer_path = Path::new(model_path).join("tokenizer.json");
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
+
+        // Configure truncation to max 512 tokens (BERT's position embedding limit)
+        use tokenizers::TruncationParams;
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: 512,
+                ..Default::default()
+            }))
+            .map_err(E::msg)?;
 
         // Load model weights
         let weights_path = if Path::new(model_path).join("model.safetensors").exists() {
@@ -690,8 +699,17 @@ impl HighPerformanceBertTokenClassifier {
 
         // Load tokenizer
         let tokenizer_path = Path::new(model_path).join("tokenizer.json");
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
+
+        // Configure truncation to max 512 tokens (BERT's position embedding limit)
+        use tokenizers::TruncationParams;
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: 512,
+                ..Default::default()
+            }))
+            .map_err(E::msg)?;
 
         // Load model weights
         let weights_path = if Path::new(model_path).join("model.safetensors").exists() {
