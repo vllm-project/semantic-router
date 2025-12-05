@@ -36,7 +36,7 @@ concurrency:
 jobs:
   # Build job for multi-architecture Docker images
   build_multiarch:
-    if: github.repository == 'vllm-project/semantic-router'
+    if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     permissions:
       contents: read

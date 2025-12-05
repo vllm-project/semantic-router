@@ -8,6 +8,7 @@ on:
       - 'website/**'
       - '**/*.md'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths-ignore:
@@ -30,6 +31,7 @@ jobs:
   # Lint and validate Helm chart
   lint-chart:
     name: Lint Helm Chart
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
