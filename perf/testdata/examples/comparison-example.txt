@@ -1,0 +1,78 @@
+# Example Baseline Comparison Output
+# This shows what you'll see when running: make perf-compare
+
+Comparing performance with baseline...
+Baseline directory: perf/testdata/baselines/
+Threshold file: perf/config/thresholds.yaml
+
+Loading baselines...
+  ✓ classification.json (15 benchmarks)
+  ✓ decision.json (8 benchmarks)
+  ✓ cache.json (9 benchmarks)
+
+Comparing current results...
+
+===================================================================================
+                        PERFORMANCE COMPARISON RESULTS
+===================================================================================
+Benchmark                                      Baseline        Current         Change
+-----------------------------------------------------------------------------------
+✓ BenchmarkClassifyBatch_Size1-8               10245678        10123456        -1.19%
+  └─ P95 Latency:                              10.50ms         10.12ms         -3.62%
+  └─ Throughput:                               97.60 qps       98.78 qps       +1.21%
+
+✓ BenchmarkClassifyBatch_Size10-8              52345678        51234567        -2.12%
+  └─ P95 Latency:                              53.20ms         51.78ms         -2.67%
+  └─ Throughput:                               19.10 qps       19.52 qps       +2.20%
+
+✓ BenchmarkClassifyBatch_Size50-8              215678901       212345678       -1.54%
+
+✓ BenchmarkClassifyBatch_Size100-8             412345678       410234567       -0.51%
+
+✓ BenchmarkEvaluateDecisions_SingleDomain-8    234567          229876          -2.00%
+  └─ P95 Latency:                              0.24ms          0.23ms          -4.17%
+  └─ Throughput:                               4263 qps        4350 qps        +2.04%
+
+⚠️  BenchmarkEvaluateDecisions_Complex-8       456789          512345          +12.16%
+  └─ P95 Latency:                              0.46ms          0.52ms          +13.04%
+  └─ Throughput:                               2189 qps        1952 qps        -10.83%
+
+✓ BenchmarkCacheSearch_1000Entries-8           3456789         3389012         -1.96%
+  └─ P95 Latency:                              4.23ms          4.15ms          -1.89%
+  └─ Throughput:                               289.34 qps      295.12 qps      +2.00%
+  └─ Hit Rate:                                 78.50%          79.20%          +0.89%
+
+✓ BenchmarkCacheSearch_10000Entries-8          7890123         7823456         -0.84%
+  └─ P95 Latency:                              9.12ms          9.05ms          -0.77%
+
+✓ BenchmarkCacheConcurrency_50-8               789012          756234          -4.16%
+  └─ Throughput:                               1267 qps        1322 qps        +4.34%
+  └─ Hit Rate:                                 85.20%          86.50%          +1.53%
+
+✓ BenchmarkProcessRequest-8                    456789          445678          -2.43%
+
+✓ BenchmarkFullRequestFlow-8                   890123          878901          -1.26%
+
+===================================================================================
+
+Summary:
+  Total Benchmarks:    32
+  Regressions:         1 (3.1%)
+  Improvements:        8 (25.0%)
+  No Change:           23 (71.9%)
+
+⚠️  WARNING: 1 regression(s) detected!
+
+Regressions:
+  1. BenchmarkEvaluateDecisions_Complex-8: +12.16% (threshold: 10%)
+     - P95 latency increased by 13.04%
+     - Throughput decreased by 10.83%
+     - ACTION REQUIRED: Investigate complex decision evaluation performance
+
+Significant Improvements:
+  1. BenchmarkCacheConcurrency_50-8: +4.34% throughput
+  2. BenchmarkEvaluateDecisions_SingleDomain-8: +2.04% throughput
+
+✓ Comparison complete
+  Results saved to: reports/comparison.json
+  Detailed report: reports/comparison.md

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Benchmark Report - vLLM Semantic Router</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        .header .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .metadata {
+            background: #f8f9fa;
+            padding: 25px 40px;
+            border-bottom: 2px solid #e9ecef;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .metadata-item strong {
+            color: #667eea;
+            min-width: 100px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            padding: 40px;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+        }
+        .summary-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .summary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .summary-card h3 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        .summary-card p {
+            color: #6c757d;
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+        .summary-card.total { border-top: 4px solid #667eea; }
+        .summary-card.total h3 { color: #667eea; }
+        .summary-card.regression { border-top: 4px solid #dc3545; }
+        .summary-card.regression h3 { color: #dc3545; }
+        .summary-card.improvement { border-top: 4px solid #28a745; }
+        .summary-card.improvement h3 { color: #28a745; }
+        .summary-card.nochange { border-top: 4px solid #6c757d; }
+        .summary-card.nochange h3 { color: #6c757d; }
+        .alert {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px 40px;
+            margin: 0;
+            font-size: 1.1em;
+        }
+        .alert.danger {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        .alert.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        .content {
+            padding: 40px;
+        }
+        h2 {
+            color: #667eea;
+            margin: 30px 0 20px 0;
+            font-size: 1.8em;
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+        .status.ok {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.regression {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.improved {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .change {
+            font-weight: 600;
+        }
+        .change.positive { color: #28a745; }
+        .change.negative { color: #dc3545; }
+        .change.neutral { color: #6c757d; }
+        .footer {
+            background: #f8f9fa;
+            padding: 30px 40px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 2px solid #e9ecef;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .chart-placeholder {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 60px;
+            text-align: center;
+            color: #6c757d;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Performance Benchmark Report</h1>
+            <p class="subtitle">vLLM Semantic Router Performance Analysis</p>
+        </div>
+
+        <div class="metadata">
+            <div class="metadata-item">
+                <strong>Generated:</strong>
+                <span>2025-12-04 16:30:00 UTC</span>
+            </div>
+            <div class="metadata-item">
+                <strong>Git Commit:</strong>
+                <span>816dbec26397</span>
+            </div>
+            <div class="metadata-item">
+                <strong>Git Branch:</strong>
+                <span>perf_test</span>
+            </div>
+            <div class="metadata-item">
+                <strong>Go Version:</strong>
+                <span>go1.24.1</span>
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="summary-card total">
+                <h3>32</h3>
+                <p>Total Benchmarks</p>
+            </div>
+            <div class="summary-card regression">
+                <h3>1</h3>
+                <p>Regressions</p>
+            </div>
+            <div class="summary-card improvement">
+                <h3>8</h3>
+                <p>Improvements</p>
+            </div>
+            <div class="summary-card nochange">
+                <h3>23</h3>
+                <p>No Change</p>
+            </div>
+        </div>
+
+        <div class="alert danger">
+            <strong>⚠️ WARNING:</strong> Performance regressions detected! Review the detailed results below.
+        </div>
+
+        <div class="content">
+            <h2>🔍 Detailed Results</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Benchmark</th>
+                        <th>Metric</th>
+                        <th>Baseline</th>
+                        <th>Current</th>
+                        <th>Change</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>BenchmarkClassifyBatch_Size1</strong></td>
+                        <td>ns/op</td>
+                        <td>10,245,678</td>
+                        <td>10,123,456</td>
+                        <td class="change positive">-1.19%</td>
+                        <td><span class="status ok">✅ OK</span></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>P95 Latency</td>
+                        <td>10.50ms</td>
+                        <td>10.12ms</td>
+                        <td class="change positive">-3.62%</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Throughput</td>
+                        <td>97.60 qps</td>
+                        <td>98.78 qps</td>
+                        <td class="change positive">+1.21%</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td><strong>BenchmarkClassifyBatch_Size10</strong></td>
+                        <td>ns/op</td>
+                        <td>52,345,678</td>
+                        <td>51,234,567</td>
+                        <td class="change positive">-2.12%</td>
+                        <td><span class="status improved">🚀 IMPROVED</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>BenchmarkEvaluateDecisions_Complex</strong></td>
+                        <td>ns/op</td>
+                        <td>456,789</td>
+                        <td>512,345</td>
+                        <td class="change negative">+12.16%</td>
+                        <td><span class="status regression">⚠️ REGRESSION</span></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>P95 Latency</td>
+                        <td>0.46ms</td>
+                        <td>0.52ms</td>
+                        <td class="change negative">+13.04%</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Throughput</td>
+                        <td>2,189 qps</td>
+                        <td>1,952 qps</td>
+                        <td class="change negative">-10.83%</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td><strong>BenchmarkCacheSearch_1000Entries</strong></td>
+                        <td>ns/op</td>
+                        <td>3,456,789</td>
+                        <td>3,389,012</td>
+                        <td class="change positive">-1.96%</td>
+                        <td><span class="status improved">🚀 IMPROVED</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>BenchmarkCacheConcurrency_50</strong></td>
+                        <td>ns/op</td>
+                        <td>789,012</td>
+                        <td>756,234</td>
+                        <td class="change positive">-4.16%</td>
+                        <td><span class="status improved">🚀 IMPROVED</span></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Throughput</td>
+                        <td>1,267 qps</td>
+                        <td>1,322 qps</td>
+                        <td class="change positive">+4.34%</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>📈 Performance Trends</h2>
+            <div class="chart-placeholder">
+                <p>📊 Interactive charts would appear here</p>
+                <p style="font-size: 0.9em; margin-top: 10px;">Showing latency trends, throughput over time, and component comparisons</p>
+            </div>
+
+            <h2>🔴 Regressions (Action Required)</h2>
+            <table>
+                <tr>
+                    <th>Benchmark</th>
+                    <th>Issue</th>
+                    <th>Impact</th>
+                    <th>Recommendation</th>
+                </tr>
+                <tr>
+                    <td><strong>BenchmarkEvaluateDecisions_Complex</strong></td>
+                    <td>P95 latency +13.04%<br>Throughput -10.83%</td>
+                    <td>Complex decision scenarios slowed significantly</td>
+                    <td>Profile with <code>make perf-profile-cpu</code><br>Investigate rule matching optimization</td>
+                </tr>
+            </table>
+
+            <h2>✅ Significant Improvements</h2>
+            <ul style="line-height: 2; font-size: 1.1em;">
+                <li><strong>Cache Concurrency:</strong> +4.34% throughput improvement under high load</li>
+                <li><strong>Classification Batch Processing:</strong> Consistent 1-2% improvements across all batch sizes</li>
+                <li><strong>Request Processing:</strong> 2.43% faster header/body handling</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>Performance testing powered by <a href="https://github.com/vllm-project/semantic-router" target="_blank">vLLM Semantic Router</a></p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Generated with ❤️ by the performance testing framework</p>
+        </div>
+    </div>
+</body>
+</html>
