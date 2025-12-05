@@ -1,34 +1,21 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
+metadata:
+  name: semantic-router
 resources:
 - namespace.yaml
-- pvc.yaml
+- pv-models.yaml
 - deployment.yaml
 - service.yaml
-
-# Patch deployment to disable secure mode for Istio
 patches:
-- patch: |-
-    - op: replace
-      path: /spec/template/spec/containers/0/args
-      value: ["--secure=false"]
-    - op: add
-      path: /spec/template/spec/containers/0/imagePullPolicy
-      value: "IfNotPresent"
+- patch: "- op: replace\n  path: /spec/template/spec/containers/0/args\n  value: [\"\
+    --secure=false\"]"
   target:
     kind: Deployment
     name: semantic-router
-
-# Override the ConfigMap to use the different config.yaml
 configMapGenerator:
-  - name: semantic-router-config
-    files:
-      - config.yaml 
-      - tools_db.json
-
+- name: semantic-router-config
+  files:
+  - config.yaml
+  - tools_db.json
 namespace: vllm-semantic-router-system
-
-images:
-- name: ghcr.io/vllm-project/semantic-router/extproc
-  newTag: latest

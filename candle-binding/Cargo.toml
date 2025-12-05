@@ -7,13 +7,26 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 name = "candle_semantic_router"
-crate-type = ["staticlib", "cdylib"]
+# Order: rlib for Rust-to-Rust linking, staticlib for C/Go FFI (static), cdylib for dynamic linking
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[features]
+default = ["cuda"]
+# CUDA support (enables GPU acceleration)
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+# Flash Attention 2 support (requires CUDA and compatible GPU)
+# Enable with: cargo build --features flash-attn
+# Note: Requires CUDA Compute Capability >= 8.0 (Ampere or newer)
+flash-attn = ["cuda", "candle-flash-attn"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = "0.8.4"
-candle-nn = "0.8.4"
-candle-transformers = "0.8.4"
+candle-core = "0.9.2-alpha.1"
+candle-nn = "0.9.2-alpha.1"
+candle-transformers = "0.9.2-alpha.1"
+# Flash Attention 2 (optional, requires CUDA)
+# Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
+candle-flash-attn = { version = "0.9.2-alpha.1", optional = true }
 tokenizers = { version = "0.21.0", features = ["http"] }
 hf-hub = "0.4.1"
 safetensors = "0.4.1"
@@ -21,5 +34,35 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.93"
 tracing = "0.1.37"
 libc = "0.2.147"
-lazy_static = "1.4.0"
-rand = "0.8.5" 
+rand = "0.8.5"
+# Performance optimization: parallel processing and lock-free initialization
+rayon = "1.8"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"  # Efficient multi-channel select for scheduler wakeup
+
+[dev-dependencies]
+rstest = "0.18"
+tokio = { version = "1.0", features = ["full"] }
+tempfile = "3.8"
+serial_test = "3.0"
+criterion = "0.5"
+async-std = { version = "1.12", features = ["attributes"] }
+
+# Example demonstrating Qwen3 Multi-LoRA classification
+[[example]]
+name = "qwen3_example"
+path = "../examples/candle-binding/qwen3_example.rs"
+
+# Example demonstrating DeBERTa v2 Prompt Injection Detection
+[[example]]
+name = "deberta_prompt_injection_example"
+path = "../examples/candle-binding/deberta_prompt_injection_example.rs"
+
+# Example showing raw softmax confidence values
+[[example]]
+name = "test_raw_confidence"
+path = "../examples/candle-binding/test_raw_confidence.rs"
+
+# Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
+# They are not included in the library build to keep it self-contained.
+# To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.

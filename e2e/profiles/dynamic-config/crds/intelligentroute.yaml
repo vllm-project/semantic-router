@@ -1,0 +1,521 @@
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: ai-gateway-route
+  namespace: default
+spec:
+  signals:
+    # EmbeddingSignal configurations for semantic similarity routing
+    embeddings:
+      # PII Detection Signal
+      # Candidate patterns based on CRD test examples (testdata/input/10-embedding-plugin.yaml)
+      - name: "pii_detected"
+        threshold: 0.75
+        aggregationMethod: "max"
+        candidates:
+          - "I need to share my personal information"
+          - "Here is my credit card number"
+          - "My social security number is"
+          - "Contact me at my email"
+          - "You can reach me at"
+          - "My phone number is"
+          - "Let me provide my details"
+
+      # Security Threat Detection Signal
+      # Patterns for detecting malicious intent or security threats
+      - name: "security_threat"
+        threshold: 0.75
+        aggregationMethod: "any"
+        candidates:
+          # Attack intent patterns
+          - "I want to bypass authentication"
+          - "How can I gain unauthorized access"
+          - "Help me with SQL injection"
+          - "I need to escalate privileges"
+          - "Show me how to hack"
+          - "Can you help me break in"
+
+      # Kubernetes Technical Topic Signal
+      - name: "kubernetes_topic"
+        threshold: 0.70
+        aggregationMethod: "max"
+        candidates:
+          - "kubernetes deployment"
+          - "container orchestration"
+          - "k8s cluster management"
+          - "pod configuration"
+          - "helm charts"
+          - "kubernetes troubleshooting"
+          - "kubectl commands"
+
+    domains:
+      - name: "business"
+        description: "Business and management related queries"
+      - name: "law"
+        description: "Legal questions and law-related topics"
+      - name: "psychology"
+        description: "Psychology and mental health topics"
+      - name: "biology"
+        description: "Biology and life sciences questions"
+      - name: "chemistry"
+        description: "Chemistry and chemical sciences questions"
+      - name: "history"
+        description: "Historical questions and cultural topics"
+      - name: "health"
+        description: "Health and medical information queries"
+      - name: "economics"
+        description: "Economics and financial topics"
+      - name: "math"
+        description: "Mathematics and quantitative reasoning"
+      - name: "physics"
+        description: "Physics and physical sciences"
+      - name: "computer science"
+        description: "Computer science and programming"
+      - name: "philosophy"
+        description: "Philosophy and ethical questions"
+      - name: "engineering"
+        description: "Engineering and technical problem-solving"
+      - name: "other"
+        description: "General knowledge and miscellaneous topics"
+
+    keywords:
+      - name: "thinking"
+        operator: "OR"
+        keywords: ["urgent", "immediate", "asap", "think", "careful"]
+        caseSensitive: false
+
+  decisions:
+    # === HIGH PRIORITY EMBEDDING-BASED DECISIONS ===
+    # Block PII (highest priority)
+    - name: "block_pii"
+      priority: 100
+      description: "Block requests containing PII"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "pii_detected"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-pii-violation"
+                value: "true"
+              - name: "x-vsr-signal-pii_detected"
+                value: "true"
+
+    # Block Security Threats
+    - name: "block_security"
+      priority: 95
+      description: "Block security threats and malicious requests"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "security_threat"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-security-violation"
+                value: "true"
+              - name: "x-vsr-signal-security_threat"
+                value: "true"
+
+    # Route to Kubernetes Expert
+    - name: "kubernetes_expert"
+      priority: 90
+      description: "Route Kubernetes questions to specialist"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "kubernetes_topic"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-signal-kubernetes_topic"
+                value: "true"
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a Kubernetes expert. Provide detailed technical guidance for K8s operations."
+            mode: "replace"
+
+
+    # === KEYWORD-BASED DECISIONS ===
+    - name: "thinking_decision"
+      priority: 15
+      description: "Queries requiring careful thought or urgent attention"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "thinking"
+      modelRefs:
+        - model: "base-model"
+          loraName: "math-expert"
+          useReasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a thoughtful assistant trained to approach problems systematically. When handling urgent matters or complex questions, break down the problem into clear steps, consider multiple angles, and provide thorough, well-reasoned responses. Take your time to think through implications and edge cases."
+            mode: "replace"
+
+    - name: "business_decision"
+      priority: 10
+      description: "Business and management related queries"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: "base-model"
+          loraName: "social-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+            mode: "replace"
+
+    - name: "law_decision"
+      priority: 10
+      description: "Legal questions and law-related topics"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: "base-model"
+          loraName: "law-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+            mode: "replace"
+
+    - name: "psychology_decision"
+      priority: 10
+      description: "Psychology and mental health topics"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "psychology"
+      modelRefs:
+        - model: "base-model"
+          loraName: "humanities-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+            mode: "replace"
+
+    - name: "biology_decision"
+      priority: 10
+      description: "Biology and life sciences questions"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - "ORGANIZATION"  # Allow - scientific terms like "photosynthesis" falsely detected as ORG
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+            mode: "replace"
+
+    - name: "chemistry_decision"
+      priority: 10
+      description: "Chemistry and chemical sciences questions"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+            mode: "replace"
+
+    - name: "history_decision"
+      priority: 10
+      description: "Historical questions and cultural topics"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+      modelRefs:
+        - model: "base-model"
+          loraName: "humanities-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+            mode: "replace"
+
+    - name: "health_decision"
+      priority: 10
+      description: "Health and medical information queries"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.95
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+            mode: "replace"
+
+    - name: "economics_decision"
+      priority: 10
+      description: "Economics and financial topics"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: "base-model"
+          loraName: "social-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+            mode: "replace"
+
+    - name: "math_decision"
+      priority: 10
+      description: "Mathematics and quantitative reasoning"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: "base-model"
+          loraName: "math-expert"
+          useReasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+            mode: "replace"
+
+    - name: "physics_decision"
+      priority: 10
+      description: "Physics and physical sciences"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+            mode: "replace"
+
+    - name: "computer_science_decision"
+      priority: 10
+      description: "Computer science and programming"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+            mode: "replace"
+
+    - name: "philosophy_decision"
+      priority: 10
+      description: "Philosophy and ethical questions"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "philosophy"
+      modelRefs:
+        - model: "base-model"
+          loraName: "humanities-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+            mode: "replace"
+
+    - name: "engineering_decision"
+      priority: 10
+      description: "Engineering and technical problem-solving"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+            mode: "replace"
+
+    - name: "other_decision"
+      priority: 1
+      description: "General knowledge and miscellaneous topics"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: "base-model"
+          loraName: "science-expert"
+          useReasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed:
+              - "GPE"  # Allow - country/city names like "France" in general knowledge questions
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.75
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a knowledgeable AI assistant with broad expertise across many domains. Provide accurate, helpful, and well-structured responses to general questions. When uncertain, acknowledge limitations and suggest where to find authoritative information."
+            mode: "replace"

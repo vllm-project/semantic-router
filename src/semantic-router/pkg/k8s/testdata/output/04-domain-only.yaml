@@ -1,0 +1,164 @@
+config_source: kubernetes
+embedding_models:
+  qwen3_model_path: models/Qwen3-Embedding-0.6B
+  gemma_model_path: models/embeddinggemma-300m
+  use_cpu: true
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+classifier:
+  category_model:
+    model_id: models/category_classifier_modernbert-base_model
+    threshold: 0.6
+    use_cpu: true
+    use_modernbert: true
+    category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+  pii_model:
+    model_id: models/pii_classifier_modernbert-base_presidio_token_model
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+prompt_guard:
+  enabled: true
+  model_id: models/jailbreak_classifier_modernbert-base_model
+  threshold: 0.7
+  use_cpu: true
+  use_modernbert: true
+  jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
+semantic_cache:
+  backend_type: memory
+  enabled: true
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: fifo
+  embedding_model: bert
+observability:
+  tracing:
+    enabled: false
+    provider: opentelemetry
+    exporter:
+      type: otlp
+      endpoint: jaeger:4317
+      insecure: true
+    sampling:
+      type: always_on
+      rate: 1
+    resource:
+      service_name: vllm-semantic-router
+      service_version: v0.1.0
+      deployment_environment: development
+api:
+  batch_classification:
+    metrics:
+      sample_rate: 1
+      duration_buckets:
+        - 0.001
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+        - 30
+      size_buckets:
+        - 1
+        - 2
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+        - 200
+      enabled: true
+      detailed_goroutine_tracking: true
+clear_route_cache: false
+categories:
+  - name: math
+    description: Mathematics and quantitative reasoning
+    mmlu_categories:
+      - math
+  - name: physics
+    description: Physics and physical sciences
+    mmlu_categories:
+      - physics
+  - name: computer_science
+    description: Computer science and programming
+    mmlu_categories:
+      - computer_science
+  - name: chemistry
+    description: Chemistry and chemical sciences
+    mmlu_categories:
+      - chemistry
+decisions:
+  - name: stem_query
+    description: Complex STEM domain queries - use large model
+    priority: 100
+    rules:
+      operator: OR
+      conditions:
+        - type: domain
+          name: math
+        - type: domain
+          name: physics
+        - type: domain
+          name: computer_science
+    modelRefs:
+      - model: mistral-large
+        lora_name: math-expert
+        use_reasoning: false
+  - name: chemistry_query
+    description: Chemistry domain queries - use small model
+    priority: 80
+    rules:
+      operator: AND
+      conditions:
+        - type: domain
+          name: chemistry
+    modelRefs:
+      - model: mistral-7b
+        lora_name: stem-tutor
+        use_reasoning: false
+strategy: priority
+default_reasoning_effort: high
+reasoning_families:
+  deepseek:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  gpt:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  qwen3:
+    type: chat_template_kwargs
+    parameter: enable_thinking
+model_config:
+  mistral-7b:
+    pricing:
+      prompt_per_1m: 0.7
+      completion_per_1m: 1.4
+    loras:
+      - name: stem-tutor
+        description: STEM education tutor
+  mistral-large:
+    pricing:
+      prompt_per_1m: 3
+      completion_per_1m: 9
+    loras:
+      - name: math-expert
+        description: Mathematics specialist
+      - name: science-expert
+        description: Science specialist
+default_model: mistral-7b
+vllm_endpoints: []
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: config/tools_db.json
+  fallback_to_empty: true

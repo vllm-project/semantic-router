@@ -1,0 +1,81 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: keyword-domain-pool
+  namespace: default
+spec:
+  defaultModel: "deepseek-v3"
+  models:
+    - name: "deepseek-v3"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000027  # $0.27 per 1M - efficient for homework help
+        outputTokenPrice: 0.0000011  # $1.1 per 1M
+      loras:
+        - name: "homework-helper"
+          description: "Homework assistance specialist"
+
+    - name: "deepseek-r1"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000055  # $0.55 per 1M - better for complex academic problems
+        outputTokenPrice: 0.0000022  # $2.2 per 1M
+      loras:
+        - name: "academic-expert"
+          description: "Advanced academic problem solver"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: keyword-domain-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "homework"
+        operator: "OR"
+        keywords: ["homework", "assignment", "exercise", "problem set"]
+        caseSensitive: false
+
+    domains:
+      - name: "math"
+        description: "Mathematics and quantitative reasoning"
+      - name: "physics"
+        description: "Physics and physical sciences"
+      - name: "chemistry"
+        description: "Chemistry and chemical sciences"
+
+  decisions:
+    - name: "math_homework"
+      description: "Math homework assistance - use reasoning model"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "homework"
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: "deepseek-r1"
+          loraName: "academic-expert"
+          useReasoning: true
+          reasoningEffort: "medium"
+
+    - name: "science_homework"
+      description: "Science homework assistance - use fast model"
+      priority: 90
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "homework"
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: "deepseek-v3"
+          loraName: "homework-helper"
+          useReasoning: false
+

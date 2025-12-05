@@ -1,109 +1,252 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
-	"sync"
 
-	"gopkg.in/yaml.v3"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+// ConfigSource defines where to load dynamic configuration from
+type ConfigSource string
+
+const (
+	// ConfigSourceFile loads configuration from file (default)
+	ConfigSourceFile ConfigSource = "file"
+	// ConfigSourceKubernetes loads configuration from Kubernetes CRDs
+	ConfigSourceKubernetes ConfigSource = "kubernetes"
 )
 
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
+	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)
+	// +optional
+	// +kubebuilder:default=file
+	ConfigSource ConfigSource `yaml:"config_source,omitempty"`
+
+	/*
+		Static: Global Configuration
+		Timing: Should be handled when starting the router.
+	*/
+	// Inline models configuration
+	InlineModels `yaml:",inline"`
+	// Semantic cache configuration
+	SemanticCache `yaml:"semantic_cache"`
+	// LLMObservability for LLM tracing, metrics, and logging
+	LLMObservability `yaml:",inline"`
+	// API server configuration
+	APIServer `yaml:",inline"`
+	// Router-specific options
+	RouterOptions `yaml:",inline"`
+	/*
+		Dynamic: User Facing Configurations
+		Timing: Should be dynamically handled when running router.
+	*/
+	// Intelligent routing configuration
+	IntelligentRouting `yaml:",inline"`
+	// Backend models configuration
+	BackendModels `yaml:",inline"`
+	// ToolSelection for automatic tool selection
+	ToolSelection `yaml:",inline"`
+}
+
+// ToolSelection represents the configuration for automatic tool selection
+type ToolSelection struct {
+	// Tools configuration for automatic tool selection
+	Tools ToolsConfig `yaml:"tools"`
+}
+
+// API server configuration
+type APIServer struct {
+	// API configuration for classification endpoints
+	API APIConfig `yaml:"api"`
+}
+
+// LLMObservability represents the configuration for LLM observability
+type LLMObservability struct {
+	// Observability configuration for tracing, metrics, and logging
+	Observability ObservabilityConfig `yaml:"observability"`
+}
+
+type RouterOptions struct {
+	// Auto model name for automatic model selection (default: "MoM")
+	// This is the model name that clients should use to trigger automatic model selection
+	// For backward compatibility, "auto" is also accepted and treated as an alias
+	AutoModelName string `yaml:"auto_model_name,omitempty"`
+
+	// Include configured models in /v1/models list endpoint (default: false)
+	// When false, only the auto model name is returned
+	// When true, all models configured in model_config are also included
+	IncludeConfigModelsInList bool `yaml:"include_config_models_in_list,omitempty"`
+
+	// Gateway route cache clearing
+	ClearRouteCache bool `yaml:"clear_route_cache"`
+}
+
+// InlineModels represents the configuration for models that are built into the binary
+type InlineModels struct {
+	// Embedding models configuration (Phase 4: Long-context embedding support)
+	EmbeddingModels `yaml:"embedding_models"`
+
 	// BERT model configuration for Candle BERT similarity comparison
-	BertModel struct {
-		ModelID   string  `yaml:"model_id"`
-		Threshold float32 `yaml:"threshold"`
-		UseCPU    bool    `yaml:"use_cpu"`
-	} `yaml:"bert_model"`
+	BertModel `yaml:"bert_model"`
 
 	// Classifier configuration for text classification
-	Classifier struct {
-		CategoryModel struct {
-			ModelID             string  `yaml:"model_id"`
-			Threshold           float32 `yaml:"threshold"`
-			UseCPU              bool    `yaml:"use_cpu"`
-			UseModernBERT       bool    `yaml:"use_modernbert"`
-			CategoryMappingPath string  `yaml:"category_mapping_path"`
-		} `yaml:"category_model"`
-		MCPCategoryModel struct {
-			Enabled        bool              `yaml:"enabled"`
-			TransportType  string            `yaml:"transport_type"`
-			Command        string            `yaml:"command,omitempty"`
-			Args           []string          `yaml:"args,omitempty"`
-			Env            map[string]string `yaml:"env,omitempty"`
-			URL            string            `yaml:"url,omitempty"`
-			ToolName       string            `yaml:"tool_name,omitempty"` // Optional: will auto-discover if not specified
-			Threshold      float32           `yaml:"threshold"`
-			TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
-		} `yaml:"mcp_category_model,omitempty"`
-		PIIModel struct {
-			ModelID        string  `yaml:"model_id"`
-			Threshold      float32 `yaml:"threshold"`
-			UseCPU         bool    `yaml:"use_cpu"`
-			PIIMappingPath string  `yaml:"pii_mapping_path"`
-		} `yaml:"pii_model"`
-	} `yaml:"classifier"`
+	Classifier `yaml:"classifier"`
 
-	// Categories for routing queries
+	// Prompt guard configuration
+	PromptGuard PromptGuardConfig `yaml:"prompt_guard"`
+}
+
+// IntelligentRouting represents the configuration for intelligent routing
+type IntelligentRouting struct {
+	// Keyword-based classification rules
+	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
+
+	// Embedding-based classification rules
+	EmbeddingRules []EmbeddingRule `yaml:"embedding_rules,omitempty"`
+
+	// Categories for domain classification (only metadata, used by domain rules)
 	Categories []Category `yaml:"categories"`
+
+	// Decisions for routing logic (combines rules with AND/OR operators)
+	Decisions []Decision `yaml:"decisions,omitempty"`
+
+	// Strategy for selecting decision when multiple decisions match
+	// "priority" - select decision with highest priority
+	// "confidence" - select decision with highest confidence score
+	Strategy string `yaml:"strategy,omitempty"`
+
+	// Reasoning mode configuration
+	ReasoningConfig `yaml:",inline"`
+}
+
+// BackendModels represents the configuration for backend models
+type BackendModels struct {
+	// Model parameters configuration
+	ModelConfig map[string]ModelParams `yaml:"model_config"`
 
 	// Default LLM model to use if no match is found
 	DefaultModel string `yaml:"default_model"`
 
+	// vLLM endpoints configuration for multiple backend support
+	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+}
+
+type ReasoningConfig struct {
 	// Default reasoning effort level (low, medium, high) when not specified per category
 	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 
 	// Reasoning family configurations to define how different model families handle reasoning syntax
 	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+}
 
-	// Semantic cache configuration
-	SemanticCache struct {
-		// Type of cache backend to use
-		BackendType string `yaml:"backend_type,omitempty"`
+// Classifier represents the configuration for text classification
+type Classifier struct {
+	// In-tree category classifier
+	CategoryModel `yaml:"category_model"`
+	// Out-of-tree category classifier using MCP
+	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
+	// PII detection model
+	PIIModel `yaml:"pii_model"`
+}
 
-		// Enable semantic caching
-		Enabled bool `yaml:"enabled"`
+type BertModel struct {
+	ModelID   string  `yaml:"model_id"`
+	Threshold float32 `yaml:"threshold"`
+	UseCPU    bool    `yaml:"use_cpu"`
+}
 
-		// Similarity threshold for cache hits (0.0-1.0)
-		// If not specified, will use the BertModel.Threshold
-		SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+type CategoryModel struct {
+	ModelID             string  `yaml:"model_id"`
+	Threshold           float32 `yaml:"threshold"`
+	UseCPU              bool    `yaml:"use_cpu"`
+	UseModernBERT       bool    `yaml:"use_modernbert"`
+	CategoryMappingPath string  `yaml:"category_mapping_path"`
+}
 
-		// Maximum number of cache entries to keep (applies to in-memory cache)
-		MaxEntries int `yaml:"max_entries,omitempty"`
+type PIIModel struct {
+	ModelID        string  `yaml:"model_id"`
+	Threshold      float32 `yaml:"threshold"`
+	UseCPU         bool    `yaml:"use_cpu"`
+	PIIMappingPath string  `yaml:"pii_mapping_path"`
+}
 
-		// Time-to-live for cache entries in seconds (0 means no expiration)
-		TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+type EmbeddingModels struct {
+	// Path to Qwen3-Embedding-0.6B model directory
+	Qwen3ModelPath string `yaml:"qwen3_model_path"`
+	// Path to EmbeddingGemma-300M model directory
+	GemmaModelPath string `yaml:"gemma_model_path"`
+	// Use CPU for inference (default: true, auto-detect GPU if available)
+	UseCPU bool `yaml:"use_cpu"`
+}
 
-		// Eviction policy for in-memory cache ("fifo", "lru", "lfu")
-		EvictionPolicy string `yaml:"eviction_policy,omitempty"`
+type MCPCategoryModel struct {
+	Enabled        bool              `yaml:"enabled"`
+	TransportType  string            `yaml:"transport_type"`
+	Command        string            `yaml:"command,omitempty"`
+	Args           []string          `yaml:"args,omitempty"`
+	Env            map[string]string `yaml:"env,omitempty"`
+	URL            string            `yaml:"url,omitempty"`
+	ToolName       string            `yaml:"tool_name,omitempty"` // Optional: will auto-discover if not specified
+	Threshold      float32           `yaml:"threshold"`
+	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+}
 
-		// Path to backend-specific configuration file
-		BackendConfigPath string `yaml:"backend_config_path,omitempty"`
-	} `yaml:"semantic_cache"`
+type SemanticCache struct {
+	// Type of cache backend to use
+	BackendType string `yaml:"backend_type,omitempty"`
 
-	// Prompt guard configuration
-	PromptGuard PromptGuardConfig `yaml:"prompt_guard"`
+	// Enable semantic caching
+	Enabled bool `yaml:"enabled"`
 
-	// Model parameters configuration
-	ModelConfig map[string]ModelParams `yaml:"model_config"`
+	// Similarity threshold for cache hits (0.0-1.0)
+	// If not specified, will use the BertModel.Threshold
+	SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
 
-	// Tools configuration for automatic tool selection
-	Tools ToolsConfig `yaml:"tools"`
+	// Maximum number of cache entries to keep (applies to in-memory cache)
+	MaxEntries int `yaml:"max_entries,omitempty"`
 
-	// vLLM endpoints configuration for multiple backend support
-	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+	// Time-to-live for cache entries in seconds (0 means no expiration)
+	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
 
-	// API configuration for classification endpoints
-	API APIConfig `yaml:"api"`
+	// Eviction policy for in-memory cache ("fifo", "lru", "lfu")
+	EvictionPolicy string `yaml:"eviction_policy,omitempty"`
 
-	// Observability configuration for tracing, metrics, and logging
-	Observability ObservabilityConfig `yaml:"observability"`
+	// Path to backend-specific configuration file
+	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
-	// Gateway route cache clearing
-	ClearRouteCache bool `yaml:"clear_route_cache"`
+	// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
+	// - "bert": Fast, 384-dim, good for short texts (default)
+	// - "qwen3": High quality, 1024-dim, supports 32K context
+	// - "gemma": Balanced, 768-dim, supports 8K context
+	// Default: "bert"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+// KeywordRule defines a rule for keyword-based classification.
+type KeywordRule struct {
+	Name          string   `yaml:"name"` // Name is also used as category
+	Operator      string   `yaml:"operator"`
+	Keywords      []string `yaml:"keywords"`
+	CaseSensitive bool     `yaml:"case_sensitive"`
+}
+
+// Aggregation method used in keyword embedding rule
+type AggregationMethod string
+
+const (
+	AggregationMethodMean AggregationMethod = "mean"
+	AggregationMethodMax  AggregationMethod = "max"
+	AggregationMethodAny  AggregationMethod = "any"
+)
+
+// EmbeddingRule defines a rule for keyword embedding based similarity match rule.
+type EmbeddingRule struct {
+	Name                      string            `yaml:"name"` // Name is also used as category
+	SimilarityThreshold       float32           `yaml:"threshold"`
+	Candidates                []string          `yaml:"candidates"` // Renamed from Keywords
+	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
 }
 
 // APIConfig represents configuration for API endpoints
@@ -119,6 +262,15 @@ type APIConfig struct {
 type ObservabilityConfig struct {
 	// Tracing configuration for distributed tracing
 	Tracing TracingConfig `yaml:"tracing"`
+	// Metrics configuration for Prometheus metrics endpoint
+	Metrics MetricsConfig `yaml:"metrics"`
+}
+
+// MetricsConfig represents configuration for metrics endpoint
+type MetricsConfig struct {
+	// Enabled controls whether the Prometheus metrics endpoint is served
+	// When omitted, defaults to true
+	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
 // TracingConfig represents configuration for distributed tracing
@@ -207,20 +359,44 @@ type PromptGuardConfig struct {
 	// Enable prompt guard jailbreak detection
 	Enabled bool `yaml:"enabled"`
 
-	// Model ID for the jailbreak classification model
+	// Model ID for the jailbreak classification model (Candle model path)
+	// Ignored when use_vllm is true
 	ModelID string `yaml:"model_id"`
 
 	// Threshold for jailbreak detection (0.0-1.0)
 	Threshold float32 `yaml:"threshold"`
 
-	// Use CPU for inference
+	// Use CPU for inference (Candle CPU flag)
+	// Ignored when use_vllm is true
 	UseCPU bool `yaml:"use_cpu"`
 
-	// Use ModernBERT for jailbreak detection
+	// Use ModernBERT for jailbreak detection (Candle ModernBERT flag)
+	// Ignored when use_vllm is true
 	UseModernBERT bool `yaml:"use_modernbert"`
 
 	// Path to the jailbreak type mapping file
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
+
+	// Use vLLM REST API instead of Candle for guardrail/safety checks
+	// When true, ModelID, UseCPU, and UseModernBERT are ignored
+	// When false (default), uses Candle-based classification
+	UseVLLM bool `yaml:"use_vllm,omitempty"`
+
+	// Dedicated vLLM endpoint configuration for PromptGuard
+	// This is separate from vllm_endpoints (which are for backend inference)
+	ClassifierVLLMEndpoint ClassifierVLLMEndpoint `yaml:"classifier_vllm_endpoint,omitempty"`
+
+	// Model name on vLLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+	VLLMModelName string `yaml:"vllm_model_name,omitempty"`
+
+	// Timeout for vLLM API calls in seconds
+	// Default: 30 seconds if not specified
+	VLLMTimeoutSeconds int `yaml:"vllm_timeout_seconds,omitempty"`
+
+	// Response parser type (optional, auto-detected from model name if not set)
+	// Options: "qwen3guard", "json", "simple", "auto"
+	// "auto" tries multiple parsers (OR logic)
+	ResponseParserType string `yaml:"response_parser_type,omitempty"`
 }
 
 // ToolsConfig represents configuration for automatic tool selection
@@ -240,6 +416,26 @@ type ToolsConfig struct {
 
 	// Fallback behavior: if true, return empty tools on failure; if false, return error
 	FallbackToEmpty bool `yaml:"fallback_to_empty"`
+}
+
+// ClassifierVLLMEndpoint represents a vLLM endpoint configuration for classifiers
+// This is separate from VLLMEndpoint (which is for backend inference)
+type ClassifierVLLMEndpoint struct {
+	// Address of the vLLM endpoint (IP address)
+	Address string `yaml:"address"`
+
+	// Port of the vLLM endpoint
+	Port int `yaml:"port"`
+
+	// Optional name identifier for the endpoint (for logging and debugging)
+	Name string `yaml:"name,omitempty"`
+
+	// Use chat template format for models requiring chat format (e.g., Qwen3Guard)
+	UseChatTemplate bool `yaml:"use_chat_template,omitempty"`
+
+	// Custom prompt template (supports %s placeholder for the prompt)
+	// If empty, uses default formatting
+	PromptTemplate string `yaml:"prompt_template,omitempty"`
 }
 
 // VLLMEndpoint represents a vLLM backend endpoint configuration
@@ -268,9 +464,6 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	// PII policy configuration for this model
-	PIIPolicy PIIPolicy `yaml:"pii_policy,omitempty"`
-
 	// Preferred endpoints for this model (optional)
 	PreferredEndpoints []string `yaml:"preferred_endpoints,omitempty"`
 
@@ -280,6 +473,18 @@ type ModelParams struct {
 	// Reasoning family for this model (e.g., "deepseek", "qwen3", "gpt-oss")
 	// If empty, the model doesn't support reasoning mode
 	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+
+	// LoRA adapters available for this model
+	// These must be registered with vLLM using --lora-modules flag
+	LoRAs []LoRAAdapter `yaml:"loras,omitempty"`
+}
+
+// LoRAAdapter represents a LoRA adapter configuration for a model
+type LoRAAdapter struct {
+	// Name of the LoRA adapter (must match the name registered with vLLM)
+	Name string `yaml:"name"`
+	// Description of what this LoRA adapter is optimized for
+	Description string `yaml:"description,omitempty"`
 }
 
 // ReasoningFamilyConfig defines how a reasoning family handles reasoning mode
@@ -319,32 +524,307 @@ const (
 	PIITypeZipCode         = "ZIP_CODE"          // ZIP/Postal codes
 )
 
-// GetCacheSimilarityThreshold returns the effective threshold for the semantic cache
-func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
-	if c.SemanticCache.SimilarityThreshold != nil {
-		return *c.SemanticCache.SimilarityThreshold
-	}
-	return c.BertModel.Threshold
-}
-
-// ModelScore associates an LLM with its selection weight and reasoning flag within a category.
-type ModelScore struct {
-	Model                string  `yaml:"model"`
-	Score                float64 `yaml:"score"`
-	UseReasoning         *bool   `yaml:"use_reasoning"`                   // Pointer to detect missing field
-	ReasoningDescription string  `yaml:"reasoning_description,omitempty"` // Model-specific reasoning description
-	ReasoningEffort      string  `yaml:"reasoning_effort,omitempty"`      // Model-specific reasoning effort level (low, medium, high)
-}
-
 // Category represents a category for routing queries
+// Category represents a domain category (only metadata, used by domain rules)
 type Category struct {
-	Name        string       `yaml:"name"`
-	Description string       `yaml:"description,omitempty"`
-	ModelScores []ModelScore `yaml:"model_scores"`
+	// Metadata
+	CategoryMetadata `yaml:",inline"`
+}
+
+// Decision represents a routing decision that combines multiple rules with AND/OR logic
+type Decision struct {
+	// Name is the unique identifier for this decision
+	Name string `yaml:"name"`
+
+	// Description provides information about what this decision handles
+	Description string `yaml:"description,omitempty"`
+
+	// Priority is used when strategy is "priority" - higher priority decisions are preferred
+	Priority int `yaml:"priority,omitempty"`
+
+	// Rules defines the combination of keyword/embedding/domain rules using AND/OR logic
+	Rules RuleCombination `yaml:"rules"`
+
+	// ModelRefs contains model references for this decision (currently only supports one model)
+	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
+
+	// Plugins contains policy configurations applied after rule matching
+	Plugins []DecisionPlugin `yaml:"plugins,omitempty"`
+}
+
+// ModelRef represents a reference to a model (without score field)
+type ModelRef struct {
+	Model string `yaml:"model"`
+	// Optional LoRA adapter name - when specified, this LoRA adapter name will be used
+	// as the final model name in requests instead of the base model name.
+	LoRAName string `yaml:"lora_name,omitempty"`
+	// Reasoning mode control on Model Level
+	ModelReasoningControl `yaml:",inline"`
+}
+
+// DecisionPlugin represents a plugin configuration for a decision
+type DecisionPlugin struct {
+	// Type specifies the plugin type: "semantic-cache", "jailbreak", "pii", "system_prompt"
+	Type string `yaml:"type" json:"type"`
+
+	// Configuration is the raw configuration for this plugin
+	// The structure depends on the plugin type
+	// When loaded from YAML, this will be a map[string]interface{}
+	// When loaded from Kubernetes CRD, this will be []byte (from runtime.RawExtension)
+	Configuration interface{} `yaml:"configuration,omitempty" json:"configuration,omitempty"`
+}
+
+// Plugin configuration structures for unmarshaling
+
+// SemanticCachePluginConfig represents configuration for semantic-cache plugin
+type SemanticCachePluginConfig struct {
+	Enabled             bool     `json:"enabled" yaml:"enabled"`
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+}
+
+// JailbreakPluginConfig represents configuration for jailbreak plugin
+type JailbreakPluginConfig struct {
+	Enabled   bool     `json:"enabled" yaml:"enabled"`
+	Threshold *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+}
+
+// PIIPluginConfig represents configuration for pii plugin
+type PIIPluginConfig struct {
+	Enabled   bool     `json:"enabled" yaml:"enabled"`
+	Threshold *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+
+	// PII Policy configuration
+	// When Enabled is true, all PII types are blocked by default unless listed in PIITypesAllowed
+	// When Enabled is false, PII detection is skipped entirely
+	PIITypesAllowed []string `json:"pii_types_allowed,omitempty" yaml:"pii_types_allowed,omitempty"`
+}
+
+// SystemPromptPluginConfig represents configuration for system_prompt plugin
+type SystemPromptPluginConfig struct {
+	Enabled      *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
+	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"` // "replace" or "insert"
+}
+
+// HeaderMutationPluginConfig represents configuration for header_mutation plugin
+type HeaderMutationPluginConfig struct {
+	Add    []HeaderPair `json:"add,omitempty" yaml:"add,omitempty"`
+	Update []HeaderPair `json:"update,omitempty" yaml:"update,omitempty"`
+	Delete []string     `json:"delete,omitempty" yaml:"delete,omitempty"`
+}
+
+// HeaderPair represents a header name-value pair
+type HeaderPair struct {
+	Name  string `json:"name" yaml:"name"`
+	Value string `json:"value" yaml:"value"`
+}
+
+// Helper methods for Decision to access plugin configurations
+
+// GetPluginConfig returns the configuration for a specific plugin type
+// Returns nil if the plugin is not found
+func (d *Decision) GetPluginConfig(pluginType string) interface{} {
+	for _, plugin := range d.Plugins {
+		if plugin.Type == pluginType {
+			return plugin.Configuration
+		}
+	}
+	return nil
+}
+
+// unmarshalPluginConfig unmarshals plugin configuration to a target struct
+// Handles both map[string]interface{} (from YAML) and []byte (from Kubernetes RawExtension)
+func unmarshalPluginConfig(config interface{}, target interface{}) error {
+	if config == nil {
+		return fmt.Errorf("plugin configuration is nil")
+	}
+
+	switch v := config.(type) {
+	case map[string]interface{}:
+		// From YAML file - convert via JSON
+		data, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal config: %w", err)
+		}
+		return json.Unmarshal(data, target)
+	case map[interface{}]interface{}:
+		// From YAML file with interface{} keys - convert to map[string]interface{} first
+		converted := convertMapToStringKeys(v)
+		data, err := json.Marshal(converted)
+		if err != nil {
+			return fmt.Errorf("failed to marshal config: %w", err)
+		}
+		return json.Unmarshal(data, target)
+	case []byte:
+		// From Kubernetes RawExtension - direct unmarshal
+		return json.Unmarshal(v, target)
+	default:
+		return fmt.Errorf("unsupported configuration type: %T", config)
+	}
+}
+
+// convertMapToStringKeys recursively converts map[interface{}]interface{} to map[string]interface{}
+func convertMapToStringKeys(m map[interface{}]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range m {
+		// Convert key to string
+		key, ok := k.(string)
+		if !ok {
+			key = fmt.Sprintf("%v", k)
+		}
+
+		// Recursively convert nested maps
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			result[key] = convertMapToStringKeys(val)
+		case []interface{}:
+			result[key] = convertSliceValues(val)
+		default:
+			result[key] = v
+		}
+	}
+	return result
+}
+
+// convertSliceValues recursively converts slice elements that are maps
+func convertSliceValues(s []interface{}) []interface{} {
+	result := make([]interface{}, len(s))
+	for i, v := range s {
+		switch val := v.(type) {
+		case map[interface{}]interface{}:
+			result[i] = convertMapToStringKeys(val)
+		case []interface{}:
+			result[i] = convertSliceValues(val)
+		default:
+			result[i] = v
+		}
+	}
+	return result
+}
+
+// GetSemanticCacheConfig returns the semantic-cache plugin configuration
+func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
+	config := d.GetPluginConfig("semantic-cache")
+	if config == nil {
+		return nil
+	}
+
+	result := &SemanticCachePluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal semantic-cache config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetJailbreakConfig returns the jailbreak plugin configuration
+func (d *Decision) GetJailbreakConfig() *JailbreakPluginConfig {
+	config := d.GetPluginConfig("jailbreak")
+	if config == nil {
+		return nil
+	}
+
+	result := &JailbreakPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal jailbreak config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetPIIConfig returns the pii plugin configuration
+func (d *Decision) GetPIIConfig() *PIIPluginConfig {
+	config := d.GetPluginConfig("pii")
+	if config == nil {
+		return nil
+	}
+
+	result := &PIIPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal pii config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetSystemPromptConfig returns the system_prompt plugin configuration
+func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
+	config := d.GetPluginConfig("system_prompt")
+	if config == nil {
+		return nil
+	}
+
+	result := &SystemPromptPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal system_prompt config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetHeaderMutationConfig returns the header_mutation plugin configuration
+func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
+	config := d.GetPluginConfig("header_mutation")
+	if config == nil {
+		return nil
+	}
+
+	result := &HeaderMutationPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal header_mutation config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// RuleCombination defines how to combine multiple rule conditions with AND/OR operators
+type RuleCombination struct {
+	// Operator specifies how to combine conditions: "AND" or "OR"
+	Operator string `yaml:"operator"`
+
+	// Conditions is the list of rule references to evaluate
+	Conditions []RuleCondition `yaml:"conditions"`
+}
+
+// RuleCondition references a specific rule by type and name
+type RuleCondition struct {
+	// Type specifies the rule type: "keyword", "embedding", or "domain"
+	Type string `yaml:"type"`
+
+	// Name is the name of the rule to reference
+	Name string `yaml:"name"`
+}
+
+// ModelReasoningControl represents reasoning mode control on model level
+type ModelReasoningControl struct {
+	UseReasoning         *bool  `yaml:"use_reasoning"`                   // Pointer to detect missing field
+	ReasoningDescription string `yaml:"reasoning_description,omitempty"` // Model-specific reasoning description
+	ReasoningEffort      string `yaml:"reasoning_effort,omitempty"`      // Model-specific reasoning effort level (low, medium, high)
+}
+
+// DomainAwarePolicies represents policies that can be configured on a per-category basis
+type DomainAwarePolicies struct {
+	// System prompt optimization
+	SystemPromptPolicy `yaml:",inline"`
+	// Semantic caching policy
+	SemanticCachingPolicy `yaml:",inline"`
+	// Jailbreak detection policy
+	JailbreakPolicy `yaml:",inline"`
+	// PII detection policy
+	PIIDetectionPolicy `yaml:",inline"`
+}
+
+// CategoryMetadata represents metadata for a category
+type CategoryMetadata struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
 	// MMLUCategories optionally maps this generic category to one or more MMLU-Pro categories
 	// used by the classifier model. When provided, classifier outputs will be translated
 	// from these MMLU categories to this generic category name.
 	MMLUCategories []string `yaml:"mmlu_categories,omitempty"`
+}
+
+type SystemPromptPolicy struct {
 	// SystemPrompt is an optional category-specific system prompt automatically injected into requests
 	SystemPrompt string `yaml:"system_prompt,omitempty"`
 	// SystemPromptEnabled controls whether the system prompt should be injected for this category
@@ -356,400 +836,32 @@ type Category struct {
 	SystemPromptMode string `yaml:"system_prompt_mode,omitempty"`
 }
 
-// GetModelReasoningFamily returns the reasoning family configuration for a given model name
-func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
-	if rc == nil || rc.ModelConfig == nil || rc.ReasoningFamilies == nil {
-		return nil
-	}
-
-	// Look up the model in model_config
-	modelParams, exists := rc.ModelConfig[modelName]
-	if !exists || modelParams.ReasoningFamily == "" {
-		return nil
-	}
-
-	// Look up the reasoning family configuration
-	familyConfig, exists := rc.ReasoningFamilies[modelParams.ReasoningFamily]
-	if !exists {
-		return nil
-	}
-
-	return &familyConfig
+// SemanticCachingPolicy represents category-specific caching policies
+type SemanticCachingPolicy struct {
+	// SemanticCacheEnabled controls whether semantic caching is enabled for this category
+	// If nil, inherits from global SemanticCache.Enabled setting
+	SemanticCacheEnabled *bool `yaml:"semantic_cache_enabled,omitempty"`
+	// SemanticCacheSimilarityThreshold defines the minimum similarity score for cache hits (0.0-1.0)
+	// If nil, uses the global threshold from SemanticCache.SimilarityThreshold or BertModel.Threshold
+	SemanticCacheSimilarityThreshold *float32 `yaml:"semantic_cache_similarity_threshold,omitempty"`
 }
 
-var (
-	config     *RouterConfig
-	configOnce sync.Once
-	configErr  error
-	configMu   sync.RWMutex
-)
-
-// LoadConfig loads the configuration from the specified YAML file once and caches it globally.
-func LoadConfig(configPath string) (*RouterConfig, error) {
-	configOnce.Do(func() {
-		cfg, err := ParseConfigFile(configPath)
-		if err != nil {
-			configErr = err
-			return
-		}
-		configMu.Lock()
-		config = cfg
-		configMu.Unlock()
-	})
-	if configErr != nil {
-		return nil, configErr
-	}
-	configMu.RLock()
-	defer configMu.RUnlock()
-	return config, nil
+// JailbreakPolicy represents category-specific jailbreak detection policies
+type JailbreakPolicy struct {
+	// JailbreakEnabled controls whether jailbreak detection is enabled for this category
+	// If nil, inherits from global PromptGuard.Enabled setting
+	JailbreakEnabled *bool `yaml:"jailbreak_enabled,omitempty"`
+	// JailbreakThreshold defines the confidence threshold for jailbreak detection (0.0-1.0)
+	// If nil, uses the global threshold from PromptGuard.Threshold
+	JailbreakThreshold *float32 `yaml:"jailbreak_threshold,omitempty"`
 }
 
-// BoolPtr returns a pointer to a bool value (helper for tests and config)
-func BoolPtr(b bool) *bool {
-	return &b
-}
-
-// validateConfigStructure performs additional validation on the parsed config
-func validateConfigStructure(cfg *RouterConfig) error {
-	// Ensure all categories have at least one model with scores
-	for _, category := range cfg.Categories {
-		if len(category.ModelScores) == 0 {
-			return fmt.Errorf("category '%s' has no model_scores defined - each category must have at least one model", category.Name)
-		}
-
-		// Validate each model score has the required fields
-		for i, modelScore := range category.ModelScores {
-			if modelScore.Model == "" {
-				return fmt.Errorf("category '%s', model_scores[%d]: model name cannot be empty", category.Name, i)
-			}
-			if modelScore.Score <= 0 {
-				return fmt.Errorf("category '%s', model '%s': score must be greater than 0, got %f", category.Name, modelScore.Model, modelScore.Score)
-			}
-			if modelScore.UseReasoning == nil {
-				return fmt.Errorf("category '%s', model '%s': missing required field 'use_reasoning'", category.Name, modelScore.Model)
-			}
-		}
-	}
-
-	// Validate vLLM endpoints address formats
-	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ParseConfigFile parses the YAML config file without touching the global cache.
-func ParseConfigFile(configPath string) (*RouterConfig, error) {
-	// Resolve symlinks to handle Kubernetes ConfigMap mounts
-	resolved, _ := filepath.EvalSymlinks(configPath)
-	if resolved == "" {
-		resolved = configPath
-	}
-	data, err := os.ReadFile(resolved)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	cfg := &RouterConfig{}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	// Validation after parsing
-	if err := validateConfigStructure(cfg); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
-// ReplaceGlobalConfig replaces the globally cached config. It is safe for concurrent readers.
-func ReplaceGlobalConfig(newCfg *RouterConfig) {
-	configMu.Lock()
-	defer configMu.Unlock()
-	config = newCfg
-	// Do not reset configOnce to avoid racing re-parses via LoadConfig; callers should use ParseConfigFile for fresher reads.
-	configErr = nil
-}
-
-// GetConfig returns the current configuration
-func GetConfig() *RouterConfig {
-	configMu.RLock()
-	defer configMu.RUnlock()
-	return config
-}
-
-// GetCategoryDescriptions returns all category descriptions for similarity matching
-func (c *RouterConfig) GetCategoryDescriptions() []string {
-	var descriptions []string
-	for _, category := range c.Categories {
-		if category.Description != "" {
-			descriptions = append(descriptions, category.Description)
-		} else {
-			// Use category name if no description is available
-			descriptions = append(descriptions, category.Name)
-		}
-	}
-	return descriptions
-}
-
-// GetModelForCategoryIndex returns the best LLM model name for the category at the given index
-func (c *RouterConfig) GetModelForCategoryIndex(index int) string {
-	if index < 0 || index >= len(c.Categories) {
-		return c.DefaultModel
-	}
-
-	category := c.Categories[index]
-	if len(category.ModelScores) > 0 {
-		return category.ModelScores[0].Model
-	}
-
-	// Fall back to default model if category has no models
-	return c.DefaultModel
-}
-
-// GetModelPricing returns pricing per 1M tokens and its currency for the given model.
-// The currency indicates the unit of the returned rates (e.g., "USD").
-func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
-	if modelConfig, okc := c.ModelConfig[modelName]; okc {
-		p := modelConfig.Pricing
-		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 {
-			cur := p.Currency
-			if cur == "" {
-				cur = "USD"
-			}
-			return p.PromptPer1M, p.CompletionPer1M, cur, true
-		}
-	}
-	return 0, 0, "", false
-}
-
-// GetModelPIIPolicy returns the PII policy for a given model
-// If the model is not found in the config, returns a default policy that allows all PII
-func (c *RouterConfig) GetModelPIIPolicy(modelName string) PIIPolicy {
-	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		return modelConfig.PIIPolicy
-	}
-	// Default policy allows all PII
-	return PIIPolicy{
-		AllowByDefault: true,
-		PIITypes:       []string{},
-	}
-}
-
-// IsModelAllowedForPIIType checks if a model is allowed to process a specific PII type
-func (c *RouterConfig) IsModelAllowedForPIIType(modelName string, piiType string) bool {
-	policy := c.GetModelPIIPolicy(modelName)
-
-	// If allow_by_default is true, all PII types are allowed unless explicitly denied
-	if policy.AllowByDefault {
-		return true
-	}
-
-	// If allow_by_default is false, only explicitly allowed PII types are permitted
-	return slices.Contains(policy.PIITypes, piiType)
-}
-
-// IsModelAllowedForPIITypes checks if a model is allowed to process any of the given PII types
-func (c *RouterConfig) IsModelAllowedForPIITypes(modelName string, piiTypes []string) bool {
-	for _, piiType := range piiTypes {
-		if !c.IsModelAllowedForPIIType(modelName, piiType) {
-			return false
-		}
-	}
-	return true
-}
-
-// IsPIIClassifierEnabled checks if PII classification is enabled
-func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	return c.Classifier.PIIModel.ModelID != "" && c.Classifier.PIIModel.PIIMappingPath != ""
-}
-
-// IsCategoryClassifierEnabled checks if category classification is enabled
-func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.Classifier.CategoryModel.ModelID != "" && c.Classifier.CategoryModel.CategoryMappingPath != ""
-}
-
-// IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
-func (c *RouterConfig) IsMCPCategoryClassifierEnabled() bool {
-	return c.Classifier.MCPCategoryModel.Enabled && c.Classifier.MCPCategoryModel.ToolName != ""
-}
-
-// GetPromptGuardConfig returns the prompt guard configuration
-func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
-	return c.PromptGuard
-}
-
-// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled
-func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	return c.PromptGuard.Enabled && c.PromptGuard.ModelID != "" && c.PromptGuard.JailbreakMappingPath != ""
-}
-
-// GetEndpointsForModel returns all endpoints that can serve the specified model
-// Returns endpoints based on the model's preferred_endpoints configuration in model_config
-func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
-	var endpoints []VLLMEndpoint
-
-	// Check if model has preferred endpoints configured
-	if modelConfig, ok := c.ModelConfig[modelName]; ok && len(modelConfig.PreferredEndpoints) > 0 {
-		// Return only the preferred endpoints
-		for _, endpointName := range modelConfig.PreferredEndpoints {
-			if endpoint, found := c.GetEndpointByName(endpointName); found {
-				endpoints = append(endpoints, *endpoint)
-			}
-		}
-	}
-
-	return endpoints
-}
-
-// GetEndpointByName returns the endpoint with the specified name
-func (c *RouterConfig) GetEndpointByName(name string) (*VLLMEndpoint, bool) {
-	for _, endpoint := range c.VLLMEndpoints {
-		if endpoint.Name == name {
-			return &endpoint, true
-		}
-	}
-	return nil, false
-}
-
-// GetAllModels returns a list of all models configured in model_config
-func (c *RouterConfig) GetAllModels() []string {
-	var models []string
-
-	for modelName := range c.ModelConfig {
-		models = append(models, modelName)
-	}
-
-	return models
-}
-
-// SelectBestEndpointForModel selects the best endpoint for a model based on weights and availability
-// Returns the endpoint name and whether selection was successful
-func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, bool) {
-	endpoints := c.GetEndpointsForModel(modelName)
-	if len(endpoints) == 0 {
-		return "", false
-	}
-
-	// If only one endpoint, return it
-	if len(endpoints) == 1 {
-		return endpoints[0].Name, true
-	}
-
-	// Select endpoint with highest weight
-	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
-		}
-	}
-
-	return bestEndpoint.Name, true
-}
-
-// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port
-// Returns the endpoint address:port string and whether selection was successful
-func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool) {
-	endpoints := c.GetEndpointsForModel(modelName)
-	if len(endpoints) == 0 {
-		return "", false
-	}
-
-	// If only one endpoint, return it
-	if len(endpoints) == 1 {
-		return fmt.Sprintf("%s:%d", endpoints[0].Address, endpoints[0].Port), true
-	}
-
-	// Select endpoint with highest weight
-	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
-		}
-	}
-
-	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
-}
-
-// GetModelReasoningForCategory returns whether a specific model supports reasoning in a given category
-func (c *RouterConfig) GetModelReasoningForCategory(categoryName string, modelName string) bool {
-	for _, category := range c.Categories {
-		if category.Name == categoryName {
-			for _, modelScore := range category.ModelScores {
-				if modelScore.Model == modelName {
-					return modelScore.UseReasoning != nil && *modelScore.UseReasoning
-				}
-			}
-		}
-	}
-	return false // Default to false if category or model not found
-}
-
-// GetBestModelForCategory returns the best scoring model for a given category
-func (c *RouterConfig) GetBestModelForCategory(categoryName string) (string, bool) {
-	for _, category := range c.Categories {
-		if category.Name == categoryName {
-			if len(category.ModelScores) > 0 {
-				useReasoning := category.ModelScores[0].UseReasoning != nil && *category.ModelScores[0].UseReasoning
-				return category.ModelScores[0].Model, useReasoning
-			}
-		}
-	}
-	return "", false // Return empty string and false if category not found or has no models
-}
-
-// ValidateEndpoints validates that all configured models have at least one endpoint
-func (c *RouterConfig) ValidateEndpoints() error {
-	// Get all models from categories
-	allCategoryModels := make(map[string]bool)
-	for _, category := range c.Categories {
-		for _, modelScore := range category.ModelScores {
-			allCategoryModels[modelScore.Model] = true
-		}
-	}
-
-	// Add default model
-	if c.DefaultModel != "" {
-		allCategoryModels[c.DefaultModel] = true
-	}
-
-	// Check that each model has at least one endpoint
-	for model := range allCategoryModels {
-		endpoints := c.GetEndpointsForModel(model)
-		if len(endpoints) == 0 {
-			return fmt.Errorf("model '%s' has no available endpoints", model)
-		}
-	}
-
-	return nil
-}
-
-// IsSystemPromptEnabled returns whether system prompt injection is enabled for a category
-func (c *Category) IsSystemPromptEnabled() bool {
-	// If SystemPromptEnabled is explicitly set, use that value
-	if c.SystemPromptEnabled != nil {
-		return *c.SystemPromptEnabled
-	}
-	// Default to true if SystemPrompt is not empty
-	return c.SystemPrompt != ""
-}
-
-// GetSystemPromptMode returns the system prompt injection mode, defaulting to "replace"
-func (c *Category) GetSystemPromptMode() string {
-	if c.SystemPromptMode == "" {
-		return "replace" // Default mode
-	}
-	return c.SystemPromptMode
-}
-
-// GetCategoryByName returns a category by name
-func (c *RouterConfig) GetCategoryByName(name string) *Category {
-	for i := range c.Categories {
-		if c.Categories[i].Name == name {
-			return &c.Categories[i]
-		}
-	}
-	return nil
+// PIIDetectionPolicy represents category-specific PII detection policies
+type PIIDetectionPolicy struct {
+	// PIIEnabled controls whether PII detection is enabled for this category
+	// If nil, inherits from global PII detection enabled setting (based on classifier.pii_model configuration)
+	PIIEnabled *bool `yaml:"pii_enabled,omitempty"`
+	// PIIThreshold defines the confidence threshold for PII detection (0.0-1.0)
+	// If nil, uses the global threshold from Classifier.PIIModel.Threshold
+	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
 }

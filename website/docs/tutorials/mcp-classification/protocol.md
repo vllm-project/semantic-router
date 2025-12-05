@@ -33,7 +33,7 @@ Content-Type: application/json
 Standard input/output communication:
 
 ```bash
-python server.py  # Reads from stdin, writes to stdout
+python server_keyword.py  # Reads from stdin, writes to stdout
 ```
 
 **Best for:** Local development, MCP Inspector testing, embedded scenarios
@@ -398,14 +398,14 @@ curl -X POST http://localhost:8090/mcp/tools/call \
 
 ```bash
 npm install -g @modelcontextprotocol/inspector
-mcp-inspector python server.py
+mcp-inspector python server_keyword.py
 ```
 
 ### Integration Test
 
 ```bash
 # Start your MCP server
-python server.py --http --port 8090
+python server_keyword.py --http --port 8090
 
 # Configure semantic router to use it
 # Send test queries through the router

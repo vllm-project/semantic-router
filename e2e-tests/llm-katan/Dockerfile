@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements first for better layer caching
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Install PyTorch CPU-only version to save space (no CUDA for testing server)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the llm_katan package
 COPY llm_katan/ ./llm_katan/

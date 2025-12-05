@@ -1,0 +1,79 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: embedding-pool
+  namespace: default
+spec:
+  defaultModel: "deepseek-v3"
+  models:
+    - name: "deepseek-v3"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000027  # $0.27 per 1M input tokens - efficient for semantic matching
+        outputTokenPrice: 0.0000011  # $1.1 per 1M output tokens
+      loras:
+        - name: "customer-support"
+          description: "Customer support specialist"
+
+    - name: "deepseek-r1"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000055  # $0.55 per 1M input tokens - better reasoning
+        outputTokenPrice: 0.0000022  # $2.2 per 1M output tokens
+      loras:
+        - name: "technical-expert"
+          description: "Technical problem solving expert"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: embedding-route
+  namespace: default
+spec:
+  signals:
+    embeddings:
+      - name: "customer_support"
+        threshold: 0.75
+        candidates:
+          - "I need help with my account"
+          - "Can you assist me with a problem?"
+          - "I have a question about my order"
+        aggregationMethod: "max"
+      - name: "technical_issue"
+        threshold: 0.80
+        candidates:
+          - "The system is not working properly"
+          - "I'm experiencing technical difficulties"
+          - "There's a bug in the application"
+        aggregationMethod: "mean"
+
+  decisions:
+    - name: "tech_troubleshoot"
+      description: "Technical troubleshooting - use reasoning model"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "technical_issue"
+      modelRefs:
+        - model: "deepseek-r1"
+          loraName: "technical-expert"
+          useReasoning: true
+          reasoningEffort: "high"
+
+    - name: "support_ticket"
+      description: "Customer support requests - use fast model"
+      priority: 80
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "customer_support"
+      modelRefs:
+        - model: "deepseek-v3"
+          loraName: "customer-support"
+          useReasoning: false
+

@@ -4,13 +4,13 @@ metadata:
   name: semantic-router
   namespace: openshift
   annotations:
-    description: "vLLM Semantic Router deployment template for OpenShift"
-    iconClass: "icon-load-balancer"
-    openshift.io/display-name: "vLLM Semantic Router"
-    openshift.io/documentation-url: "https://github.com/vllm-project/semantic-router"
-    openshift.io/support-url: "https://github.com/vllm-project/semantic-router/issues"
-    tags: "semantic-router,vllm,ai,ml,routing"
-    template.openshift.io/bindable: "false"
+    description: vLLM Semantic Router deployment template for OpenShift
+    iconClass: icon-load-balancer
+    openshift.io/display-name: vLLM Semantic Router
+    openshift.io/documentation-url: https://github.com/vllm-project/semantic-router
+    openshift.io/support-url: https://github.com/vllm-project/semantic-router/issues
+    tags: semantic-router,vllm,ai,ml,routing
+    template.openshift.io/bindable: 'false'
 labels:
   app: semantic-router
   template: semantic-router
@@ -24,8 +24,8 @@ objects:
       app.kubernetes.io/name: semantic-router
       app.kubernetes.io/component: system
     annotations:
-      openshift.io/description: "Namespace for vLLM Semantic Router deployment on OpenShift"
-      openshift.io/display-name: "vLLM Semantic Router System"
+      openshift.io/description: Namespace for vLLM Semantic Router deployment on OpenShift
+      openshift.io/display-name: vLLM Semantic Router System
 - apiVersion: v1
   kind: PersistentVolumeClaim
   metadata:
@@ -35,7 +35,7 @@ objects:
       app: semantic-router
   spec:
     accessModes:
-      - ReadWriteOnce
+    - ReadWriteOnce
     resources:
       requests:
         storage: ${STORAGE_SIZE}
@@ -59,7 +59,8 @@ objects:
         containers:
         - name: semantic-router
           image: ${CONTAINER_IMAGE}:${CONTAINER_TAG}
-          args: ["--secure=${SECURE_MODE}"]
+          args:
+          - --secure=${SECURE_MODE}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -79,7 +80,7 @@ objects:
             protocol: TCP
           env:
           - name: LD_LIBRARY_PATH
-            value: "/app/lib"
+            value: /app/lib
           volumeMounts:
           - name: config-volume
             mountPath: /app/config
@@ -162,7 +163,7 @@ objects:
       app: semantic-router
       service: api
     annotations:
-      description: "Route for Semantic Router Classification API"
+      description: Route for Semantic Router Classification API
   spec:
     host: ${API_HOSTNAME}
     to:
@@ -183,9 +184,9 @@ objects:
       app: semantic-router
       service: grpc
     annotations:
-      description: "Route for Semantic Router gRPC API"
+      description: Route for Semantic Router gRPC API
       haproxy.router.openshift.io/balance: roundrobin
-      haproxy.router.openshift.io/disable_cookies: "true"
+      haproxy.router.openshift.io/disable_cookies: 'true'
   spec:
     host: ${GRPC_HOSTNAME}
     to:
@@ -205,7 +206,7 @@ objects:
       app: semantic-router
       service: metrics
     annotations:
-      description: "Route for Semantic Router Prometheus metrics"
+      description: Route for Semantic Router Prometheus metrics
   spec:
     host: ${METRICS_HOSTNAME}
     to:
@@ -225,137 +226,87 @@ objects:
     labels:
       app: semantic-router
   data:
-    config.yaml: |
-      server:
-        port: 50051
-        secure: ${SECURE_MODE}
-
-      metrics:
-        enabled: true
-        port: 9190
-
-      classification:
-        api:
-          enabled: true
-          port: 8080
-
-        router:
-          category:
-            enabled: true
-            model_path: "models/category_classifier_modernbert-base_model"
-
-          pii:
-            enabled: true
-            model_path: "models/pii_classifier_modernbert-base_model"
-
-          jailbreak:
-            enabled: true
-            model_path: "models/jailbreak_classifier_modernbert-base_model"
-
-          pii_token:
-            enabled: true
-            model_path: "models/pii_classifier_modernbert-base_presidio_token_model"
-
-        tools:
-          enabled: true
-          database_path: "/app/config/tools_db.json"
-
-      logging:
-        level: ${LOG_LEVEL}
-        format: "json"
-
-      cache:
-        enabled: true
-        ttl: "5m"
-    tools_db.json: |
-      {
-        "tools": [
-          {
-            "name": "search",
-            "description": "Search for information on the web",
-            "category": "search",
-            "parameters": {
-              "query": {
-                "type": "string",
-                "description": "The search query"
-              }
-            }
-          },
-          {
-            "name": "calculator",
-            "description": "Perform mathematical calculations",
-            "category": "math",
-            "parameters": {
-              "expression": {
-                "type": "string",
-                "description": "The mathematical expression to evaluate"
-              }
-            }
-          }
-        ]
-      }
+    config.yaml: "server:\n  port: 50051\n  secure: ${SECURE_MODE}\n\nmetrics:\n \
+      \ enabled: true\n  port: 9190\n\nclassification:\n  api:\n    enabled: true\n\
+      \    port: 8080\n\n  router:\n    category:\n      enabled: true\n      model_path:\
+      \ \"models/category_classifier_modernbert-base_model\"\n\n    pii:\n      enabled:\
+      \ true\n      model_path: \"models/pii_classifier_modernbert-base_model\"\n\n\
+      \    jailbreak:\n      enabled: true\n      model_path: \"models/jailbreak_classifier_modernbert-base_model\"\
+      \n\n    pii_token:\n      enabled: true\n      model_path: \"models/pii_classifier_modernbert-base_presidio_token_model\"\
+      \n\n  tools:\n    enabled: true\n    database_path: \"/app/config/tools_db.json\"\
+      \n\nlogging:\n  level: ${LOG_LEVEL}\n  format: \"json\"\n\ncache:\n  enabled:\
+      \ true\n  ttl: \"5m\"\n"
+    tools_db.json: "{\n  \"tools\": [\n    {\n      \"name\": \"search\",\n      \"\
+      description\": \"Search for information on the web\",\n      \"category\": \"\
+      search\",\n      \"parameters\": {\n        \"query\": {\n          \"type\"\
+      : \"string\",\n          \"description\": \"The search query\"\n        }\n\
+      \      }\n    },\n    {\n      \"name\": \"calculator\",\n      \"description\"\
+      : \"Perform mathematical calculations\",\n      \"category\": \"math\",\n  \
+      \    \"parameters\": {\n        \"expression\": {\n          \"type\": \"string\"\
+      ,\n          \"description\": \"The mathematical expression to evaluate\"\n\
+      \        }\n      }\n    }\n  ]\n}\n"
 parameters:
 - name: NAMESPACE
-  description: "The namespace to deploy the semantic router into"
-  value: "vllm-semantic-router-system"
+  description: The namespace to deploy the semantic router into
+  value: vllm-semantic-router-system
   required: true
 - name: CONTAINER_IMAGE
-  description: "Container image for the semantic router"
-  value: "ghcr.io/vllm-project/semantic-router/extproc"
+  description: Container image for the semantic router
+  value: ghcr.io/vllm-project/semantic-router/extproc
   required: true
 - name: CONTAINER_TAG
-  description: "Container image tag"
-  value: "latest"
+  description: Container image tag
+  value: latest
   required: true
 - name: REPLICAS
-  description: "Number of replicas to deploy"
-  value: "1"
+  description: Number of replicas to deploy
+  value: '1'
   required: true
 - name: STORAGE_SIZE
-  description: "Size of persistent storage for models"
-  value: "10Gi"
+  description: Size of persistent storage for models
+  value: 10Gi
   required: true
 - name: MEMORY_REQUEST
-  description: "Memory request for container"
-  value: "3Gi"
+  description: Memory request for container
+  value: 3Gi
   required: true
 - name: MEMORY_LIMIT
-  description: "Memory limit for container"
-  value: "6Gi"
+  description: Memory limit for container
+  value: 6Gi
   required: true
 - name: CPU_REQUEST
-  description: "CPU request for container"
-  value: "1"
+  description: CPU request for container
+  value: '1'
   required: true
 - name: CPU_LIMIT
-  description: "CPU limit for container"
-  value: "2"
+  description: CPU limit for container
+  value: '2'
   required: true
 - name: SECURE_MODE
-  description: "Enable secure mode (TLS)"
-  value: "true"
+  description: Enable secure mode (TLS)
+  value: 'true'
   required: true
 - name: LIVENESS_INITIAL_DELAY
-  description: "Initial delay for liveness probe (seconds)"
-  value: "60"
+  description: Initial delay for liveness probe (seconds)
+  value: '60'
   required: true
 - name: READINESS_INITIAL_DELAY
-  description: "Initial delay for readiness probe (seconds)"
-  value: "90"
+  description: Initial delay for readiness probe (seconds)
+  value: '90'
   required: true
 - name: LOG_LEVEL
-  description: "Logging level (debug, info, warn, error)"
-  value: "info"
+  description: Logging level (debug, info, warn, error)
+  value: info
   required: true
 - name: API_HOSTNAME
-  description: "Custom hostname for API route (leave empty for auto-generated)"
-  value: ""
+  description: Custom hostname for API route (leave empty for auto-generated)
+  value: ''
   required: false
 - name: GRPC_HOSTNAME
-  description: "Custom hostname for gRPC route (leave empty for auto-generated)"
-  value: ""
+  description: Custom hostname for gRPC route (leave empty for auto-generated)
+  value: ''
   required: false
 - name: METRICS_HOSTNAME
-  description: "Custom hostname for metrics route (leave empty for auto-generated)"
-  value: ""
+  description: Custom hostname for metrics route (leave empty for auto-generated)
+  value: ''
   required: false

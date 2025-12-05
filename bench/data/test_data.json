@@ -1,0 +1,352 @@
+[
+  {
+    "text": "What is Ohm's Law in electrical engineering?",
+    "true_label": "engineering",
+    "true_label_id": 5
+  },
+  {
+    "text": "In object-oriented programming, what does polymorphism mean?",
+    "true_label": "computer science",
+    "true_label_id": 3
+  },
+  {
+    "text": "What is the modulus of elasticity (Young's modulus) used to measure?",
+    "true_label": "engineering",
+    "true_label_id": 5
+  },
+  {
+    "text": "Which blood type is known as the universal donor?",
+    "true_label": "health",
+    "true_label_id": 6
+  },
+  {
+    "text": "Which mineral is essential for bone health?",
+    "true_label": "health",
+    "true_label_id": 6
+  },
+  {
+    "text": "Who wrote 'The Republic'?",
+    "true_label": "philosophy",
+    "true_label_id": 11
+  },
+  {
+    "text": "In control systems, what does PID controller stand for?",
+    "true_label": "engineering",
+    "true_label_id": 5
+  },
+  {
+    "text": "What is the bystander effect in social psychology?",
+    "true_label": "psychology",
+    "true_label_id": 13
+  },
+  {
+    "text": "In a right triangle, what is the Pythagorean theorem?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "What does CPI stand for in economic indicators?",
+    "true_label": "economics",
+    "true_label_id": 4
+  },
+  {
+    "text": "What does GDP measure in an economy?",
+    "true_label": "economics",
+    "true_label_id": 4
+  },
+  {
+    "text": "In marketing, what are the four Ps of the marketing mix?",
+    "true_label": "business",
+    "true_label_id": 1
+  },
+  {
+    "text": "What are the three laws of thermodynamics?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "What are renewable energy sources?",
+    "true_label": "other",
+    "true_label_id": 10
+  },
+  {
+    "text": "What was the primary cause of the American Civil War?",
+    "true_label": "history",
+    "true_label_id": 7
+  },
+  {
+    "text": "What data structure uses LIFO (Last In First Out) principle?",
+    "true_label": "computer science",
+    "true_label_id": 3
+  },
+  {
+    "text": "In networking, what layer of the OSI model handles routing?",
+    "true_label": "computer science",
+    "true_label_id": 3
+  },
+  {
+    "text": "What is the slope-intercept form of a linear equation?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "What unit is used to measure force?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "Who wrote the Declaration of Independence?",
+    "true_label": "history",
+    "true_label_id": 7
+  },
+  {
+    "text": "What is the speed of light in vacuum?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "What is the difference between fiscal and monetary policy?",
+    "true_label": "economics",
+    "true_label_id": 4
+  },
+  {
+    "text": "What is the primary function of ribosomes in cells?",
+    "true_label": "biology",
+    "true_label_id": 0
+  },
+  {
+    "text": "What is Newton's second law of motion?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "What does 'pro bono' mean in legal practice?",
+    "true_label": "law",
+    "true_label_id": 8
+  },
+  {
+    "text": "Which organelle is responsible for producing ATP in eukaryotic cells?",
+    "true_label": "biology",
+    "true_label_id": 0
+  },
+  {
+    "text": "What is the pH of a neutral solution at 25\u00b0C?",
+    "true_label": "chemistry",
+    "true_label_id": 2
+  },
+  {
+    "text": "What is the purpose of a compiler in programming?",
+    "true_label": "computer science",
+    "true_label_id": 3
+  },
+  {
+    "text": "What was the name of the ship that brought the Pilgrims to America?",
+    "true_label": "history",
+    "true_label_id": 7
+  },
+  {
+    "text": "What is the primary function of the cardiovascular system?",
+    "true_label": "health",
+    "true_label_id": 6
+  },
+  {
+    "text": "What is the process called when a solid changes directly to a gas?",
+    "true_label": "chemistry",
+    "true_label_id": 2
+  },
+  {
+    "text": "In economics, what is meant by 'elastic demand'?",
+    "true_label": "economics",
+    "true_label_id": 4
+  },
+  {
+    "text": "In which year did World War II end?",
+    "true_label": "history",
+    "true_label_id": 7
+  },
+  {
+    "text": "What is the difference between B2B and B2C business models?",
+    "true_label": "business",
+    "true_label_id": 1
+  },
+  {
+    "text": "What does 'tabula rasa' mean in philosophy?",
+    "true_label": "philosophy",
+    "true_label_id": 11
+  },
+  {
+    "text": "What is the derivative of x\u00b2 with respect to x?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "What is the primary goal of supply chain management?",
+    "true_label": "business",
+    "true_label_id": 1
+  },
+  {
+    "text": "What is classical conditioning in psychology?",
+    "true_label": "psychology",
+    "true_label_id": 13
+  },
+  {
+    "text": "What does E=mc\u00b2 represent?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "What is the difference between civil and criminal law?",
+    "true_label": "law",
+    "true_label_id": 8
+  },
+  {
+    "text": "What does the integral of a function represent?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "According to the law of demand, what happens to quantity demanded when price increases?",
+    "true_label": "economics",
+    "true_label_id": 4
+  },
+  {
+    "text": "What is the value of \u03c0 (pi) to two decimal places?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "What is the value of e (Euler's number) to two decimal places?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "What is the role of DNA polymerase during DNA replication?",
+    "true_label": "biology",
+    "true_label_id": 0
+  },
+  {
+    "text": "In genetics, what does the term 'phenotype' refer to?",
+    "true_label": "biology",
+    "true_label_id": 0
+  },
+  {
+    "text": "What is the difference between TCP and UDP protocols?",
+    "true_label": "computer science",
+    "true_label_id": 3
+  },
+  {
+    "text": "What is the purpose of the Miranda rights?",
+    "true_label": "law",
+    "true_label_id": 8
+  },
+  {
+    "text": "Which cellular process involves the division of cytoplasm?",
+    "true_label": "biology",
+    "true_label_id": 0
+  },
+  {
+    "text": "What does IQ stand for in psychology?",
+    "true_label": "psychology",
+    "true_label_id": 13
+  },
+  {
+    "text": "Which financial statement shows a company's revenues and expenses?",
+    "true_label": "business",
+    "true_label_id": 1
+  },
+  {
+    "text": "What is the acceleration due to gravity on Earth?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "What is Avogadro's number used to represent?",
+    "true_label": "chemistry",
+    "true_label_id": 2
+  },
+  {
+    "text": "What does 'habeas corpus' mean in legal terms?",
+    "true_label": "law",
+    "true_label_id": 8
+  },
+  {
+    "text": "In mechanical engineering, what is the formula for torque?",
+    "true_label": "engineering",
+    "true_label_id": 5
+  },
+  {
+    "text": "In a DNA molecule, which of the following base pairs is correct?",
+    "true_label": "biology",
+    "true_label_id": 0
+  },
+  {
+    "text": "What is required for a contract to be legally binding?",
+    "true_label": "law",
+    "true_label_id": 8
+  },
+  {
+    "text": "What is Maslow's hierarchy of needs?",
+    "true_label": "psychology",
+    "true_label_id": 13
+  },
+  {
+    "text": "What is the worst-case time complexity of quicksort?",
+    "true_label": "computer science",
+    "true_label_id": 3
+  },
+  {
+    "text": "What is the ship of Theseus paradox about?",
+    "true_label": "philosophy",
+    "true_label_id": 11
+  },
+  {
+    "text": "What is the formula for kinetic energy?",
+    "true_label": "physics",
+    "true_label_id": 12
+  },
+  {
+    "text": "What is the sum of angles in a triangle?",
+    "true_label": "math",
+    "true_label_id": 9
+  },
+  {
+    "text": "Who proposed the philosophical concept of 'cogito ergo sum'?",
+    "true_label": "philosophy",
+    "true_label_id": 11
+  },
+  {
+    "text": "What is the normal resting heart rate for adults?",
+    "true_label": "health",
+    "true_label_id": 6
+  },
+  {
+    "text": "What does the term 'opportunity cost' refer to in economics?",
+    "true_label": "economics",
+    "true_label_id": 4
+  },
+  {
+    "text": "Which element has the atomic number 6?",
+    "true_label": "chemistry",
+    "true_label_id": 2
+  },
+  {
+    "text": "What does SWOT analysis stand for in strategic planning?",
+    "true_label": "business",
+    "true_label_id": 1
+  },
+  {
+    "text": "What is sustainable development?",
+    "true_label": "other",
+    "true_label_id": 10
+  },
+  {
+    "text": "What does CAD stand for in engineering design?",
+    "true_label": "engineering",
+    "true_label_id": 5
+  },
+  {
+    "text": "Which type of molecule catalyzes biochemical reactions in living organisms?",
+    "true_label": "biology",
+    "true_label_id": 0
+  }
+]

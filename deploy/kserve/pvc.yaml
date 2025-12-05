@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-models
+  labels:
+    app: semantic-router
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{MODELS_PVC_SIZE}}  # Adjust based on model size requirements
+  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed (or use --storage-class flag with deploy.sh)
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-cache
+  labels:
+    app: semantic-router
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{CACHE_PVC_SIZE}}  # Cache storage - adjust as needed
+  # storageClassName: gp3-csi  # Uncomment and set to your storage class if needed (or use --storage-class flag with deploy.sh)
+  volumeMode: Filesystem

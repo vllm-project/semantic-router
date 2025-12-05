@@ -3,6 +3,7 @@
 This directory provides a local Jaeger + tracing-enabled semantic-router stack for development, debugging, and demonstration.
 
 ## Why here?
+
 `tools/tracing` groups this with other local-only utilities (see `tools/observability` for metrics stack). Production deployments should rely on manifests in `deploy/kubernetes` / `openshift` instead of this all-in-one compose.
 
 ## Quick Start
@@ -31,7 +32,7 @@ curl -X POST http://localhost:8081/v1/chat/completions \
 ## View Traces
 
 1. Open Jaeger UI
-2. Select service: `vllm-semantic-router` (or `semantic-router` depending on OTEL resource config)
+2. Select service: `vllm-semantic-router` (set via resource.service_name in config/config.tracing.yaml)
 3. Click "Find Traces"
 
 ## Stopping
@@ -48,12 +49,15 @@ docker compose -f tools/tracing/docker-compose.tracing.yaml down -v
 
 ## Environment Variables
 
-| Variable | Purpose |
-|----------|---------|
+| Variable                    | Purpose                         |
+| --------------------------- | ------------------------------- |
 | OTEL_EXPORTER_OTLP_ENDPOINT | Where spans are exported (gRPC) |
-| OTEL_SERVICE_NAME | Logical service name in traces |
+| OTEL_SERVICE_NAME           | Logical service name in traces  |
+
+Note: the router reads tracing settings from the YAML config (observability.tracing._). The OTEL\__ env vars here are only informational and do not override the YAML. To change exporter endpoint or service name, edit `config/config.tracing.yaml`.
 
 ## Relationship with Metrics Stack
+
 If you also want Prometheus/Grafana metrics:
 
 ```bash

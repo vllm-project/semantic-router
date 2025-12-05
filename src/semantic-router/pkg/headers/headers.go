@@ -12,7 +12,7 @@ const (
 
 	// GatewayDestinationEndpoint specifies the backend endpoint address selected by the router.
 	// This header is set by the router to direct Envoy to the appropriate upstream service.
-	GatewayDestinationEndpoint = "x-gateway-destination-endpoint"
+	GatewayDestinationEndpoint = "x-vsr-destination-endpoint"
 
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.
@@ -24,9 +24,15 @@ const (
 // Vector Semantic Router decision-making information for debugging and monitoring.
 // Headers are only added when the request is successful and did not hit the cache.
 const (
-	// VSRSelectedCategory indicates the category selected by VSR during classification.
+	// VSRSelectedCategory indicates the category selected by VSR during domain classification.
+	// This comes from the domain classifier (MMLU categories).
 	// Example values: "math", "business", "biology", "computer_science"
 	VSRSelectedCategory = "x-vsr-selected-category"
+
+	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
+	// This is the final routing decision made by the DecisionEngine.
+	// Example values: "math_decision", "business_decision", "thinking_decision"
+	VSRSelectedDecision = "x-vsr-selected-decision"
 
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
@@ -52,6 +58,10 @@ const (
 	// VSRPIIViolation indicates that the request was blocked due to PII policy violation.
 	// Value: "true"
 	VSRPIIViolation = "x-vsr-pii-violation"
+
+	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
+	// Value: "EMAIL_ADDRESS,US_SSN" (example)
+	VSRPIITypes = "x-vsr-pii-types"
 
 	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
 	// Value: "true"

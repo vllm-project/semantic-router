@@ -39,8 +39,10 @@ func Resource(resource string) schema.GroupResource {
 // addKnownTypes adds the set of types defined in this package to the supplied scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(GroupVersion,
-		&SemanticRoute{},
-		&SemanticRouteList{},
+		&IntelligentPool{},
+		&IntelligentPoolList{},
+		&IntelligentRoute{},
+		&IntelligentRouteList{},
 	)
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil

@@ -21,6 +21,7 @@ class ServerConfig:
     max_tokens: int = 512
     temperature: float = 0.7
     device: str = "auto"  # "auto", "cpu", "cuda"
+    quantize: bool = True  # Enable int8 quantization for CPU (default: enabled)
 
     def __post_init__(self):
         """Post-initialization processing"""

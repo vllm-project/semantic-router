@@ -6,7 +6,7 @@ Example MCP servers that provide text classification with intelligent routing fo
 
 This directory contains **three MCP classification servers**:
 
-### 1. **Regex-Based Server** (`server.py`)
+### 1. **Regex-Based Server** (`server_keyword.py`)
 
 - ✅ **Simple & Fast** - Pattern matching with regex
 - ✅ **Lightweight** - ~10MB memory, <5ms per query
@@ -16,7 +16,7 @@ This directory contains **three MCP classification servers**:
 ### 2. **Embedding-Based Server** (`server_embedding.py`)
 
 - ✅ **High Accuracy** - Semantic understanding with Qwen3-Embedding-0.6B
-- ✅ **RAG-Style** - FAISS vector database with similarity search
+- ✅ **RAG-Style** - Milvus vector database with similarity search
 - ✅ **Flexible** - Handles paraphrases, synonyms, variations
 - 📝 **Best For**: Production use when you have good training examples
 
@@ -31,13 +31,13 @@ This directory contains **three MCP classification servers**:
 
 **Choose based on your needs:**
 
-- **Quick start / Testing?** → Use `server.py` (regex-based)
+- **Quick start / Testing?** → Use `server_keyword.py` (regex-based)
 - **Production with training examples?** → Use `server_embedding.py` (embedding-based)
 - **Production with fine-tuned model?** → Use `server_generative.py` (generative model)
 
 ---
 
-## Regex-Based Server (`server.py`)
+## Regex-Based Server (`server_keyword.py`)
 
 ### Features
 
@@ -64,10 +64,10 @@ This directory contains **three MCP classification servers**:
 pip install -r requirements.txt
 
 # HTTP mode (for semantic router)
-python server.py --http --port 8090
+python server_keyword.py --http --port 8090
 
 # Stdio mode (for MCP clients)
-python server.py
+python server_keyword.py
 ```
 
 **Test the server:**
@@ -79,7 +79,7 @@ curl http://localhost:8090/health
 
 ## Configuration
 
-**Router config (`config-mcp-classifier-example.yaml`):**
+**Router config (`config-mcp-classifier.yaml`):**
 
 ```yaml
 classifier:
@@ -111,7 +111,7 @@ The router automatically discovers classification tools from the MCP server by:
 This server implements the MCP classification protocol defined in:
 
 ```
-github.com/vllm-project/semantic-router/src/semantic-router/pkg/connectivity/mcp/api
+github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp/api
 ```
 
 **Required Tools:**
@@ -220,14 +220,14 @@ python3 server_embedding.py --http --port 8090
 ### Features
 
 - **Qwen3-Embedding-0.6B** model with 1024-dimensional embeddings
-- **FAISS vector database** for fast similarity search
+- **Milvus vector database** for fast similarity search 
 - **RAG-style classification** using 95 training examples
 - **Same MCP protocol** as regex server (drop-in replacement)
 - **Higher accuracy** - Understands semantic meaning, not just patterns
 
 ### Comparison
 
-| Feature | Regex (`server.py`) | Embedding (`server_embedding.py`) | Generative (`server_generative.py`) |
+| Feature | Regex (`server_keyword.py`) | Embedding (`server_embedding.py`) | Generative (`server_generative.py`) |
 |---------|---------------------|-----------------------------------|-------------------------------------|
 | **Accuracy** | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
 | **Speed** | ~1-5ms | ~50-100ms | ~100-200ms (GPU) |

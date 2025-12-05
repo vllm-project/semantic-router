@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // NewCacheBackend creates a cache backend instance from the provided configuration
@@ -15,7 +15,7 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 
 	if !config.Enabled {
 		// Create a disabled cache backend
-		observability.Debugf("Cache disabled - creating disabled in-memory cache backend")
+		logging.Debugf("Cache disabled - creating disabled in-memory cache backend")
 		return NewInMemoryCache(InMemoryCacheOptions{
 			Enabled: false,
 		}), nil
@@ -24,19 +24,24 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
 		// Use in-memory cache as the default backend
-		observability.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f",
-			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold)
+		logging.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s, UseHNSW: %t",
+			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel, config.UseHNSW)
+
 		options := InMemoryCacheOptions{
 			Enabled:             config.Enabled,
 			SimilarityThreshold: config.SimilarityThreshold,
 			MaxEntries:          config.MaxEntries,
 			TTLSeconds:          config.TTLSeconds,
 			EvictionPolicy:      config.EvictionPolicy,
+			UseHNSW:             config.UseHNSW,
+			HNSWM:               config.HNSWM,
+			HNSWEfConstruction:  config.HNSWEfConstruction,
+			EmbeddingModel:      config.EmbeddingModel,
 		}
 		return NewInMemoryCache(options), nil
 
 	case MilvusCacheType:
-		observability.Debugf("Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
+		logging.Debugf("Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
 			config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
 		options := MilvusCacheOptions{
 			Enabled:             config.Enabled,
@@ -46,8 +51,33 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		}
 		return NewMilvusCache(options)
 
+	case RedisCacheType:
+		logging.Debugf("Creating Redis cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
+			config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
+		options := RedisCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			ConfigPath:          config.BackendConfigPath,
+		}
+		return NewRedisCache(options)
+
+	case HybridCacheType:
+		logging.Debugf("Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
+			config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
+		options := HybridCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			MaxMemoryEntries:    config.MaxMemoryEntries,
+			HNSWM:               config.HNSWM,
+			HNSWEfConstruction:  config.HNSWEfConstruction,
+			MilvusConfigPath:    config.BackendConfigPath,
+		}
+		return NewHybridCache(options)
+
 	default:
-		observability.Debugf("Unsupported cache backend type: %s", config.BackendType)
+		logging.Debugf("Unsupported cache backend type: %s", config.BackendType)
 		return nil, fmt.Errorf("unsupported cache backend type: %s", config.BackendType)
 	}
 }
@@ -87,10 +117,20 @@ func ValidateCacheConfig(config CacheConfig) error {
 		}
 		// Ensure the Milvus configuration file exists
 		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-			observability.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
+			logging.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
 			return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
 		}
-		observability.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+		logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+	case RedisCacheType:
+		if config.BackendConfigPath == "" {
+			return fmt.Errorf("backend_config_path is required for Redis cache backend")
+		}
+		// Ensure the Redis configuration file exists
+		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+			logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
+			return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
+		}
+		logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
 	}
 
 	return nil
@@ -140,6 +180,19 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"Distributed architecture",
 				"Advanced indexing",
 				"High availability",
+				"TTL support",
+			},
+		},
+		{
+			Type:        RedisCacheType,
+			Name:        "Redis Vector Database",
+			Description: "High-performance semantic cache powered by Redis with vector search",
+			Features: []string{
+				"Fast in-memory performance",
+				"Persistent storage with AOF/RDB",
+				"Scalable with Redis Cluster",
+				"HNSW and FLAT indexing",
+				"Wide ecosystem support",
 				"TTL support",
 			},
 		},

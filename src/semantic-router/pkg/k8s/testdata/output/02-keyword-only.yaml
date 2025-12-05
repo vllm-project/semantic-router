@@ -1,0 +1,159 @@
+config_source: kubernetes
+embedding_models:
+  qwen3_model_path: models/Qwen3-Embedding-0.6B
+  gemma_model_path: models/embeddinggemma-300m
+  use_cpu: true
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+classifier:
+  category_model:
+    model_id: models/category_classifier_modernbert-base_model
+    threshold: 0.6
+    use_cpu: true
+    use_modernbert: true
+    category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+  pii_model:
+    model_id: models/pii_classifier_modernbert-base_presidio_token_model
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+prompt_guard:
+  enabled: true
+  model_id: models/jailbreak_classifier_modernbert-base_model
+  threshold: 0.7
+  use_cpu: true
+  use_modernbert: true
+  jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
+semantic_cache:
+  backend_type: memory
+  enabled: true
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: fifo
+  embedding_model: bert
+observability:
+  tracing:
+    enabled: false
+    provider: opentelemetry
+    exporter:
+      type: otlp
+      endpoint: jaeger:4317
+      insecure: true
+    sampling:
+      type: always_on
+      rate: 1
+    resource:
+      service_name: vllm-semantic-router
+      service_version: v0.1.0
+      deployment_environment: development
+api:
+  batch_classification:
+    metrics:
+      sample_rate: 1
+      duration_buckets:
+        - 0.001
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+        - 30
+      size_buckets:
+        - 1
+        - 2
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+        - 200
+      enabled: true
+      detailed_goroutine_tracking: true
+clear_route_cache: false
+keyword_rules:
+  - name: urgent
+    operator: OR
+    keywords:
+      - urgent
+      - emergency
+      - critical
+      - asap
+    case_sensitive: false
+  - name: greeting
+    operator: OR
+    keywords:
+      - hello
+      - hi
+      - hey
+      - greetings
+    case_sensitive: false
+categories: []
+decisions:
+  - name: urgent_request
+    description: Handle urgent requests with larger model
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: urgent
+    modelRefs:
+      - model: gemma-2-27b
+        lora_name: urgent-specialist
+        use_reasoning: false
+  - name: greeting_response
+    description: Handle greetings with fast small model
+    priority: 50
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: greeting
+    modelRefs:
+      - model: gemma-2-9b
+        lora_name: greeting-handler
+        use_reasoning: false
+strategy: priority
+default_reasoning_effort: high
+reasoning_families:
+  deepseek:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  gpt:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  qwen3:
+    type: chat_template_kwargs
+    parameter: enable_thinking
+model_config:
+  gemma-2-9b:
+    pricing:
+      prompt_per_1m: 0.39999999999999997
+      completion_per_1m: 0.7999999999999999
+    loras:
+      - name: greeting-handler
+        description: Optimized for greeting responses
+  gemma-2-27b:
+    pricing:
+      prompt_per_1m: 2
+      completion_per_1m: 4
+    loras:
+      - name: urgent-specialist
+        description: Specialized in handling urgent requests
+default_model: gemma-2-9b
+vllm_endpoints: []
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: config/tools_db.json
+  fallback_to_empty: true

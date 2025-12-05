@@ -43,13 +43,72 @@ Enable jailbreak detection in your configuration:
 ```yaml
 # config/config.yaml
 prompt_guard:
-  enabled: true
+  enabled: true  # Global default - can be overridden per category
   model_id: "models/jailbreak_classifier_modernbert-base_model"
   threshold: 0.7                   # Detection sensitivity (0.0-1.0)
   use_cpu: true                    # Run on CPU
   use_modernbert: true             # Use ModernBERT architecture
   jailbreak_mapping_path: "config/jailbreak_type_mapping.json"  # Path to jailbreak type mapping
 ```
+
+### Category-Level Jailbreak Protection
+
+You can configure jailbreak detection at the category level for fine-grained security control, including both enabling/disabling and threshold customization:
+
+```yaml
+# Global default settings
+prompt_guard:
+  enabled: true  # Default for all categories
+  threshold: 0.7  # Default threshold for all categories
+
+categories:
+  # High-security category - strict protection with high threshold
+  - name: customer_support
+    jailbreak_enabled: true  # Strict protection for public-facing
+    jailbreak_threshold: 0.9  # Higher threshold for stricter detection
+    model_scores:
+      - model: qwen3
+        score: 0.8
+
+  # Internal tool - relaxed threshold for code/technical content
+  - name: code_generation
+    jailbreak_enabled: true  # Keep enabled but with relaxed threshold
+    jailbreak_threshold: 0.5  # Lower threshold to reduce false positives
+    model_scores:
+      - model: qwen3
+        score: 0.9
+
+  # General category - inherits global settings
+  - name: general
+    # No jailbreak_enabled or jailbreak_threshold specified
+    # Uses global prompt_guard.enabled (true) and threshold (0.7)
+    model_scores:
+      - model: qwen3
+        score: 0.5
+```
+
+**Category-Level Behavior**:
+
+- **When `jailbreak_enabled` is not specified**: Category inherits from global `prompt_guard.enabled`
+- **When `jailbreak_enabled: true`**: Jailbreak detection is explicitly enabled for this category
+- **When `jailbreak_enabled: false`**: Jailbreak detection is explicitly disabled for this category
+- **When `jailbreak_threshold` is not specified**: Category inherits from global `prompt_guard.threshold`
+- **When `jailbreak_threshold: 0.X`**: Uses category-specific threshold (0.0-1.0)
+- **Category-specific settings always override global settings** when explicitly configured
+
+**Threshold Tuning Guide**:
+
+- **High threshold (0.8-0.95)**: Stricter detection, fewer false positives, may miss subtle attacks
+- **Medium threshold (0.6-0.8)**: Balanced detection, good for most use cases
+- **Low threshold (0.4-0.6)**: More sensitive, catches more attacks, higher false positive rate
+- **Recommended**: Start with 0.7 globally, adjust per category based on risk profile and false positive tolerance
+
+**Use Cases**:
+
+- **High-security categories (0.8-0.9 threshold)**: Customer support, business advice, public-facing APIs
+- **Technical categories (0.5-0.6 threshold)**: Code generation, developer tools (reduce false positives on technical jargon)
+- **Internal tools (0.5 threshold or disabled)**: Testing environments, trusted internal applications
+- **General categories (inherit global)**: Use global default for most categories
 
 ## How Jailbreak Protection Works
 
@@ -134,8 +193,37 @@ security_policy_violations_total 45
 ### 4. Integration with Routing
 
 - Apply stricter protection to sensitive models
-- Use different thresholds for different categories
+- Use category-level jailbreak settings for different domains
 - Combine with PII detection for comprehensive security
+
+**Example**: Configure different jailbreak policies per category:
+
+```yaml
+prompt_guard:
+  enabled: true  # Global default
+
+categories:
+  # Strict protection for customer-facing categories
+  - name: customer_support
+    jailbreak_enabled: true
+    model_scores:
+      - model: safe-model
+        score: 0.9
+
+  # Relaxed protection for internal development
+  - name: code_generation
+    jailbreak_enabled: false  # Allow broader input
+    model_scores:
+      - model: code-model
+        score: 0.9
+
+  # Use global default for general queries
+  - name: general
+    # Inherits from prompt_guard.enabled
+    model_scores:
+      - model: general-model
+        score: 0.7
+```
 
 ## Troubleshooting
 

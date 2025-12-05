@@ -20,6 +20,7 @@ This guide provides step-by-step instructions for deploying the vLLM Semantic Ro
 - **Download classification models (≈1.5GB, first run only):**
 
   ```bash
+  # Tips: If you encounter this error 'hf: command not found', run 'pip install huggingface_hub hf_transfer'.
   make download-models
   ```
 
@@ -39,13 +40,13 @@ This guide provides step-by-step instructions for deploying the vLLM Semantic Ro
 
   ```bash
   # For Debian / Ubuntu
-  sudo apt-get update 
+  sudo apt-get update
   sudo apt-get install -y docker-compose-plugin
 
   # For RHEL / CentOS / Fedora
-  sudo yum update -y 
+  sudo yum update -y
   sudo yum install -y docker-compose-plugin
-  
+
   # Verify
   docker compose version
   ```
@@ -56,14 +57,14 @@ This guide provides step-by-step instructions for deploying the vLLM Semantic Ro
 
 ```bash
 # Core (router + envoy)
-docker compose up --build
+docker compose -f deploy/docker-compose/docker-compose.yml up --build
 
 # Detached (recommended once OK)
-docker compose up -d --build
+docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 
 # Include mock vLLM + testing profile (points router to mock endpoint)
-CONFIG_FILE=/app/config/config.testing.yaml \
-  docker compose --profile testing up --build
+CONFIG_FILE=/app/config/testing/config.testing.yaml \
+  docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
 ```
 
 ### Verify
@@ -87,7 +88,7 @@ docker compose logs -f semantic-router
 docker compose exec semantic-router bash
 
 # Recreate after config change
-docker compose up -d --build
+docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 
 # Stop and clean up containers
 docker compose down

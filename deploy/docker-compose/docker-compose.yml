@@ -7,12 +7,16 @@ services:
     ports:
       - "50051:50051"
     volumes:
-      - ../../config:/app/config:ro
-      - ../../models:/app/models:ro
-      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ../../config:/app/config:ro,z
+      - ../../models:/app/models:ro,z
+      - ~/.cache/huggingface:/root/.cache/huggingface:z
     environment:
       - LD_LIBRARY_PATH=/app/lib
+      # Use main config by default; override via CONFIG_FILE if needed
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
+      # Optional informational envs (router reads YAML for tracing config)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=vllm-semantic-router
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
     networks:
@@ -28,11 +32,13 @@ services:
   envoy:
     image: envoyproxy/envoy:v1.31.7
     container_name: envoy-proxy
+    security_opt:
+      - label=disable
     ports:
       - "8801:8801"  # Main proxy port
       - "19000:19000"  # Admin interface
     volumes:
-      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro,z
     command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
     depends_on:
       semantic-router:
@@ -40,7 +46,7 @@ services:
     networks:
       - semantic-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:19000/ready"]
+      test: ["CMD", "bash", "-c", "(echo -e 'GET /ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; timeout 2 cat <&3) 3<>/dev/tcp/localhost/19000 | grep -q LIVE"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -65,12 +71,24 @@ services:
       retries: 5
       start_period: 5s
 
+  # Jaeger for distributed tracing (OTLP gRPC + UI)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "4318:4317"  # OTLP gRPC (mapped to 4318 on host to avoid conflicts)
+      - "16686:16686"  # Web UI
+    networks:
+      - semantic-network
+
   # Prometheus and Grafana for observability
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
     volumes:
-      - ./addons/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./addons/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro,z
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
@@ -90,24 +108,24 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro
-      - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
-      - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro
-      - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro
+      - ./addons/grafana.ini:/etc/grafana/grafana.ini:ro,z
+      - ./addons/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro,z
+      - ./addons/grafana-datasource-jaeger.yaml:/etc/grafana/provisioning/datasources/datasource_jaeger.yaml:ro,z
+      - ./addons/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro,z
+      - ./addons/llm-router-dashboard.json:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro,z
       - grafana-data:/var/lib/grafana
     networks:
       - semantic-network
     depends_on:
       - prometheus
 
-  # Open WebUI (optional, used by Dashboard Playground)
+  # Open WebUI (kept for feature parity and user choice)
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: openwebui
     ports:
-      - "3001:8080"
+      - "3001:8080"  # Expose Open WebUI on host 3001
     environment:
-      # Add any Open WebUI env here if needed (auth, providers, etc.)
       - WEBUI_NAME=Open WebUI
       # Route Open WebUI's OpenAI-compatible calls through Pipelines by default
       - OPENAI_API_BASE_URL=http://pipelines:9099
@@ -117,21 +135,68 @@ services:
     networks:
       - semantic-network
 
+  # Chat UI (Hugging Face) replacing Open WebUI
+  chat-ui:
+    image: ghcr.io/huggingface/chat-ui-db:latest
+    container_name: chat-ui
+    ports:
+      - "3002:3000"  # Expose Chat UI on host 3002
+    environment:
+      # Point Chat UI to Envoy's OpenAI-compatible endpoint
+      - OPENAI_BASE_URL=http://envoy-proxy:8801/v1
+      # Provide a token if your upstream requires it; for HF router use hf_xxx
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-changeme}
+      # MongoDB for persistence (use Atlas by overriding MONGODB_URL)
+      - MONGODB_URL=${MONGODB_URL:-mongodb://mongo:27017}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME:-chat-ui}
+      # Optional theming (override as needed)
+      - PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-HuggingChat}
+      - PUBLIC_APP_ASSETS=${PUBLIC_APP_ASSETS:-chatui}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      envoy:
+        condition: service_started
+      semantic-router:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - semantic-network
+
   # Open WebUI Pipelines server (executes Python pipelines)
   pipelines:
     image: ghcr.io/open-webui/pipelines:main
     container_name: pipelines
-    # Optional: expose on host for debugging
-    # ports:
-    #   - "9099:9099"
     environment:
-      # Allow pipelines to reach services running on host if ever required
       - PYTHONUNBUFFERED=1
     volumes:
       # Persistent pipelines storage (auto-loaded on start)
-      - openwebui-pipelines:/app/pipelines
-      # Mount our vLLM Semantic Router pipeline
-      - ./addons/vllm_semantic_router_pipe.py:/app/pipelines/vllm_semantic_router_pipe.py:ro
+      - type: volume
+        source: openwebui-pipelines
+        target: /app/pipelines
+        volume:
+          nocopy: true
+      # Mount our vLLM Semantic Router pipeline (read-only) into the persistent dir
+      - type: bind
+        source: ./addons/vllm_semantic_router_pipe.py
+        target: /app/pipelines/vllm_semantic_router_pipe.py
+        read_only: true
+    networks:
+      - semantic-network
+
+  # MongoDB for Chat UI persistence (dev default; use Atlas in prod)
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
     networks:
       - semantic-network
 
@@ -146,7 +211,7 @@ services:
       - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN:-}
       - HF_HUB_ENABLE_HF_TRANSFER=1
     volumes:
-      - ../../models:/app/models:ro
+      - ../../models:/app/models:ro,z
       - hf-cache:/home/llmkatan/.cache/huggingface
     networks:
       semantic-network:
@@ -162,7 +227,7 @@ services:
   # Semantic Router Dashboard
   dashboard:
     # Use pre-built image from GHCR, fallback to local build for development
-    image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
+    # image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
     build:
       context: ../../
       dockerfile: dashboard/backend/Dockerfile
@@ -172,12 +237,14 @@ services:
       - DASHBOARD_PORT=8700
       - TARGET_GRAFANA_URL=http://grafana:3000
       - TARGET_PROMETHEUS_URL=http://prometheus:9090
+      - TARGET_JAEGER_URL=http://jaeger:16686
       - TARGET_ROUTER_API_URL=http://semantic-router:8080
       - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
       - TARGET_OPENWEBUI_URL=http://openwebui:8080
+      - TARGET_CHATUI_URL=http://chat-ui:3000
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
     volumes:
-      - ../../config:/app/config:rw
+      - ../../config:/app/config:rw,z
     ports:
       - "8700:8700"
     networks:
@@ -188,6 +255,8 @@ services:
       grafana:
         condition: service_started
       prometheus:
+        condition: service_started
+      chat-ui:
         condition: service_started
       openwebui:
         condition: service_started
@@ -212,6 +281,7 @@ volumes:
     driver: local
   prometheus-data:
   grafana-data:
+  mongo-data:
   openwebui-data:
   openwebui-pipelines:
   hf-cache:

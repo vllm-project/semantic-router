@@ -1,0 +1,76 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: domain-pool
+  namespace: default
+spec:
+  defaultModel: "mistral-7b"
+  models:
+    - name: "mistral-7b"
+      pricing:
+        inputTokenPrice: 0.0000007   # $0.7 per 1M - fast for simple STEM queries
+        outputTokenPrice: 0.0000014  # $1.4 per 1M
+      loras:
+        - name: "stem-tutor"
+          description: "STEM education tutor"
+
+    - name: "mistral-large"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M - better for complex STEM problems
+        outputTokenPrice: 0.000009   # $9 per 1M
+      loras:
+        - name: "math-expert"
+          description: "Mathematics specialist"
+        - name: "science-expert"
+          description: "Science specialist"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: domain-route
+  namespace: default
+spec:
+  signals:
+    domains:
+      - name: "math"
+        description: "Mathematics and quantitative reasoning"
+      - name: "physics"
+        description: "Physics and physical sciences"
+      - name: "computer_science"
+        description: "Computer science and programming"
+      - name: "chemistry"
+        description: "Chemistry and chemical sciences"
+
+  decisions:
+    - name: "stem_query"
+      description: "Complex STEM domain queries - use large model"
+      priority: 100
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "math"
+          - type: "domain"
+            name: "physics"
+          - type: "domain"
+            name: "computer_science"
+      modelRefs:
+        - model: "mistral-large"
+          loraName: "math-expert"
+          useReasoning: false
+
+    - name: "chemistry_query"
+      description: "Chemistry domain queries - use small model"
+      priority: 80
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: "mistral-7b"
+          loraName: "stem-tutor"
+          useReasoning: false
+

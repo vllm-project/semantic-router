@@ -3,8 +3,8 @@ package services
 import (
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
 )
 
 func TestNewUnifiedClassificationService(t *testing.T) {

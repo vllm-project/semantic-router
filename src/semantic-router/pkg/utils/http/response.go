@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -11,14 +12,17 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
-func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool) *ext_proc.ProcessingResponse {
+func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string) *ext_proc.ProcessingResponse {
 	// Record PII violation metrics
 	metrics.RecordPIIViolations(model, deniedPII)
+
+	// Join denied PII types for header
+	deniedPIIStr := strings.Join(deniedPII, ",")
 
 	// Create OpenAI-compatible response format for PII violations
 	unixTimeStep := time.Now().Unix()
@@ -49,7 +53,7 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 
 		chunkJSON, err := json.Marshal(streamChunk)
 		if err != nil {
-			observability.Errorf("Error marshaling streaming PII response: %v", err)
+			logging.Errorf("Error marshaling streaming PII response: %v", err)
 			responseBody = []byte("data: {\"error\": \"Failed to generate response\"}\n\ndata: [DONE]\n\n")
 		} else {
 			responseBody = []byte(fmt.Sprintf("data: %s\n\ndata: [DONE]\n\n", chunkJSON))
@@ -84,7 +88,7 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 		responseBody, err = json.Marshal(openAIResponse)
 		if err != nil {
 			// Log the error and return a fallback response
-			observability.Errorf("Error marshaling OpenAI response: %v", err)
+			logging.Errorf("Error marshaling OpenAI response: %v", err)
 			responseBody = []byte(`{"error": "Failed to generate response"}`)
 		}
 	}
@@ -105,6 +109,18 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 					Header: &core.HeaderValue{
 						Key:      headers.VSRPIIViolation,
 						RawValue: []byte("true"),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRPIITypes,
+						RawValue: []byte(deniedPIIStr),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRSelectedDecision,
+						RawValue: []byte(decisionName),
 					},
 				},
 			},
@@ -150,7 +166,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 
 		chunkJSON, err := json.Marshal(streamChunk)
 		if err != nil {
-			observability.Errorf("Error marshaling streaming jailbreak response: %v", err)
+			logging.Errorf("Error marshaling streaming jailbreak response: %v", err)
 			responseBody = []byte("data: {\"error\": \"Failed to generate response\"}\n\ndata: [DONE]\n\n")
 		} else {
 			responseBody = []byte(fmt.Sprintf("data: %s\n\ndata: [DONE]\n\n", chunkJSON))
@@ -185,7 +201,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 		responseBody, err = json.Marshal(openAIResponse)
 		if err != nil {
 			// Log the error and return a fallback response
-			observability.Errorf("Error marshaling jailbreak response: %v", err)
+			logging.Errorf("Error marshaling jailbreak response: %v", err)
 			responseBody = []byte(`{"error": "Failed to generate response"}`)
 		}
 	}
@@ -244,7 +260,7 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.P
 		// Parse the cached JSON response
 		var cachedCompletion openai.ChatCompletion
 		if err := json.Unmarshal(cachedResponse, &cachedCompletion); err != nil {
-			observability.Errorf("Error parsing cached response for streaming conversion: %v", err)
+			logging.Errorf("Error parsing cached response for streaming conversion: %v", err)
 			responseBody = []byte("data: {\"error\": \"Failed to convert cached response\"}\n\ndata: [DONE]\n\n")
 		} else {
 			// Convert chat.completion to chat.completion.chunk format
@@ -271,7 +287,7 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.P
 
 			chunkJSON, err := json.Marshal(streamChunk)
 			if err != nil {
-				observability.Errorf("Error marshaling streaming cache response: %v", err)
+				logging.Errorf("Error marshaling streaming cache response: %v", err)
 				responseBody = []byte("data: {\"error\": \"Failed to generate response\"}\n\ndata: [DONE]\n\n")
 			} else {
 				responseBody = []byte(fmt.Sprintf("data: %s\n\ndata: [DONE]\n\n", chunkJSON))

@@ -75,6 +75,9 @@ bin/
 !*/models/README.md
 models/
 
+# Training data
+wikipedia_data/
+
 # Added by Claude Task Master
 # Logs
 logs
@@ -94,7 +97,7 @@ node_modules/
 *.sw?
 # Task files
 tasks.json
-tasks/ 
+tasks/
 .cursor/
 .roo/
 .env.example
@@ -143,3 +146,15 @@ dashboard/backend/dashboard-backend.exe
 
 # Keep old HTML backup for reference
 dashboard/frontend/index.html.old
+
+
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+
+# Kind cluster configuration
+tools/kind/kind-config.yaml

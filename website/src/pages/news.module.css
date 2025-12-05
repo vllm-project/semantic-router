@@ -1,0 +1,211 @@
+.heroSection {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.heroTitle {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.heroDescription {
+  font-size: 1.2rem;
+  color: var(--ifm-color-emphasis-700);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.newsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.newsItem {
+  height: 100%;
+}
+
+.newsCard {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.newsCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.cardHeader {
+  padding: 0;
+}
+
+.articleTitle {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+  color: var(--ifm-heading-color);
+}
+
+.articleMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.categoryBadge {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.source {
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-600);
+  font-weight: 500;
+}
+
+.date {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-500);
+}
+
+.articleDescription {
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+/* Custom button styling for Read More buttons */
+.newsCard .button--outline {
+  color: white !important;
+  background-color: var(--ifm-color-primary) !important;
+  border-color: var(--ifm-color-primary) !important;
+  transition: all 0.2s ease-in-out;
+  opacity: 1 !important;
+}
+
+.newsCard .button--outline:hover {
+  color: white !important;
+  background-color: var(--ifm-color-primary) !important;
+  border-color: var(--ifm-color-primary) !important;
+  transform: translateY(-1px);
+  opacity: 1 !important;
+  font-weight: bold !important;
+}
+
+/* More specific targeting for outline buttons */
+.newsCard .card__footer .button--outline {
+  color: white !important;
+  background-color: var(--ifm-color-primary) !important;
+  border-color: var(--ifm-color-primary) !important;
+}
+
+.newsCard .card__footer .button--outline:hover {
+  color: white !important;
+  background-color: var(--ifm-color-primary) !important;
+  border-color: var(--ifm-color-primary) !important;
+  font-weight: bold !important;
+}
+
+/* Custom read more button class */
+.readMoreButton {
+  color: white !important;
+  background-color: var(--ifm-color-primary) !important;
+  border-color: var(--ifm-color-primary) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.readMoreButton:hover {
+  color: white !important;
+  background-color: var(--ifm-color-primary) !important;
+  border-color: var(--ifm-color-primary) !important;
+  transform: translateY(-1px);
+  font-weight: bold !important;
+}
+
+.contributeSection {
+  text-align: center;
+  padding: 2rem;
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 8px;
+  margin-top: 2rem;
+}
+
+.contributeSection h2 {
+  margin-bottom: 1rem;
+  color: var(--ifm-heading-color);
+}
+
+.contributeSection p {
+  margin-bottom: 0;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.contributeSection a {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.contributeSection a:hover {
+  text-decoration: underline;
+}
+
+.contributeActions {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.contributeActions a {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.contributeActions a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .heroTitle {
+    font-size: 2.5rem;
+  }
+  
+  .heroDescription {
+    font-size: 1.1rem;
+  }
+  
+  .newsGrid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .articleMeta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .heroTitle {
+    font-size: 2rem;
+  }
+  
+  .newsGrid {
+    gap: 1rem;
+  }
+}

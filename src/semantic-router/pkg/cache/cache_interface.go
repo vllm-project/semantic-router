@@ -20,6 +20,11 @@ type CacheBackend interface {
 	// IsEnabled returns whether caching is currently active
 	IsEnabled() bool
 
+	// CheckConnection verifies the cache backend connection is healthy
+	// Returns nil if the connection is healthy, error otherwise
+	// For local caches (in-memory), this may be a no-op
+	CheckConnection() error
+
 	// AddPendingRequest stores a request awaiting its response
 	AddPendingRequest(requestID string, model string, query string, requestBody []byte) error
 
@@ -32,6 +37,11 @@ type CacheBackend interface {
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error
 	FindSimilar(model string, query string) ([]byte, bool, error)
+
+	// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
+	// This allows category-specific similarity thresholds
+	// Returns the cached response, match status, and any error
+	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error
@@ -58,6 +68,12 @@ const (
 
 	// MilvusCacheType specifies the Milvus vector database backend
 	MilvusCacheType CacheBackendType = "milvus"
+
+	// RedisCacheType specifies the Redis vector database backend
+	RedisCacheType CacheBackendType = "redis"
+
+	// HybridCacheType specifies the hybrid HNSW + Milvus backend
+	HybridCacheType CacheBackendType = "hybrid"
 )
 
 // EvictionPolicyType defines the available eviction policies
@@ -96,4 +112,20 @@ type CacheConfig struct {
 
 	// BackendConfigPath points to backend-specific configuration files
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+	// UseHNSW enables HNSW index for faster search in memory backend
+	UseHNSW bool `yaml:"use_hnsw,omitempty"`
+
+	// HNSWM is the number of bi-directional links per node (default: 16)
+	HNSWM int `yaml:"hnsw_m,omitempty"`
+
+	// HNSWEfConstruction is the size of dynamic candidate list during construction (default: 200)
+	HNSWEfConstruction int `yaml:"hnsw_ef_construction,omitempty"`
+
+	// Hybrid cache specific settings
+	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
+
+	// EmbeddingModel specifies which embedding model to use
+	// Options: "bert" (default), "qwen3", "gemma"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 }

@@ -12,7 +12,7 @@ func TestHeaderConstants(t *testing.T) {
 	}{
 		// Request headers
 		{"RequestID", RequestID, "x-request-id"},
-		{"GatewayDestinationEndpoint", GatewayDestinationEndpoint, "x-gateway-destination-endpoint"},
+		{"GatewayDestinationEndpoint", GatewayDestinationEndpoint, "x-vsr-destination-endpoint"},
 		{"SelectedModel", SelectedModel, "x-selected-model"},
 		// VSR headers
 		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},

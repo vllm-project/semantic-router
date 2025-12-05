@@ -1,0 +1,327 @@
+name: Cleanup Existing Spam
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (only report, do not delete)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      scan_issues:
+        description: 'Scan open issues'
+        required: false
+        default: 'true'
+        type: boolean
+      scan_closed_issues:
+        description: 'Scan closed issues (may find previously closed spam)'
+        required: false
+        default: 'false'
+        type: boolean
+      scan_comments:
+        description: 'Scan issue comments'
+        required: false
+        default: 'true'
+        type: boolean
+      max_issues:
+        description: 'Max number of issues to scan (0 = all)'
+        required: false
+        default: '100'
+        type: string
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan and cleanup spam
+        uses: actions/github-script@v7
+        env:
+          # Uses the same hidden detection logic as the main filter
+          SPAM_DETECTION_SCRIPT: ${{ secrets.SPAM_DETECTION_SCRIPT }}
+        with:
+          script: |
+            const dryRun = '${{ inputs.dry_run }}' === 'true';
+            const scanIssues = '${{ inputs.scan_issues }}' === 'true';
+            const scanClosedIssues = '${{ inputs.scan_closed_issues }}' === 'true';
+            const scanComments = '${{ inputs.scan_comments }}' === 'true';
+            const maxIssues = parseInt('${{ inputs.max_issues }}') || 0;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            core.info(`Starting cleanup with hidden detection logic`);
+            core.info(`  Dry run: ${dryRun}`);
+            core.info(`  Scan open issues: ${scanIssues}`);
+            core.info(`  Scan closed issues: ${scanClosedIssues}`);
+            core.info(`  Scan comments: ${scanComments}`);
+            core.info(``);
+
+            // Load detection script from secret
+            const detectionScript = process.env.SPAM_DETECTION_SCRIPT;
+
+            if (!detectionScript) {
+              core.error("SPAM_DETECTION_SCRIPT secret not found!");
+              core.error("The cleanup tool requires the SPAM_DETECTION_SCRIPT secret to be configured.");
+              core.error("Please set up the secret before running cleanup.");
+              core.error("See documentation for setup instructions.");
+              core.setFailed("Spam detection not configured");
+              return;
+            }
+
+            // Create analyzer function (all logic hidden in secret)
+            let analyzeContent;
+
+            try {
+              // Wrap the detection script to create a reusable analyzer
+              const analyzerWrapper = `
+                (async function(github, context, core) {
+                  ${detectionScript}
+                })
+              `;
+
+              // Execute to get the detection capabilities
+              const detectionModule = eval(analyzerWrapper);
+              await detectionModule(github, context, core);
+
+              // Create a mock context for analysis
+              analyzeContent = async function(body, actor, assoc) {
+                // Create mock event for analysis
+                const mockContext = {
+                  ...context,
+                  eventName: 'issues',
+                  payload: {
+                    issue: {
+                      body: body,
+                      user: { login: actor },
+                      author_association: assoc,
+                      number: 0
+                    },
+                    action: 'opened'
+                  }
+                };
+
+                // Run detection on mock event
+                let isSpam = false;
+                let reason = "Clean";
+                let score = 0;
+
+                // Capture the detection result by checking if action would be taken
+                const originalUpdate = github.rest.issues.update;
+                const originalDelete = github.rest.issues.deleteComment;
+
+                let detectionResult = { isSpam: false };
+
+                github.rest.issues.update = async (params) => {
+                  detectionResult = { isSpam: true, reason: "Would close", score: 2 };
+                  return { data: {} };
+                };
+
+                github.rest.issues.deleteComment = async (params) => {
+                  detectionResult = { isSpam: true, reason: "Would delete", score: 2 };
+                  return { data: {} };
+                };
+
+                github.rest.issues.createComment = async () => ({ data: {} });
+                github.rest.pulls.update = async () => ({ data: {} });
+                github.rest.pulls.deleteReviewComment = async () => ({ data: {} });
+
+                try {
+                  await detectionModule(github, mockContext, core);
+                } catch (e) {
+                  // Ignore errors from mock execution
+                }
+
+                // Restore original functions
+                github.rest.issues.update = originalUpdate;
+                github.rest.issues.deleteComment = originalDelete;
+
+                return detectionResult;
+              };
+
+              core.info("✅ Loaded spam detection from secret");
+              core.info("");
+
+            } catch (err) {
+              core.error(`Failed to load detection: ${err.message}`);
+              core.setFailed(`Detection script error`);
+              return;
+            }
+
+            let totalScanned = 0;
+            let totalSpam = 0;
+            let totalClosed = 0;
+            let totalDeleted = 0;
+
+            // Scan issues
+            if (scanIssues) {
+              core.info("Scanning open issues...");
+              let page = 1;
+
+              while (maxIssues === 0 || totalScanned < maxIssues) {
+                const issues = await github.rest.issues.listForRepo({
+                  owner, repo, state: 'open', per_page: 100, page
+                });
+
+                if (issues.data.length === 0) break;
+
+                for (const issue of issues.data) {
+                  if (issue.pull_request) continue;
+                  if (maxIssues > 0 && totalScanned >= maxIssues) break;
+
+                  totalScanned++;
+                  const analysis = await analyzeContent(
+                    issue.body || "",
+                    issue.user?.login || "unknown",
+                    issue.author_association || "NONE"
+                  );
+
+                  if (analysis.isSpam) {
+                    totalSpam++;
+                    core.warning(`[SPAM] Issue #${issue.number} by @${issue.user?.login}`);
+                    core.warning(`  Preview: ${(issue.body || "").substring(0, 150)}...`);
+
+                    if (!dryRun) {
+                      try {
+                        await github.rest.issues.update({
+                          owner, repo, issue_number: issue.number,
+                          state: "closed", state_reason: "not_planned"
+                        });
+                        await github.rest.issues.createComment({
+                          owner, repo, issue_number: issue.number,
+                          body: "This issue has been automatically closed as spam during cleanup."
+                        });
+                        totalClosed++;
+                        core.notice(`✓ Closed spam issue #${issue.number}`);
+                      } catch (err) {
+                        core.error(`✗ Failed to close issue #${issue.number}: ${err.message}`);
+                      }
+                    }
+                  }
+                }
+                page++;
+              }
+            }
+
+            // Scan closed issues
+            if (scanClosedIssues) {
+              core.info("Scanning closed issues...");
+              let page = 1;
+              let closedScanned = 0;
+
+              while (maxIssues === 0 || closedScanned < maxIssues) {
+                const issues = await github.rest.issues.listForRepo({
+                  owner, repo, state: 'closed', per_page: 100, page
+                });
+
+                if (issues.data.length === 0) break;
+
+                for (const issue of issues.data) {
+                  if (issue.pull_request) continue;
+                  if (maxIssues > 0 && closedScanned >= maxIssues) break;
+
+                  closedScanned++;
+                  const analysis = await analyzeContent(
+                    issue.body || "",
+                    issue.user?.login || "unknown",
+                    issue.author_association || "NONE"
+                  );
+
+                  if (analysis.isSpam) {
+                    totalSpam++;
+                    core.warning(`[SPAM] Closed Issue #${issue.number} by @${issue.user?.login}`);
+                    core.warning(`  Preview: ${(issue.body || "").substring(0, 150)}...`);
+                    core.warning(`  Already closed, but content still visible`);
+
+                    if (!dryRun) {
+                      try {
+                        // Rewrite the closed spam issue to remove content
+                        await github.rest.issues.update({
+                          owner, repo, issue_number: issue.number,
+                          title: "[MODERATED] Content Removed",
+                          body: "**This content has been automatically moderated and removed.**\n\n" +
+                                "The original content violated our spam policy and has been hidden.\n\n" +
+                                "_This was detected during a cleanup scan of existing content._"
+                        });
+                        totalClosed++;
+                        core.notice(`✓ Moderated closed spam issue #${issue.number}`);
+                      } catch (err) {
+                        core.error(`✗ Failed to moderate issue #${issue.number}: ${err.message}`);
+                      }
+                    }
+                  }
+                }
+                page++;
+              }
+              core.info(`Scanned ${closedScanned} closed issues`);
+            }
+
+            // Scan comments
+            if (scanComments) {
+              core.info("Scanning issue comments...");
+              let page = 1;
+              let commentCount = 0;
+
+              while (page <= 10) {
+                const comments = await github.rest.issues.listCommentsForRepo({
+                  owner, repo, per_page: 100, page, sort: 'created', direction: 'desc'
+                });
+
+                if (comments.data.length === 0) break;
+
+                for (const comment of comments.data) {
+                  commentCount++;
+                  const analysis = await analyzeContent(
+                    comment.body || "",
+                    comment.user?.login || "unknown",
+                    comment.author_association || "NONE"
+                  );
+
+                  if (analysis.isSpam) {
+                    totalSpam++;
+                    core.warning(`[SPAM] Comment #${comment.id} by @${comment.user?.login}`);
+                    core.warning(`  Preview: ${(comment.body || "").substring(0, 150)}...`);
+
+                    if (!dryRun) {
+                      try {
+                        await github.rest.issues.deleteComment({
+                          owner, repo, comment_id: comment.id
+                        });
+                        totalDeleted++;
+                        core.notice(`✓ Deleted spam comment #${comment.id}`);
+                      } catch (err) {
+                        core.error(`✗ Failed to delete comment #${comment.id}: ${err.message}`);
+                      }
+                    }
+                  }
+                }
+                page++;
+              }
+
+              core.info(`Scanned ${commentCount} comments`);
+            }
+
+            // Summary
+            core.notice("=".repeat(60));
+            core.notice(`Cleanup Summary ${dryRun ? '(DRY RUN)' : '(EXECUTED)'}`);
+            core.notice("=".repeat(60));
+            if (scanIssues) core.notice(`✓ Scanned open issues: ${totalScanned}`);
+            if (scanClosedIssues) core.notice(`✓ Scanned closed issues for content removal`);
+            if (scanComments) core.notice(`✓ Scanned comments`);
+            core.notice("");
+            core.notice(`Total spam found: ${totalSpam}`);
+            if (!dryRun) {
+              core.notice(`Actions taken:`);
+              core.notice(`  - Issues closed/moderated: ${totalClosed}`);
+              core.notice(`  - Comments deleted: ${totalDeleted}`);
+            } else {
+              core.notice("⚠️  DRY RUN - No actions taken");
+              core.notice("    Set dry_run to 'false' to execute cleanup");
+            }
+            core.notice("=".repeat(60));

@@ -139,7 +139,8 @@ const Contributing: React.FC = () => {
               <div className={styles.stepNumberTips}>
                 <p>1. If the precommit check fails, don't worry. You can also get more information by executing "make help". </p>
                 <p>2. For the pip installation tool, we recommend that you use venv for installation.</p>
-                <p>3. You can also directly submit the PR and let GitHub CI test it for you, but this will take a lot of time!</p>
+                <p>3. We recommend installing pre-commit through Python's virtual environment.</p>
+                <p>4. You can also directly submit the PR and let GitHub CI test it for you, but this will take a lot of time!</p>
               </div>
 
               <div className={styles.steps}>
@@ -147,7 +148,10 @@ const Contributing: React.FC = () => {
                   <span className={styles.stepNumber}>1</span>
                   <div>
                     <h4>Install precommit</h4>
-                    <p>Run pip install --user precommit</p>
+                    <p>
+                      Run
+                      <code>pip install --user pre-commit</code>
+                    </p>
                   </div>
                 </div>
                 <div className={styles.step}>
@@ -155,10 +159,26 @@ const Contributing: React.FC = () => {
                   <div>
                     <h4>Install check tools</h4>
                     <div className={styles.stepNumberTips}>
-                      <p>Markdown: npm install -g markdownlint-cli</p>
-                      <p>Yaml: pip install --user yamllint</p>
-                      <p>CodeSpell: pip install --user codespell</p>
-                      <p>JavaScript: cd website && npm lint</p>
+                      <p>
+                        1. Markdown:
+                        <code>npm install -g markdownlint-cli</code>
+                      </p>
+                      <p>
+                        2. Yaml:
+                        <code>pip install --user yamllint</code>
+                      </p>
+                      <p>
+                        3. CodeSpell:
+                        <code>pip install --user codespell</code>
+                      </p>
+                      <p>
+                        4. JavaScript:
+                        <code>cd website && npm lint</code>
+                      </p>
+                      <p>
+                        5. Shell: take Mac as an example, execute
+                        <code>brew install shellcheck</code>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -166,14 +186,24 @@ const Contributing: React.FC = () => {
                   <span className={styles.stepNumber}>3</span>
                   <div>
                     <h4>Install precommit to git</h4>
-                    <p>Run pre-commit install, then pre-commit installed at .git/hooks/pre-commit</p>
+                    <p>
+                      Run
+                      <code>pre-commit install</code>
+                      , then pre-commit installed at
+                      <code>.git/hooks/pre-commit</code>
+                    </p>
                   </div>
                 </div>
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>4</span>
                   <div>
                     <h4>Run</h4>
-                    <p>Run make precommit-check to check.</p>
+                    <p>
+                      Run
+                      <code>make precommit-check</code>
+                      {' '}
+                      to check.
+                    </p>
                   </div>
                 </div>
 
@@ -181,18 +211,29 @@ const Contributing: React.FC = () => {
 
                 <h3>Docker/Podman</h3>
                 <p>From the above local running method, it can be seen that the process is very troublesome and complicated. Therefore, we have provided running methods based on Docker or Podman. There is no need to install various dependent software; all you need is a container runtime.</p>
+
+                <h4>Some Tips: </h4>
+                <div className={styles.stepNumberTips}>
+                  <p>
+                    Although Docker can help avoid installing too many detection tools locally, this does not mean that it will be automatically executed during the commit process. Therefore, when committing, you can use
+                    <code>git commit -s -m -n</code>
+                    {' '}
+                    to skip the detection.
+                    {' '}
+                  </p>
+                </div>
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>1</span>
                   <div>
                     <h4>Make sure Docker/Podman is installed</h4>
-                    <p>docker --version</p>
+                    <p><code>docker --version</code></p>
                   </div>
                 </div>
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>2</span>
                   <div>
                     <h4>Run precommit by Docker/Podman</h4>
-                    <p>make precommit-local</p>
+                    <p><code>make precommit-local</code></p>
                   </div>
                 </div>
                 <div>

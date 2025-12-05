@@ -10,7 +10,15 @@ Uses embeddings and cosine similarity to match queries by meaning rather than ex
 
 ### Configurable Thresholds
 
-Adjustable similarity thresholds balance cache hit rates with response quality.
+Adjustable similarity thresholds balance cache hit rates with response quality. Thresholds can be set globally or per-category for fine-grained control.
+
+### Category-Level Control
+
+**NEW**: Configure cache settings at the category level for precise control over sensitive and general content:
+
+- **Sensitive categories** (health, psychology, law): Use high thresholds (0.92-0.95) to prevent incorrect cache hits where word nuances matter
+- **General categories** (chat, troubleshooting): Use lower thresholds (0.75-0.82) for better cache hit rates
+- **Privacy categories**: Disable caching entirely for specific categories
 
 ### Multiple Backends
 

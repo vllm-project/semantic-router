@@ -18,7 +18,7 @@ from pydantic import BaseModel
 class Pipeline:
     class Valves(BaseModel):
         # vLLM Semantic Router endpoint URL
-        vsr_base_url: str = "http://envoy-proxy:8801/v1"
+        vsr_base_url: str = "http://envoy-proxy:8801"
 
         # API key for authentication (if required)
         api_key: str = ""
@@ -45,7 +45,7 @@ class Pipeline:
         # Initialize valves
         self.valves = self.Valves(
             **{
-                "vsr_base_url": "http://envoy-proxy:8801/v1",
+                "vsr_base_url": "http://envoy-proxy:8801",
                 "api_key": "",
                 "show_vsr_info": True,
                 "log_vsr_info": True,

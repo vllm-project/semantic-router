@@ -1,0 +1,32 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    openshift.io/display-name: granite3.2-8b
+    serving.knative.openshift.io/enablePassthrough: "true"
+    sidecar.istio.io/inject: "true"
+    sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    opendatahub.io/dashboard: "true"
+  name: granite32-8b
+spec:
+  predictor:
+    containerConcurrency: 1
+    maxReplicas: 1
+    minReplicas: 1
+    model:
+      modelFormat:
+        name: vLLM
+      name: ""
+      resources:
+        limits:
+          cpu: "2"
+          memory: 16Gi
+          nvidia.com/gpu: "1"
+        requests:
+          cpu: "2"
+          memory: 8Gi
+          nvidia.com/gpu: "1"
+      runtime: granite32-8b
+      storageUri: oci://quay.io/redhat-ai-services/modelcar-catalog:granite-3.2-8b-instruct

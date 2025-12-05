@@ -53,13 +53,7 @@ from typing import Dict, List, Optional
 
 import torch
 from datasets import Dataset, load_dataset
-from peft import (
-    LoraConfig,
-    PeftConfig,
-    PeftModel,
-    TaskType,
-    get_peft_model,
-)
+from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from transformers import (
@@ -87,7 +81,7 @@ from common_lora_utils import (
 # Setup logging
 logger = setup_logging()
 
-# Required categories to match legacy model (14 categories)
+# Standard category set for classification tasks (14 categories)
 REQUIRED_CATEGORIES = [
     "biology",
     "business",
@@ -246,58 +240,103 @@ class MMLU_Dataset:
         }
 
 
-def format_instruction(question: str, category: str = None) -> str:
+def format_instruction(question: str, category: str = None) -> List[Dict[str, str]]:
     """
-    Format a question-category pair as an instruction-following example.
+    Format a question-category pair as chat messages for proper instruction fine-tuning.
+
+    Uses Qwen3's ChatML format with special tokens to separate user input from assistant output.
+    This ensures the model only trains on generating the category name (1-2 tokens), not the
+    entire instruction (~200+ tokens), resulting in 100x more efficient training!
 
     Args:
         question: The question text
         category: The category label (None for inference)
 
     Returns:
-        Formatted instruction string (with or without answer)
+        List of message dicts with 'role' and 'content' keys
+        Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
     """
     instruction = INSTRUCTION_TEMPLATE.format(question=question)
 
+    # User message (the instruction/question)
+    messages = [{"role": "user", "content": instruction}]
+
     if category is not None:
-        # Training format: instruction + answer
-        return f"{instruction} {category}"
-    else:
-        # Inference format: instruction only
-        return instruction
+        # Assistant message (the category name)
+        # This is just 1-2 tokens - much more efficient than training on entire sequence!
+        messages.append({"role": "assistant", "content": category})
+
+    return messages
 
 
 def create_generative_dataset(
     texts: List[str], labels: List[str], tokenizer, max_length=512
 ):
     """
-    Create dataset in generative format for instruction-following.
+    Create dataset in chat format for proper instruction fine-tuning.
 
-    Format: "Question: ... Category: {label}"
-    The model learns to generate the category name.
+    Uses tokenizer.apply_chat_template() to format messages with special tokens.
+    This ensures:
+    - User input (instruction) and assistant output (category) are properly separated
+    - Model trains ONLY on the category name (1-2 tokens), not the instruction (200+ tokens)
+    - Training efficiency: Focuses 100% of gradient updates on classification tokens
+    - Inference format matches training format exactly
     """
-    formatted_examples = []
+    input_ids_list = []
+    labels_list = []
+    attention_mask_list = []
 
     for text, label in zip(texts, labels):
-        # Create full text: instruction + answer
-        full_text = format_instruction(text, label)
-        formatted_examples.append(full_text)
+        # Get messages (user instruction + assistant category)
+        messages = format_instruction(text, label)
 
-    # Tokenize
-    encodings = tokenizer(
-        formatted_examples,
-        truncation=True,
-        padding="max_length",
-        max_length=max_length,
-        return_tensors="pt",
-    )
+        # Apply chat template to add special tokens
+        # add_generation_prompt=False because we already have the assistant response
+        # Disable thinking mode to train model for direct classification
+        formatted_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=False, enable_thinking=False
+        )
 
-    # For causal LM, labels = input_ids (shifted internally by model)
+        # Tokenize the full conversation
+        full_encoding = tokenizer(
+            formatted_text,
+            truncation=True,
+            max_length=max_length,
+            padding="max_length",
+        )
+
+        # Now tokenize just the user part (without assistant response) to find where to mask
+        user_messages = [messages[0]]  # Only user message
+        user_text = tokenizer.apply_chat_template(
+            user_messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        user_encoding = tokenizer(user_text, add_special_tokens=False)
+
+        # Create labels: -100 for instruction, actual tokens for assistant response
+        labels = full_encoding["input_ids"].copy()
+        user_length = len(user_encoding["input_ids"])
+
+        # Mask the instruction part (user message + prompt)
+        for i in range(min(user_length, len(labels))):
+            labels[i] = -100
+
+        # Mask padding tokens
+        for i, token_id in enumerate(full_encoding["input_ids"]):
+            if token_id == tokenizer.pad_token_id:
+                labels[i] = -100
+
+        input_ids_list.append(full_encoding["input_ids"])
+        labels_list.append(labels)
+        attention_mask_list.append(full_encoding["attention_mask"])
+
     return Dataset.from_dict(
         {
-            "input_ids": encodings["input_ids"],
-            "attention_mask": encodings["attention_mask"],
-            "labels": encodings["input_ids"],  # Standard causal LM format
+            "input_ids": input_ids_list,
+            "attention_mask": attention_mask_list,
+            "labels": labels_list,
         }
     )
 
@@ -379,6 +418,12 @@ def main(
     )
     logger.info(f"Using device: {device_str} (GPU {selected_gpu})")
 
+    # CRITICAL: Set CUDA_VISIBLE_DEVICES early to prevent DataParallel from using other GPUs
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(selected_gpu)
+    # After setting CUDA_VISIBLE_DEVICES, GPU will be referred to as cuda:0
+    device_str = "cuda:0"
+    logger.info(f"Set CUDA_VISIBLE_DEVICES={selected_gpu}, using device: {device_str}")
+
     clear_gpu_memory()
     log_memory_usage("Pre-training")
 
@@ -403,17 +448,27 @@ def main(
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
     # Load model for causal LM with memory optimization
+    # Use F32 for training (more stable), will convert to BF16 for Candle inference later
+    logger.info("Using F32 dtype for training (more stable than BF16)")
+
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
+        torch_dtype=torch.float32,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
     )
 
     # Move to GPU using device from set_gpu_device utility
-    model = model.to(device_str)
+    # Device is now cuda:0 after CUDA_VISIBLE_DEVICES is set
+    device = torch.device(device_str)
+    model = model.to(device)
 
     # Prepare model for training
     model.config.use_cache = False  # Required for training
+
+    # Enable gradient checkpointing for memory efficiency
+    model.gradient_checkpointing_enable()
+    model.enable_input_require_grads()  # Required for gradient checkpointing with LoRA
 
     # Create LoRA configuration
     target_modules = get_qwen3_target_modules()
@@ -463,7 +518,7 @@ def main(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,  # Configurable via parameter
-        per_device_eval_batch_size=batch_size,
+        per_device_eval_batch_size=1,  # Reduce eval batch size to save memory
         gradient_accumulation_steps=max(
             1, 16 // batch_size
         ),  # Maintain effective batch size of 16, minimum 1
@@ -471,18 +526,23 @@ def main(
         weight_decay=0.01,
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
-        eval_strategy="epoch",
+        eval_strategy="no",  # Skip eval during training (saves 10+ minutes)
         save_strategy="no",  # Don't save intermediate checkpoints (saves disk space!)
         save_total_limit=1,  # Keep only 1 checkpoint
         warmup_ratio=0.1,
         lr_scheduler_type="cosine",
-        fp16=False,  # Disable fp16 to avoid gradient issues
-        gradient_checkpointing=False,  # Disable to avoid gradient issues
+        bf16=False,  # Use F32 for training (more stable)
+        fp16=False,  # Use F32 for training (more stable)
+        gradient_checkpointing=True,  # Enable to save memory (trades compute for memory)
+        gradient_checkpointing_kwargs={"use_reentrant": False},  # Better for BF16
         dataloader_num_workers=num_workers,  # Configurable workers (0=single process, 2-4=multiprocessing)
         remove_unused_columns=False,  # Keep all columns
         max_grad_norm=1.0,  # Gradient clipping for stability
         optim="adamw_torch",  # Use PyTorch AdamW
         prediction_loss_only=True,  # Only compute loss, don't collect predictions (saves memory!)
+        # Memory optimizations
+        dataloader_pin_memory=False,  # Disable pin memory to save GPU memory
+        auto_find_batch_size=False,  # Don't auto-adjust batch size
     )
 
     # Create trainer (no compute_metrics needed since prediction_loss_only=True)
@@ -521,7 +581,7 @@ def main(
     model.eval()
 
     # Use validation data for testing
-    num_test_samples = min(20, len(val_texts))  # Test on 20 samples
+    num_test_samples = min(200, len(val_texts))  # Test on 200 samples
     correct = 0
     total = 0
 
@@ -531,7 +591,16 @@ def main(
         question = val_texts[i]
         true_category = val_labels[i]
 
-        prompt = format_instruction(question, category=None)
+        # Format using chat template
+        messages = format_instruction(question, category=None)
+
+        # Apply chat template with generation prompt
+        # This adds <|im_start|>assistant\n to prompt the model to respond
+        # Disable thinking mode for direct classification output
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+
         inputs = tokenizer(
             prompt, return_tensors="pt", max_length=512, truncation=True
         ).to(model.device)
@@ -543,20 +612,24 @@ def main(
                 temperature=0.1,
                 do_sample=False,  # Greedy decoding for evaluation
                 pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=[
+                    tokenizer.eos_token_id,
+                    tokenizer.convert_tokens_to_ids("<|im_end|>"),
+                ],
             )
 
-        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Decode only the generated part (skip the input prompt)
+        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
-        # Extract the category (text after "A:" or "Category:")
-        if "A:" in generated_text:
-            answer_text = generated_text.split("A:")[-1].strip()
-        elif "Category:" in generated_text:
-            answer_text = generated_text.split("Category:")[-1].strip()
-        else:
-            answer_text = ""
+        # Remove thinking tokens that Qwen3 generates
+        generated_text = (
+            generated_text.replace("<think>", "").replace("</think>", "").strip()
+        )
 
+        # With chat template, model generates just the category directly
         # Clean up answer (take first line, remove punctuation at end)
-        answer_text = answer_text.split("\n")[0].strip().strip(".,!?;:").lower()
+        answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
 
         # Match against known categories (handle multi-word categories like "computer science")
         predicted_category = "unknown"
@@ -609,22 +682,12 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        # Load base model with appropriate dtype
-        # Check for GPU capability and use float16 only if supported
-        use_fp16 = False
-        if torch.cuda.is_available():
-            # Check if GPU supports efficient float16 (compute capability >= 7.0)
-            try:
-                compute_capability = torch.cuda.get_device_capability()
-                use_fp16 = (
-                    compute_capability[0] >= 7
-                )  # Volta and newer support efficient FP16
-            except Exception:
-                use_fp16 = False
+        # Load base model with F32 (matches training)
+        logger.info("Using F32 dtype for inference (matches training)")
 
         base_model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if use_fp16 else torch.float32,
+            torch_dtype=torch.float32,
             device_map="auto" if torch.cuda.is_available() else None,
             trust_remote_code=True,
         )
@@ -650,7 +713,18 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
         total = 0
 
         for example in test_examples:
-            prompt = format_instruction(example, category=None)
+            # Format using chat template
+            messages = format_instruction(example, category=None)
+
+            # Apply chat template with generation prompt
+            # Disable thinking mode for direct classification output
+            prompt = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
+            )
+
             inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
             with torch.no_grad():
@@ -660,20 +734,24 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
                     temperature=0.1,
                     do_sample=True,
                     pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=[
+                        tokenizer.eos_token_id,
+                        tokenizer.convert_tokens_to_ids("<|im_end|>"),
+                    ],
                 )
 
-            generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            # Decode only the generated part (skip the input prompt)
+            generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
-            # Extract category (handle both "A:" and "Category:" formats)
-            if "A:" in generated_text:
-                answer_text = generated_text.split("A:")[-1].strip()
-            elif "Category:" in generated_text:
-                answer_text = generated_text.split("Category:")[-1].strip()
-            else:
-                answer_text = ""
+            # Remove thinking tokens that Qwen3 generates
+            generated_text = (
+                generated_text.replace("<think>", "").replace("</think>", "").strip()
+            )
 
+            # With chat template, model generates just the category directly
             # Clean up and match against known categories
-            answer_text = answer_text.split("\n")[0].strip().strip(".,!?;:").lower()
+            answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
 
             category = "unknown"
             for cat in REQUIRED_CATEGORIES:
@@ -691,7 +769,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
                 )
 
             print(f"\nQuestion: {example}")
-            print(f"Generated: {generated_text[len(prompt):50]}...")
+            print(f"Generated: {generated_text[:50]}...")
             print(f"Predicted Category: {category}")
             print("-" * 80)
 

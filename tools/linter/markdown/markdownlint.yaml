@@ -48,5 +48,8 @@ MD022: false
 # Trailing spaces
 MD009: false
 
-#  MD005/list-indent Inconsistent indentation for list items
+# MD005/list-indent Inconsistent indentation for list items
 MD005: false
+
+# MD060/table-column-style Table column style
+MD060: false

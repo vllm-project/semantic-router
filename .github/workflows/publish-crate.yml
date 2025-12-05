@@ -6,10 +6,15 @@ on:
       - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
   workflow_dispatch:  # Allow manual triggering
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   publish:
+    if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
@@ -65,23 +70,23 @@ jobs:
         CRATE_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
         TAG_VERSION="${{ steps.extract_tag.outputs.version }}"
         echo "Crate version: $CRATE_VERSION"
-        echo "Tag version: $TAG_VERSION" 
+        echo "Tag version: $TAG_VERSION"
         if [ "$CRATE_VERSION" != "$TAG_VERSION" ]; then
           echo "::error::Crate version ($CRATE_VERSION) does not match tag version ($TAG_VERSION)"
           exit 1
         fi
 
-    - name: Run tests
+    - name: Run tests (CPU-only, no CUDA)
       working-directory: candle-binding
-      run: cargo test --verbose
+      run: cargo test --no-default-features --verbose
 
-    - name: Check crate
+    - name: Check crate (CPU-only, no CUDA)
       working-directory: candle-binding
-      run: cargo check --verbose
+      run: cargo check --no-default-features --verbose
 
-    - name: Build crate
+    - name: Build crate (CPU-only, no CUDA)
       working-directory: candle-binding
-      run: cargo build --release --verbose
+      run: cargo build --release --no-default-features --verbose
 
     - name: Dry run publish
       working-directory: candle-binding

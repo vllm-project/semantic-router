@@ -74,11 +74,14 @@ Visit [https://huggingface.co/settings/tokens](https://huggingface.co/settings/t
 ### Basic Usage
 
 ```bash
-# Start server with a tiny model
+# Start server with a tiny model (quantization enabled by default for speed)
 llm-katan --model Qwen/Qwen3-0.6B --port 8000
 
 # Start with custom served model name
 llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+
+# Disable quantization for higher accuracy (slower)
+llm-katan --model Qwen/Qwen3-0.6B --port 8000 --no-quantize
 
 # With vLLM backend (optional)
 llm-katan --model Qwen/Qwen3-0.6B --port 8000 --backend vllm
@@ -179,11 +182,51 @@ curl http://127.0.0.1:8000/v1/models
 curl http://127.0.0.1:8000/health
 ```
 
+## CPU Optimization
+
+LLM Katan includes **automatic int8 quantization** for CPU inference, providing significant performance improvements:
+
+### Performance Gains
+
+- **2-4x faster inference** on CPU (on supported platforms)
+- **4x memory reduction**
+- **Enabled by default** for best testing experience
+- **Minimal quality impact** (acceptable for testing scenarios)
+- **Platform support**: Works best on Linux x86_64; may not be available on all platforms (e.g., Mac)
+
+### When to Use Quantization
+
+✅ **Enabled (default)** - Recommended for:
+
+- Fast E2E testing
+- Development environments
+- CI/CD pipelines
+- Resource-constrained environments
+
+❌ **Disabled (--no-quantize)** - Use when you need:
+
+- Maximum accuracy (though tiny models have limited accuracy anyway)
+- Debugging precision-sensitive issues
+- Comparing with full-precision baselines
+
+### Example Performance
+
+```bash
+# Default: Fast with quantization (~50-100s per inference)
+llm-katan --model Qwen/Qwen3-0.6B
+
+# Slower but more accurate (~200s per inference)
+llm-katan --model Qwen/Qwen3-0.6B --no-quantize
+```
+
+> **Note**: Even with quantization, llm-katan is slower than production tools like LM Studio (which uses llama.cpp with extensive optimizations). For production workloads, use vLLM, Ollama, or similar solutions.
+
 ## Use Cases
 
 ### Strengths
 
 - **Fastest time-to-test**: 30 seconds from install to running
+- **Optimized for CPU**: Automatic int8 quantization for 2-4x speedup
 - **Minimal resource footprint**: Designed for tiny models and efficient testing
 - **No GPU required**: Runs on laptops, Macs, and any CPU-only environment
 - **CI/CD integration friendly**: Lightweight and automation-ready
@@ -223,6 +266,7 @@ Optional:
   --max, --max-tokens INTEGER   Maximum tokens to generate (default: 512)
   -t, --temperature FLOAT       Sampling temperature (default: 0.7)
   -d, --device [auto|cpu|cuda]  Device to use (default: auto)
+  --quantize/--no-quantize      Enable int8 quantization for faster CPU inference (default: enabled)
   --log-level [debug|info|warning|error]  Log level (default: INFO)
   --version                     Show version and exit
   --help                        Show help and exit
@@ -234,8 +278,8 @@ Optional:
 # Custom generation settings
 llm-katan --model Qwen/Qwen3-0.6B --max-tokens 1024 --temperature 0.9
 
-# Force specific device
-llm-katan --model Qwen/Qwen3-0.6B --device cpu --log-level debug
+# Force specific device with full precision (no quantization)
+llm-katan --model Qwen/Qwen3-0.6B --device cpu --no-quantize --log-level debug
 
 # Custom host and port
 llm-katan --model Qwen/Qwen3-0.6B --host 127.0.0.1 --port 9000

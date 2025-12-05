@@ -1,0 +1,176 @@
+config_source: kubernetes
+embedding_models:
+  qwen3_model_path: models/Qwen3-Embedding-0.6B
+  gemma_model_path: models/embeddinggemma-300m
+  use_cpu: true
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+classifier:
+  category_model:
+    model_id: models/category_classifier_modernbert-base_model
+    threshold: 0.6
+    use_cpu: true
+    use_modernbert: true
+    category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+  pii_model:
+    model_id: models/pii_classifier_modernbert-base_presidio_token_model
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+prompt_guard:
+  enabled: true
+  model_id: models/jailbreak_classifier_modernbert-base_model
+  threshold: 0.7
+  use_cpu: true
+  use_modernbert: true
+  jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
+semantic_cache:
+  backend_type: memory
+  enabled: true
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: fifo
+  embedding_model: bert
+observability:
+  tracing:
+    enabled: false
+    provider: opentelemetry
+    exporter:
+      type: otlp
+      endpoint: jaeger:4317
+      insecure: true
+    sampling:
+      type: always_on
+      rate: 1
+    resource:
+      service_name: vllm-semantic-router
+      service_version: v0.1.0
+      deployment_environment: development
+api:
+  batch_classification:
+    metrics:
+      sample_rate: 1
+      duration_buckets:
+        - 0.001
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+        - 30
+      size_buckets:
+        - 1
+        - 2
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+        - 200
+      enabled: true
+      detailed_goroutine_tracking: true
+clear_route_cache: false
+keyword_rules:
+  - name: urgent
+    operator: OR
+    keywords:
+      - urgent
+      - emergency
+      - critical
+    case_sensitive: false
+embedding_rules:
+  - name: technical_help
+    threshold: 0.75
+    candidates:
+      - I need technical assistance with this problem
+      - Can you help me debug this issue?
+      - Something is broken and needs fixing
+    aggregation_method: max
+categories:
+  - name: computer_science
+    description: Computer science and programming
+    mmlu_categories:
+      - computer_science
+  - name: engineering
+    description: Engineering and technical problem-solving
+    mmlu_categories:
+      - engineering
+  - name: math
+    description: Mathematics and quantitative reasoning
+    mmlu_categories:
+      - math
+decisions:
+  - name: urgent_tech_cs
+    description: Urgent technical computer science issues
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: urgent
+        - type: embedding
+          name: technical_help
+        - type: domain
+          name: computer_science
+    modelRefs:
+      - model: qwen-2.5-72b
+        use_reasoning: false
+  - name: tech_engineering
+    description: Technical engineering queries
+    priority: 80
+    rules:
+      operator: AND
+      conditions:
+        - type: embedding
+          name: technical_help
+        - type: domain
+          name: engineering
+    modelRefs:
+      - model: qwen-2.5-72b
+        use_reasoning: false
+strategy: priority
+default_reasoning_effort: high
+reasoning_families:
+  deepseek:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  gpt:
+    type: reasoning_effort
+    parameter: reasoning_effort
+  qwen3:
+    type: chat_template_kwargs
+    parameter: enable_thinking
+model_config:
+  qwen-2.5-32b:
+    pricing:
+      prompt_per_1m: 2
+      completion_per_1m: 4
+    reasoning_family: qwen3
+    loras:
+      - name: multi-domain-expert
+        description: Multi-domain specialist
+  qwen-2.5-72b:
+    pricing:
+      prompt_per_1m: 3
+      completion_per_1m: 6
+    reasoning_family: qwen3
+    loras:
+      - name: advanced-multi-domain
+        description: Advanced multi-domain expert
+default_model: qwen-2.5-32b
+vllm_endpoints: []
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: config/tools_db.json
+  fallback_to_empty: true

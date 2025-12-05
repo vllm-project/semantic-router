@@ -1,0 +1,91 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: full-signal-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-32b"
+  models:
+    - name: "qwen-2.5-32b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000002    # $2 per 1M - balanced for multi-signal routing
+        outputTokenPrice: 0.000004   # $4 per 1M
+      loras:
+        - name: "multi-domain-expert"
+          description: "Multi-domain specialist"
+
+    - name: "qwen-2.5-72b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M - for complex multi-signal queries
+        outputTokenPrice: 0.000006   # $6 per 1M
+      loras:
+        - name: "advanced-multi-domain"
+          description: "Advanced multi-domain expert"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: full-signal-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "urgent"
+        operator: "OR"
+        keywords: ["urgent", "emergency", "critical"]
+        caseSensitive: false
+
+    embeddings:
+      - name: "technical_help"
+        threshold: 0.75
+        candidates:
+          - "I need technical assistance with this problem"
+          - "Can you help me debug this issue?"
+          - "Something is broken and needs fixing"
+        aggregationMethod: "max"
+
+    domains:
+      - name: "computer_science"
+        description: "Computer science and programming"
+      - name: "engineering"
+        description: "Engineering and technical problem-solving"
+      - name: "math"
+        description: "Mathematics and quantitative reasoning"
+
+  decisions:
+    - name: "urgent_tech_cs"
+      description: "Urgent technical computer science issues"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "urgent"
+          - type: "embedding"
+            name: "technical_help"
+          - type: "domain"
+            name: "computer_science"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          use_reasoning: true
+          reasoning_effort: "high"
+
+    - name: "tech_engineering"
+      description: "Technical engineering queries"
+      priority: 80
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "technical_help"
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          use_reasoning: true
+          reasoning_effort: "medium"
+

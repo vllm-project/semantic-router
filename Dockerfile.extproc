@@ -1,5 +1,5 @@
 # Build the Rust library using Makefile
-FROM rust:1.85 AS rust-builder
+FROM rust:1.90 AS rust-builder
 
 # Install make and other build dependencies including cross-compilation tools
 RUN apt-get update && apt-get install -y \
@@ -30,24 +30,24 @@ COPY candle-binding/Cargo.loc[k] ./candle-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
 
-# Pre-build dependencies to cache them
+# Pre-build dependencies to cache them (CPU-only, no CUDA)
 RUN cd candle-binding && \
     mkdir -p src && \
     echo "fn main() {}" > src/lib.rs && \
-    cargo build --release && \
+    cargo build --release --no-default-features && \
     rm -rf src
 
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
 
-# Use Makefile to build the Rust library (rebuild with actual source code)
-RUN echo "Building Rust library with actual source code..." && \
+# Use Makefile to build the Rust library (rebuild with actual source code, CPU-only, no CUDA)
+RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." && \
     echo "Checking source files:" && \
     ls -la candle-binding/src/ && \
     echo "Forcing clean rebuild..." && \
     cd candle-binding && \
     cargo clean && \
-    cargo build --release && \
+    cargo build --release --no-default-features && \
     echo "Checking built library:" && \
     find target -name "*.so" -type f && \
     ls -la target/release/
@@ -82,7 +82,7 @@ RUN mkdir -p bin && cd src/semantic-router && \
     go build -ldflags="-w -s" -o ../../bin/router cmd/main.go
 
 # Final stage: copy the binary and the shared library
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 
 WORKDIR /app
 

@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: vllm-semantic-router-system
+  labels:
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: observability
+    app.kubernetes.io/part-of: semantic-router-stack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+      app.kubernetes.io/component: observability
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jaeger
+        app.kubernetes.io/component: observability
+        app.kubernetes.io/part-of: semantic-router-stack
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:latest
+        ports:
+        - name: ui
+          containerPort: 16686
+          protocol: TCP
+        - name: otlp-grpc
+          containerPort: 4317
+          protocol: TCP
+        - name: otlp-http
+          containerPort: 4318
+          protocol: TCP
+        - name: jaeger-grpc
+          containerPort: 14250
+          protocol: TCP
+        - name: jaeger-thrift
+          containerPort: 14268
+          protocol: TCP
+        - name: zipkin
+          containerPort: 9411
+          protocol: TCP
+        env:
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        - name: SPAN_STORAGE_TYPE
+          value: "memory"
+        - name: MEMORY_MAX_TRACES
+          value: "10000"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 16686
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 16686
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
