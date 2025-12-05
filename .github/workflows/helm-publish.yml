@@ -2,6 +2,7 @@ name: Publish Helm Chart
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths:
@@ -22,6 +23,7 @@ env:
 jobs:
   validate-and-package:
     name: Validate and Package
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

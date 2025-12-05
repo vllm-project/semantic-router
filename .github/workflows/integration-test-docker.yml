@@ -2,6 +2,7 @@ name: Integration Test [Docker Compose]
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths-ignore:
@@ -21,7 +22,7 @@ concurrency:
 
 jobs:
   test-quickstart:
-    if: github.repository == 'vllm-project/semantic-router'
+    if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
