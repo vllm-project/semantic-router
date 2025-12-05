@@ -1,0 +1,48 @@
+# Build artifacts
+build/
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Go
+*.test
+*.out
+*.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+
+# Models (too large for git)
+models/
+*.xml
+*.bin
+*.onnx
+*.pt
+*.pth
+*.safetensors
+
+# Test outputs
+test_output/
+results/
