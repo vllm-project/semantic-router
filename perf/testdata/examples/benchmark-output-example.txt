@@ -1,0 +1,61 @@
+# Example Benchmark Output
+# This shows what you'll see when running: make perf-bench-quick
+
+goos: linux
+goarch: amd64
+pkg: github.com/vllm-project/semantic-router/perf/benchmarks
+cpu: Intel(R) Xeon(R) CPU @ 2.20GHz
+
+BenchmarkClassifyBatch_Size1-8              100      10245678 ns/op    10.25 ms/op     2456 B/op      45 allocs/op
+BenchmarkClassifyBatch_Size10-8              20      52345678 ns/op    52.35 ms/op    12345 B/op     234 allocs/op
+BenchmarkClassifyBatch_Size50-8               5     215678901 ns/op   215.68 ms/op    56789 B/op    1123 allocs/op
+BenchmarkClassifyBatch_Size100-8              3     412345678 ns/op   412.35 ms/op   112345 B/op    2234 allocs/op
+BenchmarkClassifyBatch_Parallel-8          1000       1234567 ns/op     1.23 ms/op     2456 B/op      45 allocs/op
+BenchmarkClassifyCategory-8                 200       8765432 ns/op     8.77 ms/op     2123 B/op      42 allocs/op
+BenchmarkClassifyPII-8                      150      10123456 ns/op    10.12 ms/op     2234 B/op      43 allocs/op
+BenchmarkClassifyJailbreak-8                180       9876543 ns/op     9.88 ms/op     2345 B/op      44 allocs/op
+BenchmarkCGOOverhead-8                      500       3456789 ns/op     3.46 ms/op     1234 B/op      23 allocs/op
+
+BenchmarkEvaluateDecisions_SingleDomain-8           10000       234567 ns/op     0.23 ms/op      456 B/op      12 allocs/op
+BenchmarkEvaluateDecisions_MultipleDomains-8         5000       345678 ns/op     0.35 ms/op      678 B/op      15 allocs/op
+BenchmarkEvaluateDecisions_WithKeywords-8            8000       267890 ns/op     0.27 ms/op      512 B/op      13 allocs/op
+BenchmarkEvaluateDecisions_ComplexScenario-8         3000       456789 ns/op     0.46 ms/op      890 B/op      18 allocs/op
+BenchmarkEvaluateDecisions_Parallel-8               20000       156789 ns/op     0.16 ms/op      456 B/op      12 allocs/op
+BenchmarkRuleEvaluation_AND-8                       12000       198765 ns/op     0.20 ms/op      489 B/op      11 allocs/op
+BenchmarkRuleEvaluation_OR-8                        15000       176543 ns/op     0.18 ms/op      467 B/op      10 allocs/op
+BenchmarkPrioritySelection-8                         6000       289012 ns/op     0.29 ms/op      623 B/op      14 allocs/op
+
+BenchmarkCacheSearch_1000Entries-8                   500      3456789 ns/op     3.46 ms/op     1234 B/op      23 allocs/op
+    cache_bench_test.go:25: p95_ms: 4.23   p99_ms: 5.67   qps: 289.34   hit_rate_%: 78.50
+BenchmarkCacheSearch_10000Entries-8                  200      7890123 ns/op     7.89 ms/op     2345 B/op      34 allocs/op
+    cache_bench_test.go:48: p95_ms: 9.12   p99_ms: 12.34  qps: 126.74   hit_rate_%: 82.30
+BenchmarkCacheSearch_HNSW-8                          800      2345678 ns/op     2.35 ms/op     1123 B/op      21 allocs/op
+    cache_bench_test.go:71: search_p95_ms: 1.23   embedding_p95_ms: 1.12
+BenchmarkCacheSearch_Linear-8                        300      5678901 ns/op     5.68 ms/op     1456 B/op      25 allocs/op
+    cache_bench_test.go:94: search_p95_ms: 3.45   embedding_p95_ms: 2.23
+BenchmarkCacheConcurrency_1-8                        600      2890123 ns/op     2.89 ms/op     1234 B/op      22 allocs/op
+    cache_bench_test.go:117: qps: 346.02
+BenchmarkCacheConcurrency_10-8                      1500      1234567 ns/op     1.23 ms/op     1345 B/op      24 allocs/op
+    cache_bench_test.go:140: qps: 811.36
+BenchmarkCacheConcurrency_50-8                      3000       789012 ns/op     0.79 ms/op     1456 B/op      26 allocs/op
+    cache_bench_test.go:163: qps: 1267.43   hit_rate_%: 85.20
+BenchmarkCacheHitRate-8                             2000      1123456 ns/op     1.12 ms/op     1378 B/op      25 allocs/op
+    cache_bench_test.go:186: hit_rate_%: 89.70   p95_ms: 1.45
+
+BenchmarkProcessRequest-8                           5000       456789 ns/op     0.46 ms/op      789 B/op      18 allocs/op
+BenchmarkProcessRequestBody-8                       3000       678901 ns/op     0.68 ms/op      912 B/op      21 allocs/op
+BenchmarkHeaderProcessing-8                         8000       234567 ns/op     0.23 ms/op      456 B/op      12 allocs/op
+BenchmarkFullRequestFlow-8                          2000       890123 ns/op     0.89 ms/op     1123 B/op      24 allocs/op
+BenchmarkDifferentRequestTypes/Math-8               2500       712345 ns/op     0.71 ms/op      945 B/op      22 allocs/op
+BenchmarkDifferentRequestTypes/Code-8               2400       734567 ns/op     0.73 ms/op      967 B/op      23 allocs/op
+BenchmarkDifferentRequestTypes/Business-8           2600       698901 ns/op     0.70 ms/op      923 B/op      21 allocs/op
+BenchmarkConcurrentRequests-8                      10000       234567 ns/op     0.23 ms/op      567 B/op      15 allocs/op
+
+PASS
+CPU profiling saved to: ../reports/cpu.prof
+Memory profiling saved to: ../reports/mem.prof
+ok      github.com/vllm-project/semantic-router/perf/benchmarks    89.456s
+
+✓ Benchmarks complete
+  Total time: 89.5s
+  Profiles: reports/cpu.prof, reports/mem.prof

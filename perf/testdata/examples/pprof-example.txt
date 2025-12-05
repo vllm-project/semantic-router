@@ -1,0 +1,168 @@
+# Example pprof CPU Profile Output
+
+## Command Line View (go tool pprof -top reports/cpu.prof)
+
+```
+File: semantic-router-benchmarks
+Type: cpu
+Time: Dec 4, 2025 at 4:30pm (UTC)
+Duration: 45.67s, Total samples = 42.34s (92.71%)
+Showing nodes accounting for 38.12s, 90.03% of 42.34s total
+Dropped 156 nodes (cum <= 0.21s)
+Showing top 20 nodes out of 245
+
+      flat  flat%   sum%        cum   cum%
+    8.45s 19.96% 19.96%     12.34s 29.15%  runtime.mallocgc
+    5.67s 13.39% 33.35%     18.23s 43.05%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification.(*UnifiedClassifier).ClassifyBatch
+    4.23s  9.99% 43.34%      9.12s 21.54%  runtime.scanobject
+    3.45s  8.15% 51.49%      7.89s 18.63%  C.classify_unified_batch (CGO)
+    2.89s  6.83% 58.32%      6.78s 16.01%  github.com/vllm-project/semantic-router/candle-binding.ClassifyBatch
+    2.34s  5.53% 63.85%      5.67s 13.39%  runtime.mapassign_faststr
+    2.12s  5.01% 68.86%      4.56s 10.77%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision.(*Engine).EvaluateDecisions
+    1.89s  4.46% 73.32%      3.45s  8.15%  encoding/json.Unmarshal
+    1.67s  3.94% 77.26%      2.89s  6.83%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache.(*InMemoryCache).FindSimilarWithThreshold
+    1.45s  3.42% 80.68%      2.34s  5.53%  runtime.newobject
+    1.23s  2.91% 83.59%      2.12s  5.01%  strings.Builder.WriteString
+    1.12s  2.65% 86.24%      1.89s  4.46%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc.(*OpenAIRouter).Process
+    0.98s  2.31% 88.55%      1.67s  3.94%  runtime.typedmemmove
+    0.87s  2.06% 90.61%      1.45s  3.42%  runtime.gcBgMarkWorker
+    0.76s  1.80% 92.41%      1.23s  2.91%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision.evaluateRuleCombination
+    0.65s  1.54% 93.95%      1.12s  2.65%  runtime.memmove
+    0.54s  1.28% 95.23%      0.98s  2.31%  runtime.convT2Estring
+    0.43s  1.02% 96.25%      0.87s  2.06%  github.com/vllm-project/semantic-router/candle-binding.generateEmbedding
+    0.32s  0.76% 97.01%      0.76s  1.80%  runtime.heapBitsSetType
+    0.21s  0.50% 97.51%      0.65s  1.54%  sync.(*Mutex).Lock
+```
+
+## Interpretation
+
+### Hot Spots Identified:
+
+1. **Memory Allocation (19.96%)**
+   - `runtime.mallocgc` is the top consumer
+   - High allocation rate in classification path
+   - **Action:** Reduce allocations, use object pools
+
+2. **Classification (13.39%)**
+   - `ClassifyBatch` using significant CPU
+   - Combined with CGO call (8.15%), totals ~21%
+   - **Action:** Optimize batch processing, reduce CGO overhead
+
+3. **CGO Overhead (8.15%)**
+   - `C.classify_unified_batch` taking considerable time
+   - Data marshalling between Go and Rust
+   - **Action:** Batch more requests, reduce call frequency
+
+4. **Decision Engine (5.01%)**
+   - `EvaluateDecisions` is efficient
+   - Could be further optimized for complex scenarios
+   - **Action:** Profile rule matching specifically
+
+5. **Cache Operations (3.94%)**
+   - `FindSimilarWithThreshold` reasonable
+   - HNSW index performing well
+   - **Action:** Monitor as cache grows
+
+## Web UI View (go tool pprof -http=:8080 reports/cpu.prof)
+
+When you run `make perf-profile-cpu`, a browser opens showing:
+
+### 1. Flame Graph View
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          runtime.main (100%)                              │
+├──────────────────────────────────────────────────────────────────────────┤
+│                    testing.(*M).Run (95%)                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│             BenchmarkClassifyBatch_Size10 (45%)                          │
+│  ┌─────────────────────────────────────────────┐                        │
+│  │  UnifiedClassifier.ClassifyBatch (40%)      │                        │
+│  │  ┌───────────────────────────────────┐     │                        │
+│  │  │  C.classify_unified_batch (20%)   │     │                        │
+│  │  │  ┌─────────────────────┐          │     │                        │
+│  │  │  │  Rust BERT (15%)    │          │     │                        │
+│  │  │  └─────────────────────┘          │     │                        │
+│  │  │  ┌─────────────────────┐          │     │                        │
+│  │  │  │  CGO marshaling(5%) │          │     │                        │
+│  │  │  └─────────────────────┘          │     │                        │
+│  │  └───────────────────────────────────┘     │                        │
+│  │  ┌───────────────────────────────────┐     │                        │
+│  │  │  JSON processing (10%)            │     │                        │
+│  │  └───────────────────────────────────┘     │                        │
+│  └─────────────────────────────────────────────┘                        │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2. Top Functions
+- Click on any function to drill down
+- See call graph and callers
+- Identify optimization opportunities
+
+### 3. Graph View
+Shows function call relationships with:
+- Box size = CPU time
+- Arrow thickness = call frequency
+- Red/hot colors = hot paths
+
+## Memory Profile Example (go tool pprof -top reports/mem.prof)
+
+```
+File: semantic-router-benchmarks
+Type: alloc_space
+Time: Dec 4, 2025 at 4:30pm (UTC)
+Showing nodes accounting for 1.23GB, 89.13% of 1.38GB total
+
+      flat  flat%   sum%        cum   cum%
+  345.67MB 25.05% 25.05%   567.89MB 41.15%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification.(*UnifiedClassifier).ClassifyBatch
+  234.56MB 17.01% 42.06%   345.67MB 25.05%  runtime.makeslice
+  156.78MB 11.36% 53.42%   234.56MB 17.01%  encoding/json.Unmarshal
+  123.45MB  8.95% 62.37%   156.78MB 11.36%  github.com/vllm-project/semantic-router/candle-binding.ClassifyBatch
+   98.76MB  7.16% 69.53%   123.45MB  8.95%  strings.Builder.Grow
+   87.65MB  6.35% 75.88%    98.76MB  7.16%  runtime.convTslice
+   76.54MB  5.55% 81.43%    87.65MB  6.35%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache.generateEmbedding
+   65.43MB  4.74% 86.17%    76.54MB  5.55%  runtime.mapassign_faststr
+   54.32MB  3.94% 90.11%    65.43MB  4.74%  github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision.(*Engine).EvaluateDecisions
+```
+
+## Key Insights from Profiling
+
+### Optimization Opportunities:
+
+1. **Reduce Allocations in Classification**
+   - 345MB allocated in ClassifyBatch
+   - Use sync.Pool for temporary buffers
+   - Reuse slice capacity
+
+2. **Optimize JSON Marshalling**
+   - 156MB in json.Unmarshal
+   - Consider using encoding/json alternatives
+   - Pre-allocate structures
+
+3. **String Operations**
+   - 98MB in strings.Builder
+   - Use byte slices instead of strings
+   - Reduce string concatenation
+
+4. **Cache Embeddings**
+   - 76MB in generateEmbedding
+   - Implement embedding cache
+   - Batch embedding generation
+
+### Performance Wins Expected:
+
+- **Classification:** 15-20% faster with pooling
+- **Memory:** 30-40% reduction with reuse
+- **GC Pressure:** Significant reduction
+- **Throughput:** 10-15% improvement
+
+## How to Use This Data
+
+1. **Identify Hot Spots:** Focus on functions > 5% CPU
+2. **Reduce Allocations:** Functions allocating > 100MB
+3. **Optimize Loops:** Look for nested calls in hot paths
+4. **Batch Operations:** Reduce CGO call frequency
+5. **Profile Again:** Verify improvements
+
+---
+
+*Run `make perf-profile-cpu` to see this in your browser!*

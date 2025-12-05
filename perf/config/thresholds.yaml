@@ -1,0 +1,70 @@
+# Performance SLOs and regression thresholds
+
+component_benchmarks:
+  classification:
+    batch_size_1:
+      max_p95_latency_ms: 10.0
+      max_p99_latency_ms: 15.0
+      min_throughput_qps: 100
+      max_regression_percent: 10  # Fail if >10% slower
+
+    batch_size_10:
+      max_p95_latency_ms: 50.0
+      max_p99_latency_ms: 75.0
+      min_throughput_qps: 500
+      max_regression_percent: 15
+
+    batch_size_50:
+      max_p95_latency_ms: 200.0
+      max_p99_latency_ms: 300.0
+      min_throughput_qps: 1000
+      max_regression_percent: 15
+
+    batch_size_100:
+      max_p95_latency_ms: 400.0
+      max_p99_latency_ms: 600.0
+      min_throughput_qps: 2000
+      max_regression_percent: 20
+
+  decision_engine:
+    evaluate_decisions:
+      max_p95_latency_ms: 1.0
+      min_throughput_qps: 10000
+      max_regression_percent: 5
+
+    priority_selection:
+      max_p95_latency_ms: 2.0
+      max_regression_percent: 5
+
+  cache:
+    search_1000_entries:
+      max_p95_latency_ms: 5.0
+      min_cache_hit_rate: 0.8
+      max_regression_percent: 10
+
+    search_10000_entries:
+      max_p95_latency_ms: 10.0
+      min_cache_hit_rate: 0.8
+      max_regression_percent: 15
+
+    hnsw_vs_linear:
+      max_regression_percent: 10
+
+e2e_tests:
+  throughput:
+    min_sustained_qps: 500
+    min_success_rate: 0.99
+    max_regression_percent: 15
+
+  latency:
+    max_p95_ms: 100
+    max_p99_ms: 150
+    max_regression_percent: 20
+
+  resource:
+    max_regression_percent: 25
+
+resource_limits:
+  max_memory_mb: 2048
+  max_goroutines: 10000
+  max_cpu_percent: 80

@@ -1,0 +1,35 @@
+benchmark_config:
+  classification:
+    batch_sizes: [1, 10, 50, 100]
+    iterations: 1000
+    warmup_iterations: 100
+
+  cache:
+    cache_sizes: [1000, 10000]
+    concurrency_levels: [1, 10, 50]
+    hit_ratio: 0.7
+
+  e2e:
+    load_patterns:
+      - name: constant
+        qps: 50
+        duration: 60s
+
+      - name: ramp_up
+        start_qps: 10
+        end_qps: 100
+        duration: 120s
+
+      - name: burst
+        qps: 200
+        duration: 30s
+
+profiling:
+  enable_cpu: true
+  enable_memory: true
+  enable_goroutine: true
+  output_dir: reports
+
+reporting:
+  formats: [json, markdown, html]
+  baseline_dir: testdata/baselines

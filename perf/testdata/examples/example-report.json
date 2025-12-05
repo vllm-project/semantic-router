@@ -1,0 +1,79 @@
+{
+  "metadata": {
+    "generated_at": "2025-12-04T16:30:00Z",
+    "git_commit": "816dbec26397",
+    "git_branch": "perf_test",
+    "go_version": "go1.24.1"
+  },
+  "comparisons": [
+    {
+      "benchmark_name": "BenchmarkClassifyBatch_Size1",
+      "baseline": {
+        "ns_per_op": 10245678,
+        "p50_latency_ms": 9.85,
+        "p95_latency_ms": 10.50,
+        "p99_latency_ms": 11.20,
+        "throughput_qps": 97.60,
+        "allocs_per_op": 45,
+        "bytes_per_op": 2456
+      },
+      "current": {
+        "ns_per_op": 10123456,
+        "p50_latency_ms": 9.72,
+        "p95_latency_ms": 10.12,
+        "p99_latency_ms": 10.89,
+        "throughput_qps": 98.78,
+        "allocs_per_op": 45,
+        "bytes_per_op": 2456
+      },
+      "ns_per_op_change": -1.19,
+      "p95_latency_change": -3.62,
+      "throughput_change": 1.21,
+      "regression_detected": false,
+      "threshold": 10.0
+    },
+    {
+      "benchmark_name": "BenchmarkEvaluateDecisions_ComplexScenario",
+      "baseline": {
+        "ns_per_op": 456789,
+        "p95_latency_ms": 0.46,
+        "throughput_qps": 2189
+      },
+      "current": {
+        "ns_per_op": 512345,
+        "p95_latency_ms": 0.52,
+        "throughput_qps": 1952
+      },
+      "ns_per_op_change": 12.16,
+      "p95_latency_change": 13.04,
+      "throughput_change": -10.83,
+      "regression_detected": true,
+      "threshold": 10.0
+    },
+    {
+      "benchmark_name": "BenchmarkCacheSearch_1000Entries",
+      "baseline": {
+        "ns_per_op": 3456789,
+        "p95_latency_ms": 4.23,
+        "throughput_qps": 289.34
+      },
+      "current": {
+        "ns_per_op": 3389012,
+        "p95_latency_ms": 4.15,
+        "throughput_qps": 295.12
+      },
+      "ns_per_op_change": -1.96,
+      "p95_latency_change": -1.89,
+      "throughput_change": 2.00,
+      "regression_detected": false,
+      "threshold": 10.0
+    }
+  ],
+  "has_regressions": true,
+  "summary": {
+    "total_benchmarks": 32,
+    "regressions_found": 1,
+    "improvements_found": 8,
+    "no_change_found": 23
+  }
+}
