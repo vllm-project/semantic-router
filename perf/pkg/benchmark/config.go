@@ -23,15 +23,15 @@ type BenchmarkConfigSection struct {
 
 // ClassificationConfig defines classification benchmark parameters
 type ClassificationConfig struct {
-	BatchSizes        []int `yaml:"batch_sizes"`
-	Iterations        int   `yaml:"iterations"`
-	WarmupIterations  int   `yaml:"warmup_iterations"`
+	BatchSizes       []int `yaml:"batch_sizes"`
+	Iterations       int   `yaml:"iterations"`
+	WarmupIterations int   `yaml:"warmup_iterations"`
 }
 
 // CacheConfig defines cache benchmark parameters
 type CacheConfig struct {
-	CacheSizes        []int `yaml:"cache_sizes"`
-	ConcurrencyLevels []int `yaml:"concurrency_levels"`
+	CacheSizes        []int   `yaml:"cache_sizes"`
+	ConcurrencyLevels []int   `yaml:"concurrency_levels"`
 	HitRatio          float64 `yaml:"hit_ratio"`
 }
 
@@ -109,9 +109,9 @@ type E2ETestsThresholds struct {
 
 // ResourceLimitsThresholds defines resource limit thresholds
 type ResourceLimitsThresholds struct {
-	MaxMemoryMB    int     `yaml:"max_memory_mb"`
-	MaxGoroutines  int     `yaml:"max_goroutines"`
-	MaxCPUPercent  float64 `yaml:"max_cpu_percent"`
+	MaxMemoryMB   int     `yaml:"max_memory_mb"`
+	MaxGoroutines int     `yaml:"max_goroutines"`
+	MaxCPUPercent float64 `yaml:"max_cpu_percent"`
 }
 
 // BenchmarkThreshold defines thresholds for a single benchmark

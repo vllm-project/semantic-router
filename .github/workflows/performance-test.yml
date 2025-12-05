@@ -88,6 +88,7 @@ jobs:
 
       - name: Run component benchmarks
         run: |
+          mkdir -p reports
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
 

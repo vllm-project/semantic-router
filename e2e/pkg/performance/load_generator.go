@@ -28,20 +28,20 @@ func NewLoadGenerator(concurrency, rateLimit int, duration time.Duration) *LoadG
 
 // LoadResult contains the results of a load test
 type LoadResult struct {
-	TotalRequests   int
-	SuccessfulReqs  int
-	FailedReqs      int
-	Duration        time.Duration
-	AvgLatencyMs    float64
-	P50LatencyMs    float64
-	P90LatencyMs    float64
-	P95LatencyMs    float64
-	P99LatencyMs    float64
-	MaxLatencyMs    float64
-	MinLatencyMs    float64
-	ThroughputQPS   float64
-	Latencies       []time.Duration
-	Errors          []error
+	TotalRequests  int
+	SuccessfulReqs int
+	FailedReqs     int
+	Duration       time.Duration
+	AvgLatencyMs   float64
+	P50LatencyMs   float64
+	P90LatencyMs   float64
+	P95LatencyMs   float64
+	P99LatencyMs   float64
+	MaxLatencyMs   float64
+	MinLatencyMs   float64
+	ThroughputQPS  float64
+	Latencies      []time.Duration
+	Errors         []error
 }
 
 // RequestFunc is a function that executes a single request
