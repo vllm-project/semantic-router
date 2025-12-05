@@ -79,7 +79,7 @@ semantic_cache:
   hnsw_ef_construction: 200
   
   # Milvus configuration
-  backend_config_path: "config/milvus.yaml"
+  backend_config_path: "config/semantic-cache/milvus.yaml"
 ```
 
 ### Configuration Parameters
@@ -96,7 +96,7 @@ semantic_cache:
 
 ### Milvus Configuration
 
-Create `config/milvus.yaml`:
+Create `config/semantic-cache/milvus.yaml`:
 
 ```yaml
 milvus:
@@ -125,7 +125,7 @@ options := cache.HybridCacheOptions{
     MaxMemoryEntries:    100000,
     HNSWM:               16,
     HNSWEfConstruction:  200,
-    MilvusConfigPath:    "config/milvus.yaml",
+    MilvusConfigPath:    "config/semantic-cache/milvus.yaml",
     LocalCacheSize:      1000,
 }
 
