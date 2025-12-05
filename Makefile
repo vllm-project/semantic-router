@@ -21,6 +21,7 @@ _run:
 		-f tools/make/observability.mk \
 		-f tools/make/openshift.mk \
 		-f tools/make/e2e.mk \
+		-f tools/make/performance.mk \
 		$(MAKECMDGOALS)
 
 .PHONY: _run

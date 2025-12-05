@@ -8,6 +8,7 @@ This directory contains example outputs showing what you'll see when running per
 Raw benchmark output from `make perf-bench-quick`
 
 **Shows:**
+
 - ns/op (nanoseconds per operation)
 - Throughput (operations per second)
 - Memory allocations
@@ -15,6 +16,7 @@ Raw benchmark output from `make perf-bench-quick`
 - Cache hit rates
 
 **Example line:**
+
 ```
 BenchmarkClassifyBatch_Size1-8    100  10245678 ns/op  10.25 ms/op  2456 B/op  45 allocs/op
 ```
@@ -25,6 +27,7 @@ BenchmarkClassifyBatch_Size1-8    100  10245678 ns/op  10.25 ms/op  2456 B/op  4
 Baseline comparison output from `make perf-compare`
 
 **Shows:**
+
 - Benchmark vs baseline comparison
 - Percentage changes
 - Regression detection
@@ -32,6 +35,7 @@ Baseline comparison output from `make perf-compare`
 - Actionable recommendations
 
 **Example:**
+
 ```
 ⚠️  BenchmarkEvaluateDecisions_Complex: +12.16% (threshold: 10%)
     - P95 latency increased by 13.04%
@@ -44,12 +48,14 @@ Baseline comparison output from `make perf-compare`
 Machine-readable JSON report
 
 **Use for:**
+
 - CI/CD automation
 - Programmatic analysis
 - Data visualization
 - Trend tracking
 
 **Structure:**
+
 ```json
 {
   "metadata": {...},
@@ -65,12 +71,14 @@ Machine-readable JSON report
 Human-readable Markdown report
 
 **Use for:**
+
 - Documentation
 - Sharing results
 - GitHub issues
 - Performance reviews
 
 **Includes:**
+
 - Executive summary
 - Detailed comparison tables
 - Analysis and recommendations
@@ -82,6 +90,7 @@ Human-readable Markdown report
 Beautiful HTML report with styling
 
 **Features:**
+
 - Professional design
 - Color-coded metrics
 - Interactive elements (when fully implemented)
@@ -89,6 +98,7 @@ Beautiful HTML report with styling
 - Detailed tables
 
 **Open in browser:**
+
 ```bash
 open perf/testdata/examples/example-report.html
 ```
@@ -99,6 +109,7 @@ open perf/testdata/examples/example-report.html
 GitHub PR comment format
 
 **Shows:**
+
 - What appears on your PRs automatically
 - Summary table
 - Key changes highlighted
@@ -113,6 +124,7 @@ GitHub PR comment format
 CPU profiling output and interpretation
 
 **Shows:**
+
 - Top CPU consuming functions
 - Flame graph visualization
 - Memory allocation patterns
@@ -120,6 +132,7 @@ CPU profiling output and interpretation
 - Hot spot analysis
 
 **View interactively:**
+
 ```bash
 make perf-profile-cpu  # Opens browser at localhost:8080
 ```
@@ -197,16 +210,19 @@ Significant Improvements:
 ## 🎯 How to Use These Examples
 
 ### For New Users
+
 1. Read `benchmark-output-example.txt` to understand raw output
 2. Check `comparison-example.txt` to see regression detection
 3. View `example-report.html` in browser for full experience
 
 ### For CI Integration
+
 1. Reference `pr-comment-example.md` for expected PR comments
 2. Use `example-report.json` structure for automation
 3. Set up thresholds based on example values
 
 ### For Performance Optimization
+
 1. Study `pprof-example.txt` for profiling insights
 2. Focus on functions > 5% CPU time
 3. Reduce allocations in hot paths

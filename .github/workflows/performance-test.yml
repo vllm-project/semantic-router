@@ -11,6 +11,11 @@ on:
       - '.github/workflows/performance-test.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write  # Required to comment on PRs
+  issues: write         # Required to comment on PRs (PRs are issues)
+
 jobs:
   component-benchmarks:
     runs-on: ubuntu-latest
@@ -88,6 +93,7 @@ jobs:
 
       - name: Run component benchmarks
         run: |
+          mkdir -p reports
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release
           make perf-bench-quick 2>&1 | tee reports/bench-output.txt
 

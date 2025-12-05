@@ -19,16 +19,19 @@ make download-models
 ```
 
 **What it does:**
+
 - Downloads ML models needed for classification and embeddings
 - Stores models in `models/` directory
 - Takes 5-30 minutes depending on network speed
 
 **Quick alternative (minimal models):**
+
 ```bash
 CI_MINIMAL_MODELS=true make download-models
 ```
 
 **Expected output:**
+
 ```
 Downloading models...
 ✓ ModernBERT classification models downloaded
@@ -45,11 +48,13 @@ make build
 ```
 
 **What it does:**
+
 - Compiles Rust library (candle-binding)
 - Builds Go semantic router binary
 - Creates `bin/router` executable
 
 **Expected output:**
+
 ```
 Building Rust library...
    Compiling candle-binding...
@@ -59,6 +64,7 @@ Building router...
 ```
 
 **Troubleshooting:**
+
 - If Rust fails: `make clean && make rust`
 - If Go fails: `cd src/semantic-router && go mod tidy`
 
@@ -71,12 +77,14 @@ make perf-bench-quick
 ```
 
 **What it does:**
+
 - Runs all component benchmarks with 3s benchtime (fast)
 - Tests classification, decision engine, and cache
 - Generates CPU and memory profiles
 - Takes 3-5 minutes
 
 **Expected output:**
+
 ```
 Running performance benchmarks...
 goos: linux
@@ -92,6 +100,7 @@ ok      github.com/vllm-project/semantic-router/perf/benchmarks  45.678s
 ```
 
 **Run specific benchmarks:**
+
 ```bash
 make perf-bench-classification  # Classification only
 make perf-bench-decision        # Decision engine only
@@ -107,17 +116,20 @@ make perf-profile-cpu
 ```
 
 **What it does:**
+
 - Opens pprof web interface at http://localhost:8080
 - Shows CPU flame graph and call tree
 - Identifies performance hot spots
 
 **Expected behavior:**
+
 1. Browser opens automatically
 2. Shows interactive flame graph
 3. Click on functions to drill down
 4. View call graph, top functions, etc.
 
 **Manual analysis:**
+
 ```bash
 # Generate flame graph
 go tool pprof -http=:8080 reports/cpu.prof
@@ -130,6 +142,7 @@ go tool pprof reports/cpu.prof
 ```
 
 **Memory profile:**
+
 ```bash
 make perf-profile-mem
 # or manually:
@@ -147,12 +160,14 @@ make perf-baseline-update
 ```
 
 **What it does:**
+
 - Runs comprehensive benchmarks (30s benchtime)
 - Generates baseline JSON files
 - Stores in `perf/testdata/baselines/`
 - Takes 10-15 minutes
 
 **Expected output:**
+
 ```
 Running benchmarks to update baseline...
 Running for 30s each...
@@ -169,6 +184,7 @@ Baselines saved to:
 ```
 
 **Commit baselines:**
+
 ```bash
 git add perf/testdata/baselines/
 git commit -m "chore: update performance baselines"
@@ -245,6 +261,7 @@ BenchmarkName-8    N   ns/op    B/op   allocs/op
 ### Profile Interpretation
 
 In pprof web UI:
+
 - **Red = hot** (most CPU time)
 - **Focus on wide bars** (cumulative time)
 - **Look for unexpected calls** (e.g., lots of allocations)

@@ -110,13 +110,13 @@ func (mc *MetricsCollector) MonitorPodMetrics(ctx context.Context, podName strin
 
 // ResourceStats holds aggregated resource statistics
 type ResourceStats struct {
-	AvgCPUCores  float64
-	MaxCPUCores  float64
-	MinCPUCores  float64
-	AvgMemoryMB  float64
-	MaxMemoryMB  float64
-	MinMemoryMB  float64
-	SampleCount  int
+	AvgCPUCores float64
+	MaxCPUCores float64
+	MinCPUCores float64
+	AvgMemoryMB float64
+	MaxMemoryMB float64
+	MinMemoryMB float64
+	SampleCount int
 }
 
 // AggregateMetrics aggregates multiple pod metrics samples

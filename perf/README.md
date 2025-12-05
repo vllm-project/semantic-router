@@ -122,20 +122,24 @@ Test semantic cache performance (wraps existing cache benchmark tool):
 ### Tracked Metrics
 
 **Latency**:
+
 - P50, P90, P95, P99 percentiles
 - Average and max latency
 
 **Throughput**:
+
 - Requests per second (QPS)
 - Batch processing efficiency
 
 **Resource Usage**:
+
 - CPU usage (cores)
 - Memory usage (MB)
 - Goroutine count
 - Heap allocations
 
 **Component-Specific**:
+
 - Classification: CGO call overhead
 - Cache: Hit rate, HNSW vs linear speedup
 - Decision: Rule matching time
@@ -164,6 +168,7 @@ make perf-e2e
 ```
 
 Test cases:
+
 - `performance-throughput` - Sustained QPS measurement
 - `performance-latency` - End-to-end latency distribution
 - `performance-resource` - Resource utilization monitoring
@@ -238,6 +243,7 @@ go tool pprof -http=:8080 reports/mem.prof
 ```
 
 Look for:
+
 - String/slice allocations in classification
 - CGO marshalling overhead
 - Cache entry allocations

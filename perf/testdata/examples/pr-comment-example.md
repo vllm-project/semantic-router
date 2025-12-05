@@ -37,11 +37,13 @@ This is what will automatically appear as a comment on your PR when performance 
 **1 regression exceeds threshold (10%):**
 
 #### `BenchmarkEvaluateDecisions_ComplexScenario`
+
 - **Latency:** 0.46ms → 0.52ms (+13.04%) ⚠️
 - **Throughput:** 2189 qps → 1952 qps (-10.83%) ⚠️
 - **Threshold:** 10% (exceeded by 3.04%)
 
 **Action Required:**
+
 - Review complex decision evaluation logic
 - Run `make perf-profile-cpu` locally to identify bottleneck
 - Consider optimizing rule matching for multi-domain scenarios

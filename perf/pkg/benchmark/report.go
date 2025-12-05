@@ -11,10 +11,10 @@ import (
 
 // Report represents a performance report
 type Report struct {
-	Metadata       ReportMetadata        `json:"metadata"`
-	Comparisons    []ComparisonResult    `json:"comparisons"`
-	HasRegressions bool                  `json:"has_regressions"`
-	Summary        ReportSummary         `json:"summary"`
+	Metadata       ReportMetadata     `json:"metadata"`
+	Comparisons    []ComparisonResult `json:"comparisons"`
+	HasRegressions bool               `json:"has_regressions"`
+	Summary        ReportSummary      `json:"summary"`
 }
 
 // ReportMetadata holds metadata about the report
