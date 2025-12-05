@@ -11,17 +11,21 @@ The Semantic Router operates as an ExtProc server that processes HTTP requests t
 ### Ports and endpoint mapping
 
 - 8801 (HTTP, Envoy public entry)
+
   - Typical client entry for OpenAI-compatible requests like `POST /v1/chat/completions`.
   - Can proxy `GET /v1/models` to Router 8080 if you add an Envoy route; otherwise `/v1/models` at 8801 may return “no healthy upstream”.
+  - Experimental: `POST /v1/responses` supported via compatibility adapter when `enable_responses_adapter: true` in config. Text-only inputs are mapped to legacy Chat Completions under the hood; streaming maps will be added in a future release.
 
 - 8080 (HTTP, Classification API)
-  - `GET /v1/models`  → OpenAI-compatible model list (includes synthetic `MoM`)
-  - `GET /health`      → Classification API health
+
+  - `GET /v1/models` → OpenAI-compatible model list (includes synthetic `MoM`)
+  - `GET /health` → Classification API health
   - `GET /info/models` → Loaded classifier models + system info
   - `GET /info/classifier` → Classifier configuration details
   - `POST /api/v1/classify/intent|pii|security|batch` → Direct classification utilities
 
 - 50051 (gRPC, ExtProc)
+
   - Envoy External Processing (ExtProc) for in-path classification/routing of `/v1/chat/completions`.
   - Not an HTTP port; not directly accessible via curl.
 
@@ -36,7 +40,7 @@ sequenceDiagram
     participant Envoy
     participant Router
     participant Backend
-    
+
     Client->>Envoy: POST /v1/chat/completions
     Envoy->>Router: ExtProc Request
     Router->>Router: Classify & Route
@@ -63,9 +67,24 @@ Lists available models and includes a synthetic "MoM" (Mixture of Models) model 
 {
   "object": "list",
   "data": [
-    { "id": "MoM", "object": "model", "created": 1726890000, "owned_by": "semantic-router" },
-    { "id": "gpt-4o-mini", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" },
-    { "id": "llama-3.1-8b-instruct", "object": "model", "created": 1726890000, "owned_by": "upstream-endpoint" }
+    {
+      "id": "MoM",
+      "object": "model",
+      "created": 1726890000,
+      "owned_by": "semantic-router"
+    },
+    {
+      "id": "gpt-4o-mini",
+      "object": "model",
+      "created": 1726890000,
+      "owned_by": "upstream-endpoint"
+    },
+    {
+      "id": "llama-3.1-8b-instruct",
+      "object": "model",
+      "created": 1726890000,
+      "owned_by": "upstream-endpoint"
+    }
   ]
 }
 ```
@@ -86,7 +105,7 @@ Notes:
   "model": "gpt-3.5-turbo",
   "messages": [
     {
-      "role": "user", 
+      "role": "user",
       "content": "What is the derivative of x^2?"
     }
   ],
@@ -109,7 +128,7 @@ Notes:
 ```json
 {
   "id": "chatcmpl-abc123",
-  "object": "chat.completion", 
+  "object": "chat.completion",
   "created": 1677858242,
   "model": "gpt-3.5-turbo",
   "choices": [
@@ -156,12 +175,12 @@ The router adds metadata headers to both requests and responses:
 
 ### Response Headers (Added by Router)
 
-| Header | Description | Example |
-|--------|-------------|---------|
-| `x-processing-time` | Total processing time (ms) | `45` |
-| `x-classification-time` | Classification time (ms) | `12` |
-| `x-security-checks` | Security check results | `pii:false,jailbreak:false` |
-| `x-tools-selected` | Number of tools selected | `2` |
+| Header                  | Description                | Example                     |
+| ----------------------- | -------------------------- | --------------------------- |
+| `x-processing-time`     | Total processing time (ms) | `45`                        |
+| `x-classification-time` | Classification time (ms)   | `12`                        |
+| `x-security-checks`     | Security check results     | `pii:false,jailbreak:false` |
+| `x-tools-selected`      | Number of tools selected   | `2`                         |
 
 ## Health Check API
 
@@ -178,7 +197,7 @@ The router provides health check endpoints for monitoring:
   "uptime": 3600,
   "models": {
     "category_classifier": "loaded",
-    "pii_detector": "loaded", 
+    "pii_detector": "loaded",
     "jailbreak_guard": "loaded"
   },
   "cache": {
@@ -188,7 +207,7 @@ The router provides health check endpoints for monitoring:
   },
   "endpoints": {
     "endpoint1": "healthy",
-    "endpoint2": "healthy", 
+    "endpoint2": "healthy",
     "endpoint3": "degraded"
   }
 }
@@ -211,7 +230,7 @@ semantic_router_request_duration_seconds{endpoint="endpoint1"} 0.045
 semantic_router_classification_accuracy{category="mathematics"} 0.94
 semantic_router_classification_duration_seconds 0.012
 
-# Cache metrics  
+# Cache metrics
 semantic_router_cache_hit_ratio 0.73
 semantic_router_cache_size 1247
 
@@ -231,6 +250,7 @@ llm_request_errors_total{model="phi4",reason="pii_policy_denied"} 8
 The router exposes dedicated Prometheus counters to monitor reasoning mode decisions and template usage across model families. These metrics are emitted by the router and can be scraped by your Prometheus server.
 
 - `llm_reasoning_decisions_total{category, model, enabled, effort}`
+
   - Description: Count of reasoning decisions made per category and selected model, with whether reasoning was enabled and the applied effort level.
   - Labels:
     - category: category name determined during routing
@@ -239,6 +259,7 @@ The router exposes dedicated Prometheus counters to monitor reasoning mode decis
     - effort: effort level used when enabled (e.g., low|medium|high)
 
 - `llm_reasoning_template_usage_total{family, param}`
+
   - Description: Count of times a model-family-specific template parameter was applied to requests.
   - Labels:
     - family: normalized model family (e.g., qwen3, deepseek, gpt-oss, gpt)
@@ -274,6 +295,7 @@ sum by (family, effort) (
 The router exposes additional metrics for cost accounting and routing decisions.
 
 - `llm_model_cost_total{model, currency}`
+
   - Description: Total accumulated cost attributed to each model (computed from token usage and per-1M pricing), labeled by currency.
   - Labels:
     - model: model name used for the request
@@ -383,7 +405,7 @@ model_config:
 Notes:
 
 - Pricing is optional; if omitted, cost is treated as 0 and only token metrics are emitted.
-- Cost is computed as: (prompt_tokens * prompt_per_1m + completion_tokens * completion_per_1m) / 1_000_000 (in the configured currency).
+- Cost is computed as: (prompt_tokens _ prompt_per_1m + completion_tokens _ completion_per_1m) / 1_000_000 (in the configured currency).
 
 ## gRPC ExtProc API
 
@@ -463,14 +485,14 @@ func (r *Router) handleRequestBody(body *ProcessingRequest_RequestBody) *Process
 
 ### HTTP Status Codes
 
-| Status | Description |
-|--------|-------------|
-| 200 | Success |
-| 400 | Bad Request (malformed input) |
-| 403 | Forbidden (security violation) |
-| 429 | Too Many Requests (rate limited) |
-| 500 | Internal Server Error |
-| 503 | Service Unavailable (backend down) |
+| Status | Description                        |
+| ------ | ---------------------------------- |
+| 200    | Success                            |
+| 400    | Bad Request (malformed input)      |
+| 403    | Forbidden (security violation)     |
+| 429    | Too Many Requests (rate limited)   |
+| 500    | Internal Server Error              |
+| 503    | Service Unavailable (backend down) |
 
 ## Configuration API
 
@@ -499,15 +521,17 @@ For real-time streaming responses:
 **Endpoint:** `ws://localhost:8801/v1/chat/stream`
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8801/v1/chat/stream');
+const ws = new WebSocket("ws://localhost:8801/v1/chat/stream");
 
-ws.send(JSON.stringify({
-  "model": "gpt-3.5-turbo",
-  "messages": [{"role": "user", "content": "Tell me a story"}],
-  "stream": true
-}));
+ws.send(
+  JSON.stringify({
+    model: "gpt-3.5-turbo",
+    messages: [{ role: "user", content: "Tell me a story" }],
+    stream: true,
+  })
+);
 
-ws.onmessage = function(event) {
+ws.onmessage = function (event) {
   const chunk = JSON.parse(event.data);
   console.log(chunk.choices[0].delta.content);
 };
@@ -523,7 +547,7 @@ import requests
 class SemanticRouterClient:
     def __init__(self, base_url="http://localhost:8801"):
         self.base_url = base_url
-        
+
     def chat_completion(self, messages, model="gpt-3.5-turbo", **kwargs):
         response = requests.post(
             f"{self.base_url}/v1/chat/completions",
@@ -534,7 +558,7 @@ class SemanticRouterClient:
             }
         )
         return response.json()
-        
+
     def get_health(self):
         response = requests.get(f"{self.base_url}/health")
         return response.json()
@@ -550,36 +574,36 @@ result = client.chat_completion([
 
 ```javascript
 class SemanticRouterClient {
-    constructor(baseUrl = 'http://localhost:8801') {
-        this.baseUrl = baseUrl;
-    }
-    
-    async chatCompletion(messages, model = 'gpt-3.5-turbo', options = {}) {
-        const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model,
-                messages,
-                ...options
-            })
-        });
-        
-        return response.json();
-    }
-    
-    async getHealth() {
-        const response = await fetch(`${this.baseUrl}/health`);
-        return response.json();
-    }
+  constructor(baseUrl = "http://localhost:8801") {
+    this.baseUrl = baseUrl;
+  }
+
+  async chatCompletion(messages, model = "gpt-3.5-turbo", options = {}) {
+    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        ...options,
+      }),
+    });
+
+    return response.json();
+  }
+
+  async getHealth() {
+    const response = await fetch(`${this.baseUrl}/health`);
+    return response.json();
+  }
 }
 
 // Usage
 const client = new SemanticRouterClient();
 const result = await client.chatCompletion([
-    { role: 'user', content: 'Solve x^2 + 5x + 6 = 0' }
+  { role: "user", content: "Solve x^2 + 5x + 6 = 0" },
 ]);
 ```
 
@@ -621,7 +645,7 @@ X-RateLimit-Retry-After: 60
 # Include relevant context
 messages = [
     {
-        "role": "system", 
+        "role": "system",
         "content": "You are a mathematics tutor."
     },
     {
@@ -651,7 +675,7 @@ try:
         handle_router_error(response['error'])
     else:
         process_response(response)
-        
+
 except requests.exceptions.Timeout:
     handle_timeout_error()
 except requests.exceptions.ConnectionError:
