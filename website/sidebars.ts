@@ -59,6 +59,7 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/gateway-api-inference-extension',
             'installation/k8s/istio',
             'installation/k8s/llm-d',
+            'installation/milvus',
           ],
         },
         'installation/docker-compose',
