@@ -75,6 +75,17 @@ jobs:
         run: |
           make build-e2e
 
+      - name: Free up disk space
+        run: |
+          # Remove unnecessary toolchains to free ~25GB disk space
+          # This helps prevent "no space left on device" errors
+          echo "Disk before cleanup:"
+          df -h /
+          # Note: Do NOT remove $AGENT_TOOLSDIRECTORY - it contains Go/Rust from setup actions
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          echo "Disk after cleanup:"
+          df -h /
+
       - name: Run Integration E2E tests (${{ matrix.profile }})
         id: e2e-test
         run: |
