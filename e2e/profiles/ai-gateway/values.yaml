@@ -142,7 +142,8 @@ config:
         - type: "pii"
           configuration:
             enabled: true
-            pii_types_allowed: []
+            pii_types_allowed:
+              - "ORGANIZATION"  # Allow - scientific terms like "photosynthesis" falsely detected as ORG
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -396,6 +397,10 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -441,7 +446,8 @@ config:
         - type: "pii"
           configuration:
             enabled: true
-            pii_types_allowed: []
+            pii_types_allowed:
+              - "GPE"  # Allow - country/city names in general knowledge questions
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -529,7 +535,7 @@ config:
       case_sensitive: false
 
     - name: "sensitive_keywords"
-      operator: "AND"
+      operator: "OR"
       keywords: ["SSN", "credit card"]
       case_sensitive: false
 

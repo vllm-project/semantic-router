@@ -21,7 +21,7 @@ import (
 const (
 	// Version Configuration
 	// AIBrix version - can be overridden via AIBRIX_VERSION environment variable
-	defaultAIBrixVersion = "v0.4.1"
+	defaultAIBrixVersion = "v0.5.0"
 
 	// Kubernetes Namespaces - used frequently throughout
 	namespaceSemanticRouter = "vllm-semantic-router-system"
@@ -468,7 +468,7 @@ func (p *Profile) kubectlApply(ctx context.Context, kubeConfig, manifest string)
 }
 
 func (p *Profile) kubectlDelete(ctx context.Context, kubeConfig, manifest string) error {
-	return p.runKubectl(ctx, kubeConfig, "delete", "-f", manifest)
+	return p.runKubectl(ctx, kubeConfig, "delete", "--ignore-not-found", "-f", manifest)
 }
 
 func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {

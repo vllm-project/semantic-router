@@ -29,6 +29,10 @@ on:
       - "src/**"
       - "e2e-tests/llm-katan/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Build job for multi-architecture Docker images
   build_multiarch:

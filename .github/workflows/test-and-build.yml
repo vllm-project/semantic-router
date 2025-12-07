@@ -12,9 +12,25 @@ on:
     - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual triggering
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # use changes as filter
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
   test-and-build:
-    if: github.repository == 'vllm-project/semantic-router'
+    needs: changes
+    if: >-
+      ${{ github.event_name == 'schedule'
+          || needs.changes.outputs.core == 'true'
+          || needs.changes.outputs.helm == 'true'
+          || needs.changes.outputs.e2e  == 'true'
+          || needs.changes.outputs.docker == 'true'
+          || needs.changes.outputs.make == 'true'
+          || needs.changes.outputs.ci   == 'true' }}
     runs-on: ubuntu-latest
 
     steps:

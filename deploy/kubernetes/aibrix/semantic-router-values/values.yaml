@@ -123,7 +123,8 @@ config:
         - type: "pii"
           configuration:
             enabled: true
-            pii_types_allowed: []
+            pii_types_allowed:
+              - "ORGANIZATION"  # Allow - scientific terms like "photosynthesis" falsely detected as ORG
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -189,7 +190,8 @@ config:
         - type: "pii"
           configuration:
             enabled: true
-            pii_types_allowed: []
+            pii_types_allowed:
+              - "GPE"  # Allow - country/city names in general knowledge questions
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -539,7 +541,7 @@ config:
   # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
   embedding_models:
     qwen3_model_path: "models/Qwen3-Embedding-0.6B"
-    gemma_model_path: "models/embeddinggemma-300m"
+    gemma_model_path: ""
     use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
   # Observability Configuration
