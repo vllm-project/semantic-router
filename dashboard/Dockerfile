@@ -2,7 +2,7 @@
 FROM node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm ci --include=dev   # Ensure devDependencies are installed regardless of NODE_ENV
 COPY frontend/ ./
 RUN npm run build
 

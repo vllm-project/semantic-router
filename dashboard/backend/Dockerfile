@@ -5,7 +5,7 @@ COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashbo
 COPY dashboard/frontend/src ./src
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
-RUN npm install
+RUN npm install --include=dev  # Ensure TypeScript/Vite are installed regardless of NODE_ENV
 RUN npm run build
 
 # Stage 2: Build backend with Go
