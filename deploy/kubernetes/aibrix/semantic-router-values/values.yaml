@@ -433,11 +433,11 @@ config:
   # Classifier configuration
   classifier:
     category_model:
-      model_id: "models/category_classifier_modernbert-base_model"
-      use_modernbert: true
+      model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+      use_modernbert: false  # Use LoRA intent classifier with auto-detection
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+      category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
     pii_model:
       # Support both traditional (modernbert) and LoRA-based PII detection
       # When model_type is "auto", the system will auto-detect LoRA configuration

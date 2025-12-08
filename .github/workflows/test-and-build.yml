@@ -85,9 +85,9 @@ jobs:
         with:
           path: |
             models/
-          key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
+          key: ${{ runner.os }}-models-v2-${{ hashFiles('tools/make/models.mk') }}
           restore-keys: |
-            ${{ runner.os }}-models-v1-
+            ${{ runner.os }}-models-v2-
         continue-on-error: true # Don't fail the job if caching fails
 
       - name: Check go mod tidy

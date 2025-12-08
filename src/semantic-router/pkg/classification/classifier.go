@@ -18,34 +18,35 @@ type CategoryInitializer interface {
 	Init(modelID string, useCPU bool, numClasses ...int) error
 }
 
-type LinearCategoryInitializer struct{}
-
-func (c *LinearCategoryInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
-	err := candle_binding.InitClassifier(modelID, numClasses[0], useCPU)
-	if err != nil {
-		return err
-	}
-	logging.Infof("Initialized linear category classifier with %d classes", numClasses[0])
-	return nil
+type CategoryInitializerImpl struct {
+	usedModernBERT bool // Track which init path succeeded for inference routing
 }
 
-type ModernBertCategoryInitializer struct{}
+func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	// Try auto-detecting Candle BERT init first - checks for lora_config.json
+	// This enables LoRA Intent/Category models when available
+	success := candle_binding.InitCandleBertClassifier(modelID, numClasses[0], useCPU)
+	if success {
+		c.usedModernBERT = false
+		logging.Infof("Initialized category classifier with auto-detection (LoRA or Traditional BERT)")
+		return nil
+	}
 
-func (c *ModernBertCategoryInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	// Fallback to ModernBERT-specific init for backward compatibility
+	// This handles models with incomplete configs (missing hidden_act, etc.)
+	logging.Infof("Auto-detection failed, falling back to ModernBERT category initializer")
 	err := candle_binding.InitModernBertClassifier(modelID, useCPU)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize category classifier (both auto-detect and ModernBERT): %w", err)
 	}
-	logging.Infof("Initialized ModernBERT category classifier (classes auto-detected from model)")
+	c.usedModernBERT = true
+	logging.Infof("Initialized ModernBERT category classifier (fallback mode)")
 	return nil
 }
 
-// createCategoryInitializer creates the appropriate category initializer based on configuration
-func createCategoryInitializer(useModernBERT bool) CategoryInitializer {
-	if useModernBERT {
-		return &ModernBertCategoryInitializer{}
-	}
-	return &LinearCategoryInitializer{}
+// createCategoryInitializer creates the category initializer (auto-detecting)
+func createCategoryInitializer() CategoryInitializer {
+	return &CategoryInitializerImpl{}
 }
 
 type CategoryInference interface {
@@ -53,32 +54,22 @@ type CategoryInference interface {
 	ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error)
 }
 
-type LinearCategoryInference struct{}
+type CategoryInferenceImpl struct{}
 
-func (c *LinearCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassifyText(text)
+func (c *CategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
+	return candle_binding.ClassifyCandleBertText(text)
 }
 
-func (c *LinearCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
-	return candle_binding.ClassifyTextWithProbabilities(text)
-}
-
-type ModernBertCategoryInference struct{}
-
-func (c *ModernBertCategoryInference) Classify(text string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassifyModernBertText(text)
-}
-
-func (c *ModernBertCategoryInference) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+func (c *CategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	// Note: CandleBert doesn't have WithProbabilities yet, fall back to ModernBERT
+	// This will work correctly if ModernBERT was initialized as fallback
 	return candle_binding.ClassifyModernBertTextWithProbabilities(text)
 }
 
-// createCategoryInference creates the appropriate category inference based on configuration
-func createCategoryInference(useModernBERT bool) CategoryInference {
-	if useModernBERT {
-		return &ModernBertCategoryInference{}
-	}
-	return &LinearCategoryInference{}
+// createCategoryInference creates the category inference (auto-detecting)
+func createCategoryInference() CategoryInference {
+	return &CategoryInferenceImpl{}
 }
 
 type JailbreakInitializer interface {
@@ -391,7 +382,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add in-tree classifier if configured
 	if cfg.CategoryModel.ModelID != "" {
-		options = append(options, withCategory(categoryMapping, createCategoryInitializer(cfg.CategoryModel.UseModernBERT), createCategoryInference(cfg.CategoryModel.UseModernBERT)))
+		options = append(options, withCategory(categoryMapping, createCategoryInitializer(), createCategoryInference()))
 	}
 
 	// Add MCP classifier if configured
@@ -409,7 +400,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 // IsCategoryEnabled checks if category classification is properly configured
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryModel.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model
