@@ -1501,7 +1501,7 @@ func TestExpirationHeapOperations(t *testing.T) {
 	heap.UpdateExpiration("req-1", now.Add(3*time.Hour))
 
 	// Now req-0 should be earliest
-	reqID, idx, _, ok = heap.PeekNext()
+	reqID, _, _, ok = heap.PeekNext()
 	if !ok || reqID != "req-0" {
 		t.Errorf("Expected PeekNext to return req-0 after update, got %s", reqID)
 	}
