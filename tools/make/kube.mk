@@ -31,6 +31,10 @@ create-cluster: ## Create a kind cluster with optimized configuration
 			exit 0; \
 		fi; \
 	fi
+	@if [ ! -f "$(KIND_CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)[INFO]$(NC) Kind config not found: $(KIND_CONFIG_FILE). Generating..."; \
+		bash tools/kind/generate-kind-config.sh; \
+	fi
 	@echo "$(BLUE)[INFO]$(NC) Creating cluster with config: $(KIND_CONFIG_FILE)"
 	@mkdir -p /tmp/kind-semantic-router
 	@kind create cluster --name $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG_FILE)

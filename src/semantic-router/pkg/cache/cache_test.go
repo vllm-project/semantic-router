@@ -1351,6 +1351,224 @@ func TestLFUPolicyTiebreaker(t *testing.T) {
 	}
 }
 
+// TestFIFOPolicyOptimized tests the O(1) FIFO policy operations
+func TestFIFOPolicyOptimized(t *testing.T) {
+	policy := NewFIFOPolicy()
+	entries := []CacheEntry{
+		{RequestID: "req-0"},
+		{RequestID: "req-1"},
+		{RequestID: "req-2"},
+	}
+
+	// Test OnInsert and SelectVictim
+	for i, e := range entries {
+		policy.OnInsert(i, e.RequestID)
+	}
+
+	victim := policy.SelectVictim(entries)
+	if victim != 0 {
+		t.Errorf("Expected victim 0 (oldest), got %d", victim)
+	}
+
+	// Test Evict
+	evicted := policy.Evict()
+	if evicted != 0 {
+		t.Errorf("Expected evicted index 0, got %d", evicted)
+	}
+
+	// Test UpdateIndex (simulating swap after eviction)
+	policy.UpdateIndex("req-2", 2, 0)
+	victim = policy.SelectVictim(entries)
+	if victim != 1 {
+		t.Errorf("Expected victim 1 after swap, got %d", victim)
+	}
+
+	// Test OnRemove
+	policy.OnRemove(1, "req-1")
+	victim = policy.SelectVictim(entries)
+	if victim != 0 {
+		t.Errorf("Expected victim 0 (req-2 moved), got %d", victim)
+	}
+}
+
+// TestLRUPolicyOptimized tests the O(1) LRU policy operations
+func TestLRUPolicyOptimized(t *testing.T) {
+	policy := NewLRUPolicy()
+	entries := []CacheEntry{
+		{RequestID: "req-0"},
+		{RequestID: "req-1"},
+		{RequestID: "req-2"},
+	}
+
+	// Insert all entries
+	for i, e := range entries {
+		policy.OnInsert(i, e.RequestID)
+	}
+
+	// LRU order: req-2 (MRU) -> req-1 -> req-0 (LRU)
+	victim := policy.SelectVictim(entries)
+	if victim != 0 {
+		t.Errorf("Expected victim 0 (LRU), got %d", victim)
+	}
+
+	// Access req-0 to make it MRU
+	policy.OnAccess(0, "req-0")
+	victim = policy.SelectVictim(entries)
+	if victim != 1 {
+		t.Errorf("Expected victim 1 after accessing req-0, got %d", victim)
+	}
+
+	// Test Evict
+	evicted := policy.Evict()
+	if evicted != 1 {
+		t.Errorf("Expected evicted index 1, got %d", evicted)
+	}
+
+	// Test UpdateIndex
+	policy.UpdateIndex("req-2", 2, 1)
+
+	// Test OnRemove
+	policy.OnRemove(1, "req-2")
+
+	// Only req-0 should remain
+	victim = policy.SelectVictim(entries)
+	if victim != 0 {
+		t.Errorf("Expected victim 0, got %d", victim)
+	}
+}
+
+// TestLFUPolicyOptimized tests the O(1) LFU policy operations
+func TestLFUPolicyOptimized(t *testing.T) {
+	policy := NewLFUPolicy()
+	entries := []CacheEntry{
+		{RequestID: "req-0"},
+		{RequestID: "req-1"},
+		{RequestID: "req-2"},
+	}
+
+	// Insert all entries (all start with freq=1)
+	for i, e := range entries {
+		policy.OnInsert(i, e.RequestID)
+	}
+
+	// Access req-2 multiple times to increase frequency
+	for i := 0; i < 5; i++ {
+		policy.OnAccess(2, "req-2")
+	}
+
+	// req-0 and req-1 have freq=1, req-2 has freq=6
+	victim := policy.SelectVictim(entries)
+	if victim != 0 && victim != 1 {
+		t.Errorf("Expected victim 0 or 1 (lowest freq), got %d", victim)
+	}
+
+	// Test Evict
+	evicted := policy.Evict()
+	if evicted != 0 && evicted != 1 {
+		t.Errorf("Expected evicted 0 or 1, got %d", evicted)
+	}
+
+	// Test UpdateIndex
+	policy.UpdateIndex("req-2", 2, 0)
+
+	// Test OnRemove
+	policy.OnRemove(1, "req-1")
+}
+
+// TestExpirationHeapOperations tests all ExpirationHeap operations
+func TestExpirationHeapOperations(t *testing.T) {
+	now := time.Now()
+	heap := NewExpirationHeap()
+
+	// Test Add
+	heap.Add("req-0", 0, now.Add(1*time.Hour))
+	heap.Add("req-1", 1, now.Add(30*time.Minute))
+	heap.Add("req-2", 2, now.Add(2*time.Hour))
+
+	// Test Size
+	if heap.Size() != 3 {
+		t.Errorf("Expected size 3, got %d", heap.Size())
+	}
+
+	// Test PeekNext (should be req-1, earliest expiration)
+	reqID, idx, expiresAt, ok := heap.PeekNext()
+	if !ok || reqID != "req-1" || idx != 1 {
+		t.Errorf("Expected PeekNext to return req-1, got %s (idx=%d, ok=%v)", reqID, idx, ok)
+	}
+	_ = expiresAt
+
+	// Test UpdateExpiration (move req-1 to later)
+	heap.UpdateExpiration("req-1", now.Add(3*time.Hour))
+
+	// Now req-0 should be earliest
+	reqID, _, _, ok = heap.PeekNext()
+	if !ok || reqID != "req-0" {
+		t.Errorf("Expected PeekNext to return req-0 after update, got %s", reqID)
+	}
+
+	// Test UpdateIndex
+	heap.UpdateIndex("req-0", 5)
+
+	// Test Remove
+	heap.Remove("req-0")
+	if heap.Size() != 2 {
+		t.Errorf("Expected size 2 after remove, got %d", heap.Size())
+	}
+
+	// Test PopExpired
+	heap.Add("req-expired", 10, now.Add(-1*time.Hour)) // Already expired
+	expired := heap.PopExpired(now)
+	if len(expired) != 1 || expired[0] != "req-expired" {
+		t.Errorf("Expected 1 expired entry, got %v", expired)
+	}
+}
+
+// TestInMemoryCacheEviction tests cache eviction with O(1) policies
+func TestInMemoryCacheEviction(t *testing.T) {
+	cache := NewInMemoryCache(InMemoryCacheOptions{
+		Enabled:             true,
+		MaxEntries:          3,
+		TTLSeconds:          3600,
+		SimilarityThreshold: 0.9,
+		EvictionPolicy:      LRUEvictionPolicyType,
+	})
+
+	// Add entries up to max
+	for i := 0; i < 3; i++ {
+		embedding := make([]float32, 384)
+		embedding[i] = 1.0
+		cache.mu.Lock()
+		cache.entries = append(cache.entries, CacheEntry{
+			RequestID: fmt.Sprintf("req-%d", i),
+			Query:     fmt.Sprintf("query %d", i),
+			Embedding: embedding,
+		})
+		idx := len(cache.entries) - 1
+		cache.entryMap[fmt.Sprintf("req-%d", i)] = idx
+		cache.registerEntryWithEvictionPolicy(idx, fmt.Sprintf("req-%d", i))
+		cache.mu.Unlock()
+	}
+
+	// Verify we have 3 entries
+	stats := cache.GetStats()
+	if stats.TotalEntries != 3 {
+		t.Errorf("Expected 3 entries, got %d", stats.TotalEntries)
+	}
+
+	// Add one more to trigger eviction
+	cache.mu.Lock()
+	cache.evictOne()
+	cache.mu.Unlock()
+
+	// Should have 2 entries now
+	cache.mu.RLock()
+	count := len(cache.entries)
+	cache.mu.RUnlock()
+	if count != 2 {
+		t.Errorf("Expected 2 entries after eviction, got %d", count)
+	}
+}
+
 // TestHybridCacheDisabled tests that disabled hybrid cache returns immediately
 func TestHybridCacheDisabled(t *testing.T) {
 	cache, err := NewHybridCache(HybridCacheOptions{
