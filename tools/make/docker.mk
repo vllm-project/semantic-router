@@ -179,6 +179,33 @@ docker-compose-down-llm-katan:
 	@echo "Stopping services with $(COMPOSE_CMD) (llm-katan profile)..."
 	@$(COMPOSE_CMD) --profile llm-katan down
 
+##@ CI Docker Compose (minimal services for CI testing)
+
+# CI compose file path
+CI_COMPOSE_FILE ?= deploy/docker-compose/docker-compose.ci.yml
+
+docker-compose-up-ci: ## Start minimal CI services (semantic-router, envoy, llm-katan)
+docker-compose-up-ci:
+	@$(LOG_TARGET)
+	@echo "Starting CI services with $(COMPOSE_CMD) (minimal for CI)..."
+	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) up -d
+
+docker-compose-down-ci: ## Stop CI services
+docker-compose-down-ci:
+	@$(LOG_TARGET)
+	@echo "Stopping CI services with $(COMPOSE_CMD)..."
+	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) down
+
+docker-compose-logs-ci: ## Show logs for CI services
+docker-compose-logs-ci:
+	@$(LOG_TARGET)
+	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) logs
+
+docker-compose-ps-ci: ## Show status of CI services
+docker-compose-ps-ci:
+	@$(LOG_TARGET)
+	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) ps
+
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables

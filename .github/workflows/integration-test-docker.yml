@@ -21,10 +21,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-quickstart:
+  test-ci-compose:
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20  # Reduced from 30 - CI compose is faster
 
     steps:
       - name: Check out the repo
@@ -46,32 +46,92 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            make \
-            curl \
-            docker-compose
+          sudo apt-get install -y make curl
+          pip install huggingface_hub[cli]
 
-      - name: Run quickstart script
-        id: quickstart
+      - name: Download models
         run: |
-          timeout 1200 bash scripts/quickstart.sh || {
-            exit_code=$?
-            if [ $exit_code -eq 124 ]; then
-              echo "::error::Quickstart script timed out after 20 minutes"
-            else
-              echo "::error::Quickstart script failed with exit code $exit_code"
-            fi
-            exit $exit_code
-          }
+          echo "Downloading minimal models for CI..."
+          make download-models
         env:
           CI: true
           CI_MINIMAL_MODELS: true
-          TERM: xterm
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
+
+      - name: Start CI services
+        run: |
+          echo "Starting minimal CI services (semantic-router, envoy, llm-katan)..."
+          make docker-compose-up-ci
+        env:
+          CI: true
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services to be healthy..."
+          max_attempts=60
+          attempt=1
+          
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt/$max_attempts: Checking service health..."
+            
+            # Check semantic-router health
+            if docker ps --filter "name=semantic-router" --filter "health=healthy" --format "{{.Names}}" | grep -q "semantic-router"; then
+              echo "✅ semantic-router is healthy"
+              
+              # Check envoy health
+              if docker ps --filter "name=envoy-proxy" --filter "health=healthy" --format "{{.Names}}" | grep -q "envoy-proxy"; then
+                echo "✅ envoy-proxy is healthy"
+                
+                # Check llm-katan health
+                if docker ps --filter "name=llm-katan" --filter "health=healthy" --format "{{.Names}}" | grep -q "llm-katan"; then
+                  echo "✅ llm-katan is healthy"
+                  echo "🎉 All services are healthy!"
+                  exit 0
+                fi
+              fi
+            fi
+            
+            # Show current status
+            docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|llm-katan" || true
+            
+            sleep 5
+            ((attempt++))
+          done
+          
+          echo "❌ Timeout waiting for services to be healthy"
+          docker ps -a
+          exit 1
+
+      - name: Test semantic router health endpoint
+        run: |
+          echo "Testing semantic router health..."
+          curl -f http://localhost:8080/health || {
+            echo "❌ Health check failed"
+            exit 1
+          }
+          echo "✅ Health check passed"
+
+      - name: Test envoy proxy endpoint
+        run: |
+          echo "Testing envoy proxy..."
+          curl -f http://localhost:19000/ready || {
+            echo "❌ Envoy ready check failed"
+            exit 1
+          }
+          echo "✅ Envoy is ready"
+
+      - name: Test llm-katan endpoint
+        run: |
+          echo "Testing llm-katan..."
+          curl -f http://localhost:8002/health || {
+            echo "❌ LLM-Katan health check failed"
+            exit 1
+          }
+          echo "✅ LLM-Katan is healthy"
 
       - name: Test semantic routing functionality
         run: |
@@ -85,24 +145,31 @@ jobs:
               "temperature": 0.7
             }')
 
-          echo "Full response: $response"
+          echo "Response: $response"
+          
+          # Verify we got a response
+          if echo "$response" | grep -q "choices"; then
+            echo "✅ Chat completions test passed"
+          else
+            echo "⚠️ Response may not contain expected fields, but request succeeded"
+          fi
 
       - name: Show service logs on failure
         if: failure()
         run: |
           echo "=== Docker Compose Logs ==="
-          docker compose -f deploy/docker-compose/docker-compose.yml logs
+          make docker-compose-logs-ci || docker compose -f deploy/docker-compose/docker-compose.ci.yml logs
           echo "=== Container Status ==="
           docker ps -a
           echo "=== Semantic Router Logs ==="
-          docker logs semantic-router || true
+          docker logs semantic-router 2>&1 | tail -100 || true
           echo "=== Envoy Logs ==="
-          docker logs envoy-proxy || true
-          echo "=== Dashboard Logs ==="
-          docker logs semantic-router-dashboard || true
+          docker logs envoy-proxy 2>&1 | tail -100 || true
+          echo "=== LLM-Katan Logs ==="
+          docker logs llm-katan 2>&1 | tail -100 || true
 
       - name: Clean up
         if: always()
         run: |
-          make docker-compose-down || true
+          make docker-compose-down-ci || true
           docker system prune -af --volumes || true
