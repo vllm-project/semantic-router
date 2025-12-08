@@ -78,6 +78,32 @@ MODELS = {
         "labels": None,
         "demo": "John Smith works at Microsoft in Seattle, his email is john.smith@microsoft.com",
     },
+    "😤 Dissatisfaction Detector": {
+        "id": "llm-semantic-router/dissat-detector",
+        "description": "Detects user dissatisfaction in conversational AI interactions. Classifies user follow-up messages as satisfied (SAT) or dissatisfied (DISSAT).",
+        "type": "dialogue",
+        "labels": {0: ("SAT", "🟢"), 1: ("DISSAT", "🔴")},
+        "demo": {
+            "query": "Find a restaurant nearby",
+            "response": "I found Italian Kitchen for you.",
+            "followup": "Show me other options",
+        },
+    },
+    "🔍 Dissatisfaction Explainer": {
+        "id": "llm-semantic-router/dissat-explainer",
+        "description": "Explains why a user is dissatisfied. Stage 2 of hierarchical dissatisfaction detection - classifies into NEED_CLARIFICATION, WRONG_ANSWER, or WANT_DIFFERENT.",
+        "type": "dialogue",
+        "labels": {
+            0: ("NEED_CLARIFICATION", "❓"),
+            1: ("WRONG_ANSWER", "❌"),
+            2: ("WANT_DIFFERENT", "🔄"),
+        },
+        "demo": {
+            "query": "Book a table for 2",
+            "response": "Table for 3 confirmed",
+            "followup": "No, I said 2 people not 3",
+        },
+    },
 }
 
 
@@ -96,6 +122,26 @@ def load_model(model_id: str, model_type: str):
 def classify_sequence(text: str, model_id: str, labels: dict) -> tuple:
     """Classify text using sequence classification model."""
     tokenizer, model = load_model(model_id, "sequence")
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
+    with torch.no_grad():
+        outputs = model(**inputs)
+        probs = torch.softmax(outputs.logits, dim=-1)[0]
+    pred_class = torch.argmax(probs).item()
+    label_name, emoji = labels[pred_class]
+    confidence = probs[pred_class].item()
+    all_scores = {
+        f"{labels[i][1]} {labels[i][0]}": float(probs[i]) for i in range(len(labels))
+    }
+    return label_name, emoji, confidence, all_scores
+
+
+def classify_dialogue(
+    query: str, response: str, followup: str, model_id: str, labels: dict
+) -> tuple:
+    """Classify dialogue using sequence classification model with special format."""
+    tokenizer, model = load_model(model_id, "sequence")
+    # Format input as per model requirements
+    text = f"[USER QUERY] {query}\n[SYSTEM RESPONSE] {response}\n[USER FOLLOWUP] {followup}"
     inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
     with torch.no_grad():
         outputs = model(**inputs)
@@ -211,18 +257,70 @@ def main():
 
     # Main content
     st.subheader("📝 Input")
-    text_input = st.text_area(
-        "Enter text to analyze:",
-        value=model_config["demo"],
-        height=120,
-        placeholder="Type your text here...",
-    )
+
+    # Different input UI based on model type
+    if model_config["type"] == "dialogue":
+        # Dialogue models need query, response, and followup
+        demo = model_config["demo"]
+        query_input = st.text_input(
+            "🗣️ User Query:",
+            value=demo["query"],
+            placeholder="Enter the original user query...",
+        )
+        response_input = st.text_input(
+            "🤖 System Response:",
+            value=demo["response"],
+            placeholder="Enter the system's response...",
+        )
+        followup_input = st.text_input(
+            "💬 User Follow-up:",
+            value=demo["followup"],
+            placeholder="Enter the user's follow-up message...",
+        )
+        text_input = None  # Not used for dialogue models
+    else:
+        # Standard text input for other models
+        text_input = st.text_area(
+            "Enter text to analyze:",
+            value=model_config["demo"],
+            height=120,
+            placeholder="Type your text here...",
+        )
+        query_input = response_input = followup_input = None
 
     st.markdown("---")
 
     # Analyze button
     if st.button("🔍 Analyze", type="primary", use_container_width=True):
-        if not text_input.strip():
+        if model_config["type"] == "dialogue":
+            if (
+                not query_input.strip()
+                or not response_input.strip()
+                or not followup_input.strip()
+            ):
+                st.warning("Please fill in all dialogue fields.")
+            else:
+                with st.spinner("Analyzing..."):
+                    label, emoji, conf, scores = classify_dialogue(
+                        query_input,
+                        response_input,
+                        followup_input,
+                        model_config["id"],
+                        model_config["labels"],
+                    )
+                    st.session_state.result = {
+                        "type": "dialogue",
+                        "label": label,
+                        "emoji": emoji,
+                        "confidence": conf,
+                        "scores": scores,
+                        "input": {
+                            "query": query_input,
+                            "response": response_input,
+                            "followup": followup_input,
+                        },
+                    }
+        elif not text_input.strip():
             st.warning("Please enter some text to analyze.")
         else:
             with st.spinner("Analyzing..."):
@@ -250,7 +348,7 @@ def main():
         st.markdown("---")
         st.subheader("📊 Results")
         result = st.session_state.result
-        if result["type"] == "sequence":
+        if result["type"] in ("sequence", "dialogue"):
             col1, col2 = st.columns([1, 1])
             with col1:
                 st.success(f"{result['emoji']} **{result['label']}**")
@@ -262,7 +360,7 @@ def main():
                 )
                 for k, v in sorted_scores.items():
                     st.progress(v, text=f"{k}: {v:.1%}")
-        else:
+        elif result["type"] == "token":
             entities = result["entities"]
             if entities:
                 st.success(f"Found {len(entities)} PII entity(s)")
