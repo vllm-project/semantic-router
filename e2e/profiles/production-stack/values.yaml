@@ -24,18 +24,19 @@ config:
           description: "General-purpose adapter"
 
   # Classifier configuration - required for domain-classify test
+  # Using LoRA models for better performance with auto-detection
   classifier:
     category_model:
-      model_id: models/category_classifier_modernbert-base_model
-      use_modernbert: true
+      model_id: models/lora_intent_classifier_bert-base-uncased_model
+      use_modernbert: false
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+      category_mapping_path: models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json
     pii_model:
       # Required for pii-detection test
       model_id: models/lora_pii_detector_bert-base-uncased_model
       use_modernbert: false
-      threshold: 0.7
+      threshold: 0.9
       use_cpu: true
       pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
 
@@ -70,8 +71,242 @@ config:
     - name: other
       description: "General knowledge and miscellaneous topics"
 
-  # Simple default decision - routes all requests to base model
+  # Decisions for routing requests based on classified domain
   decisions:
+    - name: business_decision
+      description: "Business domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: philosophy_decision
+      description: "Philosophy domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "philosophy"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: biology_decision
+      description: "Biology domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: health_decision
+      description: "Health domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: computer_science_decision
+      description: "Computer science domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: engineering_decision
+      description: "Engineering domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: psychology_decision
+      description: "Psychology domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "psychology"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: math_decision
+      description: "Math domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: chemistry_decision
+      description: "Chemistry domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: physics_decision
+      description: "Physics domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: history_decision
+      description: "History domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "history"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: law_decision
+      description: "Law domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
+    - name: economics_decision
+      description: "Economics domain queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+
     - name: default_decision
       description: "Default route for all requests"
       priority: 1
