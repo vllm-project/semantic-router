@@ -2,6 +2,7 @@ name: Test And Build
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
   push:
@@ -24,13 +25,14 @@ jobs:
   test-and-build:
     needs: changes
     if: >-
-      ${{ github.event_name == 'schedule'
+      ${{ !github.event.pull_request.draft
+          && (github.event_name == 'schedule'
           || needs.changes.outputs.core == 'true'
           || needs.changes.outputs.helm == 'true'
           || needs.changes.outputs.e2e  == 'true'
           || needs.changes.outputs.docker == 'true'
           || needs.changes.outputs.make == 'true'
-          || needs.changes.outputs.ci   == 'true' }}
+          || needs.changes.outputs.ci   == 'true') }}
     runs-on: ubuntu-latest
 
     steps:

@@ -16,7 +16,7 @@ The framework follows a **separation of concerns** design:
 - **aibrix**: Tests Semantic Router with vLLM AIBrix integration
 - **dynamic-config**: Tests Semantic Router with Kubernetes CRD-based configuration (IntelligentRoute/IntelligentPool)
 - **istio**: Tests Semantic Router with Istio service mesh integration
-- **production-stack**: Tests vLLM Production Stack configurations (future)
+- **production-stack**: Tests vLLM Production Stack configurations
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
 - **dynamo**: Tests with Nvidia Dynamo (future)
 
@@ -131,6 +131,7 @@ make e2e-test
 
 ```bash
 make e2e-test E2E_PROFILE=ai-gateway
+make e2e-test E2E_PROFILE=production-stack
 ```
 
 ### Run specific test cases

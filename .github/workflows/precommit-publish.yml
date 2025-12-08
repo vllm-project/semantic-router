@@ -5,6 +5,7 @@ on:
     paths:
       - 'Dockerfile.precommit'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'Dockerfile.precommit'
 
@@ -14,7 +15,7 @@ concurrency:
 
 jobs:
   build_and_push:
-    if: github.repository == 'vllm-project/semantic-router'
+    if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     permissions:
       contents: read

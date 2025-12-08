@@ -2,6 +2,7 @@ name: Integration Test [Kubernetes]
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths-ignore:
@@ -21,12 +22,13 @@ concurrency:
 
 jobs:
   integration-test:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
-        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio]
+        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio, production-stack]
 
     steps:
       - name: Check out the repo
