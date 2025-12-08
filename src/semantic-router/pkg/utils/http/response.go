@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -16,9 +17,12 @@ import (
 )
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
-func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool) *ext_proc.ProcessingResponse {
+func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string) *ext_proc.ProcessingResponse {
 	// Record PII violation metrics
 	metrics.RecordPIIViolations(model, deniedPII)
+
+	// Join denied PII types for header
+	deniedPIIStr := strings.Join(deniedPII, ",")
 
 	// Create OpenAI-compatible response format for PII violations
 	unixTimeStep := time.Now().Unix()
@@ -105,6 +109,18 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 					Header: &core.HeaderValue{
 						Key:      headers.VSRPIIViolation,
 						RawValue: []byte("true"),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRPIITypes,
+						RawValue: []byte(deniedPIIStr),
+					},
+				},
+				{
+					Header: &core.HeaderValue{
+						Key:      headers.VSRSelectedDecision,
+						RawValue: []byte(decisionName),
 					},
 				},
 			},

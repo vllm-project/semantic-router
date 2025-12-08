@@ -1,0 +1,62 @@
+[
+  {
+    "description": "Math derivative query should classify correctly",
+    "query": "What is the derivative of x squared?",
+    "expected_category": "math",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Math integral query should classify correctly",
+    "query": "How do I integrate cos(x)?",
+    "expected_category": "math",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Science photosynthesis query should classify correctly",
+    "query": "Explain photosynthesis",
+    "expected_category": "science",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Science gravity query should classify correctly",
+    "query": "What is the law of universal gravitation?",
+    "expected_category": "science",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Technology programming query should classify correctly",
+    "query": "How do I write a Python function?",
+    "expected_category": "technology",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "Technology database query should classify correctly",
+    "query": "What is a relational database?",
+    "expected_category": "technology",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "History World War query should classify correctly",
+    "query": "When did World War II end?",
+    "expected_category": "history",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "History ancient civilization query should classify correctly",
+    "query": "Tell me about ancient Egypt",
+    "expected_category": "history",
+    "expected_confidence_min": 0.7
+  },
+  {
+    "description": "General greeting should classify correctly",
+    "query": "Hello, how are you?",
+    "expected_category": "general",
+    "expected_confidence_min": 0.6
+  },
+  {
+    "description": "General weather query should classify correctly",
+    "query": "What's the weather like?",
+    "expected_category": "general",
+    "expected_confidence_min": 0.6
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "description": "Math query should fallback gracefully when MCP unavailable",
+    "query": "What is the Pythagorean theorem?",
+    "expected_category": "math",
+    "simulate_mcp_failure": true,
+    "expected_confidence_min": 0.5
+  },
+  {
+    "description": "Science query should fallback gracefully when MCP times out",
+    "query": "Explain Newton's laws of motion",
+    "expected_category": "science",
+    "simulate_mcp_timeout": true,
+    "expected_confidence_min": 0.5
+  },
+  {
+    "description": "Technology query should fallback on MCP error",
+    "query": "What is Kubernetes?",
+    "expected_category": "technology",
+    "simulate_mcp_error": true,
+    "expected_confidence_min": 0.5
+  },
+  {
+    "description": "History query should use in-tree classifier on fallback",
+    "query": "What was the Renaissance?",
+    "expected_category": "history",
+    "simulate_mcp_failure": true,
+    "verify_in_tree_used": true,
+    "expected_confidence_min": 0.5
+  },
+  {
+    "description": "MCP should recover after being available again",
+    "query": "Calculate the area of a circle",
+    "expected_category": "math",
+    "test_recovery": true,
+    "expected_confidence_min": 0.7
+  }
+]

@@ -14,8 +14,9 @@ The framework follows a **separation of concerns** design:
 
 - **ai-gateway**: Tests Semantic Router with Envoy AI Gateway integration
 - **aibrix**: Tests Semantic Router with vLLM AIBrix integration
-- **istio**: Tests Semantic Router with Istio Gateway (future)
-- **production-stack**: Tests vLLM Production Stack configurations (future)
+- **dynamic-config**: Tests Semantic Router with Kubernetes CRD-based configuration (IntelligentRoute/IntelligentPool)
+- **istio**: Tests Semantic Router with Istio service mesh integration
+- **production-stack**: Tests vLLM Production Stack configurations
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
 - **dynamo**: Tests with Nvidia Dynamo (future)
 
@@ -45,10 +46,18 @@ e2e/
 │   ├── rule_condition_logic.go        # Signal-decision: AND/OR operators
 │   ├── decision_fallback.go           # Signal-decision: Fallback behavior
 │   ├── keyword_routing.go             # Signal-decision: Keyword matching
-│   └── plugin_config_variations.go    # Signal-decision: Plugin configs
+│   ├── plugin_config_variations.go    # Signal-decision: Plugin configs
+│   └── embedding_signal_routing.go    # Signal-decision: Embedding signals
 ├── profiles/
-│   └── ai-gateway/       # AI Gateway test profile
-│       └── profile.go    # Profile definition and environment setup
+│   ├── ai-gateway/       # AI Gateway test profile
+│   │   └── profile.go    # Profile definition and environment setup
+│   ├── aibrix/           # AIBrix test profile
+│   │   └── profile.go
+│   └── dynamic-config/   # Dynamic CRD-based configuration profile
+│       ├── profile.go
+│       └── crds/         # IntelligentRoute and IntelligentPool CRDs
+│           ├── intelligentroute.yaml
+│           └── intelligentpool.yaml
 └── README.md
 ```
 
@@ -83,6 +92,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `decision-fallback-behavior` | Fallback to default decision when no match | 5 cases, fallback validation |
 | `keyword-routing` | Keyword-based routing decisions | 6 cases, keyword matching (case-insensitive) |
 | `plugin-config-variations` | Plugin configuration variations (PII allowlist, cache thresholds) | 6 cases, config validation |
+| `embedding-signal-routing` | EmbeddingSignal CRD routing with semantic similarity | 31 cases, PII/security/technical/domain routing accuracy |
 
 **Signal-Decision Engine Features Tested:**
 
@@ -94,6 +104,7 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 - ✅ Per-decision plugin configurations
 - ✅ PII allowlist handling
 - ✅ Per-decision cache thresholds (0.75, 0.92, 0.95)
+- ✅ Embedding signal routing (semantic similarity-based routing via IntelligentRoute CRD)
 
 All test cases:
 
@@ -120,6 +131,7 @@ make e2e-test
 
 ```bash
 make e2e-test E2E_PROFILE=ai-gateway
+make e2e-test E2E_PROFILE=production-stack
 ```
 
 ### Run specific test cases
@@ -346,6 +358,7 @@ Test data is stored in `e2e/testcases/testdata/` as JSON files. Each test case l
 - `cache_cases.json`: 5 groups of similar questions for semantic cache testing
 - `pii_detection_cases.json`: 10 PII types (email, phone, SSN, etc.)
 - `jailbreak_detection_cases.json`: 10 attack types (prompt injection, DAN, etc.)
+- `embedding_signal_cases.json`: 31 test cases for EmbeddingSignal routing (PII, security, technical, domain classification)
 
 **Signal-Decision Engine Tests** use embedded test cases (defined inline in test files) to validate:
 
@@ -355,6 +368,49 @@ Test data is stored in `e2e/testcases/testdata/` as JSON files. Each test case l
 - Decision fallback behavior (5 test cases)
 - Keyword-based routing (6 test cases)
 - Plugin configuration variations (6 test cases)
+
+### Embedding Signal Routing
+
+The `embedding-signal-routing` test validates the `IntelligentRoute` CRD with `EmbeddingSignal` configurations. This test:
+
+**Features Tested:**
+
+- Semantic similarity-based routing using embedding models (Qwen3/Gemma)
+- PII detection via embedding signals (semantic patterns like "share my credit card")
+- Security threat detection (SQL injection, unauthorized access attempts)
+- Technical domain routing (Kubernetes, container orchestration)
+- Domain classification (healthcare, finance, general knowledge)
+- Threshold behavior (0.75 similarity threshold)
+- Aggregation methods (max similarity across multiple candidates)
+- Paraphrase handling (different wording, same intent)
+- Multi-signal evaluation (multiple signals in one request)
+
+**Test Categories:**
+
+- PII Detection (7 cases): Semantic PII pattern matching
+- Security Threats (4 cases): Malicious intent detection
+- Technical Topics (4 cases): Kubernetes-specific routing
+- Domain Classification (4 cases): Healthcare, finance domains
+- Threshold Tests (3 cases): Similarity boundary testing
+- Aggregation Tests (2 cases): Multi-candidate matching
+- Paraphrase Tests (2 cases): Intent recognition
+- Multi-signal (1 case): Combined signal evaluation
+- Edge Cases (4 cases): Empty content, short/long queries
+
+**Profile Support:**
+
+- ✅ `dynamic-config` profile (uses CRDs)
+- ❌ `ai-gateway` profile (uses static YAML config)
+- ❌ `aibrix` profile (uses static YAML config)
+
+**Requirements:**
+
+- Embedding models must be initialized (Qwen3 or Gemma)
+- `EMBEDDING_MODEL_OVERRIDE=qwen3` environment variable for consistent test results
+- IntelligentRoute CRD with EmbeddingSignal definitions
+- Model requests must use `"model": "auto"` to trigger decision evaluation
+
+**Note:** This test differs from `pii-detection` (which uses regex/NER plugins) and `domain-classify` (which uses academic domain routing). Embedding signals use semantic similarity to detect **intent** rather than exact patterns.
 
 **Test Data Format Example:**
 
@@ -517,3 +573,186 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 ```
 
 See `profiles/ai-gateway/` for a complete example.
+
+## Profile Details
+
+### Istio Profile
+
+The Istio profile tests Semantic Router deployment and functionality in an Istio service mesh environment. It validates both Istio-specific features (sidecars, mTLS, tracing) and general Semantic Router functionality through Istio Gateway + VirtualService routing.
+
+**What it Tests:**
+
+- **Istio-Specific Features:**
+  - Istio sidecar injection and health
+  - Traffic routing through Istio ingress gateway
+  - Mutual TLS (mTLS) between services
+  - Distributed tracing and observability
+
+- **Semantic Router Features (through Istio):**
+  - Chat completions API and stress testing
+  - Domain classification and routing
+  - Semantic cache, PII detection, jailbreak detection
+  - Signal-Decision engine (priority, plugins, keywords, fallback)
+
+**Prerequisites:**
+
+- Docker and Kind (managed by E2E framework)
+- Helm (for installing Istio components)
+
+**Components Deployed:**
+
+1. **Istio Control Plane** (`istio-system` namespace):
+   - `istiod` - Istio control plane
+   - `istio-ingressgateway` - Ingress gateway for external traffic
+
+2. **Semantic Router** (`semantic-router` namespace):
+   - Deployed via Helm with Istio sidecar injection enabled
+   - Namespace labeled with `istio-injection=enabled`
+
+3. **Istio Resources**:
+   - `Gateway` - Configures ingress gateway on port 80
+   - `VirtualService` - Routes traffic to Semantic Router service
+   - `DestinationRule` - Enables mTLS with `ISTIO_MUTUAL` mode
+
+**Test Cases:**
+
+**Istio-Specific Tests (4):**
+
+| Test Case | Description | What it Validates |
+|-----------|-------------|-------------------|
+| `istio-sidecar-health-check` | Verify Envoy sidecar injection | - Istio-proxy container exists<br>- Sidecar is healthy and ready<br>- Namespace has `istio-injection=enabled` label |
+| `istio-traffic-routing` | Test routing through Istio gateway | - Gateway and VirtualService exist<br>- Requests route correctly to Semantic Router<br>- Istio/Envoy headers present in responses |
+| `istio-mtls-verification` | Verify mutual TLS configuration | - DestinationRule has `ISTIO_MUTUAL` mode<br>- mTLS certificates present in istio-proxy<br>- PeerAuthentication policy (if configured) |
+| `istio-tracing-observability` | Check distributed tracing and metrics | - Trace headers propagated<br>- Envoy metrics exposed<br>- Telemetry configuration<br>- Access logs enabled |
+
+**Common Functionality Tests (through Istio Gateway):**
+
+These tests validate that Semantic Router features work correctly when routed through Istio Gateway and VirtualService:
+
+- `chat-completions-request` - Basic API functionality
+- `chat-completions-stress-request` - Sequential stress (1000 requests)
+- `domain-classify` - Classification accuracy (65 cases)
+- `semantic-cache` - Cache hit rate (5 groups)
+- `pii-detection` - PII detection and blocking (10 types)
+- `jailbreak-detection` - Attack detection (10 types)
+- `decision-priority-selection` - Priority-based routing (4 cases)
+- `plugin-chain-execution` - Plugin ordering (4 cases)
+- `rule-condition-logic` - AND/OR operators (6 cases)
+- `decision-fallback-behavior` - Fallback handling (5 cases)
+- `keyword-routing` - Keyword matching (6 cases)
+- `plugin-config-variations` - Config variations (6 cases)
+- `chat-completions-progressive-stress` - Progressive QPS stress test
+
+**Total: 17 test cases** (4 Istio-specific + 13 common functionality)
+
+**Usage:**
+
+```bash
+# Run all Istio tests
+make e2e-test E2E_PROFILE=istio
+
+# Run specific Istio tests
+make e2e-test-specific E2E_PROFILE=istio E2E_TESTS="istio-sidecar-health-check,istio-mtls-verification"
+
+# Run with verbose output
+./bin/e2e -profile istio -verbose
+
+# Keep cluster for debugging
+make e2e-test E2E_PROFILE=istio E2E_KEEP_CLUSTER=true
+```
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────┐
+│         Istio Ingress Gateway            │
+│      (istio-system namespace)            │
+│   Port 80 → semantic-router service      │
+└────────────┬────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│    Semantic Router Pod                   │
+│  (semantic-router namespace)             │
+│  ┌─────────────┐  ┌──────────────────┐  │
+│  │   Main      │  │  Istio-Proxy     │  │
+│  │ Container   │◄─┤  (Envoy Sidecar) │  │
+│  │             │  │                  │  │
+│  │  :8801      │  │  mTLS, Tracing   │  │
+│  └─────────────┘  └──────────────────┘  │
+└─────────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────┐
+│         Istiod (Control Plane)           │
+│  - Config distribution                   │
+│  - Certificate management (mTLS)         │
+│  - Sidecar injection                     │
+└─────────────────────────────────────────┘
+```
+
+**Key Features Tested:**
+
+**Istio Integration:**
+
+- ✅ **Automatic Sidecar Injection**: Istio automatically injects Envoy proxy sidecars into pods
+- ✅ **Traffic Management**: Requests route through Istio Gateway → VirtualService → Semantic Router
+- ✅ **Security (mTLS)**: Automatic mutual TLS encryption and authentication between services
+- ✅ **Observability**: Distributed tracing, metrics collection, and access logs
+- ✅ **Service Mesh Integration**: Semantic Router operates correctly within Istio mesh
+
+**Test Coverage:**
+
+Istio-Specific Tests (4):
+
+- ✅ **istio-sidecar-health-check**: Validates sidecar injection and health
+- ✅ **istio-traffic-routing**: Tests routing through Gateway and VirtualService
+- ✅ **istio-mtls-verification**: Confirms mTLS configuration and certificates
+- ✅ **istio-tracing-observability**: Validates distributed tracing and metrics
+
+Common Functionality Tests (13):
+
+- ✅ **Chat Completions**: API functionality and stress testing
+- ✅ **Classification**: Domain-based routing with 65 test cases
+- ✅ **Security Features**: PII detection, jailbreak detection, semantic cache
+- ✅ **Signal-Decision Engine**: Priority routing, plugin chains, keyword matching, fallback behavior
+- ✅ **Load Handling**: Progressive stress testing (10-100 QPS)
+
+**Total: 17 comprehensive test cases validating both Istio integration and Semantic Router functionality through the service mesh**
+
+**Setup Steps (Automated by Profile):**
+
+1. Install Istio control plane using Helm (base, istiod, ingress gateway)
+2. Create namespace with `istio-injection=enabled` label
+3. Deploy Semantic Router via Helm (sidecar auto-injected)
+4. Create Istio Gateway and VirtualService for traffic routing
+5. Create DestinationRule for mTLS configuration
+6. Verify all components are ready
+
+**Troubleshooting:**
+
+If tests fail, check:
+
+```bash
+# Check Istio installation
+kubectl get pods -n istio-system
+
+# Check sidecar injection
+kubectl get pods -n semantic-router -o jsonpath='{.items[*].spec.containers[*].name}'
+
+# Check Istio resources
+kubectl get gateway,virtualservice,destinationrule -n semantic-router
+
+# Check mTLS configuration
+kubectl get destinationrule semantic-router -n semantic-router -o yaml
+
+# View Istio proxy logs
+kubectl logs -n semantic-router <pod-name> -c istio-proxy
+```
+
+**Related Resources:**
+
+- [Istio Documentation](https://istio.io/latest/docs/)
+- [Istio Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/)
+- [Istio Security (mTLS)](https://istio.io/latest/docs/concepts/security/)
+- [Istio Observability](https://istio.io/latest/docs/concepts/observability/)

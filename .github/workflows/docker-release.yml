@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build_and_push_extproc:
     if: github.repository == 'vllm-project/semantic-router'

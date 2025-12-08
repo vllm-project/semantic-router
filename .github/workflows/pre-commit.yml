@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch: # Allow manual triggering
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pre-commit:
     if: github.repository == 'vllm-project/semantic-router'

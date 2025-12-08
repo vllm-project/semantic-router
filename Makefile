@@ -12,6 +12,7 @@ _run:
 		-f tools/make/docs.mk \
 		-f tools/make/linter.mk \
 		-f tools/make/milvus.mk \
+		-f tools/make/redis.mk \
 		-f tools/make/models.mk \
 		-f tools/make/pre-commit.mk \
 		-f tools/make/docker.mk \

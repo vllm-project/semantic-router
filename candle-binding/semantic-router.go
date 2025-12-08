@@ -310,8 +310,9 @@ type SimResult struct {
 
 // ClassResult represents the result of a text classification
 type ClassResult struct {
-	Class      int     // Class index
-	Confidence float32 // Confidence score
+	Class      int      // Class index
+	Confidence float32  // Confidence score
+	Categories []string // Violation categories (e.g., "Violent", "Jailbreak") - only populated when unsafe/controversial
 }
 
 // ClassResultWithProbs represents the result of a text classification with full probability distribution

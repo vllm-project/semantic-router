@@ -1,0 +1,187 @@
+[
+  {
+    "description": "PII (SSN) should block entire plugin chain",
+    "query": "My social security number is 123-45-6789",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["US_SSN"]
+  },
+  {
+    "description": "PII (EMAIL) should block entire plugin chain",
+    "query": "Contact me at john.doe@example.com",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["EMAIL_ADDRESS"]
+  },
+  {
+    "description": "PII (EMAIL) with name context should be blocked",
+    "query": "Please send the report to sarah.smith@company.org for review",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["EMAIL_ADDRESS", "PERSON"]
+  },
+  {
+    "description": "PII (EMAIL) in contact request should be blocked",
+    "query": "You can reach me at support@techcorp.io anytime",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["EMAIL_ADDRESS"]
+  },
+  {
+    "description": "PII (PHONE_NUMBER) should block plugin chain",
+    "query": "Call me at 555-123-4567 for more details",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["PHONE_NUMBER"]
+  },
+  {
+    "description": "PII (PHONE_NUMBER) with context should be blocked",
+    "query": "Contact our office at 555-867-5309 for urgent matters",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["PHONE_NUMBER"]
+  },
+  {
+    "description": "PII (CREDIT_CARD) should block plugin chain",
+    "query": "Process payment with card 4532-1234-5678-9012",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["CREDIT_CARD"]
+  },
+  {
+    "description": "PII (CREDIT_CARD) Visa format should be blocked",
+    "query": "Use my credit card 4111111111111111 for the subscription",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["CREDIT_CARD"]
+  },
+  {
+    "description": "PII (US_SSN) alternative format should be blocked",
+    "query": "SSN for verification: 456 78 9012",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["US_SSN"]
+  },
+  {
+    "description": "PII (PERSON) with full name should be blocked",
+    "query": "Send the invoice to Dr. Michael Johnson at the clinic",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["PERSON"]
+  },
+  {
+    "description": "PII (STREET_ADDRESS) should be blocked",
+    "query": "Deliver the package to 123 Main Street, Apt 4B",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["STREET_ADDRESS"]
+  },
+  {
+    "description": "PII (IP_ADDRESS) IPv4 should be blocked",
+    "query": "The server IP is 192.168.1.100, please whitelist it",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["IP_ADDRESS"]
+  },
+  {
+    "description": "PII (IP_ADDRESS) IPv6 should be blocked",
+    "query": "Connect to 2001:0db8:85a3:0000:0000:8a2e:0370:7334 for the service",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["IP_ADDRESS"]
+  },
+  {
+    "description": "PII (IBAN_CODE) should be blocked",
+    "query": "Transfer funds to IBAN: DE89370400440532013000",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["IBAN_CODE"]
+  },
+  {
+    "description": "Multiple PII (EMAIL + PHONE) should be blocked",
+    "query": "Contact support@example.com or call 555-987-6543",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["EMAIL_ADDRESS", "PHONE_NUMBER"]
+  },
+  {
+    "description": "Multiple PII (SSN + PERSON) should be blocked",
+    "query": "Patient John Smith, SSN 234-56-7890, needs immediate care",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["US_SSN", "PERSON"]
+  },
+  {
+    "description": "Multiple PII (CREDIT_CARD + EMAIL) should be blocked",
+    "query": "Send receipt to buyer@shop.com for card ending 4242424242424242",
+    "expect_pii_block": true,
+    "expect_cache_used": false,
+    "expect_prompt_applied": false,
+    "pii_types": ["CREDIT_CARD", "EMAIL_ADDRESS"]
+  },
+  {
+    "description": "Clean math query should pass PII and apply prompt",
+    "query": "What is 5 + 7?",
+    "expect_pii_block": false,
+    "expect_cache_used": false,
+    "expect_prompt_applied": true,
+    "pii_types": []
+  },
+  {
+    "description": "Biology query should pass PII plugin (ORGANIZATION allowed)",
+    "query": "Tell me about photosynthesis",
+    "expect_pii_block": false,
+    "expect_cache_used": false,
+    "expect_prompt_applied": true,
+    "pii_types": []
+  },
+  {
+    "description": "Clean coding question should pass",
+    "query": "How do I write a for loop in Python?",
+    "expect_pii_block": false,
+    "expect_cache_used": false,
+    "expect_prompt_applied": true,
+    "pii_types": []
+  },
+  {
+    "description": "Clean general knowledge question should pass",
+    "query": "What is the capital of France?",
+    "expect_pii_block": false,
+    "expect_cache_used": false,
+    "expect_prompt_applied": true,
+    "pii_types": []
+  },
+  {
+    "description": "Clean science question should pass",
+    "query": "Explain quantum entanglement in simple terms",
+    "expect_pii_block": false,
+    "expect_cache_used": false,
+    "expect_prompt_applied": true,
+    "pii_types": []
+  },
+  {
+    "description": "Clean history question should pass",
+    "query": "When did World War II end?",
+    "expect_pii_block": false,
+    "expect_cache_used": false,
+    "expect_prompt_applied": true,
+    "pii_types": []
+  }
+]
+

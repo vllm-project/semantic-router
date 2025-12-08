@@ -123,6 +123,8 @@ api:
       enabled: true
 
 observability:
+  metrics:
+    enabled: true  # Set to false to disable the Prometheus /metrics endpoint
   tracing:
     enabled: true
     provider: "opentelemetry"

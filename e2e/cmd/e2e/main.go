@@ -12,13 +12,17 @@ import (
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
+	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 )
 
@@ -107,13 +111,14 @@ func getProfile(name string) (framework.Profile, error) {
 		return dynamicconfig.NewProfile(), nil
 	case "aibrix":
 		return aibrix.NewProfile(), nil
+	case "istio":
+		return istio.NewProfile(), nil
 	case "llm-d":
 		return llmd.NewProfile(), nil
+	case "production-stack":
+		return productionstack.NewProfile(), nil
 	case "routing-strategies":
 		return routingstrategies.NewProfile(), nil
-	// Add more profiles here as they are implemented
-	// case "istio":
-	//     return istio.NewProfile(), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", name)
 	}

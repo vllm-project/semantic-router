@@ -48,6 +48,8 @@ helm install semantic-router ./deploy/helm/semantic-router \
   --create-namespace
 ```
 
+> Need a registry mirror/proxy (e.g., in China)? Append `--set global.imageRegistry=<your-registry>` to any Helm install/upgrade command.
+
 ### Verify Installation
 
 ```bash

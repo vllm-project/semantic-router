@@ -1,0 +1,131 @@
+# Redis Vector Database Configuration for Semantic Cache
+# This configuration file contains settings for using Redis with vector search as the semantic cache backend.
+# To use this configuration:
+# 1. Set backend_type: "redis" in your main config.yaml
+# 2. Set backend_config_path: "config/semantic-cache/redis.yaml" in your main config.yaml
+# 3. Ensure Redis server with RediSearch module is running and accessible
+# 4. Redis Stack or Redis Enterprise with vector search capability is required
+
+# Redis connection settings
+connection:
+  # Redis server host (change for production deployment)
+  host: "localhost"  # For production: use your Redis cluster endpoint
+
+  # Redis server port
+  port: 6379  # Standard Redis port
+
+  # Database number (0-15 for standard Redis)
+  database: 0
+
+  # Password for authentication (leave empty if no auth required)
+  password: ""
+
+  # Connection timeout in seconds
+  timeout: 30
+
+  # TLS/SSL configuration (recommended for production)
+  tls:
+    enabled: false      # Set to true for secure connections
+    cert_file: ""       # Path to client certificate
+    key_file: ""        # Path to client private key
+    ca_file: ""         # Path to CA certificate
+
+# Index settings for vector search
+index:
+  # Name of the search index
+  name: "semantic_cache_idx"
+
+  # Key prefix for documents in this index
+  prefix: "doc:"
+
+  # Vector field configuration
+  vector_field:
+    # Name of the vector field
+    name: "embedding"
+
+    # Dimension of the embeddings (auto-detected from model at runtime)
+    dimension: 384  # This value is ignored - dimension is auto-detected from the embedding model
+
+    # Distance metric for similarity calculation
+    # Options: COSINE (cosine similarity), L2 (Euclidean distance), IP (inner product)
+    metric_type: "COSINE"  # COSINE is recommended for semantic similarity
+
+  # Index type and parameters
+  # Options: HNSW (Hierarchical Navigable Small World) or FLAT (brute force)
+  index_type: "HNSW"  # HNSW is recommended for performance
+
+  # Index parameters (only used when index_type is HNSW)
+  params:
+    M: 16              # Number of bi-directional links per node (default: 16)
+    efConstruction: 64  # Size of dynamic candidate list during construction (default: 64)
+
+# Search configuration
+search:
+  # Number of top results to retrieve for similarity comparison
+  topk: 1  # We only need the most similar entry for cache lookup
+
+# Logging and monitoring
+logging:
+  # Log level for Redis client operations (debug, info, warn, error)
+  level: "info"
+
+  # Enable query/search logging for debugging
+  enable_query_log: false
+
+  # Enable performance metrics collection
+  enable_metrics: true
+
+# Development and debugging settings
+development:
+  # Drop index on startup (WARNING: This will delete all cached data)
+  drop_index_on_startup: true  # Enable for development to test dynamic dimensions
+
+  # Create index if it doesn't exist
+  auto_create_index: true
+
+  # Print detailed error messages
+  verbose_errors: true
+
+# Example configurations for different environments:
+#
+# Local Development (Docker - Redis Stack):
+# connection:
+#   host: "localhost"
+#   port: 6379
+#   password: ""
+#   database: 0
+# development:
+#   drop_index_on_startup: true  # Clean start for development
+#   auto_create_index: true
+#
+# Production (Redis Enterprise Cloud):
+# connection:
+#   host: "redis-12345.c123.us-east-1-1.ec2.cloud.redislabs.com"
+#   port: 12345
+#   password: "your-secure-password"
+#   database: 0
+#   tls:
+#     enabled: true
+# development:
+#   drop_index_on_startup: false
+#   auto_create_index: false  # Pre-create indexes in production
+#
+# Kubernetes Deployment:
+# connection:
+#   host: "redis-service.redis-system.svc.cluster.local"
+#   port: 6379
+#   timeout: 60  # Longer timeout for cluster environments
+#   password: "${REDIS_PASSWORD}"  # Use environment variable
+#
+# Performance Tuning Notes:
+# - For HNSW index:
+#   * M (16-64): Higher M = better recall, more memory, slower indexing
+#   * efConstruction (64-512): Higher ef = better index quality, slower indexing
+# - For metric_type:
+#   * COSINE: Best for semantic similarity (normalized vectors)
+#   * IP: Fast but requires normalized vectors
+#   * L2: Euclidean distance, good for non-normalized vectors
+# - For index_type:
+#   * HNSW: Fast approximate search, recommended for >10k entries
+#   * FLAT: Exact search, better for <10k entries or when recall must be 100%
+

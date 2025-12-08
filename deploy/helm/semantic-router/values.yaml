@@ -6,6 +6,8 @@
 global:
   # -- Namespace for all resources (if not specified, uses Release.Namespace)
   namespace: ""
+  # -- Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com)
+  imageRegistry: ""
 
 # -- Number of replicas for the deployment
 replicaCount: 1
@@ -131,7 +133,11 @@ initContainer:
   # -- Enable init container
   enabled: true
   # -- Init container image
-  image: python:3.11-slim
+  image:
+    repository: ghcr.io/vllm-project/semantic-router/model-downloader
+    # Leave empty to default to the chart AppVersion; override with a pinned tag if desired
+    tag: ""
+    pullPolicy: IfNotPresent
   # -- Resource limits for init container
   resources:
     limits:

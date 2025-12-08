@@ -25,7 +25,7 @@ func setupServiceConnection(ctx context.Context, client *kubernetes.Clientset, o
 	var serviceName string
 	if svcConfig.LabelSelector != "" {
 		var err error
-		serviceName, err = helpers.GetEnvoyServiceName(ctx, client, svcConfig.LabelSelector, opts.Verbose)
+		serviceName, err = helpers.GetServiceByLabelInNamespace(ctx, client, svcConfig.Namespace, svcConfig.LabelSelector, opts.Verbose)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to get service by label selector: %w", err)
 		}
