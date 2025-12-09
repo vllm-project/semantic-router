@@ -28,6 +28,7 @@ jobs:
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
+        # Note: dynamo profile requires GPU, run manually with: make e2e-test-dynamo
         profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio, production-stack]
 
     steps:

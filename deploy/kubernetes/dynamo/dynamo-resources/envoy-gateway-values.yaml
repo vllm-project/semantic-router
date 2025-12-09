@@ -1,0 +1,8 @@
+# Envoy Gateway values for Dynamo E2E Testing
+# Enables ExtensionAPIs (EnvoyPatchPolicy) for Semantic Router integration
+
+config:
+  envoyGateway:
+    extensionApis:
+      enableEnvoyPatchPolicy: true
+
