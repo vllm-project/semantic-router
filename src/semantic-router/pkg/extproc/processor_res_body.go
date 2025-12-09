@@ -15,6 +15,9 @@ import (
 func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_ResponseBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	completionLatency := time.Since(ctx.StartTime)
 
+	// Decrement active request count for queue depth estimation
+	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
+
 	// Process the response for caching
 	responseBody := v.ResponseBody.Body
 
@@ -67,6 +70,16 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			timePerToken := completionLatency.Seconds() / float64(completionTokens)
 			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
 		}
+
+		// Record windowed model metrics for load balancing
+		metrics.RecordModelWindowedRequest(
+			ctx.RequestModel,
+			completionLatency.Seconds(),
+			int64(promptTokens),
+			int64(completionTokens),
+			false, // isError
+			false, // isTimeout
+		)
 
 		// Compute and record cost if pricing is configured
 		if r.Config != nil {

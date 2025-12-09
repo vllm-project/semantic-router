@@ -179,7 +179,69 @@ histogram_quantile(0.95, rate(llm_model_completion_latency_seconds_bucket[5m]))
 
 ---
 
-## 6. Troubleshooting
+## 6. Windowed Model Metrics (Load Balancing)
+
+Enhanced time-windowed metrics for model performance tracking, useful for load balancing decisions in Kubernetes environments where model selection matters more than endpoint selection.
+
+### Configuration
+
+Enable windowed metrics in `config.yaml`:
+
+```yaml
+observability:
+  metrics:
+    windowed_metrics:
+      enabled: true
+      time_windows: ["1m", "5m", "15m", "1h", "24h"]
+      update_interval: "10s"
+      model_metrics: true
+      queue_depth_estimation: true
+      max_models: 100
+```
+
+### Model-Level Metrics
+
+| Metric                                      | Type  | Labels                       | Description                           |
+| ------------------------------------------- | ----- | ---------------------------- | ------------------------------------- |
+| `llm_model_latency_windowed_seconds`        | gauge | model, time_window           | Average latency per time window       |
+| `llm_model_requests_windowed_total`         | gauge | model, time_window           | Request count per time window         |
+| `llm_model_tokens_windowed_total`           | gauge | model, token_type, time_window | Token throughput per window         |
+| `llm_model_utilization_percentage`          | gauge | model, time_window           | Estimated utilization percentage      |
+| `llm_model_queue_depth_estimated`           | gauge | model                        | Current estimated queue depth         |
+| `llm_model_error_rate_windowed`             | gauge | model, time_window           | Error rate per time window            |
+| `llm_model_latency_p50_windowed_seconds`    | gauge | model, time_window           | P50 latency per time window           |
+| `llm_model_latency_p95_windowed_seconds`    | gauge | model, time_window           | P95 latency per time window           |
+| `llm_model_latency_p99_windowed_seconds`    | gauge | model, time_window           | P99 latency per time window           |
+
+### Example Queries
+
+```promql
+# Average latency for model in last 5 minutes
+llm_model_latency_windowed_seconds{model="gpt-4", time_window="5m"}
+
+# P95 latency comparison across models
+llm_model_latency_p95_windowed_seconds{time_window="15m"}
+
+# Token throughput per model
+llm_model_tokens_windowed_total{token_type="completion", time_window="1h"}
+
+# Current queue depth for load balancing decisions
+llm_model_queue_depth_estimated{model="gpt-4"}
+
+# Error rate monitoring
+llm_model_error_rate_windowed{time_window="5m"} > 0.05
+```
+
+### Use Cases
+
+1. **Load Balancing**: Use queue depth and latency metrics to route requests to less loaded models
+2. **Performance Monitoring**: Track P95/P99 latency trends across time windows
+3. **Capacity Planning**: Monitor utilization percentages to identify when to scale models
+4. **Alerting**: Set alerts on error rates or latency spikes within specific time windows
+
+---
+
+## 7. Troubleshooting
 
 | Issue           | Check               | Fix                                                   |
 | --------------- | ------------------- | ----------------------------------------------------- |
