@@ -43,11 +43,13 @@ MILVUS_MODE=standalone RECREATE_CLUSTER=false CLEANUP=false ./tools/milvus/test-
 ## Troubleshooting
 
 **ServiceMonitor CRD Not Found:**
+
 ```bash
 # Add: --set metrics.serviceMonitor.enabled=false
 ```
 
 **Both Pulsar versions running:**
+
 ```bash
 # Add: --set pulsar.enabled=false --set pulsarv3.enabled=true
 ```

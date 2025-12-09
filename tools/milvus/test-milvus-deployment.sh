@@ -257,7 +257,11 @@ section_monitoring() {
     if kubectl get crd servicemonitors.monitoring.coreos.com &> /dev/null; then
         log_info "Prometheus Operator detected"
         log_info "ServiceMonitor is enabled by default in Helm values"
-        kubectl get servicemonitor -n "$NAMESPACE" 2>/dev/null && log_success "ServiceMonitor found" || log_warning "ServiceMonitor not yet created"
+        if kubectl get servicemonitor -n "$NAMESPACE" 2>/dev/null; then
+            log_success "ServiceMonitor found"
+        else
+            log_warning "ServiceMonitor not yet created"
+        fi
     else
         log_warning "Prometheus Operator not installed, ServiceMonitor will not be created"
     fi
