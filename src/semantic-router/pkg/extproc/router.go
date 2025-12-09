@@ -23,6 +23,7 @@ type OpenAIRouter struct {
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
+	ClassificationSvc    *services.ClassificationService // NEW: Use service with UnifiedClassifier
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
@@ -155,20 +156,28 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create global classification service for API access with auto-discovery
 	// This will prioritize LoRA models over legacy ModernBERT
+	var classificationSvc *services.ClassificationService
 	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
 	if err != nil {
 		logging.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
-		services.NewClassificationService(classifier, cfg)
+		classificationSvc = services.NewClassificationService(classifier, cfg)
 	} else {
-		logging.Infof("Router initialization: Using auto-discovered unified classifier")
-		// The service is already set as global in NewUnifiedClassificationService
-		_ = autoSvc
+		classificationSvc = autoSvc
+		if classificationSvc.HasUnifiedClassifier() {
+			// Wire the UnifiedClassifier from the service to the legacy Classifier for delegation
+			unifiedClassifier := classificationSvc.GetUnifiedClassifier()
+			if unifiedClassifier != nil {
+				classifier.UnifiedClassifier = unifiedClassifier
+				logging.Infof("Router using UnifiedClassifier (LoRA models) for category classification")
+			}
+		}
 	}
 
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
 		Classifier:           classifier,
+		ClassificationSvc:    classificationSvc, // NEW: Store the service
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
