@@ -1,7 +1,7 @@
-# Install with Istio Gateway 
+# Install with Istio Gateway
 
 This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vsr with it. However there are differences between how different Envoy based Gateways process the ExtProc protocol, hence the deployment described here is different from the deployment of vsr alongwith other types of Envoy based Gateways as described in the other guides in this repo. There are multiple architecture options possible to combine Istio Gateway with vsr. This document describes one of the options.
- 
+
 ## Architecture Overview
 
 The deployment consists of:
@@ -16,20 +16,20 @@ The deployment consists of:
 Before starting, ensure you have the following tools installed:
 
 - [Docker](https://docs.docker.com/get-docker/) - Container runtime
-- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes 
+- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
 
-Either minikube or kind works to deploy a local kubernetes cluster needed for this exercise so you only need one of these two. We use minikube in the description below but the same steps should work with a Kind cluster once the cluster is created in Step 1. 
+Either minikube or kind works to deploy a local kubernetes cluster needed for this exercise so you only need one of these two. We use minikube in the description below but the same steps should work with a Kind cluster once the cluster is created in Step 1.
 
 We will also deploy two different LLMs in this exercise to illustrate the semantic routing and model routing function more clearly so you ideally you should run this on a machine that has GPU support to run the two models used in this exercise and adequate memory and storage for these models. You can also use equivalent steps on a smaller server that runs smaller LLMs on a CPU based server without GPUs.
 
 ## Step 1: Create Minikube Cluster
 
-Create a local Kubernetes cluster via minikube (or equivalently via Kind). 
+Create a local Kubernetes cluster via minikube (or equivalently via Kind).
 
 ```bash
-# Create cluster  
+# Create cluster
 $ minikube start \
     --driver docker \
     --container-runtime docker \
@@ -50,21 +50,21 @@ kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
 ```
 
 ```bash
-# Create vLLM service running llama3-8b  
+# Create vLLM service running llama3-8b
 kubectl apply -f deploy/kubernetes/istio/vLlama3.yaml
 ```
 
 This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state.  Similarly also deploy the second LLM (phi4-mini) and wait for several minutes until the pod is in READY state.
 
 ```bash
-# Create vLLM service running phi4-mini  
+# Create vLLM service running phi4-mini
 kubectl apply -f deploy/kubernetes/istio/vPhi4.yaml
 ```
 
 At the end of this you should be able to see both your vLLM pods are READY and serving these LLMs using the command below. You should also see Kubernetes services exposing the IP/ port on which these models are being served. In the example below the llama3-8b model is being served via a kubernetes service with service IP of 10.108.250.109 and port 80.
 
 ```bash
-# Verify that vLLM pods running the two LLMs are READY and serving  
+# Verify that vLLM pods running the two LLMs are READY and serving
 
 kubectl get pods
 NAME                                           READY   STATUS    RESTARTS     AGE
@@ -72,7 +72,7 @@ llama-8b-57b95475bd-ph7s4                      1/1     Running   0            9d
 phi4-mini-887476b56-74twv                      1/1     Running   0            9d
 
 # View the IP/port of the Kubernetes services on which these models are being served
- 
+
 kubectl get service
 NAME                                  TYPE           CLUSTER-IP       EXTERNAL-IP      PORT(S)                        AGE
 kubernetes                            ClusterIP      10.96.0.1        <none>           443/TCP                        36d
@@ -104,7 +104,7 @@ kubectl get pods -n istio-system
 
 ## Step 4: Update vsr config
 
-The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. Ensure that the models in the config file match the models you are using and that the vllm_endpoints in the file match the ip/ port of the llm kubernetes services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features such as PromptGuard or ToolCalling. 
+The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. Ensure that the models in the config file match the models you are using and that the vllm_endpoints in the file match the ip/ port of the llm kubernetes services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features such as PromptGuard or ToolCalling.
 
 ## Step 5: Deploy vLLM Semantic Router
 
@@ -130,7 +130,7 @@ kubectl apply -f deploy/kubernetes/istio/destinationrule.yaml
 kubectl apply -f deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-## Step 7: Install gateway routes 
+## Step 7: Install gateway routes
 
 Install HTTPRoutes in the Istio gateway.
 
@@ -138,8 +138,9 @@ Install HTTPRoutes in the Istio gateway.
 kubectl apply -f deploy/kubernetes/istio/httproute-llama3-8b.yaml
 kubectl apply -f deploy/kubernetes/istio/httproute-phi4-mini.yaml
 ```
- 
+
 ## Step 8: Testing the Deployment
+
 To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
 
 ```bash
@@ -156,7 +157,7 @@ Try the following cases with and without model "auto" selection to confirm that 
 Example queries to try include the following
 
 ```bash
-# Model name llama3-8b provided explicitly, should route to this backend 
+# Model name llama3-8b provided explicitly, should route to this backend
 curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "llama3-8b",
         "messages": [
@@ -168,7 +169,7 @@ curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: applicati
 ```
 
 ```bash
-# Model name set to "auto", should categorize to "computer science" & route to llama3-8b 
+# Model name set to "auto", should categorize to "computer science" & route to llama3-8b
 curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "auto",
         "messages": [
@@ -180,7 +181,7 @@ curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: applicati
 ```
 
 ```bash
-# Model name phi4-mini provided explicitly, should route to this backend 
+# Model name phi4-mini provided explicitly, should route to this backend
 curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "phi4-mini",
         "messages": [
@@ -192,7 +193,7 @@ curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: applicati
 ```
 
 ```bash
-# Model name set to "auto", should categorize to "math" & route to phi4-mini 
+# Model name set to "auto", should categorize to "math" & route to phi4-mini
 curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "auto",
         "messages": [
@@ -211,7 +212,7 @@ curl http://192.168.49.2:30913/v1/chat/completions   -H "Content-Type: applicati
 
 ```bash
 # Check istio gateway status
-kubectl get gateway 
+kubectl get gateway
 
 # Check istio gw service status
 kubectl get svc inference-gateway-istio
@@ -226,7 +227,7 @@ kubectl logs deploy/inference-gateway-istio -c istio-proxy
 # Check semantic router pod
 kubectl get pods -n vllm-semantic-router-system
 
-# Check semantic router service 
+# Check semantic router service
 kubectl get svc -n vllm-semantic-router-system
 
 # Check semantic router logs
@@ -240,17 +241,17 @@ kubectl logs -n vllm-semantic-router-system deployment/semantic-router
 # Remove semantic router
 kubectl delete -k deploy/kubernetes/istio/
 
-# Remove Istio 
+# Remove Istio
 istioctl uninstall --purge
 
 # Remove LLMs
 kubectl delete -f deploy/kubernetes/istio/vLlama3.yaml
 kubectl delete -f deploy/kubernetes/istio/vPhi4.yaml
 
-# Stop minikube cluster 
+# Stop minikube cluster
 minikube stop
 
-# Delete minikube cluster 
+# Delete minikube cluster
 minikube delete
 ```
 

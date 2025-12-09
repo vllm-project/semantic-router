@@ -39,7 +39,7 @@
 
 #### Auto-Selection of Models and LoRA Adapters
 
-An **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models or LoRA adapters from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
+A **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models or LoRA adapters from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
 
 ![mom-overview](./website/static/img/mom-overview.png)
 
