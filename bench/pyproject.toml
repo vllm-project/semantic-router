@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-semantic-router-bench"
-version = "1.0.0"
+version = "1.1.0"
 description = "Comprehensive benchmark suite for semantic router vs direct vLLM evaluation across multiple reasoning datasets"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -77,6 +77,7 @@ Repository = "https://github.com/vllm-project/semantic-router"
 vllm-semantic-router-bench = "vllm_semantic_router_bench.cli:main"
 router-bench = "vllm_semantic_router_bench.router_reason_bench_multi_dataset:main"
 bench-plot = "vllm_semantic_router_bench.bench_plot:main"
+reasoning-mode-eval = "vllm_semantic_router_bench.reasoning_mode_eval:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
