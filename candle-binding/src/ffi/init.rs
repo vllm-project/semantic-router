@@ -37,6 +37,10 @@ pub static PARALLEL_LORA_ENGINE: OnceLock<
 pub static LORA_TOKEN_CLASSIFIER: OnceLock<
     Arc<crate::classifiers::lora::token_lora::LoRATokenClassifier>,
 > = OnceLock::new();
+// LoRA intent classifier for sequence classification
+pub static LORA_INTENT_CLASSIFIER: OnceLock<
+    Arc<crate::classifiers::lora::intent_lora::IntentLoRAClassifier>,
+> = OnceLock::new();
 
 /// Model type detection for intelligent routing
 #[derive(Debug, Clone, PartialEq)]
@@ -604,7 +608,6 @@ pub extern "C" fn init_candle_bert_classifier(
     num_classes: i32,
     use_cpu: bool,
 ) -> bool {
-    // Migrated from lib.rs:1555-1578
     let model_path = unsafe {
         match CStr::from_ptr(model_path).to_str() {
             Ok(s) => s,
@@ -612,20 +615,46 @@ pub extern "C" fn init_candle_bert_classifier(
         }
     };
 
-    // Initialize TraditionalBertClassifier
-    match crate::model_architectures::traditional::bert::TraditionalBertClassifier::new(
-        model_path,
-        num_classes as usize,
-        use_cpu,
-    ) {
-        Ok(_classifier) => {
-            // Store in global static (would need to add this to the lazy_static block)
+    // Intelligent model type detection (same as token classifier)
+    let model_type = detect_model_type(model_path);
 
-            true
+    match model_type {
+        ModelType::LoRA => {
+            // Check if already initialized
+            if LORA_INTENT_CLASSIFIER.get().is_some() {
+                return true; // Already initialized, return success
+            }
+
+            // Route to LoRA intent classifier initialization
+            match crate::classifiers::lora::intent_lora::IntentLoRAClassifier::new(
+                model_path, use_cpu,
+            ) {
+                Ok(classifier) => LORA_INTENT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Err(e) => {
+                    eprintln!(
+                        "  ERROR: Failed to initialize LoRA intent classifier: {}",
+                        e
+                    );
+                    false
+                }
+            }
         }
-        Err(e) => {
-            eprintln!("Failed to initialize Candle BERT classifier: {}", e);
-            false
+        ModelType::Traditional => {
+            // Initialize TraditionalBertClassifier
+            match crate::model_architectures::traditional::bert::TraditionalBertClassifier::new(
+                model_path,
+                num_classes as usize,
+                use_cpu,
+            ) {
+                Ok(_classifier) => {
+                    // Store in global static (would need to add this to the lazy_static block)
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to initialize Candle BERT classifier: {}", e);
+                    false
+                }
+            }
         }
     }
 }

@@ -38,6 +38,7 @@ type HNSWIndex struct {
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
 	entries             []CacheEntry
+	entryMap            map[string]int // requestID -> index for O(1) lookup
 	mu                  sync.RWMutex
 	similarityThreshold float32
 	maxEntries          int
@@ -47,11 +48,19 @@ type InMemoryCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	evictionPolicy      EvictionPolicy
-	hnswIndex           *HNSWIndex
-	useHNSW             bool
-	hnswNeedsRebuild    bool   // true while the HNSW graph is stale relative to entries
-	hnswEfSearch        int    // Search-time ef parameter
-	embeddingModel      string // "bert", "qwen3", or "gemma"
+	evictionPolicyType  EvictionPolicyType // Track the policy type for optimized eviction
+
+	// O(1) eviction tracking
+	optimizedLRU   *LRUPolicy
+	optimizedLFU   *LFUPolicy
+	optimizedFIFO  *FIFOPolicy
+	expirationHeap *ExpirationHeap
+
+	hnswIndex        *HNSWIndex
+	useHNSW          bool
+	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
+	hnswEfSearch     int    // Search-time ef parameter
+	embeddingModel   string // "bert", "qwen3", or "gemma"
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -73,16 +82,6 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 	logging.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s, useHNSW=%t",
 		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold, options.EvictionPolicy, options.UseHNSW)
 
-	var evictionPolicy EvictionPolicy
-	switch options.EvictionPolicy {
-	case LRUEvictionPolicyType:
-		evictionPolicy = &LRUPolicy{}
-	case LFUEvictionPolicyType:
-		evictionPolicy = &LFUPolicy{}
-	default: // FIFOEvictionPolicyType
-		evictionPolicy = &FIFOPolicy{}
-	}
-
 	// Set HNSW search ef parameter
 	efSearch := options.HNSWEfSearch
 	if efSearch <= 0 {
@@ -99,14 +98,32 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
+		entryMap:            make(map[string]int),
 		similarityThreshold: options.SimilarityThreshold,
 		maxEntries:          options.MaxEntries,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		evictionPolicy:      evictionPolicy,
+		evictionPolicyType:  options.EvictionPolicy,
+		expirationHeap:      NewExpirationHeap(),
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
+	}
+
+	// Initialize O(1) eviction policy
+	switch options.EvictionPolicy {
+	case LRUEvictionPolicyType:
+		cache.optimizedLRU = NewLRUPolicy()
+		cache.evictionPolicy = cache.optimizedLRU
+		logging.Debugf("LRU policy initialized for O(1) eviction")
+	case LFUEvictionPolicyType:
+		cache.optimizedLFU = NewLFUPolicy()
+		cache.evictionPolicy = cache.optimizedLFU
+		logging.Debugf("LFU policy initialized for O(1) eviction")
+	default: // FIFO
+		cache.optimizedFIFO = NewFIFOPolicy()
+		cache.evictionPolicy = cache.optimizedFIFO
+		logging.Debugf("FIFO policy initialized for O(1) eviction")
 	}
 
 	// Initialize HNSW index if enabled
@@ -208,6 +225,15 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 
 	c.entries = append(c.entries, entry)
 	entryIndex := len(c.entries) - 1
+	c.entryMap[requestID] = entryIndex
+
+	// Register with optimized eviction policy for O(1) eviction
+	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
+
+	// Register with expiration heap for efficient TTL cleanup
+	if c.ttlSeconds > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+	}
 
 	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
 	c.addEntryToHNSWIndex(entryIndex, embedding)
@@ -298,6 +324,15 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 
 	c.entries = append(c.entries, entry)
 	entryIndex := len(c.entries) - 1
+	c.entryMap[requestID] = entryIndex
+
+	// Register with optimized eviction policy for O(1) eviction
+	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
+
+	// Register with expiration heap for efficient TTL cleanup
+	if c.ttlSeconds > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+	}
 
 	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
 	c.addEntryToHNSWIndex(entryIndex, embedding)
@@ -573,35 +608,55 @@ func (c *InMemoryCache) cleanupExpiredEntriesDeferred() {
 }
 
 // cleanupExpiredEntriesInternal optionally postpones HNSW rebuild until the caller finishes batching updates.
+// Uses expiration heap for O(k) cleanup where k = number of expired entries.
 func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
 	if c.ttlSeconds <= 0 {
 		return
 	}
 
 	now := time.Now()
-	validEntries := make([]CacheEntry, 0, len(c.entries))
 
-	for _, entry := range c.entries {
-		// Retain entries that are still within their TTL based on last access
-		if !c.isExpired(entry, now) {
-			validEntries = append(validEntries, entry)
-		}
-	}
+	// Use expiration heap for efficient O(k) cleanup where k = expired entries
+	expiredRequestIDs := c.expirationHeap.PopExpired(now)
 
-	if len(validEntries) == len(c.entries) {
+	if len(expiredRequestIDs) == 0 {
 		return
 	}
 
-	expiredCount := len(c.entries) - len(validEntries)
+	// Remove expired entries from the entries slice
+	// Build a set of expired request IDs for O(1) lookup
+	expiredSet := make(map[string]bool, len(expiredRequestIDs))
+	for _, id := range expiredRequestIDs {
+		expiredSet[id] = true
+	}
+
+	// Compact the entries slice, keeping non-expired entries
+	writeIdx := 0
+	for readIdx := 0; readIdx < len(c.entries); readIdx++ {
+		entry := c.entries[readIdx]
+		if !expiredSet[entry.RequestID] {
+			if writeIdx != readIdx {
+				c.entries[writeIdx] = entry
+				// Update tracking for the moved entry
+				c.updateMovedEntryIndex(entry.RequestID, readIdx, writeIdx)
+			}
+			writeIdx++
+		} else {
+			// Remove from tracking structures
+			c.removeEntryFromTracking(readIdx, entry.RequestID)
+		}
+	}
+	c.entries = c.entries[:writeIdx]
+
+	expiredCount := len(expiredRequestIDs)
 	logging.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
-		expiredCount, len(validEntries))
+		expiredCount, len(c.entries))
 	logging.LogEvent("cache_cleanup", map[string]interface{}{
 		"backend":         "memory",
 		"expired_count":   expiredCount,
-		"remaining_count": len(validEntries),
+		"remaining_count": len(c.entries),
 		"ttl_seconds":     c.ttlSeconds,
 	})
-	c.entries = validEntries
 	cleanupTime := time.Now()
 	c.lastCleanupTime = &cleanupTime
 
@@ -630,18 +685,36 @@ func (c *InMemoryCache) isExpired(entry CacheEntry, now time.Time) bool {
 
 // updateAccessInfo updates the access information for the given entry index
 func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
+	now := time.Now()
+
 	// fast path
 	if entryIndex < len(c.entries) && c.entries[entryIndex].RequestID == target.RequestID {
-		c.entries[entryIndex].LastAccessAt = time.Now()
+		c.entries[entryIndex].LastAccessAt = now
 		c.entries[entryIndex].HitCount++
+
+		// Update optimized eviction policy tracking
+		c.notifyAccessToEvictionPolicy(entryIndex, target.RequestID)
+
+		// Extend TTL in expiration heap (sliding window TTL)
+		if c.ttlSeconds > 0 {
+			c.expirationHeap.UpdateExpiration(target.RequestID, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+		}
 		return
 	}
 
 	// fallback to linear search
 	for i := range c.entries {
 		if c.entries[i].RequestID == target.RequestID {
-			c.entries[i].LastAccessAt = time.Now()
+			c.entries[i].LastAccessAt = now
 			c.entries[i].HitCount++
+
+			// Update optimized eviction policy tracking
+			c.notifyAccessToEvictionPolicy(i, target.RequestID)
+
+			// Extend TTL in expiration heap (sliding window TTL)
+			if c.ttlSeconds > 0 {
+				c.expirationHeap.UpdateExpiration(target.RequestID, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+			}
 			break
 		}
 	}
@@ -674,9 +747,14 @@ func (c *InMemoryCache) evictOne() {
 		return
 	}
 
-	victimIdx := c.evictionPolicy.SelectVictim(c.entries)
+	// Use optimized O(1) eviction
+	victimIdx := c.evictUsingOptimizedPolicy()
 	if victimIdx < 0 || victimIdx >= len(c.entries) {
-		return
+		// Fallback to legacy O(n) eviction if optimized policy is not available
+		victimIdx = c.evictionPolicy.SelectVictim(c.entries)
+		if victimIdx < 0 || victimIdx >= len(c.entries) {
+			return
+		}
 	}
 
 	evictedRequestID := c.entries[victimIdx].RequestID
@@ -690,14 +768,136 @@ func (c *InMemoryCache) evictOne() {
 		c.hnswIndex.markStale()
 	}
 
-	c.entries[victimIdx] = c.entries[len(c.entries)-1]
-	c.entries = c.entries[:len(c.entries)-1]
+	// Remove from optimized tracking structures
+	c.removeEntryFromTracking(victimIdx, evictedRequestID)
+
+	// Swap with last entry and shrink slice
+	lastIdx := len(c.entries) - 1
+	if victimIdx != lastIdx {
+		movedEntry := c.entries[lastIdx]
+		c.entries[victimIdx] = movedEntry
+		// Update tracking for the moved entry
+		c.updateMovedEntryIndex(movedEntry.RequestID, lastIdx, victimIdx)
+	}
+	c.entries = c.entries[:lastIdx]
 
 	logging.LogEvent("cache_evicted", map[string]any{
 		"backend":     "memory",
 		"request_id":  evictedRequestID,
 		"max_entries": c.maxEntries,
 	})
+}
+
+// ===== Optimized Eviction Policy Helpers =====
+
+// registerEntryWithEvictionPolicy registers a new entry with the appropriate optimized eviction policy.
+// Caller must hold a write lock.
+func (c *InMemoryCache) registerEntryWithEvictionPolicy(entryIndex int, requestID string) {
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.OnInsert(entryIndex, requestID)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.OnInsert(entryIndex, requestID)
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			c.optimizedFIFO.OnInsert(entryIndex, requestID)
+		}
+	}
+}
+
+// evictUsingOptimizedPolicy uses the optimized O(1) eviction policy to select and evict a victim.
+// Returns the victim index, or -1 if no victim was evicted.
+// Caller must hold a write lock.
+func (c *InMemoryCache) evictUsingOptimizedPolicy() int {
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			return c.optimizedLRU.Evict()
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			return c.optimizedLFU.Evict()
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			return c.optimizedFIFO.Evict()
+		}
+	}
+	return -1
+}
+
+// removeEntryFromTracking removes an entry from all tracking structures.
+// Caller must hold a write lock.
+func (c *InMemoryCache) removeEntryFromTracking(entryIndex int, requestID string) {
+	// Remove from entryMap
+	delete(c.entryMap, requestID)
+
+	// Remove from expiration heap
+	c.expirationHeap.Remove(requestID)
+
+	// Remove from optimized eviction policy
+	// Note: This is idempotent - safe to call even if already removed by Evict()
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.OnRemove(entryIndex, requestID)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.OnRemove(entryIndex, requestID)
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			c.optimizedFIFO.OnRemove(entryIndex, requestID)
+		}
+	}
+}
+
+// updateMovedEntryIndex updates tracking structures when an entry is moved to a new index.
+// This is called after swap operations during eviction or cleanup.
+// Caller must hold a write lock.
+func (c *InMemoryCache) updateMovedEntryIndex(requestID string, oldIdx, newIdx int) {
+	// Update entryMap
+	c.entryMap[requestID] = newIdx
+
+	// Update expiration heap
+	c.expirationHeap.UpdateIndex(requestID, newIdx)
+
+	// Update optimized eviction policy
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.UpdateIndex(requestID, oldIdx, newIdx)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.UpdateIndex(requestID, oldIdx, newIdx)
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			c.optimizedFIFO.UpdateIndex(requestID, oldIdx, newIdx)
+		}
+	}
+}
+
+// notifyAccessToEvictionPolicy notifies the eviction policy of an access to update recency/frequency.
+// Caller must hold a write lock.
+func (c *InMemoryCache) notifyAccessToEvictionPolicy(entryIndex int, requestID string) {
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.OnAccess(entryIndex, requestID)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.OnAccess(entryIndex, requestID)
+		}
+		// FIFO doesn't need access tracking
+	}
 }
 
 // ===== HNSW Index Implementation =====

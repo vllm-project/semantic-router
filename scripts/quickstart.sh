@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Container runtime (docker or podman) - can be set via environment variable
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -111,14 +114,20 @@ check_prerequisites() {
 
     local missing_deps=()
 
-    # Check Docker
-    if ! command -v docker &> /dev/null; then
-        missing_deps+=("docker")
+    # Check container runtime (docker or podman)
+    if ! command -v "$CONTAINER_RUNTIME" &> /dev/null; then
+        missing_deps+=("$CONTAINER_RUNTIME")
     fi
 
-    # Check Docker Compose
-    if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
-        missing_deps+=("docker-compose")
+    # Check compose command
+    if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+        if ! command -v podman compose &> /dev/null && ! command -v podman-compose &> /dev/null; then
+            missing_deps+=("podman-compose or podman compose plugin")
+        fi
+    else
+        if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
+            missing_deps+=("docker-compose")
+        fi
     fi
 
     # Check Make
@@ -195,7 +204,7 @@ download_models() {
 
 # Function to start services
 start_services() {
-    info_msg "🐳 Starting Docker services..."
+    info_msg "🐳 Starting container services (using $CONTAINER_RUNTIME)..."
     echo
 
     # Start docker-compose services (runs in detached mode via Makefile)
@@ -204,7 +213,7 @@ start_services() {
     #   - Dashboard build from Dockerfile (Go compilation can take 5-10 minutes)
     #   - Network/system variations
     # Save output to log file for debugging
-    if timeout 600 make docker-compose-up 2>&1 | tee /tmp/docker-compose-output.log; then
+    if timeout 600 make docker-compose-up CONTAINER_RUNTIME="$CONTAINER_RUNTIME" 2>&1 | tee /tmp/docker-compose-output.log; then
         success_msg "✅ Docker compose command completed!"
         echo "   Output saved to: /tmp/docker-compose-output.log"
     else
@@ -240,17 +249,18 @@ wait_for_services() {
 
         # Check each critical service
         for service in "${critical_services[@]}"; do
-            if ! docker ps --filter "name=$service" --filter "health=healthy" --format "{{.Names}}" | grep -q "$service" 2>/dev/null; then
+            if ! "$CONTAINER_RUNTIME" ps --filter "name=$service" --filter "health=healthy" --format "{{.Names}}" | grep -q "$service" 2>/dev/null; then
                 all_healthy=false
                 unhealthy_services="$unhealthy_services $service"
             fi
         done
 
         # Check for any exited/failed containers
-        local failed_containers=$(docker ps -a --filter "status=exited" --format "{{.Names}}" 2>/dev/null)
+        local failed_containers
+        failed_containers=$("$CONTAINER_RUNTIME" ps -a --filter "status=exited" --format "{{.Names}}" 2>/dev/null)
         if [ -n "$failed_containers" ]; then
             error_msg "❌ Some containers failed to start: $failed_containers"
-            info_msg "📋 Check logs with: docker compose logs $failed_containers"
+            info_msg "📋 Check logs with: $CONTAINER_RUNTIME compose logs $failed_containers"
             return 1
         fi
 
@@ -259,7 +269,7 @@ wait_for_services() {
             echo
             # Show status of all containers
             section_header "📊 Container Status:"
-            docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|openwebui|pipelines|llm-katan"
+            "$CONTAINER_RUNTIME" ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|openwebui|pipelines|llm-katan"
             echo
             return 0
         fi
@@ -274,8 +284,8 @@ wait_for_services() {
     done
 
     info_msg "⚠️  Timeout: Services are starting but not all are healthy yet."
-    print_color "$WHITE" "📋 Check status with: docker ps"
-    print_color "$WHITE" "📋 View logs with: docker compose logs -f"
+    print_color "$WHITE" "📋 Check status with: $CONTAINER_RUNTIME ps"
+    print_color "$WHITE" "📋 View logs with: $CONTAINER_RUNTIME compose logs -f"
     return 1
 }
 
@@ -295,10 +305,10 @@ show_service_info() {
     echo
     section_header "🔧 Useful Commands:"
     echo
-    print_color "$WHITE" "  • Check service status:     docker compose ps"
-    print_color "$WHITE" "  • View logs:                docker compose logs -f"
-    print_color "$WHITE" "  • Stop services:            docker compose down"
-    print_color "$WHITE" "  • Restart services:         docker compose restart"
+    print_color "$WHITE" "  • Check service status:     $CONTAINER_RUNTIME compose ps"
+    print_color "$WHITE" "  • View logs:                $CONTAINER_RUNTIME compose logs -f"
+    print_color "$WHITE" "  • Stop services:            $CONTAINER_RUNTIME compose down"
+    print_color "$WHITE" "  • Restart services:         $CONTAINER_RUNTIME compose restart"
     echo
 }
 
@@ -355,7 +365,7 @@ main() {
     # Wait for services to be healthy
     if ! wait_for_services; then
         error_msg "❌ Service health check failed or timed out!"
-        info_msg "📋 You can check logs with: docker compose logs"
+        info_msg "📋 You can check logs with: $CONTAINER_RUNTIME compose logs"
         info_msg "📋 Or continue manually if services are starting"
         exit 1
     fi

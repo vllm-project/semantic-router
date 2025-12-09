@@ -2,6 +2,7 @@ name: Test And Build
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
   push:
@@ -12,9 +13,26 @@ on:
     - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual triggering
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # use changes as filter
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
   test-and-build:
-    if: github.repository == 'vllm-project/semantic-router'
+    needs: changes
+    if: >-
+      ${{ !github.event.pull_request.draft
+          && (github.event_name == 'schedule'
+          || needs.changes.outputs.core == 'true'
+          || needs.changes.outputs.helm == 'true'
+          || needs.changes.outputs.e2e  == 'true'
+          || needs.changes.outputs.docker == 'true'
+          || needs.changes.outputs.make == 'true'
+          || needs.changes.outputs.ci   == 'true') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -67,9 +85,9 @@ jobs:
         with:
           path: |
             models/
-          key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
+          key: ${{ runner.os }}-models-v2-${{ hashFiles('tools/make/models.mk') }}
           restore-keys: |
-            ${{ runner.os }}-models-v1-
+            ${{ runner.os }}-models-v2-
         continue-on-error: true # Don't fail the job if caching fails
 
       - name: Check go mod tidy

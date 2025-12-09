@@ -9,6 +9,7 @@ use crate::ffi::memory::{
     allocate_lora_intent_array, allocate_lora_pii_array, allocate_lora_security_array,
     allocate_modernbert_token_entity_array,
 };
+use crate::ffi::types::BertTokenEntity;
 use crate::ffi::types::*;
 use crate::model_architectures::traditional::bert::{
     TRADITIONAL_BERT_CLASSIFIER, TRADITIONAL_BERT_TOKEN_CLASSIFIER,
@@ -21,7 +22,7 @@ use crate::BertClassifier;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
-use crate::ffi::init::{PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
+use crate::ffi::init::{LORA_INTENT_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
 
@@ -654,25 +655,65 @@ pub extern "C" fn classify_candle_bert_tokens(
 
                 let entities_ptr = unsafe { allocate_bert_token_entity_array(&token_entities) };
 
-                BertTokenClassificationResult {
+                return BertTokenClassificationResult {
                     entities: entities_ptr,
                     num_entities: token_entities.len() as i32,
-                }
+                };
             }
             Err(e) => {
                 println!("Candle BERT token classification failed: {}", e);
-                BertTokenClassificationResult {
+                return BertTokenClassificationResult {
                     entities: std::ptr::null_mut(),
                     num_entities: 0,
-                }
+                };
             }
         }
-    } else {
-        println!("TraditionalBertTokenClassifier not initialized - call init function first");
-        BertTokenClassificationResult {
-            entities: std::ptr::null_mut(),
-            num_entities: 0,
+    }
+
+    // Fallback to ModernBERT token classifier (for PII detection with ModernBERT models)
+    if let Some(classifier) = TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_tokens(text) {
+            Ok(token_results) => {
+                // Filter non-background classes; Go layer applies confidence threshold
+                // Keep real positions (start, end) for accurate entity extraction
+                let token_entities: Vec<(String, String, f32, usize, usize)> = token_results
+                    .iter()
+                    .filter(|(_, class_idx, _, _, _)| *class_idx > 0)
+                    .map(|(token, class_idx, confidence, start, end)| {
+                        (
+                            token.clone(),
+                            format!("class_{}", class_idx),
+                            *confidence,
+                            *start,
+                            *end,
+                        )
+                    })
+                    .collect();
+
+                let entities_ptr =
+                    unsafe { allocate_modernbert_token_entity_array(&token_entities) };
+
+                return BertTokenClassificationResult {
+                    entities: entities_ptr as *mut BertTokenEntity,
+                    num_entities: token_entities.len() as i32,
+                };
+            }
+            Err(e) => {
+                println!("ModernBERT token classification failed: {}", e);
+                return BertTokenClassificationResult {
+                    entities: std::ptr::null_mut(),
+                    num_entities: 0,
+                };
+            }
         }
+    }
+
+    // No classifier available
+    println!("No token classifier initialized (Traditional BERT, ModernBERT, or LoRA) - call init function first");
+    BertTokenClassificationResult {
+        entities: std::ptr::null_mut(),
+        num_entities: 0,
     }
 }
 
@@ -693,7 +734,32 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
             Err(_) => return default_result,
         }
     };
-    // Use TraditionalBertClassifier for Candle BERT text classification
+
+    // Try LoRA intent classifier first (preferred for higher accuracy)
+    if let Some(classifier) = LORA_INTENT_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_with_index(text) {
+            Ok((class_idx, confidence, ref intent)) => {
+                // Allocate C string for intent label
+                let label_ptr = unsafe { allocate_c_string(intent) };
+
+                return ClassificationResult {
+                    predicted_class: class_idx as i32,
+                    confidence,
+                    label: label_ptr,
+                };
+            }
+            Err(e) => {
+                eprintln!(
+                    "LoRA intent classifier error: {}, falling back to Traditional BERT",
+                    e
+                );
+                // Don't return - fall through to Traditional BERT classifier
+            }
+        }
+    }
+
+    // Fallback to Traditional BERT classifier
     if let Some(classifier) = TRADITIONAL_BERT_CLASSIFIER.get() {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -717,7 +783,7 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
             }
         }
     } else {
-        println!("TraditionalBertClassifier not initialized - call init_bert_classifier first");
+        println!("No classifier initialized - call init_candle_bert_classifier first");
         ClassificationResult {
             predicted_class: -1,
             confidence: 0.0,

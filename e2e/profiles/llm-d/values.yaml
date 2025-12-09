@@ -5,26 +5,53 @@ config:
   clear_route_cache: true
   default_model: llama3-8b
   # Enable domain classification to return the x-vsr-selected-category header
+  # Using LoRA models for better performance with auto-detection
   classifier:
     category_model:
-      model_id: models/category_classifier_modernbert-base_model
+      model_id: models/lora_intent_classifier_bert-base-uncased_model
       threshold: 0.6
-      use_modernbert: true
-      category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+      use_modernbert: false
+      category_mapping_path: models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json
     pii_model:
       model_id: ""
       threshold: 1.0
       use_modernbert: false
       pii_mapping_path: ""
-  # Optional domains used by decision rules
+  # All 14 categories from LoRA intent classifier
   categories:
-    - name: math
-      description: "Mathematics, arithmetic, calculation"
+    - name: business
+      description: "Business management, marketing, entrepreneurship"
+    - name: philosophy
+      description: "Ethics, logic, metaphysics, epistemology"
+    - name: biology
+      description: "Genetics, evolution, ecology, anatomy"
+    - name: health
+      description: "Medicine, nutrition, fitness, diseases"
     - name: computer science
       description: "Computer networks, programming, systems"
+    - name: engineering
+      description: "Mechanical, electrical, civil engineering"
+    - name: psychology
+      description: "Behavior, cognition, mental health"
+    - name: math
+      description: "Mathematics, arithmetic, calculation"
+    - name: chemistry
+      description: "Chemical reactions, compounds, periodic table"
+    - name: physics
+      description: "Mechanics, thermodynamics, quantum physics"
+    - name: history
+      description: "Historical events, civilizations, wars"
+    - name: law
+      description: "Legal systems, regulations, court procedures"
+    - name: economics
+      description: "Microeconomics, macroeconomics, financial markets"
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+
   decisions:
+    # High priority for math - use specialized model
     - name: math_route
-      priority: 20
+      priority: 100
       rules:
         operator: OR
         conditions:
@@ -33,8 +60,10 @@ config:
       modelRefs:
         - model: phi4-mini
           use_reasoning: false
+
+    # High priority for computer science - use llama3
     - name: cs_route
-      priority: 10
+      priority: 100
       rules:
         operator: OR
         conditions:
@@ -43,6 +72,77 @@ config:
       modelRefs:
         - model: llama3-8b
           use_reasoning: false
+
+    # Medium priority routes for other technical domains
+    - name: science_route
+      priority: 50
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: physics
+          - type: domain
+            name: chemistry
+          - type: domain
+            name: biology
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: engineering_route
+      priority: 50
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: engineering
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: health_route
+      priority: 50
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: health
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    # Social sciences and humanities
+    - name: social_sciences_route
+      priority: 40
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: psychology
+          - type: domain
+            name: economics
+          - type: domain
+            name: business
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: humanities_route
+      priority: 40
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: history
+          - type: domain
+            name: philosophy
+          - type: domain
+            name: law
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    # Default fallback route with lowest priority
     - name: default_route
       priority: 1
       rules:

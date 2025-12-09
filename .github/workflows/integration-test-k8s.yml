@@ -2,6 +2,7 @@ name: Integration Test [Kubernetes]
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths-ignore:
@@ -15,14 +16,19 @@ on:
       - '**/*.md'
   workflow_dispatch: # Allow manual triggering
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   integration-test:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
-        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio]
+        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio, production-stack]
 
     steps:
       - name: Check out the repo
@@ -70,6 +76,17 @@ jobs:
       - name: Build E2E test binary
         run: |
           make build-e2e
+
+      - name: Free up disk space
+        run: |
+          # Remove unnecessary toolchains to free ~25GB disk space
+          # This helps prevent "no space left on device" errors
+          echo "Disk before cleanup:"
+          df -h /
+          # Note: Do NOT remove $AGENT_TOOLSDIRECTORY - it contains Go/Rust from setup actions
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          echo "Disk after cleanup:"
+          df -h /
 
       - name: Run Integration E2E tests (${{ matrix.profile }})
         id: e2e-test
