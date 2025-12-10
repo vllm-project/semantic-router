@@ -62,8 +62,14 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 		modelsDir = "./models"
 	}
 
+	// Resolve symlinks to handle cases where models directory is a symlink (e.g., CI uses /mnt/models)
+	resolved, err := filepath.EvalSymlinks(modelsDir)
+	if err == nil && resolved != "" {
+		modelsDir = resolved
+	}
+
 	// Check if models directory exists
-	if _, err := os.Stat(modelsDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(modelsDir); os.IsNotExist(statErr) {
 		return nil, fmt.Errorf("models directory does not exist: %s", modelsDir)
 	}
 
@@ -78,7 +84,7 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 	legacyPaths := &ModelPaths{}
 
 	// Walk through the models directory to collect all models
-	err := filepath.Walk(modelsDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(modelsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

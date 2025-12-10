@@ -30,16 +30,43 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Free up disk space
+      - name: Setup model storage on /mnt
         run: |
-          echo "Disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          echo "Disk space after cleanup:"
-          df -h
+          # Use /mnt for model storage (has ~75GB vs ~14GB on root)
+          # This helps prevent "no space left on device" errors
+          echo "Disk space before setup:"
+          df -h / && df -h /mnt
+          
+          # Create /mnt/models directory if it doesn't exist
+          sudo mkdir -p /mnt/models
+          sudo chown -R $USER:$USER /mnt/models
+          
+          # If models directory already exists in workspace, move it to /mnt
+          if [ -d "models" ] && [ ! -L "models" ]; then
+            echo "Moving existing models directory to /mnt/models..."
+            # Move contents if /mnt/models is not empty, otherwise just move the directory
+            if [ "$(ls -A /mnt/models 2>/dev/null)" ]; then
+              echo "Warning: /mnt/models already has content, merging..."
+              sudo cp -r models/* /mnt/models/ || true
+              rm -rf models
+            else
+              sudo mv models /mnt/models
+            fi
+          fi
+          
+          # Create symlink from models/ to /mnt/models/ so existing code continues to work
+          if [ ! -e "models" ]; then
+            ln -s /mnt/models models
+            echo "Created symlink: models -> /mnt/models"
+          elif [ -L "models" ]; then
+            echo "Symlink already exists: models -> $(readlink models)"
+          else
+            echo "Warning: models exists but is not a symlink"
+          fi
+          
+          echo "Disk space after setup:"
+          df -h / && df -h /mnt
+          echo "Models directory setup complete. Models will be stored in /mnt/models"
 
       - name: Set up Python
         uses: actions/setup-python@v5
