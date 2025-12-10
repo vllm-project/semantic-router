@@ -149,20 +149,21 @@ initContainer:
   # -- Additional environment variables for the init container.
   # For example, to use a private Hugging Face model, you can pass a token
   # and specify an endpoint using a pre-existing Kubernetes secret.
-  # env:
-  #   - name: HF_TOKEN
-  #     valueFrom:
-  #       secretKeyRef:
-  #         name: my-hf-secret
-  #         key: token
-  #   - name: HF_ENDPOINT
-  #     value: "https://huggingface.co"
-  env: []
+  # HF_TOKEN is required for downloading gated models like embeddinggemma-300m
+  env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-token-secret
+          key: token
+          optional: true  # Allow deployment even if secret doesn't exist (for local testing)
   # -- Models to download
   models:
     # Embedding models for semantic cache and tools
     - name: Qwen3-Embedding-0.6B
       repo: Qwen/Qwen3-Embedding-0.6B
+    - name: embeddinggemma-300m
+      repo: google/embeddinggemma-300m
     - name: all-MiniLM-L12-v2
       repo: sentence-transformers/all-MiniLM-L12-v2
     - name: lora_intent_classifier_bert-base-uncased_model

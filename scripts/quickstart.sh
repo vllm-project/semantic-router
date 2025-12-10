@@ -167,13 +167,17 @@ download_models() {
     info_msg "📥 Downloading AI models..."
     echo
 
-    # Try full model set first (includes embeddinggemma-300m which may require auth)
+    # Try full model set first (includes embeddinggemma-300m which requires HF_TOKEN for gated access)
     # If that fails (e.g., 401 on gated models), fall back to minimal set
     if [ "${CI_MINIMAL_MODELS:-}" = "true" ]; then
         info_msg "CI_MINIMAL_MODELS=true detected, using minimal model set"
         export CI_MINIMAL_MODELS=true
     else
         info_msg "Attempting to download full model set (includes embeddinggemma-300m)..."
+        if [ -z "${HF_TOKEN:-}" ]; then
+            info_msg "ℹ️  Note: HF_TOKEN not set. If embeddinggemma-300m download fails, script will fall back to minimal model set."
+            info_msg "   To download Gemma, set HF_TOKEN environment variable: export HF_TOKEN=your_token"
+        fi
         export CI_MINIMAL_MODELS=false
     fi
 
@@ -183,11 +187,13 @@ download_models() {
     else
         # Check if failure was due to gated model (embeddinggemma-300m)
         if grep -q "embeddinggemma.*401\|embeddinggemma.*Unauthorized\|embeddinggemma.*GatedRepoError" /tmp/download-models-output.log 2>/dev/null; then
-            info_msg "⚠️  Full model download failed (gated model requires auth)"
-            info_msg "📋 Falling back to minimal model set..."
+            info_msg "⚠️  Full model download failed: embeddinggemma-300m requires HF_TOKEN for gated model access"
+            info_msg "📋 Falling back to minimal model set (without Gemma)..."
+            info_msg "💡 To download Gemma, set HF_TOKEN: export HF_TOKEN=your_token && make download-models"
             export CI_MINIMAL_MODELS=true
             if make download-models 2>&1 | tee /tmp/download-models-output.log; then
                 success_msg "✅ Minimal models downloaded successfully!"
+                info_msg "ℹ️  Note: Gemma embedding model was skipped. Some features may be limited."
             else
                 error_msg "❌ Failed to download even minimal models!"
                 info_msg "📋 Check logs: cat /tmp/download-models-output.log"

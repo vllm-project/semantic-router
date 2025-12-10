@@ -71,6 +71,10 @@ jobs:
           CI_MINIMAL_MODELS: false
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
+          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
+          # The hf CLI uses HUGGINGFACE_HUB_TOKEN, so we set both for compatibility
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: make download-models
 
       - name: Run comprehensive benchmarks

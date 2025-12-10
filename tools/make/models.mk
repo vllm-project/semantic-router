@@ -25,8 +25,7 @@ download-models: ## Download models (full or minimal set depending on CI_MINIMAL
 # - Jailbreak classifier (ModernBERT)
 # - Optional plain PII classifier mapping (small)
 # - LoRA models (BERT architecture) for unified classifier tests
-# - Embedding models (Qwen3-Embedding-0.6B) for smart embedding tests
-# Note: embeddinggemma-300m is gated and requires HF_TOKEN, so it's excluded from CI
+# - Embedding models (Qwen3-Embedding-0.6B, embeddinggemma-300m) for smart embedding tests
 
 download-models-minimal:
 download-models-minimal: ## Pre-download minimal set of models for CI tests
@@ -60,9 +59,21 @@ download-models-minimal: ## Pre-download minimal set of models for CI tests
 	@if [ ! -f "models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
 		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded; \
 	fi
-	# Download embedding models for smart embedding tests (Qwen3 only - Gemma is gated)
+	# Download embedding models for smart embedding tests
 	@if [ ! -f "models/Qwen3-Embedding-0.6B/.downloaded" ] || [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
 		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen3-Embedding-0.6B/.downloaded; \
+	fi
+	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
+		echo "Downloading google/embeddinggemma-300m (requires HF_TOKEN for gated model)..."; \
+		if [ -z "$$HF_TOKEN" ] && [ -z "$$HUGGINGFACE_HUB_TOKEN" ]; then \
+			echo "⚠️  Warning: HF_TOKEN not set, skipping embeddinggemma-300m download (gated model requires authentication)"; \
+			echo "   To download Gemma, set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable"; \
+		else \
+			hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded || { \
+				echo "⚠️  Warning: Failed to download embeddinggemma-300m (may require HF_TOKEN or model access)"; \
+				echo "   Continuing with other models..."; \
+			}; \
+		fi; \
 	fi
 	# Download hallucination mitigation models
 	# Hallucination detection model (ModernBERT-based token classifier)
@@ -134,7 +145,15 @@ download-models-full: ## Download all models used in local development and docs
 	fi
 	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
 		echo "Downloading google/embeddinggemma-300m (requires HF_TOKEN for gated model)..."; \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded; \
+		if [ -z "$$HF_TOKEN" ] && [ -z "$$HUGGINGFACE_HUB_TOKEN" ]; then \
+			echo "⚠️  Warning: HF_TOKEN not set, skipping embeddinggemma-300m download (gated model requires authentication)"; \
+			echo "   To download Gemma, set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable"; \
+		else \
+			hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded || { \
+				echo "⚠️  Warning: Failed to download embeddinggemma-300m (may require HF_TOKEN or model access)"; \
+				echo "   Continuing with other models..."; \
+			}; \
+		fi; \
 	fi
 	# Download hallucination mitigation models
 	@if [ ! -f "models/halugate-detector/.downloaded" ] || [ ! -d "models/halugate-detector" ]; then \
@@ -163,6 +182,17 @@ download-models-lora: ## Download LoRA adapters and advanced embedding models on
 	fi
 	@if [ ! -f "models/Qwen3-Embedding-0.6B/.downloaded" ] || [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
 		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen3-Embedding-0.6B/.downloaded; \
+	fi
+	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
+		if [ -z "$$HF_TOKEN" ] && [ -z "$$HUGGINGFACE_HUB_TOKEN" ]; then \
+			echo "⚠️  Warning: HF_TOKEN not set, skipping embeddinggemma-300m download (gated model requires authentication)"; \
+			echo "   To download Gemma, set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable"; \
+		else \
+			hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded || { \
+				echo "⚠️  Warning: Failed to download embeddinggemma-300m (may require HF_TOKEN or model access)"; \
+				echo "   Continuing with other models..."; \
+			}; \
+		fi; \
 	fi
 
 # Clean up minimal models to save disk space (for CI)

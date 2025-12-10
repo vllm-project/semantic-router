@@ -5,7 +5,7 @@
 # Environment variables for the semantic-router container
 env:
   - name: EMBEDDING_MODEL_OVERRIDE
-    value: "qwen3"  # Force qwen3 for tests (Gemma requires HF_TOKEN)
+    value: "auto"  # Use intelligent model selection
 
 config:
   # Set config source to kubernetes to enable CRD-based configuration
@@ -127,7 +127,7 @@ config:
 
   embedding_models:
     qwen3_model_path: "models/Qwen3-Embedding-0.6B"
-    gemma_model_path: ""  # Empty = fallback to Qwen3 (embeddinggemma requires HF_TOKEN)
+    gemma_model_path: "models/embeddinggemma-300m"
     use_cpu: true
 
 # Increase memory limits for embedding model support
