@@ -110,6 +110,15 @@ spec:
         - name: models-volume
           mountPath: /app/models
         {{- end }}
+        {{- if .Values.startupProbe.enabled }}
+        # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
+        startupProbe:
+          tcpSocket:
+            port: {{ .Values.service.grpc.targetPort }}
+          periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+        {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           tcpSocket:

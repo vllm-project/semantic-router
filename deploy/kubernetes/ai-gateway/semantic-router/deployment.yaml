@@ -137,6 +137,14 @@ spec:
               readOnly: true
             - name: models-volume
               mountPath: /app/models
+          # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
+          # This probe runs FIRST and disables liveness/readiness probes until it succeeds
+          startupProbe:
+            tcpSocket:
+              port: 50051
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30  # 10s * 30 = 300s max startup time
           livenessProbe:
             tcpSocket:
               port: 50051
@@ -152,14 +160,13 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
-          # Significantly reduced resource requirements for kind cluster
+          # Resource requirements - increased memory for Gemma model loading (~7Gi peak)
           resources:
             requests:
-              memory: "3Gi"  # Reduced from 8Gi
-              cpu: "1"  # Reduced from 2
+              memory: "3Gi"
+              cpu: "1"
             limits:
-              memory: "6Gi"  # Reduced from 12Gi
-              cpu: "2"  # Reduced from 4
+              memory: "7Gi"
       volumes:
         - name: config-volume
           configMap:
