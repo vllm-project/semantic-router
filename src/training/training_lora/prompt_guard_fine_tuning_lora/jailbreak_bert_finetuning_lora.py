@@ -452,6 +452,7 @@ def create_lora_security_model(model_name: str, num_labels: int, lora_config: di
         lora_dropout=lora_config["dropout"],
         target_modules=lora_config["target_modules"],
         bias="none",
+        modules_to_save=["classifier"],  # CRITICAL: Train the classification head alongside LoRA adapters
     )
 
     # Apply LoRA to the model
@@ -562,11 +563,11 @@ def main(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
-        # Anti-gradient explosion measures based on
-        max_grad_norm=None,  # DISABLED: Trying to clip nan gradients causes issues
-        lr_scheduler_type="linear",  # Changed from cosine for debugging
-        warmup_ratio=0.0,  # DISABLED: Trying simple training first
-        weight_decay=0.0,  # DISABLED: Trying simple training first
+        # Anti-gradient explosion measures based on LLM Guard/Guardrails best practices
+        max_grad_norm=1.0,  # Re-enabled after fixing modules_to_save
+        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
+        warmup_ratio=0.06,  # PEFT recommended warmup ratio
+        weight_decay=0.01,  # Re-enabled for regularization
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
