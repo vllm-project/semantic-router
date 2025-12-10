@@ -3,7 +3,7 @@
 
 ## 1. Overview
 
-The goal of this document is to outline a comprehensive integration strategy between **vLLM Semantic Router** and the **vLLM Production Stack**.  The vLLM Production Stack is a cloud‑native reference system for deploying vLLM at scale.  It provides several deployment ways that spin up vLLM servers, a request router and an observability stack.  The request router can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing with LMCache native support.  The Semantic Router adds a **system‑intelligence layer** that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.  
+The goal of this document is to outline a comprehensive integration strategy between **vLLM Semantic Router** and the **vLLM Production Stack**.  The vLLM Production Stack is a cloud‑native reference system for deploying vLLM at scale.  It provides several deployment ways that spin up vLLM servers, a request router and an observability stack.  The request router can direct traffic to different models, perform service discovery and fault tolerance through the Kubernetes API, and support round‑robin, session‑based, prefix‑aware, KV-aware and disaggregated-prefill routing with LMCache native support.  The Semantic Router adds a **system‑intelligence layer** that classifies each user request, selects the most suitable model from a pool, injects domain‑specific system prompts, performs semantic caching and enforces enterprise‑grade security checks such as PII and jailbreak detection.
 
 By combining these two systems we obtain a unified inference stack.  Semantic routing ensures that each request is answered by the best possible model. Production‑Stack routing maximizes infrastructure and inference efficiency, and exposes rich metrics.  Together they provide:
 
@@ -24,9 +24,9 @@ The vLLM Production Stack provides the building blocks for serving large langua
 | --- | --- |
 | **Distributed deployment** | Deploy multiple vLLM instances with LMCache native support and scale from single‑instance to multi‑instance clusters without changing application code. |
 | **Request router** | Routes requests to different models and instances, supports different kinds of routing logic including disaggregated-prefill, KVCache-aware, prefix-aware, session and round-robin based routing. |
-| **Service discovery & fault tolerance** | Uses Kubernetes API for automatic discovery and removes failed nodes from the pool. | 
+| **Service discovery & fault tolerance** | Uses Kubernetes API for automatic discovery and removes failed nodes from the pool. |
 | **Observability** | Provides a Grafana dashboard to display latency distributions, time‑to‑first‑token, number of running or pending requests and GPU KV‑cache usage. |
-| **Deployment simplicity** | Helm charts/CRD/Inference-gateway to install the stack and expose an OpenAI‑compatible API. | 
+| **Deployment simplicity** | Helm charts/CRD/Inference-gateway to install the stack and expose an OpenAI‑compatible API. |
 
 ---
 
@@ -38,11 +38,11 @@ The Semantic Router adds system‑level intelligence on top of vLLM:
 
 | Capability | Description |
 | --- | --- |
-| **Mixture‑of‑Models routing** | Classifies each incoming OpenAI API request and selects the most suitable model based on task complexity and domain.  This improves accuracy by routing tasks to specialized models rather than a single general model. | 
-| **Automatic tool selection** | Identifies which external tools are relevant to the prompt and reduces unnecessary tool calls. | 
-| **Category‑specific system prompts** | Injects specialized system prompts (math, coding, business, etc.) based on query classification to improve reasoning and token efficiency. | 
+| **Mixture‑of‑Models routing** | Classifies each incoming OpenAI API request and selects the most suitable model based on task complexity and domain.  This improves accuracy by routing tasks to specialized models rather than a single general model. |
+| **Automatic tool selection** | Identifies which external tools are relevant to the prompt and reduces unnecessary tool calls. |
+| **Category‑specific system prompts** | Injects specialized system prompts (math, coding, business, etc.) based on query classification to improve reasoning and token efficiency. |
 | **Security filters** | Detects PII and blocks prompts containing sensitive data; identifies jailbreak prompts and prevents them from being sent to the LLM. |
-| **Similarity caching** | Uses embeddings to cache the semantic representation of prompts; if a new prompt is similar to a previous one, the cached response can be returned instantly. | 
+| **Similarity caching** | Uses embeddings to cache the semantic representation of prompts; if a new prompt is similar to a previous one, the cached response can be returned instantly. |
 | **Distributed tracing** | Emits OpenTelemetry traces covering classification, security checks, caching and routing decisions. |
 
 ---

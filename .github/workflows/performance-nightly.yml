@@ -1,0 +1,136 @@
+name: Nightly Performance Baseline
+
+on:
+  schedule:
+    # Run at 3:00 AM UTC daily
+    - cron: "0 3 * * *"
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  update-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+          key: ${{ runner.os }}-nightly-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nightly-cargo-
+
+      - name: Cache Go dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-nightly-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-nightly-go-
+
+      - name: Cache Models
+        uses: actions/cache@v4
+        with:
+          path: |
+            models/
+          key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
+          restore-keys: |
+            ${{ runner.os }}-models-v1-
+
+      - name: Build Rust library (CPU-only)
+        run: make rust-ci
+
+      - name: Install HuggingFace CLI
+        run: |
+          pip install -U "huggingface_hub[cli]" hf_transfer
+
+      - name: Download models (full set for nightly)
+        env:
+          CI_MINIMAL_MODELS: false
+          HF_HUB_ENABLE_HF_TRANSFER: 1
+          HF_HUB_DISABLE_TELEMETRY: 1
+        run: make download-models
+
+      - name: Run comprehensive benchmarks
+        run: |
+          export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release
+          cd perf
+          go test -bench=. -benchmem -benchtime=30s ./benchmarks/... | tee ../reports/nightly-bench.txt
+
+      - name: Update baselines
+        run: |
+          make perf-baseline-update
+
+      - name: Check for baseline changes
+        id: check_changes
+        run: |
+          git add perf/testdata/baselines/
+          if git diff --cached --quiet; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No baseline changes detected"
+          else
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Baseline changes detected"
+          fi
+
+      - name: Commit updated baselines
+        if: steps.check_changes.outputs.changes == 'true'
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git commit -m "chore: update performance baselines (nightly run)"
+          git push
+
+      - name: Upload nightly results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-baseline-${{ github.run_number }}
+          path: |
+            reports/
+            perf/testdata/baselines/
+          retention-days: 90
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🔥 Nightly Performance Baseline Update Failed';
+            const body = `
+            The nightly performance baseline update failed.
+
+            **Run:** ${{ github.run_id }}
+            **Time:** ${new Date().toISOString()}
+
+            Please investigate the failure in the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['performance', 'ci-failure']
+            });
