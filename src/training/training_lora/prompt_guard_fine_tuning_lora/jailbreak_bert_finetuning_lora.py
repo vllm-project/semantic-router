@@ -591,7 +591,7 @@ def main(
         metric_for_best_model="f1",
         save_total_limit=2,
         report_to=[],
-        fp16=torch.cuda.is_available(),
+        fp16=False,  # Disabled: FP16 causes gradient unscaling errors with LoRA
         # Additional stability measures
         dataloader_drop_last=False,
         eval_accumulation_steps=1,
