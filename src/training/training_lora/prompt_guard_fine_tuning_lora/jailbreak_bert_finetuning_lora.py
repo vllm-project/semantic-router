@@ -423,24 +423,8 @@ def create_jailbreak_dataset(max_samples=1000):
 class SecurityLoRATrainer(Trainer):
     """Enhanced Trainer for security detection with LoRA."""
 
-    def compute_loss(
-        self, model, inputs, return_outputs=False, num_items_in_batch=None
-    ):
-        """Compute security classification loss."""
-        labels = inputs.get("labels")
-        outputs = model(**inputs)
-
-        # Binary classification loss
-        loss_fct = nn.CrossEntropyLoss()
-
-        if labels is not None:
-            loss = loss_fct(
-                outputs.logits.view(-1, self.model.config.num_labels), labels.view(-1)
-            )
-        else:
-            loss = None
-
-        return (loss, outputs) if return_outputs else loss
+    # No custom compute_loss needed for sequence classification
+    # The default Trainer.compute_loss handles it correctly
 
 
 def create_lora_security_model(model_name: str, num_labels: int, lora_config: dict):
