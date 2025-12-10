@@ -17,6 +17,7 @@
 
 *Latest News* 🔥
 
+- [2025/12/10] We announced the [AMD × vLLM Semantic Router Partnership](https://vllm-semantic-router.com/blog/semantic-on-amd) 🤝
 - [2025/11/19] We released the [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html) 🧠
 - [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published 📝
 - [2025/10/26] We reached 2000 stars on GitHub! 🔥
@@ -163,12 +164,12 @@ We opened the project at Aug 31, 2025. We love open source  and collaboration �
 
 [![Star History Chart](https://api.star-history.com/svg?repos=vllm-project/semantic-router&type=Date)](https://www.star-history.com/#vllm-project/semantic-router&Date)
 
-## Sponsors 💖
+## Sponsors 👋
 
 We are grateful to our sponsors who support our development and benchmarking efforts:
 
 <div align="center">
 <a href="https://www.amd.com">
-  <img src="website/static/img/amd-logo.png" alt="AMD" height="80"/>
+  <img src="website/static/img/amd-logo.png" alt="AMD" width="40%"/>
 </a>
 </div>
