@@ -6,16 +6,38 @@ Router Memory enables stateful conversations via the [OpenAI Response API](https
 
 ```mermaid
 flowchart TB
-    Client["Client<br/>POST /v1/responses"]
-    Router["Semantic Router"]
-    Store["Response Store<br/>(Memory)"]
-    Backend["Backend LLM<br/>POST /v1/chat/completions"]
+    subgraph Client
+        A1[POST /v1/responses]
+    end
 
-    Client --> Router
-    Router <--> Store
-    Router --> Backend
-    Backend --> Router
-    Router --> Client
+    subgraph Router["Semantic Router (extproc)"]
+        B1[Receive Request]
+        B2{Has previous_response_id?}
+        B3[Load Conversation Chain]
+        B4[Translate to Chat Completions]
+        B5[Translate to Response API]
+        B6[Store Response]
+    end
+
+    subgraph Store["Response Store"]
+        C1[(Memory)]
+    end
+
+    subgraph Backend["Backend LLM"]
+        D1[POST /v1/chat/completions]
+    end
+
+    A1 --> B1
+    B1 --> B2
+    B2 -->|Yes| B3
+    B2 -->|No| B4
+    B3 --> C1
+    C1 --> B4
+    B4 --> D1
+    D1 --> B5
+    B5 --> B6
+    B6 --> C1
+    B6 --> A1
 ```
 
 ## Endpoints
