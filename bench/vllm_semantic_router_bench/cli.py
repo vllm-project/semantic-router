@@ -23,6 +23,9 @@ Examples:
   # Full benchmark comparison
   semantic-router-bench compare --dataset arc-challenge --samples 10
 
+  # Reasoning mode evaluation (Issue #42)
+  semantic-router-bench reasoning-eval --datasets mmlu gpqa --samples 10
+
   # List available datasets
   semantic-router-bench list-datasets
 
@@ -153,6 +156,55 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
     )
     comprehensive_parser.add_argument("--vllm-model", default="openai/gpt-oss-20b")
 
+    # Reasoning mode evaluation command (Issue #42)
+    reasoning_parser = subparsers.add_parser(
+        "reasoning-eval",
+        help="Evaluate standard vs reasoning mode (Issue #42)",
+    )
+    reasoning_parser.add_argument(
+        "--datasets",
+        nargs="+",
+        default=["mmlu", "gpqa"],
+        help="Datasets to evaluate (MMLU and non-MMLU)",
+    )
+    reasoning_parser.add_argument(
+        "--samples",
+        type=int,
+        default=10,
+        help="Number of samples per category (default: 10)",
+    )
+    reasoning_parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("VLLM_ENDPOINT", "http://127.0.0.1:8000/v1"),
+        help="vLLM endpoint URL",
+    )
+    reasoning_parser.add_argument(
+        "--model",
+        default=None,
+        help="Model to evaluate (fetches from endpoint if not specified)",
+    )
+    reasoning_parser.add_argument(
+        "--output-dir",
+        default="results/reasoning_mode_eval",
+        help="Output directory for results",
+    )
+    reasoning_parser.add_argument(
+        "--concurrent",
+        type=int,
+        default=1,
+        help="Number of concurrent requests",
+    )
+    reasoning_parser.add_argument(
+        "--no-plots",
+        action="store_true",
+        help="Skip plot generation",
+    )
+    reasoning_parser.add_argument(
+        "--no-report",
+        action="store_true",
+        help="Skip markdown report generation",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -170,6 +222,8 @@ For more detailed usage, see: https://vllm-semantic-router.com/docs/benchmarking
         return run_plot(args)
     elif args.command == "comprehensive":
         return run_comprehensive(args)
+    elif args.command == "reasoning-eval":
+        return run_reasoning_eval(args)
     else:
         parser.print_help()
         return 1
@@ -305,6 +359,50 @@ def run_comprehensive(args):
     )
 
     return subprocess.call([script_path], env=env)
+
+
+def run_reasoning_eval(args):
+    """Run reasoning mode evaluation (Issue #42).
+
+    Compares standard vs reasoning mode with metrics:
+    - Response correctness on MMLU(-Pro) and non-MMLU test sets
+    - Token usage (completion_tokens/prompt_tokens ratio)
+    - Response time per output token
+    """
+    print(f"🧠 Reasoning Mode Evaluation (Issue #42)")
+    print(f"   Datasets: {', '.join(args.datasets)}")
+    print(f"   Samples per category: {args.samples}")
+
+    import subprocess
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "vllm_semantic_router_bench.reasoning_mode_eval",
+        "--datasets",
+        *args.datasets,
+        "--samples-per-category",
+        str(args.samples),
+        "--endpoint",
+        args.endpoint,
+        "--output-dir",
+        args.output_dir,
+        "--concurrent-requests",
+        str(args.concurrent),
+    ]
+
+    if args.model:
+        cmd.extend(["--model", args.model])
+
+    if args.no_plots:
+        cmd.append("--generate-plots")
+        cmd.append("False")
+
+    if args.no_report:
+        cmd.append("--generate-report")
+        cmd.append("False")
+
+    return subprocess.call(cmd)
 
 
 if __name__ == "__main__":
