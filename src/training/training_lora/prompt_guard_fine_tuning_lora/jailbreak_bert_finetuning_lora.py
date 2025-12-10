@@ -563,10 +563,10 @@ def main(
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
         # Anti-gradient explosion measures based on
-        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
-        lr_scheduler_type="cosine",  # More stable learning rate schedule
-        warmup_ratio=0.06,  # Gradual warmup as recommended by PEFT/LLM Guard
-        weight_decay=0.01,
+        max_grad_norm=None,  # DISABLED: Trying to clip nan gradients causes issues
+        lr_scheduler_type="linear",  # Changed from cosine for debugging
+        warmup_ratio=0.0,  # DISABLED: Trying simple training first
+        weight_decay=0.0,  # DISABLED: Trying simple training first
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
