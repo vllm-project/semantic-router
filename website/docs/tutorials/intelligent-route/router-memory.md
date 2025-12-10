@@ -2,7 +2,41 @@
 
 Router Memory enables stateful conversations via the [OpenAI Response API](https://platform.openai.com/docs/api-reference/responses), supporting conversation chaining with `previous_response_id`.
 
-## Architecture
+## Overview
+
+Semantic Router acts as the **unified brain** for multiple LLM backends that only support the Chat Completions API. It provides:
+
+- **Cross-Model Stateful Conversations**: Maintain conversation history across different models
+- **Unified Response API**: Single API interface regardless of backend model
+- **Transparent Translation**: Automatic conversion between Response API and Chat Completions
+
+```mermaid
+flowchart TB
+    subgraph Clients
+        C1[Agent A]
+        C2[Agent B]
+    end
+
+    subgraph SR["Semantic Router"]
+        API[Response API]
+        Store[(Conversation<br/>Store)]
+    end
+
+    subgraph Backends["LLM Backends (Chat Completions Only)"]
+        M1[GPT-4o]
+        M2[Claude]
+        M3[Qwen]
+        M4[Llama]
+    end
+
+    C1 & C2 --> API
+    API <--> Store
+    API --> M1 & M2 & M3 & M4
+```
+
+With Router Memory, you can start a conversation with one model and continue it with another—the conversation history is preserved in the router, not in any single backend.
+
+## Request Flow
 
 ```mermaid
 flowchart TB
@@ -162,13 +196,6 @@ curl -X DELETE http://localhost:8801/v1/responses/resp_7cb437001e1ad5b84b6dd8ef
 | `previous_response_id` | Expanded to full `messages` array |
 | `max_output_tokens` | `max_tokens` |
 
-## Roadmap
-
-- [Milvus Backend](https://github.com/vllm-project/semantic-router/issues/803)
-- [Redis Backend](https://github.com/vllm-project/semantic-router/issues/804)
-- [E2E Tests](https://github.com/vllm-project/semantic-router/issues/805)
-
 ## Reference
 
 - [OpenAI Response API](https://platform.openai.com/docs/api-reference/responses)
-- [PR #802](https://github.com/vllm-project/semantic-router/pull/802)
