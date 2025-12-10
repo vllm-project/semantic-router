@@ -440,3 +440,87 @@ func (c *RouterConfig) GetCacheSimilarityThreshold() float32 {
 	}
 	return c.Threshold
 }
+
+// IsHallucinationMitigationEnabled checks if hallucination mitigation is enabled and properly configured
+func (c *RouterConfig) IsHallucinationMitigationEnabled() bool {
+	return c.HallucinationMitigation.Enabled
+}
+
+// IsFactCheckClassifierEnabled checks if the fact-check classifier is enabled and properly configured
+// Enabled when fact_check_rules are configured, or legacy HallucinationMitigation is enabled
+func (c *RouterConfig) IsFactCheckClassifierEnabled() bool {
+	// Check new fact_check_rules config first
+	if len(c.FactCheckRules) > 0 {
+		// For new signal config, still need the model from HallucinationMitigation
+		return c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
+			c.HallucinationMitigation.FactCheckModel.MappingPath != ""
+	}
+
+	// Fall back to legacy HallucinationMitigation config
+	if !c.HallucinationMitigation.Enabled {
+		return false
+	}
+	return c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
+		c.HallucinationMitigation.FactCheckModel.MappingPath != ""
+}
+
+// GetFactCheckRules returns all configured fact_check_rules
+func (c *RouterConfig) GetFactCheckRules() []FactCheckRule {
+	return c.FactCheckRules
+}
+
+// IsHallucinationModelEnabled checks if hallucination detection is enabled and properly configured
+// Returns true if either:
+// 1. hallucination_mitigation.enabled is true (legacy global config)
+// 2. Any decision has a hallucination plugin enabled (new per-decision config)
+// AND the hallucination model is properly configured
+func (c *RouterConfig) IsHallucinationModelEnabled() bool {
+	// Must have hallucination model configured
+	if c.HallucinationMitigation.HallucinationModel.ModelID == "" {
+		return false
+	}
+
+	// Check legacy global config
+	if c.HallucinationMitigation.Enabled {
+		return true
+	}
+
+	// Check if any decision has hallucination plugin enabled
+	for _, decision := range c.Decisions {
+		halConfig := decision.GetHallucinationConfig()
+		if halConfig != nil && halConfig.Enabled {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetFactCheckThreshold returns the threshold for fact-check classification
+// Returns default of 0.7 if not specified
+func (c *RouterConfig) GetFactCheckThreshold() float32 {
+	if c.HallucinationMitigation.FactCheckModel.Threshold > 0 {
+		return c.HallucinationMitigation.FactCheckModel.Threshold
+	}
+	return 0.7 // Default threshold
+}
+
+// GetHallucinationModelThreshold returns the threshold for hallucination detection
+// Returns default of 0.5 if not specified
+func (c *RouterConfig) GetHallucinationModelThreshold() float32 {
+	if c.HallucinationMitigation.HallucinationModel.Threshold > 0 {
+		return c.HallucinationMitigation.HallucinationModel.Threshold
+	}
+	return 0.5 // Default threshold
+}
+
+// GetHallucinationAction returns the action to take when hallucination is detected
+// Returns "warn" as default if not specified
+func (c *RouterConfig) GetHallucinationAction() string {
+	action := c.HallucinationMitigation.OnHallucinationDetected
+	if action == "" {
+		return "warn"
+	}
+	// Only "warn" is supported now
+	return "warn"
+}

@@ -39,6 +39,8 @@ extern bool init_modernbert_jailbreak_classifier(const char* model_id, bool use_
 
 extern bool init_deberta_jailbreak_classifier(const char* model_id, bool use_cpu);
 
+extern bool init_fact_check_classifier(const char* model_id, bool use_cpu);
+
 extern bool init_modernbert_pii_token_classifier(const char* model_id, bool use_cpu);
 
 // Token classification structures
@@ -230,6 +232,7 @@ extern void free_modernbert_probabilities(float* probabilities, int num_classes)
 extern ModernBertClassificationResult classify_modernbert_pii_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
+extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -237,6 +240,116 @@ extern bool init_candle_bert_token_classifier(const char* model_path, int num_cl
 extern ClassificationResult classify_candle_bert_text(const char* text);
 extern BertTokenClassificationResult classify_candle_bert_tokens(const char* text);
 extern BertTokenClassificationResult classify_candle_bert_tokens_with_labels(const char* text, const char* id2label_json);
+
+// ================================================================================================
+// HALLUCINATION DETECTION STRUCTURES (Token-level Detection + NLI)
+// ================================================================================================
+
+// HallucinationSpan represents a detected hallucinated span
+typedef struct {
+    char* text;
+    int start;
+    int end;
+    float confidence;
+    char* label;
+} HallucinationSpan;
+
+// HallucinationDetectionResult from hallucination detection model
+typedef struct {
+    bool has_hallucination;
+    float confidence;
+    HallucinationSpan* spans;
+    int num_spans;
+    bool error;
+    char* error_message;
+} HallucinationDetectionResult;
+
+// NLI label enum
+typedef enum {
+    NLI_ENTAILMENT = 0,
+    NLI_NEUTRAL = 1,
+    NLI_CONTRADICTION = 2,
+    NLI_ERROR = -1
+} NLILabel;
+
+// NLI classification result
+typedef struct {
+    NLILabel label;
+    float confidence;
+    float entailment_prob;
+    float neutral_prob;
+    float contradiction_prob;
+    bool error;
+    char* error_message;
+} NLIResult;
+
+// EnhancedHallucinationSpan with NLI explanation
+typedef struct {
+    char* text;
+    int start;
+    int end;
+    float hallucination_confidence;
+    NLILabel nli_label;
+    float nli_confidence;
+    int severity;
+    char* explanation;
+} EnhancedHallucinationSpan;
+
+// Enhanced hallucination detection result with NLI
+typedef struct {
+    bool has_hallucination;
+    float confidence;
+    EnhancedHallucinationSpan* spans;
+    int num_spans;
+    bool error;
+    char* error_message;
+} EnhancedHallucinationDetectionResult;
+
+// Initialize hallucination detection model
+extern bool init_hallucination_model(const char* model_path, bool use_cpu);
+
+// Initialize NLI model (ModernBERT-based NLI)
+extern bool init_nli_model(const char* model_path, bool use_cpu);
+
+// Check if NLI model is initialized
+extern bool is_nli_model_initialized();
+
+// Detect hallucinations in answer given context
+// threshold: confidence threshold for hallucination detection (0.0-1.0)
+extern HallucinationDetectionResult detect_hallucinations(
+    const char* context,
+    const char* question,
+    const char* answer,
+    float threshold
+);
+
+// Detect hallucinations with NLI explanations
+// threshold: confidence threshold for hallucination detection (0.0-1.0)
+extern EnhancedHallucinationDetectionResult detect_hallucinations_with_nli(
+    const char* context,
+    const char* question,
+    const char* answer,
+    float threshold
+);
+
+// Classify NLI for premise-hypothesis pair
+extern NLIResult classify_nli(
+    const char* premise,
+    const char* hypothesis
+);
+
+// Free hallucination detection result
+extern void free_hallucination_detection_result(HallucinationDetectionResult result);
+
+// Free enhanced hallucination detection result
+extern void free_enhanced_hallucination_detection_result(EnhancedHallucinationDetectionResult result);
+
+// Free NLI result
+extern void free_nli_result(NLIResult result);
+
+// ================================================================================================
+// END OF HALLUCINATION DETECTION STRUCTURES
+// ================================================================================================
 
 // LoRA Unified Classifier C structures
 typedef struct {
@@ -294,6 +407,8 @@ var (
 	bertTokenClassifierInitErr            error
 	debertaJailbreakClassifierInitOnce    sync.Once
 	debertaJailbreakClassifierInitErr     error
+	factCheckClassifierInitOnce           sync.Once
+	factCheckClassifierInitErr            error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -1580,6 +1695,345 @@ func InitModernBertPIITokenClassifier(modelPath string, useCPU bool) error {
 	})
 	return err
 }
+
+// InitFactCheckClassifier initializes the halugate-sentinel fact-check classifier
+// This model determines whether a prompt needs external fact verification.
+// Model outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+func InitFactCheckClassifier(modelPath string, useCPU bool) error {
+	var err error
+	factCheckClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default to halugate-sentinel model path
+			modelPath = "./models/halugate-sentinel"
+		}
+
+		log.Printf("Initializing fact-check classifier (halugate-sentinel): %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_fact_check_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize fact-check classifier model")
+		} else {
+			log.Printf("Fact-check classifier initialized successfully")
+		}
+	})
+	return err
+}
+
+// ClassifyFactCheckText classifies the provided text for fact-checking needs
+// Returns the predicted class (0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED) and confidence
+func ClassifyFactCheckText(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_fact_check_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify text for fact-checking")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ================================================================================================
+// HALLUCINATION DETECTION GO BINDINGS (Token-level Detection + NLI)
+// ================================================================================================
+
+// NLILabel represents the NLI classification result
+type NLILabel int
+
+const (
+	// NLIEntailment means the premise supports the hypothesis
+	NLIEntailment NLILabel = 0
+	// NLINeutral means the premise neither supports nor contradicts
+	NLINeutral NLILabel = 1
+	// NLIContradiction means the premise contradicts the hypothesis
+	NLIContradiction NLILabel = 2
+	// NLIError means an error occurred during classification
+	NLIError NLILabel = -1
+)
+
+// String returns the string representation of NLILabel
+func (l NLILabel) String() string {
+	switch l {
+	case NLIEntailment:
+		return "ENTAILMENT"
+	case NLINeutral:
+		return "NEUTRAL"
+	case NLIContradiction:
+		return "CONTRADICTION"
+	default:
+		return "ERROR"
+	}
+}
+
+// HallucinationSpan represents a detected hallucinated span
+type HallucinationSpan struct {
+	Text       string  `json:"text"`
+	Start      int     `json:"start"`
+	End        int     `json:"end"`
+	Confidence float32 `json:"confidence"`
+	Label      string  `json:"label"`
+}
+
+// HallucinationDetectionResult represents the result from hallucination detection
+type HallucinationDetectionResult struct {
+	HasHallucination bool                `json:"has_hallucination"`
+	Confidence       float32             `json:"confidence"`
+	Spans            []HallucinationSpan `json:"spans,omitempty"`
+}
+
+// NLIClassificationResult represents the result of NLI classification
+type NLIClassificationResult struct {
+	Label          NLILabel `json:"label"`
+	LabelStr       string   `json:"label_str"`
+	Confidence     float32  `json:"confidence"`
+	EntailmentProb float32  `json:"entailment_prob"`
+	NeutralProb    float32  `json:"neutral_prob"`
+	ContradictProb float32  `json:"contradiction_prob"`
+}
+
+// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation
+type EnhancedHallucinationSpan struct {
+	Text                    string   `json:"text"`
+	Start                   int      `json:"start"`
+	End                     int      `json:"end"`
+	HallucinationConfidence float32  `json:"hallucination_confidence"`
+	NLILabel                NLILabel `json:"nli_label"`
+	NLILabelStr             string   `json:"nli_label_str"`
+	NLIConfidence           float32  `json:"nli_confidence"`
+	Severity                int      `json:"severity"` // 0-4: 0=low, 4=critical
+	Explanation             string   `json:"explanation"`
+}
+
+// EnhancedHallucinationDetectionResult represents hallucination detection with NLI explanations
+type EnhancedHallucinationDetectionResult struct {
+	HasHallucination bool                        `json:"has_hallucination"`
+	Confidence       float32                     `json:"confidence"`
+	Spans            []EnhancedHallucinationSpan `json:"spans,omitempty"`
+}
+
+var (
+	hallucinationDetectInitOnce sync.Once
+	hallucinationDetectInitErr  error
+	nliModelInitOnce            sync.Once
+	nliModelInitErr             error
+)
+
+// InitHallucinationModel initializes the hallucination detection model
+func InitHallucinationModel(modelPath string, useCPU bool) error {
+	var err error
+	hallucinationDetectInitOnce.Do(func() {
+		if modelPath == "" {
+			err = fmt.Errorf("model path is required for hallucination detection")
+			return
+		}
+
+		log.Printf("Initializing hallucination detection model: %s", modelPath)
+
+		cModelPath := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelPath))
+
+		success := C.init_hallucination_model(cModelPath, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize hallucination detection model")
+		}
+	})
+
+	if err != nil {
+		hallucinationDetectInitOnce = sync.Once{}
+	}
+
+	hallucinationDetectInitErr = err
+	return err
+}
+
+// InitNLIModel initializes the NLI model for enhanced hallucination detection
+func InitNLIModel(modelPath string, useCPU bool) error {
+	var err error
+	nliModelInitOnce.Do(func() {
+		if modelPath == "" {
+			err = fmt.Errorf("model path is required for NLI model")
+			return
+		}
+
+		log.Printf("Initializing NLI model: %s", modelPath)
+
+		cModelPath := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelPath))
+
+		success := C.init_nli_model(cModelPath, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize NLI model")
+		}
+	})
+
+	if err != nil {
+		nliModelInitOnce = sync.Once{}
+	}
+
+	nliModelInitErr = err
+	return err
+}
+
+// IsNLIModelInitialized checks if the NLI model is initialized
+func IsNLIModelInitialized() bool {
+	return bool(C.is_nli_model_initialized())
+}
+
+// DetectHallucinations detects hallucinations in an answer given context
+// threshold: confidence threshold for hallucination detection (0.0-1.0)
+// Only tokens with confidence >= threshold are considered hallucinated
+func DetectHallucinations(context, question, answer string, threshold float32) (*HallucinationDetectionResult, error) {
+	if hallucinationDetectInitErr != nil {
+		return nil, fmt.Errorf("hallucination detection model not initialized: %v", hallucinationDetectInitErr)
+	}
+
+	cContext := C.CString(context)
+	cQuestion := C.CString(question)
+	cAnswer := C.CString(answer)
+	defer C.free(unsafe.Pointer(cContext))
+	defer C.free(unsafe.Pointer(cQuestion))
+	defer C.free(unsafe.Pointer(cAnswer))
+
+	result := C.detect_hallucinations(cContext, cQuestion, cAnswer, C.float(threshold))
+	defer C.free_hallucination_detection_result(result)
+
+	if bool(result.error) {
+		errMsg := "unknown error"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("hallucination detection error: %s", errMsg)
+	}
+
+	// Convert C result to Go
+	goResult := &HallucinationDetectionResult{
+		HasHallucination: bool(result.has_hallucination),
+		Confidence:       float32(result.confidence),
+		Spans:            []HallucinationSpan{},
+	}
+
+	if result.num_spans > 0 && result.spans != nil {
+		spans := (*[1 << 20]C.HallucinationSpan)(unsafe.Pointer(result.spans))[:result.num_spans:result.num_spans]
+		for _, span := range spans {
+			goSpan := HallucinationSpan{
+				Start:      int(span.start),
+				End:        int(span.end),
+				Confidence: float32(span.confidence),
+			}
+			if span.text != nil {
+				goSpan.Text = C.GoString(span.text)
+			}
+			if span.label != nil {
+				goSpan.Label = C.GoString(span.label)
+			}
+			goResult.Spans = append(goResult.Spans, goSpan)
+		}
+	}
+
+	return goResult, nil
+}
+
+// ClassifyNLI classifies the relationship between premise and hypothesis
+func ClassifyNLI(premise, hypothesis string) (*NLIClassificationResult, error) {
+	if nliModelInitErr != nil {
+		return nil, fmt.Errorf("NLI model not initialized: %v", nliModelInitErr)
+	}
+
+	cPremise := C.CString(premise)
+	cHypothesis := C.CString(hypothesis)
+	defer C.free(unsafe.Pointer(cPremise))
+	defer C.free(unsafe.Pointer(cHypothesis))
+
+	result := C.classify_nli(cPremise, cHypothesis)
+	defer C.free_nli_result(result)
+
+	if bool(result.error) {
+		errMsg := "unknown error"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("NLI classification error: %s", errMsg)
+	}
+
+	label := NLILabel(result.label)
+	return &NLIClassificationResult{
+		Label:          label,
+		LabelStr:       label.String(),
+		Confidence:     float32(result.confidence),
+		EntailmentProb: float32(result.entailment_prob),
+		NeutralProb:    float32(result.neutral_prob),
+		ContradictProb: float32(result.contradiction_prob),
+	}, nil
+}
+
+// DetectHallucinationsWithNLI detects hallucinations with NLI-based explanations
+// threshold: confidence threshold for hallucination detection (0.0-1.0)
+// Only tokens with confidence >= threshold are considered hallucinated
+func DetectHallucinationsWithNLI(context, question, answer string, threshold float32) (*EnhancedHallucinationDetectionResult, error) {
+	if hallucinationDetectInitErr != nil {
+		return nil, fmt.Errorf("hallucination detection model not initialized: %v", hallucinationDetectInitErr)
+	}
+
+	cContext := C.CString(context)
+	cQuestion := C.CString(question)
+	cAnswer := C.CString(answer)
+	defer C.free(unsafe.Pointer(cContext))
+	defer C.free(unsafe.Pointer(cQuestion))
+	defer C.free(unsafe.Pointer(cAnswer))
+
+	result := C.detect_hallucinations_with_nli(cContext, cQuestion, cAnswer, C.float(threshold))
+	defer C.free_enhanced_hallucination_detection_result(result)
+
+	if bool(result.error) {
+		errMsg := "unknown error"
+		if result.error_message != nil {
+			errMsg = C.GoString(result.error_message)
+		}
+		return nil, fmt.Errorf("enhanced hallucination detection error: %s", errMsg)
+	}
+
+	// Convert C result to Go
+	goResult := &EnhancedHallucinationDetectionResult{
+		HasHallucination: bool(result.has_hallucination),
+		Confidence:       float32(result.confidence),
+		Spans:            []EnhancedHallucinationSpan{},
+	}
+
+	if result.num_spans > 0 && result.spans != nil {
+		spans := (*[1 << 20]C.EnhancedHallucinationSpan)(unsafe.Pointer(result.spans))[:result.num_spans:result.num_spans]
+		for _, span := range spans {
+			goSpan := EnhancedHallucinationSpan{
+				Start:                   int(span.start),
+				End:                     int(span.end),
+				HallucinationConfidence: float32(span.hallucination_confidence),
+				NLILabel:                NLILabel(span.nli_label),
+				NLIConfidence:           float32(span.nli_confidence),
+				Severity:                int(span.severity),
+			}
+			goSpan.NLILabelStr = goSpan.NLILabel.String()
+			if span.text != nil {
+				goSpan.Text = C.GoString(span.text)
+			}
+			if span.explanation != nil {
+				goSpan.Explanation = C.GoString(span.explanation)
+			}
+			goResult.Spans = append(goResult.Spans, goSpan)
+		}
+	}
+
+	return goResult, nil
+}
+
+// ================================================================================================
+// END OF HALLUCINATION DETECTION GO BINDINGS
+// ================================================================================================
 
 // ClassifyModernBertText classifies the provided text using ModernBERT and returns the predicted class and confidence
 func ClassifyModernBertText(text string) (ClassResult, error) {

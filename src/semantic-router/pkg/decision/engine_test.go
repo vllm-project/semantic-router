@@ -158,3 +158,131 @@ func TestDecisionEngine_EvaluateDecisions(t *testing.T) {
 		})
 	}
 }
+
+func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
+	tests := []struct {
+		name             string
+		decisions        []config.Decision
+		signals          *SignalMatches
+		expectedDecision string
+		expectError      bool
+	}{
+		{
+			name: "Decision with fact_check condition - needs_fact_check matches",
+			decisions: []config.Decision{
+				{
+					Name:     "factual-query",
+					Priority: 10,
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{Type: "fact_check", Name: "needs_fact_check"},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				FactCheckRules: []string{"needs_fact_check"},
+			},
+			expectedDecision: "factual-query",
+			expectError:      false,
+		},
+		{
+			name: "Decision with fact_check condition - no_fact_check_needed matches",
+			decisions: []config.Decision{
+				{
+					Name:     "creative-query",
+					Priority: 10,
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{Type: "fact_check", Name: "no_fact_check_needed"},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				FactCheckRules: []string{"no_fact_check_needed"},
+			},
+			expectedDecision: "creative-query",
+			expectError:      false,
+		},
+		{
+			name: "Decision with mixed conditions - fact_check AND domain",
+			decisions: []config.Decision{
+				{
+					Name:     "factual-science",
+					Priority: 10,
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{Type: "fact_check", Name: "needs_fact_check"},
+							{Type: "domain", Name: "science"},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				DomainRules:    []string{"science"},
+				FactCheckRules: []string{"needs_fact_check"},
+			},
+			expectedDecision: "factual-science",
+			expectError:      false,
+		},
+		{
+			name: "Decision with fact_check condition - no match",
+			decisions: []config.Decision{
+				{
+					Name:     "factual-query",
+					Priority: 10,
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{Type: "fact_check", Name: "needs_fact_check"},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				FactCheckRules: []string{"no_fact_check_needed"},
+			},
+			expectedDecision: "",
+			expectError:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := NewDecisionEngine(
+				[]config.KeywordRule{},
+				[]config.EmbeddingRule{},
+				[]config.Category{},
+				tt.decisions,
+				"priority",
+			)
+
+			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if result == nil {
+				t.Errorf("Expected result but got nil")
+				return
+			}
+
+			if result.Decision.Name != tt.expectedDecision {
+				t.Errorf("Expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
+			}
+		})
+	}
+}

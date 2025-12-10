@@ -158,3 +158,10 @@ dashboard/frontend/index.html.old
 
 # Kind cluster configuration
 tools/kind/kind-config.yaml
+FaithDial_dataset/
+FactCHD_dataset/
+
+# Trained model outputs (should use HuggingFace Hub or model registry)
+**/lora_*_model/
+**/lora_*_model_rust/
+*.safetensors

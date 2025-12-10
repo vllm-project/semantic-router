@@ -1,0 +1,15 @@
+{
+    "idx_to_label": {
+        "0": "NO_FACT_CHECK_NEEDED",
+        "1": "FACT_CHECK_NEEDED"
+    },
+    "label_to_idx": {
+        "NO_FACT_CHECK_NEEDED": 0,
+        "FACT_CHECK_NEEDED": 1
+    },
+    "description": {
+        "FACT_CHECK_NEEDED": "The prompt requests factual, external-knowledge, real-world information that should be verified",
+        "NO_FACT_CHECK_NEEDED": "Opinion, creative, instructions, math, coding, personal preference, general chat - no verification needed"
+    }
+}
+

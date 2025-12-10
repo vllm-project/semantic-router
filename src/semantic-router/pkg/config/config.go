@@ -98,6 +98,9 @@ type InlineModels struct {
 
 	// Prompt guard configuration
 	PromptGuard PromptGuardConfig `yaml:"prompt_guard"`
+
+	// Hallucination mitigation configuration
+	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -110,6 +113,10 @@ type IntelligentRouting struct {
 
 	// Categories for domain classification (only metadata, used by domain rules)
 	Categories []Category `yaml:"categories"`
+
+	// FactCheck rules for fact-check signal classification
+	// When matched, outputs "needs_fact_check" or "no_fact_check_needed" signal
+	FactCheckRules []FactCheckRule `yaml:"fact_check_rules,omitempty"`
 
 	// Decisions for routing logic (combines rules with AND/OR operators)
 	Decisions []Decision `yaml:"decisions,omitempty"`
@@ -485,6 +492,75 @@ type ToolsConfig struct {
 	FallbackToEmpty bool `yaml:"fallback_to_empty"`
 }
 
+// HallucinationMitigationConfig represents configuration for hallucination mitigation
+// This feature classifies prompts to determine if they need fact-checking, and when tools
+// are used (for RAG), verifies that the LLM response is grounded in the provided context.
+type HallucinationMitigationConfig struct {
+	// Enable hallucination mitigation
+	Enabled bool `yaml:"enabled"`
+
+	// Fact-check classifier configuration
+	FactCheckModel FactCheckModelConfig `yaml:"fact_check_model"`
+
+	// Hallucination detection model configuration
+	HallucinationModel HallucinationModelConfig `yaml:"hallucination_model"`
+
+	// NLI model configuration for enhanced hallucination detection with explanations
+	NLIModel NLIModelConfig `yaml:"nli_model"`
+
+	// Action when hallucination detected: "warn"
+	// "warn" - log warning and add response header with hallucination info
+	// Default: "warn"
+	OnHallucinationDetected string `yaml:"on_hallucination_detected,omitempty"`
+}
+
+// FactCheckModelConfig represents configuration for the fact-check classifier
+// This classifier determines whether a user prompt requires external fact verification
+type FactCheckModelConfig struct {
+	// Path to the fact-check classifier model
+	ModelID string `yaml:"model_id"`
+
+	// Confidence threshold for classifying as FACT_CHECK_NEEDED (0.0-1.0)
+	// Default: 0.7
+	Threshold float32 `yaml:"threshold"`
+
+	// Use CPU for inference
+	UseCPU bool `yaml:"use_cpu"`
+
+	// Path to fact-check label mapping file (JSON format)
+	MappingPath string `yaml:"mapping_path"`
+}
+
+// HallucinationModelConfig represents configuration for hallucination detection model
+// The model uses NLI to detect if LLM responses contain claims not supported by context
+type HallucinationModelConfig struct {
+	// Path to the hallucination detection model
+	ModelID string `yaml:"model_id"`
+
+	// Confidence threshold for hallucination detection (0.0-1.0)
+	// Lower values are more sensitive to potential hallucinations
+	// Default: 0.5
+	Threshold float32 `yaml:"threshold"`
+
+	// Use CPU for inference
+	UseCPU bool `yaml:"use_cpu"`
+}
+
+// NLIModelConfig represents configuration for the NLI (Natural Language Inference) model
+// Used for enhanced hallucination detection with explanations
+// Recommended model: tasksource/ModernBERT-base-nli
+type NLIModelConfig struct {
+	// Path to the NLI model
+	ModelID string `yaml:"model_id"`
+
+	// Confidence threshold for NLI classification (0.0-1.0)
+	// Default: 0.7
+	Threshold float32 `yaml:"threshold"`
+
+	// Use CPU for inference
+	UseCPU bool `yaml:"use_cpu"`
+}
+
 // ClassifierVLLMEndpoint represents a vLLM endpoint configuration for classifiers
 // This is separate from VLLMEndpoint (which is for backend inference)
 type ClassifierVLLMEndpoint struct {
@@ -686,6 +762,37 @@ type HeaderPair struct {
 	Value string `json:"value" yaml:"value"`
 }
 
+// HallucinationPluginConfig represents configuration for hallucination detection plugin
+type HallucinationPluginConfig struct {
+	// Enable hallucination detection for this decision
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// UseNLI enables NLI (Natural Language Inference) model for detailed explanations
+	// When enabled, each hallucinated span will include:
+	// - NLI label (ENTAILMENT/NEUTRAL/CONTRADICTION)
+	// - Confidence scores
+	// - Severity level (0-4)
+	// - Human-readable explanation
+	UseNLI bool `json:"use_nli,omitempty" yaml:"use_nli,omitempty"`
+
+	// HallucinationAction specifies the action when hallucination is detected
+	// "header" - add warning headers to response (default)
+	// "body" - prepend warning text to response content
+	// "none" - no action, only log and metrics
+	HallucinationAction string `json:"hallucination_action,omitempty" yaml:"hallucination_action,omitempty"`
+
+	// UnverifiedFactualAction specifies the action when fact-check is needed but no tool context available
+	// "header" - add warning headers to response (default)
+	// "body" - prepend warning text to response content
+	// "none" - no action, only log and metrics
+	UnverifiedFactualAction string `json:"unverified_factual_action,omitempty" yaml:"unverified_factual_action,omitempty"`
+
+	// IncludeHallucinationDetails includes detailed information in body warning
+	// Only effective when HallucinationAction is "body"
+	// When true, includes confidence score and hallucinated spans in the warning text
+	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
+}
+
 // Helper methods for Decision to access plugin configurations
 
 // GetPluginConfig returns the configuration for a specific plugin type
@@ -844,6 +951,21 @@ func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
 	return result
 }
 
+// GetHallucinationConfig returns the hallucination plugin configuration
+func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
+	config := d.GetPluginConfig("hallucination")
+	if config == nil {
+		return nil
+	}
+
+	result := &HallucinationPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
+		return nil
+	}
+	return result
+}
+
 // RuleCombination defines how to combine multiple rule conditions with AND/OR operators
 type RuleCombination struct {
 	// Operator specifies how to combine conditions: "AND" or "OR"
@@ -855,11 +977,26 @@ type RuleCombination struct {
 
 // RuleCondition references a specific rule by type and name
 type RuleCondition struct {
-	// Type specifies the rule type: "keyword", "embedding", or "domain"
+	// Type specifies the rule type: "keyword", "embedding", "domain", or "fact_check"
 	Type string `yaml:"type"`
 
 	// Name is the name of the rule to reference
+	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
 	Name string `yaml:"name"`
+}
+
+// FactCheckRule defines a rule for fact-check signal classification
+// Similar to KeywordRule and EmbeddingRule, but based on ML model classification
+// The classifier determines if a query needs fact verification and outputs
+// one of the predefined signals: "needs_fact_check" or "no_fact_check_needed"
+// Threshold is read from hallucination_mitigation.fact_check_model.threshold
+type FactCheckRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "needs_fact_check" or "no_fact_check_needed"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
 }
 
 // ModelReasoningControl represents reasoning mode control on model level

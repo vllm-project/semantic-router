@@ -145,3 +145,189 @@ test-e2e-vllm:
 	@python3 e2e-tests/run_all_tests.py
 
 # Note: Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
+
+# ============== Hallucination Detection Tests ==============
+
+# Run the router with hallucination detection config
+run-router-hallucination: ## Run the router with hallucination detection enabled
+run-router-hallucination: build-router download-models
+	@echo "Running router with hallucination detection config..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		./bin/router -config=config/testing/config.hallucination.yaml
+
+# Test hallucination detection models by verifying router startup and model loading
+test-hallucination-detection: ## Test hallucination detection pipeline (fact-check, hallucination detector, NLI)
+test-hallucination-detection: build-router download-models
+	@echo "=============================================="
+	@echo "Testing Hallucination Detection Pipeline"
+	@echo "=============================================="
+	@echo ""
+	@echo "1. Starting mock vLLM server on port 8002..."
+	@nohup python3 e2e-tests/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@sleep 2
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
+	@echo ""
+	@echo "2. Starting router with hallucination detection config..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
+	@echo "   Waiting for router to initialize models (15s)..."
+	@sleep 15
+	@echo ""
+	@echo "3. Checking router logs for model initialization..."
+	@grep -E "(Fact-check classifier initialized|Hallucination.*initialized)" /tmp/router_hal.log 2>/dev/null | head -4 && echo "   ✓ Models initialized" || echo "   ⚠ Check /tmp/router_hal.log for details"
+	@echo ""
+	@echo "4. Starting Envoy proxy..."
+	@if ! command -v func-e >/dev/null 2>&1; then \
+		echo "   Installing func-e..."; \
+		curl -sL https://func-e.io/install.sh | sudo bash -s -- -b /usr/local/bin; \
+	fi
+	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
+	@sleep 3
+	@curl -sf http://localhost:19000/ready > /dev/null && echo "   ✓ Envoy is ready" || echo "   ⚠ Envoy may not be ready"
+	@echo ""
+	@echo "5. Testing OpenAI Chat API through Envoy (with tool context for hallucination detection)..."
+	@echo '   Sending request WITH tool results to trigger hallucination detection...'
+	@echo '   Question: "What is the exact height of the Eiffel Tower in meters?"'
+	@echo '   Tool Context: "The Eiffel Tower is 330 meters tall. It was completed in 1889."'
+	@echo ""
+	@RESPONSE=$$(curl -sS -D /tmp/hal_headers.txt -X POST http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model": "qwen3", "messages": [{"role": "user", "content": "What is the exact height of the Eiffel Tower in meters?"}, {"role": "tool", "tool_call_id": "call_123", "content": "The Eiffel Tower is 330 meters tall. It was completed in 1889."}]}' 2>/dev/null) && \
+		echo "   Response body (formatted):" && echo "$$RESPONSE" | python3 -m json.tool 2>/dev/null || \
+		(echo "   Raw response:" && echo "$$RESPONSE")
+	@echo ""
+	@echo "   Response headers (all):"
+	@cat /tmp/hal_headers.txt 2>/dev/null | head -20
+	@echo ""
+	@echo "   Hallucination-specific headers:"
+	@cat /tmp/hal_headers.txt 2>/dev/null | grep -iE "hallucination|fact-check|unverified" || echo "   (Headers may be in trailer or processed differently)"
+	@echo ""
+	@echo "6. Testing with another factual question..."
+	@echo '   Question: "What year was the Eiffel Tower built?"'
+	@RESPONSE=$$(curl -sS -D /tmp/hal_headers2.txt -X POST http://localhost:8801/v1/chat/completions \
+		-H "Content-Type: application/json" \
+		-d '{"model": "qwen3", "messages": [{"role": "user", "content": "What year was the Eiffel Tower built? Give me the exact year."}, {"role": "tool", "tool_call_id": "call_456", "content": "The Eiffel Tower was completed in 1889 for the World Fair."}]}' 2>/dev/null) && \
+		echo "   Response received" || echo "   ⚠ Request failed"
+	@echo "   Response headers:"
+	@cat /tmp/hal_headers2.txt 2>/dev/null | grep -iE "x-hallucination|x-fact-check|x-unverified" || echo "   (No hallucination headers)"
+	@echo ""
+	@echo "7. Checking router logs for hallucination detection activity..."
+	@grep -E "(Fact-check classification|hallucination|Hallucination)" /tmp/router_hal.log 2>/dev/null | tail -10 || echo "   (No hallucination detection logs found)"
+	@echo ""
+	@echo "8. Cleanup - stopping servers..."
+	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
+	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
+	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
+	@echo ""
+	@echo "=============================================="
+	@echo "✓ Hallucination Detection E2E Test Complete"
+	@echo "=============================================="
+	@echo ""
+	@echo "Pipeline tested:"
+	@echo "  1. Mock vLLM -> returns controlled responses"
+	@echo "  2. Router -> fact-check + hallucination detection"
+	@echo "  3. Envoy -> proxies requests through extproc"
+	@echo "  4. OpenAI Chat API -> /v1/chat/completions"
+
+test-hallucination-detection-manual: ## Start hallucination detection services for manual testing (press Ctrl+C to stop)
+test-hallucination-detection-manual: build-router download-models
+	@echo "=============================================="
+	@echo "Starting Hallucination Detection Services"
+	@echo "=============================================="
+	@echo ""
+	@echo "0. Cleaning up any existing services..."
+	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
+	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
+	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
+	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
+	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
+	@-pkill -f "func-e.*envoy" 2>/dev/null || true
+	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti:50051 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
+	@rm -f /tmp/mock_vllm.log /tmp/router_hal.log /tmp/envoy_hal.log
+	@sleep 2
+	@echo "   ✓ Cleanup complete"
+	@echo ""
+	@echo "1. Starting mock vLLM server on port 8002..."
+	@nohup python3 e2e-tests/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@sleep 2
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
+	@echo ""
+	@echo "2. Starting router with hallucination detection config..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
+	@echo "   Waiting for router to initialize models (15s)..."
+	@sleep 15
+	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   ✓ Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
+	@echo ""
+	@echo "3. Starting Envoy proxy..."
+	@if ! command -v func-e >/dev/null 2>&1; then \
+		echo "   Installing func-e..."; \
+		curl -sL https://func-e.io/install.sh | sudo bash -s -- -b /usr/local/bin; \
+	fi
+	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
+	@sleep 3
+	@curl -sf http://localhost:8801/health > /dev/null 2>&1 && echo "   ✓ Envoy is ready" || echo "   ✓ Envoy started (no /health endpoint)"
+	@echo ""
+	@echo "=============================================="
+	@echo "✓ Services Ready for Manual Testing"
+	@echo "=============================================="
+	@echo ""
+	@echo "Endpoints:"
+	@echo "  - Envoy (HTTP):  http://localhost:8801"
+	@echo "  - Router (gRPC): localhost:50051"
+	@echo "  - Mock vLLM:     http://localhost:8002"
+	@echo ""
+	@echo "Example curl command:"
+	@echo '  curl -X POST http://localhost:8801/v1/chat/completions \'
+	@echo '    -H "Content-Type: application/json" \'
+	@echo '    -d '"'"'{"model": "qwen3", "messages": [{"role": "user", "content": "What is the height of Eiffel Tower?"}, {"role": "tool", "tool_call_id": "call_123", "content": "The Eiffel Tower is 330 meters tall."}]}'"'"''
+	@echo ""
+	@echo "Logs:"
+	@echo "  - Router: tail -f /tmp/router_hal.log"
+	@echo "  - Envoy:  tail -f /tmp/envoy_hal.log"
+	@echo "  - Mock:   tail -f /tmp/mock_vllm.log"
+	@echo ""
+	@echo "Press Enter to stop all services..."
+	@read dummy
+	@echo ""
+	@echo "Stopping services..."
+	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
+	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
+	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
+	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
+	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
+	@-pkill -f "func-e.*envoy" 2>/dev/null || true
+	@echo "✓ All services stopped"
+
+# Stop hallucination detection services manually
+stop-hallucination-services: ## Stop hallucination detection services
+stop-hallucination-services:
+	@echo "Stopping hallucination detection services..."
+	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
+	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
+	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
+	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
+	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
+	@-pkill -f "func-e.*envoy" 2>/dev/null || true
+	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti:50051 | xargs kill -9 2>/dev/null || true
+	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
+	@echo "✓ All services stopped"
+
+# Hallucination Detection Demo with Tool Calling
+demo-hallucination: ## Run interactive hallucination detection demo (CLI)
+demo-hallucination: build-router download-models
+	@echo "Starting Hallucination Detection Demo (CLI)..."
+	@./e2e-tests/hallucination-demo/run_demo.sh
+
+demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
+demo-hallucination-web: build-router download-models
+	@echo "Starting Hallucination Detection Demo (Web UI)..."
+	@./e2e-tests/hallucination-demo/run_demo.sh --web
+
+demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
+demo-hallucination-auto: build-router download-models
+	@echo "Starting Hallucination Detection Demo (auto mode)..."
+	@./e2e-tests/hallucination-demo/run_demo.sh --demo

@@ -41,6 +41,15 @@ pub static LORA_TOKEN_CLASSIFIER: OnceLock<
 pub static LORA_INTENT_CLASSIFIER: OnceLock<
     Arc<crate::classifiers::lora::intent_lora::IntentLoRAClassifier>,
 > = OnceLock::new();
+// Hallucination detector (ModernBERT token classifier for RAG verification)
+pub static HALLUCINATION_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
+> = OnceLock::new();
+// ModernBERT NLI classifier for hallucination explanation (NLI post-processing)
+// Model: tasksource/ModernBERT-base-nli
+pub static NLI_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
 
 /// Model type detection for intelligent routing
 #[derive(Debug, Clone, PartialEq)]
@@ -367,6 +376,70 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT jailbreak classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize ModernBERT fact-check classifier (halugate-sentinel model)
+///
+/// This initializes the halugate-sentinel ModernBERT model for classifying
+/// whether a prompt needs fact-checking.
+///
+/// Model outputs:
+/// - 0: NO_FACT_CHECK_NEEDED
+/// - 1: FACT_CHECK_NEEDED
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+/// - Caller must ensure proper memory management
+///
+/// # Returns
+/// `true` if initialization succeeds, `false` otherwise
+///
+/// # Example
+/// ```c
+/// bool success = init_fact_check_classifier(
+///     "models/halugate-sentinel",
+///     true  // use CPU
+/// );
+/// ```
+#[no_mangle]
+pub extern "C" fn init_fact_check_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+    // Check if already initialized - return true if so (idempotent)
+    if crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.get().is_some() {
+        println!("✓ Fact-check classifier already initialized");
+        return true;
+    }
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    println!(
+        "🔧 Initializing fact-check classifier (halugate-sentinel): {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
+        Ok(model) => {
+            match crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.set(Arc::new(model)) {
+                Ok(_) => {
+                    println!("✓ Fact-check classifier initialized successfully");
+                    true
+                }
+                Err(_) => {
+                    // Already initialized by another thread, that's fine
+                    println!("✓ Fact-check classifier already initialized (race condition)");
+                    true
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize fact-check classifier: {}", e);
             false
         }
     }
@@ -832,4 +905,106 @@ pub extern "C" fn init_lora_unified_classifier(
             false
         }
     }
+}
+
+/// Initialize hallucination detection model
+///
+/// This is a ModernBERT-based token classifier for detecting hallucinations
+/// in RAG (Retrieval Augmented Generation) outputs. It classifies each token as
+/// either SUPPORTED (grounded in context) or HALLUCINATED.
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string pointing to the model directory
+#[no_mangle]
+pub extern "C" fn init_hallucination_model(model_path: *const c_char, use_cpu: bool) -> bool {
+    let model_path = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    // Check if already initialized
+    if HALLUCINATION_CLASSIFIER.get().is_some() {
+        println!("Hallucination detection model already initialized");
+        return true;
+    }
+
+    println!(
+        "Initializing hallucination detection model from: {}",
+        model_path
+    );
+
+    // Use TraditionalModernBertTokenClassifier for hallucination detection
+    // Model has: 2 classes (0=SUPPORTED, 1=HALLUCINATED)
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new(
+        model_path,
+        use_cpu,
+    ) {
+        Ok(classifier) => {
+            let success = HALLUCINATION_CLASSIFIER.set(Arc::new(classifier)).is_ok();
+            if success {
+                println!("Hallucination detection model initialized successfully");
+            }
+            success
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize hallucination detection model: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize ModernBERT NLI (Natural Language Inference) model
+///
+/// This model is used for post-processing hallucination detection results to provide
+/// explanations. It classifies premise-hypothesis pairs into:
+/// - Entailment (0): The premise supports the hypothesis
+/// - Neutral (1): The premise neither supports nor contradicts
+/// - Contradiction (2): The premise contradicts the hypothesis
+///
+/// Recommended model: tasksource/ModernBERT-base-nli
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string pointing to the model directory
+#[no_mangle]
+pub extern "C" fn init_nli_model(model_path: *const c_char, use_cpu: bool) -> bool {
+    let model_path = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    // Check if already initialized
+    if NLI_CLASSIFIER.get().is_some() {
+        println!("NLI model already initialized");
+        return true;
+    }
+
+    println!("Initializing NLI model from: {}", model_path);
+
+    // Use TraditionalModernBertClassifier for ModernBERT NLI
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(
+        model_path,
+        use_cpu,
+    ) {
+        Ok(classifier) => {
+            let success = NLI_CLASSIFIER.set(Arc::new(classifier)).is_ok();
+            if success {
+                println!("NLI model (ModernBERT) initialized successfully");
+            }
+            success
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize NLI model: {}", e);
+            false
+        }
+    }
+}
+
+/// Check if NLI model is initialized
+#[no_mangle]
+pub extern "C" fn is_nli_model_initialized() -> bool {
+    NLI_CLASSIFIER.get().is_some()
 }

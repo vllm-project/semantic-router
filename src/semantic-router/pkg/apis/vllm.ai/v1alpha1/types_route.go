@@ -50,6 +50,26 @@ type Signals struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=14
 	Domains []DomainSignal `json:"domains,omitempty" yaml:"domains,omitempty"`
+
+	// FactCheckRules defines fact-check rules for signal classification
+	// Similar to KeywordRules and EmbeddingRules, but based on ML model classification
+	// Each rule has a name that can be referenced in decision conditions
+	// +optional
+	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
+}
+
+// FactCheckRule defines a rule for fact-check signal classification
+// The classifier determines if a query needs fact verification based on the ML model
+// Predefined signal names: "needs_fact_check", "no_fact_check_needed"
+// Threshold is read from hallucination_mitigation.fact_check_model.threshold
+type FactCheckRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "needs_fact_check" or "no_fact_check_needed"
+	Name string `json:"name" yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	// +optional
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 // DomainSignal defines a domain category for classification
@@ -171,12 +191,13 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain)
+	// Type defines the type of signal (keyword/embedding/domain/fact_check)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference
+	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=100
@@ -214,9 +235,9 @@ type ModelRef struct {
 
 // DecisionPlugin defines a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type is the plugin type (semantic-cache, jailbreak, pii, system_prompt, header_mutation)
+	// Type is the plugin type (semantic-cache, jailbreak, pii, system_prompt, header_mutation, hallucination)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=semantic-cache;jailbreak;pii;system_prompt;header_mutation
+	// +kubebuilder:validation:Enum=semantic-cache;jailbreak;pii;system_prompt;header_mutation;hallucination
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

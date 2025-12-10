@@ -64,6 +64,19 @@ download-models-minimal: ## Pre-download minimal set of models for CI tests
 	@if [ ! -f "models/Qwen3-Embedding-0.6B/.downloaded" ] || [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
 		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen3-Embedding-0.6B/.downloaded; \
 	fi
+	# Download hallucination mitigation models
+	# Hallucination detection model (ModernBERT-based token classifier)
+	@if [ ! -f "models/halugate-detector/.downloaded" ] || [ ! -d "models/halugate-detector" ]; then \
+		hf download KRLabsOrg/lettucedect-base-modernbert-en-v1 --local-dir models/halugate-detector && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/halugate-detector/.downloaded; \
+	fi
+	# NLI model for enhanced hallucination detection with explanations (ModernBERT-based)
+	@if [ ! -f "models/ModernBERT-base-nli/.downloaded" ] || [ ! -d "models/ModernBERT-base-nli" ]; then \
+		hf download tasksource/ModernBERT-base-nli --local-dir models/ModernBERT-base-nli && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/ModernBERT-base-nli/.downloaded; \
+	fi
+	# Fact-check classifier model (HaluGate Sentinel)
+	@if [ ! -f "models/halugate-sentinel/.downloaded" ] || [ ! -d "models/halugate-sentinel" ]; then \
+		hf download LLM-Semantic-Router/halugate-sentinel --local-dir models/halugate-sentinel && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/halugate-sentinel/.downloaded; \
+	fi
 
 # Full model set for local development and docs
 
@@ -122,6 +135,16 @@ download-models-full: ## Download all models used in local development and docs
 	@if [ ! -f "models/embeddinggemma-300m/.downloaded" ] || [ ! -d "models/embeddinggemma-300m" ]; then \
 		echo "Downloading google/embeddinggemma-300m (requires HF_TOKEN for gated model)..."; \
 		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/embeddinggemma-300m/.downloaded; \
+	fi
+	# Download hallucination mitigation models
+	@if [ ! -f "models/halugate-detector/.downloaded" ] || [ ! -d "models/halugate-detector" ]; then \
+		hf download KRLabsOrg/lettucedect-base-modernbert-en-v1 --local-dir models/halugate-detector && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/halugate-detector/.downloaded; \
+	fi
+	@if [ ! -f "models/ModernBERT-base-nli/.downloaded" ] || [ ! -d "models/ModernBERT-base-nli" ]; then \
+		hf download tasksource/ModernBERT-base-nli --local-dir models/ModernBERT-base-nli && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/ModernBERT-base-nli/.downloaded; \
+	fi
+	@if [ ! -f "models/halugate-sentinel/.downloaded" ] || [ ! -d "models/halugate-sentinel" ]; then \
+		hf download LLM-Semantic-Router/halugate-sentinel --local-dir models/halugate-sentinel && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/halugate-sentinel/.downloaded; \
 	fi
 
 # Download only LoRA and advanced embedding models (for CI after minimal tests)

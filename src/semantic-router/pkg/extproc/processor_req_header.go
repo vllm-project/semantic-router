@@ -15,6 +15,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
+// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation
+type EnhancedHallucinationSpan struct {
+	Text                    string  `json:"text"`
+	Start                   int     `json:"start"`
+	End                     int     `json:"end"`
+	HallucinationConfidence float32 `json:"hallucination_confidence"`
+	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
+	NLIConfidence           float32 `json:"nli_confidence"`
+	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
+	Explanation             string  `json:"explanation"` // Human-readable explanation
+}
+
+// EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations
+type EnhancedHallucinationInfo struct {
+	Confidence float32                     `json:"confidence"`
+	Spans      []EnhancedHallucinationSpan `json:"spans"`
+}
+
 // RequestContext holds the context for processing a request
 type RequestContext struct {
 	Headers             map[string]string
@@ -44,6 +62,17 @@ type RequestContext struct {
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
+	// Hallucination mitigation tracking
+	FactCheckNeeded           bool                       // Result of fact-check classification
+	FactCheckConfidence       float32                    // Confidence score of fact-check classification
+	HasToolsForFactCheck      bool                       // Request has tools that provide context for fact-checking
+	ToolResultsContext        string                     // Aggregated tool results for hallucination check
+	UserContent               string                     // Stored user content for hallucination detection
+	HallucinationDetected     bool                       // Result of hallucination detection
+	HallucinationSpans        []string                   // Unsupported spans found in answer (basic mode)
+	HallucinationConfidence   float32                    // Confidence score of hallucination detection
+	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
+	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
 
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation

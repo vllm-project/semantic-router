@@ -235,6 +235,10 @@ type Classifier struct {
 	mcpCategoryInitializer MCPCategoryInitializer
 	mcpCategoryInference   MCPCategoryInference
 
+	// Hallucination mitigation classifiers
+	factCheckClassifier   *FactCheckClassifier
+	hallucinationDetector *HallucinationDetector
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -314,6 +318,21 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 	if classifier.IsKeywordEmbeddingClassifierEnabled() {
 		if err := classifier.initializeKeywordEmbeddingClassifier(); err != nil {
 			return nil, err
+		}
+	}
+
+	// Initialize hallucination mitigation classifiers
+	if classifier.IsFactCheckEnabled() {
+		if err := classifier.initializeFactCheckClassifier(); err != nil {
+			logging.Warnf("Failed to initialize fact-check classifier: %v", err)
+			// Non-fatal - continue without fact-check
+		}
+	}
+
+	if classifier.IsHallucinationDetectionEnabled() {
+		if err := classifier.initializeHallucinationDetector(); err != nil {
+			logging.Warnf("Failed to initialize hallucination detector: %v", err)
+			// Non-fatal - continue without hallucination detection
 		}
 	}
 
@@ -571,24 +590,36 @@ func (c *Classifier) initializePIIClassifier() error {
 	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
 }
 
+// SignalResults contains all evaluated signal results
+type SignalResults struct {
+	MatchedKeywordRules   []string
+	MatchedEmbeddingRules []string
+	MatchedDomainRules    []string
+	MatchedFactCheckRules []string // "needs_fact_check" or "no_fact_check_needed"
+}
+
 // EvaluateAllRules evaluates all rule types and returns matched rule names
 // Returns (matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules)
 // matchedKeywordRules: list of matched keyword rule category names
 // matchedEmbeddingRules: list of matched embedding rule category names
 // matchedDomainRules: list of matched domain rule category names (from category classification)
 func (c *Classifier) EvaluateAllRules(text string) ([]string, []string, []string, error) {
-	var matchedKeywordRules []string
-	var matchedEmbeddingRules []string
-	var matchedDomainRules []string
+	results := c.EvaluateAllSignals(text)
+	return results.MatchedKeywordRules, results.MatchedEmbeddingRules, results.MatchedDomainRules, nil
+}
+
+// EvaluateAllSignals evaluates all signal types and returns SignalResults
+// This is the new method that includes fact_check signals
+func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
+	results := &SignalResults{}
 
 	// Evaluate keyword rules - check each rule individually
 	if c.keywordClassifier != nil {
 		category, _, err := c.keywordClassifier.Classify(text)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("keyword rule evaluation failed: %w", err)
-		}
-		if category != "" {
-			matchedKeywordRules = append(matchedKeywordRules, category)
+			logging.Errorf("keyword rule evaluation failed: %v", err)
+		} else if category != "" {
+			results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
 		}
 	}
 
@@ -596,10 +627,9 @@ func (c *Classifier) EvaluateAllRules(text string) ([]string, []string, []string
 	if c.keywordEmbeddingClassifier != nil {
 		category, _, err := c.keywordEmbeddingClassifier.Classify(text)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("embedding rule evaluation failed: %w", err)
-		}
-		if category != "" {
-			matchedEmbeddingRules = append(matchedEmbeddingRules, category)
+			logging.Errorf("embedding rule evaluation failed: %v", err)
+		} else if category != "" {
+			results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
 		}
 	}
 
@@ -607,17 +637,42 @@ func (c *Classifier) EvaluateAllRules(text string) ([]string, []string, []string
 	if c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil {
 		result, err := c.categoryInference.Classify(text)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("domain rule evaluation failed: %w", err)
-		}
-		// Map class index to category name
-		if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
-			if categoryName != "" {
-				matchedDomainRules = append(matchedDomainRules, categoryName)
+			logging.Errorf("domain rule evaluation failed: %v", err)
+		} else {
+			// Map class index to category name
+			if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
+				if categoryName != "" {
+					results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+				}
 			}
 		}
 	}
 
-	return matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules, nil
+	// Evaluate fact-check rules
+	// Only evaluate if fact_check_rules are configured and fact-check classifier is enabled
+	if len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled() {
+		factCheckResult, err := c.ClassifyFactCheck(text)
+		if err != nil {
+			logging.Errorf("fact-check rule evaluation failed: %v", err)
+		} else if factCheckResult != nil {
+			// Determine which signal to output based on classification result
+			// Threshold is already applied in ClassifyFactCheck using fact_check_model.threshold
+			signalName := "no_fact_check_needed"
+			if factCheckResult.NeedsFactCheck {
+				signalName = "needs_fact_check"
+			}
+
+			// Check if this signal is defined in fact_check_rules
+			for _, rule := range c.Config.FactCheckRules {
+				if rule.Name == signalName {
+					results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
+					break
+				}
+			}
+		}
+	}
+
+	return results
 }
 
 // EvaluateDecisionWithEngine evaluates all decisions using the DecisionEngine
@@ -628,14 +683,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	// Evaluate all rules
-	matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules, err := c.EvaluateAllRules(text)
-	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate rules: %w", err)
-	}
+	// Evaluate all signals (includes fact_check)
+	signals := c.EvaluateAllSignals(text)
 
-	logging.Infof("Rule evaluation results: keyword=%v, embedding=%v, domain=%v",
-		matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules)
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v",
+		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules, signals.MatchedFactCheckRules)
 
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
@@ -646,12 +698,13 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		c.Config.Strategy,
 	)
 
-	// Evaluate decisions
-	result, err := engine.EvaluateDecisions(
-		matchedKeywordRules,
-		matchedEmbeddingRules,
-		matchedDomainRules,
-	)
+	// Evaluate decisions with all signals
+	result, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{
+		KeywordRules:   signals.MatchedKeywordRules,
+		EmbeddingRules: signals.MatchedEmbeddingRules,
+		DomainRules:    signals.MatchedDomainRules,
+		FactCheckRules: signals.MatchedFactCheckRules,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
 	}
@@ -1245,4 +1298,168 @@ func (c *Classifier) updateBestModel(score float64, model string, bestScore *flo
 		*bestScore = score
 		*bestModel = model
 	}
+}
+
+// IsFactCheckEnabled checks if fact-check classification is enabled and properly configured
+func (c *Classifier) IsFactCheckEnabled() bool {
+	return c.Config.IsFactCheckClassifierEnabled()
+}
+
+// IsHallucinationDetectionEnabled checks if hallucination detection is enabled and properly configured
+func (c *Classifier) IsHallucinationDetectionEnabled() bool {
+	return c.Config.IsHallucinationModelEnabled()
+}
+
+// initializeFactCheckClassifier initializes the fact-check classification model
+func (c *Classifier) initializeFactCheckClassifier() error {
+	if !c.IsFactCheckEnabled() {
+		return nil
+	}
+
+	classifier, err := NewFactCheckClassifier(&c.Config.HallucinationMitigation.FactCheckModel)
+	if err != nil {
+		return fmt.Errorf("failed to create fact-check classifier: %w", err)
+	}
+
+	if err := classifier.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize fact-check classifier: %w", err)
+	}
+
+	c.factCheckClassifier = classifier
+	logging.Infof("Fact-check classifier initialized successfully")
+	return nil
+}
+
+// initializeHallucinationDetector initializes the hallucination detection model
+func (c *Classifier) initializeHallucinationDetector() error {
+	if !c.IsHallucinationDetectionEnabled() {
+		return nil
+	}
+
+	detector, err := NewHallucinationDetector(&c.Config.HallucinationMitigation.HallucinationModel)
+	if err != nil {
+		return fmt.Errorf("failed to create hallucination detector: %w", err)
+	}
+
+	if err := detector.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize hallucination detector: %w", err)
+	}
+
+	// Initialize NLI model if configured
+	if c.Config.HallucinationMitigation.NLIModel.ModelID != "" {
+		detector.SetNLIConfig(&c.Config.HallucinationMitigation.NLIModel)
+		if err := detector.InitializeNLI(); err != nil {
+			// NLI is optional - log warning but don't fail
+			logging.Warnf("Failed to initialize NLI model: %v (NLI-enhanced detection will be unavailable)", err)
+		} else {
+			logging.Infof("NLI model initialized successfully for enhanced hallucination detection")
+		}
+	}
+
+	c.hallucinationDetector = detector
+	logging.Infof("Hallucination detector initialized successfully")
+	return nil
+}
+
+// ClassifyFactCheck performs fact-check classification on the given text
+// Returns the classification result indicating if the prompt needs fact-checking
+func (c *Classifier) ClassifyFactCheck(text string) (*FactCheckResult, error) {
+	if c.factCheckClassifier == nil || !c.factCheckClassifier.IsInitialized() {
+		return nil, fmt.Errorf("fact-check classifier is not initialized")
+	}
+
+	result, err := c.factCheckClassifier.Classify(text)
+	if err != nil {
+		return nil, fmt.Errorf("fact-check classification failed: %w", err)
+	}
+
+	if result != nil {
+		logging.Infof("Fact-check classification: needs_fact_check=%v, confidence=%.3f, label=%s",
+			result.NeedsFactCheck, result.Confidence, result.Label)
+	}
+
+	return result, nil
+}
+
+// DetectHallucination checks if an answer contains hallucinations given the context
+// context: The tool results or RAG context that should ground the answer
+// question: The original user question
+// answer: The LLM-generated answer to verify
+func (c *Classifier) DetectHallucination(context, question, answer string) (*HallucinationResult, error) {
+	if c.hallucinationDetector == nil || !c.hallucinationDetector.IsInitialized() {
+		return nil, fmt.Errorf("hallucination detector is not initialized")
+	}
+
+	result, err := c.hallucinationDetector.Detect(context, question, answer)
+	if err != nil {
+		return nil, fmt.Errorf("hallucination detection failed: %w", err)
+	}
+
+	if result != nil {
+		logging.Infof("Hallucination detection: detected=%v, confidence=%.3f, unsupported_spans=%d",
+			result.HallucinationDetected, result.Confidence, len(result.UnsupportedSpans))
+	}
+
+	return result, nil
+}
+
+// DetectHallucinationWithNLI checks if an answer contains hallucinations with NLI explanations
+// context: The tool results or RAG context that should ground the answer
+// question: The original user question
+// answer: The LLM-generated answer to verify
+// Returns enhanced result with detailed NLI analysis for each hallucinated span
+func (c *Classifier) DetectHallucinationWithNLI(context, question, answer string) (*EnhancedHallucinationResult, error) {
+	if c.hallucinationDetector == nil || !c.hallucinationDetector.IsInitialized() {
+		return nil, fmt.Errorf("hallucination detector is not initialized")
+	}
+
+	// Check if NLI is initialized
+	if !c.hallucinationDetector.IsNLIInitialized() {
+		logging.Warnf("NLI model not initialized, falling back to basic hallucination detection")
+		// Fall back to basic detection and convert to enhanced format
+		basicResult, err := c.hallucinationDetector.Detect(context, question, answer)
+		if err != nil {
+			return nil, fmt.Errorf("hallucination detection failed: %w", err)
+		}
+		// Convert basic result to enhanced format
+		enhancedResult := &EnhancedHallucinationResult{
+			HallucinationDetected: basicResult.HallucinationDetected,
+			Confidence:            basicResult.Confidence,
+			Spans:                 []EnhancedHallucinationSpan{},
+		}
+		for _, span := range basicResult.UnsupportedSpans {
+			enhancedResult.Spans = append(enhancedResult.Spans, EnhancedHallucinationSpan{
+				Text:                    span,
+				HallucinationConfidence: basicResult.Confidence,
+				NLILabel:                0, // Unknown
+				NLILabelStr:             "UNKNOWN",
+				NLIConfidence:           0,
+				Severity:                2, // Medium
+				Explanation:             fmt.Sprintf("Unsupported claim detected (confidence: %.1f%%)", basicResult.Confidence*100),
+			})
+		}
+		return enhancedResult, nil
+	}
+
+	result, err := c.hallucinationDetector.DetectWithNLI(context, question, answer)
+	if err != nil {
+		return nil, fmt.Errorf("hallucination detection with NLI failed: %w", err)
+	}
+
+	if result != nil {
+		logging.Infof("Hallucination detection (NLI): detected=%v, confidence=%.3f, spans=%d",
+			result.HallucinationDetected, result.Confidence, len(result.Spans))
+	}
+
+	return result, nil
+}
+
+// GetFactCheckClassifier returns the fact-check classifier instance
+func (c *Classifier) GetFactCheckClassifier() *FactCheckClassifier {
+	return c.factCheckClassifier
+}
+
+// GetHallucinationDetector returns the hallucination detector instance
+func (c *Classifier) GetHallucinationDetector() *HallucinationDetector {
+	return c.hallucinationDetector
 }

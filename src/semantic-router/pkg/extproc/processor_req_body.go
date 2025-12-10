@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -84,6 +85,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
+
+	// Perform fact-check classification for hallucination mitigation
+	r.performFactCheckClassification(ctx, userContent)
+
+	// Check if request has tools that can provide context for fact-checking
+	r.checkRequestHasTools(ctx)
 
 	// Perform decision evaluation and model selection once at the beginning
 	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
@@ -301,7 +308,19 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	}
 
 	setHeaders := []*core.HeaderValueOption{}
-	removeHeaders := []string{"content-length"}
+	removeHeaders := []string{"content-length"} // Always remove old content-length when body is modified
+
+	// Add new content-length header for the modified body
+	if len(modifiedBody) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "content-length",
+				RawValue: []byte(fmt.Sprintf("%d", len(modifiedBody))),
+			},
+		})
+	}
+
+	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s, endpoint=%s", len(modifiedBody), model, endpoint)
 
 	// Add standard routing headers
 	if endpoint != "" {

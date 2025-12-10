@@ -155,6 +155,25 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
+	// Perform hallucination detection if enabled and conditions are met
+	if hallucinationResponse := r.performHallucinationDetection(ctx, responseBody); hallucinationResponse != nil {
+		// Hallucination detected and action is "block" - return error response
+		return hallucinationResponse, nil
+	}
+
+	// Check unverified factual response if hallucination plugin is enabled
+	if ctx.VSRSelectedDecision != nil {
+		hallucinationConfig := ctx.VSRSelectedDecision.GetHallucinationConfig()
+		if hallucinationConfig != nil && hallucinationConfig.Enabled {
+			r.checkUnverifiedFactualResponse(ctx)
+		}
+	}
+
+	// Track if body needs to be modified
+	modifiedBody := responseBody
+	needsBodyMutation := false
+
+	// Apply hallucination warning (may modify body or headers)
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseBody{
 			ResponseBody: &ext_proc.BodyResponse{
@@ -165,6 +184,32 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				},
 			},
 		},
+	}
+
+	// Apply hallucination warning based on configured action
+	if ctx.HallucinationDetected {
+		modifiedBody, response = r.applyHallucinationWarning(response, ctx, modifiedBody)
+		if string(modifiedBody) != string(responseBody) {
+			needsBodyMutation = true
+		}
+	}
+
+	// Apply unverified factual warning based on configured action
+	if ctx.UnverifiedFactualResponse {
+		modifiedBody, response = r.applyUnverifiedFactualWarning(response, ctx, modifiedBody)
+		if string(modifiedBody) != string(responseBody) {
+			needsBodyMutation = true
+		}
+	}
+
+	// If body was modified, update the response with body mutation
+	if needsBodyMutation {
+		bodyResponse := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+		bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{
+				Body: modifiedBody,
+			},
+		}
 	}
 
 	return response, nil

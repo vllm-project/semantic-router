@@ -56,6 +56,11 @@ pub static TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER: OnceLock<
 pub static TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER: OnceLock<
     Arc<TraditionalModernBertTokenClassifier>,
 > = OnceLock::new();
+// Fact-check classifier using halugate-sentinel model (ModernBERT-based sequence classifier)
+// Model outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+pub static TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER: OnceLock<
+    Arc<TraditionalModernBertClassifier>,
+> = OnceLock::new();
 
 // Real classifier implementations
 #[derive(Clone)]
@@ -622,11 +627,18 @@ impl TraditionalModernBertTokenClassifier {
         };
 
         // Get number of classes from config.json id2label field (single source of truth)
+        // For models that don't include id2label in config.json,
+        // we fall back to num_labels if available, or default to 2 (binary classification)
         let config_json: serde_json::Value = serde_json::from_str(&config_str)?;
         let num_classes = config_json.get("id2label")
             .and_then(|v| v.as_object())
             .map(|obj| obj.len())
-            .ok_or_else(|| E::msg("config.json missing valid id2label field - this is required for ModernBERT token classification"))?;
+            .or_else(|| config_json.get("num_labels").and_then(|v| v.as_u64()).map(|n| n as usize))
+            .unwrap_or_else(|| {
+                // Default to 2 classes for binary token classification (e.g., SUPPORTED/HALLUCINATED)
+                println!("  config.json missing id2label field, defaulting to 2 classes (binary classification)");
+                2
+            });
 
         // Load token classifier with correct number of classes
         let classifier =
@@ -677,7 +689,7 @@ impl TraditionalModernBertTokenClassifier {
         let predictions = logits_squeezed.argmax(D::Minus1)?;
         let predictions_vec = predictions.to_vec1::<u32>()?;
 
-        // Load id2label mapping for BIO tag processing
+        // Load id2label mapping
         let config_path = format!(
             "{}/config.json",
             self.model_path
@@ -687,7 +699,7 @@ impl TraditionalModernBertTokenClassifier {
         let id2label = match crate::ffi::classify::load_id2label_from_config(&config_path) {
             Ok(mapping) => mapping,
             Err(_) => {
-                // Fallback: return individual token results without BIO processing
+                // Fallback: return individual token results without any label processing
                 for (token_idx, token_probs) in probs_data.iter().enumerate() {
                     if token_idx < tokenization_result.tokens.len()
                         && token_idx < tokenization_result.offsets.len()
@@ -714,6 +726,34 @@ impl TraditionalModernBertTokenClassifier {
                 return Ok(results);
             }
         };
+
+        // Check if labels are BIO format (start with B- or I-) or simple format (like SUPPORTED/HALLUCINATED)
+        let is_bio_format = id2label
+            .values()
+            .any(|v| v.starts_with("B-") || v.starts_with("I-"));
+
+        // For simple token classification (non-BIO format), return individual token predictions
+        if !is_bio_format {
+            for (token_idx, token_probs) in probs_data.iter().enumerate() {
+                if token_idx < tokenization_result.tokens.len()
+                    && token_idx < tokenization_result.offsets.len()
+                {
+                    let pred_id = predictions_vec[token_idx] as usize;
+                    let confidence = token_probs[pred_id];
+
+                    let offset = tokenization_result.offsets[token_idx];
+                    let token_text =
+                        if offset.0 < text.len() && offset.1 <= text.len() && offset.0 < offset.1 {
+                            text[offset.0..offset.1].to_string()
+                        } else {
+                            tokenization_result.tokens[token_idx].clone()
+                        };
+
+                    results.push((token_text, pred_id, confidence, offset.0, offset.1));
+                }
+            }
+            return Ok(results);
+        }
 
         // BIO tag entity extraction (like old architecture)
         #[derive(Debug, Clone)]

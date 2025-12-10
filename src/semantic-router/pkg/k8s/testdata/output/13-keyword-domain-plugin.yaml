@@ -26,6 +26,17 @@ prompt_guard:
   use_cpu: true
   use_modernbert: true
   jailbreak_mapping_path: models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json
+hallucination_mitigation:
+  enabled: false
+  fact_check_model:
+    model_id: ""
+    threshold: 0
+    use_cpu: false
+    mapping_path: ""
+  hallucination_model:
+    model_id: ""
+    threshold: 0
+    use_cpu: false
 semantic_cache:
   backend_type: memory
   enabled: true
@@ -49,6 +60,7 @@ observability:
       service_name: vllm-semantic-router
       service_version: v0.1.0
       deployment_environment: development
+  metrics: {}
 api:
   batch_classification:
     metrics:

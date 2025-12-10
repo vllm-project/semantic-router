@@ -255,3 +255,62 @@ func TestCustomBatchSizeRanges(t *testing.T) {
 	// Restore original config
 	SetBatchMetricsConfig(originalConfig)
 }
+
+// TestHallucinationMitigationMetrics tests the hallucination mitigation metrics
+func TestHallucinationMitigationMetrics(_ *testing.T) {
+	// Test fact-check classification metrics
+	RecordFactCheckClassification("fact_check_needed")
+	RecordFactCheckClassification("no_fact_check_needed")
+	RecordFactCheckClassification("error")
+
+	// Test hallucination detection metrics
+	RecordHallucinationDetection("hallucination_detected")
+	RecordHallucinationDetection("no_hallucination")
+	RecordHallucinationDetection("error")
+
+	// Test hallucination detection latency
+	RecordHallucinationDetectionLatency(0.5)
+	RecordHallucinationDetectionLatency(1.2)
+
+	// Test unverified factual response metric
+	RecordUnverifiedFactualResponse()
+}
+
+// TestUnverifiedFactualResponseMetric tests the unverified factual response counter
+func TestUnverifiedFactualResponseMetric(_ *testing.T) {
+	// Record multiple unverified responses
+	for i := 0; i < 5; i++ {
+		RecordUnverifiedFactualResponse()
+	}
+	// The test passes if no panic occurs - Prometheus counters are monotonic
+}
+
+// TestFactCheckClassificationMetrics tests the fact-check classification metrics recording
+func TestFactCheckClassificationMetrics(_ *testing.T) {
+	testCases := []string{
+		"fact_check_needed",
+		"no_fact_check_needed",
+		"error",
+	}
+
+	for _, tc := range testCases {
+		RecordFactCheckClassification(tc)
+	}
+}
+
+// TestHallucinationDetectionMetrics tests the hallucination detection metrics recording
+func TestHallucinationDetectionMetrics(_ *testing.T) {
+	testCases := []struct {
+		result  string
+		latency float64
+	}{
+		{"hallucination_detected", 0.8},
+		{"no_hallucination", 0.3},
+		{"error", 0.1},
+	}
+
+	for _, tc := range testCases {
+		RecordHallucinationDetection(tc.result)
+		RecordHallucinationDetectionLatency(tc.latency)
+	}
+}
