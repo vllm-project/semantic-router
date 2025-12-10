@@ -149,7 +149,7 @@ class Jailbreak_Dataset:
             "salad-data": {
                 "name": "OpenSafetyLab/Salad-Data",
                 "config": "attack_enhanced_set",
-                "text_column": "attack",
+                "text_column": "augq",  # Fixed: was "attack" but actual column is "augq" (augmented question)
                 "label_column": None,
                 "type": "jailbreak",
                 "description": "Salad-Data jailbreak attacks",
