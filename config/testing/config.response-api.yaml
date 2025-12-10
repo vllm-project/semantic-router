@@ -55,12 +55,13 @@ decisions:
     rules:
       operator: "OR"
       conditions:
-        - type: "always"
+        - type: "domain"
+          name: "other"
     modelRefs:
-      - model: "test-model"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
 
-default_model: "test-model"
+default_model: "openai/gpt-oss-120b"
 
 # Reasoning family configurations
 reasoning_families:
