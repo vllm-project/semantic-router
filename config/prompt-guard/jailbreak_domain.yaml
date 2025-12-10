@@ -5,17 +5,17 @@
 # Global jailbreak detection configuration (can be overridden per category)
 prompt_guard:
   enabled: true  # Global default - can be overridden per category
-  use_modernbert: true
-  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  use_modernbert: false
+  model_id: "models/lora_jailbreak_classifier_bert-base-uncased_model"
   threshold: 0.7  # Global default threshold - can be overridden per category
   use_cpu: true
-  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+  jailbreak_mapping_path: "models/lora_jailbreak_classifier_bert-base-uncased_model/jailbreak_type_mapping.json"
 
 # Classifier configuration
 classifier:
   category_model:
     model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
+    use_modernbert: false
     threshold: 0.6
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"

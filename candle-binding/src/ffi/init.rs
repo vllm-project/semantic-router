@@ -41,6 +41,10 @@ pub static LORA_TOKEN_CLASSIFIER: OnceLock<
 pub static LORA_INTENT_CLASSIFIER: OnceLock<
     Arc<crate::classifiers::lora::intent_lora::IntentLoRAClassifier>,
 > = OnceLock::new();
+// LoRA jailbreak classifier for security threat detection
+pub static LORA_JAILBREAK_CLASSIFIER: OnceLock<
+    Arc<crate::classifiers::lora::security_lora::SecurityLoRAClassifier>,
+> = OnceLock::new();
 
 /// Model type detection for intelligent routing
 #[derive(Debug, Clone, PartialEq)]
@@ -231,7 +235,11 @@ pub extern "C" fn init_pii_classifier(
     }
 }
 
-/// Initialize jailbreak classifier
+/// Initialize jailbreak classifier with LoRA auto-detection
+///
+/// Intelligent model type detection (same pattern as intent classifier):
+/// 1. Checks for lora_config.json → Routes to LoRA jailbreak classifier
+/// 2. Falls back to Traditional BERT if LoRA config not found
 ///
 /// # Safety
 /// - `model_id` must be a valid null-terminated C string
@@ -241,24 +249,59 @@ pub extern "C" fn init_jailbreak_classifier(
     num_classes: i32,
     use_cpu: bool,
 ) -> bool {
-    let model_id = unsafe {
+    let model_path = unsafe {
         match CStr::from_ptr(model_id).to_str() {
             Ok(s) => s,
             Err(_) => return false,
         }
     };
 
-    // Ensure num_classes is valid
-    if num_classes < 2 {
-        eprintln!("Number of classes must be at least 2, got {num_classes}");
-        return false;
-    }
+    // Intelligent model type detection (same as intent classifier)
+    let model_type = detect_model_type(model_path);
 
-    match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => BERT_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
-        Err(e) => {
-            eprintln!("Failed to initialize BERT jailbreak classifier: {e}");
-            false
+    match model_type {
+        ModelType::LoRA => {
+            eprintln!("🔍 Detected LoRA model for jailbreak classification");
+
+            // Check if already initialized
+            if LORA_JAILBREAK_CLASSIFIER.get().is_some() {
+                return true; // Already initialized, return success
+            }
+
+            // Route to LoRA jailbreak classifier (SecurityLoRAClassifier)
+            match crate::classifiers::lora::security_lora::SecurityLoRAClassifier::new(
+                model_path, use_cpu,
+            ) {
+                Ok(classifier) => {
+                    eprintln!("✅ LoRA jailbreak classifier initialized successfully");
+                    LORA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  ERROR: Failed to initialize LoRA jailbreak classifier: {}",
+                        e
+                    );
+                    false
+                }
+            }
+        }
+        ModelType::Traditional => {
+            eprintln!("🔍 Detected Traditional BERT model for jailbreak classification");
+
+            // Ensure num_classes is valid
+            if num_classes < 2 {
+                eprintln!("Number of classes must be at least 2, got {num_classes}");
+                return false;
+            }
+
+            // Initialize Traditional BERT jailbreak classifier
+            match BertClassifier::new(model_path, num_classes as usize, use_cpu) {
+                Ok(classifier) => BERT_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+                Err(e) => {
+                    eprintln!("Failed to initialize BERT jailbreak classifier: {e}");
+                    false
+                }
+            }
         }
     }
 }

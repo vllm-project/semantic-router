@@ -22,7 +22,7 @@ use crate::BertClassifier;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
-use crate::ffi::init::{LORA_INTENT_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
+use crate::ffi::init::{LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER};
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
 
@@ -179,7 +179,9 @@ pub extern "C" fn classify_pii_text(text: *const c_char) -> ClassificationResult
         default_result
     }
 }
-/// Classify text for jailbreak detection
+/// Classify text for jailbreak detection with LoRA auto-detection
+///
+/// Tries LoRA jailbreak classifier first, falls back to Traditional BERT
 ///
 /// # Safety
 /// - `text` must be a valid null-terminated C string
@@ -198,6 +200,31 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
         }
     };
 
+    // Try LoRA jailbreak classifier first (preferred for higher accuracy)
+    if let Some(classifier) = LORA_JAILBREAK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_with_index(text) {
+            Ok((class_idx, confidence, ref label)) => {
+                // Allocate C string for label
+                let label_ptr = unsafe { allocate_c_string(label) };
+
+                return ClassificationResult {
+                    predicted_class: class_idx as i32,
+                    confidence,
+                    label: label_ptr,
+                };
+            }
+            Err(e) => {
+                eprintln!(
+                    "LoRA jailbreak classifier error: {}, falling back to Traditional BERT",
+                    e
+                );
+                // Don't return - fall through to Traditional BERT classifier
+            }
+        }
+    }
+
+    // Fallback to Traditional BERT classifier
     if let Some(classifier) = BERT_JAILBREAK_CLASSIFIER.get() {
         let classifier = classifier.clone();
         match classifier.classify_text(text) {
@@ -212,7 +239,7 @@ pub extern "C" fn classify_jailbreak_text(text: *const c_char) -> Classification
             }
         }
     } else {
-        eprintln!("BERT jailbreak classifier not initialized");
+        eprintln!("No jailbreak classifier initialized - call init_jailbreak_classifier first");
         default_result
     }
 }

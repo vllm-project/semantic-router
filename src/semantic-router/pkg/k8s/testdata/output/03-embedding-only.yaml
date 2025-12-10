@@ -49,6 +49,11 @@ observability:
       service_name: vllm-semantic-router
       service_version: v0.1.0
       deployment_environment: development
+  metrics:
+    windowed_metrics:
+      enabled: false
+      model_metrics: false
+      queue_depth_estimation: false
 api:
   batch_classification:
     metrics:

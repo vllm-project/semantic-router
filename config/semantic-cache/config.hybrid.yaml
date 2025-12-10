@@ -28,11 +28,11 @@ tools:
 
 prompt_guard:
   enabled: true
-  use_modernbert: true
-  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  use_modernbert: false
+  model_id: "models/lora_jailbreak_classifier_bert-base-uncased_model"
   threshold: 0.7
   use_cpu: true
-  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+  jailbreak_mapping_path: "models/lora_jailbreak_classifier_bert-base-uncased_model/jailbreak_type_mapping.json"
 
 # vLLM Endpoints Configuration
 vllm_endpoints:
