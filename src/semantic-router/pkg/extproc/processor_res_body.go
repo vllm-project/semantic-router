@@ -127,12 +127,41 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
-	// Allow the response to continue without modification
+	// Translate response for Response API requests
+	finalBody := responseBody
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && r.ResponseAPIFilter != nil {
+		translatedBody, err := r.ResponseAPIFilter.TranslateResponse(ctx.TraceContext, ctx.ResponseAPICtx, responseBody)
+		if err != nil {
+			logging.Errorf("Response API translation error: %v", err)
+			// Continue with original response on error
+		} else {
+			finalBody = translatedBody
+			logging.Infof("Response API: Translated response to Response API format")
+		}
+	}
+
+	// Build response with possible body modification
+	var bodyMutation *ext_proc.BodyMutation
+	var headerMutation *ext_proc.HeaderMutation
+	if finalBody != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		bodyMutation = &ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{
+				Body: finalBody,
+			},
+		}
+		// Remove content-length so Envoy recalculates it for the modified body
+		headerMutation = &ext_proc.HeaderMutation{
+			RemoveHeaders: []string{"content-length"},
+		}
+	}
+
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseBody{
 			ResponseBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
+					Status:         ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: headerMutation,
+					BodyMutation:   bodyMutation,
 				},
 			},
 		},

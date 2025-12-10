@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
@@ -26,6 +27,7 @@ type OpenAIRouter struct {
 	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
+	ResponseAPIFilter    *ResponseAPIFilter
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -165,6 +167,18 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		_ = autoSvc
 	}
 
+	// Create Response API filter if enabled
+	var responseAPIFilter *ResponseAPIFilter
+	if cfg.ResponseAPI.Enabled {
+		responseStore, err := createResponseStore(cfg)
+		if err != nil {
+			logging.Warnf("Failed to create response store: %v, Response API will be disabled", err)
+		} else {
+			responseAPIFilter = NewResponseAPIFilter(responseStore)
+			logging.Infof("Response API enabled with %s backend", cfg.ResponseAPI.StoreBackend)
+		}
+	}
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -172,6 +186,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
+		ResponseAPIFilter:    responseAPIFilter,
 	}
 
 	return router, nil
@@ -237,4 +252,22 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 func (r *OpenAIRouter) shouldClearRouteCache() bool {
 	// Check if feature is enabled
 	return r.Config.ClearRouteCache
+}
+
+// createResponseStore creates a response store based on configuration.
+func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore, error) {
+	storeConfig := responsestore.StoreConfig{
+		Enabled:     true,
+		TTLSeconds:  cfg.ResponseAPI.TTLSeconds,
+		BackendType: responsestore.StoreBackendType(cfg.ResponseAPI.StoreBackend),
+		Memory: responsestore.MemoryStoreConfig{
+			MaxResponses: cfg.ResponseAPI.MaxResponses,
+		},
+		Milvus: responsestore.MilvusStoreConfig{
+			Address:            cfg.ResponseAPI.Milvus.Address,
+			Database:           cfg.ResponseAPI.Milvus.Database,
+			ResponseCollection: cfg.ResponseAPI.Milvus.Collection,
+		},
+	}
+	return responsestore.NewStore(storeConfig)
 }

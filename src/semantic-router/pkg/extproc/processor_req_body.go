@@ -25,15 +25,36 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Save the original request body
 	ctx.OriginalRequestBody = v.RequestBody.GetBody()
 
+	// Handle Response API translation if this is a /v1/responses request
+	requestBody := ctx.OriginalRequestBody
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && r.ResponseAPIFilter != nil {
+		respCtx, translatedBody, err := r.ResponseAPIFilter.TranslateRequest(ctx.TraceContext, requestBody)
+		if err != nil {
+			logging.Errorf("Response API translation error: %v", err)
+			return r.createErrorResponse(400, "Invalid Response API request: "+err.Error()), nil
+		}
+		if respCtx != nil && translatedBody != nil {
+			// Update context with full Response API context
+			ctx.ResponseAPICtx = respCtx
+			requestBody = translatedBody
+			logging.Infof("Response API: Translated to Chat Completions format")
+		} else {
+			// Translation returned nil - this means the request is missing required fields (e.g., 'input')
+			// Return error since the request was sent to /v1/responses but is not valid Response API format
+			logging.Errorf("Response API: Request to /v1/responses missing required 'input' field")
+			return r.createErrorResponse(400, "Invalid Response API request: 'input' field is required. Use 'input' instead of 'messages' for Response API."), nil
+		}
+	}
+
 	// Extract stream parameter from original request and update ExpectStreamingResponse if needed
-	hasStreamParam := extractStreamParam(ctx.OriginalRequestBody)
+	hasStreamParam := extractStreamParam(requestBody)
 	if hasStreamParam {
 		logging.Infof("Original request contains stream parameter: true")
 		ctx.ExpectStreamingResponse = true // Set this if stream param is found
 	}
 
 	// Parse the OpenAI request using SDK types
-	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
+	openAIRequest, err := parseOpenAIRequest(requestBody)
 	if err != nil {
 		logging.Errorf("Error parsing OpenAI request: %v", err)
 		// Attempt to determine model for labeling (may be unknown here)
@@ -186,7 +207,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	selectedEndpoint := r.selectEndpointForModel(ctx, originalModel)
 
 	// Create response with headers
-	response := r.createSpecifiedModelResponse(originalModel, selectedEndpoint)
+	response := r.createSpecifiedModelResponse(originalModel, selectedEndpoint, ctx)
 
 	// Handle route cache clearing
 	if r.shouldClearRouteCache() {
@@ -300,6 +321,17 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 		})
 	}
 
+	// For Response API requests, modify :path to /v1/chat/completions
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      ":path",
+				RawValue: []byte("/v1/chat/completions"),
+			},
+		})
+		logging.Infof("Response API: Rewriting path to /v1/chat/completions")
+	}
+
 	// Apply header mutations from decision's header_mutation plugin
 	if ctx.VSRSelectedDecision != nil {
 		pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
@@ -332,8 +364,10 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 }
 
 // createSpecifiedModelResponse creates a response for specified model routing
-func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint string) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint string, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{}
+	removeHeaders := []string{}
+
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -350,14 +384,38 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 		},
 	})
 
+	// For Response API requests, modify :path to /v1/chat/completions and use translated body
+	var bodyMutation *ext_proc.BodyMutation
+	if ctx != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      ":path",
+				RawValue: []byte("/v1/chat/completions"),
+			},
+		})
+		removeHeaders = append(removeHeaders, "content-length")
+
+		// Use the translated body from Response API context
+		if len(ctx.ResponseAPICtx.TranslatedBody) > 0 {
+			bodyMutation = &ext_proc.BodyMutation{
+				Mutation: &ext_proc.BodyMutation_Body{
+					Body: ctx.ResponseAPICtx.TranslatedBody,
+				},
+			}
+		}
+		logging.Infof("Response API: Rewriting path to /v1/chat/completions (specified model)")
+	}
+
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestBody{
 			RequestBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
 					Status: ext_proc.CommonResponse_CONTINUE,
 					HeaderMutation: &ext_proc.HeaderMutation{
-						SetHeaders: setHeaders,
+						SetHeaders:    setHeaders,
+						RemoveHeaders: removeHeaders,
 					},
+					BodyMutation: bodyMutation,
 				},
 			},
 		},

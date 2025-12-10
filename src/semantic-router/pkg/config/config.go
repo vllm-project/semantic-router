@@ -32,6 +32,8 @@ type RouterConfig struct {
 	InlineModels `yaml:",inline"`
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
+	// Response API configuration for stateful conversations
+	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
 	// LLMObservability for LLM tracing, metrics, and logging
 	LLMObservability `yaml:",inline"`
 	// API server configuration
@@ -222,6 +224,43 @@ type SemanticCache struct {
 	// - "gemma": Balanced, 768-dim, supports 8K context
 	// Default: "bert"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+// ResponseAPIConfig configures the Response API for stateful conversations.
+// The Response API provides OpenAI-compatible /v1/responses endpoints
+// that support conversation chaining via previous_response_id.
+// Requests are translated to Chat Completions format and routed through Envoy.
+type ResponseAPIConfig struct {
+	// Enable Response API endpoints
+	Enabled bool `yaml:"enabled"`
+
+	// Storage backend type: "memory", "milvus"
+	// Default: "memory"
+	StoreBackend string `yaml:"store_backend,omitempty"`
+
+	// Time-to-live for stored responses in seconds (0 = 30 days default)
+	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+	// Maximum number of responses to store (for memory backend)
+	MaxResponses int `yaml:"max_responses,omitempty"`
+
+	// Path to backend-specific configuration (for milvus)
+	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+	// Milvus configuration (when store_backend is "milvus")
+	Milvus ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
+}
+
+// ResponseAPIMilvusConfig configures Milvus storage for Response API.
+type ResponseAPIMilvusConfig struct {
+	// Milvus server address (e.g., "localhost:19530")
+	Address string `yaml:"address"`
+
+	// Database name
+	Database string `yaml:"database,omitempty"`
+
+	// Collection name for storing responses
+	Collection string `yaml:"collection,omitempty"`
 }
 
 // KeywordRule defines a rule for keyword-based classification.
