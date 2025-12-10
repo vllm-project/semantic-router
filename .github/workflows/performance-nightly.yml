@@ -73,6 +73,9 @@ jobs:
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
 
+      - name: Create reports directory
+        run: mkdir -p reports
+
       - name: Run comprehensive benchmarks
         run: |
           export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release
