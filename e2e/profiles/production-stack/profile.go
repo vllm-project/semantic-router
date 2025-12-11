@@ -44,7 +44,6 @@ const (
 	chartEnvoyGateway       = "oci://docker.io/envoyproxy/gateway-helm"
 	chartAIGatewayCRD       = "oci://docker.io/envoyproxy/ai-gateway-crds-helm"
 	chartAIGateway          = "oci://docker.io/envoyproxy/ai-gateway-helm"
-	chartVersion            = "v0.0.0-latest"
 	envoyGatewayValuesURL   = "https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"
 
 	// File path constants
@@ -232,7 +231,7 @@ func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deploye
 		ReleaseName: releaseEnvoyGateway,
 		Chart:       chartEnvoyGateway,
 		Namespace:   namespaceEnvoyGateway,
-		Version:     chartVersion,
+		Version:     "v1.6.0",
 		ValuesFiles: []string{envoyGatewayValuesURL},
 		Wait:        true,
 		Timeout:     timeoutHelmInstall,
@@ -250,7 +249,7 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		ReleaseName: releaseAIGatewayCRD,
 		Chart:       chartAIGatewayCRD,
 		Namespace:   namespaceAIGateway,
-		Version:     chartVersion,
+		Version:     "v0.4.0",
 		Wait:        true,
 		Timeout:     timeoutHelmInstall,
 	}
@@ -263,7 +262,7 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		ReleaseName: releaseAIGateway,
 		Chart:       chartAIGateway,
 		Namespace:   namespaceAIGateway,
-		Version:     chartVersion,
+		Version:     "v0.4.0",
 		Wait:        true,
 		Timeout:     timeoutHelmInstall,
 	}

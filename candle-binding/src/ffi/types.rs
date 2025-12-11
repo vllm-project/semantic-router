@@ -417,6 +417,146 @@ impl Default for EmbeddingModelsInfoResult {
     }
 }
 
+/// Hallucination span detected by token-level classifier
+#[repr(C)]
+#[derive(Debug)]
+pub struct HallucinationSpan {
+    pub text: *mut c_char,  // The hallucinated text span
+    pub start: i32,         // Start position in answer
+    pub end: i32,           // End position in answer
+    pub confidence: f32,    // Confidence of hallucination detection
+    pub label: *mut c_char, // "HALLUCINATED" or "SUPPORTED"
+}
+
+/// Hallucination detection result
+#[repr(C)]
+#[derive(Debug)]
+pub struct HallucinationDetectionResult {
+    pub has_hallucination: bool,       // Whether hallucination was detected
+    pub confidence: f32,               // Overall confidence
+    pub spans: *mut HallucinationSpan, // Array of detected spans
+    pub num_spans: i32,                // Number of spans
+    pub error: bool,                   // Whether an error occurred
+    pub error_message: *mut c_char,    // Error message if error is true
+}
+
+impl Default for HallucinationDetectionResult {
+    fn default() -> Self {
+        Self {
+            has_hallucination: false,
+            confidence: 0.0,
+            spans: std::ptr::null_mut(),
+            num_spans: 0,
+            error: false,
+            error_message: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// NLI (Natural Language Inference) classification labels
+/// Used for post-processing hallucination detection spans
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NLILabel {
+    /// Premise entails hypothesis (supports the claim)
+    Entailment = 0,
+    /// Premise is neutral with respect to hypothesis (can't verify)
+    Neutral = 1,
+    /// Premise contradicts hypothesis (refutes the claim)
+    Contradiction = 2,
+    /// Error occurred during classification
+    Error = -1,
+}
+
+/// NLI classification result for a single premise-hypothesis pair
+#[repr(C)]
+#[derive(Debug)]
+pub struct NLIResult {
+    /// Predicted NLI label
+    pub label: NLILabel,
+    /// Confidence score (0.0-1.0)
+    pub confidence: f32,
+    /// Probability of entailment
+    pub entailment_prob: f32,
+    /// Probability of neutral
+    pub neutral_prob: f32,
+    /// Probability of contradiction
+    pub contradiction_prob: f32,
+    /// Whether an error occurred
+    pub error: bool,
+    /// Error message if error is true
+    pub error_message: *mut c_char,
+}
+
+impl Default for NLIResult {
+    fn default() -> Self {
+        Self {
+            label: NLILabel::Error,
+            confidence: 0.0,
+            entailment_prob: 0.0,
+            neutral_prob: 0.0,
+            contradiction_prob: 0.0,
+            error: false,
+            error_message: std::ptr::null_mut(),
+        }
+    }
+}
+
+/// Enhanced hallucination span with NLI explanation
+/// Combines token-level hallucination detection with NLI-based verification
+#[repr(C)]
+#[derive(Debug)]
+pub struct EnhancedHallucinationSpan {
+    /// The hallucinated text span
+    pub text: *mut c_char,
+    /// Start position in answer
+    pub start: i32,
+    /// End position in answer
+    pub end: i32,
+    /// Confidence from hallucination detector
+    pub hallucination_confidence: f32,
+    /// NLI label for this span
+    pub nli_label: NLILabel,
+    /// NLI confidence
+    pub nli_confidence: f32,
+    /// Severity level (0-4): 0=low, 4=critical
+    /// Based on combination of hallucination detection and NLI results
+    pub severity: i32,
+    /// Human-readable explanation
+    pub explanation: *mut c_char,
+}
+
+/// Enhanced hallucination detection result with NLI explanations
+#[repr(C)]
+#[derive(Debug)]
+pub struct EnhancedHallucinationDetectionResult {
+    /// Whether hallucination was detected
+    pub has_hallucination: bool,
+    /// Overall confidence score
+    pub confidence: f32,
+    /// Array of enhanced spans with NLI labels
+    pub spans: *mut EnhancedHallucinationSpan,
+    /// Number of spans
+    pub num_spans: i32,
+    /// Whether an error occurred
+    pub error: bool,
+    /// Error message if error is true
+    pub error_message: *mut c_char,
+}
+
+impl Default for EnhancedHallucinationDetectionResult {
+    fn default() -> Self {
+        Self {
+            has_hallucination: false,
+            confidence: 0.0,
+            spans: std::ptr::null_mut(),
+            num_spans: 0,
+            error: false,
+            error_message: std::ptr::null_mut(),
+        }
+    }
+}
+
 /// Validate that a C structure pointer is not null and properly aligned
 pub unsafe fn validate_c_struct_ptr<T>(ptr: *const T) -> bool {
     !ptr.is_null() && (ptr as usize) % std::mem::align_of::<T>() == 0

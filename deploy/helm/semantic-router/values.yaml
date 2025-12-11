@@ -121,7 +121,7 @@ ingress:
 resources:
   # -- Resource limits
   limits:
-    memory: "6Gi"
+    memory: "7Gi"
     cpu: "2"
   # -- Resource requests
   requests:
@@ -201,6 +201,19 @@ tolerations: []
 
 # Affinity rules
 affinity: {}
+
+# Startup probe configuration (for slow-starting containers with model loading)
+# This probe runs FIRST and disables liveness/readiness probes until it succeeds
+# Required when using Gemma embedding model which takes ~35s to load
+startupProbe:
+  # -- Enable startup probe
+  enabled: true
+  # -- Period seconds
+  periodSeconds: 10
+  # -- Timeout seconds
+  timeoutSeconds: 5
+  # -- Failure threshold
+  failureThreshold: 30
 
 # Liveness probe configuration
 livenessProbe:

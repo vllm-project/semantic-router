@@ -15,6 +15,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
+// EnhancedHallucinationSpan represents a hallucinated span with NLI explanation
+type EnhancedHallucinationSpan struct {
+	Text                    string  `json:"text"`
+	Start                   int     `json:"start"`
+	End                     int     `json:"end"`
+	HallucinationConfidence float32 `json:"hallucination_confidence"`
+	NLILabel                string  `json:"nli_label"` // ENTAILMENT, NEUTRAL, or CONTRADICTION
+	NLIConfidence           float32 `json:"nli_confidence"`
+	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
+	Explanation             string  `json:"explanation"` // Human-readable explanation
+}
+
+// EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations
+type EnhancedHallucinationInfo struct {
+	Confidence float32                     `json:"confidence"`
+	Spans      []EnhancedHallucinationSpan `json:"spans"`
+}
+
 // RequestContext holds the context for processing a request
 type RequestContext struct {
 	Headers             map[string]string
@@ -44,9 +62,23 @@ type RequestContext struct {
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
+	// Hallucination mitigation tracking
+	FactCheckNeeded           bool                       // Result of fact-check classification
+	FactCheckConfidence       float32                    // Confidence score of fact-check classification
+	HasToolsForFactCheck      bool                       // Request has tools that provide context for fact-checking
+	ToolResultsContext        string                     // Aggregated tool results for hallucination check
+	UserContent               string                     // Stored user content for hallucination detection
+	HallucinationDetected     bool                       // Result of hallucination detection
+	HallucinationSpans        []string                   // Unsupported spans found in answer (basic mode)
+	HallucinationConfidence   float32                    // Confidence score of hallucination detection
+	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
+	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
 
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
+
+	// Response API context
+	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
 }
 
 // handleRequestHeaders processes the request headers
@@ -117,6 +149,42 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.handleModelsRequest(path)
 	}
 
+	// Handle Response API endpoints
+	if r.ResponseAPIFilter != nil && r.ResponseAPIFilter.IsEnabled() && strings.HasPrefix(path, "/v1/responses") {
+		// GET /v1/responses/{id}/input_items - Get input items for a response
+		if method == "GET" && strings.HasSuffix(path, "/input_items") {
+			responseID := extractResponseIDFromInputItemsPath(path)
+			if responseID != "" {
+				logging.Infof("Handling GET /v1/responses/%s/input_items", responseID)
+				return r.ResponseAPIFilter.HandleGetInputItems(ctx.TraceContext, responseID)
+			}
+		}
+
+		// GET /v1/responses/{id} - Get a response
+		if method == "GET" {
+			responseID := extractResponseIDFromPath(path)
+			if responseID != "" {
+				logging.Infof("Handling GET /v1/responses/%s", responseID)
+				return r.ResponseAPIFilter.HandleGetResponse(ctx.TraceContext, responseID)
+			}
+		}
+
+		// DELETE /v1/responses/{id} - Delete a response
+		if method == "DELETE" {
+			responseID := extractResponseIDFromPath(path)
+			if responseID != "" {
+				logging.Infof("Handling DELETE /v1/responses/%s", responseID)
+				return r.ResponseAPIFilter.HandleDeleteResponse(ctx.TraceContext, responseID)
+			}
+		}
+
+		// POST /v1/responses - Create response (mark for body phase processing)
+		if method == "POST" {
+			ctx.ResponseAPICtx = &ResponseAPIContext{IsResponseAPIRequest: true}
+			logging.Infof("Detected Response API POST request: %s", path)
+		}
+	}
+
 	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
@@ -134,4 +202,61 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The Accept header is still recorded on context for downstream logic.
 
 	return response, nil
+}
+
+// extractResponseIDFromPath extracts the response ID from a path like /v1/responses/{id}
+func extractResponseIDFromPath(path string) string {
+	// Remove query string if present
+	if idx := strings.Index(path, "?"); idx != -1 {
+		path = path[:idx]
+	}
+
+	// Expected format: /v1/responses/{id}
+	prefix := "/v1/responses/"
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+
+	id := strings.TrimPrefix(path, prefix)
+	// Remove any trailing slashes
+	id = strings.TrimSuffix(id, "/")
+
+	// Skip if this is an input_items request
+	if strings.Contains(id, "/") {
+		return ""
+	}
+
+	// Validate it looks like a response ID (should start with "resp_")
+	if id != "" && strings.HasPrefix(id, "resp_") {
+		return id
+	}
+
+	return ""
+}
+
+// extractResponseIDFromInputItemsPath extracts the response ID from a path like /v1/responses/{id}/input_items
+func extractResponseIDFromInputItemsPath(path string) string {
+	// Remove query string if present
+	if idx := strings.Index(path, "?"); idx != -1 {
+		path = path[:idx]
+	}
+
+	// Expected format: /v1/responses/{id}/input_items
+	prefix := "/v1/responses/"
+	suffix := "/input_items"
+
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return ""
+	}
+
+	// Extract the ID between prefix and suffix
+	id := strings.TrimPrefix(path, prefix)
+	id = strings.TrimSuffix(id, suffix)
+
+	// Validate it looks like a response ID (should start with "resp_")
+	if id != "" && strings.HasPrefix(id, "resp_") {
+		return id
+	}
+
+	return ""
 }

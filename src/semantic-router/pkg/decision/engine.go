@@ -18,6 +18,7 @@ package decision
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -52,6 +53,14 @@ func NewDecisionEngine(
 	}
 }
 
+// SignalMatches contains all matched signals for decision evaluation
+type SignalMatches struct {
+	KeywordRules   []string
+	EmbeddingRules []string
+	DomainRules    []string
+	FactCheckRules []string // "needs_fact_check" or "no_fact_check_needed"
+}
+
 // DecisionResult represents the result of decision evaluation
 type DecisionResult struct {
 	Decision     *config.Decision
@@ -68,6 +77,18 @@ func (e *DecisionEngine) EvaluateDecisions(
 	matchedEmbeddingRules []string,
 	matchedDomainRules []string,
 ) (*DecisionResult, error) {
+	// Call EvaluateDecisionsWithSignals with empty fact_check rules for backward compatibility
+	return e.EvaluateDecisionsWithSignals(&SignalMatches{
+		KeywordRules:   matchedKeywordRules,
+		EmbeddingRules: matchedEmbeddingRules,
+		DomainRules:    matchedDomainRules,
+		FactCheckRules: nil,
+	})
+}
+
+// EvaluateDecisionsWithSignals evaluates all decisions using SignalMatches
+// This is the new method that supports all signal types including fact_check
+func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*DecisionResult, error) {
 	if len(e.decisions) == 0 {
 		return nil, fmt.Errorf("no decisions configured")
 	}
@@ -77,12 +98,7 @@ func (e *DecisionEngine) EvaluateDecisions(
 	// Evaluate each decision
 	for i := range e.decisions {
 		decision := &e.decisions[i]
-		matched, confidence, matchedRules := e.evaluateDecision(
-			decision,
-			matchedKeywordRules,
-			matchedEmbeddingRules,
-			matchedDomainRules,
-		)
+		matched, confidence, matchedRules := e.evaluateDecisionWithSignals(decision, signals)
 
 		if matched {
 			results = append(results, DecisionResult{
@@ -101,27 +117,18 @@ func (e *DecisionEngine) EvaluateDecisions(
 	return e.selectBestDecision(results), nil
 }
 
-// evaluateDecision evaluates a single decision's rule combination
-func (e *DecisionEngine) evaluateDecision(
+// evaluateDecisionWithSignals evaluates a single decision's rule combination with all signals
+func (e *DecisionEngine) evaluateDecisionWithSignals(
 	decision *config.Decision,
-	matchedKeywordRules []string,
-	matchedEmbeddingRules []string,
-	matchedDomainRules []string,
+	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
-	return e.evaluateRuleCombination(
-		decision.Rules,
-		matchedKeywordRules,
-		matchedEmbeddingRules,
-		matchedDomainRules,
-	)
+	return e.evaluateRuleCombinationWithSignals(decision.Rules, signals)
 }
 
-// evaluateRuleCombination evaluates a rule combination with AND/OR logic
-func (e *DecisionEngine) evaluateRuleCombination(
+// evaluateRuleCombinationWithSignals evaluates a rule combination with all signal types
+func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 	rules config.RuleCombination,
-	matchedKeywordRules []string,
-	matchedEmbeddingRules []string,
-	matchedDomainRules []string,
+	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
 	if len(rules.Conditions) == 0 {
 		return false, 0, nil
@@ -133,31 +140,28 @@ func (e *DecisionEngine) evaluateRuleCombination(
 
 	for _, condition := range rules.Conditions {
 		conditionMatched := false
-		var matchedList []string
 
 		switch condition.Type {
 		case "keyword":
-			matchedList = matchedKeywordRules
+			conditionMatched = slices.Contains(signals.KeywordRules, condition.Name)
 		case "embedding":
-			matchedList = matchedEmbeddingRules
+			conditionMatched = slices.Contains(signals.EmbeddingRules, condition.Name)
 		case "domain":
-			matchedList = matchedDomainRules
+			// Domain matching: check if the detected domain matches the category
+			// A match occurs if:
+			// 1. The detected domain equals the category name, OR
+			// 2. The detected domain is in the category's mmlu_categories list
+			conditionMatched = e.matchesDomainCondition(condition.Name, signals.DomainRules)
+		case "fact_check":
+			conditionMatched = slices.Contains(signals.FactCheckRules, condition.Name)
 		default:
 			continue
-		}
-
-		// Check if the condition's rule name is in the matched list
-		for _, ruleName := range matchedList {
-			if ruleName == condition.Name {
-				conditionMatched = true
-				allMatchedRules = append(allMatchedRules, fmt.Sprintf("%s:%s", condition.Type, condition.Name))
-				break
-			}
 		}
 
 		if conditionMatched {
 			matchedCount++
 			totalConfidence += 1.0 // Each matched condition contributes 1.0 to confidence
+			allMatchedRules = append(allMatchedRules, fmt.Sprintf("%s:%s", condition.Type, condition.Name))
 		}
 	}
 
@@ -174,6 +178,30 @@ func (e *DecisionEngine) evaluateRuleCombination(
 	}
 
 	return matched, confidence, allMatchedRules
+}
+
+// matchesDomainCondition checks if any of the detected domains match the given category name
+// A match occurs if:
+// 1. The detected domain equals the category name directly, OR
+// 2. The detected domain is in the category's mmlu_categories list
+func (e *DecisionEngine) matchesDomainCondition(categoryName string, detectedDomains []string) bool {
+	// Direct match: detected domain equals the category name
+	if slices.Contains(detectedDomains, categoryName) {
+		return true
+	}
+
+	// Check if any detected domain is in the category's mmlu_categories
+	for _, cat := range e.categories {
+		if cat.Name == categoryName {
+			for _, detectedDomain := range detectedDomains {
+				if slices.Contains(cat.MMLUCategories, detectedDomain) {
+					return true
+				}
+			}
+			break // Found the category, no need to continue
+		}
+	}
+	return false
 }
 
 // selectBestDecision selects the best decision based on the configured strategy

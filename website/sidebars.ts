@@ -79,6 +79,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/intelligent-route/keyword-routing',
             'tutorials/intelligent-route/mcp-routing',
             'tutorials/intelligent-route/lora-routing',
+            'tutorials/intelligent-route/router-memory',
           ],
         },
         {

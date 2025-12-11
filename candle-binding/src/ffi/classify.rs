@@ -15,8 +15,9 @@ use crate::model_architectures::traditional::bert::{
     TRADITIONAL_BERT_CLASSIFIER, TRADITIONAL_BERT_TOKEN_CLASSIFIER,
 };
 use crate::model_architectures::traditional::modernbert::{
-    TRADITIONAL_MODERNBERT_CLASSIFIER, TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER,
-    TRADITIONAL_MODERNBERT_PII_CLASSIFIER, TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
+    TRADITIONAL_MODERNBERT_CLASSIFIER, TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER,
+    TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER, TRADITIONAL_MODERNBERT_PII_CLASSIFIER,
+    TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
 use crate::BertClassifier;
 use std::ffi::{c_char, CStr};
@@ -1198,6 +1199,68 @@ pub extern "C" fn classify_deberta_jailbreak_text(text: *const c_char) -> Classi
     }
 }
 
+/// Classify text for fact-checking needs using halugate-sentinel model
+///
+/// This function uses the halugate-sentinel ModernBERT model to determine
+/// whether a prompt requires external fact verification.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - Caller must ensure proper memory management
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0 for NO_FACT_CHECK_NEEDED, 1 for FACT_CHECK_NEEDED, -1 for error
+/// - `confidence`: confidence score (0.0-1.0)
+///
+/// # Example
+/// ```c
+/// ModernBertClassificationResult result = classify_fact_check_text("When was the Eiffel Tower built?");
+/// if (result.predicted_class == 1) {
+///     printf("Fact-checking needed with %.2f%% confidence\n", result.confidence * 100.0);
+/// }
+/// ```
+#[no_mangle]
+pub extern "C" fn classify_fact_check_text(text: *const c_char) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("Fact-check classification failed: {}", e);
+                ModernBertClassificationResult {
+                    predicted_class: -1,
+                    confidence: 0.0,
+                }
+            }
+        }
+    } else {
+        eprintln!("Fact-check classifier not initialized - call init_fact_check_classifier first");
+        ModernBertClassificationResult {
+            predicted_class: -1,
+            confidence: 0.0,
+        }
+    }
+}
+
 /// Classify ModernBERT PII tokens
 ///
 /// # Safety
@@ -1287,5 +1350,600 @@ pub extern "C" fn classify_modernbert_pii_tokens(
             entities: std::ptr::null_mut(),
             num_entities: 0,
         }
+    }
+}
+
+/// Detect hallucinations in an LLM answer given context
+///
+/// This is a token-level classifier that determines if each token in the answer
+/// is SUPPORTED (grounded in context) or HALLUCINATED (not grounded).
+///
+/// # Arguments
+/// - `context`: Tool results or RAG context that should ground the answer
+/// - `question`: The original user question
+/// - `answer`: The LLM-generated answer to verify
+/// - `threshold`: Confidence threshold for hallucination detection (0.0-1.0)
+///                Only tokens with confidence >= threshold are considered hallucinated
+///
+/// # Safety
+/// - `context` must be a valid null-terminated C string (tool results/RAG context)
+/// - `question` must be a valid null-terminated C string (user's question)
+/// - `answer` must be a valid null-terminated C string (LLM's response)
+#[no_mangle]
+pub extern "C" fn detect_hallucinations(
+    context: *const c_char,
+    question: *const c_char,
+    answer: *const c_char,
+    threshold: f32,
+) -> HallucinationDetectionResult {
+    // Parse input strings
+    let context = unsafe {
+        match CStr::from_ptr(context).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return HallucinationDetectionResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid context string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    let question = unsafe {
+        match CStr::from_ptr(question).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return HallucinationDetectionResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid question string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    let answer = unsafe {
+        match CStr::from_ptr(answer).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return HallucinationDetectionResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid answer string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    // Check if model is initialized
+    let classifier = match crate::ffi::init::HALLUCINATION_CLASSIFIER.get() {
+        Some(c) => c.clone(),
+        None => {
+            return HallucinationDetectionResult {
+                error: true,
+                error_message: unsafe {
+                    allocate_c_string("Hallucination detection model not initialized")
+                },
+                ..Default::default()
+            }
+        }
+    };
+
+    // Hallucination detector expects context and answer as separate segments
+    // Format: context [SEP] answer (the tokenizer will add [CLS] and final [SEP])
+    // We need to include question in context if provided
+    let full_context = if question.is_empty() {
+        context.to_string()
+    } else {
+        format!("{} Question: {}", context, question)
+    };
+
+    // Combine context and answer with separator
+    // ModernBERT tokenizer uses [SEP] token (id 50282) to separate segments
+    let formatted_input = format!("{} [SEP] {}", full_context, answer);
+
+    // Find where answer starts (after [SEP])
+    let answer_char_start = full_context.len() + " [SEP] ".len();
+
+    // Classify tokens
+    match classifier.classify_tokens(&formatted_input) {
+        Ok(token_results) => {
+            // Only process tokens that are part of the answer (after context + separator)
+            let answer_start_pos = answer_char_start;
+
+            // Collect hallucinated spans
+            // Label 1 = HALLUCINATED, Label 0 = SUPPORTED
+            let mut hallucinated_spans: Vec<(String, i32, i32, f32, String)> = Vec::new();
+            let mut current_span_start: Option<i32> = None;
+            let mut current_span_end: Option<i32> = None;
+            let mut current_span_confidence: f32 = 0.0;
+            let mut hallucination_token_count = 0;
+            let mut total_answer_tokens = 0;
+            let mut max_hallucination_confidence: f32 = 0.0;
+
+            for (_token, class_idx, confidence, start, _end) in &token_results {
+                // Only process tokens in the answer section
+                let token_start = *start as usize;
+                if token_start < answer_start_pos {
+                    continue;
+                }
+
+                total_answer_tokens += 1;
+
+                // Use provided threshold (default to 0.5 if invalid)
+                let effective_threshold = if threshold > 0.0 && threshold <= 1.0 {
+                    threshold
+                } else {
+                    0.5
+                };
+
+                // Check if token is hallucinated (class 1) AND confidence >= threshold
+                if *class_idx == 1 && *confidence >= effective_threshold {
+                    hallucination_token_count += 1;
+                    if *confidence > max_hallucination_confidence {
+                        max_hallucination_confidence = *confidence;
+                    }
+
+                    // Start or continue a hallucinated span
+                    // Use character offsets to track span boundaries in the original answer
+                    let token_offset_in_answer = (*start as i32) - answer_start_pos as i32;
+                    let token_end_in_answer = (*_end as i32) - answer_start_pos as i32;
+
+                    if current_span_start.is_none() {
+                        current_span_start = Some(token_offset_in_answer);
+                        current_span_end = Some(token_end_in_answer);
+                        current_span_confidence = *confidence;
+                    } else {
+                        // Extend the span end
+                        current_span_end = Some(token_end_in_answer);
+                    }
+
+                    // Update confidence to max of span
+                    if *confidence > current_span_confidence {
+                        current_span_confidence = *confidence;
+                    }
+                } else {
+                    // End current span if there was one
+                    if let (Some(start_pos), Some(end_pos)) = (current_span_start, current_span_end)
+                    {
+                        // Extract span text from original answer using offsets
+                        let span_text = if start_pos >= 0
+                            && end_pos > start_pos
+                            && (end_pos as usize) <= answer.len()
+                        {
+                            answer[start_pos as usize..end_pos as usize].to_string()
+                        } else {
+                            // Fallback: empty string if offsets are invalid
+                            String::new()
+                        };
+
+                        if !span_text.is_empty() {
+                            hallucinated_spans.push((
+                                span_text,
+                                start_pos,
+                                end_pos,
+                                current_span_confidence,
+                                "HALLUCINATED".to_string(),
+                            ));
+                        }
+                        current_span_start = None;
+                        current_span_end = None;
+                        current_span_confidence = 0.0;
+                    }
+                }
+            }
+
+            // Don't forget the last span
+            if let (Some(start_pos), Some(end_pos)) = (current_span_start, current_span_end) {
+                // Extract span text from original answer using offsets
+                let span_text = if start_pos >= 0
+                    && end_pos > start_pos
+                    && (end_pos as usize) <= answer.len()
+                {
+                    answer[start_pos as usize..end_pos as usize].to_string()
+                } else {
+                    String::new()
+                };
+
+                if !span_text.is_empty() {
+                    hallucinated_spans.push((
+                        span_text,
+                        start_pos,
+                        end_pos,
+                        current_span_confidence,
+                        "HALLUCINATED".to_string(),
+                    ));
+                }
+            }
+
+            // Calculate overall confidence
+            let has_hallucination = !hallucinated_spans.is_empty();
+            let overall_confidence = if has_hallucination {
+                max_hallucination_confidence
+            } else if total_answer_tokens > 0 {
+                // If no hallucination, confidence is based on how sure we are
+                1.0 - (hallucination_token_count as f32 / total_answer_tokens as f32)
+            } else {
+                1.0
+            };
+
+            // Allocate spans array
+            let num_spans = hallucinated_spans.len() as i32;
+            let spans_ptr = if num_spans > 0 {
+                unsafe { allocate_hallucination_span_array(&hallucinated_spans) }
+            } else {
+                std::ptr::null_mut()
+            };
+
+            HallucinationDetectionResult {
+                has_hallucination,
+                confidence: overall_confidence,
+                spans: spans_ptr,
+                num_spans,
+                error: false,
+                error_message: std::ptr::null_mut(),
+            }
+        }
+        Err(e) => HallucinationDetectionResult {
+            error: true,
+            error_message: unsafe { allocate_c_string(&format!("Classification failed: {}", e)) },
+            ..Default::default()
+        },
+    }
+}
+
+/// Allocate hallucination span array for FFI
+/// # Safety
+/// Caller must free the memory using free_hallucination_detection_result
+unsafe fn allocate_hallucination_span_array(
+    spans: &[(String, i32, i32, f32, String)],
+) -> *mut HallucinationSpan {
+    if spans.is_empty() {
+        return std::ptr::null_mut();
+    }
+
+    let layout = std::alloc::Layout::array::<HallucinationSpan>(spans.len()).unwrap();
+    let ptr = std::alloc::alloc(layout) as *mut HallucinationSpan;
+
+    for (i, (text, start, end, confidence, label)) in spans.iter().enumerate() {
+        let span = HallucinationSpan {
+            text: allocate_c_string(text),
+            start: *start,
+            end: *end,
+            confidence: *confidence,
+            label: allocate_c_string(label),
+        };
+        std::ptr::write(ptr.add(i), span);
+    }
+
+    ptr
+}
+
+/// Classify NLI (Natural Language Inference) for a premise-hypothesis pair
+///
+/// This function determines the logical relationship between a premise (context)
+/// and a hypothesis (claim/span). Used for post-processing hallucination detection.
+///
+/// # Returns
+/// - Entailment (0): The premise supports the hypothesis
+/// - Neutral (1): The premise neither supports nor contradicts
+/// - Contradiction (2): The premise contradicts the hypothesis
+///
+/// # Safety
+/// - `premise` must be a valid null-terminated C string (e.g., context/tool results)
+/// - `hypothesis` must be a valid null-terminated C string (e.g., the claim to verify)
+#[no_mangle]
+pub extern "C" fn classify_nli(premise: *const c_char, hypothesis: *const c_char) -> NLIResult {
+    // Parse input strings
+    let premise = unsafe {
+        match CStr::from_ptr(premise).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return NLIResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid premise string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    let hypothesis = unsafe {
+        match CStr::from_ptr(hypothesis).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return NLIResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid hypothesis string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    // Check if NLI model is initialized
+    let classifier = match crate::ffi::init::NLI_CLASSIFIER.get() {
+        Some(c) => c.clone(),
+        None => {
+            return NLIResult {
+                error: true,
+                error_message: unsafe { allocate_c_string("NLI model not initialized") },
+                ..Default::default()
+            }
+        }
+    };
+
+    // Format input for NLI: premise [SEP] hypothesis
+    // ModernBERT NLI models use [SEP] token (id 50282) to separate segments
+    let nli_input = format!("{} [SEP] {}", premise, hypothesis);
+
+    // Classify
+    match classifier.classify_text(&nli_input) {
+        Ok((class_idx, confidence)) => {
+            // Map class index to NLI label
+            // Standard NLI ordering: 0=entailment, 1=neutral, 2=contradiction
+            let label = match class_idx {
+                0 => NLILabel::Entailment,
+                1 => NLILabel::Neutral,
+                2 => NLILabel::Contradiction,
+                _ => NLILabel::Error,
+            };
+
+            // Get probabilities if available (approximate from confidence)
+            // In a full implementation, we'd get all probabilities from the classifier
+            let (entailment_prob, neutral_prob, contradiction_prob) = match class_idx {
+                0 => (
+                    confidence,
+                    (1.0 - confidence) / 2.0,
+                    (1.0 - confidence) / 2.0,
+                ),
+                1 => (
+                    (1.0 - confidence) / 2.0,
+                    confidence,
+                    (1.0 - confidence) / 2.0,
+                ),
+                2 => (
+                    (1.0 - confidence) / 2.0,
+                    (1.0 - confidence) / 2.0,
+                    confidence,
+                ),
+                _ => (0.0, 0.0, 0.0),
+            };
+
+            NLIResult {
+                label,
+                confidence,
+                entailment_prob,
+                neutral_prob,
+                contradiction_prob,
+                error: false,
+                error_message: std::ptr::null_mut(),
+            }
+        }
+        Err(e) => NLIResult {
+            error: true,
+            error_message: unsafe {
+                allocate_c_string(&format!("NLI classification failed: {}", e))
+            },
+            ..Default::default()
+        },
+    }
+}
+
+/// Detect hallucinations with NLI explanations (enhanced pipeline)
+///
+/// This function combines token-level hallucination detection with NLI-based
+/// verification to provide detailed explanations for each hallucinated span.
+///
+/// Pipeline:
+/// 1. Run hallucination detector to find hallucinated spans
+/// 2. For each span, run NLI (context vs. span) to classify as:
+///    - CONTRADICTION: Direct conflict with context (severity 4)
+///    - NEUTRAL: Not supported by context / fabrication (severity 2)
+///    - ENTAILMENT: Supported (false positive, remove from results)
+///
+/// # Arguments
+/// - `threshold`: Confidence threshold for hallucination detection (0.0-1.0)
+///
+/// # Safety
+/// - `context` must be a valid null-terminated C string
+/// - `question` must be a valid null-terminated C string
+/// - `answer` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn detect_hallucinations_with_nli(
+    context: *const c_char,
+    question: *const c_char,
+    answer: *const c_char,
+    threshold: f32,
+) -> EnhancedHallucinationDetectionResult {
+    // Parse input strings
+    let context_str = unsafe {
+        match CStr::from_ptr(context).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return EnhancedHallucinationDetectionResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid context string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    let question_str = unsafe {
+        match CStr::from_ptr(question).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return EnhancedHallucinationDetectionResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid question string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    let _answer_str = unsafe {
+        match CStr::from_ptr(answer).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return EnhancedHallucinationDetectionResult {
+                    error: true,
+                    error_message: allocate_c_string("Invalid answer string"),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+
+    // Step 1: Run hallucination detection with threshold
+    let hallucination_result = detect_hallucinations(context, question, answer, threshold);
+
+    if hallucination_result.error {
+        return EnhancedHallucinationDetectionResult {
+            error: true,
+            error_message: hallucination_result.error_message,
+            ..Default::default()
+        };
+    }
+
+    // If no hallucinations detected, return early
+    if !hallucination_result.has_hallucination || hallucination_result.num_spans == 0 {
+        // Free the hallucination detection result
+        crate::ffi::memory::free_hallucination_detection_result(hallucination_result);
+        return EnhancedHallucinationDetectionResult {
+            has_hallucination: false,
+            confidence: 1.0,
+            spans: std::ptr::null_mut(),
+            num_spans: 0,
+            error: false,
+            error_message: std::ptr::null_mut(),
+        };
+    }
+
+    // Check if NLI model is available
+    let nli_available = crate::ffi::init::NLI_CLASSIFIER.get().is_some();
+
+    // Step 2: Process each span with NLI
+    let mut enhanced_spans: Vec<EnhancedHallucinationSpan> = Vec::new();
+
+    unsafe {
+        let spans_slice = std::slice::from_raw_parts(
+            hallucination_result.spans,
+            hallucination_result.num_spans as usize,
+        );
+
+        for span in spans_slice {
+            let span_text = if !span.text.is_null() {
+                CStr::from_ptr(span.text).to_str().unwrap_or("")
+            } else {
+                ""
+            };
+
+            // Skip empty spans
+            if span_text.is_empty() {
+                continue;
+            }
+
+            // Run NLI on this span (context = premise, span = hypothesis)
+            let (nli_label, nli_confidence, severity, explanation) = if nli_available {
+                let nli_input_premise = format!("{} {}", context_str, question_str);
+                let premise_cstr = std::ffi::CString::new(nli_input_premise).unwrap();
+                let hypothesis_cstr = std::ffi::CString::new(span_text).unwrap();
+
+                let nli_result = classify_nli(premise_cstr.as_ptr(), hypothesis_cstr.as_ptr());
+
+                if nli_result.error {
+                    // If NLI fails, use hallucination detector only
+                    (
+                        NLILabel::Neutral,
+                        0.0,
+                        2,
+                        "NLI classification failed, based on hallucination detector only"
+                            .to_string(),
+                    )
+                } else {
+                    let (sev, expl) = match nli_result.label {
+                        NLILabel::Contradiction => {
+                            (4, format!("CONTRADICTION: This claim directly conflicts with the provided context (confidence: {:.1}%)", nli_result.confidence * 100.0))
+                        }
+                        NLILabel::Neutral => {
+                            (2, format!("FABRICATION: This claim is not supported by the provided context (confidence: {:.1}%)", nli_result.confidence * 100.0))
+                        }
+                        NLILabel::Entailment => {
+                            // NLI says it's supported, but hallucination detector flagged it
+                            // This is a potential false positive from the detector
+                            // Include with low severity as it may be a subtle issue
+                            (1, format!("UNCERTAIN: Hallucination detector flagged this but NLI suggests it may be supported (confidence: {:.1}%)", nli_result.confidence * 100.0))
+                        }
+                        NLILabel::Error => {
+                            (2, "Unable to determine relationship with context".to_string())
+                        }
+                    };
+                    (nli_result.label, nli_result.confidence, sev, expl)
+                }
+            } else {
+                // No NLI model, use hallucination detector confidence only
+                let sev = if span.confidence > 0.8 { 3 } else { 2 };
+                (
+                    NLILabel::Neutral,
+                    0.0,
+                    sev,
+                    format!(
+                        "Unsupported claim detected (confidence: {:.1}%)",
+                        span.confidence * 100.0
+                    ),
+                )
+            };
+
+            enhanced_spans.push(EnhancedHallucinationSpan {
+                text: allocate_c_string(span_text),
+                start: span.start,
+                end: span.end,
+                hallucination_confidence: span.confidence,
+                nli_label,
+                nli_confidence,
+                severity,
+                explanation: allocate_c_string(&explanation),
+            });
+        }
+
+        // Free the original hallucination detection result
+        crate::ffi::memory::free_hallucination_detection_result(hallucination_result);
+    }
+
+    // Allocate enhanced spans array
+    let num_spans = enhanced_spans.len() as i32;
+    let has_hallucination = num_spans > 0;
+
+    // Calculate overall confidence (max of individual confidences)
+    let overall_confidence = enhanced_spans
+        .iter()
+        .map(|s| s.hallucination_confidence.max(s.nli_confidence))
+        .fold(0.0f32, |acc, c| acc.max(c));
+
+    let spans_ptr = if num_spans > 0 {
+        let layout =
+            std::alloc::Layout::array::<EnhancedHallucinationSpan>(num_spans as usize).unwrap();
+        let ptr = unsafe { std::alloc::alloc(layout) as *mut EnhancedHallucinationSpan };
+
+        for (i, span) in enhanced_spans.into_iter().enumerate() {
+            unsafe {
+                std::ptr::write(ptr.add(i), span);
+            }
+        }
+        ptr
+    } else {
+        std::ptr::null_mut()
+    };
+
+    EnhancedHallucinationDetectionResult {
+        has_hallucination,
+        confidence: overall_confidence,
+        spans: spans_ptr,
+        num_spans,
+        error: false,
+        error_message: std::ptr::null_mut(),
     }
 }

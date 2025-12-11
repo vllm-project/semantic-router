@@ -10,25 +10,26 @@ import (
 // performDecisionEvaluationAndModelSelection performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
+// Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
+// hallucination detection), but model selection only happens for auto models.
 func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
 	var selectedModel string
 
-	// Only perform evaluation for auto models with content
-	if !r.Config.IsAutoModelName(originalModel) {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
-	}
-
+	// Check if there's content to evaluate
 	if len(nonUserMessages) == 0 && userContent == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
 	// Check if decisions are configured
 	if len(r.Config.Decisions) == 0 {
-		logging.Warnf("No decisions configured, using default model")
-		return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+		if r.Config.IsAutoModelName(originalModel) {
+			logging.Warnf("No decisions configured, using default model")
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+		}
+		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
 	// Determine text to use for evaluation
@@ -42,18 +43,27 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	}
 
 	// Perform decision evaluation using DecisionEngine
+	// This is ALWAYS done when decisions are configured, regardless of model type,
+	// because plugins (e.g., hallucination detection) depend on the matched decision
 	result, err := r.Classifier.EvaluateDecisionWithEngine(evaluationText)
 	if err != nil {
-		logging.Errorf("Decision evaluation error: %v, using default model", err)
-		return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+		logging.Errorf("Decision evaluation error: %v", err)
+		if r.Config.IsAutoModelName(originalModel) {
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+		}
+		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
 	if result == nil || result.Decision == nil {
-		logging.Warnf("No decision matched, using default model")
-		return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+		logging.Warnf("No decision matched")
+		if r.Config.IsAutoModelName(originalModel) {
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+		}
+		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
-	// Store the selected decision in context for later use (e.g., header mutations)
+	// Store the selected decision in context for later use (e.g., plugins, header mutations)
+	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
 	// Extract domain category from matched rules (for VSRSelectedCategory header)
@@ -74,7 +84,15 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
 		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
 
-	// Select best model from the decision's ModelRefs
+	// Model selection only happens for auto models
+	// When a specific model is requested, we keep it but still apply decision plugins
+	if !r.Config.IsAutoModelName(originalModel) {
+		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
+			originalModel, decisionName)
+		return decisionName, evaluationConfidence, reasoningDecision, ""
+	}
+
+	// Select best model from the decision's ModelRefs (only for auto models)
 	if len(result.Decision.ModelRefs) > 0 {
 		modelRef := result.Decision.ModelRefs[0]
 		// Use LoRA name if specified, otherwise use the base model name

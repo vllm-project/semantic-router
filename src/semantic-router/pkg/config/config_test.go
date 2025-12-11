@@ -2397,3 +2397,315 @@ func ResetConfig() {
 	config = nil
 	configErr = nil
 }
+
+var _ = Describe("Hallucination Mitigation Configuration", func() {
+	var (
+		tempDir    string
+		configFile string
+	)
+
+	BeforeEach(func() {
+		var err error
+		tempDir, err = os.MkdirTemp("", "hallucination_config_test")
+		Expect(err).NotTo(HaveOccurred())
+		configFile = filepath.Join(tempDir, "config.yaml")
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(tempDir)
+		ResetConfig()
+	})
+
+	Describe("HallucinationMitigationConfig Parsing", func() {
+		Context("with full hallucination mitigation configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+hallucination_mitigation:
+  enabled: true
+  fact_check_model:
+    model_id: "models/fact_check_classifier"
+    threshold: 0.75
+    use_cpu: true
+    mapping_path: "config/hallucination/fact_check_mapping.json"
+  hallucination_model:
+    model_id: "models/hallucination_detect_modernbert"
+    threshold: 0.6
+    use_cpu: true
+  on_hallucination_detected: "block"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse hallucination mitigation configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
+				Expect(cfg.HallucinationMitigation.FactCheckModel.ModelID).To(Equal("models/fact_check_classifier"))
+				Expect(cfg.HallucinationMitigation.FactCheckModel.Threshold).To(Equal(float32(0.75)))
+				Expect(cfg.HallucinationMitigation.FactCheckModel.UseCPU).To(BeTrue())
+				Expect(cfg.HallucinationMitigation.FactCheckModel.MappingPath).To(Equal("config/hallucination/fact_check_mapping.json"))
+				Expect(cfg.HallucinationMitigation.HallucinationModel.ModelID).To(Equal("models/hallucination_detect_modernbert"))
+				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0.6)))
+				Expect(cfg.HallucinationMitigation.HallucinationModel.UseCPU).To(BeTrue())
+				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(Equal("block"))
+			})
+		})
+
+		Context("with minimal hallucination mitigation configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+hallucination_mitigation:
+  enabled: true
+  fact_check_model:
+    model_id: "models/fact_check"
+    mapping_path: "config/mapping.json"
+  hallucination_model:
+    model_id: "models/hallucination"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse with default values for optional fields", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
+				Expect(cfg.HallucinationMitigation.FactCheckModel.Threshold).To(Equal(float32(0)))
+				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0)))
+				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(BeEmpty())
+			})
+		})
+
+		Context("with hallucination mitigation disabled", func() {
+			BeforeEach(func() {
+				configContent := `
+hallucination_mitigation:
+  enabled: false
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should have enabled set to false", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.HallucinationMitigation.Enabled).To(BeFalse())
+			})
+		})
+
+		Context("with missing hallucination_mitigation section", func() {
+			BeforeEach(func() {
+				configContent := `
+default_model: "test-model"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should have hallucination mitigation disabled by default", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.HallucinationMitigation.Enabled).To(BeFalse())
+				Expect(cfg.HallucinationMitigation.FactCheckModel.ModelID).To(BeEmpty())
+				Expect(cfg.HallucinationMitigation.HallucinationModel.ModelID).To(BeEmpty())
+			})
+		})
+	})
+
+	Describe("IsHallucinationMitigationEnabled", func() {
+		It("should return true when enabled is true", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = true
+
+			Expect(cfg.IsHallucinationMitigationEnabled()).To(BeTrue())
+		})
+
+		It("should return false when enabled is false", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = false
+
+			Expect(cfg.IsHallucinationMitigationEnabled()).To(BeFalse())
+		})
+
+		It("should return false for zero-value config", func() {
+			cfg := &RouterConfig{}
+
+			Expect(cfg.IsHallucinationMitigationEnabled()).To(BeFalse())
+		})
+	})
+
+	Describe("IsFactCheckClassifierEnabled", func() {
+		It("should return true when fully configured with legacy config", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = true
+			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
+
+			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
+		})
+
+		It("should return true when fact_check_rules are configured", func() {
+			cfg := &RouterConfig{}
+			cfg.FactCheckRules = []FactCheckRule{
+				{Name: "needs_fact_check", Description: "Query needs fact verification"},
+				{Name: "no_fact_check_needed", Description: "Query does not need fact verification"},
+			}
+			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
+
+			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
+		})
+
+		It("should return false when hallucination mitigation is disabled and no fact_check_rules", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = false
+			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
+
+			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
+		})
+
+		It("should return false when model_id is missing", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = true
+			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
+
+			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
+		})
+
+		It("should return false when mapping_path is missing", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = true
+			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+
+			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
+		})
+	})
+
+	Describe("GetFactCheckRules", func() {
+		It("should return all configured fact_check_rules", func() {
+			cfg := &RouterConfig{}
+			cfg.FactCheckRules = []FactCheckRule{
+				{Name: "needs_fact_check", Description: "Needs verification"},
+				{Name: "no_fact_check_needed", Description: "No verification needed"},
+			}
+
+			rules := cfg.GetFactCheckRules()
+			Expect(rules).To(HaveLen(2))
+			Expect(rules[0].Name).To(Equal("needs_fact_check"))
+			Expect(rules[1].Name).To(Equal("no_fact_check_needed"))
+		})
+
+		It("should return empty slice when no rules configured", func() {
+			cfg := &RouterConfig{}
+
+			rules := cfg.GetFactCheckRules()
+			Expect(rules).To(BeEmpty())
+		})
+	})
+
+	Describe("IsHallucinationModelEnabled", func() {
+		It("should return true when fully configured", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = true
+			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
+
+			Expect(cfg.IsHallucinationModelEnabled()).To(BeTrue())
+		})
+
+		It("should return false when hallucination mitigation is disabled", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = false
+			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
+
+			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
+		})
+
+		It("should return false when model_id is missing", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.Enabled = true
+
+			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
+		})
+	})
+
+	Describe("GetFactCheckThreshold", func() {
+		It("should return configured threshold when set", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.FactCheckModel.Threshold = 0.85
+
+			Expect(cfg.GetFactCheckThreshold()).To(Equal(float32(0.85)))
+		})
+
+		It("should return default 0.7 when threshold is not set", func() {
+			cfg := &RouterConfig{}
+
+			Expect(cfg.GetFactCheckThreshold()).To(Equal(float32(0.7)))
+		})
+
+		It("should return default 0.7 when threshold is zero", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.FactCheckModel.Threshold = 0
+
+			Expect(cfg.GetFactCheckThreshold()).To(Equal(float32(0.7)))
+		})
+	})
+
+	Describe("GetHallucinationModelThreshold", func() {
+		It("should return configured threshold when set", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.HallucinationModel.Threshold = 0.65
+
+			Expect(cfg.GetHallucinationModelThreshold()).To(Equal(float32(0.65)))
+		})
+
+		It("should return default 0.5 when threshold is not set", func() {
+			cfg := &RouterConfig{}
+
+			Expect(cfg.GetHallucinationModelThreshold()).To(Equal(float32(0.5)))
+		})
+
+		It("should return default 0.5 when threshold is zero", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.HallucinationModel.Threshold = 0
+
+			Expect(cfg.GetHallucinationModelThreshold()).To(Equal(float32(0.5)))
+		})
+	})
+
+	Describe("GetHallucinationAction", func() {
+		It("should return 'warn' when action is 'warn'", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.OnHallucinationDetected = "warn"
+
+			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
+		})
+
+		It("should return 'warn' when action is 'block' (only warn is supported for global config)", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.OnHallucinationDetected = "block"
+
+			// Global config only supports "warn" action
+			// Per-decision plugin config supports "header", "body", "none", "block"
+			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
+		})
+
+		It("should return default 'warn' when action is empty", func() {
+			cfg := &RouterConfig{}
+
+			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
+		})
+
+		It("should return default 'warn' when action is invalid", func() {
+			cfg := &RouterConfig{}
+			cfg.HallucinationMitigation.OnHallucinationDetected = "invalid"
+
+			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
+		})
+	})
+})

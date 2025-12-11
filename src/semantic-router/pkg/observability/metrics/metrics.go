@@ -298,6 +298,41 @@ var (
 		[]string{"model", "pii_type"},
 	)
 
+	// FactCheckClassifications tracks fact-check classification results
+	FactCheckClassifications = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_fact_check_classifications_total",
+			Help: "The total number of fact-check classifications by result",
+		},
+		[]string{"result"},
+	)
+
+	// HallucinationDetections tracks hallucination detection results
+	HallucinationDetections = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_hallucination_detections_total",
+			Help: "The total number of hallucination detection runs by result",
+		},
+		[]string{"result"},
+	)
+
+	// HallucinationDetectionLatency tracks the latency of hallucination detection
+	HallucinationDetectionLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "llm_hallucination_detection_latency_seconds",
+			Help:    "The latency of hallucination detection operations in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+
+	// UnverifiedFactualResponses tracks responses that needed fact-checking but had no context
+	UnverifiedFactualResponses = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_unverified_factual_responses_total",
+			Help: "The total number of factual responses that could not be verified due to missing tool context",
+		},
+	)
+
 	// ReasoningDecisions tracks the reasoning mode decision outcome by category, model, and effort
 	ReasoningDecisions = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -536,6 +571,26 @@ func RecordPIIViolations(model string, piiTypes []string) {
 // RecordClassifierLatency records the latency for a classifier invocation by type
 func RecordClassifierLatency(classifier string, seconds float64) {
 	ClassifierLatency.WithLabelValues(classifier).Observe(seconds)
+}
+
+// RecordFactCheckClassification records a fact-check classification result
+func RecordFactCheckClassification(result string) {
+	FactCheckClassifications.WithLabelValues(result).Inc()
+}
+
+// RecordHallucinationDetection records a hallucination detection result
+func RecordHallucinationDetection(result string) {
+	HallucinationDetections.WithLabelValues(result).Inc()
+}
+
+// RecordHallucinationDetectionLatency records the latency for hallucination detection
+func RecordHallucinationDetectionLatency(seconds float64) {
+	HallucinationDetectionLatency.Observe(seconds)
+}
+
+// RecordUnverifiedFactualResponse records when a factual response could not be verified
+func RecordUnverifiedFactualResponse() {
+	UnverifiedFactualResponses.Inc()
 }
 
 // Batch Classification Metrics - Dynamically initialized based on configuration

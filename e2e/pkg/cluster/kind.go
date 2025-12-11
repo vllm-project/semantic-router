@@ -38,8 +38,37 @@ func (k *KindCluster) Create(ctx context.Context) error {
 		return nil
 	}
 
-	// Create cluster
-	cmd := exec.CommandContext(ctx, "kind", "create", "cluster", "--name", k.Name)
+	// Mount /mnt from host into Kind node so storage provisioner can use it (more disk space)
+	configContent := fmt.Sprintf(`kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: %s
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: /mnt
+        containerPath: /mnt
+  - role: worker
+    extraMounts:
+      - hostPath: /mnt
+        containerPath: /mnt
+`, k.Name)
+
+	configFile, err := os.CreateTemp("", "kind-config-*.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp config file: %w", err)
+	}
+	defer os.Remove(configFile.Name())
+
+	if _, err := configFile.WriteString(configContent); err != nil {
+		configFile.Close()
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	configFile.Close()
+
+	k.log("Using Kind config with /mnt mount for storage")
+
+	// Create cluster with config file
+	cmd := exec.CommandContext(ctx, "kind", "create", "cluster", "--name", k.Name, "--config", configFile.Name())
 	if k.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -54,6 +83,22 @@ func (k *KindCluster) Create(ctx context.Context) error {
 	if err := k.WaitForReady(ctx, 5*time.Minute); err != nil {
 		return fmt.Errorf("cluster failed to become ready: %w", err)
 	}
+
+	// Configure storage provisioner to use /mnt (75GB) instead of /tmp (limited space)
+	kubeConfig, err := k.GetKubeConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get kubeconfig: %w", err)
+	}
+	defer os.Remove(kubeConfig)
+
+	// Simple one-liner: update ConfigMap and restart provisioner
+	// Models downloaded in pods will be stored in /mnt via PVCs
+	exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig,
+		"patch", "configmap", "local-path-config", "-n", "local-path-storage",
+		"--type", "merge",
+		"-p", `{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/mnt/local-path-provisioner\"]}]}"}}`).Run()
+	exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig,
+		"rollout", "restart", "deployment/local-path-provisioner", "-n", "local-path-storage").Run()
 
 	k.log("Cluster %s created successfully", k.Name)
 	return nil

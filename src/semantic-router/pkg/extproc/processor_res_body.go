@@ -127,15 +127,89 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
-	// Allow the response to continue without modification
+	// Translate response for Response API requests
+	finalBody := responseBody
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && r.ResponseAPIFilter != nil {
+		translatedBody, err := r.ResponseAPIFilter.TranslateResponse(ctx.TraceContext, ctx.ResponseAPICtx, responseBody)
+		if err != nil {
+			logging.Errorf("Response API translation error: %v", err)
+			// Continue with original response on error
+		} else {
+			finalBody = translatedBody
+			logging.Infof("Response API: Translated response to Response API format")
+		}
+	}
+
+	// Build response with possible body modification
+	var bodyMutation *ext_proc.BodyMutation
+	var headerMutation *ext_proc.HeaderMutation
+	if finalBody != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		bodyMutation = &ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{
+				Body: finalBody,
+			},
+		}
+		// Remove content-length so Envoy recalculates it for the modified body
+		headerMutation = &ext_proc.HeaderMutation{
+			RemoveHeaders: []string{"content-length"},
+		}
+	}
+
+	// Perform hallucination detection if enabled and conditions are met
+	if hallucinationResponse := r.performHallucinationDetection(ctx, responseBody); hallucinationResponse != nil {
+		// Hallucination detected and action is "block" - return error response
+		return hallucinationResponse, nil
+	}
+
+	// Check unverified factual response if hallucination plugin is enabled
+	if ctx.VSRSelectedDecision != nil {
+		hallucinationConfig := ctx.VSRSelectedDecision.GetHallucinationConfig()
+		if hallucinationConfig != nil && hallucinationConfig.Enabled {
+			r.checkUnverifiedFactualResponse(ctx)
+		}
+	}
+
+	// Track if body needs to be modified
+	modifiedBody := responseBody
+	needsBodyMutation := false
+
+	// Apply hallucination warning (may modify body or headers)
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseBody{
 			ResponseBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
+					Status:         ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: headerMutation,
+					BodyMutation:   bodyMutation,
 				},
 			},
 		},
+	}
+
+	// Apply hallucination warning based on configured action
+	if ctx.HallucinationDetected {
+		modifiedBody, response = r.applyHallucinationWarning(response, ctx, modifiedBody)
+		if string(modifiedBody) != string(responseBody) {
+			needsBodyMutation = true
+		}
+	}
+
+	// Apply unverified factual warning based on configured action
+	if ctx.UnverifiedFactualResponse {
+		modifiedBody, response = r.applyUnverifiedFactualWarning(response, ctx, modifiedBody)
+		if string(modifiedBody) != string(responseBody) {
+			needsBodyMutation = true
+		}
+	}
+
+	// If body was modified, update the response with body mutation
+	if needsBodyMutation {
+		bodyResponse := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+		bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
+			Mutation: &ext_proc.BodyMutation_Body{
+				Body: modifiedBody,
+			},
+		}
 	}
 
 	return response, nil

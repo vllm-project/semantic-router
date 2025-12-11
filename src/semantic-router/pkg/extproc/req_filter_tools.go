@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -136,6 +137,17 @@ func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompleti
 	}
 
 	setHeaders := []*core.HeaderValueOption{}
+
+	// Add new content-length for the modified body
+	if len(modifiedBody) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "content-length",
+				RawValue: []byte(fmt.Sprintf("%d", len(modifiedBody))),
+			},
+		})
+	}
+
 	if selectedEndpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{

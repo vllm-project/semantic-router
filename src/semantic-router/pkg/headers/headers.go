@@ -75,3 +75,31 @@ const (
 	// Value: floating point number formatted as string (e.g., "0.950")
 	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
 )
+
+// Hallucination Mitigation Headers
+// These headers are added to responses when hallucination detection is enabled
+// and potential hallucinations are detected in the LLM response.
+const (
+	// HallucinationDetected indicates that potential hallucination was detected in the response.
+	// Value: "true"
+	HallucinationDetected = "x-vsr-hallucination-detected"
+
+	// HallucinationSpans contains a summary of unsupported claims found in the response.
+	// Value: semicolon-separated list of claim summaries (truncated if too long)
+	HallucinationSpans = "x-vsr-hallucination-spans"
+
+	// FactCheckNeeded indicates whether the original prompt was classified as needing fact-checking.
+	// Value: "true" or "false"
+	FactCheckNeeded = "x-vsr-fact-check-needed"
+
+	// UnverifiedFactualResponse indicates the response contains factual claims that could not be verified.
+	// This occurs when the prompt was classified as needing fact-checking but no tool/RAG context
+	// was available to verify the response against.
+	// Value: "true"
+	UnverifiedFactualResponse = "x-vsr-unverified-factual-response"
+
+	// VerificationContextMissing indicates that no tool/RAG context was available for verification.
+	// This header is set alongside UnverifiedFactualResponse to explain why verification couldn't occur.
+	// Value: "true"
+	VerificationContextMissing = "x-vsr-verification-context-missing"
+)
