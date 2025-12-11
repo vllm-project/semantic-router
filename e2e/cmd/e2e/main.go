@@ -12,6 +12,7 @@ import (
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
+	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
@@ -20,6 +21,7 @@ import (
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
@@ -31,7 +33,7 @@ const version = "v1.0.0"
 func main() {
 	// Parse command line flags
 	var (
-		profile            = flag.String("profile", "ai-gateway", "Test profile to run (ai-gateway, istio, etc.)")
+		profile            = flag.String("profile", "ai-gateway", "Test profile to run (ai-gateway, dynamo, istio, etc.)")
 		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
 		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")
 		keepCluster        = flag.Bool("keep-cluster", false, "Keep cluster after tests complete")
@@ -109,6 +111,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return aigateway.NewProfile(), nil
 	case "dynamic-config":
 		return dynamicconfig.NewProfile(), nil
+	case "dynamo":
+		return dynamo.NewProfile(), nil
 	case "aibrix":
 		return aibrix.NewProfile(), nil
 	case "istio":

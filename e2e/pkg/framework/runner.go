@@ -209,6 +209,13 @@ func (r *Runner) Run(ctx context.Context) error {
 
 func (r *Runner) setupCluster(ctx context.Context) error {
 	r.log("Setting up Kind cluster: %s", r.opts.ClusterName)
+
+	// Enable GPU support for dynamo profile
+	if r.profile.Name() == "dynamo" {
+		r.log("Enabling GPU support for Dynamo profile")
+		r.cluster.SetGPUEnabled(true)
+	}
+
 	return r.cluster.Create(ctx)
 }
 

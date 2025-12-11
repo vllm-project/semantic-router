@@ -1,0 +1,39 @@
+---
+# RBAC for Semantic Router to access Dynamo CRDs and resources
+# Similar to LLM-D profile's approach for testing integration
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dynamo-extproc-access
+rules:
+# Access to Dynamo CRDs
+- apiGroups: ["nvidia.com"]
+  resources:
+  - dynamographdeployments
+  - dynamographdeployments/status
+  verbs: ["get", "list", "watch"]
+
+# Access to worker pods for monitoring
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+
+# Access to deployments created by Dynamo operator
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dynamo-extproc-access-binding
+subjects:
+# Semantic Router service account (created by Helm chart)
+- kind: ServiceAccount
+  name: semantic-router
+  namespace: vllm-semantic-router-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dynamo-extproc-access
+

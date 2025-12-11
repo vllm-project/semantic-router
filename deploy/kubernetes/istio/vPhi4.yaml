@@ -10,7 +10,7 @@ spec:
   resources:
     requests:
       storage: 20Gi
-#  storageClassName: default
+  # storageClassName: default
   volumeMode: Filesystem
 ---
 apiVersion: apps/v1
@@ -35,10 +35,10 @@ spec:
         persistentVolumeClaim:
           claimName: phi4-mini
       # vLLM needs to access the host's shared memory for tensor parallel inference.
-      #      - name: shm
-      #  emptyDir:
-      #    medium: Memory
-            #          sizeLimit: "2Gi"
+      # - name: shm
+      #   emptyDir:
+      #     medium: Memory
+      #     sizeLimit: "2Gi"
       containers:
       - name: phi4-mini
         image: vllm/vllm-openai:latest
@@ -66,8 +66,8 @@ spec:
         volumeMounts:
         - mountPath: /root/.cache/huggingface
           name: cache-volume
-            #        - name: shm
-            #          mountPath: /dev/shm
+        # - name: shm
+        #   mountPath: /dev/shm
         livenessProbe:
           httpGet:
             path: /health
