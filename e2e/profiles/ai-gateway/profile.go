@@ -175,7 +175,7 @@ func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deploye
 		ReleaseName: "eg",
 		Chart:       "oci://docker.io/envoyproxy/gateway-helm",
 		Namespace:   "envoy-gateway-system",
-		Version:     "v0.0.0-latest",
+		Version:     "v1.6.0",
 		ValuesFiles: []string{"https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"},
 		Wait:        true,
 		Timeout:     "10m",
@@ -194,7 +194,7 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		ReleaseName: "aieg-crd",
 		Chart:       "oci://docker.io/envoyproxy/ai-gateway-crds-helm",
 		Namespace:   "envoy-ai-gateway-system",
-		Version:     "v0.0.0-latest",
+		Version:     "v0.4.0",
 		Wait:        true,
 		Timeout:     "10m",
 	}
@@ -208,7 +208,7 @@ func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deplo
 		ReleaseName: "aieg",
 		Chart:       "oci://docker.io/envoyproxy/ai-gateway-helm",
 		Namespace:   "envoy-ai-gateway-system",
-		Version:     "v0.0.0-latest",
+		Version:     "v0.4.0",
 		Wait:        true,
 		Timeout:     "10m",
 	}
