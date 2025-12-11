@@ -2686,11 +2686,13 @@ default_model: "test-model"
 			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
 		})
 
-		It("should return 'block' when action is 'block'", func() {
+		It("should return 'warn' when action is 'block' (only warn is supported for global config)", func() {
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.OnHallucinationDetected = "block"
 
-			Expect(cfg.GetHallucinationAction()).To(Equal("block"))
+			// Global config only supports "warn" action
+			// Per-decision plugin config supports "header", "body", "none", "block"
+			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
 		})
 
 		It("should return default 'warn' when action is empty", func() {

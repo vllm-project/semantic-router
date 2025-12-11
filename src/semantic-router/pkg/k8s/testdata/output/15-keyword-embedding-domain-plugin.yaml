@@ -37,6 +37,10 @@ hallucination_mitigation:
     model_id: ""
     threshold: 0
     use_cpu: false
+  nli_model:
+    model_id: ""
+    threshold: 0
+    use_cpu: false
 semantic_cache:
   backend_type: memory
   enabled: true
@@ -45,6 +49,8 @@ semantic_cache:
   ttl_seconds: 3600
   eviction_policy: fifo
   embedding_model: bert
+response_api:
+  enabled: false
 observability:
   tracing:
     enabled: false
@@ -60,7 +66,11 @@ observability:
       service_name: vllm-semantic-router
       service_version: v0.1.0
       deployment_environment: development
-  metrics: {}
+  metrics:
+    windowed_metrics:
+      enabled: false
+      model_metrics: false
+      queue_depth_estimation: false
 api:
   batch_classification:
     metrics:

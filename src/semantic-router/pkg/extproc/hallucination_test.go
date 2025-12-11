@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	. "github.com/onsi/ginkgo/v2"
@@ -44,10 +43,8 @@ func createMockBodyResponse() *ext_proc.ProcessingResponse {
 	}
 }
 
-func TestHallucinationExtproc(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Hallucination Extproc Suite")
-}
+// TestHallucinationExtproc is removed - tests are now part of the main ExtProc Suite in extproc_test.go
+// This avoids the "Rerunning Suite" error from Ginkgo when multiple RunSpecs are called
 
 var _ = Describe("RequestContext Hallucination Fields", func() {
 	var ctx *RequestContext
@@ -259,8 +256,8 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 					{
 						Type: "hallucination",
 						Configuration: map[string]interface{}{
-							"enabled":                   enabled,
-							"on_hallucination_detected": action,
+							"enabled":              enabled,
+							"hallucination_action": action,
 						},
 					},
 				},
@@ -368,19 +365,19 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 	})
 
 	Describe("getHallucinationActionForDecision", func() {
-		It("should return 'warn' when decision is nil", func() {
-			Expect(router.getHallucinationActionForDecision(nil)).To(Equal("warn"))
+		It("should return 'header' when decision is nil", func() {
+			Expect(router.getHallucinationActionForDecision(nil)).To(Equal("header"))
 		})
 
-		It("should return 'warn' when no hallucination plugin configured", func() {
+		It("should return 'header' when no hallucination plugin configured", func() {
 			decision := &config.Decision{
 				Name:    "test_decision",
 				Plugins: []config.DecisionPlugin{},
 			}
-			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("warn"))
+			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("header"))
 		})
 
-		It("should return 'warn' when action not specified", func() {
+		It("should return 'header' when action not specified", func() {
 			decision := &config.Decision{
 				Name: "test_decision",
 				Plugins: []config.DecisionPlugin{
@@ -392,23 +389,55 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 					},
 				},
 			}
-			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("warn"))
+			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("header"))
 		})
 
-		It("should return 'warn' when action is warn", func() {
+		It("should return 'header' when action is header", func() {
 			decision := &config.Decision{
 				Name: "test_decision",
 				Plugins: []config.DecisionPlugin{
 					{
 						Type: "hallucination",
 						Configuration: map[string]interface{}{
-							"enabled":                   true,
-							"on_hallucination_detected": "warn",
+							"enabled":              true,
+							"hallucination_action": "header",
 						},
 					},
 				},
 			}
-			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("warn"))
+			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("header"))
+		})
+
+		It("should return 'body' when action is body", func() {
+			decision := &config.Decision{
+				Name: "test_decision",
+				Plugins: []config.DecisionPlugin{
+					{
+						Type: "hallucination",
+						Configuration: map[string]interface{}{
+							"enabled":              true,
+							"hallucination_action": "body",
+						},
+					},
+				},
+			}
+			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("body"))
+		})
+
+		It("should return 'none' when action is none", func() {
+			decision := &config.Decision{
+				Name: "test_decision",
+				Plugins: []config.DecisionPlugin{
+					{
+						Type: "hallucination",
+						Configuration: map[string]interface{}{
+							"enabled":              true,
+							"hallucination_action": "none",
+						},
+					},
+				},
+			}
+			Expect(router.getHallucinationActionForDecision(decision)).To(Equal("none"))
 		})
 	})
 

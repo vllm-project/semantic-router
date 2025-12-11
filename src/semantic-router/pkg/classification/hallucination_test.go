@@ -3,7 +3,6 @@ package classification
 import (
 	"os"
 	"path/filepath"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,10 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestHallucination(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Hallucination Mitigation Suite")
-}
+// TestHallucination is removed - tests are now part of the main Classifier Suite in classifier_test.go
+// This avoids the "Rerunning Suite" error from Ginkgo when multiple RunSpecs are called
 
 // findProjectRoot finds the project root by looking for go.mod
 func findProjectRoot() string {
