@@ -23,8 +23,7 @@ categories:
     mmlu_categories: ["computer science", "engineering"]
   - name: finance
     mmlu_categories: ["economics"]
-  - name: politics
-    # If omitted, identity mapping applies when this name matches MMLU
+  - name: politics  # If omitted, identity mapping applies when this name matches MMLU
 
 # Decisions define routing logic by combining rules and model selection
 decisions:

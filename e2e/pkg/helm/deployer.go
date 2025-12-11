@@ -94,11 +94,13 @@ func (d *Deployer) WaitForDeployment(ctx context.Context, namespace, deploymentN
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Convert timeout to seconds for kubectl
+	timeoutSeconds := int(timeout.Seconds())
 	cmd := exec.CommandContext(ctx, "kubectl", "wait",
 		"--for=condition=Available",
 		fmt.Sprintf("deployment/%s", deploymentName),
 		"-n", namespace,
-		"--timeout=600s",
+		fmt.Sprintf("--timeout=%ds", timeoutSeconds),
 		"--kubeconfig", d.KubeConfig)
 
 	if d.Verbose {
