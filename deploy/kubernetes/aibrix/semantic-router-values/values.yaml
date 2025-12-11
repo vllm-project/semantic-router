@@ -544,6 +544,11 @@ config:
     gemma_model_path: ""
     use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
+# Disable startupProbe in E2E tests for faster deployment verification
+# E2E tests use smaller models and don't need the extended startup time
+startupProbe:
+  enabled: false
+
   # Observability Configuration
   observability:
     tracing:

@@ -164,6 +164,11 @@ config:
     threshold: 0.6
     use_cpu: true
 
+# Disable startupProbe in E2E tests for faster deployment verification
+# E2E tests use smaller models and don't need the extended startup time
+startupProbe:
+  enabled: false
+
 # Keep consistent with the default chart: initContainer, model downloads, and PVC use chart defaults
 image:
   pullPolicy: IfNotPresent
