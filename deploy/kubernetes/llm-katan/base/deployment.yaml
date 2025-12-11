@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-katan
+spec:
+  selector:
+    matchLabels: {}
+  replicas: 1
+  template:
+    metadata:
+      labels: {}
+    spec:
+      # Create a non-root user for security (matching Dockerfile)
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+
+      initContainers:
+        # Pre-download model to cache for faster startup
+        # Uses lightweight python:3.11-slim image and checks if model exists before downloading
+        - name: model-downloader
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0  # Run as root to install packages
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+
+              MODEL_ID="${YLLM_MODEL:-Qwen/Qwen3-0.6B}"
+              MODEL_DIR=$(basename "$MODEL_ID")
+
+              mkdir -p /cache/models
+              cd /cache/models
+
+              # Check if model already exists in PVC
+              if [ -d "$MODEL_DIR" ]; then
+                echo "Model $MODEL_ID already cached. Skipping download."
+                exit 0
+              fi
+
+              # Model not found, proceed with download
+              echo "Downloading model $MODEL_ID..."
+              pip install --no-cache-dir huggingface_hub[cli]
+              hf download "$MODEL_ID" --local-dir "$MODEL_DIR"
+          env:
+            - name: YLLM_MODEL
+              value: "Qwen/Qwen3-0.6B"
+            - name: HF_HUB_CACHE
+              value: "/tmp/hf_cache"
+          volumeMounts:
+            - name: models-volume
+              mountPath: /cache/models
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+
+      containers:
+        - name: llm-katan
+          image: ghcr.io/vllm-project/semantic-router/llm-katan:latest
+          imagePullPolicy: IfNotPresent
+
+          # Command is set via environment variables
+          # Default: llm-katan --model Qwen/Qwen3-0.6B --host 0.0.0.0 --port 8000
+
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          env:
+            # These can be overridden via ConfigMap in overlays
+            - name: YLLM_MODEL
+              value: "/cache/models/Qwen3-0.6B"  # Local path to downloaded model
+            - name: YLLM_PORT
+              value: "8000"
+            - name: YLLM_HOST
+              value: "0.0.0.0"
+            - name: YLLM_BACKEND
+              value: "transformers"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+
+          volumeMounts:
+            - name: models-volume
+              mountPath: /cache/models
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 10  # 2.5 minutes max startup time (model already downloaded by initContainer)
+
+          resources:
+            requests:
+              memory: "3Gi"
+              cpu: "1"
+            limits:
+              memory: "6Gi"
+              cpu: "2"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # HuggingFace needs to write to cache
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+      volumes:
+        - name: models-volume
+          persistentVolumeClaim:
+            claimName: llm-katan-models

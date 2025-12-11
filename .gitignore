@@ -112,6 +112,7 @@ website/build
 .docusaurus
 spec/
 results/
+reports/
 
 .github/copilot*.md
 
