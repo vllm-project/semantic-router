@@ -11,6 +11,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -18,6 +19,7 @@ import (
 
 // CreatePIIViolationResponse creates an HTTP response for PII policy violations
 func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bool, decisionName string) *ext_proc.ProcessingResponse {
+
 	// Record PII violation metrics
 	metrics.RecordPIIViolations(model, deniedPII)
 
@@ -25,28 +27,30 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 	deniedPIIStr := strings.Join(deniedPII, ",")
 
 	// Create OpenAI-compatible response format for PII violations
-	unixTimeStep := time.Now().Unix()
-	var responseBody []byte
-	var contentType string
+	var (
+		unixTimeStep = time.Now().Unix()
+		responseBody []byte
+		contentType  string
+	)
 
 	if isStreaming {
 		// For streaming responses, use SSE format
 		contentType = "text/event-stream"
 
 		// Create streaming chunk with security violation message
-		streamChunk := map[string]interface{}{
-			"id":      fmt.Sprintf("chatcmpl-pii-violation-%d", unixTimeStep),
-			"object":  "chat.completion.chunk",
-			"created": unixTimeStep,
-			"model":   model,
-			"choices": []map[string]interface{}{
+		streamChunk := openai.ChatCompletion{
+			ID:      fmt.Sprintf("chatcmpl-pii-violation-%d", unixTimeStep),
+			Object:  "chat.completion",
+			Created: unixTimeStep,
+			Model:   model,
+			Choices: []openai.ChatCompletionChoice{
 				{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"role":    "assistant",
-						"content": fmt.Sprintf("I cannot process this request as it contains personally identifiable information (%v) that is not allowed for the '%s' model according to the configured privacy policy. Please remove any sensitive information and try again.", deniedPII, model),
+					Index: 0,
+					Message: openai.ChatCompletionMessage{
+						Role:    consts.ASSISTANT,
+						Content: fmt.Sprintf("I cannot process this request as it contains personally identifiable information (%v) that is not allowed for the '%s' model according to the configured privacy policy. Please remove any sensitive information and try again.", deniedPII, model),
 					},
-					"finish_reason": "content_filter",
+					FinishReason: "content_filter",
 				},
 			},
 		}
@@ -71,7 +75,7 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 				{
 					Index: 0,
 					Message: openai.ChatCompletionMessage{
-						Role:    "assistant",
+						Role:    consts.ASSISTANT,
 						Content: fmt.Sprintf("I cannot process this request as it contains personally identifiable information (%v) that is not allowed for the '%s' model according to the configured privacy policy. Please remove any sensitive information and try again.", deniedPII, model),
 					},
 					FinishReason: "content_filter",
@@ -137,29 +141,32 @@ func CreatePIIViolationResponse(model string, deniedPII []string, isStreaming bo
 
 // CreateJailbreakViolationResponse creates an HTTP response for jailbreak detection violations
 func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, isStreaming bool) *ext_proc.ProcessingResponse {
+
 	// Create OpenAI-compatible response format for jailbreak violations
-	unixTimeStep := time.Now().Unix()
-	var responseBody []byte
-	var contentType string
+	var (
+		unixTimeStep = time.Now().Unix()
+		responseBody []byte
+		contentType  string
+	)
 
 	if isStreaming {
 		// For streaming responses, use SSE format
 		contentType = "text/event-stream"
 
 		// Create streaming chunk with security violation message
-		streamChunk := map[string]interface{}{
-			"id":      fmt.Sprintf("chatcmpl-jailbreak-blocked-%d", unixTimeStep),
-			"object":  "chat.completion.chunk",
-			"created": unixTimeStep,
-			"model":   "security-filter",
-			"choices": []map[string]interface{}{
+		streamChunk := openai.ChatCompletion{
+			ID:      fmt.Sprintf("jailbreakcmpl-pii-violation-%d", unixTimeStep),
+			Object:  "chat.completion",
+			Created: unixTimeStep,
+			Model:   "security-filter",
+			Choices: []openai.ChatCompletionChoice{
 				{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"role":    "assistant",
-						"content": fmt.Sprintf("I cannot process this request as it appears to contain a potential jailbreak attempt (type: %s, confidence: %.3f). Please rephrase your request in a way that complies with our usage policies.", jailbreakType, confidence),
+					Index: 0,
+					Message: openai.ChatCompletionMessage{
+						Role:    consts.ASSISTANT,
+						Content: fmt.Sprintf("I cannot process this request as it appears to contain a potential jailbreak attempt (type: %s, confidence: %.3f). Please rephrase your request in a way that complies with our usage policies.", jailbreakType, confidence),
 					},
-					"finish_reason": "content_filter",
+					FinishReason: "content_filter",
 				},
 			},
 		}
@@ -184,7 +191,7 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 				{
 					Index: 0,
 					Message: openai.ChatCompletionMessage{
-						Role:    "assistant",
+						Role:    consts.ASSISTANT,
 						Content: fmt.Sprintf("I cannot process this request as it appears to contain a potential jailbreak attempt (type: %s, confidence: %.3f). Please rephrase your request in a way that complies with our usage policies.", jailbreakType, confidence),
 					},
 					FinishReason: "content_filter",
@@ -250,8 +257,11 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 
 // CreateCacheHitResponse creates an immediate response from cache
 func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.ProcessingResponse {
-	var responseBody []byte
-	var contentType string
+
+	var (
+		responseBody []byte
+		contentType  string
+	)
 
 	if isStreaming {
 		// For streaming responses, convert cached JSON to SSE format
@@ -264,25 +274,26 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool) *ext_proc.P
 			responseBody = []byte("data: {\"error\": \"Failed to convert cached response\"}\n\ndata: [DONE]\n\n")
 		} else {
 			// Convert chat.completion to chat.completion.chunk format
-			streamChunk := map[string]interface{}{
-				"id":      cachedCompletion.ID,
-				"object":  "chat.completion.chunk",
-				"created": cachedCompletion.Created,
-				"model":   cachedCompletion.Model,
-				"choices": []map[string]interface{}{},
+			streamChunk := openai.ChatCompletion{
+				ID:      cachedCompletion.ID,
+				Object:  "chat.completion.chunk",
+				Created: cachedCompletion.Created,
+				Model:   cachedCompletion.Model,
+				Choices: []openai.ChatCompletionChoice{},
 			}
 
 			// Convert choices from message format to delta format
 			for _, choice := range cachedCompletion.Choices {
-				streamChoice := map[string]interface{}{
-					"index": choice.Index,
-					"delta": map[string]interface{}{
-						"role":    choice.Message.Role,
-						"content": choice.Message.Content,
+				streamChoice := &openai.ChatCompletionChoice{
+					Index: choice.Index,
+					Message: openai.ChatCompletionMessage{
+						Role:    consts.ASSISTANT,
+						Content: choice.Message.Content, // Content will be in delta
 					},
-					"finish_reason": choice.FinishReason,
+					FinishReason: choice.FinishReason,
 				}
-				streamChunk["choices"] = append(streamChunk["choices"].([]map[string]interface{}), streamChoice)
+
+				streamChunk.Choices = append(streamChunk.Choices, *streamChoice)
 			}
 
 			chunkJSON, err := json.Marshal(streamChunk)

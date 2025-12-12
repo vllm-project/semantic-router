@@ -23,6 +23,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 // CRDConverter converts Kubernetes CRDs to internal configuration structures
@@ -88,7 +89,7 @@ func (c *CRDConverter) ConvertIntelligentRoute(route *v1alpha1.IntelligentRoute)
 		EmbeddingRules: make([]config.EmbeddingRule, 0),
 		Categories:     make([]config.Category, 0),
 		Decisions:      make([]config.Decision, 0),
-		Strategy:       "priority", // Always use priority strategy
+		Strategy:       consts.PriorityStrategy, // Always use priority strategy
 	}
 
 	// Convert keyword signals

@@ -12,7 +12,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp"
-	api "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
