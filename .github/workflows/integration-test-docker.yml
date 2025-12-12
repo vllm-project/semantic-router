@@ -82,12 +82,39 @@ jobs:
       - name: Download models
         run: |
           echo "Downloading minimal models for CI..."
+          # Debug: Check if HF_TOKEN is available (without printing the actual token)
+          if [ -n "$HF_TOKEN" ]; then
+            echo "✅ HF_TOKEN is set (length: ${#HF_TOKEN} characters)"
+            echo "Authenticating with HuggingFace..."
+            huggingface-cli login --token "$HF_TOKEN" --add-to-git-credential
+            echo "✅ HuggingFace authentication successful"
+            # Also ensure environment variable is set for hf CLI
+            export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+          else
+            echo "⚠️  HF_TOKEN not set - gated models may fail to download"
+            echo "   This workflow requires HF_TOKEN secret to be configured in repository settings"
+            echo "   For now, Gemma model download will be skipped (expected to fail)"
+          fi
+          # Export all environment variables for make
+          export CI=true
+          export CI_MINIMAL_MODELS=true
+          export HF_HUB_ENABLE_HF_TRANSFER=1
+          export HF_HUB_DISABLE_TELEMETRY=1
+          # Pass token to make if available
+          if [ -n "$HF_TOKEN" ]; then
+            export HF_TOKEN="$HF_TOKEN"
+            export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+          fi
           make download-models
         env:
           CI: true
           CI_MINIMAL_MODELS: true
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
+          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
+          # The hf CLI uses HUGGINGFACE_HUB_TOKEN, so we set both for compatibility
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Start CI services
         run: |
