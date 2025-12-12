@@ -39,6 +39,15 @@ repos:
         files: \.go$
         pass_filenames: false
 
+  - repo: local
+    hooks:
+      - id: makefile-lint
+        name: makefile lint
+        entry: make mkcheck
+        language: system
+        files: \.mk$
+        pass_filenames: false
+
   # Markdown specific hooks
   - repo: local
     hooks:
