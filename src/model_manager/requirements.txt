@@ -1,0 +1,6 @@
+# Runtime dependencies
+huggingface_hub>=0.20.0
+pyyaml>=6.0
+
+# Development/test dependencies
+pytest>=7.0.0
