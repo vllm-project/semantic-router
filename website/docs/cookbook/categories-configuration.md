@@ -158,6 +158,51 @@ default_reasoning_effort: high
 
 > See: [config.yaml#model_config](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L53-L56) AND [config.yaml#reasoning_families](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L462-L477).
 
+## Multimodal Category Configuration
+
+Enable multimodal routing for categories that handle image inputs. Multimodal classification uses embedding-based similarity matching with CLIP vision transformer and BERT text embeddings.
+
+### Basic Multimodal Category
+
+```yaml
+categories:
+  - name: visual_analysis
+    description: "Image analysis, object detection, visual reasoning, scene understanding"
+    multimodal_enabled: true
+    model_scores:
+      - model: llava:7b
+        score: 1.0
+        capabilities: ["text", "image"]
+```
+
+### Image Generation Category
+
+```yaml
+categories:
+  - name: image_generation
+    description: "Generate images, create pictures, draw illustrations"
+    model_scores:
+      - model: image-generator
+        score: 1.0
+        capabilities: ["image"]
+```
+
+### Key Configuration Fields
+
+- `multimodal_enabled: true` - Enables embedding-based multimodal classification for this category
+  - Uses CLIP vision transformer for image embeddings
+  - Fuses text and image embeddings via weighted combination
+  - Classifies using cosine similarity against category descriptions
+
+- `description` - Critical for multimodal classification
+  - Used to generate category embeddings for similarity matching
+  - Should be descriptive and capture the category's purpose
+  - Example: "Image analysis, object detection, visual reasoning" vs "Analyze images"
+
+- `capabilities: ["text", "image"]` - Specifies model capabilities
+  - Used for routing decisions
+  - Ensures requests are routed to models that support the required capabilities
+
 ## Quick Reference
 
 | Domain Type            | use_reasoning | Priority | Use Case               |
@@ -166,3 +211,8 @@ default_reasoning_effort: high
 | Law/Health             | `false`       | 100      | Compliance, safety     |
 | Business               | `false`       | 100      | Fast insights          |
 | General/Other          | `false`       | 50       | Fallback routing       |
+
+| Multimodal Category    | multimodal_enabled | Capabilities | Use Case                    |
+| ---------------------- | ------------------ | ------------ | --------------------------- |
+| visual_analysis        | `true`             | text, image  | Image understanding         |
+| image_generation       | `false`            | image        | Image generation            |

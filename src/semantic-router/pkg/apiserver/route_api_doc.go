@@ -100,6 +100,7 @@ var endpointRegistry = []EndpointMetadata{
 	{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats"},
 	{Path: "/api/v1/classify/combined", Method: "POST", Description: "Perform combined classification (intent, PII, and security)"},
 	{Path: "/api/v1/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter"},
+	{Path: "/api/v1/classify/multimodal", Method: "POST", Description: "Multimodal intent classification (text + images)"},
 	{Path: "/info/models", Method: "GET", Description: "Get information about loaded models"},
 	{Path: "/info/classifier", Method: "GET", Description: "Get classifier information and status"},
 	{Path: "/v1/models", Method: "GET", Description: "OpenAI-compatible model listing"},
