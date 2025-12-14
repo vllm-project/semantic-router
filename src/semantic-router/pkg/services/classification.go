@@ -2,16 +2,20 @@ package services
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
 )
@@ -264,19 +268,121 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	return response, nil
 }
 
-// ClassifyMultimodal performs multimodal classification (text + images)
-// Basic prototype version - uses Ollama
+// ClassifyMultimodal performs intent classification on multimodal input (text + images).
+//
+// PRODUCTION APPROACH: Uses vision transformer embeddings for native image processing.
+// Flow:
+//  1. Extract text embedding from text input
+//  2. Extract image embeddings from images using vision transformer (CLIP)
+//  3. Fuse text + image embeddings
+//  4. Classify using fused embedding via similarity matching
+//
+// Falls back to prototype approach (Ollama text descriptions) if vision transformer is unavailable.
 func (s *ClassificationService) ClassifyMultimodal(req MultimodalClassificationRequest) (*IntentResponse, error) {
+	start := time.Now()
+
 	// Validate input
 	if req.Text == "" && len(req.Images) == 0 {
 		return nil, fmt.Errorf("either text or images must be provided")
 	}
 
+	// Try embedding-based approach first
+	if len(req.Images) > 0 {
+		// 1. Get text embedding
+		var textEmb []float32
+		var err error
+
+		if req.Text != "" {
+			// Get text embedding - try GetEmbeddingWithDim first (requires ModelFactory)
+			// If ModelFactory not initialized, fall back to GetEmbeddingDefault (BERT, 384-dim)
+			// We'll project to 512 dimensions in fuseTextAndImageEmbeddings
+			textEmb, err = candle_binding.GetEmbeddingWithDim(req.Text, 0.5, 0.5, 512)
+			if err != nil {
+				observability.Debugf("GetEmbeddingWithDim failed (ModelFactory may not be initialized): %v. Using GetEmbeddingDefault (BERT, 384-dim)...", err)
+				// Fallback to BERT embedding (384 dimensions)
+				// Will be projected to 512 in fusion step
+				textEmb, err = candle_binding.GetEmbeddingDefault(req.Text)
+				if err != nil {
+					observability.Warnf("Failed to get text embedding: %v. Falling back to prototype approach.", err)
+					return s.classifyMultimodalWithOllama(req)
+				}
+			}
+			observability.Debugf("Extracted text embedding (dim: %d)", len(textEmb))
+		} else {
+			// If no text, use zero embedding (will be dominated by image)
+			// Create zero embedding with 512 dimensions to match CLIP
+			textEmb = make([]float32, 512)
+		}
+
+		// 2. Get image embeddings
+		observability.Infof("Processing %d image(s) with vision transformer", len(req.Images))
+		imageEmbs, err := s.extractImageEmbeddings(req.Images)
+		if err != nil {
+			observability.Warnf("Failed to extract image embeddings: %v. Falling back to prototype approach.", err)
+			return s.classifyMultimodalWithOllama(req)
+		}
+		observability.Infof("Successfully extracted %d image embedding(s)", len(imageEmbs))
+
+		// 3. Fuse embeddings
+		fusedEmb := s.fuseTextAndImageEmbeddings(textEmb, imageEmbs)
+		observability.Debugf("Fused embedding dimension: %d", len(fusedEmb))
+
+		// 4. Classify using embedding
+		category, confidence, err := s.classifyWithEmbedding(fusedEmb)
+		if err != nil {
+			observability.Warnf("Embedding-based classification failed: %v. Falling back to prototype approach.", err)
+			return s.classifyMultimodalWithOllama(req)
+		}
+
+		processingTime := time.Since(start).Milliseconds()
+		processingTimeSeconds := float64(processingTime) / 1000.0
+
+		observability.Infof("Multimodal classification result: category=%s, confidence=%.3f, time=%dms",
+			category, confidence, processingTime)
+
+		// Record metrics for quantitative analysis
+		metrics.RecordCategoryClassification(category)
+		metrics.RecordClassificationConfidence(category, "multimodal", confidence)
+		metrics.RecordClassifierLatency("multimodal", processingTimeSeconds)
+
+		// 5. Build response
+		response := &IntentResponse{
+			Classification: Classification{
+				Category:         category,
+				Confidence:       confidence,
+				ProcessingTimeMs: processingTime,
+			},
+		}
+
+		// Add recommended model
+		if model := s.getRecommendedModel(category, confidence); model != "" {
+			response.RecommendedModel = model
+		}
+
+		// Add routing decision
+		response.RoutingDecision = s.getRoutingDecision(confidence, convertClassificationOptions(req.Options))
+
+		return response, nil
+	}
+
+	// No images, just text - use standard classification
+	if req.Text != "" {
+		return s.ClassifyIntent(IntentRequest{
+			Text:    req.Text,
+			Options: convertClassificationOptions(req.Options),
+		})
+	}
+
+	return nil, fmt.Errorf("no text or images provided")
+}
+
+// classifyMultimodalWithOllama is the fallback approach using Ollama
+func (s *ClassificationService) classifyMultimodalWithOllama(req MultimodalClassificationRequest) (*IntentResponse, error) {
 	text := req.Text
 
 	var imageDescriptions []string
 	if len(req.Images) > 0 {
-		observability.Infof("Processing %d image(s) with Ollama", len(req.Images))
+		observability.Infof("Processing %d image(s) with Ollama (fallback)", len(req.Images))
 		descriptions, err := s.extractImageFeatures(req.Images)
 		if err != nil {
 			observability.Errorf("Failed: ", err)
@@ -307,7 +413,8 @@ func (s *ClassificationService) ClassifyMultimodal(req MultimodalClassificationR
 	return intentResp, nil
 }
 
-// extractImageFeatures sends images to Ollama for feature extraction
+// extractImageFeatures extracts text descriptions from images using Ollama (fallback approach).
+// Use extractImageEmbeddings() for the production embedding-based approach.
 func (s *ClassificationService) extractImageFeatures(images []MultimodalImage) ([]string, error) {
 	var descriptions []string
 	ollamaURL := "http://127.0.0.1:11434/api/generate" // Hardcoded for prototype
@@ -396,6 +503,242 @@ func (s *ClassificationService) fuseTextAndImageFeatures(text string, imageDescr
 	}
 
 	return fused.String()
+}
+
+// extractImageEmbeddings extracts 512-dimensional embedding vectors from images using CLIP Vision Transformer.
+// Each image is preprocessed (decoded, resized to 224x224, normalized) and passed through CLIP ViT.
+// Returns one embedding per successfully processed image.
+func (s *ClassificationService) extractImageEmbeddings(images []MultimodalImage) ([][]float32, error) {
+	var embeddings [][]float32
+
+	for i, img := range images {
+		if img.Data == "" {
+			observability.Warnf("Skipping image %d with empty data", i+1)
+			continue
+		}
+
+		// Decode base64 image
+		imageBytes, err := base64.StdEncoding.DecodeString(img.Data)
+		if err != nil {
+			observability.Warnf("Failed to decode base64 image %d: %v", i+1, err)
+			continue // Skip this image, continue with others
+		}
+
+		// Get image embedding from Candle vision transformer
+		embedding, err := candle_binding.GetImageEmbedding(imageBytes, img.MimeType)
+		if err != nil {
+			observability.Warnf("Failed to extract embedding for image %d: %v", i+1, err)
+			continue // Skip this image, continue with others
+		}
+
+		embeddings = append(embeddings, embedding)
+		observability.Debugf("Successfully extracted embedding for image %d (dim: %d)", i+1, len(embedding))
+	}
+
+	if len(embeddings) == 0 {
+		return nil, fmt.Errorf("failed to extract embeddings from any image")
+	}
+
+	return embeddings, nil
+}
+
+// fuseTextAndImageEmbeddings combines text and image embeddings into a unified 512-dimensional embedding.
+//
+// Process:
+//  1. Average multiple image embeddings element-wise (if multiple images)
+//  2. Project both text and image embeddings to 512 dimensions (pad or truncate)
+//  3. Weighted combination: fused = 0.5 * textEmb + 0.5 * imageEmb
+//  4. L2 normalization to unit length for cosine similarity
+//
+// Returns normalized fused embedding ready for similarity matching.
+func (s *ClassificationService) fuseTextAndImageEmbeddings(
+	textEmbedding []float32,
+	imageEmbeddings [][]float32,
+) []float32 {
+	if len(imageEmbeddings) == 0 {
+		return textEmbedding
+	}
+
+	imageAvg := s.averageEmbeddings(imageEmbeddings)
+
+	// Align dimensions to 512 (CLIP's native dimension) for consistent fusion
+	targetDim := 512
+	if len(textEmbedding) != len(imageAvg) {
+		observability.Warnf("Dimension mismatch: text=%d, image=%d. Projecting both to %d dimensions.",
+			len(textEmbedding), len(imageAvg), targetDim)
+
+		if len(textEmbedding) != targetDim {
+			if len(textEmbedding) < targetDim {
+				padded := make([]float32, targetDim)
+				copy(padded, textEmbedding)
+				textEmbedding = padded
+			} else {
+				textEmbedding = textEmbedding[:targetDim]
+			}
+		}
+
+		if len(imageAvg) != targetDim {
+			if len(imageAvg) < targetDim {
+				padded := make([]float32, targetDim)
+				copy(padded, imageAvg)
+				imageAvg = padded
+			} else {
+				imageAvg = imageAvg[:targetDim]
+			}
+		}
+	}
+
+	// Weighted combination: 50% text, 50% image (balanced multimodal fusion)
+	textWeight := float32(0.5)
+	imageWeight := float32(0.5)
+
+	fused := make([]float32, len(textEmbedding))
+	for i := range fused {
+		fused[i] = textWeight*textEmbedding[i] + imageWeight*imageAvg[i]
+	}
+
+	// Normalize the fused embedding
+	norm := float32(0.0)
+	for _, v := range fused {
+		norm += v * v
+	}
+	norm = float32(math.Sqrt(float64(norm)))
+	if norm > 0 {
+		for i := range fused {
+			fused[i] /= norm
+		}
+	}
+
+	return fused
+}
+
+// averageEmbeddings computes element-wise average of multiple embeddings.
+// Used to combine multiple image embeddings into a single representative embedding.
+func (s *ClassificationService) averageEmbeddings(embeddings [][]float32) []float32 {
+	if len(embeddings) == 0 {
+		return nil
+	}
+
+	dim := len(embeddings[0])
+	avg := make([]float32, dim)
+
+	for _, emb := range embeddings {
+		if len(emb) != dim {
+			observability.Warnf("Embedding dimension mismatch: expected %d, got %d", dim, len(emb))
+			continue
+		}
+		for i := range avg {
+			avg[i] += emb[i]
+		}
+	}
+
+	count := float32(len(embeddings))
+	for i := range avg {
+		avg[i] /= count
+	}
+
+	return avg
+}
+
+// classifyWithEmbedding classifies a query embedding by computing cosine similarity
+// against all category description embeddings and returning the best match.
+//
+// Process:
+//  1. For each category in config, extract embedding from its description text
+//  2. Calculate cosine similarity: dot(queryEmb, categoryEmb) (both normalized)
+//  3. Return category with highest similarity score and its confidence
+func (s *ClassificationService) classifyWithEmbedding(embedding []float32) (string, float64, error) {
+	if s.config == nil || len(s.config.Categories) == 0 {
+		return "", 0.0, fmt.Errorf("no categories configured")
+	}
+
+	bestCategory := ""
+	bestScore := -1.0
+	secondBestScore := -1.0
+
+	for _, category := range s.config.Categories {
+		// Skip if no description
+		if category.Description == "" {
+			continue
+		}
+
+		// Extract embedding for category description (try Qwen3/Gemma, fallback to BERT)
+		targetDim := len(embedding)
+		catEmb, err := candle_binding.GetEmbeddingWithDim(category.Description, 0.5, 0.5, targetDim)
+		if err != nil {
+			catEmb, err = candle_binding.GetEmbeddingDefault(category.Description)
+			if err != nil {
+				observability.Debugf("Failed to get embedding for category %s: %v", category.Name, err)
+				continue
+			}
+		}
+
+		// Project category embedding to match query embedding dimension
+		if len(catEmb) != len(embedding) {
+			observability.Debugf("Dimension mismatch for category %s: cat=%d, query=%d. Projecting...",
+				category.Name, len(catEmb), len(embedding))
+			if len(catEmb) < len(embedding) {
+				padded := make([]float32, len(embedding))
+				copy(padded, catEmb)
+				catEmb = padded
+			} else {
+				catEmb = catEmb[:len(embedding)]
+			}
+		}
+
+		// Compute cosine similarity (both embeddings are normalized, so this is just dot product)
+		similarity := cosineSimilarity(embedding, catEmb)
+
+		// Track similarity score for this category (real embedding quality metric)
+		metrics.RecordClassificationConfidence(category.Name, "multimodal_similarity", float64(similarity))
+
+		// Track best and second-best for margin calculation
+		if float64(similarity) > bestScore {
+			secondBestScore = bestScore
+			bestScore = float64(similarity)
+			bestCategory = category.Name
+		} else if float64(similarity) > secondBestScore {
+			secondBestScore = float64(similarity)
+		}
+	}
+
+	// Track classification margin (gap between best and second-best similarity)
+	if bestScore > 0 && secondBestScore >= 0 {
+		margin := bestScore - secondBestScore
+		observability.Debugf("Classification margin: %.4f (best=%.4f, second=%.4f)", margin, bestScore, secondBestScore)
+		// Note: We could add a specific margin metric here if needed
+	}
+
+	if bestCategory == "" {
+		return "", 0.0, fmt.Errorf("no matching category found")
+	}
+
+	return bestCategory, float64(bestScore), nil
+}
+
+// cosineSimilarity calculates cosine similarity between two normalized embeddings.
+// Since both embeddings are L2-normalized, this is equivalent to dot product.
+// Returns value in range [-1, 1], typically [0, 1] for normalized embeddings.
+func cosineSimilarity(a, b []float32) float32 {
+	if len(a) != len(b) {
+		return 0.0
+	}
+
+	var dotProduct float32
+	var normA, normB float32
+
+	for i := range a {
+		dotProduct += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+
+	norm := float32(math.Sqrt(float64(normA * normB)))
+	if norm == 0 {
+		return 0.0
+	}
+
+	return dotProduct / norm
 }
 
 func convertClassificationOptions(opts *ClassificationOptions) *IntentOptions {

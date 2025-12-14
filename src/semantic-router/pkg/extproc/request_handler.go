@@ -728,17 +728,6 @@ func (r *OpenAIRouter) handleGeminiImageGeneration(ctx *RequestContext, openAIRe
 	return response, nil
 }
 
-func isImageGenerationIntent(text string) bool {
-	text = strings.ToLower(text)
-	return strings.Contains(text, "generate an image") ||
-		strings.Contains(text, "create an image") ||
-		strings.Contains(text, "draw me") ||
-		strings.Contains(text, "make a picture") ||
-		strings.Contains(text, "make an image") ||
-		strings.Contains(text, "create a photo") ||
-		strings.Contains(text, "image of")
-}
-
 // handleModelRouting handles model selection and routing logic
 func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel, userContent string, nonUserMessages []string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Create default response with CONTINUE status
@@ -1152,6 +1141,41 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		// Track VSR decision information for non-auto models
 		ctx.VSRSelectedModel = originalModel
 		ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
+
+		// Check for multimodal content
+		var categoryName string
+		if hasImages {
+			observability.Infof("Detected multimodal request with images (model specified: %s), running classification for analytics", originalModel)
+
+			// Get images from request
+			images := extractImagesFromRequest(openAIRequest)
+
+			contentType := "image"
+			if userContent != "" || len(nonUserMessages) > 0 {
+				contentType = "multimodal"
+			}
+
+			// Create multimodal classification request
+			multimodalReq := services.MultimodalClassificationRequest{
+				Text:        userContent,
+				Images:      images,
+				ContentType: contentType,
+			}
+
+			// Get classification service
+			classificationSvc := services.GetGlobalClassificationService()
+			if classificationSvc != nil {
+				intentResp, err := classificationSvc.ClassifyMultimodal(multimodalReq)
+				if err == nil {
+					categoryName = intentResp.Classification.Category
+					observability.Infof("Multimodal classification result: category=%s, confidence=%.3f (using specified model: %s)",
+						categoryName, intentResp.Classification.Confidence, originalModel)
+				} else {
+					observability.Debugf("Multimodal classification failed (non-blocking): %v", err)
+				}
+			}
+		}
+
 		// For non-auto models, check PII policy compliance
 		allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 		detectedPII := r.Classifier.DetectPIIInContent(allContent)
@@ -1224,7 +1248,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 			"request_id":         ctx.RequestID,
 			"original_model":     originalModel,
 			"selected_model":     originalModel,
-			"category":           "",
+			"category":           categoryName,
 			"reasoning_enabled":  false,
 			"reasoning_effort":   "",
 			"selected_endpoint":  selectedEndpoint,
