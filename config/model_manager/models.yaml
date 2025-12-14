@@ -1,23 +1,20 @@
-# Minimal Model Set for CI
-# This file contains only the essential models needed for CI tests.
-# Use this to avoid rate limits and speed up CI runs.
+# Full Model Set for Local Development
+# This file contains ALL models for full local development, matching models.mk download-models-full
 #
 # Usage:
-#   CI_MINIMAL_MODELS=true python -m model_manager
-#   # or explicitly:
-#   python -m model_manager --config config/models.minimal.yaml
+#   python -m model_manager
+#   python -m model_manager --config config/model_manager/models.yaml
 #
-# Equivalent to: make download-models-minimal
-#             or CI_MINIMAL_MODELS=true make download-models
+# Includes additional LoRA variants (roberta, modernbert) and gated models not in minimal set.
 #
-# Note: embeddinggemma-300m is gated and requires HF_TOKEN, so it's excluded.
+# Equivalent to: make download-models-full
 
 cache_dir: "models"
-verify: "size" # Use size for faster CI runs
+verify: "sha256" # Full verification for production use
 
 models:
   # =============================================================================
-  # Core Classifiers (ModernBERT) - Required for classification tests
+  # Core Classifiers (ModernBERT)
   # =============================================================================
 
   - id: category_classifier_modernbert-base_model
@@ -33,7 +30,7 @@ models:
     repo_id: LLM-Semantic-Router/pii_classifier_modernbert-base_model
 
   # =============================================================================
-  # LoRA Adapters (BERT-based) - Required for unified classifier tests
+  # LoRA Adapters - BERT-based
   # =============================================================================
 
   - id: lora_intent_classifier_bert-base-uncased_model
@@ -46,7 +43,33 @@ models:
     repo_id: LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model
 
   # =============================================================================
-  # Embedding Models - Required for cache and embedding tests
+  # LoRA Adapters - RoBERTa-based (Full only)
+  # =============================================================================
+
+  - id: lora_intent_classifier_roberta-base_model
+    repo_id: LLM-Semantic-Router/lora_intent_classifier_roberta-base_model
+
+  - id: lora_pii_detector_roberta-base_model
+    repo_id: LLM-Semantic-Router/lora_pii_detector_roberta-base_model
+
+  - id: lora_jailbreak_classifier_roberta-base_model
+    repo_id: LLM-Semantic-Router/lora_jailbreak_classifier_roberta-base_model
+
+  # =============================================================================
+  # LoRA Adapters - ModernBERT-based (Full only)
+  # =============================================================================
+
+  - id: lora_intent_classifier_modernbert-base_model
+    repo_id: LLM-Semantic-Router/lora_intent_classifier_modernbert-base_model
+
+  - id: lora_pii_detector_modernbert-base_model
+    repo_id: LLM-Semantic-Router/lora_pii_detector_modernbert-base_model
+
+  - id: lora_jailbreak_classifier_modernbert-base_model
+    repo_id: LLM-Semantic-Router/lora_jailbreak_classifier_modernbert-base_model
+
+  # =============================================================================
+  # Embedding Models
   # =============================================================================
 
   - id: all-MiniLM-L12-v2
@@ -55,8 +78,12 @@ models:
   - id: Qwen3-Embedding-0.6B
     repo_id: Qwen/Qwen3-Embedding-0.6B
 
+  # Gated model - requires HF_TOKEN
+  - id: embeddinggemma-300m
+    repo_id: google/embeddinggemma-300m
+
   # =============================================================================
-  # Hallucination Detection - Required for hallucination tests
+  # Hallucination Detection Models
   # =============================================================================
 
   - id: halugate-detector
@@ -69,7 +96,7 @@ models:
     repo_id: tasksource/ModernBERT-base-nli
 
   # =============================================================================
-  # LLM Models - For llm-katan tests
+  # LLM Models (for llm-katan)
   # =============================================================================
 
   - id: Qwen/Qwen3-0.6B
