@@ -66,9 +66,9 @@ jobs:
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
-      - name: Download models (full set for nightly)
+      - name: Download models (minimal set for nightly)
         env:
-          CI_MINIMAL_MODELS: false
+          CI_MINIMAL_MODELS: true
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
