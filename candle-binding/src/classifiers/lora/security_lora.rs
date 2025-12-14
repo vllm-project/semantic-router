@@ -73,6 +73,41 @@ impl SecurityLoRAClassifier {
         }
     }
 
+    /// Classify text and return (class_index, confidence, label) for FFI compatibility
+    /// This is a simpler interface for jailbreak detection that matches the intent classifier pattern
+    pub fn classify_with_index(&self, text: &str) -> Result<(usize, f32, String)> {
+        // Use real BERT model for classification
+        let (predicted_class, confidence) =
+            self.bert_classifier.classify_text(text).map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "jailbreak classification",
+                    format!("Classification failed: {}", e),
+                    text
+                );
+                candle_core::Error::from(unified_err)
+            })?;
+
+        // Map class index to label - fail if class not found
+        let label = if predicted_class < self.threat_types.len() {
+            self.threat_types[predicted_class].clone()
+        } else {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "jailbreak classification",
+                format!(
+                    "Invalid class index {} not found in labels (max: {})",
+                    predicted_class,
+                    self.threat_types.len()
+                ),
+                text
+            );
+            return Err(candle_core::Error::from(unified_err));
+        };
+
+        Ok((predicted_class, confidence, label))
+    }
+
     /// Detect security threats using real model inference
     pub fn detect_threats(&self, text: &str) -> Result<SecurityResult> {
         let start_time = Instant::now();

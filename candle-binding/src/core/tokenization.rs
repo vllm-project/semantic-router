@@ -387,7 +387,19 @@ impl DualPathTokenizer for UnifiedTokenizer {
         let encoding = tokenizer
             .encode(text, self.config.add_special_tokens)
             .map_err(E::msg)?;
-        Ok(self.encoding_to_result(&encoding))
+
+        // Explicitly enforce max_length truncation for LoRA models
+        // This is a safety check to ensure we never exceed the model's position embedding size
+        let mut result = self.encoding_to_result(&encoding);
+        let max_len = self.config.max_length;
+        if result.token_ids.len() > max_len {
+            result.token_ids.truncate(max_len);
+            result.token_ids_u32.truncate(max_len);
+            result.attention_mask.truncate(max_len);
+            result.tokens.truncate(max_len);
+        }
+
+        Ok(result)
     }
 
     fn tokenize_batch_smart(

@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
           label: 'Architecture',
           items: [
             'overview/architecture/system-architecture',
+            'overview/architecture/gateway-integrations',
             'overview/architecture/envoy-extproc',
             'overview/architecture/router-implementation',
           ],
@@ -38,6 +39,7 @@ const sidebars: SidebarsConfig = {
             'overview/categories/overview',
             'overview/categories/supported-categories',
             'overview/categories/configuration',
+            'overview/categories/keyword-configuration',
             'overview/categories/technical-details',
           ],
         },
@@ -47,9 +49,21 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Installation',
       items: [
-        'installation/installation',
-        'installation/kubernetes',
+        {
+          type: 'category',
+          label: 'Kubernetes',
+          items: [
+            'installation/k8s/ai-gateway',
+            'installation/k8s/production-stack',
+            'installation/k8s/aibrix',
+            'installation/k8s/gateway-api-inference-extension',
+            'installation/k8s/istio',
+            'installation/k8s/llm-d',
+            'installation/milvus',
+          ],
+        },
         'installation/docker-compose',
+        'installation/installation',
         'installation/configuration',
       ],
     },
@@ -61,8 +75,12 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Intelligent Route',
           items: [
-            'tutorials/intelligent-route/overview',
-            'tutorials/intelligent-route/reasoning',
+            'tutorials/intelligent-route/domain-routing',
+            'tutorials/intelligent-route/embedding-routing',
+            'tutorials/intelligent-route/keyword-routing',
+            'tutorials/intelligent-route/mcp-routing',
+            'tutorials/intelligent-route/lora-routing',
+            'tutorials/intelligent-route/router-memory',
           ],
         },
         {
@@ -71,7 +89,9 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/semantic-cache/overview',
             'tutorials/semantic-cache/in-memory-cache',
+            'tutorials/semantic-cache/redis-cache',
             'tutorials/semantic-cache/milvus-cache',
+            'tutorials/semantic-cache/hybrid-cache',
           ],
         },
         {
@@ -93,12 +113,28 @@ const sidebars: SidebarsConfig = {
             'tutorials/observability/open-webui-integration',
           ],
         },
+        {
+          type: 'category',
+          label: 'Integration',
+          items: [
+            'tutorials/integration/production-stack-integration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'MCP Classification',
+          items: [
+            'tutorials/mcp-classification/overview',
+            'tutorials/mcp-classification/protocol',
+          ],
+        },
       ],
     },
     {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',
         'proposals/production-stack-integration',
@@ -114,10 +150,21 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Cookbook',
+      items: [
+        'cookbook/categories-configuration',
+        'cookbook/classifier-tuning',
+        'cookbook/pii-policy',
+        'cookbook/vllm-endpoints',
+      ],
+    },
+    {
+      type: 'category',
       label: 'API Reference',
       items: [
         'api/router',
         'api/classification',
+        'api/crd-reference',
       ],
     },
     {
@@ -127,6 +174,7 @@ const sidebars: SidebarsConfig = {
         'troubleshooting/network-tips',
         'troubleshooting/container-connectivity',
         'troubleshooting/vsr-headers',
+        'troubleshooting/common-errors',
       ],
     },
   ],

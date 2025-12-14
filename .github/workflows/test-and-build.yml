@@ -1,14 +1,38 @@
 name: Test And Build
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+  push:
+    branches:
+      - main
   schedule:
     # Run nightly at 2:00 AM UTC
     - cron: "0 2 * * *"
   workflow_dispatch: # Allow manual triggering
-  pull_request: # Run on all pull requests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # use changes as filter
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
   test-and-build:
+    needs: changes
+    if: >-
+      ${{ !github.event.pull_request.draft
+          && (github.event_name == 'schedule'
+          || needs.changes.outputs.core == 'true'
+          || needs.changes.outputs.helm == 'true'
+          || needs.changes.outputs.e2e  == 'true'
+          || needs.changes.outputs.docker == 'true'
+          || needs.changes.outputs.make == 'true'
+          || needs.changes.outputs.ci   == 'true') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -18,7 +42,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.85
+          toolchain: 1.90
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -56,14 +80,52 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Setup model storage on /mnt
+        run: |
+          # Use /mnt for model storage (has ~75GB vs ~14GB on root)
+          # This helps prevent "no space left on device" errors
+          echo "Disk space before setup:"
+          df -h / && df -h /mnt
+          
+          # Create /mnt/models directory if it doesn't exist
+          sudo mkdir -p /mnt/models
+          sudo chown -R $USER:$USER /mnt/models
+          
+          # If models directory already exists in workspace, move it to /mnt
+          if [ -d "models" ] && [ ! -L "models" ]; then
+            echo "Moving existing models directory to /mnt/models..."
+            # Move contents if /mnt/models is not empty, otherwise just move the directory
+            if [ "$(ls -A /mnt/models 2>/dev/null)" ]; then
+              echo "Warning: /mnt/models already has content, merging..."
+              sudo cp -r models/* /mnt/models/ || true
+              rm -rf models
+            else
+              sudo mv models /mnt/models
+            fi
+          fi
+          
+          # Create symlink from models/ to /mnt/models/ so existing code continues to work
+          if [ ! -e "models" ]; then
+            ln -s /mnt/models models
+            echo "Created symlink: models -> /mnt/models"
+          elif [ -L "models" ]; then
+            echo "Symlink already exists: models -> $(readlink models)"
+          else
+            echo "Warning: models exists but is not a symlink"
+          fi
+          
+          echo "Disk space after setup:"
+          df -h / && df -h /mnt
+          echo "Models directory setup complete. Models will be stored in /mnt/models"
+
       - name: Cache Models
         uses: actions/cache@v4
         with:
           path: |
             models/
-          key: ${{ runner.os }}-models-v1-${{ hashFiles('tools/make/models.mk') }}
+          key: ${{ runner.os }}-models-v2-${{ hashFiles('tools/make/models.mk') }}
           restore-keys: |
-            ${{ runner.os }}-models-v1-
+            ${{ runner.os }}-models-v2-
         continue-on-error: true # Don't fail the job if caching fails
 
       - name: Check go mod tidy
@@ -83,6 +145,36 @@ jobs:
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
 
+      - name: Start Milvus service
+        run: |
+          echo "Starting Milvus vector database..."
+          docker run -d \
+            --name milvus-semantic-cache \
+            --security-opt seccomp:unconfined \
+            -e ETCD_USE_EMBED=true \
+            -e ETCD_DATA_DIR=/var/lib/milvus/etcd \
+            -e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
+            -e COMMON_STORAGETYPE=local \
+            -e CLUSTER_ENABLED=false \
+            -p 19530:19530 \
+            -p 9091:9091 \
+            milvusdb/milvus:v2.3.3 \
+            milvus run standalone
+
+          echo "Waiting for Milvus to be ready..."
+          sleep 20
+
+          # Verify Milvus is responsive
+          timeout 30 bash -c 'until docker logs milvus-semantic-cache 2>&1 | grep -q "Proxy successfully started"; do sleep 2; done' || true
+
+          echo "Milvus is ready at localhost:19530"
+          docker ps --filter "name=milvus-semantic-cache"
+      
+      - name: Start Redis service
+        run: |
+          echo "Starting Redis Stack..."
+          make start-redis
+
       - name: Run semantic router tests
         run: make test
         env:
@@ -90,6 +182,23 @@ jobs:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
           CGO_ENABLED: 1
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+          MILVUS_URI: localhost:19530
+          SKIP_MILVUS_TESTS: false
+          SKIP_REDIS_TESTS: false
+
+      - name: Clean Redis service
+        if: always()
+        run: |
+          echo "Stopping Redis container and cleaning data..."
+          make clean-redis
+
+      - name: Stop Milvus service
+        if: always()
+        run: |
+          echo "Stopping Milvus container..."
+          docker stop milvus-semantic-cache || true
+          docker rm milvus-semantic-cache || true
+          echo "Milvus container cleaned up"
 
       - name: Upload test artifacts on failure
         if: failure()
@@ -109,7 +218,7 @@ jobs:
   # Trigger Docker publishing on successful nightly runs
   publish-docker:
     needs: test-and-build
-    if: success() && github.event_name == 'schedule'
+    if: github.repository == 'vllm-project/semantic-router' && success() && github.event_name == 'schedule'
     uses: ./.github/workflows/docker-publish.yml
     with:
       tag_suffix: nightly-$(date +'%Y%m%d')

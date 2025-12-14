@@ -1,4 +1,3 @@
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,7 +9,7 @@ spec:
     name: inference-gateway
   rules:
   - backendRefs:
-    - name: phi4-mini          # service phi4-mini
+    - name: phi4-mini
       namespace: default
       port: 80
     matches:
@@ -18,9 +17,8 @@ spec:
         type: PathPrefix
         value: /
       headers:
-        - type: Exact
-          name: x-selected-model
-          value: 'phi4-mini'
+      - type: Exact
+        name: x-selected-model
+        value: phi4-mini
     timeouts:
       request: 300s
-

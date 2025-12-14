@@ -75,6 +75,9 @@ bin/
 !*/models/README.md
 models/
 
+# Training data
+wikipedia_data/
+
 # Added by Claude Task Master
 # Logs
 logs
@@ -94,7 +97,7 @@ node_modules/
 *.sw?
 # Task files
 tasks.json
-tasks/ 
+tasks/
 .cursor/
 .roo/
 .env.example
@@ -109,6 +112,7 @@ website/build
 .docusaurus
 spec/
 results/
+reports/
 
 .github/copilot*.md
 
@@ -155,3 +159,10 @@ dashboard/frontend/index.html.old
 
 # Kind cluster configuration
 tools/kind/kind-config.yaml
+FaithDial_dataset/
+FactCHD_dataset/
+
+# Trained model outputs (should use HuggingFace Hub or model registry)
+**/lora_*_model/
+**/lora_*_model_rust/
+*.safetensors

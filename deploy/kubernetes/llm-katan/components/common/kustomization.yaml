@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Common labels applied to all resources that use this component
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/name: llm-katan
+    app.kubernetes.io/part-of: semantic-router-workspaces
+    app.kubernetes.io/managed-by: kustomize

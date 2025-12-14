@@ -1,0 +1,414 @@
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+semantic_cache:
+  enabled: true
+  backend_type: "memory"  # Options: "memory" or "milvus"
+  similarity_threshold: 0.8
+  max_entries: 1000  # Only applies to memory backend
+  ttl_seconds: 3600
+
+  # For production environments, use Milvus for scalable caching:
+  # backend_type: "milvus"
+  # backend_config_path: "config/semantic-cache/milvus.yaml"
+
+  # Development/Testing: Use in-memory cache (current configuration)
+  # - Fast startup and no external dependencies
+  # - Limited to single instance scaling
+  # - Data lost on restart
+
+  # Production: Use Milvus vector database
+  # - Horizontally scalable and persistent
+  # - Supports distributed deployments
+  # - Requires Milvus cluster setup
+  # - To enable: uncomment the lines above and install Milvus dependencies
+tools:
+  enabled: true  # Set to true to enable automatic tool selection
+  top_k: 3        # Number of most relevant tools to select
+  similarity_threshold: 0.2  # Threshold for tool similarity
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true  # If true, return no tools on failure; if false, return error
+prompt_guard:
+  enabled: true
+  use_modernbert: false
+  model_id: "models/lora_jailbreak_classifier_bert-base-uncased_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/lora_jailbreak_classifier_bert-base-uncased_model/jailbreak_type_mapping.json"
+
+# vLLM Endpoints Configuration - supports multiple endpoints, each can serve multiple models
+vllm_endpoints:
+  - name: "qwen-endpoint"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+    health_check_path: "/health"
+  - name: "tinyllama-endpoint"
+    address: "127.0.0.1"
+    port: 8001
+    weight: 1
+    health_check_path: "/health"
+
+model_config:
+  "Model-A":
+    use_reasoning: false
+    reasoning_family: "qwen3"  # This model uses Qwen reasoning syntax
+    preferred_endpoints: ["qwen-endpoint"]
+  "Model-B":
+    use_reasoning: false
+    preferred_endpoints: ["tinyllama-endpoint"]
+
+# Classifier configuration for text classification
+# Using LoRA intent classifier (preferred modern approach with lora_config.json)
+classifier:
+  category_model:
+    model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+    use_modernbert: false  # BERT-based LoRA model
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
+  pii_model:
+    model_id: "models/lora_pii_detector_bert-base-uncased_model"
+    use_modernbert: false  # BERT-based LoRA model (this field is ignored - always auto-detects)
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/lora_pii_detector_bert-base-uncased_model/pii_type_mapping.json"
+categories:
+  - name: business
+    description: "Business and management related queries"
+    mmlu_categories: ["business"]
+  - name: law
+    description: "Legal questions and law-related topics"
+    mmlu_categories: ["law"]
+  - name: psychology
+    description: "Psychology and mental health topics"
+    mmlu_categories: ["psychology"]
+  - name: biology
+    description: "Biology and life sciences questions"
+    mmlu_categories: ["biology"]
+  - name: chemistry
+    description: "Chemistry and chemical sciences questions"
+    mmlu_categories: ["chemistry"]
+  - name: history
+    description: "Historical questions and cultural topics"
+    mmlu_categories: ["history"]
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+  - name: health
+    description: "Health and medical information queries"
+    mmlu_categories: ["health"]
+  - name: economics
+    description: "Economics and financial topics"
+    mmlu_categories: ["economics"]
+  - name: math
+    description: "Mathematics and quantitative reasoning"
+    mmlu_categories: ["math"]
+  - name: physics
+    description: "Physics and physical sciences"
+    mmlu_categories: ["physics"]
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
+  - name: philosophy
+    description: "Philosophy and ethical questions"
+    mmlu_categories: ["philosophy"]
+  - name: engineering
+    description: "Engineering and technical problem-solving"
+    mmlu_categories: ["engineering"]
+
+strategy: "priority"
+
+decisions:
+  - name: "business_decision"
+    description: "Business and management related queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "law_decision"
+    description: "Legal questions and law-related topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "psychology_decision"
+    description: "Psychology and mental health topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "biology_decision"
+    description: "Biology and life sciences questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "chemistry_decision"
+    description: "Chemistry and chemical sciences questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: true
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "history_decision"
+    description: "Historical questions and cultural topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "health_decision"
+    description: "Health and medical information queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "economics_decision"
+    description: "Economics and financial topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: true
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "physics_decision"
+    description: "Physics and physical sciences"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: true
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "computer_science_decision"
+    description: "Computer science and programming"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "philosophy_decision"
+    description: "Philosophy and ethical questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: "Model-A"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS"]
+
+  - name: "engineering_decision"
+    description: "Engineering and technical problem-solving"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous topics"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER", "US_SSN", "CREDIT_CARD"]
+
+  # Default catch-all decision for unmatched requests (E2E PII test fix)
+  # This ensures PII detection is always enabled, even when no specific decision matches
+  - name: "default_decision"
+    description: "Default catch-all decision - blocks all PII for safety"
+    priority: 1  # Lowest priority - only matches if nothing else does
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "always"  # Always matches as fallback
+    modelRefs:
+      - model: "Model-B"
+        use_reasoning: false
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []  # Block ALL PII - empty list means nothing allowed
+
+default_model: "Model-A"
+
+# API Configuration
+api:
+  batch_classification:
+    # Metrics configuration for monitoring batch classification performance
+    metrics:
+      enabled: true              # Enable comprehensive metrics collection
+      detailed_goroutine_tracking: true  # Track individual goroutine lifecycle
+      high_resolution_timing: false      # Use nanosecond precision timing
+      sample_rate: 1.0                   # Collect metrics for all requests (1.0 = 100%, 0.5 = 50%)
+      # Histogram buckets for metrics (directly configure what you need)
+      duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+      size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+# Reasoning family configurations - define how different model families handle reasoning syntax
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+# Global default reasoning effort level
+default_reasoning_effort: medium  # Default reasoning effort level (low, medium, high)

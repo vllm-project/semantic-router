@@ -54,7 +54,7 @@ repos:
     hooks:
       - id: yaml-and-yml-fmt
         name: yaml/yml fmt
-        entry: bash -c "make markdown-lint"
+        entry: bash -c "make yaml-lint"
         language: system
         files: \.(yaml|yml)$
         exclude: ^(\node_modules/)

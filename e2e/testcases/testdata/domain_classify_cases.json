@@ -1,0 +1,226 @@
+[
+  {
+    "category": "biology",
+    "question": "Flower length varies between two strains of a certain plant. This is due to a specific number ofpolygenes. Using the data given below, find approximately how many genes are in the series. Group Mean (X) Variance (s^2) Cause of variation Strain A 21 mm 1.43 mm^2 Environment Strain B 39 1.16 Environment F_1 (A \u00d7 B) 30 1.80 Environment F_2 (F_1 \u00d7 F_1) 30 5.10 Genes, environment"
+  },
+  {
+    "category": "biology",
+    "question": "In chloroplasts, a certain protein is found in the lumen of the thylakoid (thylakoid space). It is transcribed in the nucleus and synthesized on cytoplasmic ribosomes. How many membrane bilayers must this protein cross to reach its final location?"
+  },
+  {
+    "category": "biology",
+    "question": "Distinguish between covalent and ionic bonds."
+  },
+  {
+    "category": "biology",
+    "question": "Why isn't a biome map of the earth a true representationof thevegetation formations found on land?"
+  },
+  {
+    "category": "business",
+    "question": " There are three main types of buying situations in an organization, referred to by Robinson, Faris, and Wind (1967) as _____________."
+  },
+  {
+    "category": "business",
+    "question": "Mr. Fields owns a house worth $30,000. He insures it with a $20,000 fire insurance policy that contains an 80% coinsurance clause. As a result of fire, the house is damaged to the extent of $10,800. How much will the insurance company pay on the loss?"
+  },
+  {
+    "category": "business",
+    "question": "On July 7, Magee Data stock sold at a high of 23(1/8) and a low of 22(5/8). Giant Industrials sold for a high of 24(1/4) and a low of 23(1/2). Mr. Taylor purchased 300 shares of Magee Data at the high of the day and 400 shares of Giant Industrials at the low of the day. What was the cost of his purchase?"
+  },
+  {
+    "category": "business",
+    "question": "From this information compute: a) The current ratio. b) The quick asset ratio. c) The net working capital. 1. Current Assets: Current Liabilities Cash $22,150 Accounts Payable $28,500 Marketable Securities 16,000 Notes Payable 20,000 Other Bills Payable 10,000 Accounts Receivable 30,450 Inventories 25,000 Total $93,600 Total $58,500"
+  },
+  {
+    "category": "chemistry",
+    "question": "Another application of the relationship given in Problem $1-48$ has to do with the excitedstate energies and lifetimes of atoms and molecules. If we know that the lifetime of an excited state is $10^{-9} \\mathrm{~s}$, then what is the uncertainty in the energy of this state?\n"
+  },
+  {
+    "category": "chemistry",
+    "question": "To measure the wavelength of lines in atomic emission and absorption spectra, one uses a spectroscope. Two lines in the yellow emission spectra of hot Na metal, the so-called sodium-D lines, are used to calibrate this instrument. If the wavelength of one of these lines is 5890 \\AA, find the energy of the electronic transition associated with this line, h = 6.62 \u00d7 10^-27 erg-sec."
+  },
+  {
+    "category": "chemistry",
+    "question": "A solution contains 1 mg per ml of myosin and 10^14 latex particles per ml. When a given volume of this solution is dried on a grid and viewed under the electron microscope, a typical field contains 122 protein molecules and 10 latex particles. Calculate the molecular weight of myosin."
+  },
+  {
+    "category": "chemistry",
+    "question": "The barometric formula relates the pressure of a gas of molar mass $M$ at an altitude $h$ to its pressure $p_0$ at sea level. Derive this relation by showing that the change in pressure $\\mathrm{d} p$ for an infinitesimal change in altitude $\\mathrm{d} h$ where the density is $\\rho$ is $\\mathrm{d} p=-\\rho g \\mathrm{~d} h$. Remember that $\\rho$ depends on the pressure. Evaluate the pressure difference between the top and bottom of a laboratory vessel of height 15 cm."
+  },
+  {
+    "category": "computer science",
+    "question": "Consider the following equations concerning a stack module that has the operations Push, Pop, Top, and IsEmpty. Which of the equations does NOT represent the conventional semantics of a stack?"
+  },
+  {
+    "category": "computer science",
+    "question": "Let a undirected graph G with edges E = {<0,1>,<4,1>,<2,0>,<2,1>,<2,3>,<1,3>}, which <A,B> represent Node A is connected to Node B. What is the minimum vertex cover of G? Represent the vertex cover in a list of ascending order."
+  },
+  {
+    "category": "computer science",
+    "question": "What would you do in PCA to get the same projection as SVD?"
+  },
+  {
+    "category": "computer science",
+    "question": "Which Nmap scan is does not completely open a TCP connection?"
+  },
+  {
+    "category": "economics",
+    "question": "What is meant by income elasticity of demand?"
+  },
+  {
+    "category": "economics",
+    "question": "Suppose the balance sheet of an American bank looks, in its simplifiedform as follows (in 1000 dollars): Assets Liabilities and Capital cash $2,000 Demand deposits $12,000 Time & savings deposits 1,200 Balances in British bank 1,000 Deposits of states 600 U.S. Secur-ities 1,500 Common stock 200 Obligations 3,000 Surplus 1,000 Loans 9,000 Undivided profits 1,500 $ 16,500 $ 16,500 An Americanimporterwho is a depositor at this bank, buys $700 worth of British pounds to pay for his imports from Great Britain. British exporter deposits $2000 worth of British poundsin the bank in exchange for dollars. The State of New York sells an obligation of $1,000 to the bank and withdraws$700 in the form of cash. How is the balance statement of this bank changed? How muchare the excess reserves in the original and in the new situationif the legal reserve requirement is 24%?"
+  },
+  {
+    "category": "economics",
+    "question": "Which of the following statements are true concerning a comparison between ARCH(q) and GARCH(1,1) models?\n\ni) The ARCH(q) model is likely to be the more parsimonious\n\n\nii) The ARCH(q) model is the more likely to violate non-negativity constraints\n\n\niii) The ARCH(q) model can allow for an infinite number of previous lags of squared\n\nreturns to affect the current conditional variance\n\n\niv) The GARCH(1,1) model will usually be sufficient to capture all of the dependence\n\nin the conditional variance"
+  },
+  {
+    "category": "economics",
+    "question": "What is meant by psychic income?"
+  },
+  {
+    "category": "engineering",
+    "question": "A signal source operating at 50MHz has an output impedance of 20 ohms. It is to supply power through a coaxial line to a load impedance of 150 + j40 ohms. Is it possible to design a quarter-wave transformer to match the source to the load?"
+  },
+  {
+    "category": "engineering",
+    "question": "Find theeigenvaluesof matrices (a)\\vert31\\vert \\vert13\\vert (b)\\vert221\\vert \\vert131\\vert \\vert122\\vert (c)\\vert2- 10\\vert \\vert946\\vert \\vert- 80- 3\\vert"
+  },
+  {
+    "category": "engineering",
+    "question": "Air is introduced through a nozzle into a tank of water to form astream of bubbles. If the bubbles are intended to have a diameterof 2 mm, calculate by how much the pressure of theair at the nozzle must exceed that of the surrounding water. Assume that \\sigma = 72.7 \u00d7 10^-3 N m^-1."
+  },
+  {
+    "category": "engineering",
+    "question": "A linear time-invariant resistor of 4\\Omega has a current through it given byi(t) = sin\\pit. If E(0) = 0, find the energy dissipated in the resistor at t = 1, 2, 3, 4, 5, 6 sec."
+  },
+  {
+    "category": "health",
+    "question": "Which of these factors increases the risk for lung cancer?\n"
+  },
+  {
+    "category": "health",
+    "question": "A 27-year-old woman comes to the physician because of a 3-year history of chronic diarrhea and intermittent, crampy, lower abdominal pain. The pain is usually relieved with defecation and does not occur at night or interfere with sleep. She says she is frustrated by her symptoms and has stopped traveling because of her frequent, urgent need to use the bathroom. She has no history of serious illness and takes no medications. Her temperature is 37\u00b0C (98.6\u00b0F), pulse is 70/min, respirations are 14/min, and blood pressure is 120/80 mm Hg. The lower abdomen is mildly tender to palpation; there is no rebound tenderness or guarding. The remainder of the examination shows no abnormalities. Results of laboratory studies are within the reference ranges. Test of the stool for occult blood is negative. Antigliadin antibodies are not present. Which of the following is the most appropriate pharmacotherapy?"
+  },
+  {
+    "category": "health",
+    "question": "Examination of a patient indicates that they have a medially directed strabismus (squint). This could be due to damage to the"
+  },
+  {
+    "category": "health",
+    "question": "A male neonate, who was born at 36 weeks' gestation 2 hours ago in the labor and delivery unit of the hospital, now shows signs of respiratory difficulty. The mother, an 18-year-old primigravid woman, smoked one pack of cigarettes daily throughout her pregnancy. She received prenatal care during most of the pregnancy. One episode of chlamydial cervicitis was detected during the last trimester and treated with azithromycin. The neonate was born via cesarean delivery due to fetal heart rate decelerations. The amniotic fluid was stained with light particulate meconium. Apgar scores were 9 and 9 at 1 and 5 minutes, respectively. The patient is 50 cm (20 in; 50th percentile) long and weighs 3005 g (6 lb 10 oz; 50th percentile); head circumference is 35 cm (14 in; 50th percentile). The infant's vital signs now are temperature 36.6\u00b0C (97.8\u00b0F), pulse 150/min, and respirations 70/min. Pulse oximetry on room air shows an oxygen saturation of 95%. Physical examination discloses mild subcostal and intercostal retractions. Chest x-ray shows prominent pulmonary vascular markings and fluid in the intralobar fissures. Which of the following is the most likely diagnosis?"
+  },
+  {
+    "category": "history",
+    "question": "This question refers to the following information.\n\"His Majesty the Emperor of China agrees, that British subjects, with their families and establishments, shall be allowed to reside, for the purposes of carrying on their mercantile pursuits, without molestation or restraint, at the cities and towns of Canton, Amoy, Foochowfoo, Ningpo, and Shanghai; and Her Majesty the Queen of Great Britain, &c., will appoint Superintendents, or Consular officers, to reside at each of the above-named cities or towns, to be the medium of communication between the Chinese authorities and the said merchants, and to see that the just duties and other dues of the Chinese Government, as hereafter provided for, are duly discharged by Her Britannic Majesty's subjects.\"\nTreaty of Nanjing, 1839\nThe concessions offered in this treaty most directly created British"
+  },
+  {
+    "category": "history",
+    "question": "This question refers to the following information.\n\"I was once a tool of oppression\nAnd as green as a sucker could be\nAnd monopolies banded together\nTo beat a poor hayseed like me.\n\"The railroads and old party bosses\nTogether did sweetly agree;\nAnd they thought there would be little trouble\nIn working a hayseed like me. . . .\"\n\u2014\"The Hayseed\"\nWhich of the following is an accomplishment of the political movement that was organized around sentiments similar to the one in the song lyrics above?"
+  },
+  {
+    "category": "history",
+    "question": "This question refers to the following information.\n\"Indeed, as both the fatwas of distinguished [scholars] who base their opinion on reason and tradition alike and the consensus of the Sunni community agree that the ancient obligation of extirpation, extermination, and expulsion of evil innovation must be the aim of our exalted aspiration, for \"Religious zeal is a victory for the Faith of God the Beneficent\"; then, in accordance with the words of the Prophet (Peace upon him!) \"Whosoever introduces evil innovation into our order must be expelled\" and \"Whosoever does aught against our order must be expelled,\" action has become necessary and exigent\u2026\"\nLetter from Ottoman Sultan Selim I to Safavid Shah Ismail I, 1514\nThe Safavids drew the ire of Islamic empires such as the Ottoman and the Mughal Empires primarily because the Safavids"
+  },
+  {
+    "category": "history",
+    "question": "Which of the following is the last to be occupied by human beings?"
+  },
+  {
+    "category": "law",
+    "question": "Do treaties bind third States, ie non-State parties?"
+  },
+  {
+    "category": "law",
+    "question": "In 1996, a developer purchased a 100-acre tract located in a northern county in a state. Shortly thereafter, the developer prepared a subdivision plan that created 100 one-acre residential building lots on this tract. In 1997, the subdivision plan was recorded with the county recorder's office. During the next few years, the developer sold 60 residential lots to individual purchasers. Each deed specified that every lot designated on the subdivision plan was to be recorded in the county recorder's office. Each deed also provided the following:\"No house trailer or mobile home shall be built or maintained on any lot within the subdivision. \"In 2003, the developer conveyed the remaining 40 lots to a builder by deed that included language identical to that contained in the first 60 deeds. This deed from the developer to the builder was recorded. By 2008, the builder had sold all of the 40 lots. Each of these deeds identified each lot as being a part of the subdivision, but did not include the clause relating to mobile homes. On January 30, 2009, a buyer, who had purchased one of the residential lots from the builder, placed a mobile home on his property. Which of the following statements is LEAST accurate with respect to the buyer's deed?"
+  },
+  {
+    "category": "law",
+    "question": "A company offered to sell several loads of landscaping stones at a specified price and itemized terms. The offeree sent a notification to the offeror stating, \"We have received your offer to sell landscaping stone per specified terms this date.\" The offeror shipped the goods upon receiving that notification. On the date of shipment, the offeree posted an acceptance form with slight modifications to the terms. After the goods arrived, the offeree called the offeror's manager and told him that the company was unable to accept the offer at this time, he was shipping the goods back, and to \"ignore any paperwork we sent.\" The offeror sued the offeree for breach of contract. Who will prevail?"
+  },
+  {
+    "category": "law",
+    "question": "Generally, erotic materials are protected by the First Amendment for a person's personal use and possession. However, certain erotic material can reach a point where it steps over the boundaries of First Amendment protection. The Supreme Court has held that if material is obscene it does not mandate First Amendment protection. Which of the following most accurately represents one of the prongs of the three-pronged test enunciated by the U.S. Supreme Court's for determining whether a film, book, video or pictorial is obscene and therefore not subject to protection?"
+  },
+  {
+    "category": "math",
+    "question": "Use the Runge-Kutta method with $h=0.1$ to find approximate values for the solution of the initial value problem $y' + 2y = x^3e^{-2x}$ with y(0)=1 at $x=0.2$."
+  },
+  {
+    "category": "math",
+    "question": "Random variable X is normally distributed, with a mean of 25 and a standard deviation of 4. Which of the following is the approximate interquartile range for this distribution?"
+  },
+  {
+    "category": "math",
+    "question": "In triangle RST, X is located on the side RS, Y is located on the side RT, Z is located on the side ST, and XY and XZ are midsegments of \u25b3RST. If the length of side XY is 7, the length of side RT is 13, and the measure of angle YXZ is 124\u00b0, what is the length of side XZ?"
+  },
+  {
+    "category": "math",
+    "question": "Eleven pencils cost as much as three pens. If seven pens cost $\\$ 9.24$, what is the cost, in cents, of one pencil?"
+  },
+  {
+    "category": "other",
+    "question": "Greene is the sole shareholder of Seagull, a calendar-year S corporation. Greene's basis at the beginning of the year is $15,000. Seagull reported an ordinary loss of $5,000 and $2,000 of municipal bond interest for the year. Seagull distributed cash of $6,000 to Greene on November 1. What is Greene's basis in Seagull at the end of the year?"
+  },
+  {
+    "category": "other",
+    "question": "Which of the following statements about audit sampling risks is correct for a nonissuer?"
+  },
+  {
+    "category": "other",
+    "question": "The covariance between Stock A and the market index is 88, while their standard deviations are respectively 19% and 14%. What is the beta of Stock A?"
+  },
+  {
+    "category": "other",
+    "question": "Which of the following has provided the most information about the structure of Earth's core, mantle, and lower crust?"
+  },
+  {
+    "category": "philosophy",
+    "question": "Which of the following is another name for the fallacy of amphiboly?"
+  },
+  {
+    "category": "philosophy",
+    "question": " Which of the following propositions is an immediate (one-step) consequence in PL of the given premises?\n(N \u2283 ~O) \u2283 (O \u2228 Q)\nP \u2283 (N \u2283 ~O)\nN \u2283 P"
+  },
+  {
+    "category": "philosophy",
+    "question": "What was Clarence Darrow's belief about life's meaning?"
+  },
+  {
+    "category": "philosophy",
+    "question": "\" _Ad lazarum_ \" is a specific kind of"
+  },
+  {
+    "category": "physics",
+    "question": "The collisional cross section of $\\mathrm{N}_2$ is $0.43 \\mathrm{~nm}^2$. What is the diffusion coefficient of $\\mathrm{N}_2$ at a pressure of $1 \\mathrm{~atm}$ and a temperature of $298 \\mathrm{~K}$ ?"
+  },
+  {
+    "category": "physics",
+    "question": "What is the power factor of a circuit if the following meter readings prevail? Ammeter reads .15 amperes, volt-meter reads 115 volts, and wattmeter reads 15.9 watts."
+  },
+  {
+    "category": "physics",
+    "question": "An astronaut is to be put into a circular orbit a distance of 1.6 \u00d7 10^5 m (about 100 miles) above the surface of the earth. The earth has a radius of 6.37 \u00d7 106m. and mass of 5.98 \u00d7 10^24 kg. What is the orbital speed?"
+  },
+  {
+    "category": "physics",
+    "question": "An atom emits a photon of green light \\lambda = 5200 \\AA in \\tau = 2 \u00d7 10^-10 sec, Estimate the spread of wavelengths in the photon."
+  },
+  {
+    "category": "psychology",
+    "question": "How is aversion therapy used in treating a patient with a particularfetish ?"
+  },
+  {
+    "category": "psychology",
+    "question": "Providing education and job training to adolescents and young adults who have recently been released from a drug treatment program is an example of:"
+  },
+  {
+    "category": "psychology",
+    "question": "A female psychologist provides a 2-month course of brief behavior therapy for a driving phobia to a male client. Six months after termination they meet at an art opening reception and begin to date. Over the next few months, the relationship progresses and they become sexual. In this situation, the psychologist has acted:"
+  },
+  {
+    "category": "psychology",
+    "question": "Which of the following explanations of why a 17-year-old drives his car at or below the speed limit best illustrates Kohlberg's conventional level of morality?"
+  }
+]

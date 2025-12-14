@@ -1,6 +1,6 @@
 # OpenShift Deployment for Semantic Router
 
-This directory contains OpenShift-specific deployment manifests for the vLLM Semantic Router.
+This directory contains OpenShift-specific deployment manifests for the vLLM Semantic Router with **dynamic IP configuration** for cross-cluster portability.
 
 ## Quick Deployment
 
@@ -9,51 +9,138 @@ This directory contains OpenShift-specific deployment manifests for the vLLM Sem
 - OpenShift cluster access
 - `oc` CLI tool configured and logged in
 - Cluster admin privileges (or permissions to create namespaces and routes)
+- Local source code (for dashboard build)
 
-### One-Command Deployment
+### One-Click Full Deployment (Recommended)
+
+Deploy the complete stack including semantic-router, vLLM models, and all observability components:
 
 ```bash
-oc apply -k deploy/openshift/
+cd deploy/openshift
+./deploy-to-openshift.sh
 ```
 
-### Step-by-Step Deployment
+This script will deploy:
+
+**Core Components:**
+
+- ✅ Build the llm-katan image from Dockerfile
+- ✅ Create namespace and PVCs
+- ✅ Deploy vLLM model services (Model-A and Model-B)
+- ✅ Auto-discover Kubernetes service ClusterIPs
+- ✅ Generate configuration with actual IPs (portable across clusters)
+- ✅ Deploy semantic-router with Envoy proxy sidecar
+- ✅ Create OpenShift routes for external access
+
+**Observability Stack:**
+
+- ✅ Dashboard (built from local source with PlaygroundPage fix)
+- ✅ OpenWebUI playground for testing models
+- ✅ Grafana for metrics visualization
+- ✅ Prometheus for metrics collection
+
+### Minimal Deployment (Core Only)
+
+If you only want the core semantic-router and vLLM models without observability:
+
+```bash
+cd deploy/openshift
+./deploy-to-openshift.sh --no-observability
+```
+
+This deploys only the core components without Dashboard, OpenWebUI, Grafana, and Prometheus.
+
+### Command Line Options
+
+| Flag | Description |
+|------|-------------|
+| `--no-observability` | Skip deploying Dashboard, OpenWebUI, Grafana, and Prometheus |
+| `--help`, `-h` | Show help message |
+
+### Manual Deployment (Advanced)
+
+If you prefer manual deployment or need to customize:
 
 1. **Create namespace:**
 
    ```bash
-   oc apply -f deploy/openshift/namespace.yaml
+   oc create namespace vllm-semantic-router-system
    ```
 
-2. **Deploy core resources:**
+2. **Build llm-katan image:**
 
    ```bash
-   oc apply -f deploy/openshift/pvc.yaml
-   oc apply -f deploy/openshift/deployment.yaml
-   oc apply -f deploy/openshift/service.yaml
+   oc new-build --dockerfile - --name llm-katan -n vllm-semantic-router-system < Dockerfile.llm-katan
    ```
 
-3. **Create external routes:**
+3. **Deploy resources:**
 
    ```bash
-   oc apply -f deploy/openshift/routes.yaml
+   oc apply -f deployment.yaml -n vllm-semantic-router-system
    ```
+
+4. **Note:** You'll need to manually configure ClusterIPs in `config-openshift.yaml`
+
+## How Dashboard Build Works
+
+The deployment script uses OpenShift's **binary build** approach for the dashboard:
+
+1. Creates a BuildConfig with Docker strategy
+2. Uploads the local `dashboard/` directory as build source
+3. Builds the image inside OpenShift (no local Docker required)
+4. Pushes to OpenShift internal registry
+5. Deploys using the built image
+
+### Why Binary Build?
+
+- ✅ No local Docker daemon required
+- ✅ Works on any machine with `oc` CLI
+- ✅ Builds with your local code changes (including PlaygroundPage fix)
+- ✅ Automatically integrated with OpenShift registry
+- ✅ Works across different OpenShift clusters
+
+### Updating Dashboard
+
+If you make changes to the dashboard code, rebuild and redeploy:
+
+```bash
+# Rebuild dashboard image from local source
+cd dashboard
+oc start-build dashboard-custom --from-dir=. --follow -n vllm-semantic-router-system
+
+# Restart deployment to use new image
+oc rollout restart deployment/dashboard -n vllm-semantic-router-system
+```
 
 ## Accessing Services
 
-After deployment, the services will be accessible via OpenShift Routes:
+After deployment, the script will display URLs for all services. Routes are automatically generated with cluster-appropriate hostnames.
 
 ### Get Route URLs
 
 ```bash
-# Classification API (HTTP REST)
+# Core Services
 oc get route semantic-router-api -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
-
-# gRPC API
 oc get route semantic-router-grpc -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
-
-# Metrics
 oc get route semantic-router-metrics -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
+
+# Observability (if deployed)
+oc get route dashboard -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
+oc get route openwebui -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
+oc get route grafana -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
+oc get route prometheus -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
 ```
+
+### Dashboard Playground
+
+Access the OpenWebUI playground through the dashboard:
+
+```bash
+DASHBOARD_URL=$(oc get route dashboard -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
+echo "Playground: https://$DASHBOARD_URL/playground"
+```
+
+The playground automatically detects the OpenWebUI URL by replacing `dashboard` with `openwebui` in the hostname - no configuration needed!
 
 ### Example Usage
 
@@ -118,20 +205,82 @@ curl https://$METRICS_ROUTE/metrics
 
 ## Cleanup
 
-Remove all resources:
+### Quick Cleanup
+
+Remove the entire namespace and all resources (recommended):
 
 ```bash
-oc delete -k deploy/openshift/
+cd deploy/openshift
+./cleanup-openshift.sh
 ```
 
-Or remove individual components:
+If not already logged in to OpenShift:
 
 ```bash
-oc delete -f deploy/openshift/routes.yaml
-oc delete -f deploy/openshift/service.yaml
-oc delete -f deploy/openshift/deployment.yaml
-oc delete -f deploy/openshift/pvc.yaml
-oc delete -f deploy/openshift/namespace.yaml
+oc login <your-cluster-url>
+./cleanup-openshift.sh
+```
+
+### Cleanup Options
+
+The cleanup script supports different cleanup levels:
+
+| Level | What Gets Deleted | What's Preserved |
+|-------|------------------|------------------|
+| `deployment` | Deployments, services, routes, configmaps, buildconfigs | Namespace, PVCs |
+| `namespace` (default) | Entire namespace and all resources | Nothing |
+| `all` | Namespace + cluster-wide resources | Nothing |
+
+**Examples:**
+
+```bash
+# Remove everything (default)
+./cleanup-openshift.sh
+
+# Keep namespace and PVCs, remove only deployments
+./cleanup-openshift.sh --level deployment
+
+# Dry run to see what would be deleted
+./cleanup-openshift.sh --dry-run
+
+# Force cleanup without confirmation
+./cleanup-openshift.sh --force
+```
+
+### What Gets Cleaned Up
+
+The cleanup script removes:
+
+**Core Components:**
+
+- semantic-router deployment
+- vLLM model deployments (Model-A, Model-B)
+- All services and routes
+- ConfigMaps (router config, envoy config)
+- BuildConfigs and ImageStreams (llm-katan, dashboard-custom)
+
+**Observability Stack:**
+
+- Dashboard deployment
+- OpenWebUI deployment
+- Grafana deployment
+- Prometheus deployment
+- All related services, routes, and configmaps
+
+**Storage (namespace level only):**
+
+- PVCs for models and cache
+
+### Manual Cleanup
+
+If you prefer manual cleanup:
+
+```bash
+# Delete entire namespace (removes everything)
+oc delete namespace vllm-semantic-router-system
+
+# Or delete specific components
+oc delete deployment,service,route,configmap,buildconfig,imagestream --all -n vllm-semantic-router-system
 ```
 
 ## Troubleshooting

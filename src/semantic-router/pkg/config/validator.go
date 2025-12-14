@@ -1,0 +1,191 @@
+package config
+
+import (
+	"fmt"
+	"net"
+	"regexp"
+	"strings"
+)
+
+var (
+	// Pre-compiled regular expressions for better performance
+	protocolRegex = regexp.MustCompile(`^https?://`)
+	pathRegex     = regexp.MustCompile(`/`)
+	// Pattern to match IPv4 address followed by port number
+	ipv4PortRegex = regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$`)
+	// Pattern to match IPv6 address followed by port number [::1]:8080
+	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
+)
+
+// validateIPAddress validates IP address format
+// Supports IPv4 and IPv6 addresses, rejects domain names, protocol prefixes, paths, etc.
+func validateIPAddress(address string) error {
+	// Check for empty string
+	trimmed := strings.TrimSpace(address)
+	if trimmed == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+
+	// Check for protocol prefixes (http://, https://)
+	if protocolRegex.MatchString(trimmed) {
+		return fmt.Errorf("protocol prefixes (http://, https://) are not supported, got: %s", address)
+	}
+
+	// Check for paths (contains / character)
+	if pathRegex.MatchString(trimmed) {
+		return fmt.Errorf("paths are not supported, got: %s", address)
+	}
+
+	// Check for port numbers (IPv4 address followed by port or IPv6 address followed by port)
+	if ipv4PortRegex.MatchString(trimmed) || ipv6PortRegex.MatchString(trimmed) {
+		return fmt.Errorf("port numbers in address are not supported, use 'port' field instead, got: %s", address)
+	}
+
+	// Use Go standard library to validate IP address format
+	ip := net.ParseIP(trimmed)
+	if ip == nil {
+		return fmt.Errorf("invalid IP address format, got: %s", address)
+	}
+
+	return nil
+}
+
+// validateVLLMEndpoints validates the address format of all vLLM endpoints
+func validateVLLMEndpoints(endpoints []VLLMEndpoint) error {
+	for _, endpoint := range endpoints {
+		if err := validateIPAddress(endpoint.Address); err != nil {
+			return fmt.Errorf("vLLM endpoint '%s' address validation failed: %w\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n\nUnsupported formats:\n- Domain names: example.com, localhost\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err)
+		}
+	}
+	return nil
+}
+
+// validateClassifierVLLMEndpoint validates a classifier vLLM endpoint configuration
+func validateClassifierVLLMEndpoint(endpoint ClassifierVLLMEndpoint) error {
+	if endpoint.Address == "" {
+		return fmt.Errorf("classifier_vllm_endpoint.address is required")
+	}
+	if err := validateIPAddress(endpoint.Address); err != nil {
+		return fmt.Errorf("classifier_vllm_endpoint address validation failed: %w", err)
+	}
+	if endpoint.Port < 1 || endpoint.Port > 65535 {
+		return fmt.Errorf("classifier_vllm_endpoint.port must be between 1 and 65535, got: %d", endpoint.Port)
+	}
+	return nil
+}
+
+// validateVLLMClassifierConfig validates vLLM classifier configuration when use_vllm is true
+func validateVLLMClassifierConfig(cfg *PromptGuardConfig) error {
+	if !cfg.UseVLLM {
+		return nil // Skip validation if not using vLLM
+	}
+
+	// Validate endpoint
+	if err := validateClassifierVLLMEndpoint(cfg.ClassifierVLLMEndpoint); err != nil {
+		return fmt.Errorf("prompt_guard vLLM configuration validation failed: %w", err)
+	}
+
+	// Validate model name
+	if cfg.VLLMModelName == "" {
+		return fmt.Errorf("prompt_guard.vllm_model_name is required when use_vllm is true")
+	}
+
+	return nil
+}
+
+// isValidIPv4 checks if the address is a valid IPv4 address
+func isValidIPv4(address string) bool {
+	ip := net.ParseIP(address)
+	return ip != nil && ip.To4() != nil
+}
+
+// isValidIPv6 checks if the address is a valid IPv6 address
+func isValidIPv6(address string) bool {
+	ip := net.ParseIP(address)
+	return ip != nil && ip.To4() == nil
+}
+
+// getIPAddressType returns the IP address type information for error messages and debugging
+func getIPAddressType(address string) string {
+	if isValidIPv4(address) {
+		return "IPv4"
+	}
+	if isValidIPv6(address) {
+		return "IPv6"
+	}
+	return "invalid"
+}
+
+// validateConfigStructure performs additional validation on the parsed config
+func validateConfigStructure(cfg *RouterConfig) error {
+	// In Kubernetes mode, decisions and model_config will be loaded from CRDs
+	// Skip validation for these fields during initial config parse
+	if cfg.ConfigSource == ConfigSourceKubernetes {
+		// Skip validation for decisions and model_config
+		return nil
+	}
+
+	// File mode: validate decisions have at least one model ref
+	for _, decision := range cfg.Decisions {
+		if len(decision.ModelRefs) == 0 {
+			return fmt.Errorf("decision '%s' has no modelRefs defined - each decision must have at least one model", decision.Name)
+		}
+
+		// Validate each model ref has the required fields
+		for i, modelRef := range decision.ModelRefs {
+			if modelRef.Model == "" {
+				return fmt.Errorf("decision '%s', modelRefs[%d]: model name cannot be empty", decision.Name, i)
+			}
+			if modelRef.UseReasoning == nil {
+				return fmt.Errorf("decision '%s', model '%s': missing required field 'use_reasoning'", decision.Name, modelRef.Model)
+			}
+
+			// Validate LoRA name if specified
+			if modelRef.LoRAName != "" {
+				if err := validateLoRAName(cfg, modelRef.Model, modelRef.LoRAName); err != nil {
+					return fmt.Errorf("decision '%s', model '%s': %w", decision.Name, modelRef.Model, err)
+				}
+			}
+		}
+	}
+
+	// Validate vLLM endpoints address formats
+	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
+		return err
+	}
+
+	// Validate vLLM classifier configurations
+	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateLoRAName checks if the specified LoRA name is defined in the model's configuration
+func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) error {
+	// Check if the model exists in model_config
+	modelParams, exists := cfg.ModelConfig[modelName]
+	if !exists {
+		return fmt.Errorf("lora_name '%s' specified but model '%s' is not defined in model_config", loraName, modelName)
+	}
+
+	// Check if the model has any LoRAs defined
+	if len(modelParams.LoRAs) == 0 {
+		return fmt.Errorf("lora_name '%s' specified but model '%s' has no loras defined in model_config", loraName, modelName)
+	}
+
+	// Check if the specified LoRA name exists in the model's LoRA list
+	for _, lora := range modelParams.LoRAs {
+		if lora.Name == loraName {
+			return nil // Valid LoRA name found
+		}
+	}
+
+	// LoRA name not found, provide helpful error message
+	availableLoRAs := make([]string, len(modelParams.LoRAs))
+	for i, lora := range modelParams.LoRAs {
+		availableLoRAs[i] = lora.Name
+	}
+	return fmt.Errorf("lora_name '%s' is not defined in model '%s' loras. Available LoRAs: %v", loraName, modelName, availableLoRAs)
+}

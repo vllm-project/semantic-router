@@ -1,0 +1,64 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: keyword-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "llama-3.3-70b"
+  models:
+    - name: "llama-3.3-70b"
+      pricing:
+        inputTokenPrice: 0.0000006   # $0.6 per 1M - with semantic cache
+        outputTokenPrice: 0.0000012  # $1.2 per 1M
+      loras:
+        - name: "faq-cached"
+          description: "FAQ with semantic caching"
+
+    - name: "llama-3.1-405b"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M - for complex cached queries
+        outputTokenPrice: 0.000015   # $15 per 1M
+      loras:
+        - name: "expert-cached"
+          description: "Expert responses with caching"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: keyword-plugin-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "faq"
+        operator: "OR"
+        keywords: ["faq", "frequently asked", "common question"]
+        caseSensitive: false
+
+  decisions:
+    - name: "cached_faq"
+      description: "FAQ with semantic cache"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "faq"
+      modelRefs:
+        - model: "llama-3.3-70b"
+          use_reasoning: false
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.95
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "X-Cache-Strategy"
+                value: "aggressive"
+              - name: "X-Route-Type"
+                value: "keyword"
+

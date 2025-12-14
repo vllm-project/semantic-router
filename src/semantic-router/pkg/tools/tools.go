@@ -10,7 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // ToolEntry represents a tool stored in the tools database
@@ -76,7 +76,7 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 		// Generate embedding for the description
 		embedding, err := candle_binding.GetEmbedding(entry.Description, 512)
 		if err != nil {
-			observability.Warnf("Failed to generate embedding for tool %s: %v", entry.Tool.Function.Name, err)
+			logging.Warnf("Failed to generate embedding for tool %s: %v", entry.Tool.Function.Name, err)
 			continue
 		}
 
@@ -85,10 +85,10 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 
 		// Add to the database
 		db.entries = append(db.entries, entry)
-		observability.Infof("Loaded tool: %s - %s", entry.Tool.Function.Name, entry.Description)
+		logging.Infof("Loaded tool: %s - %s", entry.Tool.Function.Name, entry.Description)
 	}
 
-	observability.Infof("Loaded %d tools from file: %s", len(toolEntries), filePath)
+	logging.Infof("Loaded %d tools from file: %s", len(toolEntries), filePath)
 	return nil
 }
 
@@ -110,7 +110,7 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 	defer db.mu.Unlock()
 
 	db.entries = append(db.entries, entry)
-	observability.Infof("Added tool: %s (%s)", tool.Function.Name, description)
+	logging.Infof("Added tool: %s (%s)", tool.Function.Name, description)
 
 	return nil
 }
@@ -145,7 +145,7 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 		}
 
 		// Debug logging to see similarity scores
-		observability.Debugf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
+		logging.Debugf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
 			entry.Tool.Function.Name, dotProduct, db.similarityThreshold)
 
 		// Only consider if above threshold
@@ -172,11 +172,11 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 	selectedTools := make([]openai.ChatCompletionToolParam, 0, limit)
 	for i := range limit {
 		selectedTools = append(selectedTools, results[i].Entry.Tool)
-		observability.Infof("Selected tool: %s (similarity=%.4f)",
+		logging.Infof("Selected tool: %s (similarity=%.4f)",
 			results[i].Entry.Tool.Function.Name, results[i].Similarity)
 	}
 
-	observability.Infof("Found %d similar tools for query: %s", len(selectedTools), query)
+	logging.Infof("Found %d similar tools for query: %s", len(selectedTools), query)
 	return selectedTools, nil
 }
 

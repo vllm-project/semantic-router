@@ -19,6 +19,19 @@ const papers = [
   {
     id: 2,
     type: 'paper',
+    title: 'Category-Aware Semantic Caching for Heterogeneous LLM Workloads',
+    authors: 'Chen Wang, Xunzhuo Liu, Yue Zhu, Alaa Youssef, Priya Nagpurkar, Huamin Chen',
+    venue: '',
+    year: '2025',
+    abstract: 'We present a category-aware semantic caching where similarity thresholds, TTLs, and quotas vary by query category, with a hybrid architecture separating in-memory HNSW search from external document storage.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2510.26835', label: '📄 Paper' },
+    ],
+    featured: true,
+  },
+  {
+    id: 3,
+    type: 'paper',
     title: 'Semantic Inference Routing Protocol (SIRP)',
     authors: 'Huamin Chen, Luay Jalil',
     venue: 'Internet Engineering Task Force (IETF)',
@@ -30,7 +43,7 @@ const papers = [
     featured: true,
   },
   {
-    id: 3,
+    id: 4,
     type: 'paper',
     title: 'Multi-Provider Extensions for Agentic AI Inference APIs',
     authors: 'H. Chen, L. Jalil, N. Cocker',
@@ -69,7 +82,7 @@ const talks = [
     year: '2025',
     abstract: 'A deep dive into vLLM Semantic Router capabilities, demonstrating how intelligent routing can unlock new possibilities for efficient LLM inference.',
     links: [
-      { type: 'event', url: '', label: '🎤 Comming Soon' },
+      { type: 'event', url: 'https://drive.google.com/drive/folders/1nQJ8ZkLSjKxvu36sSHaceVXtttbLvvu-', label: '🎤 Watch Recording' },
     ],
     featured: true,
   },
@@ -127,19 +140,24 @@ function AwardCard({ item, index }) {
               </span>
             </div>
 
-            <div className={styles.awardVenue}>
-              <span className={styles.venueLabel}>Venue:</span>
-              <span className={styles.venueName}>{item.venue}</span>
-              <span className={styles.awardYear}>{item.year}</span>
-            </div>
+            {item.venue && (
+              <div className={styles.awardVenue}>
+                <span className={styles.venueLabel}>Venue:</span>
+                <span className={styles.venueName}>{item.venue}</span>
+              </div>
+            )}
           </div>
 
           <div className={styles.awardDescription}>
             {item.abstract}
           </div>
+        </div>
 
+        {/* Year and Actions Row */}
+        <div className={styles.yearAndActions}>
+          <span className={styles.awardYear}>{item.year}</span>
           {item.links && item.links.length > 0 && (
-            <div className={styles.awardActions}>
+            <>
               {item.links.map((link, linkIndex) => (
                 <a
                   key={linkIndex}
@@ -153,7 +171,7 @@ function AwardCard({ item, index }) {
                   {link.label}
                 </a>
               ))}
-            </div>
+            </>
           )}
         </div>
 

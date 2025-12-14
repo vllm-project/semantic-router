@@ -1502,7 +1502,7 @@ prompt_guard:
 
 - [Semantic Router Overview](https://vllm-semantic-router.com/docs/overview/semantic-router-overview/)
 - [System Architecture](https://vllm-semantic-router.com/docs/overview/architecture/system-architecture/)
-- [Kubernetes Deployment](https://vllm-semantic-router.com/docs/installation/kubernetes/)
+- [Kubernetes Deployment](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway)
 - [Distributed Tracing Support (PR #322)](https://github.com/vllm-project/semantic-router/pull/322)
 - [Milvus-based Semantic Caching](https://vllm-semantic-router.com/docs/features/semantic-caching/)
 

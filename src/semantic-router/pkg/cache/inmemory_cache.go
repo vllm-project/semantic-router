@@ -1,5 +1,4 @@
 //go:build !windows && cgo
-// +build !windows,cgo
 
 package cache
 
@@ -12,8 +11,8 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // HNSWNode represents a node in the HNSW graph
@@ -39,6 +38,7 @@ type HNSWIndex struct {
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
 	entries             []CacheEntry
+	entryMap            map[string]int // requestID -> index for O(1) lookup
 	mu                  sync.RWMutex
 	similarityThreshold float32
 	maxEntries          int
@@ -48,10 +48,19 @@ type InMemoryCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	evictionPolicy      EvictionPolicy
-	hnswIndex           *HNSWIndex
-	useHNSW             bool
-	hnswEfSearch        int    // Search-time ef parameter
-	embeddingModel      string // "bert", "qwen3", or "gemma"
+	evictionPolicyType  EvictionPolicyType // Track the policy type for optimized eviction
+
+	// O(1) eviction tracking
+	optimizedLRU   *LRUPolicy
+	optimizedLFU   *LFUPolicy
+	optimizedFIFO  *FIFOPolicy
+	expirationHeap *ExpirationHeap
+
+	hnswIndex        *HNSWIndex
+	useHNSW          bool
+	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
+	hnswEfSearch     int    // Search-time ef parameter
+	embeddingModel   string // "bert", "qwen3", or "gemma"
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -70,18 +79,8 @@ type InMemoryCacheOptions struct {
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
 func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
-	observability.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s, useHNSW=%t",
+	logging.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s, useHNSW=%t",
 		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold, options.EvictionPolicy, options.UseHNSW)
-
-	var evictionPolicy EvictionPolicy
-	switch options.EvictionPolicy {
-	case LRUEvictionPolicyType:
-		evictionPolicy = &LRUPolicy{}
-	case LFUEvictionPolicyType:
-		evictionPolicy = &LFUPolicy{}
-	default: // FIFOEvictionPolicyType
-		evictionPolicy = &FIFOPolicy{}
-	}
 
 	// Set HNSW search ef parameter
 	efSearch := options.HNSWEfSearch
@@ -95,18 +94,36 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
 	}
 
-	observability.Debugf("Semantic cache embedding model: %s", embeddingModel)
+	logging.Debugf("Semantic cache embedding model: %s", embeddingModel)
 
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
+		entryMap:            make(map[string]int),
 		similarityThreshold: options.SimilarityThreshold,
 		maxEntries:          options.MaxEntries,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		evictionPolicy:      evictionPolicy,
+		evictionPolicyType:  options.EvictionPolicy,
+		expirationHeap:      NewExpirationHeap(),
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
+	}
+
+	// Initialize O(1) eviction policy
+	switch options.EvictionPolicy {
+	case LRUEvictionPolicyType:
+		cache.optimizedLRU = NewLRUPolicy()
+		cache.evictionPolicy = cache.optimizedLRU
+		logging.Debugf("LRU policy initialized for O(1) eviction")
+	case LFUEvictionPolicyType:
+		cache.optimizedLFU = NewLFUPolicy()
+		cache.evictionPolicy = cache.optimizedLFU
+		logging.Debugf("LFU policy initialized for O(1) eviction")
+	default: // FIFO
+		cache.optimizedFIFO = NewFIFOPolicy()
+		cache.evictionPolicy = cache.optimizedFIFO
+		logging.Debugf("FIFO policy initialized for O(1) eviction")
 	}
 
 	// Initialize HNSW index if enabled
@@ -120,7 +137,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 			efConstruction = 200 // Default value
 		}
 		cache.hnswIndex = newHNSWIndex(M, efConstruction)
-		observability.Debugf("HNSW index initialized: M=%d, efConstruction=%d", M, efConstruction)
+		logging.Debugf("HNSW index initialized: M=%d, efConstruction=%d", M, efConstruction)
 	}
 
 	return cache
@@ -131,14 +148,29 @@ func (c *InMemoryCache) IsEnabled() bool {
 	return c.enabled
 }
 
+// CheckConnection verifies the cache connection is healthy
+// For in-memory cache, this is always healthy (no external connection)
+func (c *InMemoryCache) CheckConnection() error {
+	// In-memory cache has no external connection to check
+	return nil
+}
+
 // generateEmbedding generates an embedding using the configured model
 func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 	// Normalize to lowercase for case-insensitive comparison
 	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
 
 	switch modelName {
-	case "qwen3", "gemma":
-		// Use GetEmbeddingWithModelType for Qwen3 or Gemma
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with TRUE continuous batching
+		// Now properly fixed to avoid CUDA context issues!
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma (standard version)
 		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
 		if err != nil {
 			return nil, err
@@ -170,8 +202,8 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Remove expired entries to maintain cache hygiene
-	c.cleanupExpiredEntries()
+	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
+	c.cleanupExpiredEntriesDeferred()
 
 	// Check if eviction is needed before adding the new entry
 	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
@@ -193,13 +225,20 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 
 	c.entries = append(c.entries, entry)
 	entryIndex := len(c.entries) - 1
+	c.entryMap[requestID] = entryIndex
 
-	// Add to HNSW index if enabled
-	if c.useHNSW && c.hnswIndex != nil {
-		c.hnswIndex.addNode(entryIndex, embedding, c.entries)
+	// Register with optimized eviction policy for O(1) eviction
+	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
+
+	// Register with expiration heap for efficient TTL cleanup
+	if c.ttlSeconds > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, now.Add(time.Duration(c.ttlSeconds)*time.Second))
 	}
 
-	observability.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t)",
+	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
+	c.addEntryToHNSWIndex(entryIndex, embedding)
+
+	logging.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t)",
 		len(c.entries), len(embedding), c.useHNSW)
 
 	// Record metrics
@@ -230,7 +269,7 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 			c.entries[i].ResponseBody = responseBody
 			c.entries[i].Timestamp = time.Now()
 			c.entries[i].LastAccessAt = time.Now()
-			observability.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
+			logging.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
 				len(responseBody))
 
 			// Record successful completion
@@ -262,8 +301,8 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Clean up expired entries before adding new one
-	c.cleanupExpiredEntries()
+	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
+	c.cleanupExpiredEntriesDeferred()
 
 	// Check if eviction is needed before adding the new entry
 	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
@@ -285,15 +324,22 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 
 	c.entries = append(c.entries, entry)
 	entryIndex := len(c.entries) - 1
+	c.entryMap[requestID] = entryIndex
 
-	// Add to HNSW index if enabled
-	if c.useHNSW && c.hnswIndex != nil {
-		c.hnswIndex.addNode(entryIndex, embedding, c.entries)
+	// Register with optimized eviction policy for O(1) eviction
+	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
+
+	// Register with expiration heap for efficient TTL cleanup
+	if c.ttlSeconds > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, now.Add(time.Duration(c.ttlSeconds)*time.Second))
 	}
 
-	observability.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t)",
+	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
+	c.addEntryToHNSWIndex(entryIndex, embedding)
+
+	logging.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t)",
 		len(c.entries), len(requestBody), len(responseBody), c.useHNSW)
-	observability.LogEvent("cache_entry_added", map[string]interface{}{
+	logging.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend": "memory",
 		"query":   query,
 		"model":   model,
@@ -317,14 +363,14 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	start := time.Now()
 
 	if !c.enabled {
-		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
+		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: cache disabled")
 		return nil, false, nil
 	}
 	queryPreview := query
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
 		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding using the configured model
@@ -346,7 +392,20 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	now := time.Now()
 
 	// Use HNSW index for fast search if enabled
-	if c.useHNSW && c.hnswIndex != nil && len(c.hnswIndex.nodes) > 0 {
+	if c.useHNSW && c.hnswIndex != nil {
+		// Defensive check and rebuild HNSW index if marked as needing rebuild.
+		if c.hnswNeedsRebuild {
+			logging.Debugf("InMemoryCache.FindSimilar: HNSW index marked as needing rebuild, rebuilding now")
+			// Usually this is not reachable since we rebuild during insertions.
+			c.mu.RUnlock()
+			c.mu.Lock()
+			if c.hnswNeedsRebuild { // Double-check under write lock
+				c.rebuildHNSWIndex()
+			}
+			c.mu.Unlock()
+			c.mu.RLock()
+		}
+
 		// Search using HNSW index with configured ef parameter
 		candidateIndices := c.hnswIndex.searchKNN(queryEmbedding, 10, c.hnswEfSearch, c.entries)
 
@@ -387,7 +446,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 			}
 		}
 
-		observability.Debugf("InMemoryCache.FindSimilar: HNSW search checked %d candidates", len(candidateIndices))
+		logging.Debugf("InMemoryCache.FindSimilar: HNSW search checked %d candidates", len(candidateIndices))
 	} else {
 		// Fallback to linear search
 		for entryIndex, entry := range c.entries {
@@ -421,7 +480,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		}
 
 		if !c.useHNSW {
-			observability.Debugf("InMemoryCache.FindSimilar: Linear search used (HNSW disabled)")
+			logging.Debugf("InMemoryCache.FindSimilar: Linear search used (HNSW disabled)")
 		}
 	}
 
@@ -435,9 +494,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 	// Log if any expired entries were skipped
 	if expiredCount > 0 {
-		observability.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
+		logging.Debugf("InMemoryCache: excluded %d expired entries during search (TTL: %ds)",
 			expiredCount, c.ttlSeconds)
-		observability.LogEvent("cache_expired_entries_found", map[string]interface{}{
+		logging.LogEvent("cache_expired_entries_found", map[string]interface{}{
 			"backend":       "memory",
 			"expired_count": expiredCount,
 			"ttl_seconds":   c.ttlSeconds,
@@ -447,7 +506,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	// Handle case where no suitable entries exist
 	if bestIndex < 0 {
 		atomic.AddInt64(&c.missCount, 1)
-		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
+		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 		metrics.RecordCacheMiss()
 		return nil, false, nil
@@ -461,9 +520,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		c.updateAccessInfo(bestIndex, bestEntry)
 		c.mu.Unlock()
 
-		observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
+		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
 			bestSimilarity, threshold, len(bestEntry.ResponseBody))
-		observability.LogEvent("cache_hit", map[string]interface{}{
+		logging.LogEvent("cache_hit", map[string]interface{}{
 			"backend":    "memory",
 			"similarity": bestSimilarity,
 			"threshold":  threshold,
@@ -475,9 +534,9 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	}
 
 	atomic.AddInt64(&c.missCount, 1)
-	observability.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
 		bestSimilarity, threshold, entriesChecked)
-	observability.LogEvent("cache_miss", map[string]interface{}{
+	logging.LogEvent("cache_miss", map[string]interface{}{
 		"backend":         "memory",
 		"best_similarity": bestSimilarity,
 		"threshold":       threshold,
@@ -531,43 +590,84 @@ func (c *InMemoryCache) GetStats() CacheStats {
 	return stats
 }
 
-// cleanupExpiredEntries removes entries that have exceeded their TTL and updates the cache entry count metric to keep metrics in sync.
-// Caller must hold a write lock
+// cleanupExpiredEntries removes entries that have exceeded their TTL and immediately rebuilds HNSW if HNSW is enabled and cleanup occurs.
+//
+// Caller must hold a write lock.
 func (c *InMemoryCache) cleanupExpiredEntries() {
+	c.cleanupExpiredEntriesInternal(false)
+}
+
+// cleanupExpiredEntriesDeferred removes expired entries.
+//
+// If HNSW is enabled and cleanup occurs, it marks HNSW as needing rebuild but defers the rebuild until next call to addEntryToHNSWIndex or rebuildHNSWIndex.
+// This is used in write paths that already plan to mutate the slice again (evictions, appends) so we only rebuild once per batch.
+//
+// Caller must hold a write lock.
+func (c *InMemoryCache) cleanupExpiredEntriesDeferred() {
+	c.cleanupExpiredEntriesInternal(true)
+}
+
+// cleanupExpiredEntriesInternal optionally postpones HNSW rebuild until the caller finishes batching updates.
+// Uses expiration heap for O(k) cleanup where k = number of expired entries.
+func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
 	if c.ttlSeconds <= 0 {
 		return
 	}
 
 	now := time.Now()
-	validEntries := make([]CacheEntry, 0, len(c.entries))
 
-	for _, entry := range c.entries {
-		// Retain entries that are still within their TTL based on last access
-		if !c.isExpired(entry, now) {
-			validEntries = append(validEntries, entry)
-		}
-	}
+	// Use expiration heap for efficient O(k) cleanup where k = expired entries
+	expiredRequestIDs := c.expirationHeap.PopExpired(now)
 
-	if len(validEntries) == len(c.entries) {
+	if len(expiredRequestIDs) == 0 {
 		return
 	}
 
-	expiredCount := len(c.entries) - len(validEntries)
-	observability.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
-		expiredCount, len(validEntries))
-	observability.LogEvent("cache_cleanup", map[string]interface{}{
+	// Remove expired entries from the entries slice
+	// Build a set of expired request IDs for O(1) lookup
+	expiredSet := make(map[string]bool, len(expiredRequestIDs))
+	for _, id := range expiredRequestIDs {
+		expiredSet[id] = true
+	}
+
+	// Compact the entries slice, keeping non-expired entries
+	writeIdx := 0
+	for readIdx := 0; readIdx < len(c.entries); readIdx++ {
+		entry := c.entries[readIdx]
+		if !expiredSet[entry.RequestID] {
+			if writeIdx != readIdx {
+				c.entries[writeIdx] = entry
+				// Update tracking for the moved entry
+				c.updateMovedEntryIndex(entry.RequestID, readIdx, writeIdx)
+			}
+			writeIdx++
+		} else {
+			// Remove from tracking structures
+			c.removeEntryFromTracking(readIdx, entry.RequestID)
+		}
+	}
+	c.entries = c.entries[:writeIdx]
+
+	expiredCount := len(expiredRequestIDs)
+	logging.Debugf("InMemoryCache: TTL cleanup removed %d expired entries (remaining: %d)",
+		expiredCount, len(c.entries))
+	logging.LogEvent("cache_cleanup", map[string]interface{}{
 		"backend":         "memory",
 		"expired_count":   expiredCount,
-		"remaining_count": len(validEntries),
+		"remaining_count": len(c.entries),
 		"ttl_seconds":     c.ttlSeconds,
 	})
-	c.entries = validEntries
 	cleanupTime := time.Now()
 	c.lastCleanupTime = &cleanupTime
 
-	// Rebuild HNSW index if entries were removed
+	// Rebuild HNSW index if entries were removed and deferRebuild is false
 	if expiredCount > 0 && c.useHNSW && c.hnswIndex != nil {
-		c.rebuildHNSWIndex()
+		logging.Debugf("InMemoryCache: TTL cleanup removed entries, marking HNSW index as needing rebuild")
+		c.hnswNeedsRebuild = true
+		c.hnswIndex.markStale()
+		if !deferRebuild {
+			c.rebuildHNSWIndex()
+		}
 	}
 
 	// Update metrics after cleanup
@@ -585,32 +685,76 @@ func (c *InMemoryCache) isExpired(entry CacheEntry, now time.Time) bool {
 
 // updateAccessInfo updates the access information for the given entry index
 func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
+	now := time.Now()
+
 	// fast path
 	if entryIndex < len(c.entries) && c.entries[entryIndex].RequestID == target.RequestID {
-		c.entries[entryIndex].LastAccessAt = time.Now()
+		c.entries[entryIndex].LastAccessAt = now
 		c.entries[entryIndex].HitCount++
+
+		// Update optimized eviction policy tracking
+		c.notifyAccessToEvictionPolicy(entryIndex, target.RequestID)
+
+		// Extend TTL in expiration heap (sliding window TTL)
+		if c.ttlSeconds > 0 {
+			c.expirationHeap.UpdateExpiration(target.RequestID, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+		}
 		return
 	}
 
 	// fallback to linear search
 	for i := range c.entries {
 		if c.entries[i].RequestID == target.RequestID {
-			c.entries[i].LastAccessAt = time.Now()
+			c.entries[i].LastAccessAt = now
 			c.entries[i].HitCount++
+
+			// Update optimized eviction policy tracking
+			c.notifyAccessToEvictionPolicy(i, target.RequestID)
+
+			// Extend TTL in expiration heap (sliding window TTL)
+			if c.ttlSeconds > 0 {
+				c.expirationHeap.UpdateExpiration(target.RequestID, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+			}
 			break
 		}
 	}
 }
 
-// evictOne removes one entry based on the configured eviction policy
+// addEntryToHNSWIndex adds a new entry to the HNSW index, rebuilding if hnswNeedsRebuild is true.
+// If HNSW is disabled, this is a no-op.
+//
+// Caller must hold a write lock.
+func (c *InMemoryCache) addEntryToHNSWIndex(entryIndex int, embedding []float32) {
+	if !c.useHNSW || c.hnswIndex == nil {
+		return
+	}
+
+	if c.hnswNeedsRebuild {
+		logging.Debugf("InMemoryCache.addEntryToHNSWIndex: HNSW index marked as needing rebuild, rebuilding now")
+		c.rebuildHNSWIndex() // Rebuild HNSW index if stale
+	} else {
+		logging.Debugf("InMemoryCache.addEntryToHNSWIndex: adding new node to HNSW index for entryIndex=%d", entryIndex)
+		c.hnswIndex.addNode(entryIndex, embedding, c.entries) // Not stale, just add the new node
+	}
+}
+
+// evictOne removes one entry based on the configured eviction policy.
+// It marks HNSW as needing rebuild if HNSW is enabled and an eviction occurs. HNSW will be rebuilt on next call to addEntryToHNSWIndex or rebuildHNSWIndex.
+//
+// Caller must hold a write lock.
 func (c *InMemoryCache) evictOne() {
 	if len(c.entries) == 0 {
 		return
 	}
 
-	victimIdx := c.evictionPolicy.SelectVictim(c.entries)
+	// Use optimized O(1) eviction
+	victimIdx := c.evictUsingOptimizedPolicy()
 	if victimIdx < 0 || victimIdx >= len(c.entries) {
-		return
+		// Fallback to legacy O(n) eviction if optimized policy is not available
+		victimIdx = c.evictionPolicy.SelectVictim(c.entries)
+		if victimIdx < 0 || victimIdx >= len(c.entries) {
+			return
+		}
 	}
 
 	evictedRequestID := c.entries[victimIdx].RequestID
@@ -618,31 +762,155 @@ func (c *InMemoryCache) evictOne() {
 	// If using HNSW, we need to rebuild the index after eviction
 	// For simplicity, we'll mark that a rebuild is needed
 	if c.useHNSW && c.hnswIndex != nil {
-		// Remove the node from HNSW index
-		// Note: HNSW doesn't support efficient deletion, so we'll rebuild on next search if needed
+		logging.Debugf("InMemoryCache.evictOne: HNSW index marked as needing rebuild due to eviction")
+		// Note: HNSW doesn't support efficient deletion, leave the rebuild for the next insertion so we only rebuild once for eviction + append.
+		c.hnswNeedsRebuild = true
 		c.hnswIndex.markStale()
 	}
 
-	c.entries[victimIdx] = c.entries[len(c.entries)-1]
-	c.entries = c.entries[:len(c.entries)-1]
+	// Remove from optimized tracking structures
+	c.removeEntryFromTracking(victimIdx, evictedRequestID)
 
-	observability.LogEvent("cache_evicted", map[string]any{
+	// Swap with last entry and shrink slice
+	lastIdx := len(c.entries) - 1
+	if victimIdx != lastIdx {
+		movedEntry := c.entries[lastIdx]
+		c.entries[victimIdx] = movedEntry
+		// Update tracking for the moved entry
+		c.updateMovedEntryIndex(movedEntry.RequestID, lastIdx, victimIdx)
+	}
+	c.entries = c.entries[:lastIdx]
+
+	logging.LogEvent("cache_evicted", map[string]any{
 		"backend":     "memory",
 		"request_id":  evictedRequestID,
 		"max_entries": c.maxEntries,
 	})
 }
 
+// ===== Optimized Eviction Policy Helpers =====
+
+// registerEntryWithEvictionPolicy registers a new entry with the appropriate optimized eviction policy.
+// Caller must hold a write lock.
+func (c *InMemoryCache) registerEntryWithEvictionPolicy(entryIndex int, requestID string) {
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.OnInsert(entryIndex, requestID)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.OnInsert(entryIndex, requestID)
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			c.optimizedFIFO.OnInsert(entryIndex, requestID)
+		}
+	}
+}
+
+// evictUsingOptimizedPolicy uses the optimized O(1) eviction policy to select and evict a victim.
+// Returns the victim index, or -1 if no victim was evicted.
+// Caller must hold a write lock.
+func (c *InMemoryCache) evictUsingOptimizedPolicy() int {
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			return c.optimizedLRU.Evict()
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			return c.optimizedLFU.Evict()
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			return c.optimizedFIFO.Evict()
+		}
+	}
+	return -1
+}
+
+// removeEntryFromTracking removes an entry from all tracking structures.
+// Caller must hold a write lock.
+func (c *InMemoryCache) removeEntryFromTracking(entryIndex int, requestID string) {
+	// Remove from entryMap
+	delete(c.entryMap, requestID)
+
+	// Remove from expiration heap
+	c.expirationHeap.Remove(requestID)
+
+	// Remove from optimized eviction policy
+	// Note: This is idempotent - safe to call even if already removed by Evict()
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.OnRemove(entryIndex, requestID)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.OnRemove(entryIndex, requestID)
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			c.optimizedFIFO.OnRemove(entryIndex, requestID)
+		}
+	}
+}
+
+// updateMovedEntryIndex updates tracking structures when an entry is moved to a new index.
+// This is called after swap operations during eviction or cleanup.
+// Caller must hold a write lock.
+func (c *InMemoryCache) updateMovedEntryIndex(requestID string, oldIdx, newIdx int) {
+	// Update entryMap
+	c.entryMap[requestID] = newIdx
+
+	// Update expiration heap
+	c.expirationHeap.UpdateIndex(requestID, newIdx)
+
+	// Update optimized eviction policy
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.UpdateIndex(requestID, oldIdx, newIdx)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.UpdateIndex(requestID, oldIdx, newIdx)
+		}
+	default: // FIFO
+		if c.optimizedFIFO != nil {
+			c.optimizedFIFO.UpdateIndex(requestID, oldIdx, newIdx)
+		}
+	}
+}
+
+// notifyAccessToEvictionPolicy notifies the eviction policy of an access to update recency/frequency.
+// Caller must hold a write lock.
+func (c *InMemoryCache) notifyAccessToEvictionPolicy(entryIndex int, requestID string) {
+	switch c.evictionPolicyType {
+	case LRUEvictionPolicyType:
+		if c.optimizedLRU != nil {
+			c.optimizedLRU.OnAccess(entryIndex, requestID)
+		}
+	case LFUEvictionPolicyType:
+		if c.optimizedLFU != nil {
+			c.optimizedLFU.OnAccess(entryIndex, requestID)
+		}
+		// FIFO doesn't need access tracking
+	}
+}
+
 // ===== HNSW Index Implementation =====
 
-// rebuildHNSWIndex rebuilds the HNSW index from scratch
-// Caller must hold a write lock
+// rebuildHNSWIndex rebuilds the HNSW index from scratch.
+// Caller must hold a write lock.
 func (c *InMemoryCache) rebuildHNSWIndex() {
-	if c.hnswIndex == nil {
+	if !c.useHNSW || c.hnswIndex == nil {
+		c.hnswNeedsRebuild = false
 		return
 	}
 
-	observability.Debugf("InMemoryCache: Rebuilding HNSW index with %d entries", len(c.entries))
+	logging.Debugf("InMemoryCache: Rebuilding HNSW index with %d entries", len(c.entries))
 
 	// Clear the existing index
 	c.hnswIndex.nodes = []*HNSWNode{}
@@ -657,7 +925,8 @@ func (c *InMemoryCache) rebuildHNSWIndex() {
 		}
 	}
 
-	observability.Debugf("InMemoryCache: HNSW index rebuilt with %d nodes", len(c.hnswIndex.nodes))
+	logging.Debugf("InMemoryCache: HNSW index rebuilt with %d nodes", len(c.hnswIndex.nodes))
+	c.hnswNeedsRebuild = false
 }
 
 // newHNSWIndex creates a new HNSW index
@@ -691,7 +960,9 @@ func (h *HNSWIndex) selectLevel() int {
 	return int(r * h.ml)
 }
 
-// addNode adds a new node to the HNSW index
+// addNode adds a new node to the HNSW index.
+//
+// For InMemoryCache, it is called via addEntryToHNSWIndex to keep in sync with entries slice.
 func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []CacheEntry) {
 	level := h.selectLevel()
 
@@ -719,7 +990,7 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 		if lc == 0 {
 			M = h.Mmax0
 		}
-		neighbors := h.selectNeighbors(candidates, M, entries)
+		neighbors := h.selectNeighbors(candidates, M, embedding, entries)
 
 		// Add bidirectional links
 		node.neighbors[lc] = neighbors
@@ -733,7 +1004,8 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 
 				// Prune neighbors if needed
 				if len(n.neighbors[lc]) > M {
-					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries)
+					// Use neighbor's own embedding as query for pruning
+					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries[neighborIdx].Embedding, entries)
 				}
 			}
 		}
@@ -771,8 +1043,8 @@ func (h *HNSWIndex) searchKNN(queryEmbedding []float32, k, ef int, entries []Cac
 // searchLayer searches for nearest neighbors at a specific layer
 func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer int, entries []CacheEntry) []int {
 	visited := make(map[int]bool)
-	candidates := newMaxHeap()
-	results := newMinHeap()
+	candidates := newMinHeap() // set of candidates, explore closest candidate first
+	results := newMaxHeap()    // dynamic list of found nearest neighbors, track current frontier, worst distance on top
 
 	// Calculate distance to entry point
 	if entryPoint >= 0 && entryPoint < len(entries) {
@@ -785,11 +1057,9 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 	for candidates.len() > 0 {
 		currentIdx, currentDist := candidates.pop()
 
-		if results.len() > 0 {
-			worstDist := results.peekDist()
-			if currentDist > worstDist {
-				break
-			}
+		// If we have enough results and the current distance is worse than the worst in results, we can stop
+		if results.len() > 0 && currentDist > results.peekDist() {
+			break
 		}
 
 		// Fast O(1) lookup using nodeIndex map
@@ -825,26 +1095,71 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 	return results.items()
 }
 
-// selectNeighbors selects the best neighbors using a simple heuristic
-func (h *HNSWIndex) selectNeighbors(candidates []int, m int, entries []CacheEntry) []int {
+// selectNeighbors selects the best neighbors by sorting by distance
+// This is CRITICAL for HNSW graph quality - must select NEAREST neighbors, not arbitrary ones!
+func (h *HNSWIndex) selectNeighbors(candidates []int, m int, queryEmb []float32, entries []CacheEntry) []int {
+	// Validate queryEmb: must not be nil or empty to ensure correct distance calculations
+	if len(queryEmb) == 0 {
+		logging.Errorf("selectNeighbors: queryEmb is empty - cannot compute distances")
+		return []int{}
+	}
+
 	if len(candidates) <= m {
 		return candidates
 	}
-	// Just return first m for simplicity
-	return candidates[:m]
+
+	// Create a temporary slice with distances for sorting
+	type neighborDist struct {
+		idx  int
+		dist float32
+	}
+
+	neighbors := make([]neighborDist, len(candidates))
+
+	// Compute distance from query to each candidate (using SIMD!)
+	for i, idx := range candidates {
+		if idx >= 0 && idx < len(entries) {
+			// Validate dimension match to prevent silent data corruption in HNSW graph
+			if len(entries[idx].Embedding) != len(queryEmb) {
+				logging.Errorf("selectNeighbors: dimension mismatch - query has %d dims, candidate %d has %d dims",
+					len(queryEmb), idx, len(entries[idx].Embedding))
+				// Skip this candidate rather than corrupting the graph
+				continue
+			}
+			neighbors[i] = neighborDist{
+				idx:  idx,
+				dist: h.distance(queryEmb, entries[idx].Embedding),
+			}
+		}
+	}
+
+	// Sort by distance (ascending - smallest distance first)
+	// Use a simple selection sort since m is typically small (16-32)
+	for i := 0; i < m && i < len(neighbors); i++ {
+		minIdx := i
+		for j := i + 1; j < len(neighbors); j++ {
+			if neighbors[j].dist < neighbors[minIdx].dist {
+				minIdx = j
+			}
+		}
+		if minIdx != i {
+			neighbors[i], neighbors[minIdx] = neighbors[minIdx], neighbors[i]
+		}
+	}
+
+	// Return the m nearest neighbors
+	result := make([]int, m)
+	for i := 0; i < m; i++ {
+		result[i] = neighbors[i].idx
+	}
+	return result
 }
 
 // distance calculates cosine similarity (as dot product since embeddings are normalized)
 func (h *HNSWIndex) distance(a, b []float32) float32 {
 	// We use negative dot product so that larger similarity = smaller distance
-	var dotProduct float32
-	minLen := len(a)
-	if len(b) < minLen {
-		minLen = len(b)
-	}
-	for i := 0; i < minLen; i++ {
-		dotProduct += a[i] * b[i]
-	}
+	// Use SIMD-optimized dot product (AVX2/AVX512)
+	dotProduct := dotProductSIMD(a, b)
 	return -dotProduct // Negate so higher similarity = lower distance
 }
 
@@ -881,23 +1196,8 @@ func (h *minHeap) pop() (int, float32) {
 	return result.index, result.dist
 }
 
-func (h *minHeap) peekDist() float32 {
-	if len(h.data) == 0 {
-		return math.MaxFloat32
-	}
-	return h.data[0].dist
-}
-
 func (h *minHeap) len() int {
 	return len(h.data)
-}
-
-func (h *minHeap) items() []int {
-	result := make([]int, len(h.data))
-	for i, item := range h.data {
-		result[i] = item.index
-	}
-	return result
 }
 
 func (h *minHeap) bubbleUp(i int) {
@@ -961,6 +1261,21 @@ func (h *maxHeap) len() int {
 	return len(h.data)
 }
 
+func (h *maxHeap) peekDist() float32 {
+	if len(h.data) == 0 {
+		return math.MaxFloat32
+	}
+	return h.data[0].dist
+}
+
+func (h *maxHeap) items() []int {
+	result := make([]int, len(h.data))
+	for i, item := range h.data {
+		result[i] = item.index
+	}
+	return result
+}
+
 func (h *maxHeap) bubbleUp(i int) {
 	for i > 0 {
 		parent := (i - 1) / 2
@@ -990,11 +1305,4 @@ func (h *maxHeap) bubbleDown(i int) {
 		h.data[i], h.data[largest] = h.data[largest], h.data[i]
 		i = largest
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

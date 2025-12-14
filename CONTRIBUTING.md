@@ -43,7 +43,7 @@ Before you begin, ensure you have the following installed:
 
    This downloads the pre-trained classification models from Hugging Face.
 
-3. **Install Python dependencies(Optional):**
+3. **Install Python dependencies (Optional):**
 
    ```bash
    # For training and development

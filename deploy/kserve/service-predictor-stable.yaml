@@ -1,0 +1,23 @@
+# yamllint disable rule:line-length rule:syntax-check
+# This is a template file with {{VARIABLE}} placeholders - processed by deploy.sh
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{INFERENCESERVICE_NAME}}-predictor-stable"
+  namespace: "{{NAMESPACE}}"
+  labels:
+    app: "{{INFERENCESERVICE_NAME}}"
+    component: predictor-stable
+  annotations:
+    description: "Stable ClusterIP service for semantic router to use (headless service doesn't provide ClusterIP)"
+spec:
+  type: ClusterIP
+  selector:
+    serving.kserve.io/inferenceservice: "{{INFERENCESERVICE_NAME}}"
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: None
+

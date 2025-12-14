@@ -1,5 +1,5 @@
 # Cross-compilation optimized Dockerfile for ARM64
-FROM --platform=linux/amd64 rust:1.85 AS rust-cross-builder
+FROM --platform=linux/amd64 rust:1.90 AS rust-cross-builder
 
 # Install cross-compilation dependencies
 RUN dpkg --add-architecture arm64 && \
@@ -212,7 +212,7 @@ RUN mkdir -p bin && cd src/semantic-router && \
     fi
 
 # Final stage: copy the binary and the shared library
-FROM quay.io/centos/centos:stream9
+FROM quay.io/centos/centos:stream10
 
 # Install OpenSSL runtime libraries
 RUN dnf update -y && \

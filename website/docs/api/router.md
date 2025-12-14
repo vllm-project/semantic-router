@@ -148,7 +148,7 @@ The router adds metadata headers to both requests and responses:
 
 | Header | Description | Example |
 |--------|-------------|---------|
-| `x-gateway-destination-endpoint` | Backend endpoint selected | `endpoint1` |
+| `x-vsr-destination-endpoint` | Backend endpoint selected | `endpoint1` |
 | `x-selected-model` | Model category determined | `mathematics` |
 | `x-routing-confidence` | Classification confidence | `0.956` |
 | `x-request-id` | Unique request identifier | `req-abc123` |

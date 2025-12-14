@@ -12,5 +12,5 @@ spec:
   resources:
     requests:
       storage: 2Gi
-  # Use default storage class for OpenShift
-  # storageClassName: ""
+# Use default storage class for OpenShift
+# storageClassName: ""

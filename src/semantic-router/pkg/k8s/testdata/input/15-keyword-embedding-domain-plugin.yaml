@@ -1,0 +1,164 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: ked-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-32b"
+  models:
+    - name: "qwen-2.5-32b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000002    # $2 per 1M - for standard enterprise queries
+        outputTokenPrice: 0.000004   # $4 per 1M
+      loras:
+        - name: "enterprise-assistant"
+          description: "Enterprise assistant"
+
+    - name: "qwen-2.5-72b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M - for complex enterprise scenarios
+        outputTokenPrice: 0.000006   # $6 per 1M
+      loras:
+        - name: "enterprise-specialist"
+          description: "Enterprise domain specialist"
+        - name: "compliance-expert"
+          description: "Compliance and security expert"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: ked-plugin-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "compliance"
+        operator: "OR"
+        keywords: ["compliance", "regulation", "audit", "policy"]
+        caseSensitive: false
+      - name: "confidential"
+        operator: "OR"
+        keywords: ["confidential", "sensitive", "private", "restricted"]
+        caseSensitive: false
+
+    embeddings:
+      - name: "business_analysis"
+        threshold: 0.76
+        candidates:
+          - "I need to analyze business metrics and performance"
+          - "Can you help me with strategic business planning?"
+          - "We need insights on market trends and competition"
+        aggregationMethod: "max"
+      - name: "legal_review"
+        threshold: 0.80
+        candidates:
+          - "This document needs legal review and compliance check"
+          - "We need to ensure regulatory compliance"
+          - "Can you review this for legal implications?"
+        aggregationMethod: "mean"
+
+    domains:
+      - name: "business"
+        description: "Business and management"
+      - name: "law"
+        description: "Legal questions and law-related topics"
+      - name: "economics"
+        description: "Economics and financial topics"
+
+  decisions:
+    - name: "compliance_legal"
+      description: "Compliance and legal queries with full protection"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "compliance"
+          - type: "embedding"
+            name: "legal_review"
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          use_reasoning: true
+          reasoning_effort: "high"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.9
+            pii_types_allowed: ["PERSON", "ORGANIZATION", "EMAIL", "PHONE_NUMBER"]
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.88
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a legal compliance assistant. Provide accurate information about regulations and compliance requirements. Always remind users to consult legal professionals for specific advice."
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.93
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "X-Compliance-Level"
+                value: "high"
+              - name: "X-Audit-Required"
+                value: "true"
+
+    - name: "confidential_business"
+      description: "Confidential business analysis"
+      priority: 90
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "confidential"
+          - type: "embedding"
+            name: "business_analysis"
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          use_reasoning: true
+          reasoning_effort: "medium"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.85
+            pii_types_allowed: ["PERSON", "ORGANIZATION", "FINANCIAL_DATA"]
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.90
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "X-Confidentiality"
+                value: "high"
+
+    - name: "general_business"
+      description: "General business and economics queries"
+      priority: 50
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "business_analysis"
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          use_reasoning: false
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.85
+

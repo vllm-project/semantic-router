@@ -1,0 +1,107 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: ked-no-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-14b"
+  models:
+    - name: "qwen-2.5-14b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000001    # $1 per 1M - for general queries
+        outputTokenPrice: 0.000002   # $2 per 1M
+      loras:
+        - name: "general-assistant"
+          description: "General purpose assistant"
+
+    - name: "qwen-2.5-32b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000002    # $2 per 1M - for complex general queries
+        outputTokenPrice: 0.000004   # $4 per 1M
+      loras:
+        - name: "advanced-assistant"
+          description: "Advanced general purpose assistant"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: ked-no-plugin-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "tutorial"
+        operator: "OR"
+        keywords: ["tutorial", "guide", "how-to", "learn"]
+        caseSensitive: false
+
+    embeddings:
+      - name: "learning_intent"
+        threshold: 0.72
+        candidates:
+          - "I want to learn about this topic"
+          - "Can you teach me how to do this?"
+          - "I'm trying to understand this concept"
+        aggregationMethod: "max"
+
+    domains:
+      - name: "computer_science"
+        description: "Computer science and programming"
+      - name: "math"
+        description: "Mathematics and quantitative reasoning"
+      - name: "engineering"
+        description: "Engineering and technical problem-solving"
+
+  decisions:
+    - name: "cs_tutorial"
+      description: "Computer science tutorials"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "tutorial"
+          - type: "embedding"
+            name: "learning_intent"
+          - type: "domain"
+            name: "computer_science"
+      modelRefs:
+        - model: "qwen-2.5-32b"
+          use_reasoning: true
+          reasoning_effort: "medium"
+
+    - name: "math_tutorial"
+      description: "Math tutorials"
+      priority: 90
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "tutorial"
+          - type: "embedding"
+            name: "learning_intent"
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: "qwen-2.5-32b"
+          use_reasoning: true
+          reasoning_effort: "high"
+
+    - name: "general_learning"
+      description: "General learning queries"
+      priority: 50
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "tutorial"
+          - type: "embedding"
+            name: "learning_intent"
+      modelRefs:
+        - model: "qwen-2.5-32b"
+          use_reasoning: false
+

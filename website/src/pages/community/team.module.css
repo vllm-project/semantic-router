@@ -216,6 +216,19 @@
   transform: translateY(-2px);
 }
 
+/* Dark mode enhancement for join button */
+[data-theme='dark'] .joinButton {
+  background: var(--ifm-color-primary-light);
+  color: var(--ifm-color-gray-100);
+  border: 2px solid var(--ifm-color-primary-lighter);
+}
+
+[data-theme='dark'] .joinButton:hover {
+  background: var(--ifm-color-primary-lighter);
+  color: white;
+  border-color: var(--ifm-color-primary-lightest);
+}
+
 .recognitionCard {
   background: var(--ifm-background-surface-color);
   border: 1px solid var(--ifm-color-emphasis-200);

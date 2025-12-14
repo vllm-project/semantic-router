@@ -1,0 +1,76 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: kd-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "deepseek-v3"
+  models:
+    - name: "deepseek-v3"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000027  # $0.27 per 1M - for general medical queries
+        outputTokenPrice: 0.0000011  # $1.1 per 1M
+      loras:
+        - name: "medical-assistant"
+          description: "Medical assistant"
+
+    - name: "deepseek-r1"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000055  # $0.55 per 1M - for complex medical diagnosis
+        outputTokenPrice: 0.0000022  # $2.2 per 1M
+      loras:
+        - name: "medical-specialist"
+          description: "Medical domain expert"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: kd-plugin-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "diagnosis"
+        operator: "OR"
+        keywords: ["diagnosis", "symptoms", "treatment", "medical"]
+        caseSensitive: false
+
+    domains:
+      - name: "health"
+        description: "Health and medical information"
+      - name: "biology"
+        description: "Biology and life sciences"
+
+  decisions:
+    - name: "medical_query"
+      description: "Medical queries with PII protection"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "diagnosis"
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: "deepseek-r1"
+          use_reasoning: true
+          reasoning_effort: "high"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.9
+            pii_types_allowed: ["PERSON", "DATE_OF_BIRTH", "MEDICAL_RECORD"]
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a medical information assistant. Provide general health information but always advise users to consult healthcare professionals."
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.88
+

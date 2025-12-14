@@ -4,10 +4,9 @@
 //! including double-free protection, LoRA-specific memory management, and
 //! path switching safety mechanisms.
 
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ffi::c_char;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
 /// Memory allocation tracking for double-free protection
 #[derive(Debug, Clone)]
@@ -48,16 +47,16 @@ pub struct MemorySafetyResult {
     pub double_free_attempts: usize,
 }
 
-// Global memory tracker for dual-path safety using once_cell::Lazy
+// Global memory tracker for dual-path safety using LazyLock
 // These are lazily initialized mutable global state for runtime memory tracking
-static MEMORY_TRACKER: Lazy<Arc<RwLock<HashMap<usize, AllocationTracker>>>> =
-    Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
-static DOUBLE_FREE_PROTECTION: Lazy<Arc<Mutex<HashMap<usize, bool>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
-static LORA_MEMORY_POOL: Lazy<Arc<Mutex<LoRAMemoryPool>>> =
-    Lazy::new(|| Arc::new(Mutex::new(LoRAMemoryPool::new())));
-static PATH_SWITCH_GUARD: Lazy<Arc<RwLock<PathSwitchState>>> =
-    Lazy::new(|| Arc::new(RwLock::new(PathSwitchState::new())));
+static MEMORY_TRACKER: LazyLock<Arc<RwLock<HashMap<usize, AllocationTracker>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
+static DOUBLE_FREE_PROTECTION: LazyLock<Arc<Mutex<HashMap<usize, bool>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+static LORA_MEMORY_POOL: LazyLock<Arc<Mutex<LoRAMemoryPool>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(LoRAMemoryPool::new())));
+static PATH_SWITCH_GUARD: LazyLock<Arc<RwLock<PathSwitchState>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(PathSwitchState::new())));
 
 /// LoRA-specific memory pool for high-performance allocations
 #[derive(Debug)]

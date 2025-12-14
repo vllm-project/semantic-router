@@ -1,0 +1,17 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+e2e.test
+*.test
+
+# Output
+*.out
+
+# Go workspace file
+go.work
+

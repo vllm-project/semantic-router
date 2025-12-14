@@ -1,143 +1,80 @@
 /* Force override global h1 styles - for publications page */
 :global(.publications-page) h1,
 :global(.publications-page) .title {
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #b8860b !important;
-  background-clip: unset !important;
-  color: #b8860b !important;
+  background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
 }
 
 /* Direct targeting of production build class names */
 :global(.title_ruWM) {
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #b8860b !important;
-  background-clip: unset !important;
-  color: #b8860b !important;
+  background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
 }
 
 /* Stronger selector - override global h1 rules */
 :global(.container_hzh_) h1 {
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #b8860b !important;
-  background-clip: unset !important;
-  color: #b8860b !important;
+  background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
 }
 
-/* Award Wall Container */
+/* Simplified Container */
 .container {
-  max-width: 1800px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 80%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 165, 0, 0.1) 0%, transparent 50%),
-    linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: transparent;
   position: relative;
 }
 
-.container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image:
-    repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 100px,
-      rgba(255, 215, 0, 0.03) 100px,
-      rgba(255, 215, 0, 0.03) 102px
-    );
-  pointer-events: none;
-}
-
-/* Header Styling */
+/* Simplified Header */
 .header {
   text-align: center;
-  margin-bottom: 5rem;
+  margin-bottom: 4rem;
   position: relative;
-  padding: 4rem 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 249, 250, 0.8) 100%);
-  border-radius: 30px;
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px);
-  border: 2px solid rgba(255, 215, 0, 0.2);
+  padding: 3rem 2rem;
+  background: var(--tech-card-bg);
+  border-radius: 16px;
+  box-shadow: var(--tech-shadow);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--tech-border);
+  transition: all 0.3s ease;
 }
 
 .wallDecoration {
-  position: absolute;
-  top: -10px;
-  left: -10px;
-  right: -10px;
-  bottom: -10px;
-  border-radius: 35px;
-  background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
-  z-index: -1;
-  /* Remove animations */
+  display: none;
 }
 
 .wallPattern {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image:
-    radial-gradient(circle at 25% 25%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(255, 165, 0, 0.1) 0%, transparent 50%);
+  display: none;
 }
 
-/* Use stronger selectors to override global h1 styles */
+/* Simplified Title */
 .header .title,
 .header h1.title,
 h1.title {
-  font-size: 4.5rem !important;
-  font-weight: 900 !important;
-  margin: 0 0 2rem 0 !important;
+  font-size: 3.5rem !important;
+  font-weight: 800 !important;
+  margin: 0 0 1.5rem 0 !important;
   padding: 0 !important;
-  color: #b8860b !important;
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  background-clip: unset !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #b8860b !important;
-  text-shadow:
-    0 4px 8px rgba(184, 134, 11, 0.3),
-    0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple)) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
   position: relative !important;
-  z-index: 999 !important;
   display: block !important;
   width: 100% !important;
   text-align: center !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
 }
 
 .title::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: transparent !important;
-  z-index: -1;
+  display: none;
 }
 
 .title::after {
@@ -145,189 +82,125 @@ h1.title {
 }
 
 .subtitle {
-  font-size: 1.6rem;
-  color: #8b7355;
-  max-width: 900px;
+  font-size: 1.25rem;
+  color: var(--tech-text-secondary);
+  max-width: 800px;
   margin: 0 auto;
-  line-height: 1.8;
+  line-height: 1.6;
   font-weight: 400;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .subtitleHighlight {
-  color: #b8860b !important;
-  background: none !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: unset !important;
-  background-clip: unset !important;
+  color: var(--tech-primary-blue) !important;
   font-weight: 600;
-  text-shadow: 0 2px 4px rgba(184, 134, 11, 0.2) !important;
 }
 
-/* Filter Section */
+/* Simplified Filter Section */
 .filterSection {
-  margin-bottom: 4rem;
+  margin-bottom: 3rem;
   display: flex;
   justify-content: center;
 }
 
 .filterButtons {
   display: flex;
-  gap: 1rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 249, 250, 0.9) 100%);
-  padding: 0.8rem;
-  border-radius: 20px;
-  backdrop-filter: blur(20px);
-  border: 2px solid rgba(255, 215, 0, 0.3);
-  box-shadow:
-    0 8px 32px rgba(255, 215, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  gap: 0.75rem;
+  background: var(--tech-card-bg);
+  padding: 0.5rem;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--tech-border);
+  box-shadow: var(--tech-shadow);
 }
 
 .filterButton {
-  padding: 1rem 2rem;
+  padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 16px;
+  border-radius: 8px;
   background: transparent;
-  color: #6c757d;
-  font-weight: 700;
-  font-size: 1rem;
+  color: var(--tech-text-secondary);
+  font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s ease;
   white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: relative;
-  overflow: hidden;
 }
 
 .filterButton::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.2), transparent);
-  transition: left 0.5s ease;
-}
-
-.filterButton:hover::before {
-  left: 100%;
+  display: none;
 }
 
 .filterButton:hover {
-  background: rgba(255, 215, 0, 0.1);
-  color: #ff8c00;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.3);
-}
-
-.filterButton.active {
-  background: linear-gradient(45deg, #ffd700, #ffb347);
-  color: #8b5a00;
-  box-shadow:
-    0 6px 20px rgba(255, 215, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: rgba(9, 105, 218, 0.08);
+  color: var(--tech-primary-blue);
   transform: translateY(-1px);
 }
 
-/* Award Wall Layout */
+[data-theme='dark'] .filterButton:hover {
+  background: rgba(88, 166, 255, 0.12);
+}
+
+.filterButton.active {
+  background: var(--tech-primary-blue);
+  color: white;
+  box-shadow: 0 4px 12px rgba(9, 105, 218, 0.3);
+}
+
+[data-theme='dark'] .filterButton.active {
+  background: var(--tech-primary-blue);
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.4);
+}
+
+/* Simplified Layout */
 .awardWall {
-  margin-bottom: 5rem;
+  margin-bottom: 4rem;
   max-width: 100%;
   width: 100%;
 }
 
-/* Remove duplicate settings, handle uniformly in .awardsGrid */
-
 .awardSection {
-  margin-bottom: 6rem;
+  margin-bottom: 4rem;
   position: relative;
 }
 
 .sectionHeader {
   text-align: center;
-  margin-bottom: 4rem;
+  margin-bottom: 3rem;
   position: relative;
 }
 
 .sectionTitle {
-  font-size: 3rem;
-  font-weight: 900;
+  font-size: 2.5rem;
+  font-weight: 700;
   margin-bottom: 1rem;
-  background: linear-gradient(45deg, #ffd700, #ffb347, #ff8c00);
+  background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 2px;
 }
 
 .sectionDivider {
-  width: 200px;
-  height: 6px;
-  background: linear-gradient(90deg, transparent, #ffd700, #ffb347, #ffd700, transparent);
+  width: 100px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--tech-primary-blue), transparent);
   margin: 0 auto;
-  border-radius: 3px;
+  border-radius: 2px;
   position: relative;
-  /* Remove animations */
 }
 
 .sectionDivider::before,
 .sectionDivider::after {
-  content: '◆';
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #ffd700;
-  font-size: 1.2rem;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  display: none;
 }
 
-.sectionDivider::before {
-  left: -30px;
-}
-
-.sectionDivider::after {
-  right: -30px;
-}
-
-/* Awards Grid - responsive layout, max 3 columns, auto equal division */
+/* Awards Grid - List/Table Layout */
 .awardsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(450px, 100%), 1fr));
-  max-width: 1600px;
-  margin: 0 auto;
-  gap: 3rem;
-  padding: 2rem 0;
-  align-items: stretch;
-}
-
-/* Ensure max 3 columns constraint */
-@media (min-width: 1400px) {
-  .awardsGrid {
-    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-    max-width: 1600px;
-  }
-}
-
-/* Medium screens */
-@media (min-width: 768px) and (max-width: 1399px) {
-  .awardsGrid {
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-    gap: 2.5rem;
-  }
-}
-
-/* Small screens */
-@media (max-width: 767px) {
-  .awardsGrid {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-    padding: 1rem 0;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 100%;
+  width: 100%;
+  padding: 1rem 0;
 }
 
 .filteredAwards {
@@ -341,346 +214,259 @@ h1.title {
 
 /* Remove duplicate settings, handle uniformly in .awardsGrid */
 
-/* Award Card Styling */
+/* Award Card - Horizontal Row Layout */
 .awardCard {
   position: relative;
-  animation: awardFloat 0.8s ease-out forwards;
-  animation-delay: var(--animation-delay);
-  opacity: 0;
-  transform: translateY(50px) rotateX(10deg);
-  perspective: 1000px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: start;
+  background: var(--tech-card-bg);
+  border: 1px solid var(--tech-border);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: var(--tech-shadow);
+  gap: 1rem 1.5rem;
 }
 
-@keyframes awardFloat {
-  to {
-    opacity: 1;
-    transform: translateY(0) rotateX(0deg);
-  }
+.awardCard:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(9, 105, 218, 0.15);
+  border-color: var(--tech-primary-blue);
+}
+
+[data-theme='dark'] .awardCard:hover {
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.2);
+}
+
+.featuredAward .awardCard {
+  border-left: 3px solid var(--tech-primary-blue);
+  background: linear-gradient(90deg, rgba(9, 105, 218, 0.05), var(--tech-card-bg));
+}
+
+[data-theme='dark'] .featuredAward .awardCard {
+  background: linear-gradient(90deg, rgba(88, 166, 255, 0.08), var(--tech-card-bg));
 }
 
 .awardFrame {
-  background:
-    linear-gradient(135deg, #fff 0%, #f8f9fa 100%),
-    linear-gradient(45deg, #ffd700 0%, #ffb347 100%);
-  background-clip: padding-box, border-box;
-  border: 8px solid transparent;
-  border-radius: 30px;
-  padding: 0;
-  position: relative;
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.15),
-    0 0 0 1px rgba(255, 215, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  overflow: hidden;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: contents;
 }
 
 .awardFrame::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(45deg, #ffd700, #ffb347, #ffd700);
-  border-radius: 32px;
-  z-index: -1;
-  /* Remove animations */
+  display: none;
 }
 
-.awardCard:hover .awardFrame {
-  transform: translateY(-10px) scale(1.02);
-  box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.2),
-    0 0 0 2px rgba(255, 215, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.featuredAward .awardFrame {
-  border-width: 12px;
-  background:
-    linear-gradient(135deg, #fff 0%, #fffbf0 100%),
-    linear-gradient(45deg, #ffd700 0%, #ff8c00 50%, #ffd700 100%);
-}
-
-.featuredAward .awardFrame::before {
-  background: linear-gradient(45deg, #ffd700, #ff8c00, #ffb347, #ffd700);
-  /* Remove animations */
-}
-
-/* Award Header */
+/* Award Header - Icon/Type Section */
 .awardHeader {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 179, 71, 0.05) 100%);
-  padding: 2rem;
-  text-align: center;
-  border-bottom: 2px solid rgba(255, 215, 0, 0.2);
-  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0;
+  padding-top: 0.2rem;
 }
 
 .medalContainer {
   position: relative;
-  display: inline-block;
-  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .medal {
-  font-size: 3rem;
+  font-size: 2rem;
   display: inline-block;
-  /* Remove animations */
-  filter: drop-shadow(0 4px 8px rgba(255, 215, 0, 0.3));
 }
 
 .paperMedal {
-  color: #ffd700;
+  color: var(--tech-primary-blue);
 }
 
 .talkMedal {
-  color: #ff8c00;
+  color: var(--tech-accent-purple);
 }
 
 .starBadge {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  font-size: 1.5rem;
-  /* Remove animations */
-  filter: drop-shadow(0 2px 4px rgba(255, 215, 0, 0.5));
+  display: none;
 }
 
 .awardType {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: #8b5a00;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-top: 0.5rem;
-  text-shadow: 0 1px 2px rgba(255, 215, 0, 0.2);
+  display: none;
 }
 
-/* Award Content */
+/* Award Content - Main Info Section */
 .awardContent {
-  padding: 2.5rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 249, 250, 0.9) 100%);
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  background: transparent;
+  min-width: 0;
 }
 
 .awardTitle {
-  font-size: 1.8rem;
-  font-weight: 800;
-  color: #2c3e50;
-  margin-bottom: 2rem;
-  line-height: 1.3;
-  text-align: center;
-  background: linear-gradient(45deg, #2c3e50, #34495e);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--tech-text-primary);
+  margin: 0;
+  line-height: 1.4;
+  text-align: left;
 }
 
 .awardDetails {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: rgba(255, 215, 0, 0.05);
-  border-radius: 15px;
-  border: 1px solid rgba(255, 215, 0, 0.2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  margin: 0;
 }
 
 .awardAuthors,
 .awardVenue {
-  margin-bottom: 1rem;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  margin: 0;
 }
 
 .authorLabel,
 .venueLabel {
-  font-weight: 700;
-  color: #8b5a00;
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+  color: var(--tech-text-secondary);
+  font-size: 0.85rem;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .authorNames,
 .venueName {
-  color: #495057;
-  font-weight: 500;
-  flex: 1;
+  color: var(--tech-text-secondary);
+  font-weight: 400;
+  font-size: 0.85rem;
+  flex: none;
 }
 
 .awardYear {
-  background: linear-gradient(45deg, #ffd700, #ffb347);
-  color: #8b5a00;
-  padding: 0.3rem 0.8rem;
-  border-radius: 20px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  background: var(--tech-primary-blue);
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.85rem;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 60px;
+  white-space: nowrap;
 }
 
 .awardDescription {
-  color: #6c757d;
-  line-height: 1.7;
-  margin-bottom: 2rem;
-  font-size: 1rem;
-  text-align: left;
-  padding: 1rem;
-  background: rgba(248, 249, 250, 0.8);
-  border-radius: 10px;
-  border-left: 4px solid rgba(255, 215, 0, 0.3);
-  flex: 1;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: none;
 }
 
-/* Award Actions */
-.awardActions {
+/* Year and Actions Container - Separate Row */
+.yearAndActions {
+  grid-column: 2 / 4;
+  grid-row: 2;
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.5rem;
   flex-wrap: wrap;
-  justify-content: center;
-  margin-bottom: 1rem;
-  margin-top: auto;
 }
 
 .awardLink {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 2rem;
-  border-radius: 25px;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
   text-decoration: none;
-  font-weight: 700;
-  font-size: 1rem;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid transparent;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: relative;
-  overflow: hidden;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  height: 32px;
+  min-width: 60px;
 }
 
 .awardLink::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s ease;
-}
-
-.awardLink:hover::before {
-  left: 100%;
+  display: none;
 }
 
 .primaryLink {
-  background: linear-gradient(45deg, #ffd700, #ffb347);
-  color: #8b5a00;
-  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+  background: var(--tech-primary-blue);
+  color: white;
+  border-color: var(--tech-primary-blue);
 }
 
 .primaryLink:hover {
-  transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 10px 30px rgba(255, 215, 0, 0.5);
-  color: #8b5a00;
+  background: var(--tech-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(9, 105, 218, 0.3);
+}
+
+[data-theme='dark'] .primaryLink:hover {
+  box-shadow: 0 4px 8px rgba(88, 166, 255, 0.4);
 }
 
 .secondaryLink {
-  background: rgba(255, 215, 0, 0.1);
-  color: #ff8c00;
-  border-color: rgba(255, 215, 0, 0.3);
+  background: transparent;
+  color: var(--tech-primary-blue);
+  border-color: var(--tech-border);
 }
 
 .secondaryLink:hover {
-  background: rgba(255, 215, 0, 0.2);
-  border-color: rgba(255, 215, 0, 0.5);
-  transform: translateY(-2px);
-  color: #ff8c00;
-  box-shadow: 0 6px 16px rgba(255, 215, 0, 0.3);
+  background: rgba(9, 105, 218, 0.08);
+  border-color: var(--tech-primary-blue);
+  transform: translateY(-1px);
+}
+
+[data-theme='dark'] .secondaryLink:hover {
+  background: rgba(88, 166, 255, 0.12);
 }
 
 /* Award Footer */
 .awardFooter {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 179, 71, 0.05) 100%);
-  padding: 1.5rem;
-  text-align: center;
-  border-top: 2px solid rgba(255, 215, 0, 0.2);
+  display: none;
 }
 
 .awardSeal {
-  display: inline-block;
-  width: 80px;
-  height: 80px;
-  background: radial-gradient(circle, #ffd700 0%, #ffb347 70%, #ff8c00 100%);
-  border-radius: 50%;
-  position: relative;
-  box-shadow:
-    0 4px 16px rgba(255, 215, 0, 0.4),
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.1);
-  /* Remove animations */
+  display: none;
 }
 
 .awardSeal::before {
-  content: '';
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  right: 5px;
-  bottom: 5px;
-  border: 2px solid rgba(139, 90, 0, 0.3);
-  border-radius: 50%;
+  display: none;
 }
 
 .sealInner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  display: none;
 }
 
 .sealText {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 900;
-  color: #8b5a00;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  line-height: 1;
+  display: none;
 }
 
 .sealSubtext {
-  display: block;
-  font-size: 0.6rem;
-  font-weight: 600;
-  color: #8b5a00;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 2px;
+  display: none;
 }
 
 /* Empty State */
 .emptyState {
   text-align: center;
-  padding: 4rem 2rem;
-  color: #656d76;
-  font-size: 1.1rem;
+  padding: 3rem 2rem;
+  color: var(--tech-text-secondary);
+  font-size: 1rem;
 }
 
 
@@ -699,199 +485,142 @@ h1.title {
 
   .header {
     padding: 2rem 1rem;
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
   }
 
   .title {
-    font-size: 3rem;
+    font-size: 2.5rem !important;
   }
 
   .subtitle {
-    font-size: 1.3rem;
+    font-size: 1rem;
   }
 
   .sectionTitle {
-    font-size: 2.2rem;
+    font-size: 2rem;
   }
 
-  /* Hide filter section on mobile */
-  .filterSection {
-    display: none;
+  .filterButtons {
+    flex-wrap: wrap;
   }
 
-  /* awardsGrid responsive rules are handled uniformly in main styles */
-
-  .awardFrame {
-    border-width: 6px;
+  .filterButton {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
   }
 
-  .featuredAward .awardFrame {
-    border-width: 8px;
+  .awardCard {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    overflow: hidden;
   }
 
   .awardHeader {
-    padding: 1.5rem;
-  }
-
-  .awardContent {
-    padding: 2rem;
-  }
-
-  .awardTitle {
-    font-size: 1.5rem;
+    grid-column: unset;
+    grid-row: unset;
+    width: 100%;
+    justify-content: flex-start;
+    padding-top: 0;
   }
 
   .medal {
-    font-size: 2.5rem;
+    font-size: 1.5rem;
   }
 
-  .awardActions {
+  .awardContent {
+    grid-column: unset;
+    grid-row: unset;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .awardTitle {
+    font-size: 0.95rem;
+    word-break: break-word;
+    line-height: 1.3;
+  }
+
+  .awardDetails {
     flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .awardAuthors,
+  .awardVenue {
+    width: 100%;
+    flex-wrap: wrap;
+    overflow: hidden;
+  }
+
+  .authorLabel,
+  .venueLabel {
+    font-size: 0.8rem;
+  }
+
+  .authorNames,
+  .venueName {
+    word-break: break-word;
+    max-width: 100%;
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Year and Actions on same row - mobile */
+  .yearAndActions {
+    grid-column: unset;
+    grid-row: unset;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .awardYear {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.7rem;
+    height: 30px;
+    min-width: 55px;
   }
 
   .awardLink {
-    padding: 0.8rem 1.5rem;
-    font-size: 0.9rem;
-  }
-
-  .awardSeal {
-    width: 60px;
-    height: 60px;
-  }
-
-  .sealText {
-    font-size: 0.7rem;
-  }
-
-  .sealSubtext {
-    font-size: 0.5rem;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.7rem;
+    height: 30px;
+    min-width: 55px;
   }
 }
 
-/* Dark mode support */
+/* Dark mode support - Simplified */
 [data-theme='dark'] .container {
-  background:
-    radial-gradient(circle at 20% 80%, rgba(255, 215, 0, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 165, 0, 0.05) 0%, transparent 50%),
-    linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  background: transparent;
 }
 
 [data-theme='dark'] .header {
-  background: linear-gradient(135deg, rgba(33, 38, 45, 0.9) 0%, rgba(22, 27, 34, 0.8) 100%);
-  border-color: rgba(255, 215, 0, 0.3);
+  background: var(--tech-card-bg);
+  border-color: var(--tech-border);
 }
 
-[data-theme='dark'] .title {
-  color: #ffd700 !important;
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #ffd700 !important;
-  background-clip: unset !important;
-  text-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.4),
-    0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* Dark theme - direct targeting of production build class names */
-[data-theme='dark'] :global(.title_ruWM) {
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #ffd700 !important;
-  background-clip: unset !important;
-  color: #ffd700 !important;
-}
-
-/* Dark theme - stronger selector */
-[data-theme='dark'] :global(.container_hzh_) h1 {
-  background: none !important;
-  background-image: none !important;
-  background-color: transparent !important;
-  -webkit-background-clip: unset !important;
-  -webkit-text-fill-color: #ffd700 !important;
-  background-clip: unset !important;
-  color: #ffd700 !important;
-}
+/* Dark theme title uses same gradient as light theme */
 
 [data-theme='dark'] .subtitle {
-  color: #d4af37;
+  color: var(--tech-text-secondary);
 }
 
 [data-theme='dark'] .subtitleHighlight {
-  color: #ffd700;
-  background: none;
-  -webkit-background-clip: unset;
-  -webkit-text-fill-color: unset;
-  background-clip: unset;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: var(--tech-primary-blue);
 }
 
-[data-theme='dark'] .filterButtons {
-  background: linear-gradient(135deg, rgba(33, 38, 45, 0.95) 0%, rgba(22, 27, 34, 0.9) 100%);
-  border-color: rgba(255, 215, 0, 0.4);
-}
-
-[data-theme='dark'] .filterButton {
-  color: #8b949e;
-}
-
-[data-theme='dark'] .filterButton:hover {
-  background: rgba(255, 215, 0, 0.1);
-  color: #ffd700;
-}
-
-[data-theme='dark'] .filterButton.active {
-  background: linear-gradient(45deg, #ffd700, #ffb347);
-  color: #1a1a1a;
-}
-
-[data-theme='dark'] .awardFrame {
-  background:
-    linear-gradient(135deg, #2d3748 0%, #1a202c 100%),
-    linear-gradient(45deg, #ffd700 0%, #ffb347 100%);
-}
-
-[data-theme='dark'] .awardHeader {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 179, 71, 0.05) 100%);
-}
-
-[data-theme='dark'] .awardContent {
-  background: linear-gradient(135deg, rgba(45, 55, 72, 0.95) 0%, rgba(26, 32, 44, 0.9) 100%);
-}
-
-[data-theme='dark'] .awardTitle {
-  color: #f7fafc;
-  background: linear-gradient(45deg, #f7fafc, #e2e8f0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-[data-theme='dark'] .awardDetails {
-  background: rgba(255, 215, 0, 0.08);
-  border-color: rgba(255, 215, 0, 0.3);
-}
-
-[data-theme='dark'] .authorNames,
-[data-theme='dark'] .venueName {
-  color: #cbd5e0;
-}
-
-[data-theme='dark'] .awardDescription {
-  color: #a0aec0;
-  background: rgba(26, 32, 44, 0.8);
-  border-left-color: rgba(255, 215, 0, 0.4);
-}
-
-[data-theme='dark'] .awardFooter {
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 179, 71, 0.05) 100%);
-}
-
-[data-theme='dark'] .emptyState {
-  color: #8b949e;
-}
+/* Dark theme uses default CSS variables */
 
 

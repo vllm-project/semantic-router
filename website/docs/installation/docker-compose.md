@@ -2,7 +2,7 @@
 sidebar_position: 3
 ---
 
-# Install in Docker Compose
+# Install with Docker Compose
 
 This guide provides step-by-step instructions for deploying the vLLM Semantic Router with Envoy AI Gateway on Docker Compose.
 
@@ -10,7 +10,7 @@ This guide provides step-by-step instructions for deploying the vLLM Semantic Ro
 
 - **Docker Engine:** see more in [Docker Engine Installation](https://docs.docker.com/engine/install/)
 
-- **Clone repo：**
+- **Clone repo:**
 
   ```bash
   git clone https://github.com/vllm-project/semantic-router.git
@@ -63,7 +63,7 @@ docker compose -f deploy/docker-compose/docker-compose.yml up --build
 docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
 
 # Include mock vLLM + testing profile (points router to mock endpoint)
-CONFIG_FILE=/app/config/config.testing.yaml \
+CONFIG_FILE=/app/config/testing/config.testing.yaml \
   docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
 ```
 

@@ -1,0 +1,24 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vsr-llama8b
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: inference-gateway
+  rules:
+  - backendRefs:
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: vllm-llama3-8b-instruct
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+      headers:
+      - type: Exact
+        name: x-selected-model
+        value: llama3-8b
+    timeouts:
+      request: 300s

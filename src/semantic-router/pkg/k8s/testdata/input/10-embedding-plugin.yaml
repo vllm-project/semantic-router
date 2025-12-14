@@ -1,0 +1,68 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: embedding-plugin-pool
+  namespace: default
+spec:
+  defaultModel: "deepseek-v3"
+  models:
+    - name: "deepseek-v3"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000027  # $0.27 per 1M - with jailbreak protection
+        outputTokenPrice: 0.0000011  # $1.1 per 1M
+      loras:
+        - name: "secure-assistant"
+          description: "Security-aware assistant"
+
+    - name: "deepseek-r1"
+      reasoningFamily: "deepseek"
+      pricing:
+        inputTokenPrice: 0.00000055  # $0.55 per 1M - advanced security
+        outputTokenPrice: 0.0000022  # $2.2 per 1M
+      loras:
+        - name: "security-expert"
+          description: "Advanced security specialist"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: embedding-plugin-route
+  namespace: default
+spec:
+  signals:
+    embeddings:
+      - name: "sensitive_data"
+        threshold: 0.80
+        candidates:
+          - "I need to share my personal information"
+          - "Here is my credit card number"
+          - "My social security number is"
+        aggregationMethod: "max"
+
+  decisions:
+    - name: "pii_protected"
+      description: "PII-protected queries"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "embedding"
+            name: "sensitive_data"
+      modelRefs:
+        - model: "deepseek-r1"
+          use_reasoning: true
+          reasoning_effort: "medium"
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.8
+            pii_types_allowed: ["CREDIT_CARD", "SSN", "EMAIL"]
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.85
+

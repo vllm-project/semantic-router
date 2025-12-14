@@ -61,8 +61,9 @@ OPTIONS:
     -h, --help               Show this help message
 
 CLEANUP LEVELS:
-    deployment    - Remove deployment, services, routes, configmap (keep namespace and PVC)
-    namespace     - Remove entire namespace and all resources (default)
+    deployment    - Remove deployments, services, routes, configmaps, buildconfigs (keep namespace and PVCs)
+                    Includes: semantic-router, vLLM models, dashboard, OpenWebUI, Grafana, Prometheus
+    namespace     - Remove entire namespace and all resources including PVCs (default)
     all           - Remove namespace and any cluster-wide resources
 
 EXAMPLES:
@@ -255,6 +256,18 @@ show_current_resources() {
     oc get configmaps -n "$NAMESPACE" 2>/dev/null || echo "No configmaps found"
 
     echo ""
+    echo "=== BuildConfigs ==="
+    oc get buildconfig -n "$NAMESPACE" 2>/dev/null || echo "No buildconfigs found"
+
+    echo ""
+    echo "=== ImageStreams ==="
+    oc get imagestream -n "$NAMESPACE" 2>/dev/null || echo "No imagestreams found"
+
+    echo ""
+    echo "=== Deployments ==="
+    oc get deployments -n "$NAMESPACE" 2>/dev/null || echo "No deployments found"
+
+    echo ""
 }
 
 # Function to confirm cleanup
@@ -270,10 +283,12 @@ confirm_cleanup() {
 
     case "$CLEANUP_LEVEL" in
         "deployment")
-            log "WARN" "Will delete: deployment, services, routes, configmaps (keeping namespace and PVCs)"
+            log "WARN" "Will delete: deployments, services, routes, configmaps, buildconfigs (keeping namespace and PVCs)"
+            log "WARN" "Components: semantic-router, vLLM models, dashboard, OpenWebUI, Grafana, Prometheus"
             ;;
         "namespace")
             log "WARN" "Will delete: entire namespace and all resources including PVCs"
+            log "WARN" "This removes ALL components: core + observability stack"
             ;;
         "all")
             log "WARN" "Will delete: namespace and any cluster-wide resources"
@@ -304,13 +319,43 @@ cleanup_deployment() {
 
     # Delete specific resources but keep namespace and PVCs
     local resources=(
+        # Core semantic-router resources
         "deployment/semantic-router"
+        "deployment/vllm-model-a"
+        "deployment/vllm-model-b"
         "service/semantic-router"
         "service/semantic-router-metrics"
+        "service/vllm-model-a"
+        "service/vllm-model-b"
         "route/semantic-router-api"
         "route/semantic-router-grpc"
         "route/semantic-router-metrics"
+        "route/envoy-http"
+        "route/envoy-admin"
         "configmap/semantic-router-config"
+        "configmap/envoy-config"
+        "buildconfig/llm-katan"
+        "imagestream/llm-katan"
+        "imagestream/python"
+
+        # Observability resources
+        "deployment/dashboard"
+        "deployment/openwebui"
+        "deployment/grafana"
+        "deployment/prometheus"
+        "service/dashboard"
+        "service/openwebui"
+        "service/grafana"
+        "service/prometheus"
+        "route/dashboard"
+        "route/openwebui"
+        "route/grafana"
+        "route/prometheus"
+        "configmap/dashboard-config"
+        "configmap/grafana-config"
+        "configmap/prometheus-config"
+        "buildconfig/dashboard-custom"
+        "imagestream/dashboard-custom"
     )
 
     for resource in "${resources[@]}"; do

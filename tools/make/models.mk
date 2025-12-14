@@ -6,136 +6,40 @@
 
 # CI_MINIMAL_MODELS=true will download only the minimal set of models required for tests.
 # Default behavior downloads the full set used for local development.
+# Model configurations are moved to config directory
+#  full set: config/models.yaml
+#  minimal set: config/models.minimal.yaml
+#  LoRA and advanced embedding models: config/models.lora.yaml
 
 download-models:
 download-models: ## Download models (full or minimal set depending on CI_MINIMAL_MODELS)
 	@$(LOG_TARGET)
 	@mkdir -p models
-	@if [ "$$CI_MINIMAL_MODELS" = "true" ]; then \
-		echo "CI_MINIMAL_MODELS=true -> downloading minimal model set"; \
-		$(MAKE) -s download-models-minimal; \
-	else \
-		echo "CI_MINIMAL_MODELS not set -> downloading full model set"; \
-		$(MAKE) -s download-models-full; \
-	fi
+	# Delegate to Python Model Manager which handles CI_MINIMAL_MODELS env var
+	PYTHONPATH=src python -m model_manager
 
-# Minimal models needed to run unit tests on CI (avoid rate limits)
-# - Category classifier (ModernBERT)
-# - PII token classifier (ModernBERT Presidio)
-# - Jailbreak classifier (ModernBERT)
-# - Optional plain PII classifier mapping (small)
-
+# Explicit minimal download (useful for debugging CI mode locally)
 download-models-minimal:
 download-models-minimal: ## Pre-download minimal set of models for CI tests
 	@mkdir -p models
-	# Pre-download tiny LLM for llm-katan (optional but speeds up first start)
-	@if [ ! -f "models/Qwen/Qwen3-0.6B/.downloaded" ] || [ ! -d "models/Qwen/Qwen3-0.6B" ]; then \
-		hf download Qwen/Qwen3-0.6B --local-dir models/Qwen/Qwen3-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen/Qwen3-0.6B/.downloaded; \
-	fi
-	@if [ ! -f "models/all-MiniLM-L12-v2/.downloaded" ] || [ ! -d "models/all-MiniLM-L12-v2" ]; then \
-		hf download sentence-transformers/all-MiniLM-L12-v2 --local-dir models/all-MiniLM-L12-v2 && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/all-MiniLM-L12-v2/.downloaded; \
-	fi
-	@if [ ! -f "models/category_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/category_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir models/category_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/category_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/pii_classifier_modernbert-base_presidio_token_model/.downloaded" ] || [ ! -d "models/pii_classifier_modernbert-base_presidio_token_model" ]; then \
-		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/pii_classifier_modernbert-base_presidio_token_model/.downloaded; \
-	fi
-	@if [ ! -f "models/jailbreak_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/jailbreak_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model --local-dir models/jailbreak_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/jailbreak_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/pii_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/pii_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir models/pii_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/pii_classifier_modernbert-base_model/.downloaded; \
-	fi
+	PYTHONPATH=src python -m model_manager --config config/models.minimal.yaml
 
-# Full model set for local development and docs
-
+# Explicit full download
 download-models-full:
 download-models-full: ## Download all models used in local development and docs
 	@mkdir -p models
-	# Pre-download tiny LLM for llm-katan (optional but speeds up first start)
-	@if [ ! -f "models/Qwen/Qwen3-0.6B/.downloaded" ] || [ ! -d "models/Qwen/Qwen3-0.6B" ]; then \
-		hf download Qwen/Qwen3-0.6B --local-dir models/Qwen/Qwen3-0.6B && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/Qwen/Qwen3-0.6B/.downloaded; \
-	fi
-	@if [ ! -f "models/all-MiniLM-L12-v2/.downloaded" ] || [ ! -d "models/all-MiniLM-L12-v2" ]; then \
-		hf download sentence-transformers/all-MiniLM-L12-v2 --local-dir models/all-MiniLM-L12-v2 && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/all-MiniLM-L12-v2/.downloaded; \
-	fi
-	@if [ ! -f "models/category_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/category_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/category_classifier_modernbert-base_model --local-dir models/category_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/category_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/pii_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/pii_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_model --local-dir models/pii_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/pii_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/jailbreak_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/jailbreak_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model --local-dir models/jailbreak_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/jailbreak_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/pii_classifier_modernbert-base_presidio_token_model/.downloaded" ] || [ ! -d "models/pii_classifier_modernbert-base_presidio_token_model" ]; then \
-		hf download LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model --local-dir models/pii_classifier_modernbert-base_presidio_token_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/pii_classifier_modernbert-base_presidio_token_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_intent_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_intent_classifier_bert-base-uncased_model" ]; then \
-		hf download LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model --local-dir models/lora_intent_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_intent_classifier_bert-base-uncased_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_intent_classifier_roberta-base_model/.downloaded" ] || [ ! -d "models/lora_intent_classifier_roberta-base_model" ]; then \
-		hf download LLM-Semantic-Router/lora_intent_classifier_roberta-base_model --local-dir models/lora_intent_classifier_roberta-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_intent_classifier_roberta-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_intent_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/lora_intent_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/lora_intent_classifier_modernbert-base_model --local-dir models/lora_intent_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_intent_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_pii_detector_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_pii_detector_bert-base-uncased_model" ]; then \
-		hf download LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model --local-dir models/lora_pii_detector_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_pii_detector_bert-base-uncased_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_pii_detector_roberta-base_model/.downloaded" ] || [ ! -d "models/lora_pii_detector_roberta-base_model" ]; then \
-		hf download LLM-Semantic-Router/lora_pii_detector_roberta-base_model --local-dir models/lora_pii_detector_roberta-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_pii_detector_roberta-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_pii_detector_modernbert-base_model/.downloaded" ] || [ ! -d "models/lora_pii_detector_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/lora_pii_detector_modernbert-base_model --local-dir models/lora_pii_detector_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_pii_detector_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
-		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_jailbreak_classifier_roberta-base_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_roberta-base_model" ]; then \
-		hf download LLM-Semantic-Router/lora_jailbreak_classifier_roberta-base_model --local-dir models/lora_jailbreak_classifier_roberta-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_roberta-base_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_jailbreak_classifier_modernbert-base_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_modernbert-base_model" ]; then \
-		hf download LLM-Semantic-Router/lora_jailbreak_classifier_modernbert-base_model --local-dir models/lora_jailbreak_classifier_modernbert-base_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_modernbert-base_model/.downloaded; \
-	fi
-	@if [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
-		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
-	fi
-	@if [ ! -d "models/embeddinggemma-300m" ]; then \
-		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
-	fi
-	@if [ ! -f "models/binary_classification/.downloaded" ] || [ ! -d "models/binary_classification" ]; then \
-		hf download rd3111/binary_classification --local-dir models/binary_classification && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/binary_classification/.downloaded; \
-	fi
+	PYTHONPATH=src python -m model_manager --config config/models.yaml
 # Download only LoRA and advanced embedding models (for CI after minimal tests)
 download-models-lora:
 download-models-lora: ## Download LoRA adapters and advanced embedding models only
 	@mkdir -p models
-	@echo "Downloading LoRA adapters and advanced embedding models..."
-	@if [ ! -f "models/lora_intent_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_intent_classifier_bert-base-uncased_model" ]; then \
-		hf download LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model --local-dir models/lora_intent_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_intent_classifier_bert-base-uncased_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_pii_detector_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_pii_detector_bert-base-uncased_model" ]; then \
-		hf download LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model --local-dir models/lora_pii_detector_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_pii_detector_bert-base-uncased_model/.downloaded; \
-	fi
-	@if [ ! -f "models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded" ] || [ ! -d "models/lora_jailbreak_classifier_bert-base-uncased_model" ]; then \
-		hf download LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model --local-dir models/lora_jailbreak_classifier_bert-base-uncased_model && printf '%s\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > models/lora_jailbreak_classifier_bert-base-uncased_model/.downloaded; \
-	fi
-	@if [ ! -d "models/Qwen3-Embedding-0.6B" ]; then \
-		hf download Qwen/Qwen3-Embedding-0.6B --local-dir models/Qwen3-Embedding-0.6B; \
-	fi
-	@if [ ! -d "models/embeddinggemma-300m" ]; then \
-		echo "Attempting to download google/embeddinggemma-300m (may be restricted)..."; \
-		hf download google/embeddinggemma-300m --local-dir models/embeddinggemma-300m || echo "⚠️  Warning: Failed to download embeddinggemma-300m (model may be restricted), continuing..."; \
-	fi
+	PYTHONPATH=src python -m model_manager --config config/models.lora.yaml
 
 # Clean up minimal models to save disk space (for CI)
 clean-minimal-models: ## Remove minimal models to save disk space
 	@echo "Cleaning up minimal models to save disk space..."
-	@rm -rf models/category_classifier_modernbert-base_model || true
-	@rm -rf models/pii_classifier_modernbert-base_presidio_token_model || true
-	@rm -rf models/jailbreak_classifier_modernbert-base_model || true
-	@rm -rf models/pii_classifier_modernbert-base_model || true
-	@echo "✓ Minimal models cleaned up"
+	PYTHONPATH=src python -m model_manager --config config/models.minimal.yaml --clean
+
+# List configured models
+list-models: ## List models configured in the default or specified environment
+	@PYTHONPATH=src python -m model_manager --list

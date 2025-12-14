@@ -12,7 +12,7 @@ const (
 
 	// GatewayDestinationEndpoint specifies the backend endpoint address selected by the router.
 	// This header is set by the router to direct Envoy to the appropriate upstream service.
-	GatewayDestinationEndpoint = "x-gateway-destination-endpoint"
+	GatewayDestinationEndpoint = "x-vsr-destination-endpoint"
 
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.
@@ -24,9 +24,15 @@ const (
 // Vector Semantic Router decision-making information for debugging and monitoring.
 // Headers are only added when the request is successful and did not hit the cache.
 const (
-	// VSRSelectedCategory indicates the category selected by VSR during classification.
+	// VSRSelectedCategory indicates the category selected by VSR during domain classification.
+	// This comes from the domain classifier (MMLU categories).
 	// Example values: "math", "business", "biology", "computer_science"
 	VSRSelectedCategory = "x-vsr-selected-category"
+
+	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
+	// This is the final routing decision made by the DecisionEngine.
+	// Example values: "math_decision", "business_decision", "thinking_decision"
+	VSRSelectedDecision = "x-vsr-selected-decision"
 
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
@@ -53,6 +59,10 @@ const (
 	// Value: "true"
 	VSRPIIViolation = "x-vsr-pii-violation"
 
+	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
+	// Value: "EMAIL_ADDRESS,US_SSN" (example)
+	VSRPIITypes = "x-vsr-pii-types"
+
 	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
 	// Value: "true"
 	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"
@@ -64,4 +74,32 @@ const (
 	// VSRJailbreakConfidence indicates the confidence level of the jailbreak detection.
 	// Value: floating point number formatted as string (e.g., "0.950")
 	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
+)
+
+// Hallucination Mitigation Headers
+// These headers are added to responses when hallucination detection is enabled
+// and potential hallucinations are detected in the LLM response.
+const (
+	// HallucinationDetected indicates that potential hallucination was detected in the response.
+	// Value: "true"
+	HallucinationDetected = "x-vsr-hallucination-detected"
+
+	// HallucinationSpans contains a summary of unsupported claims found in the response.
+	// Value: semicolon-separated list of claim summaries (truncated if too long)
+	HallucinationSpans = "x-vsr-hallucination-spans"
+
+	// FactCheckNeeded indicates whether the original prompt was classified as needing fact-checking.
+	// Value: "true" or "false"
+	FactCheckNeeded = "x-vsr-fact-check-needed"
+
+	// UnverifiedFactualResponse indicates the response contains factual claims that could not be verified.
+	// This occurs when the prompt was classified as needing fact-checking but no tool/RAG context
+	// was available to verify the response against.
+	// Value: "true"
+	UnverifiedFactualResponse = "x-vsr-unverified-factual-response"
+
+	// VerificationContextMissing indicates that no tool/RAG context was available for verification.
+	// This header is set alongside UnverifiedFactualResponse to explain why verification couldn't occur.
+	// Value: "true"
+	VerificationContextMissing = "x-vsr-verification-context-missing"
 )

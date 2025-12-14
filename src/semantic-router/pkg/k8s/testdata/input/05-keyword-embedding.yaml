@@ -1,0 +1,82 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: hybrid-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-14b"
+  models:
+    - name: "qwen-2.5-14b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000001    # $1 per 1M - balanced performance
+        outputTokenPrice: 0.000002   # $2 per 1M
+      loras:
+        - name: "support-agent"
+          description: "Customer support agent"
+
+    - name: "qwen-2.5-72b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M - for urgent/complex issues
+        outputTokenPrice: 0.000006   # $6 per 1M
+      loras:
+        - name: "emergency-specialist"
+          description: "Emergency support specialist"
+
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: hybrid-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "urgent"
+        operator: "OR"
+        keywords: ["urgent", "emergency", "critical"]
+        caseSensitive: false
+
+    embeddings:
+      - name: "support_request"
+        threshold: 0.70
+        candidates:
+          - "I need immediate assistance"
+          - "Please help me resolve this issue"
+          - "Can someone help me urgently?"
+        aggregationMethod: "max"
+
+  decisions:
+    - name: "urgent_support"
+      description: "Urgent support requests - use large model with reasoning"
+      priority: 100
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "urgent"
+          - type: "embedding"
+            name: "support_request"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          loraName: "emergency-specialist"
+          useReasoning: true
+          reasoningEffort: "high"
+
+    - name: "general_support"
+      description: "General support requests - use small model"
+      priority: 50
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "urgent"
+          - type: "embedding"
+            name: "support_request"
+      modelRefs:
+        - model: "qwen-2.5-14b"
+          loraName: "support-agent"
+          useReasoning: false
+

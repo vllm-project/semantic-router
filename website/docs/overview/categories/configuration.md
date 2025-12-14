@@ -223,6 +223,62 @@ categories:
 - **0.4-0.5**: Adequate capability
 - **0.0-0.3**: Poor capability, avoid if possible
 
+#### `lora_name` (Optional)
+
+- **Type**: String
+- **Description**: LoRA adapter name to use for this model
+- **Purpose**: Enable intent-aware LoRA routing
+- **Validation**: Must be defined in the model's `loras` list in `model_config`
+
+When specified, the `lora_name` becomes the final model name in requests to vLLM, enabling automatic routing to LoRA adapters based on classified intent.
+
+```yaml
+# First, define available LoRA adapters in model_config
+model_config:
+  "llama2-7b":
+    reasoning_family: "llama2"
+    preferred_endpoints: ["vllm-primary"]
+    loras:
+      - name: "technical-lora"
+        description: "Optimized for technical questions"
+      - name: "medical-lora"
+        description: "Specialized for medical domain"
+
+# Then reference them in categories
+categories:
+  - name: "technical"
+    model_scores:
+      - model: "llama2-7b"        # Base model (for endpoint selection)
+        lora_name: "technical-lora" # LoRA adapter name (final model name)
+        score: 1.0
+```
+
+**How LoRA Routing Works**:
+
+1. LoRA adapters are defined in `model_config` under the base model
+2. Request is classified into a category (e.g., "technical")
+3. Router selects the best `ModelScore` for that category
+4. Configuration validator ensures `lora_name` is defined in model's `loras` list
+5. If `lora_name` is specified, it replaces the base model name
+6. Request is sent to vLLM with `model="technical-lora"`
+7. vLLM automatically routes to the appropriate LoRA adapter
+
+**Prerequisites**:
+
+- vLLM server must be started with `--enable-lora` flag
+- LoRA adapters must be registered using `--lora-modules` parameter
+- LoRA names must be defined in `model_config` before use in `model_scores`
+
+**Benefits**:
+
+- **Domain Expertise**: Fine-tuned adapters for specific domains
+- **Cost Efficiency**: Share base model weights across adapters
+- **Easy A/B Testing**: Compare adapter versions by adjusting scores
+- **Flexible Deployment**: Add/remove adapters without router restart
+- **Configuration Validation**: Prevents typos and missing LoRA definitions
+
+See [LoRA Routing Example](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing.yaml) for complete configuration.
+
 ## Complete Configuration Examples
 
 ### Example 1: STEM Category (Reasoning Enabled)
@@ -261,7 +317,47 @@ categories:
         score: 0.2
 ```
 
-### Example 3: Security-Focused Configuration (Jailbreak Protection)
+### Example 3: Intent-Aware LoRA Routing
+
+```yaml
+# Define LoRA adapters in model_config first
+model_config:
+  "llama2-7b":
+    reasoning_family: "llama2"
+    preferred_endpoints: ["vllm-primary"]
+    loras:
+      - name: "technical-lora"
+        description: "Optimized for technical questions"
+      - name: "medical-lora"
+        description: "Specialized for medical domain"
+
+# Then reference them in categories
+categories:
+  - name: "technical"
+    description: "Programming and technical questions"
+    model_scores:
+      - model: "llama2-7b"
+        lora_name: "technical-lora"  # Routes to technical LoRA adapter
+        score: 1.0
+        use_reasoning: true
+
+  - name: "medical"
+    description: "Medical and healthcare questions"
+    model_scores:
+      - model: "llama2-7b"
+        lora_name: "medical-lora"    # Routes to medical LoRA adapter
+        score: 1.0
+        use_reasoning: true
+
+  - name: "general"
+    description: "General questions"
+    model_scores:
+      - model: "llama2-7b"           # No lora_name - uses base model
+        score: 0.8
+        use_reasoning: false
+```
+
+### Example 4: Security-Focused Configuration (Jailbreak Protection)
 
 ```yaml
 categories:
@@ -613,5 +709,6 @@ categories:
 ## Next Steps
 
 - [**Supported Categories**](supported-categories.md) - Review all available categories
+- [**Keyword Classifier Configuration**](keyword-configuration.md) - Learn how to configure keyword-based routing rules
 - [**Technical Details**](technical-details.md) - Understand the implementation
 - [**Category Overview**](overview.md) - Learn about the category system

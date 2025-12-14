@@ -1,0 +1,14 @@
+{
+  "version": "v1.0.0",
+  "git_commit": "2dd079f3f73f6f66710d8b418daf39854fd2a1ab",
+  "git_branch": "fix_performance",
+  "timestamp": "2025-12-11T09:58:53Z",
+  "benchmarks": {
+    "BenchmarkEvaluateDecisions_SingleDomain": {"iterations": 60389019, "ns_per_op": 628.0, "bytes_per_op": 112, "allocs_per_op": 5},
+    "BenchmarkEvaluateDecisions_MultipleDomains": {"iterations": 27231171, "ns_per_op": 1289, "bytes_per_op": 376, "allocs_per_op": 13},
+    "BenchmarkEvaluateDecisions_WithKeywords": {"iterations": 60027730, "ns_per_op": 621.0, "bytes_per_op": 112, "allocs_per_op": 5},
+    "BenchmarkEvaluateDecisions_ComplexScenario": {"iterations": 26734726, "ns_per_op": 1329, "bytes_per_op": 376, "allocs_per_op": 13},
+    "BenchmarkEvaluateDecisions_Parallel": {"iterations": 266277176, "ns_per_op": 136.9, "bytes_per_op": 112, "allocs_per_op": 5},
+    "BenchmarkPrioritySelection": {"iterations": 26927731, "ns_per_op": 1327, "bytes_per_op": 376, "allocs_per_op": 13}
+  }
+}

@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/common
+
+nameSuffix: -gpt35
+
+patches:
+  - target:
+      kind: Deployment
+      name: llm-katan
+    patch: |-
+      - op: add
+        path: /spec/selector/matchLabels/app
+        value: "llm-katan-gpt35"
+      - op: add
+        path: /spec/template/metadata/labels/app
+        value: "llm-katan-gpt35"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: YLLM_SERVED_MODEL_NAME
+          value: "gpt-3.5-turbo"
+      - op: add
+        path: /spec/template/metadata/labels/model-alias
+        value: "gpt-3.5-turbo"
+
+  - target:
+      kind: Service
+      name: llm-katan
+    patch: |-
+      - op: add
+        path: /spec/selector/app
+        value: "llm-katan-gpt35"
+      - op: add
+        path: /metadata/labels/model-alias
+        value: "gpt-3.5-turbo"
+
+  # Update PVC reference in deployment to match suffixed PVC name
+  - target:
+      kind: Deployment
+      name: llm-katan
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0/persistentVolumeClaim/claimName
+        value: llm-katan-models-gpt35

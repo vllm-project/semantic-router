@@ -149,7 +149,7 @@ class Jailbreak_Dataset:
             "salad-data": {
                 "name": "OpenSafetyLab/Salad-Data",
                 "config": "attack_enhanced_set",
-                "text_column": "attack",
+                "text_column": "augq",  # Fixed: was "attack" but actual column is "augq" (augmented question)
                 "label_column": None,
                 "type": "jailbreak",
                 "description": "Salad-Data jailbreak attacks",
@@ -423,24 +423,8 @@ def create_jailbreak_dataset(max_samples=1000):
 class SecurityLoRATrainer(Trainer):
     """Enhanced Trainer for security detection with LoRA."""
 
-    def compute_loss(
-        self, model, inputs, return_outputs=False, num_items_in_batch=None
-    ):
-        """Compute security classification loss."""
-        labels = inputs.get("labels")
-        outputs = model(**inputs)
-
-        # Binary classification loss
-        loss_fct = nn.CrossEntropyLoss()
-
-        if labels is not None:
-            loss = loss_fct(
-                outputs.logits.view(-1, self.model.config.num_labels), labels.view(-1)
-            )
-        else:
-            loss = None
-
-        return (loss, outputs) if return_outputs else loss
+    # No custom compute_loss needed for sequence classification
+    # The default Trainer.compute_loss handles it correctly
 
 
 def create_lora_security_model(model_name: str, num_labels: int, lora_config: dict):
@@ -453,10 +437,12 @@ def create_lora_security_model(model_name: str, num_labels: int, lora_config: di
         tokenizer.pad_token = tokenizer.eos_token
 
     # Load base model for binary classification (safe vs jailbreak)
+    # CRITICAL FIX: Always use float32 for sequence classification with modules_to_save
+    # Float16 causes NaN gradients when training classification heads (PEFT Issue #1070)
     base_model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         num_labels=num_labels,  # Binary: 0=safe, 1=jailbreak
-        dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        torch_dtype=torch.float32,  # Fixed: was dtype=torch.float16 causing grad_norm=nan
     )
 
     # Create LoRA configuration for sequence classification
@@ -468,11 +454,22 @@ def create_lora_security_model(model_name: str, num_labels: int, lora_config: di
         lora_dropout=lora_config["dropout"],
         target_modules=lora_config["target_modules"],
         bias="none",
+        modules_to_save=[
+            "classifier"
+        ],  # CRITICAL: Train the classification head alongside LoRA adapters
     )
 
     # Apply LoRA to the model
     lora_model = get_peft_model(base_model, peft_config)
     lora_model.print_trainable_parameters()
+
+    # CRITICAL FIX: Ensure all trainable parameters are float32 (PEFT Issue #1715)
+    # This prevents NaN gradients when using modules_to_save with classification heads
+    for param in lora_model.parameters():
+        if param.requires_grad:
+            param.data = param.data.float()
+
+    logger.info("Verified all trainable parameters converted to float32")
 
     return lora_model, tokenizer
 
@@ -520,7 +517,7 @@ def main(
     lora_dropout: float = 0.1,
     num_epochs: int = 3,
     batch_size: int = 8,
-    learning_rate: float = 3e-5,  # Reduced from 1e-4 based on LLM Guard/Guardrails best practices
+    learning_rate: float = 3e-4,  # LoRA requires higher LR than full fine-tuning (PEFT LoRA.ipynb official example)
     max_samples: int = 1000,
     output_dir: str = None,
 ):
@@ -578,11 +575,12 @@ def main(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
-        # Anti-gradient explosion measures based on
-        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
-        lr_scheduler_type="cosine",  # More stable learning rate schedule
-        warmup_ratio=0.06,  # Gradual warmup as recommended by PEFT/LLM Guard
-        weight_decay=0.01,
+        # Gradient clipping disabled for LoRA - official PEFT example doesn't use it
+        # Clipping may interfere with LoRA gradient flow (especially with modules_to_save)
+        max_grad_norm=None,  # Fixed: was 1.0, removed per PEFT best practices
+        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
+        warmup_ratio=0.06,  # PEFT recommended warmup ratio
+        weight_decay=0.01,  # Re-enabled for regularization
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
@@ -591,7 +589,7 @@ def main(
         metric_for_best_model="f1",
         save_total_limit=2,
         report_to=[],
-        fp16=torch.cuda.is_available(),
+        fp16=False,  # Disabled: FP16 causes gradient unscaling errors with LoRA
         # Additional stability measures
         dataloader_drop_last=False,
         eval_accumulation_steps=1,

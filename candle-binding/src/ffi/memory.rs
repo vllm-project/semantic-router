@@ -444,6 +444,93 @@ pub extern "C" fn free_c_float_array(array: *mut f32, length: i32) {
     }
 }
 
+/// Free hallucination detection result
+///
+/// # Safety
+/// - `result` must be obtained from detect_hallucinations
+#[no_mangle]
+pub extern "C" fn free_hallucination_detection_result(result: HallucinationDetectionResult) {
+    unsafe {
+        // Free error message if present
+        if !result.error_message.is_null() {
+            let _ = CString::from_raw(result.error_message);
+        }
+
+        // Free spans array
+        if result.num_spans > 0 && !result.spans.is_null() {
+            let spans_slice =
+                std::slice::from_raw_parts_mut(result.spans, result.num_spans as usize);
+
+            // Free each span's strings
+            for span in spans_slice {
+                if !span.text.is_null() {
+                    let _ = CString::from_raw(span.text);
+                }
+                if !span.label.is_null() {
+                    let _ = CString::from_raw(span.label);
+                }
+            }
+
+            // Free the spans array itself using the layout-aware deallocation
+            let layout =
+                std::alloc::Layout::array::<HallucinationSpan>(result.num_spans as usize).unwrap();
+            std::alloc::dealloc(result.spans as *mut u8, layout);
+        }
+    }
+}
+
+/// Free NLI result
+///
+/// # Safety
+/// - `result` must be obtained from classify_nli
+#[no_mangle]
+pub extern "C" fn free_nli_result(result: NLIResult) {
+    unsafe {
+        // Free error message if present
+        if !result.error_message.is_null() {
+            let _ = CString::from_raw(result.error_message);
+        }
+    }
+}
+
+/// Free enhanced hallucination detection result
+///
+/// # Safety
+/// - `result` must be obtained from detect_hallucinations_with_nli
+#[no_mangle]
+pub extern "C" fn free_enhanced_hallucination_detection_result(
+    result: EnhancedHallucinationDetectionResult,
+) {
+    unsafe {
+        // Free error message if present
+        if !result.error_message.is_null() {
+            let _ = CString::from_raw(result.error_message);
+        }
+
+        // Free spans array
+        if result.num_spans > 0 && !result.spans.is_null() {
+            let spans_slice =
+                std::slice::from_raw_parts_mut(result.spans, result.num_spans as usize);
+
+            // Free each span's strings
+            for span in spans_slice {
+                if !span.text.is_null() {
+                    let _ = CString::from_raw(span.text);
+                }
+                if !span.explanation.is_null() {
+                    let _ = CString::from_raw(span.explanation);
+                }
+            }
+
+            // Free the spans array itself using the layout-aware deallocation
+            let layout =
+                std::alloc::Layout::array::<EnhancedHallucinationSpan>(result.num_spans as usize)
+                    .unwrap();
+            std::alloc::dealloc(result.spans as *mut u8, layout);
+        }
+    }
+}
+
 /// Convert IntentResult to LoRAIntentResult and allocate
 ///
 /// # Safety

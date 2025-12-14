@@ -379,11 +379,11 @@ def create_lora_model(model_name: str, num_labels: int, lora_config: dict):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load base model
+    # Load base model - Force FP32 to prevent NaN gradients during training
     base_model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         num_labels=num_labels,
-        dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        torch_dtype=torch.float32,  # Always use FP32 for stable training
     )
 
     # Create LoRA configuration
@@ -601,7 +601,7 @@ def merge_lora_adapter_to_full_model(
 
     # Load base model with correct number of labels
     base_model = AutoModelForSequenceClassification.from_pretrained(
-        base_model_path, num_labels=num_labels, dtype=torch.float32, device_map="cpu"
+        base_model_path, num_labels=num_labels, torch_dtype=torch.float32
     )
 
     # Load tokenizer with model-specific configuration
@@ -658,6 +658,27 @@ def merge_lora_adapter_to_full_model(
             os.path.join(output_path, "label_mapping.json"), category_mapping_path
         )
         logger.info("Created category_mapping.json")
+
+    # Create lora_config.json for Rust router detection
+    # This file signals to the Rust router that this is a LoRA-trained model
+    # and should be routed to the LoRA inference path
+    logger.info("Creating lora_config.json for LoRA model detection...")
+    lora_config = {
+        "rank": 16,  # LoRA rank (r) - matches training configuration
+        "alpha": 32,  # LoRA alpha scaling factor
+        "dropout": 0.1,  # LoRA dropout rate
+        "target_modules": [
+            "attention.self.query",
+            "attention.self.value",
+            "attention.output.dense",
+            "intermediate.dense",
+            "output.dense",
+        ],
+    }
+    lora_config_path = os.path.join(output_path, "lora_config.json")
+    with open(lora_config_path, "w") as f:
+        json.dump(lora_config, f)
+    logger.info(f"Created {lora_config_path}")
 
     logger.info("LoRA adapter merged successfully!")
 

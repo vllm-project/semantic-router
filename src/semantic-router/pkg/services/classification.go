@@ -14,10 +14,10 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // Global classification service instance
@@ -59,30 +59,30 @@ func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedCl
 func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
 	// Debug: Check current working directory
 	wd, _ := os.Getwd()
-	observability.Debugf("Debug: Current working directory: %s", wd)
-	observability.Debugf("Debug: Attempting to discover models in: ./models")
+	logging.Debugf("Debug: Current working directory: %s", wd)
+	logging.Debugf("Debug: Attempting to discover models in: ./models")
 
 	// Always try to auto-discover and initialize unified classifier for batch processing
 	// Use model path from config, fallback to "./models" if not specified
 	modelsPath := "./models"
-	if config != nil && config.Classifier.CategoryModel.ModelID != "" {
+	if config != nil && config.CategoryModel.ModelID != "" {
 		// Extract the models directory from the model path
 		// e.g., "models/category_classifier_modernbert-base_model" -> "models"
-		if idx := strings.Index(config.Classifier.CategoryModel.ModelID, "/"); idx > 0 {
-			modelsPath = config.Classifier.CategoryModel.ModelID[:idx]
+		if idx := strings.Index(config.CategoryModel.ModelID, "/"); idx > 0 {
+			modelsPath = config.CategoryModel.ModelID[:idx]
 		}
 	}
 	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifier(modelsPath)
 	if ucErr != nil {
-		observability.Infof("Unified classifier auto-discovery failed: %v", ucErr)
+		logging.Infof("Unified classifier auto-discovery failed: %v", ucErr)
 	}
 	// create legacy classifier
 	legacyClassifier, lcErr := createLegacyClassifier(config)
 	if lcErr != nil {
-		observability.Warnf("Legacy classifier initialization failed: %v", lcErr)
+		logging.Warnf("Legacy classifier initialization failed: %v", lcErr)
 	}
 	if unifiedClassifier == nil && legacyClassifier == nil {
-		observability.Warnf("No classifier initialized. Using placeholder service.")
+		logging.Warnf("No classifier initialized. Using placeholder service.")
 	}
 	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
 }
@@ -94,18 +94,18 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 
 	// Check if we should load categories from MCP server
 	// Note: tool_name is optional and will be auto-discovered if not specified
-	useMCPCategories := config.Classifier.CategoryModel.ModelID == "" &&
-		config.Classifier.MCPCategoryModel.Enabled
+	useMCPCategories := config.CategoryModel.ModelID == "" &&
+		config.MCPCategoryModel.Enabled
 
 	if useMCPCategories {
 		// Categories will be loaded from MCP server during initialization
-		observability.Infof("Category mapping will be loaded from MCP server")
+		logging.Infof("Category mapping will be loaded from MCP server")
 		// Create empty mapping initially - will be populated during initialization
 		categoryMapping = nil
-	} else if config.Classifier.CategoryModel.CategoryMappingPath != "" {
+	} else if config.CategoryMappingPath != "" {
 		// Load from file as usual
 		var err error
-		categoryMapping, err = classification.LoadCategoryMapping(config.Classifier.CategoryModel.CategoryMappingPath)
+		categoryMapping, err = classification.LoadCategoryMapping(config.CategoryMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
@@ -113,9 +113,9 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 
 	// Load PII mapping
 	var piiMapping *classification.PIIMapping
-	if config.Classifier.PIIModel.PIIMappingPath != "" {
+	if config.PIIMappingPath != "" {
 		var err error
-		piiMapping, err = classification.LoadPIIMapping(config.Classifier.PIIModel.PIIMappingPath)
+		piiMapping, err = classification.LoadPIIMapping(config.PIIMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
@@ -233,7 +233,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	}
 
 	// Perform classification using the existing classifier
-	category, confidence, err := s.classifier.ClassifyCategory(req.Text)
+	category, confidence, _, err := s.classifier.ClassifyCategoryWithEntropy(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("classification failed: %w", err)
 	}
@@ -298,16 +298,16 @@ func (s *ClassificationService) ClassifyMultimodal(req MultimodalClassificationR
 			// We'll project to 512 dimensions in fuseTextAndImageEmbeddings
 			textEmb, err = candle_binding.GetEmbeddingWithDim(req.Text, 0.5, 0.5, 512)
 			if err != nil {
-				observability.Debugf("GetEmbeddingWithDim failed (ModelFactory may not be initialized): %v. Using GetEmbeddingDefault (BERT, 384-dim)...", err)
+				logging.Debugf("GetEmbeddingWithDim failed (ModelFactory may not be initialized): %v. Using GetEmbeddingDefault (BERT, 384-dim)...", err)
 				// Fallback to BERT embedding (384 dimensions)
 				// Will be projected to 512 in fusion step
 				textEmb, err = candle_binding.GetEmbeddingDefault(req.Text)
 				if err != nil {
-					observability.Warnf("Failed to get text embedding: %v. Falling back to prototype approach.", err)
+					logging.Warnf("Failed to get text embedding: %v. Falling back to prototype approach.", err)
 					return s.classifyMultimodalWithOllama(req)
 				}
 			}
-			observability.Debugf("Extracted text embedding (dim: %d)", len(textEmb))
+			logging.Debugf("Extracted text embedding (dim: %d)", len(textEmb))
 		} else {
 			// If no text, use zero embedding (will be dominated by image)
 			// Create zero embedding with 512 dimensions to match CLIP
@@ -315,29 +315,29 @@ func (s *ClassificationService) ClassifyMultimodal(req MultimodalClassificationR
 		}
 
 		// 2. Get image embeddings
-		observability.Infof("Processing %d image(s) with vision transformer", len(req.Images))
+		logging.Infof("Processing %d image(s) with vision transformer", len(req.Images))
 		imageEmbs, err := s.extractImageEmbeddings(req.Images)
 		if err != nil {
-			observability.Warnf("Failed to extract image embeddings: %v. Falling back to prototype approach.", err)
+			logging.Warnf("Failed to extract image embeddings: %v. Falling back to prototype approach.", err)
 			return s.classifyMultimodalWithOllama(req)
 		}
-		observability.Infof("Successfully extracted %d image embedding(s)", len(imageEmbs))
+		logging.Infof("Successfully extracted %d image embedding(s)", len(imageEmbs))
 
 		// 3. Fuse embeddings
 		fusedEmb := s.fuseTextAndImageEmbeddings(textEmb, imageEmbs)
-		observability.Debugf("Fused embedding dimension: %d", len(fusedEmb))
+		logging.Debugf("Fused embedding dimension: %d", len(fusedEmb))
 
 		// 4. Classify using embedding
 		category, confidence, err := s.classifyWithEmbedding(fusedEmb)
 		if err != nil {
-			observability.Warnf("Embedding-based classification failed: %v. Falling back to prototype approach.", err)
+			logging.Warnf("Embedding-based classification failed: %v. Falling back to prototype approach.", err)
 			return s.classifyMultimodalWithOllama(req)
 		}
 
 		processingTime := time.Since(start).Milliseconds()
 		processingTimeSeconds := float64(processingTime) / 1000.0
 
-		observability.Infof("Multimodal classification result: category=%s, confidence=%.3f, time=%dms",
+		logging.Infof("Multimodal classification result: category=%s, confidence=%.3f, time=%dms",
 			category, confidence, processingTime)
 
 		// Record metrics for quantitative analysis
@@ -382,20 +382,20 @@ func (s *ClassificationService) classifyMultimodalWithOllama(req MultimodalClass
 
 	var imageDescriptions []string
 	if len(req.Images) > 0 {
-		observability.Infof("Processing %d image(s) with Ollama (fallback)", len(req.Images))
+		logging.Infof("Processing %d image(s) with Ollama (fallback)", len(req.Images))
 		descriptions, err := s.extractImageFeatures(req.Images)
 		if err != nil {
-			observability.Errorf("Failed: ", err)
+			logging.Errorf("Failed: ", err)
 		} else if len(descriptions) == 0 {
-			observability.Warnf("no error occurred")
+			logging.Warnf("no error occurred")
 		} else {
 			imageDescriptions = descriptions
-			observability.Infof("Successfully extracted %d", len(descriptions))
+			logging.Infof("Successfully extracted %d", len(descriptions))
 		}
 	}
 
 	fusedText := s.fuseTextAndImageFeatures(text, imageDescriptions)
-	observability.Debugf("Fused text length: %d chars", len(fusedText))
+	logging.Debugf("Fused text length: %d chars", len(fusedText))
 
 	intentReq := IntentRequest{
 		Text:    fusedText,
@@ -407,7 +407,7 @@ func (s *ClassificationService) classifyMultimodalWithOllama(req MultimodalClass
 		return nil, fmt.Errorf("classification failed: %w", err)
 	}
 
-	observability.Infof("Classification result: category=%s, confidence=%.3f",
+	logging.Infof("Classification result: category=%s, confidence=%.3f",
 		intentResp.Classification.Category, intentResp.Classification.Confidence)
 
 	return intentResp, nil
@@ -422,12 +422,12 @@ func (s *ClassificationService) extractImageFeatures(images []MultimodalImage) (
 
 	for i, img := range images {
 		if img.Data == "" {
-			observability.Warnf("Skipping image %d with empty data", i+1)
+			logging.Warnf("Skipping image %d with empty data", i+1)
 			continue
 		}
 
 		cleanData := strings.ReplaceAll(strings.TrimSpace(img.Data), "\n", "")
-		observability.Debugf("Sending image %d to Ollama (data length: %d chars, mime_type: %s)", i+1, len(cleanData), img.MimeType)
+		logging.Debugf("Sending image %d to Ollama (data length: %d chars, mime_type: %s)", i+1, len(cleanData), img.MimeType)
 
 		body := map[string]interface{}{
 			"model":  ollamaModel,
@@ -437,21 +437,21 @@ func (s *ClassificationService) extractImageFeatures(images []MultimodalImage) (
 
 		payload, err := json.Marshal(body)
 		if err != nil {
-			observability.Errorf("Failed to marshal Ollama request: %v", err)
+			logging.Errorf("Failed to marshal Ollama request: %v", err)
 			return nil, fmt.Errorf("failed to prepare image request: %w", err)
 		}
 
-		observability.Debugf("Calling Ollama at %s with model %s", ollamaURL, ollamaModel)
+		logging.Debugf("Calling Ollama at %s with model %s", ollamaURL, ollamaModel)
 		resp, err := http.Post(ollamaURL, "application/json", bytes.NewReader(payload))
 		if err != nil {
-			observability.Errorf("Ollama request failed: %v", err)
+			logging.Errorf("Ollama request failed: %v", err)
 			return nil, fmt.Errorf("failed to connect to Ollama at %s: %w", ollamaURL, err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			bodyBytes, _ := io.ReadAll(resp.Body)
-			observability.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(bodyBytes))
+			logging.Errorf("Ollama returned status %d: %s", resp.StatusCode, string(bodyBytes))
 			return nil, fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, string(bodyBytes))
 		}
 
@@ -460,7 +460,7 @@ func (s *ClassificationService) extractImageFeatures(images []MultimodalImage) (
 		for decoder.More() {
 			var chunk map[string]interface{}
 			if err := decoder.Decode(&chunk); err != nil {
-				observability.Warnf("Error decoding Ollama chunk: %v", err)
+				logging.Warnf("Error decoding Ollama chunk: %v", err)
 				break
 			}
 			if part, ok := chunk["response"].(string); ok {
@@ -470,9 +470,9 @@ func (s *ClassificationService) extractImageFeatures(images []MultimodalImage) (
 
 		if fullResponse != "" {
 			descriptions = append(descriptions, fullResponse)
-			observability.Infof("Image processed successfully, description length: %d chars", len(fullResponse))
+			logging.Infof("Image processed successfully, description length: %d chars", len(fullResponse))
 		} else {
-			observability.Warnf("Ollama returned empty response for image")
+			logging.Warnf("Ollama returned empty response for image")
 		}
 	}
 
@@ -513,26 +513,26 @@ func (s *ClassificationService) extractImageEmbeddings(images []MultimodalImage)
 
 	for i, img := range images {
 		if img.Data == "" {
-			observability.Warnf("Skipping image %d with empty data", i+1)
+			logging.Warnf("Skipping image %d with empty data", i+1)
 			continue
 		}
 
 		// Decode base64 image
 		imageBytes, err := base64.StdEncoding.DecodeString(img.Data)
 		if err != nil {
-			observability.Warnf("Failed to decode base64 image %d: %v", i+1, err)
+			logging.Warnf("Failed to decode base64 image %d: %v", i+1, err)
 			continue // Skip this image, continue with others
 		}
 
 		// Get image embedding from Candle vision transformer
 		embedding, err := candle_binding.GetImageEmbedding(imageBytes, img.MimeType)
 		if err != nil {
-			observability.Warnf("Failed to extract embedding for image %d: %v", i+1, err)
+			logging.Warnf("Failed to extract embedding for image %d: %v", i+1, err)
 			continue // Skip this image, continue with others
 		}
 
 		embeddings = append(embeddings, embedding)
-		observability.Debugf("Successfully extracted embedding for image %d (dim: %d)", i+1, len(embedding))
+		logging.Debugf("Successfully extracted embedding for image %d (dim: %d)", i+1, len(embedding))
 	}
 
 	if len(embeddings) == 0 {
@@ -564,7 +564,7 @@ func (s *ClassificationService) fuseTextAndImageEmbeddings(
 	// Align dimensions to 512 (CLIP's native dimension) for consistent fusion
 	targetDim := 512
 	if len(textEmbedding) != len(imageAvg) {
-		observability.Warnf("Dimension mismatch: text=%d, image=%d. Projecting both to %d dimensions.",
+		logging.Warnf("Dimension mismatch: text=%d, image=%d. Projecting both to %d dimensions.",
 			len(textEmbedding), len(imageAvg), targetDim)
 
 		if len(textEmbedding) != targetDim {
@@ -624,7 +624,7 @@ func (s *ClassificationService) averageEmbeddings(embeddings [][]float32) []floa
 
 	for _, emb := range embeddings {
 		if len(emb) != dim {
-			observability.Warnf("Embedding dimension mismatch: expected %d, got %d", dim, len(emb))
+			logging.Warnf("Embedding dimension mismatch: expected %d, got %d", dim, len(emb))
 			continue
 		}
 		for i := range avg {
@@ -668,14 +668,14 @@ func (s *ClassificationService) classifyWithEmbedding(embedding []float32) (stri
 		if err != nil {
 			catEmb, err = candle_binding.GetEmbeddingDefault(category.Description)
 			if err != nil {
-				observability.Debugf("Failed to get embedding for category %s: %v", category.Name, err)
+				logging.Debugf("Failed to get embedding for category %s: %v", category.Name, err)
 				continue
 			}
 		}
 
 		// Project category embedding to match query embedding dimension
 		if len(catEmb) != len(embedding) {
-			observability.Debugf("Dimension mismatch for category %s: cat=%d, query=%d. Projecting...",
+			logging.Debugf("Dimension mismatch for category %s: cat=%d, query=%d. Projecting...",
 				category.Name, len(catEmb), len(embedding))
 			if len(catEmb) < len(embedding) {
 				padded := make([]float32, len(embedding))
@@ -705,7 +705,7 @@ func (s *ClassificationService) classifyWithEmbedding(embedding []float32) (stri
 	// Track classification margin (gap between best and second-best similarity)
 	if bestScore > 0 && secondBestScore >= 0 {
 		margin := bestScore - secondBestScore
-		observability.Debugf("Classification margin: %.4f (best=%.4f, second=%.4f)", margin, bestScore, secondBestScore)
+		logging.Debugf("Classification margin: %.4f (best=%.4f, second=%.4f)", margin, bestScore, secondBestScore)
 		// Note: We could add a specific margin metric here if needed
 	}
 
@@ -805,8 +805,8 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 		}, nil
 	}
 
-	// Perform PII detection using the existing classifier
-	piiTypes, err := s.classifier.ClassifyPII(req.Text)
+	// Perform PII detection using the classifier with full details
+	detections, err := s.classifier.ClassifyPIIWithDetails(req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("PII detection failed: %w", err)
 	}
@@ -815,17 +815,19 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 
 	// Build response
 	response := &PIIResponse{
-		HasPII:           len(piiTypes) > 0,
+		HasPII:           len(detections) > 0,
 		Entities:         []PIIEntity{},
 		ProcessingTimeMs: processingTime,
 	}
 
-	// Convert PII types to entities (simplified for now)
-	for _, piiType := range piiTypes {
+	// Convert PII detections to API entities with actual confidence scores
+	for _, detection := range detections {
 		entity := PIIEntity{
-			Type:       piiType,
-			Value:      "[DETECTED]", // Placeholder - would need actual entity extraction
-			Confidence: 0.9,          // Placeholder - would need actual confidence
+			Type:       detection.EntityType,
+			Value:      "[DETECTED]",                  // Redacted for security
+			Confidence: float64(detection.Confidence), // Actual confidence from model
+			StartPos:   detection.Start,
+			EndPos:     detection.End,
 		}
 		response.Entities = append(response.Entities, entity)
 	}
@@ -1082,5 +1084,5 @@ func (s *ClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	defer s.configMutex.Unlock()
 	s.config = newConfig
 	// Update the global config as well
-	config.ReplaceGlobalConfig(newConfig)
+	config.Replace(newConfig)
 }

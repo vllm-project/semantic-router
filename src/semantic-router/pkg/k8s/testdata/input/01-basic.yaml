@@ -1,0 +1,90 @@
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: test-pool
+  namespace: default
+spec:
+  defaultModel: "qwen-2.5-7b"
+  models:
+    - name: "qwen-2.5-7b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.0000005  # $0.5 per 1M input tokens
+        outputTokenPrice: 0.000001   # $1 per 1M output tokens
+      loras:
+        - name: "tech-support"
+          description: "Technical support specialist"
+
+    - name: "qwen-2.5-72b"
+      reasoningFamily: "qwen3"
+      pricing:
+        inputTokenPrice: 0.000003    # $3 per 1M input tokens
+        outputTokenPrice: 0.000006   # $6 per 1M output tokens
+      loras:
+        - name: "advanced-reasoning"
+          description: "Advanced reasoning and problem solving"
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: test-route
+  namespace: default
+spec:
+  signals:
+    keywords:
+      - name: "urgent"
+        operator: "OR"
+        keywords: ["urgent", "emergency", "asap"]
+        caseSensitive: false
+    embeddings:
+      - name: "tech_support"
+        threshold: 0.75
+        candidates:
+          - "I need help with technical issues"
+          - "Can you help me troubleshoot this problem?"
+          - "Something is not working correctly"
+        aggregationMethod: "max"
+    domains:
+      - name: "computer_science"
+        description: "Computer science and programming"
+      - name: "math"
+        description: "Mathematics and quantitative reasoning"
+
+  decisions:
+    - name: "urgent_tech"
+      priority: 100
+      description: "Urgent technical support requests - use large model with reasoning"
+      signals:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "urgent"
+          - type: "embedding"
+            name: "tech_support"
+      modelRefs:
+        - model: "qwen-2.5-72b"
+          loraName: "advanced-reasoning"
+          useReasoning: true
+          reasoningEffort: "high"
+      plugins:
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.9
+
+    - name: "general_tech"
+      priority: 50
+      description: "General technical queries - use small model for efficiency"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "tech_support"
+          - type: "domain"
+            name: "computer_science"
+      modelRefs:
+        - model: "qwen-2.5-7b"
+          loraName: "tech-support"
+          useReasoning: false
+

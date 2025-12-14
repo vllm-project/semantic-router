@@ -4,49 +4,58 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// PolicyChecker handles PII policy validation
+// PolicyChecker handles PII policy validation based on decisions
 type PolicyChecker struct {
-	Config       *config.RouterConfig
-	ModelConfigs map[string]config.ModelParams
+	Config *config.RouterConfig
 }
 
-// IsPIIEnabled checks if PII detection is enabled and properly configured
-func (c *PolicyChecker) IsPIIEnabled(model string) bool {
-	modelConfig, exists := c.ModelConfigs[model]
-	if !exists {
-		observability.Infof("No PII policy found for model %s, allowing request", model)
+// IsPIIEnabled checks if PII detection is enabled for a given decision
+func (c *PolicyChecker) IsPIIEnabled(decisionName string) bool {
+	if decisionName == "" {
+		logging.Infof("No decision specified, PII detection disabled")
 		return false
 	}
-	// if it is allowed by default, then it is not enabled
-	return !modelConfig.PIIPolicy.AllowByDefault
+
+	decision := c.Config.GetDecisionByName(decisionName)
+	if decision == nil {
+		logging.Infof("Decision %s not found, PII detection disabled", decisionName)
+		return false
+	}
+
+	piiConfig := decision.GetPIIConfig()
+	if piiConfig == nil {
+		logging.Infof("No PII config found for decision %s, PII detection disabled", decisionName)
+		return false
+	}
+
+	// PII detection is enabled if the plugin is enabled
+	return piiConfig.Enabled
 }
 
 // NewPolicyChecker creates a new PII policy checker
-func NewPolicyChecker(cfg *config.RouterConfig, modelConfigs map[string]config.ModelParams) *PolicyChecker {
+func NewPolicyChecker(cfg *config.RouterConfig) *PolicyChecker {
 	return &PolicyChecker{
-		Config:       cfg,
-		ModelConfigs: modelConfigs,
+		Config: cfg,
 	}
 }
 
-// CheckPolicy checks if the detected PII types are allowed for the given model
-func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, []string, error) {
-	if !pc.IsPIIEnabled(model) {
-		observability.Infof("PII detection is disabled, allowing request")
+// CheckPolicy checks if the detected PII types are allowed for the given decision
+func (pc *PolicyChecker) CheckPolicy(decisionName string, detectedPII []string) (bool, []string, error) {
+	if !pc.IsPIIEnabled(decisionName) {
+		logging.Infof("PII detection is disabled for decision %s, allowing request", decisionName)
 		return true, nil, nil
 	}
 
-	modelConfig, exists := pc.ModelConfigs[model]
-	if !exists {
-		// If no specific config, allow by default
-		observability.Infof("No PII policy found for model %s, allowing request", model)
+	decision := pc.Config.GetDecisionByName(decisionName)
+	if decision == nil {
+		logging.Infof("Decision %s not found, allowing request", decisionName)
 		return true, nil, nil
 	}
 
-	policy := modelConfig.PIIPolicy
+	policy := decision.GetDecisionPIIPolicy()
 	var deniedPII []string
 
 	for _, piiType := range detectedPII {
@@ -60,37 +69,43 @@ func (pc *PolicyChecker) CheckPolicy(model string, detectedPII []string) (bool, 
 		}
 
 		// If allow_by_default is false, check if this PII type is explicitly allowed
-		isAllowed := slices.Contains(policy.PIITypes, piiType)
+		// Support both exact matches and BIO-tag stripping (B-PERSON, I-PERSON → PERSON)
+		isAllowed := isPIITypeAllowed(piiType, policy.PIITypes)
 		if !isAllowed {
 			deniedPII = append(deniedPII, piiType)
 		}
 	}
 
 	if len(deniedPII) > 0 {
-		observability.Warnf("PII policy violation for model %s: denied PII types %v", model, deniedPII)
+		logging.Warnf("PII policy violation for decision %s: denied PII types %v", decisionName, deniedPII)
 		return false, deniedPII, nil
 	}
 
-	observability.Infof("PII policy check passed for model %s", model)
+	logging.Infof("PII policy check passed for decision %s", decisionName)
 	return true, nil, nil
 }
 
-// FilterModelsForPII filters the list of candidate models based on PII policy compliance
-func (pc *PolicyChecker) FilterModelsForPII(candidateModels []string, detectedPII []string) []string {
-	var allowedModels []string
+// isPIITypeAllowed checks if a PII type is in the allowed list.
+// Supports exact matching and BIO-tag stripping (e.g., "B-ORGANIZATION" matches "ORGANIZATION").
+// Uses exact string matching only - no regex/wildcards.
+func isPIITypeAllowed(piiType string, allowedTypes []string) bool {
+	// Try exact match first
+	if slices.Contains(allowedTypes, piiType) {
+		return true
+	}
 
-	for _, model := range candidateModels {
-		allowed, _, err := pc.CheckPolicy(model, detectedPII)
-		if err != nil {
-			observability.Errorf("Error checking PII policy for model %s: %v", model, err)
-			continue
-		}
-		if allowed {
-			allowedModels = append(allowedModels, model)
+	// Strip BIO prefix (B-, I-, O-, E-) and match base type
+	if len(piiType) > 2 && piiType[1] == '-' {
+		prefix := piiType[0]
+		if prefix == 'B' || prefix == 'I' || prefix == 'O' || prefix == 'E' {
+			baseType := piiType[2:]
+			if slices.Contains(allowedTypes, baseType) {
+				return true
+			}
 		}
 	}
 
-	return allowedModels
+	return false
 }
 
 // ExtractAllContent extracts all content from user and non-user messages for PII analysis

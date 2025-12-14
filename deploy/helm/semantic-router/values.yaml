@@ -1,0 +1,465 @@
+# Default values for semantic-router.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global settings
+global:
+  # -- Namespace for all resources (if not specified, uses Release.Namespace)
+  namespace: ""
+  # -- Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com)
+  imageRegistry: ""
+
+# -- Number of replicas for the deployment
+replicaCount: 1
+
+# Image configuration
+image:
+  # -- Image repository
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (overrides the image tag whose default is the chart appVersion)
+  tag: "latest"
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override the name of the chart
+nameOverride: ""
+
+# -- Override the full name of the chart
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use
+  name: ""
+
+# RBAC configuration
+rbac:
+  # -- Create RBAC resources (ClusterRole and ClusterRoleBinding)
+  create: true
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext: {}
+  # fsGroup: 2000
+
+# Container security context
+securityContext:
+  # -- Run as non-root user
+  runAsNonRoot: false
+  # -- Allow privilege escalation
+  allowPrivilegeEscalation: false
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsUser: 1000
+
+# Service configuration
+service:
+  # -- Service type
+  type: ClusterIP
+  # gRPC service port
+  grpc:
+    # -- gRPC port number
+    port: 50051
+    # -- gRPC target port
+    targetPort: 50051
+    # -- gRPC protocol
+    protocol: TCP
+  # HTTP API service port
+  api:
+    # -- HTTP API port number
+    port: 8080
+    # -- HTTP API target port
+    targetPort: 8080
+    # -- HTTP API protocol
+    protocol: TCP
+  # Metrics service
+  metrics:
+    # -- Enable metrics service
+    enabled: true
+    # -- Metrics port number
+    port: 9190
+    # -- Metrics target port
+    targetPort: 9190
+    # -- Metrics protocol
+    protocol: TCP
+
+# Ingress configuration
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  # -- Ingress hosts configuration
+  hosts:
+    - host: semantic-router.local
+      paths:
+        - path: /
+          pathType: Prefix
+          servicePort: 8080
+  # -- Ingress TLS configuration
+  tls: []
+  #  - secretName: semantic-router-tls
+  #    hosts:
+  #      - semantic-router.local
+
+# Resource limits and requests
+resources:
+  # -- Resource limits
+  limits:
+    memory: "7Gi"
+    cpu: "2"
+  # -- Resource requests
+  requests:
+    memory: "3Gi"
+    cpu: "1"
+
+# Init container for model downloading
+initContainer:
+  # -- Enable init container
+  enabled: true
+  # -- Init container image
+  image:
+    repository: ghcr.io/vllm-project/semantic-router/model-downloader
+    # Leave empty to default to the chart AppVersion; override with a pinned tag if desired
+    tag: ""
+    pullPolicy: IfNotPresent
+  # -- Resource limits for init container
+  resources:
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+  # -- Additional environment variables for the init container.
+  # For example, to use a private Hugging Face model, you can pass a token
+  # and specify an endpoint using a pre-existing Kubernetes secret.
+  # env:
+  #   - name: HF_TOKEN
+  #     valueFrom:
+  #       secretKeyRef:
+  #         name: my-hf-secret
+  #         key: token
+  #   - name: HF_ENDPOINT
+  #     value: "https://huggingface.co"
+  env: []
+  # -- Models to download
+  models:
+    # Embedding models for semantic cache and tools
+    - name: Qwen3-Embedding-0.6B
+      repo: Qwen/Qwen3-Embedding-0.6B
+    - name: all-MiniLM-L12-v2
+      repo: sentence-transformers/all-MiniLM-L12-v2
+    - name: lora_intent_classifier_bert-base-uncased_model
+      repo: LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model
+    - name: category_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/category_classifier_modernbert-base_model
+    - name: pii_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/pii_classifier_modernbert-base_model
+    - name: jailbreak_classifier_modernbert-base_model
+      repo: LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model
+    - name: pii_classifier_modernbert-base_presidio_token_model
+      repo: LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model
+    # LoRA PII detector (for auto-detection feature)
+    - name: lora_pii_detector_bert-base-uncased_model
+      repo: LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model
+
+
+# Autoscaling configuration
+autoscaling:
+  # -- Enable horizontal pod autoscaling
+  enabled: false
+  # -- Minimum number of replicas
+  minReplicas: 1
+  # -- Maximum number of replicas
+  maxReplicas: 10
+  # -- Target CPU utilization percentage
+  targetCPUUtilizationPercentage: 80
+  # -- Target memory utilization percentage
+  # targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Startup probe configuration (for slow-starting containers with model loading)
+# This probe runs FIRST and disables liveness/readiness probes until it succeeds
+# Required when using Gemma embedding model which takes ~35s to load
+startupProbe:
+  # -- Enable startup probe
+  enabled: true
+  # -- Period seconds
+  periodSeconds: 10
+  # -- Timeout seconds
+  timeoutSeconds: 5
+  # -- Failure threshold
+  failureThreshold: 30
+
+# Liveness probe configuration
+livenessProbe:
+  # -- Enable liveness probe
+  enabled: true
+  # -- Initial delay seconds
+  initialDelaySeconds: 30
+  # -- Period seconds
+  periodSeconds: 30
+  # -- Timeout seconds
+  timeoutSeconds: 10
+  # -- Failure threshold
+  failureThreshold: 5
+
+# Readiness probe configuration
+readinessProbe:
+  # -- Enable readiness probe
+  enabled: true
+  # -- Initial delay seconds
+  initialDelaySeconds: 30
+  # -- Period seconds
+  periodSeconds: 30
+  # -- Timeout seconds
+  timeoutSeconds: 10
+  # -- Failure threshold
+  failureThreshold: 5
+
+# Persistent Volume Claim for models
+persistence:
+  # -- Enable persistent volume
+  enabled: true
+  # -- Storage class name (use "-" for default storage class)
+  storageClassName: "standard"
+  # -- Access mode
+  accessMode: ReadWriteOnce
+  # -- Storage size
+  size: 10Gi
+  # -- Annotations for PVC
+  annotations: {}
+  # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
+  existingClaim: ""
+
+# Application configuration
+config:
+  # BERT model configuration
+  bert_model:
+    model_id: models/all-MiniLM-L12-v2
+    threshold: 0.6
+    use_cpu: true
+
+  # Semantic cache configuration
+  semantic_cache:
+    enabled: true
+    backend_type: "memory"
+    similarity_threshold: 0.8
+    max_entries: 1000
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+
+  # Tools configuration
+  tools:
+    enabled: true
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
+
+  # Prompt guard configuration
+  prompt_guard:
+    enabled: true
+    use_modernbert: true
+    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+  # Classifier configuration
+  classifier:
+    category_model:
+      model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+      use_modernbert: false  # Use LoRA intent classifier with auto-detection
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
+    pii_model:
+      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+      use_modernbert: true
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+  # Reasoning families
+  reasoning_families:
+    deepseek:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    gpt:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  # Default reasoning effort
+  default_reasoning_effort: high
+
+  # API configuration
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+  # Observability configuration
+  observability:
+    tracing:
+      enabled: false
+      provider: "opentelemetry"
+      exporter:
+        type: "otlp"
+        endpoint: "jaeger:4317"
+        insecure: true
+      sampling:
+        type: "always_on"
+        rate: 1.0
+      resource:
+        service_name: "vllm-semantic-router"
+        service_version: "v0.1.0"
+        deployment_environment: "development"
+
+# Tools database configuration
+toolsDb:
+  - tool:
+      type: "function"
+      function:
+        name: "get_weather"
+        description: "Get current weather information for a location"
+        parameters:
+          type: "object"
+          properties:
+            location:
+              type: "string"
+              description: "The city and state, e.g. San Francisco, CA"
+            unit:
+              type: "string"
+              enum: ["celsius", "fahrenheit"]
+              description: "Temperature unit"
+          required: ["location"]
+    description: "Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow"
+    category: "weather"
+    tags: ["weather", "temperature", "forecast", "climate"]
+  - tool:
+      type: "function"
+      function:
+        name: "search_web"
+        description: "Search the web for information"
+        parameters:
+          type: "object"
+          properties:
+            query:
+              type: "string"
+              description: "The search query"
+            num_results:
+              type: "integer"
+              description: "Number of results to return"
+              default: 5
+          required: ["query"]
+    description: "Search the internet, web search, find information online, browse web content, lookup, research, google, find answers, discover, investigate"
+    category: "search"
+    tags: ["search", "web", "internet", "information", "browse"]
+  - tool:
+      type: "function"
+      function:
+        name: "calculate"
+        description: "Perform mathematical calculations"
+        parameters:
+          type: "object"
+          properties:
+            expression:
+              type: "string"
+              description: "Mathematical expression to evaluate"
+          required: ["expression"]
+    description: "Calculate mathematical expressions, solve math problems, arithmetic operations, compute numbers, addition, subtraction, multiplication, division, equations, formula"
+    category: "math"
+    tags: ["math", "calculation", "arithmetic", "compute", "numbers"]
+  - tool:
+      type: "function"
+      function:
+        name: "send_email"
+        description: "Send an email message"
+        parameters:
+          type: "object"
+          properties:
+            to:
+              type: "string"
+              description: "Recipient email address"
+            subject:
+              type: "string"
+              description: "Email subject"
+            body:
+              type: "string"
+              description: "Email body content"
+          required: ["to", "subject", "body"]
+    description: "Send email messages, email communication, contact people via email, mail, message, correspondence, notify, inform"
+    category: "communication"
+    tags: ["email", "send", "communication", "message", "contact"]
+  - tool:
+      type: "function"
+      function:
+        name: "create_calendar_event"
+        description: "Create a new calendar event or appointment"
+        parameters:
+          type: "object"
+          properties:
+            title:
+              type: "string"
+              description: "Event title"
+            date:
+              type: "string"
+              description: "Event date in YYYY-MM-DD format"
+            time:
+              type: "string"
+              description: "Event time in HH:MM format"
+            duration:
+              type: "integer"
+              description: "Duration in minutes"
+          required: ["title", "date", "time"]
+    description: "Schedule meetings, create calendar events, set appointments, manage calendar, book time, plan meeting, organize schedule, reminder, agenda"
+    category: "productivity"
+    tags: ["calendar", "event", "meeting", "appointment", "schedule"]
+
+# Container arguments
+args:
+  - "--secure=false"
+
+# Environment variables
+env:
+  - name: LD_LIBRARY_PATH
+    value: "/app/lib"

@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: llmd-epp-access
+rules:
+  - apiGroups: ["inference.networking.k8s.io", "inference.networking.x-k8s.io"]
+    resources: ["inferencepools", "inferenceobjectives"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: llmd-epp-access-binding
+subjects:
+  - kind: ServiceAccount
+    name: vllm-llama3-8b-instruct-epp
+    namespace: default
+  - kind: ServiceAccount
+    name: vllm-phi4-mini-epp
+    namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: llmd-epp-access

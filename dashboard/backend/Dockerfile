@@ -1,11 +1,11 @@
 # Stage 1: Build frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
-COPY dashboard/frontend/package.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
+COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
-RUN npm install
+RUN npm install --include=dev  # Ensure TypeScript/Vite are installed regardless of NODE_ENV
 RUN npm run build
 
 # Stage 2: Build backend with Go

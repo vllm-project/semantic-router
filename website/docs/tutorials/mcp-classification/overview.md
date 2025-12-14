@@ -195,7 +195,7 @@ classifier:
 
 The repository includes two reference implementations in `examples/mcp-classifier-server/`:
 
-### 1. Regex-Based (`server.py`)
+### 1. Regex-Based (`server_keyword.py`)
 
 - Simple pattern matching
 - Fast prototyping (less than 5ms classification)
