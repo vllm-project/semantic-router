@@ -77,7 +77,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl
-          pip install huggingface_hub[cli]
+          pip install -r src/model_manager/requirements.txt hf_transfer
 
       - name: Download models
         run: |
@@ -86,6 +86,7 @@ jobs:
         env:
           CI: true
           CI_MINIMAL_MODELS: true
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
 
