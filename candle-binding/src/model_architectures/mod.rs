@@ -5,6 +5,7 @@
 pub mod embedding;
 pub mod lora;
 pub mod traditional; // NEW: Embedding models (Qwen3, Gemma)
+pub mod vision; // Vision transformer for image embeddings
 
 // Core model modules
 pub mod config;
