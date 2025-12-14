@@ -64,14 +64,15 @@ vllm_endpoints:
     port: 11434
     weight: 1
 
-  - name: "image-gen-endpoint"
+  - name: "image-gen"
     address: "127.0.0.1"
-    port: 9000
+    port: 8801
+    gateway: true
     weight: 1
 
 model_config:
   "image-generator":
-    preferred_endpoints: ["image-gen-endpoint"]
+    preferred_endpoints: ["image-gen"]
     pii_policy:
       allow_by_default: true
     capabilities: ["image"]
@@ -103,18 +104,13 @@ model_config:
 
 # Classifier configuration
 classifier:
-  # category_model:
-  #   model_id: "models/category_classifier_modernbert-base_model"
-  #   use_modernbert: true
-  #   threshold: 0.3
-  #   use_cpu: true
-  #   category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  # Use models/binary_classification for image generation recognition
   category_model:
-    model_id: "models/category_classifier_image_gen"  # Local model path
-    use_modernbert: false
-    threshold: 0.5
+    model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+    use_modernbert: true
+    threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_image_gen/category_mapping.json"
+    category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
   pii_model:
     model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
     use_modernbert: true
@@ -230,26 +226,13 @@ categories:
         score: 0.7
         use_reasoning: false
   - name: visual_analysis
+    description: "General visual analysis, image understanding, scene description, object recognition, visual question answering, image interpretation"
     use_reasoning: true
-    reasoning_description: "Visual analysis requires systematic observation and reasoning"
     multimodal_enabled: true
     model_scores:
       - model: llava:7b
-        score: 1.0
-        use_reasoning: true
-        reasoning_description: "Vision-language reasoning for multimodal understanding"
-        capabilities: ["text", "image"]
-
-  - name: document_processing
-    use_reasoning: false
-    reasoning_description: "Document understanding via OCR or structured layout extraction"
-    description: "OCR, document understanding, form extraction"
-    multimodal_enabled: true
-    model_scores:
-      - model: llava:7b
-        score: 0.8
+        score: 0.4
         use_reasoning: false
-        reasoning_description: "Basic document OCR and layout extraction"
         capabilities: ["text", "image"]
 
 # Router Configuration for Dual-Path Selection
