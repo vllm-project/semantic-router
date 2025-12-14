@@ -150,6 +150,16 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Cookbook',
+      items: [
+        'cookbook/categories-configuration',
+        'cookbook/classifier-tuning',
+        'cookbook/pii-policy',
+        'cookbook/vllm-endpoints',
+      ],
+    },
+    {
+      type: 'category',
       label: 'API Reference',
       items: [
         'api/router',
@@ -164,6 +174,7 @@ const sidebars: SidebarsConfig = {
         'troubleshooting/network-tips',
         'troubleshooting/container-connectivity',
         'troubleshooting/vsr-headers',
+        'troubleshooting/common-errors',
       ],
     },
   ],
