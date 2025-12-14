@@ -11,7 +11,7 @@ import (
 
 // Config holds logger configuration.
 type Config struct {
-	// Level is one of: debug, info, warn, error, dpanic, panic, fatal
+	// Level is one of: debug, info, warn, error, panic, panic, fatal
 	Level string
 	// Encoding is one of: json, console
 	Encoding string
