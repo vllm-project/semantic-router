@@ -1,0 +1,82 @@
+# Response API E2E Test Profile Values
+# This configuration enables Response API for testing
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Response API Configuration
+responseApi:
+  enabled: true
+  storeBackend: "memory"
+  ttlSeconds: 86400
+  maxResponses: 1000
+
+# Semantic Cache (required for some tests)
+semanticCache:
+  enabled: true
+  backendType: "memory"
+  similarityThreshold: 0.8
+  maxEntries: 1000
+  ttlSeconds: 3600
+
+# vLLM Endpoints - use mock backend for testing
+vllmEndpoints:
+  - name: "test-endpoint"
+    address: "mock-vllm"
+    port: 8000
+    weight: 1
+
+# Model configuration
+modelConfig:
+  "MoM":
+    useReasoning: false
+    preferredEndpoints: ["test-endpoint"]
+
+# Minimal classifier configuration
+classifier:
+  categoryModel:
+    modelId: "models/all-MiniLM-L12-v2"
+    threshold: 0.6
+    useCpu: true
+
+# Categories
+categories:
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+
+# Strategy
+strategy: "priority"
+
+# Decisions
+decisions:
+  - name: "default_decision"
+    description: "Default catch-all decision"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "MoM"
+        useReasoning: false
+
+defaultModel: "MoM"
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+
+# Resources
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
