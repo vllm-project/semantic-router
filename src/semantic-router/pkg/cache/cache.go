@@ -5,10 +5,67 @@ import (
 	"fmt"
 )
 
+// ContentPart in multimodal messages
+type ContentPart struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	ImageURL struct {
+		URL string `json:"url"`
+	} `json:"image_url,omitempty"`
+}
+
+type FlexibleContent struct {
+	value interface{}
+}
+
+// UnmarshalJSON handles both string and array content
+func (fc *FlexibleContent) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		fc.value = str
+		return nil
+	}
+
+	var arr []ContentPart
+	if err := json.Unmarshal(data, &arr); err == nil {
+		fc.value = arr
+		return nil
+	}
+
+	fc.value = data
+	return nil
+}
+
+// ExtractText extracts text content from flexible content
+func (fc *FlexibleContent) ExtractText() string {
+	if fc.value == nil {
+		return ""
+	}
+
+	switch v := fc.value.(type) {
+	case string:
+		return v
+	case []ContentPart:
+		// Extract text from content parts
+		var texts []string
+		for _, part := range v {
+			if part.Type == "text" && part.Text != "" {
+				texts = append(texts, part.Text)
+			}
+		}
+		if len(texts) > 0 {
+			return texts[0]
+		}
+		return ""
+	default:
+		return ""
+	}
+}
+
 // ChatMessage represents a message in the OpenAI chat format with role and content
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string          `json:"role"`
+	Content FlexibleContent `json:"content"`
 }
 
 // OpenAIRequest represents the structure of an OpenAI API request
@@ -28,7 +85,10 @@ func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
 	var userMessages []string
 	for _, msg := range req.Messages {
 		if msg.Role == "user" {
-			userMessages = append(userMessages, msg.Content)
+			text := msg.Content.ExtractText()
+			if text != "" {
+				userMessages = append(userMessages, text)
+			}
 		}
 	}
 
