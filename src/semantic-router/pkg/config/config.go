@@ -672,6 +672,15 @@ const (
 type Category struct {
 	// Metadata
 	CategoryMetadata `yaml:",inline"`
+	// ModelScores for the category
+	ModelScores []ModelScore `yaml:"model_scores,omitempty"`
+}
+
+// ModelScore represents a model's score for a category
+type ModelScore struct {
+	Model        string  `yaml:"model"`
+	Score        float64 `yaml:"score"`
+	UseReasoning *bool   `yaml:"use_reasoning"`
 }
 
 // Decision represents a routing decision that combines multiple rules with AND/OR logic
