@@ -173,3 +173,70 @@ clean-minimal-models: ## Remove minimal models to save disk space
 	@rm -rf models/jailbreak_classifier_modernbert-base_model || true
 	@rm -rf models/pii_classifier_modernbert-base_model || true
 	@echo "✓ Minimal models cleaned up"
+
+# Convert models to OpenVINO format for testing
+convert-openvino-test-models: ## Convert models to OpenVINO IR format for openvino-binding tests
+	@echo "Converting models to OpenVINO IR format for tests..."
+	@echo "================================================================"
+	@echo "This will download HuggingFace models and convert to OpenVINO"
+	@echo "================================================================"
+	@mkdir -p openvino-binding/test_models
+	
+	# 1. Convert all-MiniLM-L6-v2 embedding model
+	@echo "\n[1/2] Converting all-MiniLM-L6-v2 embedding model..."
+	@if [ ! -f "openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml" ]; then \
+		echo "  → Downloading HuggingFace model..."; \
+		optimum-cli export openvino \
+			--model sentence-transformers/all-MiniLM-L6-v2 \
+			--task feature-extraction \
+			openvino-binding/test_models/all-MiniLM-L6-v2 \
+			--weight-format fp32 && \
+		echo "  ✓ Converted: openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml"; \
+	else \
+		echo "  ✓ Already exists: openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml"; \
+	fi
+	
+	# 2. Convert category_classifier_modernbert
+	@echo "\n[2/2] Converting category_classifier_modernbert..."
+	@if [ ! -f "openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml" ]; then \
+		echo "  → Downloading HuggingFace model..."; \
+		optimum-cli export openvino \
+			--model LLM-Semantic-Router/category_classifier_modernbert-base_model \
+			--task text-classification \
+			openvino-binding/test_models/category_classifier_modernbert \
+			--weight-format fp32 && \
+		echo "  ✓ Converted: openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml"; \
+	else \
+		echo "  ✓ Already exists: openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml"; \
+	fi
+	
+	# 3. Convert tokenizers using openvino_tokenizers
+	@echo "\n[3/3] Converting tokenizers to native OpenVINO format..."
+	@if [ "$$SKIP_TOKENIZER_CONVERSION" = "1" ]; then \
+		echo "  ⚠️  SKIP_TOKENIZER_CONVERSION=1 - skipping tokenizer conversion"; \
+		echo "  Note: Tests will use fallback tokenization (slower but functional)"; \
+	else \
+		command -v python3 >/dev/null 2>&1 && PYTHON_CMD=python3 || PYTHON_CMD=python; \
+		$$PYTHON_CMD openvino-binding/scripts/convert_test_tokenizers.py || { \
+			echo ""; \
+			echo "⚠️  Tokenizer conversion failed, but models are ready"; \
+			echo "   Tests will use fallback tokenization"; \
+			echo ""; \
+			echo "To fix, install dependencies:"; \
+			echo "  pip install openvino-tokenizers>=2025.3.0.0"; \
+			echo ""; \
+			echo "Or skip tokenizer conversion:"; \
+			echo "  export SKIP_TOKENIZER_CONVERSION=1"; \
+			echo "  make convert-openvino-test-models"; \
+		}; \
+	fi
+	
+	@echo "\n================================================================"
+	@echo "✓ OpenVINO test models converted successfully!"
+	@echo "================================================================"
+	@echo "Models ready for testing:"
+	@echo "  • openvino-binding/test_models/all-MiniLM-L6-v2/"
+	@echo "  • openvino-binding/test_models/category_classifier_modernbert/"
+	@echo ""
+	@echo "Run tests with: cd openvino-binding && make test"
+	@echo "================================================================"
