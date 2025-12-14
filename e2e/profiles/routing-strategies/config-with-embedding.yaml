@@ -1,0 +1,464 @@
+# Extended configuration for routing-strategies profile with embedding rules
+# This config enables all routing methods: Keyword → Embedding → BERT → MCP
+
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  use_hnsw: true
+  hnsw_m: 16
+  hnsw_ef_construction: 200
+  embedding_model: "bert"
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: true
+  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "172.28.0.20"
+    port: 8002
+    weight: 1
+
+model_config:
+  "qwen3":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: true
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Keyword rules - Priority 1 (highest)
+keyword_rules:
+  - name: "urgent_request"
+    operator: "OR"
+    keywords: ["urgent", "immediate", "asap", "emergency"]
+    case_sensitive: false
+  - name: "sensitive_data"
+    operator: "AND"
+    keywords: ["SSN", "social security number", "credit card"]
+    case_sensitive: false
+  - name: "exclude_spam"
+    operator: "NOR"
+    keywords: ["buy now", "free money"]
+    case_sensitive: false
+  - name: "regex_pattern_match"
+    operator: "OR"
+    keywords: ["user\\.name@domain\\.com", "C:\\Program Files\\\\"]
+    case_sensitive: false
+
+# Embedding rules - Priority 2 (after keyword)
+# These use semantic similarity to match queries to predefined candidates
+embedding_rules:
+  - name: "ai"
+    threshold: 0.75
+    candidates:
+      - "artificial intelligence"
+      - "machine learning"
+      - "deep learning"
+      - "neural networks"
+      - "AI algorithms"
+    aggregation_method: "max"  # Use maximum similarity score
+    model: "auto"  # Auto-select best embedding model
+  - name: "data_science"
+    threshold: 0.70
+    candidates:
+      - "data analysis"
+      - "statistical modeling"
+      - "predictive analytics"
+      - "data visualization"
+    aggregation_method: "mean"
+    model: "auto"
+  - name: "programming"
+    threshold: 0.72
+    candidates:
+      - "write code"
+      - "implement function"
+      - "create class"
+      - "code snippet"
+      - "programming task"
+    aggregation_method: "max"
+    model: "auto"
+
+# Categories - Used by BERT classifier (Priority 3)
+categories:
+  # Keyword-based categories (for decision matching)
+  - name: urgent_request
+    description: "Urgent and time-sensitive requests"
+    mmlu_categories: ["urgent_request"]
+  - name: sensitive_data
+    description: "Requests involving sensitive personal data"
+    mmlu_categories: ["sensitive_data"]
+  - name: exclude_spam
+    description: "Potential spam or suspicious requests"
+    mmlu_categories: ["exclude_spam"]
+  - name: regex_pattern_match
+    description: "Structured data and pattern-based requests"
+    mmlu_categories: ["regex_pattern_match"]
+
+  # Embedding-based categories (for decision matching)
+  - name: ai
+    description: "Artificial intelligence and machine learning topics"
+    mmlu_categories: ["ai", "machine_learning"]
+  - name: data_science
+    description: "Data science and analytics"
+    mmlu_categories: ["data_science"]
+  - name: programming
+    description: "Programming and software development"
+    mmlu_categories: ["programming"]
+
+  # BERT/Domain categories (for BERT classification)
+  - name: business
+    description: "Business and management related queries"
+    mmlu_categories: ["business"]
+  - name: law
+    description: "Legal questions and law-related topics"
+    mmlu_categories: ["law"]
+  - name: psychology
+    description: "Psychology and mental health topics"
+    mmlu_categories: ["psychology"]
+  - name: biology
+    description: "Biology and life sciences questions"
+    mmlu_categories: ["biology"]
+  - name: chemistry
+    description: "Chemistry and chemical sciences questions"
+    mmlu_categories: ["chemistry"]
+  - name: history
+    description: "Historical questions and cultural topics"
+    mmlu_categories: ["history"]
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+  - name: health
+    description: "Health and medical information queries"
+    mmlu_categories: ["health"]
+  - name: economics
+    description: "Economics and financial topics"
+    mmlu_categories: ["economics"]
+  - name: math
+    description: "Mathematics and quantitative reasoning"
+    mmlu_categories: ["math"]
+  - name: physics
+    description: "Physics and physical sciences"
+    mmlu_categories: ["physics"]
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
+  - name: philosophy
+    description: "Philosophy and ethical questions"
+    mmlu_categories: ["philosophy"]
+  - name: engineering
+    description: "Engineering and technical problem-solving"
+    mmlu_categories: ["engineering"]
+
+strategy: "priority"
+
+# Decisions define routing logic
+# Priority order: Keyword (150) > Embedding (140) > Domain/BERT (100) > Default (50)
+decisions:
+  # === KEYWORD-BASED DECISIONS (Priority 150) ===
+  - name: "urgent_request_decision"
+    description: "Urgent and time-sensitive requests"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "urgent_request"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "sensitive_data_decision"
+    description: "Requests involving sensitive personal data"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "sensitive_data"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+          threshold: 0.6
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "exclude_spam_decision"
+    description: "Potential spam or suspicious requests"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "exclude_spam"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a content moderation assistant. This request has been flagged as potential spam."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "regex_pattern_match_decision"
+    description: "Structured data and pattern-based requests"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "regex_pattern_match"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a technical assistant specialized in handling structured data and pattern-based requests."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  # === EMBEDDING-BASED DECISIONS (Priority 140) ===
+  - name: "ai_decision"
+    description: "Artificial intelligence and machine learning topics"
+    priority: 140
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "ai"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an AI and machine learning expert. Provide detailed, technical explanations about artificial intelligence, neural networks, and related topics."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "data_science_decision"
+    description: "Data science and analytics"
+    priority: 140
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "data_science"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a data science expert. Provide insights on data analysis, statistical methods, and predictive modeling."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "programming_decision"
+    description: "Programming and software development"
+    priority: 140
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "programming"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a programming expert. Help with code implementation, debugging, and software development best practices."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  # === DOMAIN/BERT DECISIONS (Priority 100) ===
+  - name: "business_decision"
+    description: "Business and management related queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a senior business consultant and strategic advisor."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  # ... Continue with all other domain decisions (law, psychology, biology, etc.)
+  # Each with priority: 100 and type: "domain"
+
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "computer_science_decision"
+    description: "Computer science and programming"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a computer science expert."
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  # === DEFAULT FALLBACK (Priority 50) ===
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous topics"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful and knowledgeable assistant."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.75
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+default_model: qwen3
+
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+default_reasoning_effort: high
+
+# Embedding Models Configuration
+embedding_models:
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/embeddinggemma-300m"
+  use_cpu: true
+
+# Observability Configuration
+observability:
+  tracing:
+    enabled: true
+    provider: "opentelemetry"
+    exporter:
+      type: "otlp"
+      endpoint: "jaeger:4317"
+      insecure: true
+    sampling:
+      type: "always_on"
+      rate: 1.0
+    resource:
+      service_name: "vllm-semantic-router"
+      service_version: "v0.1.0"
+      deployment_environment: "development"
