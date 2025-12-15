@@ -12,16 +12,19 @@ docker run -d --gpus all -p 8083:8000 vllm/vllm-openai:latest \
 # 2. Start semantic router with hallucination config
 cd /path/to/semantic-router
 export LD_LIBRARY_PATH=$PWD/candle-binding/target/release
-./bin/router -config=bench/hallucination_bench/config.yaml
+./bin/router -config=bench/hallucination/config-7b.yaml
 
 # 3. Start Envoy
-func-e run --config-path config/envoy.yaml
+make run-envoy
 
 # 4. Run benchmark
-python -m bench.hallucination_bench.evaluate \
+python3 -m bench.hallucination.evaluate \
     --endpoint http://localhost:8801 \
     --dataset halueval \
     --max-samples 50
+
+# Or use the Makefile target:
+make bench-hallucination MAX_SAMPLES=50
 ```
 
 ## Using the Large Model
@@ -40,7 +43,7 @@ hf download KRLabsOrg/lettucedect-large-modernbert-en-v1 \
 
 ### Step 2: Update Config
 
-Edit `bench/hallucination_bench/config.yaml`:
+Edit `bench/hallucination/config-7b.yaml`:
 
 ```yaml
 hallucination_mitigation:
@@ -56,11 +59,11 @@ hallucination_mitigation:
 
 ```bash
 # Kill existing router
-pkill -f "router.*config.yaml"
+pkill -f "router.*config"
 
 # Start with updated config
 export LD_LIBRARY_PATH=$PWD/candle-binding/target/release
-./bin/router -config=bench/hallucination_bench/config.yaml
+./bin/router -config=bench/hallucination/config-7b.yaml
 ```
 
 ## Supported Models
@@ -74,12 +77,12 @@ Both use `ModernBertForTokenClassification` architecture supported by candle-bin
 
 ## Config Reference
 
-Key settings in `config.yaml`:
+Key settings in `config-7b.yaml`:
 
 ```yaml
 # vLLM endpoint
 vllm_endpoints:
-  - name: "vllm-qwen"
+  - name: "vllm-general"
     address: "127.0.0.1"
     port: 8083
 
@@ -102,7 +105,7 @@ hallucination_mitigation:
 
 ## Output
 
-Results saved to `bench/hallucination_bench/results/` with:
+Results saved to `bench/hallucination/results/` with:
 
 - Precision, Recall, F1 (when ground truth available)
 - Latency metrics (avg, p50, p99)

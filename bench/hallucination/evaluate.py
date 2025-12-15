@@ -36,6 +36,7 @@ from .datasets import HallucinationSample, get_dataset
 @dataclass
 class DetectionResult:
     """Result from hallucination detection."""
+
     sample_id: str
     question: str
     context_length: int
@@ -61,6 +62,7 @@ class DetectionResult:
 @dataclass
 class BenchmarkResults:
     """Aggregated benchmark results."""
+
     dataset_name: str
     endpoint: str
     model: str
@@ -126,7 +128,9 @@ class HallucinationBenchmark:
                 return []
 
             data = resp.json()
-            models = [m.get("id", m.get("name", "unknown")) for m in data.get("data", [])]
+            models = [
+                m.get("id", m.get("name", "unknown")) for m in data.get("data", [])
+            ]
             self.available_models = models
 
             print(f"✓ Discovered {len(models)} models:")
@@ -173,17 +177,17 @@ class HallucinationBenchmark:
 
         try:
             # Build messages - include tool context if available
-            messages = [
-                {"role": "user", "content": sample.question}
-            ]
+            messages = [{"role": "user", "content": sample.question}]
 
             if include_context and sample.context:
                 # Add tool result with context (enables hallucination detection)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": f"ctx_{sample.id}",
-                    "content": sample.context,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": f"ctx_{sample.id}",
+                        "content": sample.context,
+                    }
+                )
 
             # Send request
             response = requests.post(
@@ -212,13 +216,19 @@ class HallucinationBenchmark:
 
             # Extract hallucination detection headers
             headers = response.headers
-            result.hallucination_detected = headers.get("x-vsr-hallucination-detected", "").lower() == "true"
+            result.hallucination_detected = (
+                headers.get("x-vsr-hallucination-detected", "").lower() == "true"
+            )
             result.hallucination_spans = headers.get("x-vsr-hallucination-spans", "")
 
             # Extract efficiency-related headers
-            result.fact_check_needed = headers.get("x-vsr-fact-check-needed", "").lower() == "true"
+            result.fact_check_needed = (
+                headers.get("x-vsr-fact-check-needed", "").lower() == "true"
+            )
             # Detection is skipped if fact-check says not needed, or if unverified (no context)
-            unverified = headers.get("x-vsr-unverified-factual-response", "").lower() == "true"
+            unverified = (
+                headers.get("x-vsr-unverified-factual-response", "").lower() == "true"
+            )
             result.detection_skipped = not result.fact_check_needed or unverified
 
         except requests.exceptions.Timeout:
@@ -251,8 +261,12 @@ class HallucinationBenchmark:
         detected_count = 0
 
         # Use tqdm with leave=True to keep progress bar visible
-        pbar = tqdm(samples, desc="Evaluating", unit="sample",
-                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] Hallucinations: {postfix}')
+        pbar = tqdm(
+            samples,
+            desc="Evaluating",
+            unit="sample",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] Hallucinations: {postfix}",
+        )
         pbar.set_postfix_str("0")
 
         for sample in pbar:
@@ -270,9 +284,15 @@ class HallucinationBenchmark:
                 tqdm.write(f"   Question: {result.question[:80]}...")
                 if result.hallucination_spans:
                     spans_preview = result.hallucination_spans[:150]
-                    tqdm.write(f"   Spans: {spans_preview}{'...' if len(result.hallucination_spans) > 150 else ''}")
+                    tqdm.write(
+                        f"   Spans: {spans_preview}{'...' if len(result.hallucination_spans) > 150 else ''}"
+                    )
                 if result.gt_is_faithful is not None:
-                    gt_label = "✅ Correct" if not result.gt_is_faithful else "❌ False Positive"
+                    gt_label = (
+                        "✅ Correct"
+                        if not result.gt_is_faithful
+                        else "❌ False Positive"
+                    )
                     tqdm.write(f"   Ground Truth: {gt_label}")
                 tqdm.write(f"   Latency: {result.latency_ms:.0f}ms")
                 tqdm.write("")
@@ -281,7 +301,9 @@ class HallucinationBenchmark:
             elif result.error and verbose:
                 tqdm.write(f"❌ ERROR: {result.error[:100]}")
 
-        dataset_name = samples[0].metadata.get("dataset", "unknown") if samples else "unknown"
+        dataset_name = (
+            samples[0].metadata.get("dataset", "unknown") if samples else "unknown"
+        )
         return self.calculate_metrics(dataset_name, model)
 
     def calculate_metrics(self, dataset_name: str, model: str) -> BenchmarkResults:
@@ -311,7 +333,11 @@ class HallucinationBenchmark:
         total_with_gt = tp + fp + tn + fn
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        )
         accuracy = (tp + tn) / total_with_gt if total_with_gt > 0 else 0.0
 
         # Latency metrics
@@ -328,15 +354,19 @@ class HallucinationBenchmark:
 
         # Average context length
         context_lengths = [r.context_length for r in successful if r.context_length > 0]
-        avg_context_length = sum(context_lengths) / len(context_lengths) if context_lengths else 0.0
+        avg_context_length = (
+            sum(context_lengths) / len(context_lengths) if context_lengths else 0.0
+        )
 
         # Estimate detection time based on context length
         # ModernBERT-large (395M params) timing estimates:
         # - Fact-check classifier (ModernBERT-base): ~12ms (prompt only)
         # - LettuceDetect-large: ~45ms base + ~0.02ms per character
         # These are empirical measurements on CPU; GPU would be faster
-        CLASSIFIER_TIME_MS = 12.0   # Fact-check classifier time (ModernBERT-base, prompt only)
-        DETECTION_BASE_MS = 45.0    # Base detection time (ModernBERT-large)
+        CLASSIFIER_TIME_MS = (
+            12.0  # Fact-check classifier time (ModernBERT-base, prompt only)
+        )
+        DETECTION_BASE_MS = 45.0  # Base detection time (ModernBERT-large)
         DETECTION_PER_CHAR_MS = 0.02  # Additional time per character (large model)
 
         estimated_detection_times = []
@@ -355,7 +385,9 @@ class HallucinationBenchmark:
         estimated_total = sum(estimated_detection_times)
         actual_total = sum(actual_detection_times)
         time_saved = estimated_total - actual_total
-        efficiency_gain = (time_saved / estimated_total * 100) if estimated_total > 0 else 0.0
+        efficiency_gain = (
+            (time_saved / estimated_total * 100) if estimated_total > 0 else 0.0
+        )
 
         return BenchmarkResults(
             dataset_name=dataset_name,
@@ -410,7 +442,12 @@ def print_results(results: BenchmarkResults):
     print("-" * 40)
     print(f"  Hallucinations detected: {results.total_hallucinations_detected}")
 
-    total_gt = results.true_positives + results.false_positives + results.true_negatives + results.false_negatives
+    total_gt = (
+        results.true_positives
+        + results.false_positives
+        + results.true_negatives
+        + results.false_negatives
+    )
     if total_gt > 0:
         print(f"\n🎯 Accuracy Metrics (vs ground truth):")
         print("-" * 40)
@@ -434,10 +471,16 @@ def print_results(results: BenchmarkResults):
     # Efficiency metrics - two-stage pipeline savings
     print(f"\n⚡ Two-Stage Pipeline Efficiency:")
     print("-" * 40)
-    print(f"  Fact-check needed:     {results.fact_check_needed_count}/{results.successful_requests} queries")
-    print(f"  Detection skipped:     {results.detection_skipped_count}/{results.successful_requests} queries")
+    print(
+        f"  Fact-check needed:     {results.fact_check_needed_count}/{results.successful_requests} queries"
+    )
+    print(
+        f"  Detection skipped:     {results.detection_skipped_count}/{results.successful_requests} queries"
+    )
     print(f"  Avg context length:    {results.avg_context_length:.0f} chars")
-    print(f"  Estimated detect time: {results.estimated_detection_time_ms:.2f} ms (if all ran)")
+    print(
+        f"  Estimated detect time: {results.estimated_detection_time_ms:.2f} ms (if all ran)"
+    )
     print(f"  Actual detect time:    {results.actual_detection_time_ms:.2f} ms")
     print(f"  Time saved:            {results.time_saved_ms:.2f} ms")
     print(f"  Efficiency gain:       {results.efficiency_gain_percent:.1f}%")
@@ -452,7 +495,11 @@ def print_results(results: BenchmarkResults):
     print("-" * 60)
     for r in results.results[:5]:
         detected = "🚨" if r.get("hallucination_detected") else "✅"
-        gt = "HAL" if r.get("gt_is_faithful") is False else ("OK" if r.get("gt_is_faithful") else "?")
+        gt = (
+            "HAL"
+            if r.get("gt_is_faithful") is False
+            else ("OK" if r.get("gt_is_faithful") else "?")
+        )
         print(f"  {detected} GT:{gt} | {r.get('question', '')[:50]}...")
 
     print("=" * 60)
@@ -462,30 +509,54 @@ def main():
     parser = argparse.ArgumentParser(description="Hallucination Detection Benchmark")
 
     # Endpoint options
-    parser.add_argument("--endpoint", type=str, default="http://localhost:8801",
-                        help="Router/Envoy endpoint URL")
+    parser.add_argument(
+        "--endpoint",
+        type=str,
+        default="http://localhost:8801",
+        help="Router/Envoy endpoint URL",
+    )
 
     # Dataset options
-    parser.add_argument("--dataset", type=str, default="halueval",
-                        help="Dataset to use (halueval, or path to JSONL)")
-    parser.add_argument("--max-samples", type=int, default=50,
-                        help="Maximum samples to evaluate")
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="halueval",
+        help="Dataset to use (halueval, or path to JSONL)",
+    )
+    parser.add_argument(
+        "--max-samples", type=int, default=50, help="Maximum samples to evaluate"
+    )
 
     # Model options
-    parser.add_argument("--model", type=str, default=None,
-                        help="Model to use (auto-discovered if not specified)")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Model to use (auto-discovered if not specified)",
+    )
 
     # Test modes
-    parser.add_argument("--no-context", action="store_true",
-                        help="Don't include tool context (disables hallucination detection)")
-    parser.add_argument("--list-models", action="store_true",
-                        help="Just list available models and exit")
-    parser.add_argument("--quiet", action="store_true",
-                        help="Don't print hallucinations as they're detected")
+    parser.add_argument(
+        "--no-context",
+        action="store_true",
+        help="Don't include tool context (disables hallucination detection)",
+    )
+    parser.add_argument(
+        "--list-models", action="store_true", help="Just list available models and exit"
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Don't print hallucinations as they're detected",
+    )
 
     # Output options
-    parser.add_argument("--output-dir", type=str, default="bench/hallucination_bench/results",
-                        help="Output directory for results")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="bench/hallucination/results",
+        help="Output directory for results",
+    )
 
     args = parser.parse_args()
 

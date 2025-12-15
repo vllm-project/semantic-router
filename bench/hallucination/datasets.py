@@ -13,6 +13,7 @@ from typing import List, Optional, Iterator
 
 try:
     from datasets import load_dataset
+
     HAS_DATASETS = True
 except ImportError:
     HAS_DATASETS = False
@@ -21,6 +22,7 @@ except ImportError:
 @dataclass
 class HallucinationSample:
     """A single sample for hallucination detection evaluation."""
+
     id: str
     context: str  # Ground truth context (tool results / RAG context)
     question: str  # User question
@@ -54,7 +56,9 @@ class HaluEvalDataset(DatasetInterface):
     def load(self, max_samples: Optional[int] = None) -> List[HallucinationSample]:
         """Load HaluEval dataset from HuggingFace."""
         if not HAS_DATASETS:
-            raise ImportError("datasets package not installed. Run: pip install datasets")
+            raise ImportError(
+                "datasets package not installed. Run: pip install datasets"
+            )
 
         print(f"Loading HaluEval dataset...")
 
@@ -69,17 +73,21 @@ class HaluEvalDataset(DatasetInterface):
             if max_samples and i >= max_samples:
                 break
 
-            samples.append(HallucinationSample(
-                id=f"halueval_{i}",
-                context=item.get("knowledge", ""),
-                question=item.get("question", ""),
-                gold_answer=item.get("right_answer", ""),
-                llm_response=item.get("hallucinated_answer", item.get("answer", "")),
-                is_faithful=item.get("hallucination", "no") == "no",
-                metadata={
-                    "dataset": "halueval",
-                }
-            ))
+            samples.append(
+                HallucinationSample(
+                    id=f"halueval_{i}",
+                    context=item.get("knowledge", ""),
+                    question=item.get("question", ""),
+                    gold_answer=item.get("right_answer", ""),
+                    llm_response=item.get(
+                        "hallucinated_answer", item.get("answer", "")
+                    ),
+                    is_faithful=item.get("hallucination", "no") == "no",
+                    metadata={
+                        "dataset": "halueval",
+                    },
+                )
+            )
 
         print(f"Loaded {len(samples)} samples from HaluEval")
         return samples
@@ -107,16 +115,18 @@ class CustomDataset(DatasetInterface):
                     break
 
                 item = json.loads(line.strip())
-                samples.append(HallucinationSample(
-                    id=item.get("id", f"custom_{i}"),
-                    context=item.get("context", item.get("knowledge", "")),
-                    question=item.get("question", item.get("query", "")),
-                    gold_answer=item.get("gold_answer", item.get("answer", "")),
-                    llm_response=item.get("llm_response", item.get("response", "")),
-                    hallucination_spans=item.get("hallucination_spans", []),
-                    is_faithful=item.get("is_faithful"),
-                    metadata=item.get("metadata", {}),
-                ))
+                samples.append(
+                    HallucinationSample(
+                        id=item.get("id", f"custom_{i}"),
+                        context=item.get("context", item.get("knowledge", "")),
+                        question=item.get("question", item.get("query", "")),
+                        gold_answer=item.get("gold_answer", item.get("answer", "")),
+                        llm_response=item.get("llm_response", item.get("response", "")),
+                        hallucination_spans=item.get("hallucination_spans", []),
+                        is_faithful=item.get("is_faithful"),
+                        metadata=item.get("metadata", {}),
+                    )
+                )
 
         print(f"Loaded {len(samples)} samples from {self.file_path}")
         return samples
