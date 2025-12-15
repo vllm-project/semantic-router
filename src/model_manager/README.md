@@ -30,14 +30,20 @@ python -m model_manager --list
 # Verify existing models without downloading
 python -m model_manager --verify-only
 
-# Clean all cached models
+# Clean all cached models (from default config)
 python -m model_manager --clean
+
+# Clean all models from a specific config
+python -m model_manager --config config/model_manager/models.yaml --clean
 
 # Clean a specific model
 python -m model_manager --clean-model category_classifier_modernbert-base_model
 
 # Verbose output for debugging
 python -m model_manager -v
+
+# Show help message
+python -m model_manager --help
 ```
 
 ### CI Mode
@@ -119,10 +125,12 @@ models:
 
 ## Environment Variables
 
-| Variable            | Description                                                      |
-| ------------------- | ---------------------------------------------------------------- |
-| `CI_MINIMAL_MODELS` | Set to `true`, `1`, or `yes` to auto-select minimal config       |
-| `HF_TOKEN`          | HuggingFace token for gated models (e.g., `embeddinggemma-300m`) |
+| Variable                    | Description                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `CI_MINIMAL_MODELS`         | Set to `true`, `1`, or `yes` to auto-select minimal config                              |
+| `HF_TOKEN`                  | HuggingFace token for gated models (e.g., `embeddinggemma-300m`)                        |
+| `HF_ENDPOINT`               | A HuggingFace mirror endpoint for accelerated downloads (e.g., `https://hf-mirror.com`) |
+| `HF_HUB_ENABLE_HF_TRANSFER` | Set to `1` to enable faster downloads using `hf_transfer` (enabled by default in CI)    |
 
 ## API Reference
 
