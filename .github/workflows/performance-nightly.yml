@@ -1,9 +1,10 @@
 name: Nightly Performance Baseline
 
 on:
-  schedule:
-    # Run at 3:00 AM UTC daily
-    - cron: "0 3 * * *"
+  # Disabled - baseline comparison not currently used in PR tests
+  # schedule:
+  #   # Run at 3:00 AM UTC daily
+  #   - cron: "0 3 * * *"
   workflow_dispatch:  # Allow manual triggering
 
 jobs:

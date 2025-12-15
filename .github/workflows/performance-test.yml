@@ -24,8 +24,6 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Need full history for baseline comparison
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -82,14 +80,6 @@ jobs:
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
-
-      - name: Download performance baselines
-        continue-on-error: true
-        run: |
-          mkdir -p perf/testdata/baselines
-          git show main:perf/testdata/baselines/classification.json > perf/testdata/baselines/classification.json 2>/dev/null || echo '{"version":"v1.0.0","benchmarks":{}}' > perf/testdata/baselines/classification.json
-          git show main:perf/testdata/baselines/decision.json > perf/testdata/baselines/decision.json 2>/dev/null || echo '{"version":"v1.0.0","benchmarks":{}}' > perf/testdata/baselines/decision.json
-          git show main:perf/testdata/baselines/cache.json > perf/testdata/baselines/cache.json 2>/dev/null || echo '{"version":"v1.0.0","benchmarks":{}}' > perf/testdata/baselines/cache.json
 
       - name: Run component benchmarks
         run: |
@@ -177,21 +167,3 @@ jobs:
           path: |
             reports/
           retention-days: 30
-
-      - name: Check for regressions (placeholder)
-        id: regression_check
-        continue-on-error: true
-        run: |
-          # In a real implementation, this would:
-          # 1. Parse benchmark output
-          # 2. Compare against baselines
-          # 3. Calculate % changes
-          # 4. Exit 1 if regressions exceed thresholds
-          echo "No regressions detected (placeholder check)"
-
-      - name: Fail on regression
-        if: steps.regression_check.outcome == 'failure'
-        run: |
-          echo "❌ Performance regressions detected!"
-          echo "See benchmark results in artifacts for details"
-          exit 1
