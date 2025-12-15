@@ -29,7 +29,6 @@ download-models-full:
 download-models-full: ## Download all models used in local development and docs
 	@mkdir -p models
 	PYTHONPATH=src python -m model_manager --config config/models.yaml
-
 # Download only LoRA and advanced embedding models (for CI after minimal tests)
 download-models-lora:
 download-models-lora: ## Download LoRA adapters and advanced embedding models only

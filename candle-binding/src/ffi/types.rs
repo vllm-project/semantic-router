@@ -17,8 +17,8 @@ pub struct ClassificationResult {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ClassificationResultWithProbs {
-    pub confidence: f32,
     pub predicted_class: i32,
+    pub confidence: f32,
     pub label: *mut c_char,
     pub probabilities: *mut f32,
     pub num_classes: i32,
@@ -37,6 +37,40 @@ pub struct EmbeddingResult {
     pub sequence_length: i32,
     /// Processing time in milliseconds
     pub processing_time_ms: f32,
+}
+
+impl EmbeddingResult {
+    /// Create a success result with embedding data
+    pub fn success(embedding: Vec<f32>) -> *mut Self {
+        let len = embedding.len();
+        let mut boxed_embedding = embedding.into_boxed_slice();
+        let data_ptr = boxed_embedding.as_mut_ptr();
+        std::mem::forget(boxed_embedding);
+        
+        let result = Box::new(Self {
+            data: data_ptr,
+            length: len as i32,
+            error: false,
+            model_type: -1, // Vision model
+            sequence_length: 0,
+            processing_time_ms: 0.0,
+        });
+        Box::into_raw(result)
+    }
+    
+    /// Create an error result
+    pub fn error(_message: &str) -> *mut Self {
+        // For now, just return error flag
+        let result = Box::new(Self {
+            data: std::ptr::null_mut(),
+            length: 0,
+            error: true,
+            model_type: -1,
+            sequence_length: 0,
+            processing_time_ms: 0.0,
+        });
+        Box::into_raw(result)
+    }
 }
 
 /// Tokenization result structure (matches Go C struct)

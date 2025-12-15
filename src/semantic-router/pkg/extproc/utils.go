@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // sendResponse sends a response with proper error handling and logging
@@ -133,6 +134,54 @@ func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, 
 	}
 
 	return userContent, nonUser
+}
+
+func extractImagesFromRequest(req *openai.ChatCompletionNewParams) []services.MultimodalImage {
+	var images []services.MultimodalImage
+
+	for _, msg := range req.Messages {
+		if msg.OfUser != nil && len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
+			for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+				if part.OfImageURL != nil && part.OfImageURL.ImageURL.URL != "" {
+					imageURL := part.OfImageURL.ImageURL.URL
+
+					var base64Data string
+					var mimeType string
+
+					if strings.HasPrefix(imageURL, "data:") {
+						parts := strings.SplitN(imageURL, ",", 2)
+						if len(parts) == 2 {
+							base64Data = parts[1]
+							mimeParts := strings.Split(parts[0], ";")
+							if len(mimeParts) > 0 {
+								mimeType = strings.TrimPrefix(mimeParts[0], "data:")
+							}
+						}
+					} else {
+						images = append(images, services.MultimodalImage{
+							URL:      imageURL,
+							MimeType: "image/jpeg", // defaulting for now
+						})
+						continue
+					}
+
+					if base64Data != "" {
+						images = append(images, services.MultimodalImage{
+							Data:     base64Data,
+							MimeType: mimeType,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return images
+}
+
+func hasMultimodalContent(req *openai.ChatCompletionNewParams) bool {
+	images := extractImagesFromRequest(req)
+	return len(images) > 0
 }
 
 // statusCodeToEnum converts HTTP status code to typev3.StatusCode enum

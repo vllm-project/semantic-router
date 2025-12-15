@@ -51,6 +51,7 @@ make run-router
 - `POST /api/v1/classify/pii` - PII detection with real model inference
 - `POST /api/v1/classify/security` - Security/jailbreak detection with real model inference
 - `POST /api/v1/classify/batch` - Batch classification with configurable processing strategies
+- `POST /api/v1/classify/multimodal` - Multimodal intent classification (text + images)
 - `GET /info/models` - Model information and system status
 - `GET /info/classifier` - Detailed classifier capabilities and configuration
 
@@ -92,6 +93,18 @@ curl -X POST http://localhost:8080/api/v1/classify/security \
 curl -X POST http://localhost:8080/api/v1/classify/batch \
   -H "Content-Type: application/json" \
   -d '{"texts": ["What is machine learning?", "Write a business plan", "Calculate area of circle"]}'
+
+# Multimodal classification
+IMAGE_B64=$(base64 -i cat.jpg | tr -d '\n')
+curl -X POST http://localhost:8080/api/v1/classify/multimodal \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"text\": \"What is in this image?\",
+    \"images\": [{
+      \"data\": \"$IMAGE_B64\",
+      \"mime_type\": \"image/jpeg\"
+    }]
+  }"
 
 # Model information
 curl -X GET http://localhost:8080/info/models
@@ -791,6 +804,67 @@ Get real-time classification performance metrics.
   }
 }
 ```
+
+## Multimodal Classification
+
+Classify requests containing both text and images using embedding-based classification with CLIP vision transformer and BERT text embeddings.
+
+### Endpoint
+`POST /api/v1/classify/multimodal`
+
+### Request Format
+
+```json
+{
+  "text": "What is in this image?",
+  "images": [
+    {
+      "data": "base64_encoded_image_data",
+      "mime_type": "image/jpeg"
+    }
+  ],
+  "content_type": "multimodal"
+}
+```
+
+### Response Format
+
+```json
+{
+  "classification": {
+    "category": "visual_analysis",
+    "confidence": 0.85,
+    "processing_time_ms": 523
+  },
+  "content_type": "multimodal",
+  "recommended_model": "llava:7b",
+  "routing_decision": "route"
+}
+```
+
+### Example Request
+
+```bash
+# Encode image to base64
+IMAGE_B64=$(base64 -i cat.jpg | tr -d '\n')
+
+# Send multimodal classification request
+curl -X POST http://localhost:8080/api/v1/classify/multimodal \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"text\": \"What is in this image?\",
+    \"images\": [{
+      \"data\": \"$IMAGE_B64\",
+      \"mime_type\": \"image/jpeg\"
+    }]
+  }"
+```
+
+### Supported Image Formats
+
+- JPEG (`image/jpeg`)
+- PNG (`image/png`)
+- Other formats supported by the image processing library
 
 ## Error Handling
 

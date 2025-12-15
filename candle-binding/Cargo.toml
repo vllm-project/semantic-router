@@ -40,6 +40,10 @@ rayon = "1.8"
 parking_lot = "0.12"
 crossbeam-channel = "0.5"  # Efficient multi-channel select for scheduler wakeup
 
+# Image processing for vision transformer
+image = "0.25"  # For JPEG/PNG decoding
+resize = "0.8"  # For image resizing
+
 [dev-dependencies]
 rstest = "0.18"
 tokio = { version = "1.0", features = ["full"] }

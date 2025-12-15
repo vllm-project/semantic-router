@@ -17,9 +17,9 @@ use crate::BertClassifier;
 // - Thread-safe initialization guarantee
 // - No dependency on lazy_static
 pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
-static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
-static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 // DeBERTa v3 jailbreak/prompt injection classifier (exported for use in classify.rs)
 pub static DEBERTA_JAILBREAK_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier>,

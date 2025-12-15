@@ -12,6 +12,7 @@ pub mod similarity; //  similarity functions
 pub mod tokenization; //  tokenization function
 pub mod types; //  C structure definitions
 pub mod validation; //  parameter validation functions
+pub mod vision; //  vision transformer functions
 
 pub mod memory_safety; // Dual-path memory safety system
 pub mod state_manager; // Global state management system
@@ -27,6 +28,7 @@ pub use similarity::*;
 pub use tokenization::*;
 pub use types::*;
 pub use validation::*;
+pub use vision::*;
 
 pub use memory_safety::*;
 pub use state_manager::*;
@@ -45,3 +47,5 @@ pub mod oncelock_concurrent_test;
 pub mod state_manager_test;
 #[cfg(test)]
 pub mod validation_test;
+#[cfg(test)]
+pub mod vision_test;

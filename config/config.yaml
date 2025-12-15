@@ -50,13 +50,30 @@ vllm_endpoints:
     port: 8002
     weight: 1
 
+  - name: "ollama-endpoint"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
+  - name: "image-gen"
+    address: "127.0.0.1"
+    port: 8801
+    gateway: true
+    weight: 1
+
 model_config:
+  "image-generator":
+    preferred_endpoints: ["image-gen"]
+    pii_policy:
+      allow_by_default: true
+    capabilities: ["image"]
   "qwen3":
     reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]  # Optional: omit to let upstream handle endpoint selection
 
 # Classifier configuration
 classifier:
+  # Use models/binary_classification for image generation recognition
   category_model:
     model_id: "models/lora_intent_classifier_bert-base-uncased_model"
     threshold: 0.6
@@ -71,6 +88,18 @@ classifier:
 
 # Categories define domain metadata only (no routing logic)
 categories:
+  - name: image_generation
+    description: "Generate images from text prompts"
+    keywords:
+      - "generate an image"
+      - "make a picture"
+      - "draw"
+      - "create an image"
+      - "produce artwork"
+    model_scores:
+      - model: image-generator
+        score: 1.0
+        use_reasoning: false
   - name: business
     description: "Business and management related queries"
     mmlu_categories: ["business"]
@@ -137,6 +166,16 @@ decisions:
         configuration:
           enabled: true
           pii_types_allowed: []
+
+  - name: visual_analysis
+    description: "General visual analysis, image understanding, scene description, object recognition, visual question answering, image interpretation"
+    use_reasoning: true
+    multimodal_enabled: true
+    model_scores:
+      - model: llava:7b
+        score: 0.7
+        use_reasoning: false
+        capabilities: ["text", "image"]
 
   - name: "law_decision"
     description: "Legal questions and law-related topics"

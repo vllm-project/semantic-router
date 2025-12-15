@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // EnhancedHallucinationSpan represents a hallucinated span with NLI explanation
@@ -62,6 +63,8 @@ type RequestContext struct {
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
+	// Multimodal content tracking
+	Images []services.MultimodalImage // Extracted images from the request (for multimodal classification)
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification
 	FactCheckConfidence       float32                    // Confidence score of fact-check classification

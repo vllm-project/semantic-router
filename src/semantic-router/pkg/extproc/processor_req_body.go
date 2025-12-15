@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -85,6 +86,9 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Get content from messages
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
+
+	// Extract images from request and store in context for multimodal classification
+	ctx.Images = extractImagesFromRequest(openAIRequest)
 
 	// Perform fact-check classification for hallucination mitigation
 	r.performFactCheckClassification(ctx, userContent)
@@ -209,6 +213,41 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 	// PII policy check already done in performPIIDetection
+
+	// Check for multimodal content and run classification for analytics
+	if len(ctx.Images) > 0 {
+		logging.Infof("Detected multimodal request with images (model specified: %s), running classification for analytics", originalModel)
+
+		// Get images from context (already extracted)
+		images := ctx.Images
+
+		userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
+		contentType := "image"
+		if userContent != "" || len(nonUserMessages) > 0 {
+			contentType = "multimodal"
+		}
+
+		// Create multimodal classification request
+		multimodalReq := services.MultimodalClassificationRequest{
+			Text:        userContent,
+			Images:      images,
+			ContentType: contentType,
+		}
+
+		// Get classification service
+		classificationSvc := services.GetGlobalClassificationService()
+		if classificationSvc != nil {
+			intentResp, err := classificationSvc.ClassifyMultimodal(multimodalReq)
+			if err == nil && intentResp != nil {
+				categoryName := intentResp.Classification.Category
+				ctx.VSRSelectedCategory = categoryName
+				logging.Infof("Multimodal classification result: category=%s, confidence=%.3f (using specified model: %s)",
+					categoryName, intentResp.Classification.Confidence, originalModel)
+			} else {
+				logging.Debugf("Multimodal classification failed (non-blocking): %v", err)
+			}
+		}
+	}
 
 	// Select endpoint for the specified model
 	selectedEndpoint := r.selectEndpointForModel(ctx, originalModel)

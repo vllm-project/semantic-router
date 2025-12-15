@@ -37,6 +37,21 @@ static_resources:
             - name: local_service
               domains: ["*"]
               routes:
+              # Route for Gemini image generation
+              - match:
+                  prefix: "/v1/chat/completions"
+                  headers: 
+                  - name: "x-selected-model"
+                    exact_match: "image-generator"
+                route:
+                  cluster: image-gen
+                  timeout: 300s
+                  host_rewrite_literal: "presuccessfully-pagodalike-dede.ngrok-free.dev"
+              - match:
+                  path: "/v1/images/generations"
+                route:
+                  cluster: gemini_cluster
+                  timeout: 300s
               # Single route using original destination cluster
               - match:
                   prefix: "/"
@@ -96,6 +111,51 @@ static_resources:
               socket_address:
                 address: 127.0.0.1
                 port_value: 50051
+
+  # Gemini cluster with TLS support
+  - name: gemini_cluster
+    connect_timeout: 30s
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: gemini_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: generativelanguage.googleapis.com
+                port_value: 443
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: generativelanguage.googleapis.com
+  - name: image-gen
+    type: LOGICAL_DNS
+    lb_policy: ROUND_ROBIN
+    connect_timeout: 30s
+    dns_lookup_family: V4_ONLY
+
+    load_assignment:
+      cluster_name: image-gen
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: presuccessfully-pagodalike-dede.ngrok-free.dev
+                port_value: 443
+
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: "presuccessfully-pagodalike-dede.ngrok-free.dev"
+
+    dns_refresh_rate: 5s
+    respect_dns_ttl: true
 
   # Dynamic vLLM cluster using original destination
   - name: vllm_dynamic_cluster

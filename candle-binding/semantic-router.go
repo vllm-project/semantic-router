@@ -94,6 +94,11 @@ typedef struct {
     float processing_time_ms; // Processing time in milliseconds
 } EmbeddingResult;
 
+// Vision transformer functions
+extern bool init_vision_encoder_ffi(const char* model_id, const char* device_type);
+extern EmbeddingResult* get_image_embedding(const unsigned char* image_data, size_t data_len, const char* mime_type);
+extern void free_image_embedding_result(EmbeddingResult* result);
+
 // Embedding similarity result structure
 typedef struct {
     float similarity;         // Cosine similarity score (-1.0 to 1.0)
@@ -3006,4 +3011,61 @@ func extractLabelAndCategories(content string) (string, []string) {
 
 // ================================================================================================
 // END OF LORA UNIFIED CLASSIFIER GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// VISION TRANSFORMER GO BINDINGS
+// ================================================================================================
+
+// InitVisionEncoder initializes the CLIP vision transformer encoder
+func InitVisionEncoder(modelID, deviceType string) error {
+	cModelID := C.CString(modelID)
+	defer C.free(unsafe.Pointer(cModelID))
+
+	cDeviceType := C.CString(deviceType)
+	defer C.free(unsafe.Pointer(cDeviceType))
+
+	success := C.init_vision_encoder_ffi(cModelID, cDeviceType)
+	if !success {
+		return fmt.Errorf("failed to initialize vision encoder with model: %s", modelID)
+	}
+
+	return nil
+}
+
+// GetImageEmbedding extracts an embedding vector from an image
+func GetImageEmbedding(imageData []byte, mimeType string) ([]float32, error) {
+	if len(imageData) == 0 {
+		return nil, fmt.Errorf("image data cannot be empty")
+	}
+
+	cMimeType := C.CString(mimeType)
+	defer C.free(unsafe.Pointer(cMimeType))
+
+	result := C.get_image_embedding(
+		(*C.uchar)(unsafe.Pointer(&imageData[0])),
+		C.size_t(len(imageData)),
+		cMimeType,
+	)
+	defer C.free_image_embedding_result(result)
+
+	if bool(result.error) {
+		return nil, fmt.Errorf("image embedding extraction failed")
+	}
+
+	length := int(result.length)
+	embedding := make([]float32, length)
+
+	if length > 0 {
+		cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
+		for i := 0; i < length; i++ {
+			embedding[i] = float32(cFloats[i])
+		}
+	}
+
+	return embedding, nil
+}
+
+// ================================================================================================
+// END OF VISION TRANSFORMER GO BINDINGS
 // ================================================================================================

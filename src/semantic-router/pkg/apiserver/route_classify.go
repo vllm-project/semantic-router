@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -37,6 +38,86 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 		return
 	}
 
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// handleMultimodalClassification handles image + text classification using the classification service
+func (s *ClassificationAPIServer) handleMultimodalClassification(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Errorf("Panic in handleMultimodalClassification: %v", r)
+			s.writeErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Panic: %v", r))
+		}
+	}()
+
+	var req struct {
+		Text   string `json:"text"`
+		Images []struct {
+			Data     string `json:"data"`
+			MimeType string `json:"mime_type"`
+		} `json:"images"`
+	}
+
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		logging.Errorf("Failed to parse multimodal request: %v", err)
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Detect content type
+	contentType := "text"
+	if len(req.Images) > 0 && req.Text != "" {
+		contentType = "multimodal"
+	} else if len(req.Images) > 0 {
+		contentType = "image"
+	}
+
+	logging.Infof("Multimodal request: contentType=%s, textLen=%d, imageCount=%d",
+		contentType, len(req.Text), len(req.Images))
+
+	// Convert request to MultimodalClassificationRequest
+	multimodalImages := make([]services.MultimodalImage, len(req.Images))
+	for i, img := range req.Images {
+		multimodalImages[i] = services.MultimodalImage{
+			Data:     img.Data,
+			MimeType: img.MimeType,
+		}
+	}
+
+	multimodalReq := services.MultimodalClassificationRequest{
+		Text:        req.Text,
+		Images:      multimodalImages,
+		ContentType: contentType,
+	}
+
+	// Call the classification service
+	intentResp, err := s.classificationSvc.ClassifyMultimodal(multimodalReq)
+	if err != nil {
+		logging.Errorf("Multimodal classification failed: %v", err)
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		return
+	}
+
+	if intentResp == nil {
+		logging.Errorf("ClassifyMultimodal returned nil response")
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", "Classification returned nil response")
+		return
+	}
+
+	// Build response
+	response := map[string]interface{}{
+		"category":          intentResp.Classification.Category,
+		"confidence":        intentResp.Classification.Confidence,
+		"content_type":      contentType,
+		"recommended_model": intentResp.RecommendedModel,
+		"routing_decision":  intentResp.RoutingDecision,
+	}
+
+	if intentResp.Probabilities != nil {
+		response["probabilities"] = intentResp.Probabilities
+	}
+
+	// Send JSON response using helper
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
