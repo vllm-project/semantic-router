@@ -1,0 +1,88 @@
+# All-in-One Deployment
+
+Single-container deployment for vLLM Semantic Router with all components bundled together.
+
+## Components
+
+| Service    | Port  | Description                 |
+| ---------- | ----- | --------------------------- |
+| Envoy      | 8801  | API Gateway (main endpoint) |
+| Dashboard  | 8700  | Web UI for monitoring       |
+| Grafana    | 3000  | Metrics dashboards          |
+| Prometheus | 9090  | Metrics collection          |
+| Jaeger     | 16686 | Distributed tracing         |
+| chat-ui    | 5173  | HuggingChat interface       |
+| Open WebUI | 3001  | LLM chat interface          |
+| Pipelines  | 9099  | Pipeline backend            |
+| LLM-Katan  | 8002  | Lightweight LLM server      |
+
+## Quick Start
+
+```bash
+# Build
+docker build -f Dockerfile.all-in-one -t vsr-all-in-one:latest .
+
+# Download models (required)
+make download-models
+
+# Run
+docker run -d --name vsr \
+  -p 8801:8801 -p 8002:8002 -p 8700:8700 -p 3000:3000 -p 9090:9090 \
+  -p 16686:16686 -p 5173:5173 -p 3001:3001 -p 9099:9099 \
+  -v $(pwd)/models:/app/models:ro \
+  vsr-all-in-one:latest
+```
+
+## Files
+
+| File                           | Description                   |
+| ------------------------------ | ----------------------------- |
+| `config.all-in-one.yaml`       | Semantic router configuration |
+| `envoy.template.yaml`          | Envoy proxy configuration     |
+| `supervisord.all-in-one.conf`  | Process management            |
+| `entrypoint-all-in-one.sh`     | Container entrypoint          |
+| `prometheus.yaml`              | Prometheus scrape config      |
+| `grafana-*.yaml`               | Grafana provisioning          |
+| `vllm_semantic_router_pipe.py` | Open WebUI pipeline           |
+
+## Environment Variables
+
+Key variables that can be overridden:
+
+```bash
+ENVOY_LISTEN_PORT=8801
+DASHBOARD_PORT=8700
+LLMKATAN_MODEL=/app/models/Qwen/Qwen3-0.6B
+GF_SECURITY_ADMIN_PASSWORD=admin
+```
+
+## Services Management
+
+```bash
+# Enter container
+docker exec -it vsr bash
+
+# View all service status
+supervisorctl status
+
+# View specific service logs
+tail -f /var/log/supervisor/semantic-router.log
+tail -f /var/log/supervisor/envoy.log
+
+# Restart a service
+supervisorctl restart semantic-router
+supervisorctl restart envoy
+
+# Stop/Start a service
+supervisorctl stop chatui
+supervisorctl start chatui
+
+# Restart all services
+supervisorctl restart all
+```
+
+## Notes
+
+- Image size is ~10GB
+- Requires models to be mounted at `/app/models`
+- All services managed by Supervisor
