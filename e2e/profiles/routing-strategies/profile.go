@@ -128,6 +128,7 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"keyword-routing",
 		"entropy-routing",
+		"routing-fallback", // Test sequential fallback: Keyword → Embedding → BERT → MCP
 		// MCP tests are registered but not run by default
 		// To run MCP tests, use: E2E_TESTS="mcp-stdio-classification,mcp-http-classification,..."
 		// "mcp-stdio-classification",
