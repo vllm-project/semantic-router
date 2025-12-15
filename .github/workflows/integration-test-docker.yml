@@ -182,6 +182,93 @@ jobs:
             echo "⚠️ Response may not contain expected fields, but request succeeded"
           fi
 
+      - name: Test Response API - Create Response
+        run: |
+          echo "Testing Response API: POST /v1/responses..."
+
+          response=$(curl -s -X POST http://localhost:8801/v1/responses \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "qwen3",
+              "input": "What is 2 + 2?",
+              "store": true
+            }')
+
+          echo "Response: $response"
+
+          # Extract response ID for subsequent tests
+          response_id=$(echo "$response" | jq -r '.id // empty')
+          if [ -n "$response_id" ] && [[ "$response_id" == resp_* ]]; then
+            echo "✅ Response API create test passed (id=$response_id)"
+            echo "RESPONSE_ID=$response_id" >> $GITHUB_ENV
+          else
+            echo "❌ Response API create test failed - invalid or missing response ID"
+            exit 1
+          fi
+
+      - name: Test Response API - Get Response
+        run: |
+          echo "Testing Response API: GET /v1/responses/$RESPONSE_ID..."
+
+          response=$(curl -s -X GET "http://localhost:8801/v1/responses/$RESPONSE_ID" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $response"
+
+          # Verify response ID matches
+          got_id=$(echo "$response" | jq -r '.id // empty')
+          if [ "$got_id" = "$RESPONSE_ID" ]; then
+            echo "✅ Response API get test passed"
+          else
+            echo "❌ Response API get test failed - ID mismatch (expected=$RESPONSE_ID, got=$got_id)"
+            exit 1
+          fi
+
+      - name: Test Response API - Get Input Items
+        run: |
+          echo "Testing Response API: GET /v1/responses/$RESPONSE_ID/input_items..."
+
+          response=$(curl -s -X GET "http://localhost:8801/v1/responses/$RESPONSE_ID/input_items" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $response"
+
+          # Verify it's a list
+          object_type=$(echo "$response" | jq -r '.object // empty')
+          if [ "$object_type" = "list" ]; then
+            echo "✅ Response API input_items test passed"
+          else
+            echo "❌ Response API input_items test failed - expected object=list, got=$object_type"
+            exit 1
+          fi
+
+      - name: Test Response API - Delete Response
+        run: |
+          echo "Testing Response API: DELETE /v1/responses/$RESPONSE_ID..."
+
+          response=$(curl -s -X DELETE "http://localhost:8801/v1/responses/$RESPONSE_ID" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $response"
+
+          # Verify deletion
+          deleted=$(echo "$response" | jq -r '.deleted // empty')
+          if [ "$deleted" = "true" ]; then
+            echo "✅ Response API delete test passed"
+          else
+            echo "❌ Response API delete test failed - expected deleted=true"
+            exit 1
+          fi
+
+          # Verify 404 on subsequent get
+          get_response=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8801/v1/responses/$RESPONSE_ID")
+          if [ "$get_response" = "404" ]; then
+            echo "✅ Response API delete verification passed (404 on get)"
+          else
+            echo "❌ Response API delete verification failed - expected 404, got $get_response"
+            exit 1
+          fi
+
       - name: Show service logs on failure
         if: failure()
         run: |
