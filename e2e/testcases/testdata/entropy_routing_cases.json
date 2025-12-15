@@ -1,0 +1,252 @@
+[
+  {
+    "name": "very_high_entropy_uniform_distribution",
+    "description": "Test very high entropy with uniform probability distribution",
+    "query": "What is the best approach to analyze this data?",
+    "expected_uncertainty_level": "very_high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.25,
+    "max_confidence": 0.35
+  },
+  {
+    "name": "very_low_entropy_math_confident",
+    "description": "Test very low entropy with very confident math classification",
+    "query": "Solve the equation 2x + 5 = 15 for x",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "math"
+  },
+  {
+    "name": "very_low_entropy_physics_confident",
+    "description": "Test very low entropy with very confident physics classification",
+    "query": "Calculate the force required to accelerate a 10kg mass at 5m/s²",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "physics"
+  },
+  {
+    "name": "very_low_entropy_code_confident",
+    "description": "Test very low entropy with very confident code classification",
+    "query": "Write a Python function to reverse a string",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "code"
+  },
+  {
+    "name": "very_low_entropy_biology_confident",
+    "description": "Test very low entropy with very confident biology classification",
+    "query": "What is the process of photosynthesis in plants?",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": false,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "biology"
+  },
+  {
+    "name": "low_entropy_math_strong",
+    "description": "Test low entropy with strong math classification",
+    "query": "Find the derivative of x³ + 2x² - 5x + 7",
+    "expected_uncertainty_level": "low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.70,
+    "max_confidence": 0.90,
+    "expected_top_category": "math"
+  },
+  {
+    "name": "low_entropy_code_strong",
+    "description": "Test low entropy with strong code classification",
+    "query": "Implement a binary search algorithm in Java",
+    "expected_uncertainty_level": "low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.70,
+    "max_confidence": 0.90,
+    "expected_top_category": "code"
+  },
+  {
+    "name": "medium_entropy_math_above_threshold",
+    "description": "Test medium entropy with math above confidence threshold",
+    "query": "What is the integral of sin(x) with respect to x?",
+    "expected_uncertainty_level": "medium",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.55,
+    "max_confidence": 0.75,
+    "expected_top_category": "math"
+  },
+  {
+    "name": "medium_entropy_physics_above_threshold",
+    "description": "Test medium entropy with physics above confidence threshold",
+    "query": "Explain Newton's third law of motion",
+    "expected_uncertainty_level": "medium",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.55,
+    "max_confidence": 0.75,
+    "expected_top_category": "physics"
+  },
+  {
+    "name": "medium_entropy_biology_above_threshold",
+    "description": "Test medium entropy with biology above confidence threshold",
+    "query": "Describe the structure of DNA",
+    "expected_uncertainty_level": "medium",
+    "expected_use_reasoning": false,
+    "min_confidence": 0.55,
+    "max_confidence": 0.75,
+    "expected_top_category": "biology"
+  },
+  {
+    "name": "high_entropy_math_physics_weighted",
+    "description": "Test high entropy with math and physics competing (both reasoning)",
+    "query": "Calculate the trajectory of a projectile launched at 45 degrees",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.50,
+    "max_confidence": 0.75
+  },
+  {
+    "name": "high_entropy_code_math_weighted",
+    "description": "Test high entropy with code and math competing (both reasoning)",
+    "query": "Implement an algorithm to calculate Fibonacci numbers",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.50,
+    "max_confidence": 0.75
+  },
+  {
+    "name": "high_entropy_biology_chemistry_weighted",
+    "description": "Test high entropy with biology and chemistry competing (both non-reasoning)",
+    "query": "Explain the process of cellular respiration and its chemical reactions",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": false,
+    "min_confidence": 0.50,
+    "max_confidence": 0.75
+  },
+  {
+    "name": "high_entropy_mixed_reasoning_nonreasoning",
+    "description": "Test high entropy with mixed reasoning and non-reasoning categories",
+    "query": "How does machine learning work in biological research?",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.45,
+    "max_confidence": 0.70
+  },
+  {
+    "name": "confidence_adjustment_very_low",
+    "description": "Test confidence adjustment for very low uncertainty (95% multiplier)",
+    "query": "What is 2 + 2?",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.90,
+    "max_confidence": 1.0,
+    "expected_top_category": "math"
+  },
+  {
+    "name": "confidence_adjustment_low",
+    "description": "Test confidence adjustment for low uncertainty (90% multiplier)",
+    "query": "Solve for x: 3x - 7 = 11",
+    "expected_uncertainty_level": "low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.75,
+    "max_confidence": 0.90,
+    "expected_top_category": "math"
+  },
+  {
+    "name": "confidence_adjustment_medium",
+    "description": "Test confidence adjustment for medium uncertainty (80% multiplier)",
+    "query": "What is the quadratic formula?",
+    "expected_uncertainty_level": "medium",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.55,
+    "max_confidence": 0.75,
+    "expected_top_category": "math"
+  },
+  {
+    "name": "confidence_adjustment_high",
+    "description": "Test confidence adjustment for high uncertainty (weighted decision)",
+    "query": "Analyze the mathematical patterns in biological systems",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.50,
+    "max_confidence": 0.70
+  },
+  {
+    "name": "weighted_decision_all_reasoning",
+    "description": "Test weighted decision when top categories all require reasoning",
+    "query": "Develop a mathematical model to simulate physical phenomena",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.50,
+    "max_confidence": 0.75
+  },
+  {
+    "name": "weighted_decision_all_nonreasoning",
+    "description": "Test weighted decision when top categories don't require reasoning",
+    "query": "Describe the historical and biological context of human evolution",
+    "expected_uncertainty_level": "high",
+    "expected_use_reasoning": false,
+    "min_confidence": 0.50,
+    "max_confidence": 0.75
+  },
+  {
+    "name": "edge_case_complex_interdisciplinary",
+    "description": "Test edge case with complex interdisciplinary query",
+    "query": "How do quantum mechanics principles apply to computational algorithms in bioinformatics?",
+    "expected_uncertainty_level": "very_high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.25,
+    "max_confidence": 0.40
+  },
+  {
+    "name": "fallback_conservative_default",
+    "description": "Test conservative fallback for ambiguous queries",
+    "query": "Tell me about it",
+    "expected_uncertainty_level": "very_high",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.25,
+    "max_confidence": 0.40
+  },
+  {
+    "name": "reasoning_physics_kinematics",
+    "description": "Test reasoning decision for physics kinematics problem",
+    "query": "A car accelerates from rest to 60 mph in 8 seconds. Calculate the acceleration and distance traveled.",
+    "expected_uncertainty_level": "low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.70,
+    "max_confidence": 0.90,
+    "expected_top_category": "physics"
+  },
+  {
+    "name": "reasoning_code_algorithm",
+    "description": "Test reasoning decision for algorithmic coding problem",
+    "query": "Design a data structure to support insert, delete, and getRandom operations in O(1) time",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": true,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "code"
+  },
+  {
+    "name": "nonreasoning_history_facts",
+    "description": "Test non-reasoning decision for historical facts",
+    "query": "When did World War II end?",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": false,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "history"
+  },
+  {
+    "name": "nonreasoning_language_grammar",
+    "description": "Test non-reasoning decision for language/grammar query",
+    "query": "What is the plural form of 'mouse' in English?",
+    "expected_uncertainty_level": "very_low",
+    "expected_use_reasoning": false,
+    "min_confidence": 0.85,
+    "max_confidence": 1.0,
+    "expected_top_category": "language"
+  }
+]
