@@ -2,7 +2,7 @@
 # This file contains only LoRA adapter models for incremental CI downloads.
 #
 # Usage:
-#   python -m model_manager --config config/models.lora.yaml
+#   python -m model_manager --config config/model_manager/models.lora.yaml
 #
 # Equivalent to: make download-models-lora
 

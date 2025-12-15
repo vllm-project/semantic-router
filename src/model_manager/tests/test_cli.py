@@ -18,37 +18,37 @@ class TestGetDefaultConfig:
         with patch("os.environ.get") as mock_get:
             mock_get.return_value = ""
             result = get_default_config()
-            assert result == "config/models.yaml"
+            assert result == "config/model_manager/models.yaml"
 
     def test_minimal_config_with_true(self):
         """Test that minimal config is returned when CI_MINIMAL_MODELS=true."""
         with patch.dict(os.environ, {"CI_MINIMAL_MODELS": "true"}):
             result = get_default_config()
-            assert result == "config/models.minimal.yaml"
+            assert result == "config/model_manager/models.minimal.yaml"
 
     def test_minimal_config_with_1(self):
         """Test that minimal config is returned when CI_MINIMAL_MODELS=1."""
         with patch.dict(os.environ, {"CI_MINIMAL_MODELS": "1"}):
             result = get_default_config()
-            assert result == "config/models.minimal.yaml"
+            assert result == "config/model_manager/models.minimal.yaml"
 
     def test_minimal_config_with_yes(self):
         """Test that minimal config is returned when CI_MINIMAL_MODELS=yes."""
         with patch.dict(os.environ, {"CI_MINIMAL_MODELS": "yes"}):
             result = get_default_config()
-            assert result == "config/models.minimal.yaml"
+            assert result == "config/model_manager/models.minimal.yaml"
 
     def test_minimal_config_case_insensitive(self):
         """Test that CI_MINIMAL_MODELS check is case insensitive."""
         with patch.dict(os.environ, {"CI_MINIMAL_MODELS": "TRUE"}):
             result = get_default_config()
-            assert result == "config/models.minimal.yaml"
+            assert result == "config/model_manager/models.minimal.yaml"
 
     def test_default_config_with_false(self):
         """Test that default config is returned when CI_MINIMAL_MODELS=false."""
         with patch.dict(os.environ, {"CI_MINIMAL_MODELS": "false"}):
             result = get_default_config()
-            assert result == "config/models.yaml"
+            assert result == "config/model_manager/models.yaml"
 
 
 class TestMainCLI:

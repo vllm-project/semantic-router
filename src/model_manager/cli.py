@@ -24,8 +24,8 @@ def get_default_config() -> str:
     """Get default config path based on CI_MINIMAL_MODELS environment variable."""
     ci_minimal = os.environ.get("CI_MINIMAL_MODELS", "").lower()
     if ci_minimal in ("true", "1", "yes"):
-        return "config/models.minimal.yaml"
-    return "config/models.yaml"
+        return "config/model_manager/models.minimal.yaml"
+    return "config/model_manager/models.yaml"
 
 
 def setup_logging(verbose: bool = False) -> None:

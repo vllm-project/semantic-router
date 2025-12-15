@@ -6,14 +6,14 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'website/**'
-      - '**/*.md'
+      - "website/**"
+      - "**/*.md"
   push:
     branches:
       - main
     paths-ignore:
-      - 'website/**'
-      - '**/*.md'
+      - "website/**"
+      - "**/*.md"
   workflow_dispatch: # Allow manual triggering
 
 concurrency:
@@ -24,7 +24,7 @@ jobs:
   test-ci-compose:
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # Reduced from 30 - CI compose is faster
+    timeout-minutes: 20 # Reduced from 30 - CI compose is faster
 
     steps:
       - name: Check out the repo
@@ -36,11 +36,11 @@ jobs:
           # This helps prevent "no space left on device" errors
           echo "Disk space before setup:"
           df -h / && df -h /mnt
-          
+
           # Create /mnt/models directory if it doesn't exist
           sudo mkdir -p /mnt/models
           sudo chown -R $USER:$USER /mnt/models
-          
+
           # If models directory already exists in workspace, move it to /mnt
           if [ -d "models" ] && [ ! -L "models" ]; then
             echo "Moving existing models directory to /mnt/models..."
@@ -53,7 +53,7 @@ jobs:
               sudo mv models /mnt/models
             fi
           fi
-          
+
           # Create symlink from models/ to /mnt/models/ so existing code continues to work
           if [ ! -e "models" ]; then
             ln -s /mnt/models models
@@ -63,7 +63,7 @@ jobs:
           else
             echo "Warning: models exists but is not a symlink"
           fi
-          
+
           echo "Disk space after setup:"
           df -h / && df -h /mnt
           echo "Models directory setup complete. Models will be stored in /mnt/models"
@@ -71,13 +71,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl
-          pip install huggingface_hub[cli]
+          pip install -r src/model_manager/requirements.txt
 
       - name: Download models
         run: |
@@ -86,6 +86,7 @@ jobs:
         env:
           CI: true
           CI_MINIMAL_MODELS: true
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
 
@@ -101,7 +102,7 @@ jobs:
           echo "Waiting for services to be healthy..."
           max_attempts=60
           attempt=1
-          
+
           while [ $attempt -le $max_attempts ]; do
             echo "Attempt $attempt/$max_attempts: Checking service health..."
             
@@ -128,7 +129,7 @@ jobs:
             sleep 5
             ((attempt++))
           done
-          
+
           echo "❌ Timeout waiting for services to be healthy"
           docker ps -a
           exit 1
@@ -173,7 +174,7 @@ jobs:
             }')
 
           echo "Response: $response"
-          
+
           # Verify we got a response
           if echo "$response" | grep -q "choices"; then
             echo "✅ Chat completions test passed"
