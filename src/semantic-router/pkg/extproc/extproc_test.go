@@ -587,8 +587,8 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 
 	// Load tools from file if configured
 	if cfg.Tools.Enabled && cfg.Tools.ToolsDBPath != "" {
-		if err := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); err != nil {
-			return nil, fmt.Errorf("failed to load tools database: %w", err)
+		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
+			return nil, fmt.Errorf("failed to load tools database: %w", loadErr)
 		}
 	}
 

@@ -326,10 +326,10 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.ToolSelection.Tools.FallbackToEmpty = true
 				cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
-				router, err := CreateTestRouter(cfg)
+				testRouter, err := CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = router.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
+				err = testRouter.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(openAIRequest.Tools).To(BeNil())
 			})
@@ -353,7 +353,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.ToolSelection.Tools.FallbackToEmpty = false
 				cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
-				router, err := CreateTestRouter(cfg)
+				testRouter, err := CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Set initial tools
@@ -367,7 +367,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				}
 				openAIRequest.Tools = originalTools
 
-				err = router.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
+				err = testRouter.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
 				// Should not be nil but empty array
 				Expect(openAIRequest.Tools).NotTo(BeNil())
@@ -502,7 +502,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		It("should skip processing when tools database is disabled", func() {
 			cfg.ToolSelection.Tools.Enabled = false
-			router, err := CreateTestRouter(cfg)
+			testRouter, err := CreateTestRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			requestJSON := []byte(`{
@@ -513,7 +513,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			openAIRequest, err := parseOpenAIRequest(requestJSON)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = router.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+			err = testRouter.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
