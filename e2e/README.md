@@ -18,6 +18,7 @@ The framework follows a **separation of concerns** design:
 - **istio**: Tests Semantic Router with Istio service mesh integration
 - **production-stack**: Tests vLLM Production Stack configurations
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
+- **response-api**: Tests Response API endpoints (POST/GET/DELETE /v1/responses)
 - **dynamo**: Tests with Nvidia Dynamo (future)
 
 ## Directory Structure
@@ -81,6 +82,15 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `semantic-cache` | Semantic cache hit rate | 5 groups, cache hit rate |
 | `pii-detection` | PII detection and blocking | 10 PII types, detection rate, block rate |
 | `jailbreak-detection` | Jailbreak attack detection | 10 attack types, detection rate, block rate |
+
+### Response API Tests
+
+| Test Case | Description | Metrics |
+|-----------|-------------|---------|
+| `response-api-create` | POST /v1/responses - Create a new response | Response ID validation, status check |
+| `response-api-get` | GET /v1/responses/{id} - Retrieve a response | Response retrieval, ID matching |
+| `response-api-delete` | DELETE /v1/responses/{id} - Delete a response | Deletion confirmation, 404 verification |
+| `response-api-input-items` | GET /v1/responses/{id}/input_items - List input items | Input items list, pagination |
 
 ### Signal-Decision Engine Tests
 

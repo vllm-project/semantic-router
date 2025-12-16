@@ -3,6 +3,14 @@ bert_model:
   threshold: 0.6
   use_cpu: true
 
+# Response API Configuration
+# Enables OpenAI Response API support with conversation chaining
+response_api:
+  enabled: true
+  store_backend: "memory"  # Options: "memory", "milvus", "redis"
+  ttl_seconds: 86400       # 24 hours
+  max_responses: 1000
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
