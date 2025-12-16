@@ -7,4 +7,10 @@ through the router + Envoy stack.
 from .evaluate import HallucinationBenchmark
 from .datasets import HaluEvalDataset, CustomDataset, get_dataset
 
-__all__ = ["HallucinationBenchmark", "HaluEvalDataset", "CustomDataset", "get_dataset"]
+__all__ = [
+    "HallucinationBenchmark",
+    "HaluEvalDataset",
+    "FinancialFactEvalDataset",
+    "CustomDataset",
+    "get_dataset",
+]

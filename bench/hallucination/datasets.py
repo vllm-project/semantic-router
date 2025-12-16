@@ -93,6 +93,73 @@ class HaluEvalDataset(DatasetInterface):
         return samples
 
 
+class FinancialFactEvalDataset(DatasetInterface):
+    """FinanceBench dataset loader.
+    Loads `PatronusAI/financebench` from the Hugging Face datasets hub.
+    The dataset's schema varies between versions and splits, so the loader
+    maps common fields with sensible fallbacks.
+    """
+
+    def name(self) -> str:
+        return "financebench"
+
+    def load(self, max_samples: Optional[int] = None) -> List[HallucinationSample]:
+        if not HAS_DATASETS:
+            raise ImportError(
+                "datasets package not installed. Run: pip install datasets"
+            )
+
+        print("Loading FinanceBench dataset...")
+        try:
+            ds = load_dataset("PatronusAI/financebench")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load PatronusAI/financebench: {e}")
+
+        samples: List[HallucinationSample] = []
+        for i, item in enumerate(ds):
+            if max_samples and i >= max_samples:
+                break
+
+            # Map common fields with fallbacks for different dataset schemas.
+            # The financebench dataset contains financial claims/questions and
+            # references; exact field names may vary across releases.
+            id_ = item.get("id") or item.get("financebench_id") or f"finance_{i}"
+            evidence = item.get("evidence")
+            if isinstance(evidence, dict) and "evidence_text" in evidence:
+                context = evidence["evidence_text"]
+            else:
+                context = ""
+                print(
+                    f"Warning: 'evidence_text' not found in evidence for sample {id_}"
+                )
+            question = item.get("question")
+            gold_answer = item.get("answer")
+            llm_response = None
+            hallucination_spans = None
+            is_faithful = None
+            # Some datasets include a binary correctness/faithful flag.
+            if "is_faithful" in item:
+                is_faithful = bool(item.get("is_faithful"))
+
+            samples.append(
+                HallucinationSample(
+                    id=str(id_),
+                    context=str(context or ""),
+                    question=str(question or ""),
+                    gold_answer=str(gold_answer or ""),
+                    llm_response=(
+                        str(llm_response) if llm_response is not None else None
+                    ),
+                    hallucination_spans=hallucination_spans,
+                    is_faithful=is_faithful,
+                    metadata={"dataset": "financebench", "raw_keys": list(item.keys())},
+                )
+            )
+
+        print(f"Loaded {len(samples)} samples from FinanceBench")
+        return samples
+
+
 class CustomDataset(DatasetInterface):
     """Load custom dataset from JSONL file."""
 
@@ -136,6 +203,7 @@ def get_dataset(name: str, **kwargs) -> DatasetInterface:
     """Factory function to get a dataset by name."""
     datasets = {
         "halueval": HaluEvalDataset,
+        "financebench": FinancialFactEvalDataset,
     }
 
     if name in datasets:
