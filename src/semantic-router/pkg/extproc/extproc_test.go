@@ -460,7 +460,7 @@ func CreateTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			BertModel: config.BertModel{
-				ModelID:   "sentence-transformers/all-MiniLM-L12-v2",
+				ModelID:   "sentence-transformers/all-MiniLM-L6-v2",
 				Threshold: 0.8,
 				UseCPU:    true,
 			},
