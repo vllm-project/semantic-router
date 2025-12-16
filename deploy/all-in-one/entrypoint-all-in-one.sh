@@ -96,6 +96,7 @@ fi
 echo ""
 echo "Generating configurations..."
 if [ -f /etc/envoy/envoy.template.yaml ]; then
+    # shellcheck disable=SC2016 # envsubst requires literal variable names in single quotes
     envsubst '${ENVOY_LISTEN_PORT} ${ENVOY_ADMIN_PORT} ${EXTPROC_HOST} ${EXTPROC_PORT}' \
         < /etc/envoy/envoy.template.yaml \
         > /etc/envoy/envoy.yaml
