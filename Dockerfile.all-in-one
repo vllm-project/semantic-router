@@ -48,11 +48,7 @@ ARG MONGODB_VERSION=8.0.4
 ARG CHATUI_VERSION=latest
 
 # Stage 1: Rust library (candle-binding)
-FROM m.daocloud.io/docker.io/rustlang/rust:nightly AS rust-builder
-
-# Use Chinese apt mirror (aliyun)
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
+FROM rustlang/rust:nightly AS rust-builder
 
 RUN apt-get update && apt-get install -y \
     make \
@@ -65,29 +61,11 @@ RUN apt-get update && apt-get install -y \
 
 RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
 
-# Use Chinese Cargo mirror (rsproxy.cn by ByteDance)
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 ENV CARGO_INCREMENTAL=1
 ENV CARGO_PROFILE_RELEASE_LTO=thin
 ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
-
-# Configure Cargo to use Chinese mirror
-RUN mkdir -p ~/.cargo && \
-    echo '[source.crates-io]' > ~/.cargo/config.toml && \
-    echo 'replace-with = "rsproxy-sparse"' >> ~/.cargo/config.toml && \
-    echo '' >> ~/.cargo/config.toml && \
-    echo '[source.rsproxy]' >> ~/.cargo/config.toml && \
-    echo 'registry = "https://rsproxy.cn/crates.io-index"' >> ~/.cargo/config.toml && \
-    echo '' >> ~/.cargo/config.toml && \
-    echo '[source.rsproxy-sparse]' >> ~/.cargo/config.toml && \
-    echo 'registry = "sparse+https://rsproxy.cn/index/"' >> ~/.cargo/config.toml && \
-    echo '' >> ~/.cargo/config.toml && \
-    echo '[registries.rsproxy]' >> ~/.cargo/config.toml && \
-    echo 'index = "https://rsproxy.cn/crates.io-index"' >> ~/.cargo/config.toml && \
-    echo '' >> ~/.cargo/config.toml && \
-    echo '[net]' >> ~/.cargo/config.toml && \
-    echo 'git-fetch-with-cli = true' >> ~/.cargo/config.toml
 
 WORKDIR /app
 
@@ -109,7 +87,7 @@ RUN cd candle-binding && \
     cargo build --release --no-default-features
 
 # Stage 2: semantic-router (Go)
-FROM m.daocloud.io/docker.io/library/golang:1.24 AS go-router-builder
+FROM golang:1.24 AS go-router-builder
 
 WORKDIR /app
 
@@ -131,7 +109,7 @@ RUN mkdir -p bin && cd src/semantic-router && \
     go build -ldflags="-w -s" -o ../../bin/router cmd/main.go
 
 # Stage 3: Dashboard frontend (Node.js)
-FROM m.daocloud.io/docker.io/library/node:20-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
@@ -149,13 +127,12 @@ ENV VITE_OPENWEBUI_PORT=3001
 RUN npm run build
 
 # Stage 4: Dashboard backend (Go)
-FROM m.daocloud.io/docker.io/library/golang:1.24 AS dashboard-builder
+FROM golang:1.24 AS dashboard-builder
 
 ARG TARGETARCH
 ARG TARGETOS=linux
 
 WORKDIR /app
-ENV GOPROXY=https://goproxy.io,direct
 
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
 WORKDIR /app/dashboard/backend
@@ -165,32 +142,28 @@ COPY dashboard/backend/ /app/dashboard/backend/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/dashboard-backend main.go
 
 # Stage 5: chat-ui
-FROM m.daocloud.io/ghcr.io/huggingface/chat-ui-db:latest AS chatui-source
+FROM ghcr.io/huggingface/chat-ui-db:latest AS chatui-source
 
 # Stage 5b: Open WebUI
-FROM m.daocloud.io/ghcr.io/open-webui/open-webui:main AS openwebui-source
+FROM ghcr.io/open-webui/open-webui:main AS openwebui-source
 
 # Stage 5c: Pipelines
-FROM m.daocloud.io/ghcr.io/open-webui/pipelines:main AS pipelines-source
+FROM ghcr.io/open-webui/pipelines:main AS pipelines-source
 
 # Stage 6a: Envoy
-FROM m.daocloud.io/docker.io/envoyproxy/envoy:v1.31.7 AS envoy-source
+FROM envoyproxy/envoy:v1.31.7 AS envoy-source
 
 # Stage 6b: MongoDB
-FROM m.daocloud.io/docker.io/library/mongo:7 AS mongodb-source
+FROM mongo:7 AS mongodb-source
 
 # Stage 6c: Download binaries (Prometheus, Grafana, Jaeger)
-FROM m.daocloud.io/docker.io/library/debian:testing AS downloader
+FROM debian:testing AS downloader
 
 ARG TARGETARCH
 ARG PROMETHEUS_VERSION
 ARG GRAFANA_VERSION
 ARG JAEGER_VERSION
 ARG MONGODB_VERSION
-
-# Use Chinese apt mirror (aliyun)
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -217,7 +190,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then JAEGER_ARCH="arm64"; else JAEGER_ARCH
         | tar -xzf - --strip-components=1 -C /downloads jaeger-${JAEGER_VERSION}-linux-${JAEGER_ARCH}/jaeger-all-in-one
 
 # Stage 7: Final image
-FROM m.daocloud.io/docker.io/library/debian:testing
+FROM debian:testing
 
 LABEL maintainer="vLLM Semantic Router Team"
 LABEL description="All-in-One image with semantic-router, dashboard, chat-ui, llm-katan, Envoy, MongoDB, Prometheus, Grafana, and Jaeger"
@@ -225,11 +198,6 @@ LABEL description="All-in-One image with semantic-router, dashboard, chat-ui, ll
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
-# Use Chinese apt mirror (aliyun)
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
-
-# Install runtime dependencies (including Node.js for chat-ui)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     supervisor \
     curl \
