@@ -575,11 +575,22 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	}
 
 	// Create tools database
+	toolsSimilarityThreshold := float32(0.2) // Default threshold
+	if cfg.Tools.SimilarityThreshold != nil {
+		toolsSimilarityThreshold = *cfg.Tools.SimilarityThreshold
+	}
 	toolsOptions := tools.ToolsDatabaseOptions{
-		SimilarityThreshold: cfg.Threshold,
+		SimilarityThreshold: toolsSimilarityThreshold,
 		Enabled:             cfg.Tools.Enabled,
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
+
+	// Load tools from file if configured
+	if cfg.Tools.Enabled && cfg.Tools.ToolsDBPath != "" {
+		if err := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); err != nil {
+			return nil, fmt.Errorf("failed to load tools database: %w", err)
+		}
+	}
 
 	// Create classifier
 	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, nil)
