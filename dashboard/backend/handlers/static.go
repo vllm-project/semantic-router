@@ -19,7 +19,7 @@ func StaticFileServer(staticDir string) http.Handler {
 			strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||
 			strings.HasPrefix(p, "/avatar/") || strings.HasPrefix(p, "/_app/") ||
 			strings.HasPrefix(p, "/_next/") || strings.HasPrefix(p, "/chatui/") ||
-			p == "/conversation" || strings.HasPrefix(p, "/conversations") ||
+			strings.HasPrefix(p, "/static/") || p == "/conversation" || strings.HasPrefix(p, "/conversations") ||
 			strings.HasPrefix(p, "/settings") || p == "/login" || p == "/logout" ||
 			strings.HasPrefix(p, "/r/") {
 			// These paths should have been handled by other handlers
