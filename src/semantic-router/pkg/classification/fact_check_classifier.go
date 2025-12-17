@@ -49,37 +49,16 @@ func (c *FactCheckClassifier) Initialize() error {
 		return nil
 	}
 
-	// Load mapping if configured
-	if c.config.MappingPath != "" {
-		mapping, err := LoadFactCheckMapping(c.config.MappingPath)
-		if err != nil {
-			logging.Warnf("Failed to load fact-check mapping from %s: %v, using defaults", c.config.MappingPath, err)
-			// Create default mapping
-			c.mapping = &FactCheckMapping{
-				LabelToIdx: map[string]int{
-					FactCheckLabelNotNeeded: 0,
-					FactCheckLabelNeeded:    1,
-				},
-				IdxToLabel: map[string]string{
-					"0": FactCheckLabelNotNeeded,
-					"1": FactCheckLabelNeeded,
-				},
-			}
-		} else {
-			c.mapping = mapping
-		}
-	} else {
-		// Create default mapping
-		c.mapping = &FactCheckMapping{
-			LabelToIdx: map[string]int{
-				FactCheckLabelNotNeeded: 0,
-				FactCheckLabelNeeded:    1,
-			},
-			IdxToLabel: map[string]string{
-				"0": FactCheckLabelNotNeeded,
-				"1": FactCheckLabelNeeded,
-			},
-		}
+	// Use default mapping (no external mapping file needed)
+	c.mapping = &FactCheckMapping{
+		LabelToIdx: map[string]int{
+			FactCheckLabelNotNeeded: 0,
+			FactCheckLabelNeeded:    1,
+		},
+		IdxToLabel: map[string]string{
+			"0": FactCheckLabelNotNeeded,
+			"1": FactCheckLabelNeeded,
+		},
 	}
 
 	// Initialize ML model - ModelID is required

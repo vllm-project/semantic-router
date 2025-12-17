@@ -42,7 +42,6 @@ hallucination_mitigation:
     model_id: "models/halugate-sentinel"
     threshold: 0.6
     use_cpu: true
-    mapping_path: "models/halugate-sentinel/fact_check_mapping.json"
 
   # Hallucination detector: verifies if LLM response is grounded in context
   hallucination_model:

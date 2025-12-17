@@ -480,7 +480,6 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 			cfg = &config.RouterConfig{}
 			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "test-model"
-			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "test-mapping.json"
 
 			classifier = &Classifier{Config: cfg}
 			Expect(classifier.IsFactCheckEnabled()).To(BeTrue())

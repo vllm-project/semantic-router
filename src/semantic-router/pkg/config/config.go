@@ -526,9 +526,6 @@ type FactCheckModelConfig struct {
 
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
-
-	// Path to fact-check label mapping file (JSON format)
-	MappingPath string `yaml:"mapping_path"`
 }
 
 // HallucinationModelConfig represents configuration for hallucination detection model
