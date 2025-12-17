@@ -185,6 +185,56 @@ func TestStartSpanWithNilContext(t *testing.T) {
 	span.End()
 }
 
+func TestInjectTraceContextToSlice(t *testing.T) {
+	// Initialize tracing
+	ctx := context.Background()
+	cfg := TracingConfig{
+		Enabled:               true,
+		Provider:              "opentelemetry",
+		ExporterType:          "stdout",
+		SamplingType:          "always_on",
+		ServiceName:           "test-service",
+		ServiceVersion:        "v1.0.0",
+		DeploymentEnvironment: "test",
+	}
+
+	err := InitTracing(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Failed to initialize tracing: %v", err)
+	}
+	defer func() {
+		shutdownCtx := context.Background()
+		_ = ShutdownTracing(shutdownCtx)
+	}()
+
+	// Create a span to establish trace context
+	spanCtx, span := StartSpan(ctx, SpanUpstreamRequest)
+	defer span.End()
+
+	// Test InjectTraceContextToSlice
+	headers := InjectTraceContextToSlice(spanCtx)
+
+	// Should have traceparent header
+	hasTraceparent := false
+	for _, h := range headers {
+		if h[0] == "traceparent" {
+			hasTraceparent = true
+			// Validate format: 00-<trace-id>-<span-id>-<flags>
+			// Example: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+			if len(h[1]) < 55 {
+				t.Errorf("traceparent header too short: %s", h[1])
+			}
+			// Should start with version "00-"
+			if h[1][:3] != "00-" {
+				t.Errorf("traceparent header should start with '00-': %s", h[1])
+			}
+		}
+	}
+	if !hasTraceparent {
+		t.Error("InjectTraceContextToSlice did not produce traceparent header")
+	}
+}
+
 func TestSpanAttributeConstants(t *testing.T) {
 	// Verify span name constants are defined
 	spanNames := []string{
