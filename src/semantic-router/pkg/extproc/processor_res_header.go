@@ -8,9 +8,12 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // handleResponseHeaders processes the response headers
@@ -33,6 +36,21 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_4xx")
 			}
 		}
+	}
+
+	// End upstream request span (started in createRoutingResponse/createSpecifiedModelResponse)
+	if ctx != nil && ctx.UpstreamSpan != nil {
+		// Add response status to span
+		tracing.SetSpanAttributes(ctx.UpstreamSpan,
+			attribute.Int("http.status_code", statusCode))
+
+		// Mark span as error if response was not successful
+		if !isSuccessful && statusCode != 0 {
+			ctx.UpstreamSpan.SetStatus(codes.Error, "upstream request failed")
+		}
+
+		ctx.UpstreamSpan.End()
+		ctx.UpstreamSpan = nil
 	}
 
 	// Best-effort TTFT measurement:

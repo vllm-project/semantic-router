@@ -594,8 +594,9 @@ func (p *Profile) waitForStatefulSet(ctx context.Context, kubeConfig, namespace,
 	defer cancel()
 
 	timeoutSeconds := int(timeout.Seconds())
-	cmd := exec.CommandContext(ctx, "kubectl", "wait",
-		"--for=condition=Ready",
+	// Use rollout status for StatefulSets instead of wait --for=condition=Ready
+	// (StatefulSets don't have a Ready condition like Deployments)
+	cmd := exec.CommandContext(ctx, "kubectl", "rollout", "status",
 		fmt.Sprintf("statefulset/%s", name),
 		"-n", namespace,
 		fmt.Sprintf("--timeout=%ds", timeoutSeconds),

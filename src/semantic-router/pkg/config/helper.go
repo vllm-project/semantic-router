@@ -452,16 +452,14 @@ func (c *RouterConfig) IsFactCheckClassifierEnabled() bool {
 	// Check new fact_check_rules config first
 	if len(c.FactCheckRules) > 0 {
 		// For new signal config, still need the model from HallucinationMitigation
-		return c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
-			c.HallucinationMitigation.FactCheckModel.MappingPath != ""
+		return c.HallucinationMitigation.FactCheckModel.ModelID != ""
 	}
 
 	// Fall back to legacy HallucinationMitigation config
 	if !c.HallucinationMitigation.Enabled {
 		return false
 	}
-	return c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
-		c.HallucinationMitigation.FactCheckModel.MappingPath != ""
+	return c.HallucinationMitigation.FactCheckModel.ModelID != ""
 }
 
 // GetFactCheckRules returns all configured fact_check_rules

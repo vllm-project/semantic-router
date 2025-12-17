@@ -76,6 +76,7 @@ type RequestContext struct {
 
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
+	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
 
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request

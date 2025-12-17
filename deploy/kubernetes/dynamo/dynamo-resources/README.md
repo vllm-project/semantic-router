@@ -2,6 +2,10 @@
 
 This directory contains Kubernetes manifests for E2E testing of **Semantic Router with NVIDIA Dynamo integration**.
 
+## 🎥 Demo Video
+
+▶️ **[Watch the E2E Demo on YouTube](https://www.youtube.com/watch?v=rRULSR9gTds&list=PLmrddZ45wYcuPrXisC-yl7bMI39PLo4LO&index=2)**
+
 ## ⚠️ GPU Requirements
 
 **This test requires a VM with at least 3 GPUs:**
@@ -12,13 +16,42 @@ This directory contains Kubernetes manifests for E2E testing of **Semantic Route
 | VLLMPrefillWorker | GPU 1 | Handles prefill phase of inference |
 | VLLMDecodeWorker | GPU 2 | Handles decode phase of inference |
 
+## 🔧 Prerequisites (One-Time Setup)
+
+> **Tested on:** RHEL 9 VM with NVIDIA GPUs
+
+Before running the E2E tests, you must configure Docker to use the NVIDIA runtime as the default. This is a **one-time setup** that persists across reboots.
+
+### Step 1: Configure NVIDIA Runtime as Default
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker --set-as-default
+```
+
+### Step 2: Restart Docker
+
+```bash
+sudo systemctl restart docker
+```
+
+### Step 3: Verify Configuration
+
+```bash
+docker info | grep -i "default runtime"
+```
+
+You should see: `Default Runtime: nvidia`
+
+> **Note:** The E2E framework verifies this configuration but does not set it automatically (requires sudo privileges).
+
+## What the E2E Framework Does
+
 The E2E framework automatically:
 
-1. Sets Docker runtime to `nvidia` (required for GPU passthrough)
+1. **Verifies** Docker runtime is set to `nvidia` (fails with instructions if not configured)
 2. Creates Kind cluster with GPU support
 3. Copies NVIDIA libraries to the Kind worker node
 4. Deploys the NVIDIA device plugin
-5. Restores Docker runtime to default after tests complete
 
 ## What We Test
 

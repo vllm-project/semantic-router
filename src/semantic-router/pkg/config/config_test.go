@@ -2426,7 +2426,6 @@ hallucination_mitigation:
     model_id: "models/fact_check_classifier"
     threshold: 0.75
     use_cpu: true
-    mapping_path: "config/hallucination/fact_check_mapping.json"
   hallucination_model:
     model_id: "models/hallucination_detect_modernbert"
     threshold: 0.6
@@ -2445,7 +2444,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.FactCheckModel.ModelID).To(Equal("models/fact_check_classifier"))
 				Expect(cfg.HallucinationMitigation.FactCheckModel.Threshold).To(Equal(float32(0.75)))
 				Expect(cfg.HallucinationMitigation.FactCheckModel.UseCPU).To(BeTrue())
-				Expect(cfg.HallucinationMitigation.FactCheckModel.MappingPath).To(Equal("config/hallucination/fact_check_mapping.json"))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.ModelID).To(Equal("models/hallucination_detect_modernbert"))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0.6)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.UseCPU).To(BeTrue())
@@ -2544,7 +2542,6 @@ default_model: "test-model"
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
-			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
 		})
@@ -2556,7 +2553,6 @@ default_model: "test-model"
 				{Name: "no_fact_check_needed", Description: "Query does not need fact verification"},
 			}
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
-			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
 		})
@@ -2565,7 +2561,6 @@ default_model: "test-model"
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.Enabled = false
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
-			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
 		})
@@ -2573,15 +2568,6 @@ default_model: "test-model"
 		It("should return false when model_id is missing", func() {
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.Enabled = true
-			cfg.HallucinationMitigation.FactCheckModel.MappingPath = "config/mapping.json"
-
-			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
-		})
-
-		It("should return false when mapping_path is missing", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
-			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
 		})
