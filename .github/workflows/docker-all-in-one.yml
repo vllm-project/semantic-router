@@ -35,11 +35,16 @@ jobs:
       fail-fast: false
 
     steps:
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo docker image prune --all --force
-          df -h
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Check out the repo
         uses: actions/checkout@v4
