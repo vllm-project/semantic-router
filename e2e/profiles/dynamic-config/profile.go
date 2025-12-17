@@ -108,20 +108,14 @@ func (p *Profile) GetTestCases() []string {
 		"chat-completions-request",
 		"chat-completions-stress-request",
 
-		// Classification and routing tests
-		"domain-classify",
-
 		// Feature tests
 		"semantic-cache",
-		"pii-detection",
-		"jailbreak-detection",
 
-		// Signal-Decision engine tests
-		"decision-priority-selection", // Priority-based routing
+		// Signal-Decision engine tests (CRD-specific)
+		// These tests validate the CRD-based routing approach:
+		"decision-priority-selection", // Priority-based routing between signals
 		"plugin-chain-execution",      // Plugin ordering and blocking
-		"rule-condition-logic",        // AND/OR operators
-		"decision-fallback-behavior",  // Fallback to default
-		"plugin-config-variations",    // Plugin configuration testing
+		"rule-condition-logic",        // AND/OR operators in signal conditions
 		"embedding-signal-routing",    // EmbeddingSignal-based semantic similarity routing
 
 		// Load tests

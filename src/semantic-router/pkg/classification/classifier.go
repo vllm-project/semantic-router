@@ -57,8 +57,13 @@ type CategoryInference interface {
 type CategoryInferenceImpl struct{}
 
 func (c *CategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
-	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
-	return candle_binding.ClassifyCandleBertText(text)
+	// Try Candle BERT first, fall back to ModernBERT if it fails
+	result, err := candle_binding.ClassifyCandleBertText(text)
+	if err != nil {
+		// Candle BERT not initialized or failed, try ModernBERT
+		return candle_binding.ClassifyModernBertText(text)
+	}
+	return result, nil
 }
 
 func (c *CategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
@@ -900,18 +905,34 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 
 	// Check confidence threshold for category determination
 	if result.Confidence < c.Config.CategoryModel.Threshold {
-		logging.Infof("Classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
-			result.Confidence, c.Config.CategoryModel.Threshold)
+		// Determine fallback category (default to "other" if not configured)
+		fallbackCategory := c.Config.CategoryModel.FallbackCategory
+		if fallbackCategory == "" {
+			fallbackCategory = "other"
+		}
 
-		// Still return reasoning decision based on entropy even if confidence is low
-		return "", float64(result.Confidence), reasoningDecision, nil
+		logging.Infof("Classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
+			result.Confidence, c.Config.CategoryModel.Threshold, fallbackCategory)
+
+		// Record the fallback category classification metric
+		metrics.RecordCategoryClassification(fallbackCategory)
+
+		// Return fallback category instead of empty string to enable proper decision routing
+		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 
 	// Convert class index to category name and translate to generic
 	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
 	if !ok {
-		logging.Warnf("Class index %d not found in category mapping", result.Class)
-		return "", float64(result.Confidence), reasoningDecision, nil
+		// Determine fallback category (default to "other" if not configured)
+		fallbackCategory := c.Config.CategoryModel.FallbackCategory
+		if fallbackCategory == "" {
+			fallbackCategory = "other"
+		}
+
+		logging.Warnf("Class index %d not found in category mapping, falling back to: %s", result.Class, fallbackCategory)
+		metrics.RecordCategoryClassification(fallbackCategory)
+		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 	genericCategory := c.translateMMLUToGeneric(categoryName)
 
@@ -953,12 +974,15 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Extract unique PII types from detected entities
+	// Translate class_X format to named types using PII mapping
 	piiTypes := make(map[string]bool)
 	for _, entity := range tokenResult.Entities {
 		if entity.Confidence >= threshold {
-			piiTypes[entity.EntityType] = true
-			logging.Infof("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
+			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
+			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
+			piiTypes[translatedType] = true
+			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
 		}
 	}
 
@@ -1004,19 +1028,22 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 	}
 
 	// Convert token entities to PII detections, filtering by threshold
+	// Translate class_X format to named types using PII mapping
 	var detections []PIIDetection
 	for _, entity := range tokenResult.Entities {
 		if entity.Confidence >= threshold {
+			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
+			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
 			detection := PIIDetection{
-				EntityType: entity.EntityType,
+				EntityType: translatedType,
 				Start:      entity.Start,
 				End:        entity.End,
 				Text:       entity.Text,
 				Confidence: entity.Confidence,
 			}
 			detections = append(detections, detection)
-			logging.Infof("Detected PII entity: %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, entity.Text, entity.Start, entity.End, entity.Confidence)
+			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
 		}
 	}
 

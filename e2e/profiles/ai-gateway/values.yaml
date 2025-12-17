@@ -142,8 +142,7 @@ config:
         - type: "pii"
           configuration:
             enabled: true
-            pii_types_allowed:
-              - "ORGANIZATION"  # Allow - scientific terms like "photosynthesis" falsely detected as ORG
+            pii_types_allowed: []
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -446,12 +445,11 @@ config:
         - type: "pii"
           configuration:
             enabled: true
-            pii_types_allowed:
-              - "GPE"  # Allow - country/city names in general knowledge questions
+            pii_types_allowed: []
         - type: "semantic-cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.75
+            similarity_threshold: 0.95  # High threshold to avoid false cache hits during testing
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -472,7 +470,7 @@ config:
   semantic_cache:
     enabled: true
     backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
-    similarity_threshold: 0.8
+    similarity_threshold: 0.95  # High threshold during testing to avoid false cache hits
     max_entries: 1000  # Only applies to memory backend
     ttl_seconds: 3600
     eviction_policy: "fifo"
@@ -509,11 +507,11 @@ config:
   # Classifier configuration
   classifier:
     category_model:
-      model_id: "models/lora_intent_classifier_bert-base-uncased_model"
-      use_modernbert: false  # Use LoRA intent classifier with auto-detection
+      model_id: "models/category_classifier_modernbert-base_model"
+      use_modernbert: true
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
+      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
     pii_model:
       # Support both traditional (modernbert) and LoRA-based PII detection
       # When model_type is "auto", the system will auto-detect LoRA configuration
@@ -646,4 +644,3 @@ config:
         service_name: "vllm-semantic-router"
         service_version: "v0.1.0"
         deployment_environment: "development"
-

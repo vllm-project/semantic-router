@@ -1,0 +1,131 @@
+{
+  "description": "Test cases for plugin configuration variations - validates Phase 2 (Plugin Execution)",
+  "test_cases": [
+    {
+      "query": "Explain the role of chloroplasts in plant cells",
+      "expected_decision": "biology_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Unique biology query should be cache miss"
+    },
+    {
+      "query": "Describe the structure of a lipid bilayer membrane",
+      "expected_decision": "biology_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Cell membrane query should be cache miss"
+    },
+    {
+      "query": "What is the electronegativity of fluorine?",
+      "expected_decision": "chemistry_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Chemistry electronegativity query should be cache miss"
+    },
+    {
+      "query": "What events led to the fall of the Roman Empire in 476 AD?",
+      "expected_decision": "history_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Roman Empire history query should be cache miss"
+    },
+    {
+      "query": "Define operant conditioning in behavioral psychology",
+      "expected_decision": "psychology_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Psychology conditioning query"
+    },
+    {
+      "query": "Explain the concept of opportunity cost in economics",
+      "expected_decision": "economics_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Economics opportunity cost query should be cache miss"
+    },
+    {
+      "query": "Can you recommend a good movie to watch tonight?",
+      "expected_decision": "other_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Casual movie recommendation query"
+    },
+    {
+      "query": "What is your favorite type of music genre?",
+      "expected_decision": "other_decision",
+      "plugin_type": "semantic-cache",
+      "expected_behavior": "cache_miss",
+      "description": "Casual music preference query should be cache miss"
+    },
+    {
+      "query": "Compute the derivative of x cubed plus 2x",
+      "expected_decision": "math_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Calculus derivative should have math expert prompt"
+    },
+    {
+      "query": "Solve the integral of sin(x) from 0 to pi",
+      "expected_decision": "math_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Integral calculation should have expert prompt"
+    },
+    {
+      "query": "Describe the photoelectric effect experiment",
+      "expected_decision": "physics_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Photoelectric effect query should have physics expert prompt"
+    },
+    {
+      "query": "Explain wave-particle duality in quantum mechanics",
+      "expected_decision": "physics_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Quantum physics query should have expert prompt"
+    },
+    {
+      "query": "Explain the difference between stack and heap memory",
+      "expected_decision": "computer_science_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Memory management CS query should have CS expert prompt"
+    },
+    {
+      "query": "What is the doctrine of habeas corpus?",
+      "expected_decision": "law_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Habeas corpus query should have law expert prompt"
+    },
+    {
+      "query": "What are the treatment options for Type 2 diabetes?",
+      "expected_decision": "health_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Diabetes treatment query should have health expert prompt"
+    },
+    {
+      "query": "Explain the principles of structural load distribution",
+      "expected_decision": "engineering_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Structural engineering query should have engineering prompt"
+    },
+    {
+      "query": "How do companies conduct market research for new products?",
+      "expected_decision": "business_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Market research query should have business expert prompt"
+    },
+    {
+      "query": "Compare Kant's categorical imperative to utilitarianism",
+      "expected_decision": "philosophy_decision",
+      "plugin_type": "system_prompt",
+      "expected_behavior": "prompt_applied",
+      "description": "Ethics philosophy query should have philosophy expert prompt"
+    }
+  ]
+}

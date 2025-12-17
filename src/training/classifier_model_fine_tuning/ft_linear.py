@@ -128,22 +128,65 @@ def compute_metrics(eval_pred):
     return {"f1": f1, "accuracy": accuracy}
 
 
-class MMLU_Dataset:
-    """Dataset class for MMLU-Pro category classification fine-tuning."""
+DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
 
-    def __init__(self, dataset_name="TIGER-Lab/MMLU-Pro"):
+
+class MMLU_Dataset:
+    """
+    Dataset class for MMLU-Pro category classification fine-tuning.
+
+    By default, loads MMLU-Pro (~12K samples) merged with supplementary data (~653 samples)
+    that includes casual "other" category examples for better fallback detection.
+    """
+
+    def __init__(
+        self,
+        dataset_name="TIGER-Lab/MMLU-Pro",
+        supplement_dataset: str = DEFAULT_SUPPLEMENT_DATASET,
+    ):
         """
         Initialize the dataset loader.
 
         Args:
             dataset_name: HuggingFace dataset name for MMLU-Pro
+            supplement_dataset: HuggingFace dataset ID for supplementary data (set to None to disable)
         """
         self.dataset_name = dataset_name
+        self.supplement_dataset = supplement_dataset
         self.label2id = {}
         self.id2label = {}
 
+    def _load_supplement_data(self) -> list:
+        """
+        Load supplementary training data from HuggingFace Hub.
+
+        Returns:
+            List of (text, label) tuples
+        """
+        if not self.supplement_dataset:
+            return []
+
+        try:
+            print(f"📥 Loading supplement data from: {self.supplement_dataset}")
+            supplement = load_dataset(self.supplement_dataset)
+
+            # Get the train split
+            data = (
+                supplement["train"]
+                if "train" in supplement
+                else supplement[list(supplement.keys())[0]]
+            )
+
+            samples = [(item["text"], item["label"]) for item in data]
+            print(f"✅ Loaded {len(samples)} samples from HuggingFace")
+            return samples
+        except Exception as e:
+            logger.error(f"Failed to load supplement dataset: {e}")
+            print(f"❌ Failed to load supplement dataset: {e}")
+            return []
+
     def load_huggingface_dataset(self):
-        """Load the MMLU-Pro dataset from HuggingFace."""
+        """Load the MMLU-Pro dataset from HuggingFace and merge with supplement data."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
@@ -153,10 +196,24 @@ class MMLU_Dataset:
 
             # Extract questions and categories from the test split
             # Note: MMLU-Pro typically uses 'test' split for training data
-            texts = dataset["test"]["question"]
-            labels = dataset["test"]["category"]
+            texts = list(dataset["test"]["question"])
+            labels = list(dataset["test"]["category"])
+            logger.info(f"MMLU-Pro base: {len(texts)} samples")
+            print(f"📚 MMLU-Pro base: {len(texts)} samples")
 
-            logger.info(f"Loaded {len(texts)} samples")
+            # Load and merge supplementary training data from HuggingFace Hub
+            # This includes casual "other" examples and additional academic samples
+            # to improve fallback detection for non-academic queries
+            # Dataset: LLM-Semantic-Router/category-classifier-supplement (~653 samples)
+            supplement_samples = self._load_supplement_data()
+            if supplement_samples:
+                supp_texts, supp_labels = zip(*supplement_samples)
+                texts.extend(supp_texts)
+                labels.extend(supp_labels)
+                print(f"➕ Added {len(supplement_samples)} supplement samples")
+
+            logger.info(f"Total dataset size: {len(texts)} samples")
+            print(f"📊 Total dataset size: {len(texts)} samples")
             return texts, labels
 
         except Exception as e:
@@ -357,8 +414,14 @@ def evaluate_category_classifier(
     return accuracy, class_report, conf_matrix, (predictions, true_labels)
 
 
-def main(model_name="minilm", num_epochs=5, batch_size=16):
-    """Main function to demonstrate MMLU-Pro category classification fine-tuning."""
+def main(model_name="minilm", num_epochs=3, batch_size=8):
+    """Main function to demonstrate MMLU-Pro category classification fine-tuning.
+
+    Args:
+        model_name: Name of the model to use (e.g., 'modernbert-base')
+        num_epochs: Number of training epochs
+        batch_size: Training and evaluation batch size
+    """
 
     # Validate model name
     if model_name not in MODEL_CONFIGS:
@@ -374,8 +437,8 @@ def main(model_name="minilm", num_epochs=5, batch_size=16):
     logger.info(f"Using model: {model_name} ({model_path})")
     logger.info(f"Training configuration: {num_epochs} epochs, batch size {batch_size}")
 
-    logger.info("Loading MMLU-Pro category classification dataset...")
-    dataset_loader = MMLU_Dataset()
+    logger.info("Loading MMLU-Pro + supplement dataset...")
+    dataset_loader = MMLU_Dataset()  # Uses defaults: MMLU-Pro + supplement
     datasets = dataset_loader.prepare_datasets()
 
     train_texts, train_categories = datasets["train"]
@@ -688,7 +751,6 @@ if __name__ == "__main__":
         default=8,
         help="Training and evaluation batch size (default: 8)",
     )
-
     args = parser.parse_args()
 
     if args.mode == "train":

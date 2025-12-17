@@ -527,11 +527,20 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 
 	// Check confidence threshold for category determination
 	if result.Confidence < threshold {
-		logging.Infof("MCP classification confidence (%.4f) below threshold (%.4f), but entropy analysis available",
-			result.Confidence, threshold)
+		// Determine fallback category (default to "other" if not configured)
+		fallbackCategory := c.Config.CategoryModel.FallbackCategory
+		if fallbackCategory == "" {
+			fallbackCategory = "other"
+		}
 
-		// Still return reasoning decision based on entropy even if confidence is low
-		return "", float64(result.Confidence), reasoningDecision, nil
+		logging.Infof("MCP classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
+			result.Confidence, threshold, fallbackCategory)
+
+		// Record the fallback category classification metric
+		metrics.RecordCategoryClassification(fallbackCategory)
+
+		// Return fallback category instead of empty string to enable proper decision routing
+		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 
 	// Map class index to category name

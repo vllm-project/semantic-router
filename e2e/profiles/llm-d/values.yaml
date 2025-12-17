@@ -8,10 +8,11 @@ config:
   # Using LoRA models for better performance with auto-detection
   classifier:
     category_model:
-      model_id: models/lora_intent_classifier_bert-base-uncased_model
+      model_id: "models/category_classifier_modernbert-base_model"
+      use_modernbert: true
       threshold: 0.6
-      use_modernbert: false
-      category_mapping_path: models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json
+      use_cpu: true
+      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
     pii_model:
       model_id: ""
       threshold: 1.0
@@ -49,8 +50,8 @@ config:
       description: "General knowledge and miscellaneous topics"
 
   decisions:
-    # High priority for math - use specialized model
-    - name: math_route
+    # Decision names match E2E test expectations (*_decision format)
+    - name: math_decision
       priority: 100
       rules:
         operator: OR
@@ -61,8 +62,7 @@ config:
         - model: phi4-mini
           use_reasoning: false
 
-    # High priority for computer science - use llama3
-    - name: cs_route
+    - name: computer_science_decision
       priority: 100
       rules:
         operator: OR
@@ -73,23 +73,40 @@ config:
         - model: llama3-8b
           use_reasoning: false
 
-    # Medium priority routes for other technical domains
-    - name: science_route
+    - name: physics_decision
       priority: 50
       rules:
         operator: OR
         conditions:
           - type: domain
             name: physics
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: chemistry_decision
+      priority: 50
+      rules:
+        operator: OR
+        conditions:
           - type: domain
             name: chemistry
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: biology_decision
+      priority: 50
+      rules:
+        operator: OR
+        conditions:
           - type: domain
             name: biology
       modelRefs:
         - model: llama3-8b
           use_reasoning: false
 
-    - name: engineering_route
+    - name: engineering_decision
       priority: 50
       rules:
         operator: OR
@@ -100,7 +117,7 @@ config:
         - model: llama3-8b
           use_reasoning: false
 
-    - name: health_route
+    - name: health_decision
       priority: 50
       rules:
         operator: OR
@@ -111,39 +128,74 @@ config:
         - model: llama3-8b
           use_reasoning: false
 
-    # Social sciences and humanities
-    - name: social_sciences_route
+    - name: psychology_decision
       priority: 40
       rules:
         operator: OR
         conditions:
           - type: domain
             name: psychology
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: economics_decision
+      priority: 40
+      rules:
+        operator: OR
+        conditions:
           - type: domain
             name: economics
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: business_decision
+      priority: 40
+      rules:
+        operator: OR
+        conditions:
           - type: domain
             name: business
       modelRefs:
         - model: llama3-8b
           use_reasoning: false
 
-    - name: humanities_route
+    - name: history_decision
       priority: 40
       rules:
         operator: OR
         conditions:
           - type: domain
             name: history
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: philosophy_decision
+      priority: 40
+      rules:
+        operator: OR
+        conditions:
           - type: domain
             name: philosophy
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+
+    - name: law_decision
+      priority: 40
+      rules:
+        operator: OR
+        conditions:
           - type: domain
             name: law
       modelRefs:
         - model: llama3-8b
           use_reasoning: false
 
-    # Default fallback route with lowest priority
-    - name: default_route
+    # Default fallback
+    - name: other_decision
       priority: 1
       rules:
         operator: OR
@@ -153,6 +205,7 @@ config:
       modelRefs:
         - model: llama3-8b
           use_reasoning: false
+
   semantic_cache:
     enabled: false
   prompt_guard:

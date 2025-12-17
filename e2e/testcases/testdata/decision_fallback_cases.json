@@ -1,0 +1,311 @@
+{
+  "description": "Test cases for decision fallback behavior - verifies routing to correct decisions",
+  "test_cases": [
+    {
+      "query": "What is the weather like today?",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Weather query should fall back to general/other decision"
+    },
+    {
+      "query": "Random unclassified query about nothing specific",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Unclassified query should fall back to general decision"
+    },
+    {
+      "query": "What's up?",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Casual greeting should fall back"
+    },
+    {
+      "query": "Can you recommend a good movie?",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Movie recommendation should fall back"
+    },
+    {
+      "query": "Hello there!",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Simple greeting should fall back"
+    },
+    {
+      "query": "I'm bored, entertain me",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Boredom/entertainment request should fall back"
+    },
+    {
+      "query": "What song is stuck in my head?",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Music/personal query should fall back"
+    },
+    {
+      "query": "What should I have for dinner tonight?",
+      "expected_decision": "other_decision",
+      "should_fallback": true,
+      "description": "Personal food choice should fall back"
+    },
+    {
+      "query": "What is 15 * 23?",
+      "expected_decision": "math_decision",
+      "should_fallback": false,
+      "description": "Math multiplication should match math decision"
+    },
+    {
+      "query": "Calculate the square root of 144",
+      "expected_decision": "math_decision",
+      "should_fallback": false,
+      "description": "Math calculation should match math decision"
+    },
+    {
+      "query": "Calculate the factorial of 7",
+      "expected_decision": "math_decision",
+      "should_fallback": false,
+      "description": "Factorial calculation should match math decision"
+    },
+    {
+      "query": "Solve the equation 3x + 7 = 22",
+      "expected_decision": "math_decision",
+      "should_fallback": false,
+      "description": "Algebra equation should match math decision"
+    },
+    {
+      "query": "Describe the stages of mitosis in cell division",
+      "expected_decision": "biology_decision",
+      "should_fallback": false,
+      "description": "Cell division query should match biology decision"
+    },
+    {
+      "query": "How does DNA replication work?",
+      "expected_decision": "biology_decision",
+      "should_fallback": false,
+      "description": "DNA/genetics query should match biology decision"
+    },
+    {
+      "query": "What are the stages of mitosis?",
+      "expected_decision": "biology_decision",
+      "should_fallback": false,
+      "description": "Cell biology query should match biology decision"
+    },
+    {
+      "query": "What is evolution and natural selection?",
+      "expected_decision": "biology_decision",
+      "should_fallback": false,
+      "description": "Evolution query should match biology decision"
+    },
+    {
+      "query": "Describe the structure of a cell membrane",
+      "expected_decision": "biology_decision",
+      "should_fallback": false,
+      "description": "Cell structure query should match biology decision"
+    },
+    {
+      "query": "Explain Newton's laws of motion",
+      "expected_decision": "physics_decision",
+      "should_fallback": false,
+      "description": "Physics mechanics query should match physics decision"
+    },
+    {
+      "query": "What is the theory of relativity?",
+      "expected_decision": "physics_decision",
+      "should_fallback": false,
+      "description": "Relativity query should match physics decision"
+    },
+    {
+      "query": "What is the law of conservation of energy in physics?",
+      "expected_decision": "physics_decision",
+      "should_fallback": false,
+      "description": "Energy conservation physics query should match physics decision"
+    },
+    {
+      "query": "What is mechanical engineering design?",
+      "expected_decision": "engineering_decision",
+      "should_fallback": false,
+      "description": "Mechanical engineering query should match engineering decision"
+    },
+    {
+      "query": "What are the principles of thermodynamics in engineering?",
+      "expected_decision": "engineering_decision",
+      "should_fallback": false,
+      "description": "Thermodynamics engineering query should match engineering decision"
+    },
+    {
+      "query": "What is the purpose of a heat exchanger?",
+      "expected_decision": "engineering_decision",
+      "should_fallback": false,
+      "description": "Thermal engineering query should match engineering decision"
+    },
+    {
+      "query": "Explain supply and demand in economics",
+      "expected_decision": "economics_decision",
+      "should_fallback": false,
+      "description": "Economics query should match economics decision"
+    },
+    {
+      "query": "What causes inflation?",
+      "expected_decision": "economics_decision",
+      "should_fallback": false,
+      "description": "Macroeconomics query should match economics decision"
+    },
+    {
+      "query": "How do stock markets work?",
+      "expected_decision": "economics_decision",
+      "should_fallback": false,
+      "description": "Financial markets query should match economics decision"
+    },
+    {
+      "query": "What is gross domestic product and how is it measured?",
+      "expected_decision": "economics_decision",
+      "should_fallback": false,
+      "description": "GDP query should match economics decision"
+    },
+    {
+      "query": "What is cognitive behavioral therapy?",
+      "expected_decision": "psychology_decision",
+      "should_fallback": false,
+      "description": "Psychology therapy query should match psychology decision"
+    },
+    {
+      "query": "Explain Freud's theory of the unconscious",
+      "expected_decision": "psychology_decision",
+      "should_fallback": false,
+      "description": "Psychology theory query should match psychology decision"
+    },
+    {
+      "query": "What is the difference between short-term and long-term memory?",
+      "expected_decision": "psychology_decision",
+      "should_fallback": false,
+      "description": "Memory psychology query should match psychology decision"
+    },
+    {
+      "query": "Explain constitutional rights",
+      "expected_decision": "law_decision",
+      "should_fallback": false,
+      "description": "Constitutional law query should match law decision"
+    },
+    {
+      "query": "What is tort law and how does it work?",
+      "expected_decision": "law_decision",
+      "should_fallback": false,
+      "description": "Tort law query should match law decision"
+    },
+    {
+      "query": "Explain contract law basics",
+      "expected_decision": "law_decision",
+      "should_fallback": false,
+      "description": "Contract law query should match law decision"
+    },
+    {
+      "query": "What is existentialism in philosophy?",
+      "expected_decision": "philosophy_decision",
+      "should_fallback": false,
+      "description": "Philosophy query should match philosophy decision"
+    },
+    {
+      "query": "What is the meaning of life according to philosophers?",
+      "expected_decision": "philosophy_decision",
+      "should_fallback": false,
+      "description": "Philosophical question should match philosophy decision"
+    },
+    {
+      "query": "Explain the trolley problem in ethics",
+      "expected_decision": "philosophy_decision",
+      "should_fallback": false,
+      "description": "Ethics philosophy query should match philosophy decision"
+    },
+    {
+      "query": "How do computer algorithms work?",
+      "expected_decision": "computer_science_decision",
+      "should_fallback": false,
+      "description": "Computer science query should match CS decision"
+    },
+    {
+      "query": "What is machine learning?",
+      "expected_decision": "computer_science_decision",
+      "should_fallback": false,
+      "description": "ML query should match computer science decision"
+    },
+    {
+      "query": "Explain how a binary search tree works",
+      "expected_decision": "computer_science_decision",
+      "should_fallback": false,
+      "description": "Data structures query should match CS decision"
+    },
+    {
+      "query": "What is object-oriented programming?",
+      "expected_decision": "computer_science_decision",
+      "should_fallback": false,
+      "description": "Programming paradigm query should match CS decision"
+    },
+    {
+      "query": "What are the symptoms of diabetes?",
+      "expected_decision": "health_decision",
+      "should_fallback": false,
+      "description": "Health/medical symptoms query should match health decision"
+    },
+    {
+      "query": "How to maintain a healthy diet?",
+      "expected_decision": "health_decision",
+      "should_fallback": false,
+      "description": "Nutrition query should match health decision"
+    },
+    {
+      "query": "What is the recommended daily water intake?",
+      "expected_decision": "health_decision",
+      "should_fallback": false,
+      "description": "Hydration health query should match health decision"
+    },
+    {
+      "query": "What are the warning signs of a heart attack?",
+      "expected_decision": "health_decision",
+      "should_fallback": false,
+      "description": "Heart attack symptoms query should match health decision"
+    },
+    {
+      "query": "What is the periodic table of elements?",
+      "expected_decision": "chemistry_decision",
+      "should_fallback": false,
+      "description": "Chemistry elements query should match chemistry decision"
+    },
+    {
+      "query": "Explain how chemical bonds form between atoms",
+      "expected_decision": "chemistry_decision",
+      "should_fallback": false,
+      "description": "Chemical bonding query should match chemistry decision"
+    },
+    {
+      "query": "What is the molecular structure of water?",
+      "expected_decision": "chemistry_decision",
+      "should_fallback": false,
+      "description": "Molecular chemistry query should match chemistry decision"
+    },
+    {
+      "query": "Describe the fall of the Roman Empire",
+      "expected_decision": "history_decision",
+      "should_fallback": false,
+      "description": "Ancient history query should match history decision"
+    },
+    {
+      "query": "What is a marketing strategy?",
+      "expected_decision": "business_decision",
+      "should_fallback": false,
+      "description": "Marketing query should match business decision"
+    },
+    {
+      "query": "What is the role of a CEO in a company?",
+      "expected_decision": "business_decision",
+      "should_fallback": false,
+      "description": "Corporate leadership query should match business decision"
+    },
+    {
+      "query": "What is the purpose of a balance sheet?",
+      "expected_decision": "business_decision",
+      "should_fallback": false,
+      "description": "Balance sheet query should match business decision"
+    }
+  ]
+}
