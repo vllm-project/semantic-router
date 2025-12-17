@@ -3,6 +3,8 @@ package cache
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 // ChatMessage represents a message in the OpenAI chat format with role and content
@@ -27,7 +29,7 @@ func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
 	// Find user messages in the conversation
 	var userMessages []string
 	for _, msg := range req.Messages {
-		if msg.Role == "user" {
+		if msg.Role == consts.USER {
 			userMessages = append(userMessages, msg.Content)
 		}
 	}
