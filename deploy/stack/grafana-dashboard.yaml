@@ -1,4 +1,4 @@
-# Grafana dashboard provisioning for All-in-One deployment
+# Grafana dashboard provisioning for Stack deployment
 apiVersion: 1
 
 providers:

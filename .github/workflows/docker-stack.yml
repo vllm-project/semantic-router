@@ -1,18 +1,18 @@
-name: Build All-in-One Docker Image
+name: Build Stack Docker Image
 
 on:
   workflow_dispatch:
   push:
     branches: ["main"]
     paths:
-      - "Dockerfile.all-in-one"
-      - "deploy/all-in-one/**"
-      - "!deploy/all-in-one/*.md"
+      - "Dockerfile.stack"
+      - "deploy/stack/**"
+      - "!deploy/stack/*.md"
   pull_request:
     paths:
-      - "Dockerfile.all-in-one"
-      - "deploy/all-in-one/**"
-      - "!deploy/all-in-one/*.md"
+      - "Dockerfile.stack"
+      - "deploy/stack/**"
+      - "!deploy/stack/*.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +20,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/vsr-all-in-one
+  IMAGE_NAME: ${{ github.repository }}/stack
 
 jobs:
   build:
@@ -95,7 +95,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.all-in-one
+          file: ./Dockerfile.stack
           platforms: linux/${{ matrix.arch }}
           push: ${{ github.event_name != 'pull_request' }}
           load: ${{ github.event_name == 'pull_request' && matrix.arch == 'amd64' }}
@@ -130,6 +130,6 @@ jobs:
 
       - name: Build summary
         run: |
-          echo "### All-in-One Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Stack Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Architectures**: amd64, arm64" >> $GITHUB_STEP_SUMMARY

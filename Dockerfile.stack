@@ -1,5 +1,5 @@
 # ============================================================================
-# vLLM Semantic Router All-in-One Docker Image
+# vLLM Semantic Router Stack Docker Image
 # ============================================================================
 # Complete single-container deployment with all components:
 # - semantic-router (Rust library + Go service)
@@ -17,8 +17,8 @@
 # Supports: linux/amd64, linux/arm64
 #
 # Usage:
-#   docker build -f Dockerfile.all-in-one -t vsr-all-in-one:latest .
-#   docker buildx build -f Dockerfile.all-in-one --platform linux/amd64,linux/arm64 -t vsr-all-in-one:latest .
+#   docker build -f Dockerfile.stack -t vsr-stack:latest .
+#   docker buildx build -f Dockerfile.stack --platform linux/amd64,linux/arm64 -t vsr-stack:latest .
 #
 # Run:
 #   docker run -d --name vsr \
@@ -32,7 +32,7 @@
 #     -p 9099:9099 \
 #     -p 16686:16686 \
 #     -v ./models:/app/models:ro \  # need run make download-models
-#     vsr-all-in-one:latest
+#     vsr-stack:latest
 # ============================================================================
 
 # Build arguments for target architecture
@@ -121,7 +121,7 @@ COPY dashboard/frontend/index.html ./
 
 RUN npm install --include=dev
 
-# All-in-One: configure Open WebUI port for direct access
+# Stack: configure Open WebUI port for direct access
 ENV VITE_OPENWEBUI_PORT=3001
 
 RUN npm run build
@@ -193,7 +193,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then JAEGER_ARCH="arm64"; else JAEGER_ARCH
 FROM debian:testing
 
 LABEL maintainer="vLLM Semantic Router Team"
-LABEL description="All-in-One image with semantic-router, dashboard, chat-ui, llm-katan, Envoy, MongoDB, Prometheus, Grafana, and Jaeger"
+LABEL description="Stack image with semantic-router, dashboard, chat-ui, llm-katan, Envoy, MongoDB, Prometheus, Grafana, and Jaeger"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -284,28 +284,28 @@ RUN python3 -m venv /opt/llmkatan-env && \
     /opt/llmkatan-env/bin/pip install --no-cache-dir /app/llm-katan-src && \
     rm -rf /app/llm-katan-src
 
-# vllm semantic router pipeline config (all-in-one version with localhost:8801)
-COPY deploy/all-in-one/vllm_semantic_router_pipe.py /app/pipelines/vllm_semantic_router_pipe.py
+# vllm semantic router pipeline config (stack version with localhost:8801)
+COPY deploy/stack/vllm_semantic_router_pipe.py /app/pipelines/vllm_semantic_router_pipe.py
 
 # Configuration files
-COPY deploy/all-in-one/config.all-in-one.yaml /app/config/config.yaml
+COPY deploy/stack/config.stack.yaml /app/config/config.yaml
 
 # Envoy config
-COPY deploy/all-in-one/envoy.template.yaml /etc/envoy/envoy.template.yaml
+COPY deploy/stack/envoy.template.yaml /etc/envoy/envoy.template.yaml
 
 # Prometheus config
-COPY deploy/all-in-one/prometheus.yaml /etc/prometheus/prometheus.yml
+COPY deploy/stack/prometheus.yaml /etc/prometheus/prometheus.yml
 
 # Grafana provisioning
-COPY deploy/all-in-one/grafana-datasource.yaml /etc/grafana/provisioning/datasources/datasource.yaml
-COPY deploy/all-in-one/grafana-dashboard.yaml /etc/grafana/provisioning/dashboards/dashboard.yaml
+COPY deploy/stack/grafana-datasource.yaml /etc/grafana/provisioning/datasources/datasource.yaml
+COPY deploy/stack/grafana-dashboard.yaml /etc/grafana/provisioning/dashboards/dashboard.yaml
 COPY deploy/docker-compose/addons/llm-router-dashboard.json /etc/grafana/provisioning/dashboards/
 
 # Supervisor config
-COPY deploy/all-in-one/supervisord.all-in-one.conf /etc/supervisor/supervisord.conf
+COPY deploy/stack/supervisord.stack.conf /etc/supervisor/supervisord.conf
 
 # Entrypoint
-COPY deploy/all-in-one/entrypoint-all-in-one.sh /app/entrypoint.sh
+COPY deploy/stack/entrypoint-stack.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh /app/extproc-server /app/dashboard-backend
 
 # Environment variables

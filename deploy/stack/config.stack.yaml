@@ -46,7 +46,7 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "127.0.0.1" # localhost for all-in-one deployment (llm-katan runs in same container)
+    address: "127.0.0.1" # localhost for stack deployment (llm-katan runs in same container)
     port: 8002
     weight: 1
 
@@ -512,7 +512,7 @@ observability:
     provider: "opentelemetry" # Provider: opentelemetry, openinference, openllmetry
     exporter:
       type: "otlp" # Export spans to Jaeger (via OTLP gRPC)
-      endpoint: "localhost:4317" # Jaeger on localhost for all-in-one deployment
+      endpoint: "localhost:4317" # Jaeger on localhost for stack deployment
       insecure: true # Use insecure connection (no TLS)
     sampling:
       type: "always_on" # Sampling: always_on, always_off, probabilistic

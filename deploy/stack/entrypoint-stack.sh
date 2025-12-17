@@ -1,5 +1,5 @@
 #!/bin/bash
-# Entrypoint Script for vLLM Semantic Router All-in-One
+# Entrypoint Script for vLLM Semantic Router Stack
 
 set -e
 
@@ -13,7 +13,7 @@ export DASHBOARD_PORT="${DASHBOARD_PORT:-8700}"
 export GF_SECURITY_ADMIN_USER="${GF_SECURITY_ADMIN_USER:-admin}"
 export GF_SECURITY_ADMIN_PASSWORD="${GF_SECURITY_ADMIN_PASSWORD:-admin}"
 
-# Dashboard service URLs (for all-in-one, services run on localhost)
+# Dashboard service URLs (for stack deployment, services run on localhost)
 export TARGET_GRAFANA_URL="${TARGET_GRAFANA_URL:-http://localhost:3000}"
 export TARGET_JAEGER_URL="${TARGET_JAEGER_URL:-http://localhost:16686}"
 export TARGET_PROMETHEUS_URL="${TARGET_PROMETHEUS_URL:-http://localhost:9090}"
@@ -49,7 +49,7 @@ export LLMKATAN_SERVED_MODEL_NAME="${LLMKATAN_SERVED_MODEL_NAME:-qwen3}"
 # Display startup banner
 cat << 'EOF'
 ============================================
-  vLLM Semantic Router - All-in-One
+  vLLM Semantic Router - Stack
 ============================================
 
    _____ ________  ___   ___   _   _  _____ _____ _____
@@ -59,7 +59,7 @@ cat << 'EOF'
   /\__/ / |___| |  | || | | || |\  |  | |  _| |_| \__/\
   \____/\____/\_|  |_/\_| |_/\_| \_/  \_/  \___/ \____/
 
-            ROUTER  -  All-in-One Edition
+            ROUTER  -  Stack Edition
 ============================================
 EOF
 

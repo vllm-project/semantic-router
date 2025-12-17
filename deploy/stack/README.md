@@ -1,4 +1,4 @@
-# All-in-One Deployment
+# Stack Deployment
 
 Single-container deployment for vLLM Semantic Router with all components bundled together.
 
@@ -20,7 +20,7 @@ Single-container deployment for vLLM Semantic Router with all components bundled
 
 ```bash
 # Build
-docker build -f Dockerfile.all-in-one -t vsr-all-in-one:latest .
+docker build -f Dockerfile.stack -t vsr-stack:latest .
 
 # Download models (required)
 make download-models
@@ -30,17 +30,17 @@ docker run -d --name vsr \
   -p 8801:8801 -p 8002:8002 -p 8700:8700 -p 3000:3000 -p 9090:9090 \
   -p 16686:16686 -p 5173:5173 -p 3001:3001 -p 9099:9099 \
   -v $(pwd)/models:/app/models:ro \
-  vsr-all-in-one:latest
+  vsr-stack:latest
 ```
 
 ## Files
 
 | File                           | Description                   |
 | ------------------------------ | ----------------------------- |
-| `config.all-in-one.yaml`       | Semantic router configuration |
+| `config.stack.yaml`            | Semantic router configuration |
 | `envoy.template.yaml`          | Envoy proxy configuration     |
-| `supervisord.all-in-one.conf`  | Process management            |
-| `entrypoint-all-in-one.sh`     | Container entrypoint          |
+| `supervisord.stack.conf`       | Process management            |
+| `entrypoint-stack.sh`          | Container entrypoint          |
 | `prometheus.yaml`              | Prometheus scrape config      |
 | `grafana-*.yaml`               | Grafana provisioning          |
 | `vllm_semantic_router_pipe.py` | Open WebUI pipeline           |

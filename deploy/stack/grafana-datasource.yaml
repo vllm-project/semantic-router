@@ -1,4 +1,4 @@
-# Grafana datasource provisioning for All-in-One deployment
+# Grafana datasource provisioning for Stack deployment
 apiVersion: 1
 
 datasources:

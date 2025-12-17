@@ -1,4 +1,4 @@
-# Prometheus configuration for All-in-One deployment
+# Prometheus configuration for Stack deployment
 global:
   scrape_interval: 15s
   evaluation_interval: 15s

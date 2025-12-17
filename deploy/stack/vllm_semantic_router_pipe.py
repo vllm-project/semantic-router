@@ -18,7 +18,7 @@ from pydantic import BaseModel
 class Pipeline:
     class Valves(BaseModel):
         # vLLM Semantic Router endpoint URL
-        # For all-in-one deployment, use localhost since all services run in one container
+        # For stack deployment, use localhost since all services run in one container
         vsr_base_url: str = "http://localhost:8801"
 
         # API key for authentication (if required)

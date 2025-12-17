@@ -98,7 +98,7 @@ static_resources:
                       port_value: ${EXTPROC_PORT}
 
     # LLM Backend cluster (static, pointing to llm-katan)
-    # For all-in-one deployment, this points to the local llm-katan service
+    # For stack deployment, this points to the local llm-katan service
     - name: vllm_dynamic_cluster
       connect_timeout: 300s
       per_connection_buffer_limit_bytes: 52428800
