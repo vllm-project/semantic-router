@@ -1,6 +1,14 @@
 /// <reference types="vite/client" />
 
-declare module '*.module.css' {
-  const classes: { [key: string]: string }
-  export default classes
+interface ImportMetaEnv {
+  readonly VITE_OPENWEBUI_PORT?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
+declare module "*.module.css" {
+  const classes: { [key: string]: string };
+  export default classes;
 }

@@ -144,6 +144,31 @@ test-e2e-vllm:
 	@echo "⚠️  Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
 	@python3 e2e-tests/run_all_tests.py
 
+# Run hallucination detection benchmark
+# Requires: router running with hallucination config, vLLM endpoint, envoy proxy
+bench-hallucination: ## Run hallucination detection benchmark (requires router + vLLM + envoy running)
+bench-hallucination:
+	@echo "Running hallucination detection benchmark..."
+	@echo "⚠️  Prerequisites:"
+	@echo "   1. vLLM server running (e.g., docker container on port 8083)"
+	@echo "   2. Router: make run-router CONFIG_FILE=bench/hallucination/config-7b.yaml"
+	@echo "   3. Envoy: make run-envoy"
+	@echo ""
+	python3 -m bench.hallucination.evaluate \
+		--endpoint http://localhost:8801 \
+		--dataset halueval \
+		--max-samples $${MAX_SAMPLES:-50}
+
+# Run hallucination benchmark with custom parameters
+# Usage: make bench-hallucination-full MAX_SAMPLES=200 DATASET=halueval
+bench-hallucination-full: ## Run full hallucination benchmark with more samples
+bench-hallucination-full:
+	@echo "Running full hallucination detection benchmark..."
+	python3 -m bench.hallucination.evaluate \
+		--endpoint http://localhost:8801 \
+		--dataset $${DATASET:-halueval} \
+		--max-samples $${MAX_SAMPLES:-200}
+
 # Note: Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
 
 # ============== Hallucination Detection Tests ==============

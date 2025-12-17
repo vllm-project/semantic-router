@@ -34,7 +34,6 @@ jobs:
           || needs.changes.outputs.make == 'true'
           || needs.changes.outputs.ci   == 'true') }}
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
@@ -86,11 +85,11 @@ jobs:
           # This helps prevent "no space left on device" errors
           echo "Disk space before setup:"
           df -h / && df -h /mnt
-          
+
           # Create /mnt/models directory if it doesn't exist
           sudo mkdir -p /mnt/models
           sudo chown -R $USER:$USER /mnt/models
-          
+
           # If models directory already exists in workspace, move it to /mnt
           if [ -d "models" ] && [ ! -L "models" ]; then
             echo "Moving existing models directory to /mnt/models..."
@@ -103,7 +102,7 @@ jobs:
               sudo mv models /mnt/models
             fi
           fi
-          
+
           # Create symlink from models/ to /mnt/models/ so existing code continues to work
           if [ ! -e "models" ]; then
             ln -s /mnt/models models
@@ -113,7 +112,7 @@ jobs:
           else
             echo "Warning: models exists but is not a symlink"
           fi
-          
+
           echo "Disk space after setup:"
           df -h / && df -h /mnt
           echo "Models directory setup complete. Models will be stored in /mnt/models"
@@ -134,13 +133,14 @@ jobs:
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
 
-      - name: Install HuggingFace CLI
+      - name: Install Model Manager dependencies
         run: |
-          pip install -U "huggingface_hub[cli]" hf_transfer
+          pip install -r src/model_manager/requirements.txt
 
       - name: Download models (minimal on PRs)
         env:
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
@@ -169,7 +169,7 @@ jobs:
 
           echo "Milvus is ready at localhost:19530"
           docker ps --filter "name=milvus-semantic-cache"
-      
+
       - name: Start Redis service
         run: |
           echo "Starting Redis Stack..."

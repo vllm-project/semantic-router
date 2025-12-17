@@ -6,14 +6,14 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'website/**'
-      - '**/*.md'
+      - "website/**"
+      - "**/*.md"
   push:
     branches:
       - main
     paths-ignore:
-      - 'website/**'
-      - '**/*.md'
+      - "website/**"
+      - "**/*.md"
   workflow_dispatch: # Allow manual triggering
 
 concurrency:
@@ -33,7 +33,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -57,7 +57,8 @@ jobs:
 
       - name: Install kubectl
         run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+          curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
@@ -174,5 +175,3 @@ jobs:
         if: always()
         run: |
           make e2e-cleanup || true
-
-

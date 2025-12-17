@@ -8,6 +8,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -299,6 +300,36 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 	return modifiedBody, nil
 }
 
+// startUpstreamSpanAndInjectHeaders starts an upstream request span and returns trace context headers.
+// The span will be ended when response headers arrive in handleResponseHeaders.
+func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(model string, endpoint string, ctx *RequestContext) []*core.HeaderValueOption {
+	var traceContextHeaders []*core.HeaderValueOption
+
+	// Start upstream request span (will be ended when response headers arrive)
+	spanCtx, upstreamSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanUpstreamRequest,
+		trace.WithSpanKind(trace.SpanKindClient))
+	ctx.TraceContext = spanCtx
+	ctx.UpstreamSpan = upstreamSpan
+
+	// Set span attributes for upstream request
+	tracing.SetSpanAttributes(upstreamSpan,
+		attribute.String(tracing.AttrModelName, model),
+		attribute.String(tracing.AttrEndpointAddress, endpoint))
+
+	// Inject W3C trace context headers for distributed tracing to vLLM
+	traceHeaders := tracing.InjectTraceContextToSlice(spanCtx)
+	for _, th := range traceHeaders {
+		traceContextHeaders = append(traceContextHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      th[0],
+				RawValue: []byte(th[1]),
+			},
+		})
+	}
+
+	return traceContextHeaders
+}
+
 // createRoutingResponse creates a routing response with mutations
 func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modifiedBody []byte, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	bodyMutation := &ext_proc.BodyMutation{
@@ -321,6 +352,10 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	}
 
 	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s, endpoint=%s", len(modifiedBody), model, endpoint)
+
+	// Start upstream span and inject trace context headers
+	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
+	setHeaders = append(setHeaders, traceContextHeaders...)
 
 	// Add standard routing headers
 	if endpoint != "" {
@@ -386,6 +421,10 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint string, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{}
 	removeHeaders := []string{}
+
+	// Start upstream span and inject trace context headers
+	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
+	setHeaders = append(setHeaders, traceContextHeaders...)
 
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{

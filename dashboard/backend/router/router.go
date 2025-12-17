@@ -273,10 +273,11 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			routerAPIProxy.ServeHTTP(w, r)
 			return
 		}
-		// If path is Jaeger API (services, traces, operations, etc.), use Jaeger proxy
+		// If path is Jaeger API (services, traces, operations, dependencies, etc.), use Jaeger proxy
 		if jaegerAPIProxy != nil && (strings.HasPrefix(r.URL.Path, "/api/services") ||
 			strings.HasPrefix(r.URL.Path, "/api/traces") ||
-			strings.HasPrefix(r.URL.Path, "/api/operations")) {
+			strings.HasPrefix(r.URL.Path, "/api/operations") ||
+			strings.HasPrefix(r.URL.Path, "/api/dependencies")) {
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
 			jaegerAPIProxy.ServeHTTP(w, r)
 			return
@@ -357,7 +358,16 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		jStatic, _ := proxy.NewReverseProxy(cfg.JaegerURL, "", false)
 		mux.Handle("/static/", jStatic)
 
-		log.Printf("Jaeger proxy configured: %s; static assets proxied at /static/", cfg.JaegerURL)
+		// Jaeger /dependencies page (accessible directly, not under /embedded/jaeger)
+		mux.HandleFunc("/dependencies", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			log.Printf("Proxying Jaeger dependencies page: %s", r.URL.Path)
+			jStatic.ServeHTTP(w, r)
+		})
+
+		log.Printf("Jaeger proxy configured: %s; static assets proxied at /static/, /dependencies", cfg.JaegerURL)
 	} else {
 		mux.HandleFunc("/embedded/jaeger/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

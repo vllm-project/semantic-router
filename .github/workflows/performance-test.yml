@@ -5,16 +5,16 @@ on:
     branches:
       - main
     paths:
-      - 'src/semantic-router/**'
-      - 'candle-binding/**'
-      - 'perf/**'
-      - '.github/workflows/performance-test.yml'
+      - "src/semantic-router/**"
+      - "candle-binding/**"
+      - "perf/**"
+      - ".github/workflows/performance-test.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: write  # Required to comment on PRs
-  issues: write         # Required to comment on PRs (PRs are issues)
+  pull-requests: write # Required to comment on PRs
+  issues: write # Required to comment on PRs (PRs are issues)
 
 jobs:
   component-benchmarks:
@@ -25,7 +25,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Need full history for baseline comparison
+          fetch-depth: 0 # Need full history for baseline comparison
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -72,24 +72,17 @@ jobs:
       - name: Build Rust library (CPU-only)
         run: make rust-ci
 
-      - name: Install HuggingFace CLI
+      - name: Install Model Manager dependencies
         run: |
-          pip install -U "huggingface_hub[cli]" hf_transfer
+          pip install -r src/model_manager/requirements.txt
 
       - name: Download models (minimal)
         env:
           CI_MINIMAL_MODELS: true
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models
-
-      - name: Download performance baselines
-        continue-on-error: true
-        run: |
-          mkdir -p perf/testdata/baselines
-          git show main:perf/testdata/baselines/classification.json > perf/testdata/baselines/classification.json 2>/dev/null || echo '{"version":"v1.0.0","benchmarks":{}}' > perf/testdata/baselines/classification.json
-          git show main:perf/testdata/baselines/decision.json > perf/testdata/baselines/decision.json 2>/dev/null || echo '{"version":"v1.0.0","benchmarks":{}}' > perf/testdata/baselines/decision.json
-          git show main:perf/testdata/baselines/cache.json > perf/testdata/baselines/cache.json 2>/dev/null || echo '{"version":"v1.0.0","benchmarks":{}}' > perf/testdata/baselines/cache.json
 
       - name: Run component benchmarks
         run: |
@@ -127,7 +120,7 @@ jobs:
 
       - name: Comment PR with results
         if: github.event_name == 'pull_request'
-        continue-on-error: true  # May fail for PRs from forks due to GitHub security restrictions
+        continue-on-error: true # May fail for PRs from forks due to GitHub security restrictions
         uses: actions/github-script@v7
         with:
           script: |
@@ -177,21 +170,3 @@ jobs:
           path: |
             reports/
           retention-days: 30
-
-      - name: Check for regressions (placeholder)
-        id: regression_check
-        continue-on-error: true
-        run: |
-          # In a real implementation, this would:
-          # 1. Parse benchmark output
-          # 2. Compare against baselines
-          # 3. Calculate % changes
-          # 4. Exit 1 if regressions exceed thresholds
-          echo "No regressions detected (placeholder check)"
-
-      - name: Fail on regression
-        if: steps.regression_check.outcome == 'failure'
-        run: |
-          echo "❌ Performance regressions detected!"
-          echo "See benchmark results in artifacts for details"
-          exit 1

@@ -1,9 +1,10 @@
 name: Nightly Performance Baseline
 
 on:
-  schedule:
-    # Run at 3:00 AM UTC daily
-    - cron: "0 3 * * *"
+  # Disabled - baseline comparison not currently used in PR tests
+  # schedule:
+  #   # Run at 3:00 AM UTC daily
+  #   - cron: "0 3 * * *"
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -62,13 +63,14 @@ jobs:
       - name: Build Rust library (CPU-only)
         run: make rust-ci
 
-      - name: Install HuggingFace CLI
+      - name: Install Model Manager dependencies
         run: |
-          pip install -U "huggingface_hub[cli]" hf_transfer
+          pip install -r src/model_manager/requirements.txt
 
-      - name: Download models (full set for nightly)
+      - name: Download models (minimal set for nightly)
         env:
           CI_MINIMAL_MODELS: false
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
         run: make download-models

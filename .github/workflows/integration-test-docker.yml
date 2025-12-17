@@ -6,14 +6,14 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'website/**'
-      - '**/*.md'
+      - "website/**"
+      - "**/*.md"
   push:
     branches:
       - main
     paths-ignore:
-      - 'website/**'
-      - '**/*.md'
+      - "website/**"
+      - "**/*.md"
   workflow_dispatch: # Allow manual triggering
 
 concurrency:
@@ -24,7 +24,7 @@ jobs:
   test-ci-compose:
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # Reduced from 30 - CI compose is faster
+    timeout-minutes: 20 # Reduced from 30 - CI compose is faster
 
     steps:
       - name: Check out the repo
@@ -36,11 +36,11 @@ jobs:
           # This helps prevent "no space left on device" errors
           echo "Disk space before setup:"
           df -h / && df -h /mnt
-          
+
           # Create /mnt/models directory if it doesn't exist
           sudo mkdir -p /mnt/models
           sudo chown -R $USER:$USER /mnt/models
-          
+
           # If models directory already exists in workspace, move it to /mnt
           if [ -d "models" ] && [ ! -L "models" ]; then
             echo "Moving existing models directory to /mnt/models..."
@@ -53,7 +53,7 @@ jobs:
               sudo mv models /mnt/models
             fi
           fi
-          
+
           # Create symlink from models/ to /mnt/models/ so existing code continues to work
           if [ ! -e "models" ]; then
             ln -s /mnt/models models
@@ -63,7 +63,7 @@ jobs:
           else
             echo "Warning: models exists but is not a symlink"
           fi
-          
+
           echo "Disk space after setup:"
           df -h / && df -h /mnt
           echo "Models directory setup complete. Models will be stored in /mnt/models"
@@ -71,13 +71,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl
-          pip install huggingface_hub[cli]
+          pip install -r src/model_manager/requirements.txt
 
       - name: Download models
         run: |
@@ -86,6 +86,7 @@ jobs:
         env:
           CI: true
           CI_MINIMAL_MODELS: true
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
           HF_HUB_DISABLE_TELEMETRY: 1
 
@@ -101,7 +102,7 @@ jobs:
           echo "Waiting for services to be healthy..."
           max_attempts=60
           attempt=1
-          
+
           while [ $attempt -le $max_attempts ]; do
             echo "Attempt $attempt/$max_attempts: Checking service health..."
             
@@ -128,7 +129,7 @@ jobs:
             sleep 5
             ((attempt++))
           done
-          
+
           echo "❌ Timeout waiting for services to be healthy"
           docker ps -a
           exit 1
@@ -173,12 +174,99 @@ jobs:
             }')
 
           echo "Response: $response"
-          
+
           # Verify we got a response
           if echo "$response" | grep -q "choices"; then
             echo "✅ Chat completions test passed"
           else
             echo "⚠️ Response may not contain expected fields, but request succeeded"
+          fi
+
+      - name: Test Response API - Create Response
+        run: |
+          echo "Testing Response API: POST /v1/responses..."
+
+          response=$(curl -s -X POST http://localhost:8801/v1/responses \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "qwen3",
+              "input": "What is 2 + 2?",
+              "store": true
+            }')
+
+          echo "Response: $response"
+
+          # Extract response ID for subsequent tests
+          response_id=$(echo "$response" | jq -r '.id // empty')
+          if [ -n "$response_id" ] && [[ "$response_id" == resp_* ]]; then
+            echo "✅ Response API create test passed (id=$response_id)"
+            echo "RESPONSE_ID=$response_id" >> $GITHUB_ENV
+          else
+            echo "❌ Response API create test failed - invalid or missing response ID"
+            exit 1
+          fi
+
+      - name: Test Response API - Get Response
+        run: |
+          echo "Testing Response API: GET /v1/responses/$RESPONSE_ID..."
+
+          response=$(curl -s -X GET "http://localhost:8801/v1/responses/$RESPONSE_ID" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $response"
+
+          # Verify response ID matches
+          got_id=$(echo "$response" | jq -r '.id // empty')
+          if [ "$got_id" = "$RESPONSE_ID" ]; then
+            echo "✅ Response API get test passed"
+          else
+            echo "❌ Response API get test failed - ID mismatch (expected=$RESPONSE_ID, got=$got_id)"
+            exit 1
+          fi
+
+      - name: Test Response API - Get Input Items
+        run: |
+          echo "Testing Response API: GET /v1/responses/$RESPONSE_ID/input_items..."
+
+          response=$(curl -s -X GET "http://localhost:8801/v1/responses/$RESPONSE_ID/input_items" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $response"
+
+          # Verify it's a list
+          object_type=$(echo "$response" | jq -r '.object // empty')
+          if [ "$object_type" = "list" ]; then
+            echo "✅ Response API input_items test passed"
+          else
+            echo "❌ Response API input_items test failed - expected object=list, got=$object_type"
+            exit 1
+          fi
+
+      - name: Test Response API - Delete Response
+        run: |
+          echo "Testing Response API: DELETE /v1/responses/$RESPONSE_ID..."
+
+          response=$(curl -s -X DELETE "http://localhost:8801/v1/responses/$RESPONSE_ID" \
+            -H "Content-Type: application/json")
+
+          echo "Response: $response"
+
+          # Verify deletion
+          deleted=$(echo "$response" | jq -r '.deleted // empty')
+          if [ "$deleted" = "true" ]; then
+            echo "✅ Response API delete test passed"
+          else
+            echo "❌ Response API delete test failed - expected deleted=true"
+            exit 1
+          fi
+
+          # Verify 404 on subsequent get
+          get_response=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8801/v1/responses/$RESPONSE_ID")
+          if [ "$get_response" = "404" ]; then
+            echo "✅ Response API delete verification passed (404 on get)"
+          else
+            echo "❌ Response API delete verification failed - expected 404, got $get_response"
+            exit 1
           fi
 
       - name: Show service logs on failure
