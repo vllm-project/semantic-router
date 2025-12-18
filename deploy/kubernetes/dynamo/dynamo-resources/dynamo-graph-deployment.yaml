@@ -44,7 +44,7 @@ spec:
             - /bin/sh
             - -c
           args:
-            - "sleep 15 && export CUDA_VISIBLE_DEVICES=0 && export LD_LIBRARY_PATH=/nvidia-driver-libs:/usr/local/cuda/lib64:$LD_LIBRARY_PATH && python3 -m dynamo.frontend --http-port 8000"
+            - "sleep 15 && export CUDA_VISIBLE_DEVICES=0 && export LD_LIBRARY_PATH=/nvidia-driver-libs:/usr/local/cuda/lib64:$LD_LIBRARY_PATH && python3 -m dynamo.frontend --http-port 8000 --router-mode kv"
           securityContext:
             privileged: true
           livenessProbe:

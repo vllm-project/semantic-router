@@ -7,38 +7,385 @@ config:
   model_config:
     "TinyLlama/TinyLlama-1.1B-Chat-v1.0": {}  # No reasoning family needed - let Dynamo handle load balancing
 
-  # Simplified categories for E2E testing
-  # All route to TinyLlama/TinyLlama-1.1B-Chat-v1.0 (the model configured in Dynamo workers)
+  # Categories matching ai-gateway/istio/aibrix deployments
+  # All route to TinyLlama/TinyLlama-1.1B-Chat-v1.0 (the only model in Dynamo E2E)
   categories:
+    - name: business
+      description: "Business, corporate strategy, management, finance, marketing"
+    - name: law
+      description: "Legal principles, case law, statutory interpretation, legal procedures"
+    - name: psychology
+      description: "Cognitive processes, behavioral patterns, mental health, developmental psychology"
+    - name: biology
+      description: "Molecular biology, genetics, cell biology, ecology, evolution, anatomy"
+    - name: chemistry
+      description: "Chemical reactions, molecular structures, laboratory techniques"
+    - name: history
+      description: "Historical events, time periods, cultures, civilizations"
+    - name: health
+      description: "Anatomy, physiology, diseases, treatments, preventive care, nutrition"
+    - name: economics
+      description: "Microeconomics, macroeconomics, financial markets, monetary policy, trade"
     - name: math
-      system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
-      model_scores:
-        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-          score: 1.0
-          use_reasoning: false
-
-    - name: science
-      system_prompt: "You are a science expert covering biology, chemistry, and physics."
-      model_scores:
-        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-          score: 0.9
-          use_reasoning: false
-
-    - name: general
-      system_prompt: "You are a helpful assistant."
-      model_scores:
-        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-          score: 0.7
-          use_reasoning: false
-
+      description: "Mathematics, algebra, calculus, geometry, statistics"
+    - name: physics
+      description: "Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics"
+    - name: computer science
+      description: "Algorithms, data structures, programming, software engineering"
+    - name: philosophy
+      description: "Philosophical traditions, ethics, logic, metaphysics, epistemology"
+    - name: engineering
+      description: "Engineering disciplines, design, problem-solving, systems"
     - name: other
-      system_prompt: "You are a helpful assistant for general queries."
-      model_scores:
-        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-          score: 0.6
-          use_reasoning: false
+      description: "General knowledge and miscellaneous topics"
 
   default_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+
+  # Decision rules - map domains to models
+  # All decisions route to TinyLlama (the only model in Dynamo E2E)
+  # Mirrors the same decision structure as ai-gateway/istio/aibrix deployments
+  decisions:
+    - name: business_decision
+      description: "Business and management related queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+            mode: "replace"
+
+    - name: law_decision
+      description: "Legal questions and law-related topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+            mode: "replace"
+
+    - name: psychology_decision
+      description: "Psychology and mental health topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "psychology"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+            mode: "replace"
+
+    - name: biology_decision
+      description: "Biology and life sciences questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+            mode: "replace"
+
+    - name: chemistry_decision
+      description: "Chemistry and chemical sciences questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+            mode: "replace"
+
+    - name: history_decision
+      description: "Historical questions and cultural topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+            mode: "replace"
+
+    - name: health_decision
+      description: "Health and medical information queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.95
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+            mode: "replace"
+
+    - name: economics_decision
+      description: "Economics and financial topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+            mode: "replace"
+
+    - name: math_decision
+      description: "Mathematics and quantitative reasoning"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+            mode: "replace"
+
+    - name: physics_decision
+      description: "Physics and physical sciences"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+            mode: "replace"
+
+    - name: computer_science_decision
+      description: "Computer science and programming"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+            mode: "replace"
+
+    - name: philosophy_decision
+      description: "Philosophy and ethical questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "philosophy"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+            mode: "replace"
+
+    - name: engineering_decision
+      description: "Engineering and technical problem-solving"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+            mode: "replace"
+
+    - name: thinking_decision
+      description: "Complex reasoning and multi-step thinking"
+      priority: 20
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            rule_name: "thinking"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a thinking expert, should think multiple steps before answering. Please answer the question step by step."
+            mode: "replace"
+
+    - name: general_decision
+      description: "General knowledge and miscellaneous topics"
+      priority: 1
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.75
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+            mode: "replace"
 
   # Classifier configuration
   bert_model:

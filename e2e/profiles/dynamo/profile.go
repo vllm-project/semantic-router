@@ -109,6 +109,7 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		// Dynamo-specific test cases
 		"dynamo-health-check",
+		"dynamo-category-classification",
 		"dynamo-optimized-inference",
 		"dynamo-performance-comparison",
 		"dynamo-dynamic-batching",

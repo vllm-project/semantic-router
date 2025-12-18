@@ -12,9 +12,50 @@ This directory contains Kubernetes manifests for E2E testing of **Semantic Route
 
 | Component | GPU | Description |
 |-----------|-----|-------------|
-| Frontend | GPU 0 | Dynamo Frontend (coordinates workers via etcd/NATS) |
-| VLLMPrefillWorker | GPU 1 | Handles prefill phase of inference |
+| Frontend | GPU 0 | Dynamo Frontend with KV-aware routing (`--router-mode kv`) |
+| VLLMPrefillWorker | GPU 1 | Handles prefill phase of inference (`--is-prefill-worker`) |
 | VLLMDecodeWorker | GPU 2 | Handles decode phase of inference |
+
+## 🏗️ Deployment Pattern: Disaggregated Router Deployment
+
+This integration uses **Pattern 4: Disaggregated Router Deployment** (`disagg_router.yaml`) - the most advanced configuration from [NVIDIA Dynamo](https://github.com/ai-dynamo/dynamo/blob/main/examples/backends/vllm/deploy/README.md).
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DYNAMO FRONTEND                          │
+│              (KV-aware routing enabled)                     │
+│                  --router-mode kv                           │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+            ┌─────────────┴─────────────┐
+            │                           │
+            ▼                           ▼
+┌───────────────────────┐   ┌───────────────────────┐
+│   PREFILL WORKER      │   │   DECODE WORKER       │
+│  --is-prefill-worker  │   │  (decode-only)        │
+│  Processes input      │──▶│  Generates output     │
+│  tokens               │   │  tokens               │
+└───────────────────────┘   └───────────────────────┘
+```
+
+### Why Disaggregated Router Deployment?
+
+| Feature | Benefit |
+|---------|---------|
+| **Disaggregated Serving** | Separate Prefill/Decode workers for optimal GPU utilization |
+| **KV-Aware Routing** | Routes requests to workers with relevant KV cache (prefix cache optimization) |
+| **Reduced Latency** | 2-4x faster responses on repeated/similar prompts |
+| **Better Throughput** | Workers specialize in their tasks |
+
+### KV Cache Routing Benefits
+
+The Frontend with `--router-mode kv` enables:
+
+- **Prefix Cache Hits**: Routes to workers with cached prefixes
+- **Load Balancing**: Considers worker busyness and cache state
+- **Optimal Worker Selection**: Uses cost formula based on prefill/decode load
 
 ## 🔧 Prerequisites (One-Time Setup)
 
