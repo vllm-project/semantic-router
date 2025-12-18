@@ -40,6 +40,7 @@ func main() {
 		certPath              = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 		kubeconfig            = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace             = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
+		downloadOnly          = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 	)
 	flag.Parse()
 
@@ -67,6 +68,12 @@ func main() {
 	// Ensure required models are downloaded
 	if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
 		logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
+	}
+
+	// If download-only mode, exit after downloading models
+	if *downloadOnly {
+		logging.Infof("Download-only mode: models downloaded successfully, exiting")
+		os.Exit(0)
 	}
 
 	// Initialize distributed tracing if enabled

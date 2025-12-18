@@ -17,6 +17,9 @@ RUN dnf -y update && \
     ca-certificates && \
     dnf clean all
 
+# Install HuggingFace CLI for model downloading
+RUN pip3 install --no-cache-dir huggingface_hub[cli]
+
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"

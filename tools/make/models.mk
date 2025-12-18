@@ -4,23 +4,23 @@
 
 ##@ Models
 
-# Models are now automatically downloaded by the router at startup.
-# The router uses the mom_registry in config/config.yaml to determine
-# which models to download from HuggingFace.
-#
-# No manual model download is required for development or CI.
-# The router will check for missing models and download them automatically
-# using the Go-based modeldownload package.
+# Models are automatically downloaded by the router at startup in production.
+# For testing, we use the router's --download-only flag to download models and exit.
 
-# Empty target for backward compatibility
-# Models are now downloaded automatically by the router at startup
-download-models: ## (Deprecated) Models are now downloaded automatically at startup
-	@echo "ℹ️  Models are now downloaded automatically by the router at startup"
-	@echo "ℹ️  No manual download required - the router will handle it"
+# Download models by running the router with --download-only flag
+download-models: ## Download models using router's built-in download logic
+	@echo "📦 Downloading models via router..."
+	@echo ""
+	@$(MAKE) build-router
+	@echo ""
+	@echo "Running router with --download-only flag..."
+	@echo "This may take a few minutes depending on your network speed..."
+	@./bin/router -config=config/config.yaml --download-only
+	@echo ""
+	@echo "✅ Models downloaded successfully"
 
-download-models-lora: ## (Deprecated) Models are now downloaded automatically at startup
-	@echo "ℹ️  Models are now downloaded automatically by the router at startup"
-	@echo "ℹ️  No manual download required - the router will handle it"
+download-models-lora: ## Download LoRA models (same as download-models now)
+	@$(MAKE) download-models
 
-clean-minimal-models: ## (Deprecated) No-op target for backward compatibility
+clean-minimal-models: ## No-op target for backward compatibility
 	@echo "ℹ️  This target is no longer needed"
