@@ -15,6 +15,7 @@ Provides health endpoints for monitoring service and dependency status.
 ### Structured Logging
 
 Comprehensive logging for request tracing, security events, and performance analysis.
+
 ## Key Features
 
 - **Prometheus Integration**: Exposes detailed metrics on port 9190

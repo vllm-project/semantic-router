@@ -260,6 +260,7 @@ While vLLM Semantic Router works well for experimental deployments, production a
 **The Deliverables**
 
 #### Helm Chart Support
+
 Professional Kubernetes deployment with:
 
 - Templated manifests for all resources
@@ -268,6 +269,7 @@ Professional Kubernetes deployment with:
 - Best practices for security, scaling, and resource management
 
 #### Modern Management Dashboard
+
 A comprehensive web-based control plane featuring:
 
 - **Visual Route Builder**: Drag-and-drop interface for creating SemanticRoute configurations

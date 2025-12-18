@@ -7,7 +7,7 @@ This guide showcases a deployment in which vSR can selectively route to some loc
 The deployment consists of:
 
 - **vLLM Semantic Router (vSR)**: Provides intelligent request routing and processing decisions to Envoy based Gateways
-- **LLM-D**: Distributed Inference platform used for scaleout LLM inferencing with SOTA performance. 
+- **LLM-D**: Distributed Inference platform used for scaleout LLM inferencing with SOTA performance.
 - **Istio Gateway**: Istio's implementation of Kubernetes Gateway API that uses an Envoy proxy under the covers
 - **Gateway API Inference Extension**: Additional APIs to extend the Gateway API for Inference via ExtProc servers
 - **Two instances of vLLM serving the same local LLM**: Two replicas serving the same local LLM targeted by semantic routing in this topology
@@ -18,7 +18,7 @@ The deployment consists of:
 Before starting, ensure you have the following tools installed:
 
 - [Docker](https://docs.docker.com/get-docker/) - Container runtime
-- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes 
+- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
 - [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) - Istio CLI
@@ -33,7 +33,7 @@ First, follow the steps documented in the [Istio guide](../istio/README.md), to 
 
 ## Step 2: Install Istio Gateway, Gateway API, Inference Extension CRDs
 
-Install CRDs for the Kubernetes Gateway API, Gateway API Inference Extension, Istio Control plane and an instance of the Istio Gateway exactly as described in the [Istio guide](../istio/README.md). You may also install istio using istioctl directly as described in the istio web site as long as the version is 1.28.0 or newer. 
+Install CRDs for the Kubernetes Gateway API, Gateway API Inference Extension, Istio Control plane and an instance of the Istio Gateway exactly as described in the [Istio guide](../istio/README.md). You may also install istio using istioctl directly as described in the istio web site as long as the version is 1.28.0 or newer.
 
 If installed correctly you should see the api CRDs for gateway api and inference extension as well as pods running for the Istio gateway and Istiod using the commands shown below.
 
@@ -70,14 +70,14 @@ kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
 kubectl apply -f deploy/kubernetes/istio/vLlama3.yaml
 ```
 
-This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state. In this guide we will create two replicas of the same LLM instead of 1 replica each of two separate LLMs, hence scale this deployment to 2 and wait for both LLM pods to be in READY state. 
+This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state. In this guide we will create two replicas of the same LLM instead of 1 replica each of two separate LLMs, hence scale this deployment to 2 and wait for both LLM pods to be in READY state.
 
 ```bash
 # Create a 2nd replica of the same local LLM 
 kubectl scale deploy llama-8b --replicas=2
 ```
 
-At the end of this you should be able to see both your vLLM pods are READY and serving these LLMs using the command below. 
+At the end of this you should be able to see both your vLLM pods are READY and serving these LLMs using the command below.
 
 ```bash
 # Verify that vLLM pods running the two LLMs are READY and serving  
@@ -111,7 +111,7 @@ kubectl apply -f deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml
 
 ## Step 6: Update vSR config
 
-For this guide, we use an updated vSR config file which sets two endpoints, one for the local LLM service and a second for the openai backend model, specifically we use the "gpt-4o-mini" in the provided example config. Take a look at deploy/kubernetes/llmd-base/llmd+public/config.yaml, copy it over to the config.yaml in the istio folder so that we can reuse the other manifests and kustomize from that folder to deploy vSR with this config as shown below. 
+For this guide, we use an updated vSR config file which sets two endpoints, one for the local LLM service and a second for the openai backend model, specifically we use the "gpt-4o-mini" in the provided example config. Take a look at deploy/kubernetes/llmd-base/llmd+public/config.yaml, copy it over to the config.yaml in the istio folder so that we can reuse the other manifests and kustomize from that folder to deploy vSR with this config as shown below.
 
 ```bash
 cp deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai deploy/kubernetes/istio/config.yaml
@@ -141,9 +141,9 @@ kubectl apply -f deploy/kubernetes/istio/destinationrule.yaml
 kubectl apply -f deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-## Step 9: Create a K8S Service and an Istio ServiceEntry to represent the OpenAI target 
+## Step 9: Create a K8S Service and an Istio ServiceEntry to represent the OpenAI target
 
-vSR's HTTPRoute will need a Kubernetes service representation for the OpenAI connection and since this is an external service, also need an Istio ServiceEntry representation. Set these up using the provided anifests. 
+vSR's HTTPRoute will need a Kubernetes service representation for the OpenAI connection and since this is an external service, also need an Istio ServiceEntry representation. Set these up using the provided anifests.
 
 ```bash
 kubectl apply -f deploy/kubernetes/llmd-base/llmd+public-llm/svc-openai.yaml
@@ -160,7 +160,7 @@ kubectl apply -f deploy/kubernetes/llmd-base/llmd+public-llm/dest-rule-openai.ya
 
 ## Step 11: Set up and check API account credentials for OpenAI api access
 
-In order to use the OpenAI API programmatically over the internet, you will need an OpenAI developer account with credentials that allow you to make api calls. Once registered with OpenAI, store your api key into your local environment and perform a manual curl test to access the OpenAI api with an LLM query to the same model to confirm that your account and credentials are setup correctly and there are no access issues. Perform the manual access via an LLM query to the same model that we have setup in our vSR config earlier (the "gpt-40-mini" model in our case).  A valid LLM response indicates all is well with the OpenAI account and path and it can be added to the main deployment in the following step. 
+In order to use the OpenAI API programmatically over the internet, you will need an OpenAI developer account with credentials that allow you to make api calls. Once registered with OpenAI, store your api key into your local environment and perform a manual curl test to access the OpenAI api with an LLM query to the same model to confirm that your account and credentials are setup correctly and there are no access issues. Perform the manual access via an LLM query to the same model that we have setup in our vSR config earlier (the "gpt-40-mini" model in our case).  A valid LLM response indicates all is well with the OpenAI account and path and it can be added to the main deployment in the following step.
 
 ```bash
 ## Once registered, confirm that you have your OpenAI key in your env. 
@@ -177,7 +177,7 @@ curl https://api.openai.com/v1/chat/completions   -H "Content-Type: application/
   }'
 ```
 
-## Step 12: Move the OpenAI api key into Kubernetes and Istio Env 
+## Step 12: Move the OpenAI api key into Kubernetes and Istio Env
 
 First create a Kubernetes secret using the OpenAI api key from the environment and then move it into the Istio-proxy container environment as shown next.
 
@@ -201,18 +201,18 @@ kubectl patch deployment inference-gateway-istio   --type='json'   -p='[
 kubectl exec -it deploy/inference-gateway-istio -- printenv | grep OPENAI_API_KEY
 ```
 
-## Step 13: Patch the OPENAI_API_KEY into the HTTPRoute for OpenAI    
+## Step 13: Patch the OPENAI_API_KEY into the HTTPRoute for OpenAI
 
-Patch the OPEN_AI_API_KEY from your environment into a template file to generate the manifest for the HTTPRoute representing the OpenAI target. Note that you can skip step 12 by doing this step but for now we also listed step 12 in case you have other automation options for generating the httproute manifest while templating in the value of the OPENAI_API_KEY. 
+Patch the OPEN_AI_API_KEY from your environment into a template file to generate the manifest for the HTTPRoute representing the OpenAI target. Note that you can skip step 12 by doing this step but for now we also listed step 12 in case you have other automation options for generating the httproute manifest while templating in the value of the OPENAI_API_KEY.
 
 ```bash
 ## Patch the OPENAI_API_KEY into the template to create the httproute manifest file 
 sed "s/{{OPENAI_API_KEY}}/$OPENAI_API_KEY/g" deploy/kubernetes/llmd-base/llmd+public-llm/httproute-openai.template  > deploy/kubernetes/llmd-base/llmd+public-llm/httproute-openai.yaml
 ```
 
-## Step 14: Create HTTPRoutes for Local LLM and for the OpenAI target   
+## Step 14: Create HTTPRoutes for Local LLM and for the OpenAI target
 
-Now deploy the HTTPRoute manifest for the openai route destination. In the manifest note again that we match on the contents of the x-selected-model and also setup the injection of the OpenAI api key as a bearer token for enabling the access into OpenAI api for this route. For the local LLM we use a route similar to the llm-d guide since we want the prompt query to also get routed via the inferencepool and LLM-D scheduler for the Llama pool which will then pick one of the multiple endpoints in the pool serving the Llama LLM in this example. 
+Now deploy the HTTPRoute manifest for the openai route destination. In the manifest note again that we match on the contents of the x-selected-model and also setup the injection of the OpenAI api key as a bearer token for enabling the access into OpenAI api for this route. For the local LLM we use a route similar to the llm-d guide since we want the prompt query to also get routed via the inferencepool and LLM-D scheduler for the Llama pool which will then pick one of the multiple endpoints in the pool serving the Llama LLM in this example.
 
 ```bash
 ##  HTTpRoute for OpenAI
@@ -226,6 +226,7 @@ kubectl apply -f deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
 ```
 
 ## Step 15: Testing the Deployment
+
 To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
 
 ```bash
@@ -233,7 +234,7 @@ minikube service inference-gateway-istio --url
 http://192.168.49.2:31275
 ```
 
-Now we can send LLM prompts via curl to http://192.168.49.2:31275 to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case. Use the port number that you get as output from your "minikube service" command when you try the curl examples below.
+Now we can send LLM prompts via curl to <http://192.168.49.2:31275> to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case. Use the port number that you get as output from your "minikube service" command when you try the curl examples below.
 
 ### Send Test Requests
 
@@ -318,7 +319,7 @@ $ kubectl get pods -n vllm-semantic-router-system
 NAME                              READY   STATUS    RESTARTS   AGE
 semantic-router-bf6cdd5b9-t5hpg   1/1     Running   0          5d23h
 ```
- 
+
 ```bash
 $ kubectl get pods -n istio-system
 NAME                     READY   STATUS    RESTARTS   AGE
@@ -350,7 +351,7 @@ $ kubectl get httproute vsr-openai-g4 -o yaml | grep -A 1 "reason: ResolvedRefs"
       status: "True"
 ```
 
-Also as noted previously in Step 11 verify your OpenAI account credentials and api access separately prior to accessing via the vSR + Istio setup. 
+Also as noted previously in Step 11 verify your OpenAI account credentials and api access separately prior to accessing via the vSR + Istio setup.
 
 ### Common Issues
 
@@ -404,7 +405,7 @@ minikube delete
 ## Next Steps
 
 - Test/ experiment with different features of vLLM Semantic Router
-- Test/ experiment with different public hosted models and model providers 
+- Test/ experiment with different public hosted models and model providers
 - Test/ experiment with more complex LLM-D configurations and well-lit paths
 - Set up monitoring and observability
 - Implement authentication and authorization

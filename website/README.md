@@ -6,7 +6,7 @@ This directory contains the Docusaurus-based documentation website for the vLLM 
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
 
 ### Development
@@ -21,7 +21,7 @@ make docs-dev
 cd website && npm start
 ```
 
-The site will be available at http://localhost:3000
+The site will be available at <http://localhost:3000>
 
 ### Production Build
 
@@ -88,6 +88,7 @@ website/
 ## 🛠️ Customization
 
 ### Themes and Colors
+
 Edit `src/css/custom.css` to modify:
 
 - Color scheme and gradients
@@ -96,6 +97,7 @@ Edit `src/css/custom.css` to modify:
 - Animations and effects
 
 ### Navigation
+
 Update `sidebars.js` to modify:
 
 - Documentation structure
@@ -103,6 +105,7 @@ Update `sidebars.js` to modify:
 - Page ordering
 
 ### Site Configuration
+
 Modify `docusaurus.config.js` for:
 
 - Site metadata
@@ -121,6 +124,6 @@ Modify `docusaurus.config.js` for:
 
 ## 🔗 Links
 
-- **Live Preview**: http://localhost:3000 (when running)
-- **Docusaurus Docs**: https://docusaurus.io/docs
+- **Live Preview**: <http://localhost:3000> (when running)
+- **Docusaurus Docs**: <https://docusaurus.io/docs>
 - **Main Project**: ../README.md

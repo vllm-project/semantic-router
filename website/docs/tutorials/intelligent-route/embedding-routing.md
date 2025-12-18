@@ -132,26 +132,31 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Real-World Use Cases
 
 ### 1. Customer Support (Scalable Categories)
+
 **Problem**: Need to add new support categories weekly without retraining models
 **Solution**: Add new categories by updating keyword lists, embeddings handle semantic matching
 **Impact**: Deploy new categories in minutes vs weeks for model retraining
 
 ### 2. E-commerce Support (Fast Semantic Matching)
+
 **Problem**: "Where's my order?" vs "track package" vs "shipping status" all mean the same
 **Solution**: Gemma embeddings (10-20ms) route all variations to order tracking category
 **Impact**: 95% accuracy with 10-20ms latency, handles 5K+ queries/sec
 
 ### 3. SaaS Product Inquiries (Flexible Routing)
+
 **Problem**: Users ask about pricing in 100+ different ways
 **Solution**: Semantic similarity matches all variations to "pricing information" keywords
 **Impact**: Single category handles all pricing queries without explicit rules
 
 ### 4. Startup Iteration (Rapid Category Updates)
+
 **Problem**: Product evolves rapidly, need to adjust categories daily
 **Solution**: Update embedding keywords in config, no model retraining required
 **Impact**: Category updates in seconds vs days for fine-tuning
 
 ### 5. Multilingual Platform (Semantic Understanding)
+
 **Problem**: Same question in English, Spanish, Chinese needs same routing
 **Solution**: Embeddings capture cross-lingual semantics automatically
 **Impact**: Single category definition works across languages

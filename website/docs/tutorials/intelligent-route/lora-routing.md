@@ -193,26 +193,31 @@ Check the router logs to confirm the correct LoRA adapter is selected for each q
 ## Real-World Use Cases
 
 ### 1. Healthcare Platform (Domain Routing + LoRA)
+
 **Problem**: Medical queries need specialized adapters, but users don't know which to use
 **Solution**: Domain routing classifies into diagnosis/pharmacy/mental-health, routes to corresponding LoRA adapters
 **Impact**: Automatic adapter selection, 70GB memory vs 210GB for 3 full models
 
 ### 2. Legal Tech (Keyword Routing + LoRA for Compliance)
+
 **Problem**: Compliance requires auditable routing to jurisdiction-specific legal adapters
 **Solution**: Keyword routing detects "US law"/"EU law"/"contract" keywords, routes to compliant LoRA adapters
 **Impact**: 100% auditable routing decisions, 95% citation accuracy with specialized adapters
 
 ### 3. Customer Support (Embedding Routing + LoRA)
+
 **Problem**: Support queries span IT/HR/finance, users phrase questions in many ways
 **Solution**: Embedding routing matches semantic intent, routes to department-specific LoRA adapters
 **Impact**: Handles paraphrases, single endpoint serves all departments with &lt;10ms adapter switching
 
 ### 4. EdTech Platform (Domain Routing + LoRA)
+
 **Problem**: Students ask math/science/literature questions, need subject-specific tutors
 **Solution**: Domain routing classifies academic subject, routes to subject-specific LoRA adapters
 **Impact**: 4 specialized tutors for cost of 1.2 base models, 70% cost savings
 
 ### 5. Multi-Tenant SaaS (MCP Routing + LoRA)
+
 **Problem**: Each tenant has custom LoRA adapters, need dynamic routing based on tenant ID
 **Solution**: MCP routing queries tenant database, returns tenant-specific LoRA adapter name
 **Impact**: 1000+ tenants with custom adapters, private routing logic, A/B testing support

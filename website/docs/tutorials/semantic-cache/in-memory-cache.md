@@ -33,6 +33,7 @@ graph TB
 ## How It Works
 
 ### Write Path
+
 When caching a response:
 
 1. Generate embedding for the query using the configured embedding model
@@ -41,6 +42,7 @@ When caching a response:
 4. Evict oldest/least-used entries if max_entries limit is reached
 
 ### Read Path
+
 When searching for a cached response:
 
 1. Generate embedding for the incoming query
@@ -49,6 +51,7 @@ When searching for a cached response:
 4. Otherwise, forward to LLM and cache the new response (cache miss)
 
 ### Search Methods
+
 The cache supports two search methods:
 
 - **Linear Search**: Compares query embedding against all cached embeddings

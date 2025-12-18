@@ -15,18 +15,23 @@ The deployment consists of three main components:
 Integrating vSR with Istio and GIE provides a robust, Kubernetes-native solution for serving LLMs with several key benefits:
 
 ### 1. **Kubernetes-Native LLM Management**
+
 Manage your models, routing, and scaling policies directly through `kubectl` using familiar Custom Resource Definitions (CRDs).
 
 ### 2. **Intelligent Model and Replica Routing**
+
 Combine vSR's prompt-based model routing with GIE's smart, load-aware replica selection. This ensures requests are sent not only to the right model but also to the healthiest replica, all in a single, efficient hop.
 
 ### 3. **Protect Your Models from Overload**
+
 The built-in scheduler tracks GPU load and request queues, automatically shedding traffic to prevent your model servers from crashing under high demand.
 
 ### 4. **Deep Observability**
+
 Gain insights from both high-level Gateway metrics and detailed vSR performance data (like token usage and classification accuracy) to monitor and troubleshoot your entire AI stack.
 
 ### 5. **Secure Multi-Tenancy**
+
 Isolate tenant workloads using standard Kubernetes namespaces and `HTTPRoutes`. Apply rate limits and other policies while sharing a common, secure gateway infrastructure.
 
 ## Supported Backend Models

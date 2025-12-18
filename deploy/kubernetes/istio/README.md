@@ -2,7 +2,7 @@
 
 This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vSR) with Istio Gateway on Kubernetes. Istio Gateway uses Envoy under the covers so it is possible to use vSR with it. Istio is a common choice for the gateway when using Kubernetes Gateway API Inference Extension and in the LLM-D project as well as in common Kubernetes distributions such as Red Hat Openshift. In our experience, there are low level differences in how different Envoy based gateways process the ExtProc protocol to assist with LLM inference, hence this guide and some others cover the specific case of vSR working with an Istio based gateway.
 
-There are multiple deployment guides in this repo related to vSR+Istio deployments. This current document describes deployment of vSR with Istio gateway and two local LLMs served using vLLM. Additional deployment guides in this repo build on this deployment to add support for integrating LLM-D and to illustrate support for routing to remote/ public cloud LLMs. Those topics are covered by other followup deployment guides in this repo ([llm-d guide](../llmd-base/README.md) and [public llm routing guide](../llmd-base/llmd+public-llm/README.md). 
+There are multiple deployment guides in this repo related to vSR+Istio deployments. This current document describes deployment of vSR with Istio gateway and two local LLMs served using vLLM. Additional deployment guides in this repo build on this deployment to add support for integrating LLM-D and to illustrate support for routing to remote/ public cloud LLMs. Those topics are covered by other followup deployment guides in this repo ([llm-d guide](../llmd-base/README.md) and [public llm routing guide](../llmd-base/llmd+public-llm/README.md).
 
 With that background context in mind, we now follow this guide to describe the vSR + Istio + locally hosted LLMs use case. After this guide, the reader may then optionally choose to follow up with the additional guides linked above to deploy the more advanced use cases.
 
@@ -20,17 +20,17 @@ The deployment consists of:
 Before starting, ensure you have the following tools installed:
 
 - [Docker](https://docs.docker.com/get-docker/) - Container runtime
-- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes 
+- [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
 
-Either minikube or kind works to deploy a local kubernetes cluster needed for this exercise so you only need one of these two. We use minikube in the description below but the same steps should work with a Kind cluster once the cluster is created in Step 1. 
+Either minikube or kind works to deploy a local kubernetes cluster needed for this exercise so you only need one of these two. We use minikube in the description below but the same steps should work with a Kind cluster once the cluster is created in Step 1.
 
 We will also deploy two different LLMs in this exercise to illustrate the semantic routing and model routing function more clearly so you ideally you should run this on a machine that has GPU support to run the two models used in this exercise and adequate memory and storage for these models. You can also use equivalent steps on a smaller server that runs smaller LLMs on a CPU based server without GPUs.
 
 ## Step 1: Create Minikube Cluster
 
-Create a local Kubernetes cluster via minikube (or equivalently via Kind). 
+Create a local Kubernetes cluster via minikube (or equivalently via Kind).
 
 ```bash
 # Create cluster  
@@ -108,7 +108,7 @@ kubectl get pods -n istio-system
 
 ## Step 4: Update vsr config
 
-The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. Ensure that the models in the config file match the models you are using and that the vllm_endpoints in the file match the ip/ port of the llm kubernetes services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features such as PromptGuard or ToolCalling. 
+The file deploy/kubernetes/istio/config.yaml will get used to configure vsr when it is installed in the next step. Ensure that the models in the config file match the models you are using and that the vllm_endpoints in the file match the ip/ port of the llm kubernetes services you are running. It is usually good to start with basic features of vsr such as prompt classification and model routing before experimenting with other features such as PromptGuard or ToolCalling.
 
 ## Step 5: Deploy vLLM Semantic Router
 
@@ -134,7 +134,7 @@ kubectl apply -f deploy/kubernetes/istio/destinationrule.yaml
 kubectl apply -f deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-## Step 7: Install gateway routes 
+## Step 7: Install gateway routes
 
 Install HTTPRoutes in the Istio gateway.
 
@@ -142,8 +142,9 @@ Install HTTPRoutes in the Istio gateway.
 kubectl apply -f deploy/kubernetes/istio/httproute-llama3-8b.yaml
 kubectl apply -f deploy/kubernetes/istio/httproute-phi4-mini.yaml
 ```
- 
+
 ## Step 8: Testing the Deployment
+
 To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
 
 ```bash
@@ -151,7 +152,7 @@ minikube service inference-gateway-istio --url
 http://192.168.49.2:30913
 ```
 
-Now we can send LLM prompts via curl to http://192.168.49.2:30913 to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case.
+Now we can send LLM prompts via curl to <http://192.168.49.2:30913> to access the Istio gateway  which will then use information from vLLM semantic router to dynamically route to one of the two LLMs we are using as backends in this case.
 
 ### Send Test Requests
 

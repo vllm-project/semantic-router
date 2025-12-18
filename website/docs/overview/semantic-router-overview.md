@@ -117,7 +117,7 @@ graph TB
 **Key Innovations:**
 
 - **Human Preference Training**: Uses Chatbot Arena data where users compare model outputs
-- **Multiple Router Architectures**: 
+- **Multiple Router Architectures**:
   - Similarity-weighted ranking
   - Matrix factorization
   - BERT classifiers
@@ -161,7 +161,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     participant Code as Code Specialist
     participant Creative as Creative Writer
     participant General as General Model
-    
+
     User->>Router: "Solve this calculus problem..."
     Router->>Router: Analyze query intent
     Router->>Math: Route to math specialist

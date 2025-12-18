@@ -5,6 +5,7 @@ This directory contains example outputs showing what you'll see when running per
 ## 📁 Files in This Directory
 
 ### 1. **benchmark-output-example.txt**
+
 Raw benchmark output from `make perf-bench-quick`
 
 **Shows:**
@@ -24,6 +25,7 @@ BenchmarkClassifyBatch_Size1-8    100  10245678 ns/op  10.25 ms/op  2456 B/op  4
 ---
 
 ### 2. **comparison-example.txt**
+
 Baseline comparison output from `make perf-compare`
 
 **Shows:**
@@ -45,6 +47,7 @@ Baseline comparison output from `make perf-compare`
 ---
 
 ### 3. **example-report.json**
+
 Machine-readable JSON report
 
 **Use for:**
@@ -68,6 +71,7 @@ Machine-readable JSON report
 ---
 
 ### 4. **example-report.md**
+
 Human-readable Markdown report
 
 **Use for:**
@@ -87,6 +91,7 @@ Human-readable Markdown report
 ---
 
 ### 5. **example-report.html**
+
 Beautiful HTML report with styling
 
 **Features:**
@@ -106,6 +111,7 @@ open perf/testdata/examples/example-report.html
 ---
 
 ### 6. **pr-comment-example.md**
+
 GitHub PR comment format
 
 **Shows:**
@@ -121,6 +127,7 @@ GitHub PR comment format
 ---
 
 ### 7. **pprof-example.txt**
+
 CPU profiling output and interpretation
 
 **Shows:**

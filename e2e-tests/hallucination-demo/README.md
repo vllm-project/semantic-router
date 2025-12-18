@@ -45,12 +45,14 @@ make demo-hallucination
 ## Components
 
 ### mock_vllm_toolcall.py
+
 Mock LLM server that:
 
 - Returns `tool_calls` on first request (to invoke web_search)
 - Returns hallucinated responses on follow-up (with tool results)
 
 ### mock_web_search.py
+
 Mock search service that returns ground truth context:
 
 - Eiffel Tower facts
@@ -58,6 +60,7 @@ Mock search service that returns ground truth context:
 - Apple Inc. founding info
 
 ### chat_client.py
+
 Interactive CLI client that:
 
 - Sends questions through the semantic router

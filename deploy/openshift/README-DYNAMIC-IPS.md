@@ -100,6 +100,7 @@ oc exec deployment/semantic-router -c semantic-router -- \
 ## Configuration Files
 
 ### Template: config-split.yaml
+
 Contains **placeholder IPs** that get replaced:
 
 ```yaml
@@ -113,6 +114,7 @@ vllm_endpoints:
 ```
 
 ### Generated: ConfigMap
+
 Contains **actual ClusterIPs** discovered during deployment:
 
 ```yaml

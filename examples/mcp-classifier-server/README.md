@@ -132,7 +132,7 @@ github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp/api
      }
    }
    ```
-   
+
    The `category_system_prompts` and `category_descriptions` fields are optional but recommended.
    Per-category system prompts allow the MCP server to provide specialized instructions for each
    category that the router can inject when processing queries in that specific category.
@@ -220,7 +220,7 @@ python3 server_embedding.py --http --port 8090
 ### Features
 
 - **Qwen3-Embedding-0.6B** model with 1024-dimensional embeddings
-- **Milvus vector database** for fast similarity search 
+- **Milvus vector database** for fast similarity search
 - **RAG-style classification** using 95 training examples
 - **Same MCP protocol** as regex server (drop-in replacement)
 - **Higher accuracy** - Understands semantic meaning, not just patterns

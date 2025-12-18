@@ -161,31 +161,37 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Real-World Use Cases
 
 ### 1. Complex Domain Classification (High Accuracy)
+
 **Problem**: Nuanced legal/medical queries need better accuracy than BERT/embeddings
 **Solution**: MCP uses GPT-4 with in-context examples for classification
 **Impact**: 98% accuracy vs 85% with BERT, baseline for quality comparison
 
 ### 2. Proprietary Classification Logic (Private)
+
 **Problem**: Classification logic contains trade secrets, can't use external services
 **Solution**: MCP server runs in private VPC, keeps all logic and data internal
 **Impact**: Full data privacy, no external API calls
 
 ### 3. Custom Business Rules (Extensible)
+
 **Problem**: Need to route based on user tier, location, time, A/B tests
 **Solution**: MCP combines LLM classification with database queries and business logic
 **Impact**: Flexible routing without modifying router code
 
 ### 4. Rapid Experimentation (Extensible)
+
 **Problem**: Data science team needs to test new classification approaches daily
 **Solution**: MCP server updated independently, router unchanged
 **Impact**: Deploy new classification logic in minutes vs days
 
 ### 5. Multi-Tenant Platform (Extensible + Private)
+
 **Problem**: Each customer needs custom classification, data must stay isolated
 **Solution**: MCP loads tenant-specific models/rules, enforces data isolation
 **Impact**: 1000+ tenants with custom logic, full data privacy
 
 ### 6. Hybrid Approach (High Accuracy + Extensible)
+
 **Problem**: Need LLM accuracy for edge cases, fast routing for common queries
 **Solution**: MCP uses cached responses for common patterns, LLM for novel queries
 **Impact**: 95% cache hit rate, LLM accuracy on long tail

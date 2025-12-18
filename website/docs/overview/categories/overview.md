@@ -103,15 +103,19 @@ Different categories can trigger specific processing filters:
 ## Benefits of Category-Based Routing
 
 ### 🎯 **Precision**
+
 Route queries to models specifically optimized for their domain
 
 ### ⚡ **Performance**
+
 Reduce latency by avoiding over-powered models for simple queries
 
 ### 💰 **Cost Optimization**
+
 Use expensive reasoning models only when necessary
 
 ### 🔧 **Flexibility**
+
 Easy configuration of domain-specific behaviors and rules
 
 ### 📊 **Observability**

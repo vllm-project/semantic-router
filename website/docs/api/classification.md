@@ -105,6 +105,7 @@ curl -X GET http://localhost:8080/info/classifier
 Classify user queries into routing categories.
 
 ### Endpoint
+
 `POST /classify/intent`
 
 ### Request Format
@@ -166,6 +167,7 @@ The current model supports the following 14 categories:
 Detect personally identifiable information in text.
 
 ### Endpoint
+
 `POST /classify/pii`
 
 ### Request Format
@@ -216,6 +218,7 @@ Detect personally identifiable information in text.
 Detect potential jailbreak attempts and adversarial prompts.
 
 ### Endpoint
+
 `POST /classify/security`
 
 ### Request Format
@@ -254,6 +257,7 @@ Detect potential jailbreak attempts and adversarial prompts.
 Perform multiple classification tasks in a single request.
 
 ### Endpoint
+
 `POST /classify/combined`
 
 ### Request Format
@@ -312,6 +316,7 @@ Perform multiple classification tasks in a single request.
 Process multiple texts in a single request using **high-confidence LoRA models** for maximum accuracy and efficiency. The API automatically discovers and uses the best available models (BERT, RoBERTa, or ModernBERT) with LoRA fine-tuning, delivering confidence scores of 0.99+ for in-domain texts.
 
 ### Endpoint
+
 `POST /classify/batch`
 
 ### Request Format
@@ -495,6 +500,7 @@ The API automatically scans the `./models/` directory and selects the best avail
 Get information about loaded classification models.
 
 #### Endpoint
+
 `GET /info/models`
 
 ### Response Format
@@ -563,6 +569,7 @@ When models are not loaded, the API will return placeholder responses for testin
 Get detailed information about classifier capabilities and configuration.
 
 #### Generic Categories via MMLU-Pro Mapping
+
 You can now use free-style, generic category names in your config and map them to the MMLU-Pro categories used by the classifier. The classifier will translate its MMLU predictions into your generic categories for routing and reasoning decisions.
 
 Example configuration:
@@ -637,6 +644,7 @@ Notes:
 - When no mapping is found for a predicted MMLU category, the original MMLU name is used as-is.
 
 #### Endpoint
+
 `GET /info/classifier`
 
 #### Response Format
@@ -725,6 +733,7 @@ Notes:
 Get real-time classification performance metrics.
 
 ### Endpoint
+
 `GET /metrics/classification`
 
 ### Response Format
@@ -756,6 +765,7 @@ Get real-time classification performance metrics.
 ## Configuration Management
 
 ### Get Current Configuration
+
 `GET /config/classification`
 
 ```json
@@ -779,6 +789,7 @@ Get real-time classification performance metrics.
 ```
 
 ### Update Configuration
+
 `PUT /config/classification`
 
 ```json
@@ -1019,6 +1030,7 @@ const api = new ClassificationAPI();
 Development and testing endpoints for model validation:
 
 #### Test Classification Accuracy
+
 `POST /test/accuracy`
 
 ```json
@@ -1032,6 +1044,7 @@ Development and testing endpoints for model validation:
 ```
 
 #### Benchmark Performance
+
 `POST /test/benchmark`
 
 ```json

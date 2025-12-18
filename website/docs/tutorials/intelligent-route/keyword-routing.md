@@ -108,26 +108,31 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 ## Real-World Use Cases
 
 ### 1. Financial Services (Transparent Compliance)
+
 **Problem**: Regulators require explainable routing decisions for audit trails
 **Solution**: Keyword rules provide clear "why" for each routing decision (e.g., "SSN" keyword → secure handler)
 **Impact**: Passed SOC2 audit, complete decision transparency
 
 ### 2. Healthcare Platform (Compliant PII Detection)
+
 **Problem**: HIPAA requires deterministic, auditable PII detection
 **Solution**: AND operator detects multiple PII indicators with documented rules
 **Impact**: 100% deterministic, full audit trail for compliance
 
 ### 3. High-Frequency Trading (Sub-millisecond Routing)
+
 **Problem**: Need &lt;1ms classification for real-time market data routing
 **Solution**: Keyword matching provides instant classification without ML overhead
 **Impact**: 0.1ms latency, handles 100K+ requests/sec
 
 ### 4. Government Services (Interpretable Rules)
+
 **Problem**: Citizens need to understand why requests were routed/rejected
 **Solution**: Clear keyword rules can be explained in plain language
 **Impact**: Reduced complaints, transparent decision-making
 
 ### 5. Enterprise Security (Transparent Threat Detection)
+
 **Problem**: Security team needs to understand why queries were flagged
 **Solution**: Explicit keyword/regex rules for threat patterns with clear documentation
 **Impact**: Security team can validate and update rules confidently
