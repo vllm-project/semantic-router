@@ -10,6 +10,7 @@ _run:
 		-f tools/make/rust.mk \
 		-f tools/make/build-run-test.mk \
 		-f tools/make/docs.mk \
+		-f tools/make/dashboard.mk \
 		-f tools/make/linter.mk \
 		-f tools/make/milvus.mk \
 		-f tools/make/redis.mk \

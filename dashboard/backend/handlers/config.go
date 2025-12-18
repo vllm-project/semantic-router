@@ -71,7 +71,7 @@ func UpdateConfigHandler(configPath string) http.HandlerFunc {
 		}
 
 		// Write to file
-		if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
+		if err := os.WriteFile(configPath, yamlData, 0o644); err != nil {
 			log.Printf("Error writing config file: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to write config file: %v", err), http.StatusInternalServerError)
 			return
@@ -80,6 +80,8 @@ func UpdateConfigHandler(configPath string) http.HandlerFunc {
 		log.Printf("Configuration updated successfully")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Configuration updated successfully"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Configuration updated successfully"}); err != nil {
+			log.Printf("Error encoding response: %v", err)
+		}
 	}
 }

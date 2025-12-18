@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,6 +16,7 @@
     "reactflow": "^11.11.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.18.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
@@ -24,7 +25,9 @@
     "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^16.1.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.45.0",
     "vite": "^5.4.11"
   }
 }

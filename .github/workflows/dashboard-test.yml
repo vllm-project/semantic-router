@@ -1,0 +1,85 @@
+name: Dashboard Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual triggering
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Use changes filter to detect dashboard changes
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  dashboard-test:
+    needs: changes
+    if: >-
+      ${{ !github.event.pull_request.draft
+          && needs.changes.outputs.dashboard == 'true' }}
+    runs-on: ubuntu-latest
+    name: Dashboard Lint and Type Check
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "23"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Cache Node.js dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            dashboard/frontend/node_modules
+          key: ${{ runner.os }}-node-dashboard-${{ hashFiles('dashboard/frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-dashboard-
+
+      - name: Cache Go dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-dashboard-${{ hashFiles('dashboard/backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-dashboard-
+
+      - name: Set up golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.5.0
+          install-mode: binary
+          args: --help
+
+      - name: Run dashboard checks
+        run: make dashboard-check
+
+      - name: Build dashboard
+        run: make dashboard-build
+
+      - name: Show results on failure
+        if: failure()
+        run: |
+          echo "::error::Dashboard checks failed. Please fix the issues and commit again."
+          echo ""
+          echo "To run checks locally:"
+          echo "  make dashboard-check"
+          echo ""
+          echo "To auto-fix lint issues:"
+          echo "  make dashboard-lint-fix"
