@@ -35,3 +35,6 @@ RUN pip install --break-system-packages shellcheck-py
 
 # Golangci-lint
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
+
+# Makefile Check
+RUN go install github.com/checkmake/checkmake/cmd/checkmake@latest
