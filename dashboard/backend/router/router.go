@@ -55,9 +55,18 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		})
 
 		// Proxy for Grafana static assets (no prefix stripping)
-		grafanaStaticProxy, _ = proxy.NewReverseProxy(cfg.GrafanaURL, "", false)
+		grafanaStaticProxy, err = proxy.NewReverseProxy(cfg.GrafanaURL, "", false)
+		if err != nil {
+			log.Printf("Warning: failed to create Grafana static proxy: %v", err)
+			grafanaStaticProxy = nil
+		}
 		mux.HandleFunc("/public/", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if grafanaStaticProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"Grafana static proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			grafanaStaticProxy.ServeHTTP(w, r)
@@ -66,11 +75,20 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if grafanaStaticProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"Grafana static proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			grafanaStaticProxy.ServeHTTP(w, r)
 		})
 
-		log.Printf("Grafana proxy configured: %s", cfg.GrafanaURL)
-		log.Printf("Grafana static assets proxied: /public/, /avatar/")
+		if grafanaStaticProxy != nil {
+			log.Printf("Grafana proxy configured: %s", cfg.GrafanaURL)
+			log.Printf("Grafana static assets proxied: /public/, /avatar/")
+		} else {
+			log.Printf("Grafana proxy configured: %s (static proxy failed to initialize)", cfg.GrafanaURL)
+		}
 	} else {
 		mux.HandleFunc("/embedded/grafana/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -80,11 +98,34 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		log.Printf("Warning: Grafana URL not configured")
 	}
 
+	// OpenWebUI static proxy (needs to be set up early for the smart /api/ router below)
+	var openwebuiStaticProxy *httputil.ReverseProxy
+	if cfg.OpenWebUIURL != "" {
+		var err error
+		openwebuiStaticProxy, err = proxy.NewReverseProxy(cfg.OpenWebUIURL, "", false)
+		if err != nil {
+			log.Printf("Warning: failed to create OpenWebUI static proxy: %v", err)
+			openwebuiStaticProxy = nil
+		}
+	}
+
 	// Jaeger API proxy (needs to be set up early for the smart router below)
 	var jaegerAPIProxy *httputil.ReverseProxy
+	var jaegerStaticProxy *httputil.ReverseProxy
 	if cfg.JaegerURL != "" {
 		// Create proxy for Jaeger API (no prefix stripping for /api/*)
-		jaegerAPIProxy, _ = proxy.NewReverseProxy(cfg.JaegerURL, "", false)
+		var err error
+		jaegerAPIProxy, err = proxy.NewReverseProxy(cfg.JaegerURL, "", false)
+		if err != nil {
+			log.Printf("Warning: failed to create Jaeger API proxy: %v", err)
+			jaegerAPIProxy = nil
+		}
+		// Create proxy for Jaeger static assets (reused in handlers)
+		jaegerStaticProxy, err = proxy.NewReverseProxy(cfg.JaegerURL, "", false)
+		if err != nil {
+			log.Printf("Warning: failed to create Jaeger static proxy: %v", err)
+			jaegerStaticProxy = nil
+		}
 	}
 
 	// Chat UI proxy (exposed early for smart /api routing and root-level assets)
@@ -92,7 +133,12 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	var chatUIProxy *httputil.ReverseProxy
 	if cfg.ChatUIURL != "" {
 		// Root-level proxy (no prefix stripping) for assets and API
-		chatUIProxy, _ = proxy.NewReverseProxy(cfg.ChatUIURL, "", false)
+		var err error
+		chatUIProxy, err = proxy.NewReverseProxy(cfg.ChatUIURL, "", false)
+		if err != nil {
+			log.Printf("Warning: failed to create ChatUI proxy: %v", err)
+			chatUIProxy = nil
+		}
 		// Main UI under /embedded/chatui with prefix stripping
 		cup, err := proxy.NewReverseProxy(cfg.ChatUIURL, "/embedded/chatui", false)
 		if err != nil {
@@ -110,17 +156,16 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			}
 			cup.ServeHTTP(w, r)
 		})
-		// Static assets commonly used by HF Chat UI (SvelteKit/Next)
-		mux.HandleFunc("/_app/", func(w http.ResponseWriter, r *http.Request) {
-			if middleware.HandleCORSPreflight(w, r) {
-				return
-			}
-			log.Printf("Proxying Chat UI asset: %s", r.URL.Path)
-			chatUIProxy.ServeHTTP(w, r)
-		})
+		// Note: /_app/ is also used by OpenWebUI, so it's handled by OpenWebUI's handler
+		// (registered later) which checks referer and routes to ChatUI if needed
 		// SvelteKit static assets
 		mux.HandleFunc("/_next/", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			log.Printf("Proxying Chat UI Next.js asset: %s", r.URL.Path)
@@ -131,10 +176,20 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		mux.HandleFunc("/manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			chatUIProxy.ServeHTTP(w, r)
@@ -143,10 +198,20 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			chatUIProxy.ServeHTTP(w, r)
@@ -158,12 +223,22 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			log.Printf("Proxying Chat UI conversation API: %s %s", r.Method, r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		// Handle /conversation/{id} for sending messages to a specific conversation
 		mux.HandleFunc("/conversation/", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			log.Printf("Proxying Chat UI conversation API: %s %s", r.Method, r.URL.Path)
@@ -173,11 +248,21 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			log.Printf("Proxying Chat UI conversations API: %s %s", r.Method, r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		mux.HandleFunc("/conversations/", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			log.Printf("Proxying Chat UI conversations API: %s %s", r.Method, r.URL.Path)
@@ -187,11 +272,21 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			log.Printf("Proxying Chat UI settings: %s %s", r.Method, r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		mux.HandleFunc("/settings/", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			log.Printf("Proxying Chat UI settings: %s %s", r.Method, r.URL.Path)
@@ -219,11 +314,21 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				grafanaStaticProxy.ServeHTTP(w, r)
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			log.Printf("Proxying Chat UI login: %s %s (contentType=%s)", r.Method, r.URL.Path, contentType)
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			log.Printf("Proxying Chat UI logout: %s %s", r.Method, r.URL.Path)
@@ -234,12 +339,22 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
+				return
+			}
 			log.Printf("Proxying Chat UI shared conversation: %s %s", r.Method, r.URL.Path)
 			chatUIProxy.ServeHTTP(w, r)
 		})
 		// Chat UI assets folder (logo, images, etc.)
 		mux.HandleFunc("/chatui/", func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if chatUIProxy == nil {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"ChatUI proxy not configured"}`, http.StatusBadGateway)
 				return
 			}
 			log.Printf("Proxying Chat UI assets: %s", r.URL.Path)
@@ -280,6 +395,20 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			strings.HasPrefix(r.URL.Path, "/api/dependencies")) {
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
 			jaegerAPIProxy.ServeHTTP(w, r)
+			return
+		}
+		// Check if request is from OpenWebUI (by referer) and route to OpenWebUI API
+		referer := r.Header.Get("Referer")
+		if openwebuiStaticProxy != nil && referer != "" && strings.Contains(referer, "/embedded/openwebui") {
+			log.Printf("Routing to OpenWebUI API: %s (referer: %s)", r.URL.Path, referer)
+			openwebuiStaticProxy.ServeHTTP(w, r)
+			return
+		}
+		// Check if path is a known OpenWebUI API endpoint (even without referer)
+		// OpenWebUI uses /api/config for configuration
+		if openwebuiStaticProxy != nil && strings.HasPrefix(r.URL.Path, "/api/config") {
+			log.Printf("Routing to OpenWebUI API: %s (by path pattern)", r.URL.Path)
+			openwebuiStaticProxy.ServeHTTP(w, r)
 			return
 		}
 		// Prefer Chat UI API when available (to avoid returning HTML from other backends)
@@ -354,18 +483,19 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		})
 
 		// Jaeger static assets are typically served under /static/* from the same origin
-		// Provide a passthrough proxy without prefix stripping
-		jStatic, _ := proxy.NewReverseProxy(cfg.JaegerURL, "", false)
-		mux.Handle("/static/", jStatic)
+		// Note: /static/ is shared with OpenWebUI, so we handle it in OpenWebUI section with referer-based routing
 
 		// Jaeger /dependencies page (accessible directly, not under /embedded/jaeger)
-		mux.HandleFunc("/dependencies", func(w http.ResponseWriter, r *http.Request) {
-			if middleware.HandleCORSPreflight(w, r) {
-				return
-			}
-			log.Printf("Proxying Jaeger dependencies page: %s", r.URL.Path)
-			jStatic.ServeHTTP(w, r)
-		})
+		// Use the pre-created jaegerStaticProxy
+		if jaegerStaticProxy != nil {
+			mux.HandleFunc("/dependencies", func(w http.ResponseWriter, r *http.Request) {
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				log.Printf("Proxying Jaeger dependencies page: %s", r.URL.Path)
+				jaegerStaticProxy.ServeHTTP(w, r)
+			})
+		}
 
 		log.Printf("Jaeger proxy configured: %s; static assets proxied at /static/, /dependencies", cfg.JaegerURL)
 	} else {
@@ -377,7 +507,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		log.Printf("Info: Jaeger URL not configured (optional)")
 	}
 
-	// Open WebUI proxy (optional)
+	// Open WebUI proxy (optional) - MUST handle /static/ with referer-based routing for Jaeger compatibility
 	if cfg.OpenWebUIURL != "" {
 		op, err := proxy.NewReverseProxy(cfg.OpenWebUIURL, "/embedded/openwebui", true)
 		if err != nil {
@@ -395,7 +525,70 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			}
 			op.ServeHTTP(w, r)
 		})
+
+		// Static assets for OpenWebUI and Jaeger - route based on referer
+		mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			// Check referer to determine if request is from Jaeger or OpenWebUI
+			referer := r.Header.Get("Referer")
+			if referer != "" && strings.Contains(referer, "/embedded/jaeger") {
+				// Route to Jaeger if referer indicates Jaeger
+				if jaegerStaticProxy != nil {
+					log.Printf("Proxying Jaeger /static/ asset: %s (referer: %s)", r.URL.Path, referer)
+					jaegerStaticProxy.ServeHTTP(w, r)
+					return
+				}
+			}
+			// Default to OpenWebUI when it's configured
+			if openwebuiStaticProxy != nil {
+				log.Printf("Proxying OpenWebUI /static/ asset: %s (referer: %s)", r.URL.Path, referer)
+				openwebuiStaticProxy.ServeHTTP(w, r)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"OpenWebUI static proxy not configured"}`, http.StatusBadGateway)
+			}
+		})
+
+		// OpenWebUI also uses /_app/ for its main JS/CSS bundles
+		mux.HandleFunc("/_app/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			// Check Referer to determine if request is from OpenWebUI or ChatUI
+			referer := r.Header.Get("Referer")
+			isOpenWebUIRequest := referer != "" && strings.Contains(referer, "/embedded/openwebui")
+			isChatUIRequest := referer != "" && strings.Contains(referer, "/embedded/chatui")
+
+			// If referer indicates OpenWebUI, route to OpenWebUI
+			if isOpenWebUIRequest && openwebuiStaticProxy != nil {
+				log.Printf("Proxying OpenWebUI /_app/ asset: %s (referer: %s)", r.URL.Path, referer)
+				openwebuiStaticProxy.ServeHTTP(w, r)
+				return
+			}
+			// If referer indicates ChatUI, route to ChatUI (if configured)
+			if isChatUIRequest && chatUIProxy != nil {
+				log.Printf("Proxying Chat UI /_app/ asset: %s (referer: %s)", r.URL.Path, referer)
+				chatUIProxy.ServeHTTP(w, r)
+				return
+			}
+			// If no referer or unclear, try OpenWebUI first (since it's configured)
+			if openwebuiStaticProxy != nil {
+				log.Printf("Proxying /_app/ asset to OpenWebUI (no clear referer): %s (referer: %s)", r.URL.Path, referer)
+				openwebuiStaticProxy.ServeHTTP(w, r)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"error":"Service not available","message":"No handler available for /_app/"}`, http.StatusBadGateway)
+			}
+		})
+
 		log.Printf("Open WebUI proxy configured: %s", cfg.OpenWebUIURL)
+		if openwebuiStaticProxy != nil {
+			log.Printf("Open WebUI static assets proxied at: /static/, /_app/")
+		} else {
+			log.Printf("Open WebUI static assets proxy failed to initialize")
+		}
 	} else {
 		mux.HandleFunc("/embedded/openwebui/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

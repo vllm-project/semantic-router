@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -42,7 +43,6 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 			p = "/" + p
 		}
 		r.URL.Path = p
-		r.Host = targetURL.Host
 
 		// Capture incoming Origin for downstream CORS decisions
 		incomingOrigin := r.Header.Get("Origin")
@@ -62,8 +62,49 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		}
 
 		// Set Origin header to match the target URL for iframe embedding
-		// This is required for services like Grafana and Chat UI to accept the iframe embedding
+		// This is required for services like Grafana, Chat UI, and OpenWebUI to accept the iframe embedding
+		// and pass CSRF/Origin validation checks. The original Origin is preserved in X-Forwarded-Origin
+		// for CORS response handling. This override is intentional and necessary for iframe embedding to work.
 		r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
+
+		// Set X-Forwarded-* headers to preserve client information
+		// These headers should reflect the original client request, not the target service
+		r.Header.Set("X-Forwarded-Host", r.Host)
+
+		// Determine the original protocol (http or https)
+		proto := "http"
+		if r.TLS != nil {
+			proto = "https"
+		}
+		// Also check X-Forwarded-Proto from upstream (if we're behind another proxy)
+		if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+			proto = forwardedProto
+		}
+		r.Header.Set("X-Forwarded-Proto", proto)
+
+		// Extract client IP from RemoteAddr (strip port if present)
+		var clientIP string
+		if r.RemoteAddr != "" {
+			ip, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				// If SplitHostPort fails, RemoteAddr might not have a port
+				clientIP = r.RemoteAddr
+			} else {
+				clientIP = ip
+			}
+		}
+
+		// Append to existing X-Forwarded-For if present (we might be behind another proxy)
+		if clientIP != "" {
+			if existing := r.Header.Get("X-Forwarded-For"); existing != "" {
+				r.Header.Set("X-Forwarded-For", existing+", "+clientIP)
+			} else {
+				r.Header.Set("X-Forwarded-For", clientIP)
+			}
+		}
+
+		// Set Host header to match target (some services check this)
+		r.Host = targetURL.Host
 
 		// Optionally forward Authorization header
 		if !forwardAuth {
