@@ -238,6 +238,11 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		It("should filter out tools below threshold with threshold=0.7", func() {
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.7}[0]
 
+			// Recreate router with new threshold
+			var err error
+			router, err = CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Use a very specific query to test high threshold
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 5)
 			Expect(err).NotTo(HaveOccurred())
@@ -251,6 +256,11 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		It("should include more tools with lower threshold=0.2", func() {
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
+			// Recreate router with new threshold
+			var err error
+			router, err = CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 5)
 			Expect(err).NotTo(HaveOccurred())
 			// Lower threshold should return more tools
@@ -259,6 +269,11 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		It("should return empty list when no tools meet high threshold", func() {
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
+
+			// Recreate router with new threshold
+			var err error
+			router, err = CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("xyzabc123", 5)
 			Expect(err).NotTo(HaveOccurred())
@@ -269,6 +284,11 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		It("should respect both topK and threshold constraints", func() {
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.5}[0]
 			cfg.ToolSelection.Tools.TopK = 2
+
+			// Recreate router with new threshold
+			var err error
+			router, err = CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather forecast", 2)
 			Expect(err).NotTo(HaveOccurred())
