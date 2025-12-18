@@ -14,7 +14,7 @@ import (
 func NewModelCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "model",
-		Short: "Manage router models",
+		Short: "Manage semantic router models",
 		Long: `Manage models used by the vLLM Semantic Router.
 
 This includes downloading, listing, validating, and removing models.

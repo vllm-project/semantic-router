@@ -45,7 +45,7 @@ func TestConfigCommandStructure(t *testing.T) {
 			for _, subcmd := range tt.subcommands {
 				found := false
 				for _, c := range cmd.Commands() {
-					if c.Use == subcmd {
+					if c.Name() == subcmd {
 						found = true
 						break
 					}

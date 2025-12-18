@@ -131,8 +131,8 @@ func TestGracefulShutdown(t *testing.T) {
 			t.Errorf("Failed to kill process: %v", err)
 		}
 
-		// Wait a bit
-		time.Sleep(100 * time.Millisecond)
+		// Wait for process to actually exit
+		_ = cmd.Wait()
 
 		// Verify process is gone
 		if err := cmd.Process.Signal(syscall.Signal(0)); err == nil {

@@ -114,6 +114,8 @@ func TestModelInfoCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rootCmd := &cobra.Command{Use: "vsr"}
+			rootCmd.PersistentFlags().StringP("output", "o", "table", "Output format")
+
 			modelCmd := NewModelCmd()
 			rootCmd.AddCommand(modelCmd)
 

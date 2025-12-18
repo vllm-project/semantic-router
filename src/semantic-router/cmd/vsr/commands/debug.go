@@ -83,7 +83,7 @@ Examples:
 func NewHealthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "health",
-		Short: "Check router health status",
+		Short: "Check router health",
 		Long: `Perform a quick health check of the router and its components.
 
 This is a lightweight check that verifies:
