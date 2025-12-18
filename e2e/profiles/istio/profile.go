@@ -349,7 +349,50 @@ func (p *Profile) configureNamespace(ctx context.Context, opts *framework.SetupO
 		return fmt.Errorf("failed to label namespace for sidecar injection: %w", err)
 	}
 
+	// Wait for Istio sidecar injector webhook to be ready
+	p.log("Waiting for Istio sidecar injector webhook to be ready...")
+	if err := p.waitForIstioWebhook(ctx, opts); err != nil {
+		return fmt.Errorf("failed to wait for Istio webhook: %w", err)
+	}
+
 	return nil
+}
+
+// waitForIstioWebhook waits for the Istio sidecar injector webhook to be ready
+func (p *Profile) waitForIstioWebhook(ctx context.Context, opts *framework.SetupOptions) error {
+	timeout := timeoutSidecarInjection
+	interval := 2 * time.Second
+	startTime := time.Now()
+
+	for {
+		cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", opts.KubeConfig,
+			"get", "mutatingwebhookconfiguration", "istio-sidecar-injector",
+			"-o", "jsonpath={.webhooks[0].clientConfig.service.name}")
+
+		output, err := cmd.Output()
+		if err == nil && strings.TrimSpace(string(output)) != "" {
+			endpointCmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", opts.KubeConfig,
+				"get", "endpoints", "istiod", "-n", istioNamespace,
+				"-o", "jsonpath={.subsets[0].addresses[0].ip}")
+
+			endpointOutput, endpointErr := endpointCmd.Output()
+			if endpointErr == nil && strings.TrimSpace(string(endpointOutput)) != "" {
+				p.log("✓ Istio sidecar injector webhook is ready")
+				time.Sleep(5 * time.Second)
+				return nil
+			}
+		}
+
+		if time.Since(startTime) >= timeout {
+			return fmt.Errorf("timeout waiting for Istio sidecar injector webhook")
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }
 
 // deploySemanticRouter deploys Semantic Router via Helm
@@ -362,7 +405,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	installOpts := helm.InstallOptions{
 		ReleaseName: semanticRouterDeployment,
 		Chart:       chartPath,
-		Namespace:   "vllm-semantic-router-system", // Use standard namespace
+		Namespace:   semanticRouterNamespace,
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
 			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
@@ -380,7 +423,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 
 	// Wait for deployment to be ready with sidecar injected
 	p.log("Waiting for Semantic Router deployment to be ready...")
-	if err := deployer.WaitForDeployment(ctx, "vllm-semantic-router-system", semanticRouterDeployment, timeoutSemanticRouterDeploy); err != nil {
+	if err := deployer.WaitForDeployment(ctx, semanticRouterNamespace, semanticRouterDeployment, timeoutSemanticRouterDeploy); err != nil {
 		return err
 	}
 
