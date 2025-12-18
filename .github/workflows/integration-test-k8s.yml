@@ -21,15 +21,63 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Detect which files changed to determine which profiles to test
+  changes:
+    uses: ./.github/workflows/ci-changes.yml
+
+  # Determine which profiles need to be tested based on file changes
+  determine-profiles:
+    needs: changes
+    runs-on: ubuntu-latest
+    outputs:
+      profiles: ${{ steps.set-matrix.outputs.profiles }}
+      should_run: ${{ steps.set-matrix.outputs.should_run }}
+    steps:
+      - id: set-matrix
+        run: |
+          # Run all profiles if common e2e code, core code changes, or manual/scheduled trigger
+          if [[ "${{ needs.changes.outputs.e2e_common }}" == "true" ]] || \
+             [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
+             [[ "${{ github.event_name }}" == "schedule" ]] || \
+             [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ "${{ github.event_name }}" == "push" ]]; then
+            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "llm-d", "istio", "production-stack"]' >> $GITHUB_OUTPUT
+            echo 'should_run=true' >> $GITHUB_OUTPUT
+            echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
+            exit 0
+          fi
+
+          # Only run affected profiles for PRs
+          profiles=()
+          [[ "${{ needs.changes.outputs.e2e_istio }}" == "true" ]] && profiles+=("istio")
+          [[ "${{ needs.changes.outputs.e2e_ai_gateway }}" == "true" ]] && profiles+=("ai-gateway")
+          [[ "${{ needs.changes.outputs.e2e_aibrix }}" == "true" ]] && profiles+=("aibrix")
+          [[ "${{ needs.changes.outputs.e2e_llm_d }}" == "true" ]] && profiles+=("llm-d")
+          [[ "${{ needs.changes.outputs.e2e_routing_strategies }}" == "true" ]] && profiles+=("routing-strategies")
+          [[ "${{ needs.changes.outputs.e2e_production_stack }}" == "true" ]] && profiles+=("production-stack")
+
+          # Convert to JSON array
+          if [ ${#profiles[@]} -eq 0 ]; then
+            echo 'profiles=[]' >> $GITHUB_OUTPUT
+            echo 'should_run=false' >> $GITHUB_OUTPUT
+            echo "No profile changes detected, skipping all e2e tests"
+          else
+            printf -v json '"%s",' "${profiles[@]}"
+            echo "profiles=[${json%,}]" >> $GITHUB_OUTPUT
+            echo 'should_run=true' >> $GITHUB_OUTPUT
+            echo "Running profiles: ${profiles[*]}"
+          fi
+
   integration-test:
-    if: ${{ !github.event.pull_request.draft }}
+    needs: [changes, determine-profiles]
+    if: ${{ needs.determine-profiles.outputs.should_run == 'true' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
-        # Note: dynamo profile requires GPU, run manually with: make e2e-test-dynamo
-        profile: [ai-gateway, aibrix, routing-strategies, llm-d, istio, production-stack]
+        # Dynamic profile matrix based on detected changes
+        profile: ${{ fromJson(needs.determine-profiles.outputs.profiles) }}
 
     steps:
       - name: Check out the repo

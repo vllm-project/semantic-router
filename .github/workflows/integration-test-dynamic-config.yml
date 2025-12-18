@@ -5,12 +5,31 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
+    paths:
+      # Only run when dynamic-config profile or common e2e code changes
+      - "e2e/profiles/dynamic-config/**"
+      - "e2e/pkg/**"
+      - "e2e/cmd/**"
+      - "e2e/testcases/**"
+      - "e2e/*.go"
+      - "e2e/go.mod"
+      - "e2e/go.sum"
+      - "src/**"
+      - "deploy/kubernetes/**"
     paths-ignore:
       - "website/**"
       - "**/*.md"
   push:
     branches:
       - main
+    paths:
+      - "e2e/profiles/dynamic-config/**"
+      - "e2e/pkg/**"
+      - "e2e/cmd/**"
+      - "e2e/testcases/**"
+      - "e2e/*.go"
+      - "src/**"
+      - "deploy/kubernetes/**"
     paths-ignore:
       - "website/**"
       - "**/*.md"

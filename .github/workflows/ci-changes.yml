@@ -20,6 +20,23 @@ on:
         value: ${{ jobs.filter.outputs.docker }}
       make:
         value: ${{ jobs.filter.outputs.make }}
+      # Per-profile e2e change detection
+      e2e_istio:
+        value: ${{ jobs.filter.outputs.e2e_istio }}
+      e2e_ai_gateway:
+        value: ${{ jobs.filter.outputs.e2e_ai_gateway }}
+      e2e_aibrix:
+        value: ${{ jobs.filter.outputs.e2e_aibrix }}
+      e2e_dynamic_config:
+        value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
+      e2e_llm_d:
+        value: ${{ jobs.filter.outputs.e2e_llm_d }}
+      e2e_routing_strategies:
+        value: ${{ jobs.filter.outputs.e2e_routing_strategies }}
+      e2e_production_stack:
+        value: ${{ jobs.filter.outputs.e2e_production_stack }}
+      e2e_common:
+        value: ${{ jobs.filter.outputs.e2e_common }}
 
 jobs:
   filter:
@@ -34,6 +51,15 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       make: ${{ steps.changes.outputs.make }}
+      # Per-profile e2e outputs
+      e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
+      e2e_ai_gateway: ${{ steps.changes.outputs.e2e_ai_gateway }}
+      e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
+      e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
+      e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
+      e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
+      e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
+      e2e_common: ${{ steps.changes.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +76,6 @@ jobs:
               - 'config/**'
               - 'scripts/**'
               - 'examples/**'
-              - 'e2e/**'
               - 'tools/**'
               - 'go.mod'
               - 'go.sum'
@@ -86,3 +111,26 @@ jobs:
             make:
               - 'Makefile'
               - 'tools/make/**'
+            # Per-profile e2e filters
+            e2e_istio:
+              - 'e2e/profiles/istio/**'
+            e2e_ai_gateway:
+              - 'e2e/profiles/ai-gateway/**'
+            e2e_aibrix:
+              - 'e2e/profiles/aibrix/**'
+            e2e_dynamic_config:
+              - 'e2e/profiles/dynamic-config/**'
+            e2e_llm_d:
+              - 'e2e/profiles/llm-d/**'
+            e2e_routing_strategies:
+              - 'e2e/profiles/routing-strategies/**'
+            e2e_production_stack:
+              - 'e2e/profiles/production-stack/**'
+            # Common e2e code that affects all profiles
+            e2e_common:
+              - 'e2e/pkg/**'
+              - 'e2e/cmd/**'
+              - 'e2e/testcases/**'
+              - 'e2e/*.go'
+              - 'e2e/go.mod'
+              - 'e2e/go.sum'
