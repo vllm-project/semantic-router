@@ -1,10 +1,6 @@
-# Model Registry: Maps local model paths to HuggingFace repository IDs
-# This is used for automatic model downloading at startup
-#
-# OPTIONAL: If not specified, the router will use built-in default mappings.
-# If specified, this configuration COMPLETELY REPLACES the default mappings.
-#
-# Default mappings (used when mom_registry is not specified):
+# You can override by specifying your own mappings below:
+# Uncomment and customize if you need different model mappings:
+# mom_registry:
 #   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
 #   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
 #   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
@@ -12,18 +8,7 @@
 #   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
 #   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
 #   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
-#   "models/mom-embedding-light": "google/embeddinggemma-300m"
-#
-# You can override by specifying your own mappings below:
-mom_registry:
-  "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
-  "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-  "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
-  "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
-  "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
-  "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
-  "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
-  "models/mom-embedding-flash": "google/embeddinggemma-300m"
+#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
 
 # Response API Configuration
 # Enables OpenAI Response API support with conversation chaining

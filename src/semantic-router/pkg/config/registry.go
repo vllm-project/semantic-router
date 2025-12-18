@@ -1,8 +1,8 @@
 package config
 
 // DefaultModelRegistry provides the default model registry mapping
-// Users can override this by specifying model_registry in their config.yaml
-// If model_registry is not specified in config.yaml, these defaults will be used
+// Users can override this by specifying mom_registry in their config.yaml
+// If mom_registry is not specified in config.yaml, these defaults will be used
 var DefaultModelRegistry = map[string]string{
 	"models/mom-domain-classifier":    "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
 	"models/mom-pii-classifier":       "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model",

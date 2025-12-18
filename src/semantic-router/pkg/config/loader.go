@@ -58,7 +58,7 @@ func Parse(configPath string) (*RouterConfig, error) {
 	}
 
 	// Apply default model registry if not specified in config
-	// If user specifies model_registry in config.yaml, it completely replaces the defaults
+	// If user specifies mom_registry in config.yaml, it completely replaces the defaults
 	if len(cfg.MoMRegistry) == 0 {
 		cfg.MoMRegistry = make(map[string]string)
 		for k, v := range DefaultModelRegistry {
