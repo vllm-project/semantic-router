@@ -77,18 +77,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl
-          pip install -r src/model_manager/requirements.txt
+          pip install -U "huggingface_hub[cli]" hf_transfer
 
-      - name: Download models
-        run: |
-          echo "Downloading minimal models for CI..."
-          make download-models
-        env:
-          CI: true
-          CI_MINIMAL_MODELS: true
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_HUB_ENABLE_HF_TRANSFER: 1
-          HF_HUB_DISABLE_TELEMETRY: 1
+      # Models are now automatically downloaded by the router at startup
+      # No need to pre-download models - the router will download them on first run
 
       - name: Start CI services
         run: |

@@ -2061,7 +2061,7 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 
 	// Check that we found the required models; skip if not present in this environment
 	if paths.IntentClassifier == "" || paths.PIIClassifier == "" || paths.SecurityClassifier == "" {
-		t.Logf("One or more required models not found (intent=%q, pii=%q, security=%q)", paths.IntentClassifier, paths.PIIClassifier, paths.SecurityClassifier)
+		t.Logf("One or more required models not found (intent=%q, pii=%q, Jailbreak=%q)", paths.IntentClassifier, paths.PIIClassifier, paths.SecurityClassifier)
 		t.Skip("Skipping real-models discovery assertions because required models are not present")
 	}
 

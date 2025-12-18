@@ -128,56 +128,10 @@ resources:
     memory: "3Gi"
     cpu: "1"
 
-# Init container for model downloading
-initContainer:
-  # -- Enable init container
-  enabled: true
-  # -- Init container image
-  image:
-    repository: ghcr.io/vllm-project/semantic-router/model-downloader
-    # Leave empty to default to the chart AppVersion; override with a pinned tag if desired
-    tag: ""
-    pullPolicy: IfNotPresent
-  # -- Resource limits for init container
-  resources:
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-    requests:
-      memory: "1Gi"
-      cpu: "500m"
-  # -- Additional environment variables for the init container.
-  # For example, to use a private Hugging Face model, you can pass a token
-  # and specify an endpoint using a pre-existing Kubernetes secret.
-  # env:
-  #   - name: HF_TOKEN
-  #     valueFrom:
-  #       secretKeyRef:
-  #         name: my-hf-secret
-  #         key: token
-  #   - name: HF_ENDPOINT
-  #     value: "https://huggingface.co"
-  env: []
-  # -- Models to download
-  models:
-    # Embedding models for semantic cache and tools
-    - name: Qwen3-Embedding-0.6B
-      repo: Qwen/Qwen3-Embedding-0.6B
-    - name: all-MiniLM-L12-v2
-      repo: sentence-transformers/all-MiniLM-L12-v2
-    - name: lora_intent_classifier_bert-base-uncased_model
-      repo: LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model
-    - name: category_classifier_modernbert-base_model
-      repo: LLM-Semantic-Router/category_classifier_modernbert-base_trained_model
-    - name: pii_classifier_modernbert-base_model
-      repo: LLM-Semantic-Router/pii_classifier_modernbert-base_model
-    - name: jailbreak_classifier_modernbert-base_model
-      repo: LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model
-    - name: pii_classifier_modernbert-base_presidio_token_model
-      repo: LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model
-    # LoRA PII detector (for auto-detection feature)
-    - name: lora_pii_detector_bert-base-uncased_model
-      repo: LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model
+# Models are now automatically downloaded by the router at startup
+# The router uses its built-in Go-based modeldownload package to download
+# models from HuggingFace based on the mom_registry configuration in config.yaml
+# No initContainer is needed anymore
 
 
 # Autoscaling configuration

@@ -64,7 +64,13 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 			modelsPath = config.CategoryModel.ModelID[:idx]
 		}
 	}
-	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifier(modelsPath)
+
+	// Pass mom_registry to auto-discovery for LoRA detection
+	var modelRegistry map[string]string
+	if config != nil {
+		modelRegistry = config.MoMRegistry
+	}
+	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifierWithRegistry(modelsPath, modelRegistry)
 	if ucErr != nil {
 		logging.Infof("Unified classifier auto-discovery failed: %v", ucErr)
 	}

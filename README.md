@@ -146,6 +146,19 @@ This command will:
 - ⏳ Wait for services to become healthy
 - 🌐 Show you all the endpoints and next steps
 
+### Automatic Model Download 🤖
+
+Semantic Router automatically downloads required models from HuggingFace at startup:
+
+```bash
+# Set environment variables (optional)
+export HF_ENDPOINT=https://huggingface.co
+export HF_TOKEN=your_token_here  # Only for gated models
+
+# Start the service - models download automatically
+vllm-sr --config config/config.yaml
+```
+
 For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
 
 ## Documentation 📖

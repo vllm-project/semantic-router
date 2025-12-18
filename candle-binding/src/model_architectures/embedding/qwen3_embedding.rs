@@ -1962,39 +1962,7 @@ impl Qwen3EmbeddingModel {
             })?;
         let norm = RmsNorm::new(norm_weight, config.rms_norm_eps);
 
-        // Step 8: Log model info and Flash Attention status
-        #[cfg(feature = "flash-attn")]
-        {
-            eprintln!("🚀 Flash Attention 2 enabled (feature flag active)");
-            eprintln!(
-                "   Status: Flash Attention 2 fully integrated (2-3x faster for long sequences)"
-            );
-            eprintln!("   Performance: Optimized for 8K-32K token sequences");
-        }
-
-        #[cfg(not(feature = "flash-attn"))]
-        {
-            if config.max_position_embeddings > 8192 {
-                eprintln!("ℹ️  Note: Using standard attention");
-                eprintln!(
-                    "   Sequence length: {}K tokens",
-                    config.max_position_embeddings / 1024
-                );
-            }
-        }
-
-        eprintln!("✅ Qwen3EmbeddingModel loaded successfully:");
-        eprintln!("   - Model: {}", model_path);
-        eprintln!("   - Layers: {}", config.num_hidden_layers);
-        eprintln!("   - Hidden size: {}", config.hidden_size);
-        eprintln!("   - Attention heads: {}", config.num_attention_heads);
-        eprintln!("   - KV heads (GQA): {}", config.num_key_value_heads);
-        eprintln!("   - Max seq length: {}", config.max_position_embeddings);
-        eprintln!("   - RoPE theta: {}", config.rope_theta);
-        eprintln!(
-            "   - Padding side: {:?} (CRITICAL: must be Left)",
-            tokenizer_config.padding_side
-        );
+        // Model loaded successfully - no verbose logging
 
         Ok(Self {
             embeddings,

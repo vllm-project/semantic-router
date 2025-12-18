@@ -412,7 +412,7 @@ func (uc *UnifiedClassifier) initializeLoRABindings() error {
 		return fmt.Errorf("loRA model paths not configured")
 	}
 
-	logging.Infof("Initializing LoRA models: Intent=%s, PII=%s, Security=%s, Architecture=%s",
+	logging.Debugf("Initializing LoRA models: Intent=%s, PII=%s, Jailbreak=%s, Architecture=%s",
 		uc.loraModelPaths.IntentPath, uc.loraModelPaths.PIIPath, uc.loraModelPaths.SecurityPath, uc.loraModelPaths.Architecture)
 
 	// Convert Go strings to C strings

@@ -24,6 +24,10 @@ type RouterConfig struct {
 	// +kubebuilder:default=file
 	ConfigSource ConfigSource `yaml:"config_source,omitempty"`
 
+	// MoMRegistry maps local model paths to HuggingFace repository IDs
+	// Example: "models/all-MiniLM-L12-v2": "sentence-transformers/all-MiniLM-L12-v2"
+	MoMRegistry map[string]string `yaml:"mom_registry,omitempty"`
+
 	/*
 		Static: Global Configuration
 		Timing: Should be handled when starting the router.

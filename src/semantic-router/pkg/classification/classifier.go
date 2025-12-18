@@ -28,7 +28,7 @@ func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses .
 	success := candle_binding.InitCandleBertClassifier(modelID, numClasses[0], useCPU)
 	if success {
 		c.usedModernBERT = false
-		logging.Infof("Initialized category classifier with auto-detection (LoRA or Traditional BERT)")
+		logging.Infof("Initialized category classifier with auto-detection")
 		return nil
 	}
 
@@ -160,7 +160,7 @@ func (c *PIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) e
 	success := candle_binding.InitCandleBertTokenClassifier(modelID, numClasses, useCPU)
 	if success {
 		c.usedModernBERT = false
-		logging.Infof("Initialized PII token classifier with auto-detection (LoRA or Traditional BERT)")
+		logging.Infof("Initialized PII token classifier with auto-detection")
 		return nil
 	}
 

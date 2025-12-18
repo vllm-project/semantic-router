@@ -85,13 +85,18 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		logging.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
-	// Initialize the BERT model for similarity search
-	if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
-		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
+	// Initialize the BERT model for similarity search (only if configured)
+	if cfg.BertModel.ModelID != "" {
+		if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
+			return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
+		}
+		logging.Infof("BERT similarity model initialized: %s", cfg.BertModel.ModelID)
+	} else {
+		logging.Infof("BERT model not configured, skipping initialization")
 	}
 
 	categoryDescriptions := cfg.GetCategoryDescriptions()
-	logging.Infof("Category descriptions: %v", categoryDescriptions)
+	logging.Debugf("Category descriptions: %v", categoryDescriptions)
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
@@ -116,7 +121,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	if semanticCache.IsEnabled() {
-		logging.Infof("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
+		logging.Infof("Semantic cache enabled with backend: %s with threshold: %.4f, TTL: %d s",
 			cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.TTLSeconds)
 		if cacheConfig.BackendType == cache.InMemoryCacheType {
 			logging.Infof("In-memory cache max entries: %d", cacheConfig.MaxEntries)
@@ -125,7 +130,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		logging.Infof("Semantic cache is disabled")
 	}
 
-	// Create tools database with config options
+	// Create tools database with config options (but don't load tools yet)
+	// Tools will be loaded after embedding models are initialized to avoid
+	// "ModelFactory not initialized" errors
 	toolsThreshold := cfg.BertModel.Threshold // Default to BERT threshold
 	if cfg.Tools.SimilarityThreshold != nil {
 		toolsThreshold = *cfg.Tools.SimilarityThreshold
@@ -136,12 +143,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
-	// Load tools from file if enabled and path is provided
-	if toolsDatabase.IsEnabled() && cfg.Tools.ToolsDBPath != "" {
-		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
-			logging.Warnf("Failed to load tools from file %s: %v", cfg.Tools.ToolsDBPath, loadErr)
-		}
-		logging.Infof("Tools database enabled with threshold: %.4f, top-k: %d",
+	// Note: Tools will be loaded later via LoadToolsDatabase() after embedding models init
+	if toolsDatabase.IsEnabled() {
+		logging.Infof("Tools database enabled with threshold: %.4f, top-k: %d (will load after embedding models init)",
 			toolsThreshold, cfg.Tools.TopK)
 	} else {
 		logging.Infof("Tools database is disabled")
@@ -270,4 +274,23 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 		},
 	}
 	return responsestore.NewStore(storeConfig)
+}
+
+// LoadToolsDatabase loads tools from file after embedding models are initialized
+func (r *OpenAIRouter) LoadToolsDatabase() error {
+	if !r.ToolsDatabase.IsEnabled() {
+		return nil
+	}
+
+	if r.Config.Tools.ToolsDBPath == "" {
+		logging.Warnf("Tools database enabled but no tools file path configured")
+		return nil
+	}
+
+	if err := r.ToolsDatabase.LoadToolsFromFile(r.Config.Tools.ToolsDBPath); err != nil {
+		return fmt.Errorf("failed to load tools from file %s: %w", r.Config.Tools.ToolsDBPath, err)
+	}
+
+	logging.Infof("Tools database loaded successfully from: %s", r.Config.Tools.ToolsDBPath)
+	return nil
 }

@@ -816,12 +816,6 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 	}
 
 	log.Printf("INFO: Embedding models initialized successfully")
-	if qwen3ModelPath != "" {
-		log.Printf("  - Qwen3: %s", qwen3ModelPath)
-	}
-	if gemmaModelPath != "" {
-		log.Printf("  - Gemma: %s", gemmaModelPath)
-	}
 
 	return nil
 }
