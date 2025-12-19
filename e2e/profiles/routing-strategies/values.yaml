@@ -59,11 +59,7 @@ config:
       case_sensitive: false
     - name: "sensitive_data"
       operator: "AND"
-      keywords: ["SSN", "social security number", "credit card"]
-      case_sensitive: false
-    - name: "exclude_spam"
-      operator: "NOR"
-      keywords: ["buy now", "free money"]
+      keywords: ["SSN", "credit card"]
       case_sensitive: false
 
   # Categories define domain metadata only (no routing logic)
@@ -74,9 +70,6 @@ config:
     - name: sensitive_data
       description: "Requests involving sensitive personal data"
       mmlu_categories: ["sensitive_data"]
-    - name: exclude_spam
-      description: "Potential spam or suspicious requests"
-      mmlu_categories: ["exclude_spam"]
     - name: business
       description: "Business and management related queries"
       mmlu_categories: ["business"]
@@ -168,26 +161,6 @@ config:
           configuration:
             enabled: true
             threshold: 0.6
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
-
-    - name: "exclude_spam_decision"
-      description: "Potential spam or suspicious requests"
-      priority: 150
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "exclude_spam"
-      modelRefs:
-        - model: "base-model"
-          use_reasoning: false
-      plugins:
-        - type: "system_prompt"
-          configuration:
-            system_prompt: "You are a content moderation assistant. This request has been flagged as potential spam. Please verify the legitimacy of the request before proceeding."
         - type: "pii"
           configuration:
             enabled: true

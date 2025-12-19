@@ -92,6 +92,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-matched-keywords header (from keyword classification)
+		if len(ctx.VSRMatchedKeywords) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedKeywords,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedKeywords, ",")),
+				},
+			})
+		}
+
 		// Add x-vsr-selected-reasoning header
 		if ctx.VSRReasoningMode != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

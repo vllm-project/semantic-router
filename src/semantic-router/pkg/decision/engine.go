@@ -66,9 +66,10 @@ type SignalMatches struct {
 
 // DecisionResult represents the result of decision evaluation
 type DecisionResult struct {
-	Decision     *config.Decision
-	Confidence   float64
-	MatchedRules []string
+	Decision        *config.Decision
+	Confidence      float64
+	MatchedRules    []string
+	MatchedKeywords []string // The actual keywords that matched (not rule names)
 }
 
 // EvaluateDecisions evaluates all decisions and returns the best match based on strategy
