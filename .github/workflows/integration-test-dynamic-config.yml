@@ -16,9 +16,6 @@ on:
       - "e2e/go.sum"
       - "src/**"
       - "deploy/kubernetes/**"
-    paths-ignore:
-      - "website/**"
-      - "**/*.md"
   push:
     branches:
       - main
@@ -30,9 +27,6 @@ on:
       - "e2e/*.go"
       - "src/**"
       - "deploy/kubernetes/**"
-    paths-ignore:
-      - "website/**"
-      - "**/*.md"
   workflow_dispatch: # Allow manual triggering
 
 concurrency:
