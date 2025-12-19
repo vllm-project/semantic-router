@@ -54,6 +54,7 @@ type RequestContext struct {
 	// VSR decision tracking
 	VSRSelectedCategory     string           // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName string           // The decision name from DecisionEngine evaluation
+	VSRMatchedKeywords      []string         // The keywords that matched during keyword classification
 	VSRReasoningMode        string           // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel        string           // The model selected by VSR
 	VSRCacheHit             bool             // Whether this request hit the cache

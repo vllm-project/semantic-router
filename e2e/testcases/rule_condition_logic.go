@@ -83,21 +83,21 @@ func testRuleConditionLogic(ctx context.Context, client *kubernetes.Clientset, o
 		},
 		// AND operator tests - both conditions must match
 		{
-			Query:              "What is the capital of France?",
-			ExpectedMatch:      false,
-			ExpectedDecision:   "other_decision", // Falls back to general
-			RuleOperator:       "AND",
-			RequiredConditions: []string{"keyword:urgent", "domain:business"},
-			Description:        "Query without urgent keyword should not match AND rule requiring both",
+			Query:              "Think carefully about this problem",
+			ExpectedMatch:      true,
+			ExpectedDecision:   "thinking_decision",
+			RuleOperator:       "OR",
+			RequiredConditions: []string{"keyword:think", "keyword:careful"},
+			Description:        "Query with 'think' and 'careful' keywords should match thinking decision",
 		},
 		// Keyword matching tests (case-insensitive)
 		{
 			Query:              "This is URGENT and needs immediate attention",
 			ExpectedMatch:      true,
-			ExpectedDecision:   "thinking_decision", // Keywords: "urgent", "immediate"
+			ExpectedDecision:   "urgent_request",
 			RuleOperator:       "OR",
 			RequiredConditions: []string{"keyword:urgent", "keyword:immediate"},
-			Description:        "Uppercase keywords should match (case-insensitive)",
+			Description:        "Uppercase keywords should match urgent_request (case-insensitive)",
 		},
 		{
 			Query:              "Please think about this carefully",

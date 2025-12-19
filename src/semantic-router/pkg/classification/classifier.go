@@ -598,6 +598,7 @@ func (c *Classifier) initializePIIClassifier() error {
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
 	MatchedKeywordRules   []string
+	MatchedKeywords       []string // The actual keywords that matched (not rule names)
 	MatchedEmbeddingRules []string
 	MatchedDomainRules    []string
 	MatchedFactCheckRules []string // "needs_fact_check" or "no_fact_check_needed"
@@ -620,11 +621,12 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 
 	// Evaluate keyword rules - check each rule individually
 	if c.keywordClassifier != nil {
-		category, _, err := c.keywordClassifier.Classify(text)
+		category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
 		if err != nil {
 			logging.Errorf("keyword rule evaluation failed: %v", err)
 		} else if category != "" {
 			results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
+			results.MatchedKeywords = append(results.MatchedKeywords, keywords...)
 		}
 	}
 
@@ -714,8 +716,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
 	}
 
-	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v",
-		result.Decision.Name, result.Confidence, result.MatchedRules)
+	// Populate matched keywords from signal evaluation
+	result.MatchedKeywords = signals.MatchedKeywords
+
+	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
+		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil
 }

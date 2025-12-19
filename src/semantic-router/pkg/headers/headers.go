@@ -34,6 +34,10 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRMatchedKeywords contains the comma-separated list of keywords that matched.
+	// Example value: "urgent,immediate"
+	VSRMatchedKeywords = "x-vsr-matched-keywords"
+
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
 	VSRSelectedReasoning = "x-vsr-selected-reasoning"
