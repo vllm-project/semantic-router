@@ -15,6 +15,37 @@ build-router: $(if $(CI),rust-ci,rust)
 	@mkdir -p bin
 	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
 
+# Build vsr CLI
+build-cli: ## Build the vsr CLI tool
+	@$(LOG_TARGET)
+	@mkdir -p bin
+	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev"))
+	$(eval GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"))
+	$(eval BUILD_DATE := $(shell date -u '+%Y-%m-%d_%H:%M:%S'))
+	@echo "Building vsr CLI with version: $(VERSION), commit: $(GIT_COMMIT), date: $(BUILD_DATE)"
+	@cd src/semantic-router && go build \
+		-ldflags="-r $(PWD)/candle-binding/target/release -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)" \
+		-o ../../bin/vsr cmd/vsr/main.go
+	@echo "vsr CLI built successfully: bin/vsr"
+
+# Build all (router + CLI)
+build-all: ## Build both router and CLI
+build-all: build-router build-cli
+
+# Install vsr CLI to system
+install-cli: ## Install vsr CLI to /usr/local/bin
+install-cli: build-cli
+	@cp bin/vsr /usr/local/bin/vsr
+	@chmod +x /usr/local/bin/vsr
+	@echo "vsr installed to /usr/local/bin/vsr"
+
+# Test CLI (requires Rust library for CGO dependencies)
+test-cli: ## Run CLI unit tests
+test-cli: build-router
+	@$(LOG_TARGET)
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./cmd/vsr/...
+
 # Run the router
 run-router: ## Run the router with the specified config
 run-router: build-router download-models
@@ -29,29 +60,30 @@ run-router-e2e: build-router download-models
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		./bin/router -config=config/testing/config.e2e.yaml
 
-# Unit test semantic-router
+# Unit test semantic-router (excluding CLI tests)
 # By default, Milvus and Redis tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false and/or SKIP_REDIS_TESTS=false
 # Example: make test-semantic-router SKIP_MILVUS_TESTS=false
-test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false to enable Milvus tests)
+test-semantic-router: ## Run unit tests for semantic-router (excluding CLI, set SKIP_MILVUS_TESTS=false to enable Milvus tests)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
-		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
+		cd src/semantic-router && CGO_ENABLED=1 go test -v $$(go list ./... | grep -v '/cmd/vsr')
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
 #   1. Run test-binding-minimal with minimal models
-#   2. Run test-semantic-router (also uses minimal models)
-#   3. Clean up minimal models, download LoRA/embedding models
-#   4. Run test-binding-lora
+#   2. Run test-cli (CLI tests with Rust library)
+#   3. Run test-semantic-router (also uses minimal models, excludes CLI to avoid re-testing)
+#   4. Clean up minimal models, download LoRA/embedding models
+#   5. Run test-binding-lora
 # In local dev, run all tests together
 ifeq ($(CI),true)
-test: vet check-go-mod-tidy download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
+test: vet check-go-mod-tidy download-models test-binding-minimal test-cli test-semantic-router clean-minimal-models download-models-lora test-binding-lora
 else
-test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
+test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-cli test-semantic-router
 endif
 
 # Clean built artifacts
@@ -141,7 +173,7 @@ start-llm-katan:
 test-e2e-vllm: ## Run e2e tests with LLM Katan servers (make sure servers are running)
 test-e2e-vllm:
 	@echo "Running e2e tests with LLM Katan servers..."
-	@echo "⚠️  Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
+	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
 	@python3 e2e-tests/run_all_tests.py
 
 # Run hallucination detection benchmark

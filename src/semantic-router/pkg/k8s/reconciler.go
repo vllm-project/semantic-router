@@ -259,7 +259,15 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 	// Create new config by merging with static config
 	newConfig := *r.staticConfig
 	newConfig.BackendModels = *backendModels
-	newConfig.IntelligentRouting = *intelligentRouting
+
+	// Copy IntelligentRouting fields explicitly (since it's embedded with ,inline in YAML)
+	// Assigning the whole struct doesn't work correctly with embedded structs
+	newConfig.KeywordRules = intelligentRouting.KeywordRules
+	newConfig.EmbeddingRules = intelligentRouting.EmbeddingRules
+	newConfig.Categories = intelligentRouting.Categories
+	newConfig.Decisions = intelligentRouting.Decisions
+	newConfig.Strategy = intelligentRouting.Strategy
+	newConfig.ReasoningConfig = intelligentRouting.ReasoningConfig
 
 	// Call update callback
 	if r.onConfigUpdate != nil {

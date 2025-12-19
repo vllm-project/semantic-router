@@ -1,0 +1,132 @@
+# vLLM Semantic Router Configuration
+
+# BERT model for semantic similarity
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+# vLLM endpoints - your backend models
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
+# Model configuration
+model_config:
+  "your-model":
+    preferred_endpoints: ["endpoint1"]
+    pricing:
+      currency: "USD"
+      prompt_per_1m: 0.50
+      completion_per_1m: 1.50
+
+# Categories (Metadata)
+  categories:
+    - name: math
+      description: "Mathematics related queries"
+      model_scores:
+        - model: "gpt-4"
+          score: 0.95
+        - model: "claude-3"
+          score: 0.90
+        - model: "llama-70b"
+          score: 0.85
+        - model: "your-model"
+          score: 0.80
+    - name: coding
+      description: "Programming and code generation"
+      model_scores:
+        - model: "gpt-4"
+          score: 0.92
+        - model: "claude-3"
+          score: 0.94
+        - model: "llama-70b"
+          score: 0.88
+        - model: "your-model"
+          score: 0.75
+    - name: business
+      description: "Business analysis and strategy queries"
+      model_scores:
+        - model: "gpt-4"
+          score: 0.90
+        - model: "claude-3"
+          score: 0.92
+        - model: "llama-70b"
+          score: 0.78
+        - model: "your-model"
+          score: 0.85
+    - name: creative
+      description: "Creative writing and content generation"
+      model_scores:
+        - model: "gpt-4"
+          score: 0.88
+        - model: "claude-3"
+          score: 0.95
+        - model: "llama-70b"
+          score: 0.82
+        - model: "your-model"
+          score: 0.70
+    - name: general
+      description: "General knowledge and conversation"
+      model_scores:
+        - model: "gpt-4"
+          score: 0.85
+        - model: "claude-3"
+          score: 0.85
+        - model: "llama-70b"
+          score: 0.80
+        - model: "your-model"
+          score: 0.80
+
+# Routing Rules
+  keyword_rules:
+    - name: math_keywords
+      operator: "OR"
+      keywords: ["math", "calculus", "algebra"]
+
+# Routing Decisions
+  decisions:
+    - name: math_decision
+      description: "Route math queries to model"
+      priority: 10
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "math_keywords"
+      modelRefs:
+        - model: your-model
+          use_reasoning: true
+
+  default_model: your-model
+
+# Classification models
+  classifier:
+    category_model:
+      use_modernbert: true
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "src/semantic-router/cmd/vsr/config/category_mapping.json"
+    pii_model:
+      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+      use_modernbert: true
+      threshold: 0.7
+      use_cpu: true
+
+# Security features (optional)
+prompt_guard:
+  enabled: false
+  use_modernbert: true
+  threshold: 0.7
+  use_cpu: true
+
+# Semantic caching (optional)
+semantic_cache:
+  enabled: false
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
