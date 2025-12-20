@@ -17,6 +17,7 @@ build-router: $(if $(CI),rust-ci,rust)
 
 # Build vsr CLI
 build-cli: ## Build the vsr CLI tool
+build-cli: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev"))
