@@ -47,6 +47,13 @@ test-cli: build-router
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./cmd/vsr/...
 
+# E2E test CLI (integration tests)
+test-cli-e2e: ## Run CLI integration tests
+test-cli-e2e: build-cli
+	@$(LOG_TARGET)
+	@python3 e2e-tests/cli/test_cli.py
+
+
 # Run the router
 run-router: ## Run the router with the specified config
 run-router: build-router

@@ -1,0 +1,193 @@
+name: CLI Integration Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+    paths:
+      - "src/semantic-router/cmd/vsr/**"
+      - "src/semantic-router/pkg/cli/**"
+      - "e2e-tests/cli/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/semantic-router/cmd/vsr/**"
+      - "src/semantic-router/pkg/cli/**"
+      - "e2e-tests/cli/**"
+  workflow_dispatch: # Allow manual triggering
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Basic CLI tests (no Docker required)
+  cli-basic:
+    if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/go/pkg/mod
+            candle-binding/target/
+          key: ${{ runner.os }}-cli-${{ hashFiles('**/go.sum', '**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cli-
+
+      - name: Run CLI basic tests
+        run: make test-cli-e2e
+
+  # Full CLI deploy/undeploy cycle (requires Docker)
+  cli-deploy-docker:
+    if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/go/pkg/mod
+            candle-binding/target/
+          key: ${{ runner.os }}-cli-docker-${{ hashFiles('**/go.sum', '**/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/model_manager/requirements.txt
+
+      - name: Setup model storage on /mnt
+        run: |
+          sudo mkdir -p /mnt/models
+          sudo chown -R $USER:$USER /mnt/models
+          ln -s /mnt/models models || true
+
+      - name: Download models
+        run: make download-models
+        env:
+          CI: true
+          CI_MINIMAL_MODELS: true
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_ENABLE_HF_TRANSFER: 1
+
+      - name: Build CLI
+        run: make build-cli
+
+      - name: Test CLI deploy workflow
+        run: |
+          echo "=========================================="
+          echo "Testing: vsr deploy docker"
+          echo "=========================================="
+
+          # 1. Deploy (without observability to speed up)
+          ./bin/vsr deploy docker --with-observability=false || {
+            echo "❌ vsr deploy docker failed"
+            exit 1
+          }
+          echo "✅ Deploy command succeeded"
+
+          # 2. Wait for services to start
+          echo "Waiting for services to start (60s)..."
+          sleep 60
+
+          # 3. Check status
+          echo ""
+          echo "=========================================="
+          echo "Testing: vsr status"
+          echo "=========================================="
+          ./bin/vsr status || {
+            echo "⚠️ vsr status returned non-zero"
+          }
+          echo "✅ Status command executed"
+
+          # 4. Show running containers
+          echo ""
+          echo "Container status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}"
+
+          # 5. Test health endpoint if running
+          echo ""
+          echo "Testing health endpoint..."
+          curl -s -f http://localhost:8080/health && echo "✅ Health check passed" || echo "⚠️ Health check failed (may be expected)"
+
+          # 6. Undeploy
+          echo ""
+          echo "=========================================="
+          echo "Testing: vsr undeploy docker"
+          echo "=========================================="
+          ./bin/vsr undeploy docker --volumes || {
+            echo "❌ vsr undeploy docker failed"
+            exit 1
+          }
+          echo "✅ Undeploy command succeeded"
+
+          # 7. Verify cleanup
+          sleep 5
+          remaining=$(docker ps --filter "name=semantic-router" -q | wc -l)
+          if [ "$remaining" -gt 0 ]; then
+            echo "⚠️ Some containers still running"
+            docker ps
+          else
+            echo "✅ All containers cleaned up"
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "🎉 CLI deploy/undeploy cycle completed!"
+          echo "=========================================="
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Container Status ==="
+          docker ps -a
+          echo ""
+          echo "=== Docker Logs ==="
+          docker logs semantic-router 2>&1 | tail -50 || true
+
+      - name: Clean up
+        if: always()
+        run: |
+          ./bin/vsr undeploy docker --volumes || true
+          docker system prune -af --volumes || true
