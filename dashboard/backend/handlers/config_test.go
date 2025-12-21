@@ -1,0 +1,349 @@
+package handlers
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// createValidTestConfig creates a minimal valid config file for testing
+func createValidTestConfig(t *testing.T, dir string) string {
+	configPath := filepath.Join(dir, "config.yaml")
+	validConfig := `
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+classifier:
+  category_model:
+    model_id: models/lora_intent_classifier_bert-base-uncased_model
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json
+  pii_model:
+    model_id: models/lora_pii_detector_bert-base-uncased_model
+    threshold: 0.9
+    use_cpu: true
+    pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+
+categories:
+  - name: business
+    description: Business and management related queries
+
+vllm_endpoints:
+  - name: endpoint1
+    address: 127.0.0.1
+    port: 8000
+    weight: 1
+
+default_model: test-model
+
+model_config:
+  test-model:
+    reasoning_family: qwen3
+`
+	if err := os.WriteFile(configPath, []byte(validConfig), 0o644); err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+	return configPath
+}
+
+func TestConfigHandler(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	tests := []struct {
+		name           string
+		method         string
+		expectedStatus int
+	}{
+		{
+			name:           "GET request should succeed",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "POST request should fail",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:           "PUT request should fail",
+			method:         http.MethodPut,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/api/router/config/all", nil)
+			w := httptest.NewRecorder()
+
+			handler := ConfigHandler(configPath)
+			handler(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				// Verify response is valid JSON
+				var result interface{}
+				if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+					t.Errorf("Response is not valid JSON: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateConfigHandler(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	tests := []struct {
+		name           string
+		method         string
+		requestBody    interface{}
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:   "Valid config update with valid IP address",
+			method: http.MethodPost,
+			requestBody: map[string]interface{}{
+				"vllm_endpoints": []map[string]interface{}{
+					{
+						"name":    "endpoint1",
+						"address": "192.168.1.1",
+						"port":    8000,
+						"weight":  1,
+					},
+				},
+				"default_model": "test-model",
+				"model_config": map[string]interface{}{
+					"test-model": map[string]interface{}{
+						"reasoning_family": "qwen3",
+					},
+				},
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:   "Invalid config - localhost instead of IP address",
+			method: http.MethodPost,
+			requestBody: map[string]interface{}{
+				"vllm_endpoints": []map[string]interface{}{
+					{
+						"name":    "test",
+						"address": "localhost",
+						"port":    8000,
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Config validation failed",
+		},
+		{
+			name:   "Invalid config - domain name instead of IP address",
+			method: http.MethodPost,
+			requestBody: map[string]interface{}{
+				"vllm_endpoints": []map[string]interface{}{
+					{
+						"name":    "test",
+						"address": "example.com",
+						"port":    8000,
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Config validation failed",
+		},
+		{
+			name:   "Invalid config - protocol prefix in address",
+			method: http.MethodPost,
+			requestBody: map[string]interface{}{
+				"vllm_endpoints": []map[string]interface{}{
+					{
+						"name":    "test",
+						"address": "http://127.0.0.1",
+						"port":    8000,
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Config validation failed",
+		},
+		{
+			name:   "Invalid config - port in address field",
+			method: http.MethodPost,
+			requestBody: map[string]interface{}{
+				"vllm_endpoints": []map[string]interface{}{
+					{
+						"name":    "test",
+						"address": "127.0.0.1:8000",
+						"port":    8000,
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Config validation failed",
+		},
+		{
+			name:           "Invalid JSON body",
+			method:         http.MethodPost,
+			requestBody:    "invalid json",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Invalid request body",
+		},
+		{
+			name:           "GET request should fail",
+			method:         http.MethodGet,
+			requestBody:    nil,
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:   "PUT request should work",
+			method: http.MethodPut,
+			requestBody: map[string]interface{}{
+				"vllm_endpoints": []map[string]interface{}{
+					{
+						"name":    "endpoint1",
+						"address": "10.0.0.1",
+						"port":    8000,
+						"weight":  1,
+					},
+				},
+				"default_model": "test-model",
+				"model_config": map[string]interface{}{
+					"test-model": map[string]interface{}{
+						"reasoning_family": "qwen3",
+					},
+				},
+			},
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset config file before each test
+			createValidTestConfig(t, tempDir)
+
+			var bodyBytes []byte
+			var err error
+
+			if tt.requestBody != nil {
+				if str, ok := tt.requestBody.(string); ok {
+					// For invalid JSON test
+					bodyBytes = []byte(str)
+				} else {
+					bodyBytes, err = json.Marshal(tt.requestBody)
+					if err != nil {
+						t.Fatalf("Failed to marshal request body: %v", err)
+					}
+				}
+			}
+
+			req := httptest.NewRequest(tt.method, "/api/router/config/update", bytes.NewReader(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			handler := UpdateConfigHandler(configPath)
+			handler(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d. Response body: %s", tt.expectedStatus, w.Code, w.Body.String())
+			}
+
+			if tt.expectedError != "" {
+				body := w.Body.String()
+				if !contains(body, tt.expectedError) {
+					t.Errorf("Expected error message to contain '%s', got: %s", tt.expectedError, body)
+				}
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				// Verify response is valid JSON with success message
+				var result map[string]string
+				if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+					t.Errorf("Response is not valid JSON: %v", err)
+				}
+				if result["status"] != "success" {
+					t.Errorf("Expected status 'success', got '%s'", result["status"])
+				}
+
+				// Verify config file was actually updated
+				data, err := os.ReadFile(configPath)
+				if err != nil {
+					t.Errorf("Failed to read updated config file: %v", err)
+				}
+				if len(data) == 0 {
+					t.Error("Config file is empty after update")
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	// Test that validation prevents saving invalid config
+	invalidConfig := map[string]interface{}{
+		"vllm_endpoints": []map[string]interface{}{
+			{
+				"name":    "invalid-endpoint",
+				"address": "localhost", // Invalid: should be IP address
+				"port":    8000,
+			},
+		},
+	}
+
+	bodyBytes, _ := json.Marshal(invalidConfig)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler := UpdateConfigHandler(configPath)
+	handler(w, req)
+
+	// Should return 400 Bad Request
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	// Verify original config file was not modified
+	originalData, _ := os.ReadFile(configPath)
+	if len(originalData) == 0 {
+		t.Error("Original config file should not be empty")
+	}
+
+	// Verify error message contains validation error
+	body := w.Body.String()
+	if !contains(body, "Config validation failed") {
+		t.Errorf("Expected validation error message, got: %s", body)
+	}
+}
+
+// Helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	if len(s) < len(substr) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

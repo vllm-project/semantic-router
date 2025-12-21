@@ -6,8 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ConfigHandler reads and serves the config.yaml file as JSON
@@ -70,8 +73,25 @@ func UpdateConfigHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		// Write to file
-		if err := os.WriteFile(configPath, yamlData, 0o644); err != nil {
+		// Validate configuration before saving create a temporary file for validation
+		tempFile := filepath.Join(os.TempDir(), "config_validate.yaml")
+		if err = os.WriteFile(tempFile, yamlData, 0o644); err != nil {
+			log.Printf("Error creating temp file for validation: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to validate config: %v", err), http.StatusInternalServerError)
+			return
+		}
+		defer os.Remove(tempFile)
+
+		// Validate using the router's config parser
+		_, err = routerconfig.Parse(tempFile)
+		if err != nil {
+			log.Printf("Config validation failed: %v", err)
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Write to file only after validation succeeds
+		if err = os.WriteFile(configPath, yamlData, 0o644); err != nil {
 			log.Printf("Error writing config file: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to write config file: %v", err), http.StatusInternalServerError)
 			return

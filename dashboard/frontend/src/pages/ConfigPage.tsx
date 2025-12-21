@@ -263,7 +263,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        // Try to read error message from response body
+        const errorText = await response.text()
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText)
+            if (errorJson.error || errorJson.message) {
+              errorMessage = errorJson.error || errorJson.message
+            } else {
+              errorMessage = errorText
+            }
+          } catch {
+            // If not JSON, use the text as-is
+            errorMessage = errorText
+          }
+        }
+        throw new Error(errorMessage)
       }
 
       // Refresh config after save
@@ -325,8 +341,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                 ],
                 async (data) => {
                   const newConfig = { ...config }
-                  if (!newConfig.vllm_endpoints) newConfig.vllm_endpoints = []
-                  newConfig.vllm_endpoints.push(data)
+                  // Create a new array to avoid mutating the original state
+                  newConfig.vllm_endpoints = [...(newConfig.vllm_endpoints || []), data]
                   await saveConfig(newConfig)
                 },
                 'add'
@@ -359,6 +375,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                         async (data) => {
                           const newConfig = { ...config }
                           if (newConfig.vllm_endpoints) {
+                            // Create a new array to avoid mutating the original state
+                            newConfig.vllm_endpoints = [...newConfig.vllm_endpoints]
                             newConfig.vllm_endpoints[index] = data
                           }
                           await saveConfig(newConfig)
@@ -375,7 +393,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                       if (confirm(`Are you sure you want to delete endpoint "${endpoint.name}"?`)) {
                         const newConfig = { ...config }
                         if (newConfig.vllm_endpoints) {
-                          newConfig.vllm_endpoints.splice(index, 1)
+                          // Create a new array to avoid mutating the original state
+                          newConfig.vllm_endpoints = newConfig.vllm_endpoints.filter((_, i) => i !== index)
                         }
                         saveConfig(newConfig)
                       }
