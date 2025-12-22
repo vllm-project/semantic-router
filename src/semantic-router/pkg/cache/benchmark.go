@@ -514,10 +514,10 @@ func initEmbeddingModelsOnce() error {
 	} else {
 		fmt.Println("QWEN3_MODEL_PATH not set, trying default paths...")
 		qwen3Paths = []string{
-			"./models/Qwen3-Embedding-0.6B",
-			"./candle-binding/models/Qwen3-Embedding-0.6B",
-			"../models/Qwen3-Embedding-0.6B",
-			"models/Qwen3-Embedding-0.6B",
+			"./models/mom-embedding-pro",
+			"./candle-binding/models/mom-embedding-pro",
+			"../models/mom-embedding-pro",
+			"models/mom-embedding-pro",
 		}
 	}
 

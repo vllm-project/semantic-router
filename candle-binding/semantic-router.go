@@ -1447,7 +1447,7 @@ func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) erro
 	jailbreakClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to the jailbreak classification model if path is empty
-			modelPath = "./models/jailbreak_classifier_modernbert-base_model"
+			modelPath = "./models/mom-jailbreak-classifier"
 		}
 
 		if numClasses < 2 {

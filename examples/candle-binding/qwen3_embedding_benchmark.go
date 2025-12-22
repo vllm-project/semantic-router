@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 /*
@@ -44,7 +45,6 @@ extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_
 extern int get_embedding_batched(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
 */
 import "C"
-import "unsafe"
 
 // Test texts representing typical embedding workloads
 var testTexts = []string{
@@ -272,7 +272,7 @@ func main() {
 	fmt.Println("🔧 Initializing Qwen3 Embedding Model...")
 	modelPath := os.Getenv("MODEL_PATH")
 	if modelPath == "" {
-		modelPath = "../models/Qwen3-Embedding-0.6B"
+		modelPath = "../models/mom-embedding-pro"
 	}
 
 	cModelPath := C.CString(modelPath)

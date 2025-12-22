@@ -185,8 +185,8 @@ func main() {
 		logging.Infof("No embedding models configured, skipping initialization")
 		logging.Infof("To enable embedding models, add to config.yaml:")
 		logging.Infof("  embedding_models:")
-		logging.Infof("    qwen3_model_path: 'models/Qwen3-Embedding-0.6B'")
-		logging.Infof("    gemma_model_path: 'models/embeddinggemma-300m'")
+		logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
+		logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
 		logging.Infof("    use_cpu: true")
 	}
 

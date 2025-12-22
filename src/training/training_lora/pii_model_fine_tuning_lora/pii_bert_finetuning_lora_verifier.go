@@ -195,7 +195,7 @@ func combineBIOEntities(rawEntities []candle.TokenEntity, originalText string) [
 func main() {
 	// Parse command line flags
 	var (
-		piiModelPath = flag.String("pii-token-model", "../../../../models/lora_pii_detector_bert-base-uncased_model", "Path to LoRA PII classifier model")
+		piiModelPath = flag.String("pii-token-model", "../../../../models/mom-pii-classifier", "Path to LoRA PII classifier model")
 		architecture = flag.String("architecture", "bert", "Model architecture (bert, roberta, modernbert)")
 		useCPU       = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)

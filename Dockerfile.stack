@@ -215,7 +215,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /var/log/supervisor /var/run/supervisor
+    && mkdir -p /var/log/supervisor /var/run/supervisor \
+    && pip3 install --no-cache-dir --break-system-packages huggingface_hub[cli]
 
 # Create application directories
 RUN mkdir -p \

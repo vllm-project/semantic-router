@@ -25,7 +25,7 @@ type RouterConfig struct {
 	ConfigSource ConfigSource `yaml:"config_source,omitempty"`
 
 	// MoMRegistry maps local model paths to HuggingFace repository IDs
-	// Example: "models/all-MiniLM-L12-v2": "sentence-transformers/all-MiniLM-L12-v2"
+	// Example: "models/mom-embedding-light": "sentence-transformers/all-MiniLM-L12-v2"
 	MoMRegistry map[string]string `yaml:"mom_registry,omitempty"`
 
 	/*

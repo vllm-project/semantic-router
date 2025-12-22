@@ -39,7 +39,7 @@ modelConfig:
 # Minimal classifier configuration
 classifier:
   categoryModel:
-    modelId: "models/all-MiniLM-L12-v2"
+    modelId: "models/mom-embedding-light"
     threshold: 0.6
     useCpu: true
 

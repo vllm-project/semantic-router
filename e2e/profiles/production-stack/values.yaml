@@ -27,18 +27,18 @@ config:
   # Using LoRA models for better performance with auto-detection
   classifier:
     category_model:
-      model_id: models/category_classifier_modernbert-base_model
-      use_modernbert: true
+      model_id: models/mom-domain-classifier
+      use_modernbert: false  # MoM uses LoRA-based model
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: models/category_classifier_modernbert-base_model/category_mapping.json
+      category_mapping_path: models/mom-domain-classifier/category_mapping.json
     pii_model:
       # Required for pii-detection test
-      model_id: models/lora_pii_detector_bert-base-uncased_model
+      model_id: models/mom-pii-classifier
       use_modernbert: false
       threshold: 0.9
       use_cpu: true
-      pii_mapping_path: models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json
+      pii_mapping_path: models/mom-pii-classifier/pii_type_mapping.json
 
   # Categories required for domain-classify test cases
   categories:
@@ -333,7 +333,7 @@ config:
 
   # BERT model for embeddings
   bert_model:
-    model_id: models/all-MiniLM-L12-v2
+    model_id: models/mom-embedding-light
     threshold: 0.6
     use_cpu: true
 
@@ -357,11 +357,11 @@ config:
   # Prompt guard - required for jailbreak-detection test
   prompt_guard:
     enabled: true
-    use_modernbert: true
-    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    use_modernbert: false  # MoM uses LoRA-based model
+    model_id: "models/mom-jailbreak-classifier"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Router configuration - minimal settings
   router:

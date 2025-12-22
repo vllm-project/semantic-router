@@ -17,34 +17,34 @@ func TestExtractModelPaths(t *testing.T) {
 			config: &config.RouterConfig{
 				InlineModels: config.InlineModels{
 					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath: "models/Qwen3-Embedding-0.6B",
+						Qwen3ModelPath: "models/mom-embedding-pro",
 					},
 				},
 			},
-			expected: []string{"models/Qwen3-Embedding-0.6B"},
+			expected: []string{"models/mom-embedding-pro"},
 		},
 		{
 			name: "Extract GemmaModelPath",
 			config: &config.RouterConfig{
 				InlineModels: config.InlineModels{
 					EmbeddingModels: config.EmbeddingModels{
-						GemmaModelPath: "models/embeddinggemma-300m",
+						GemmaModelPath: "models/mom-embedding-flash",
 					},
 				},
 			},
-			expected: []string{"models/embeddinggemma-300m"},
+			expected: []string{"models/mom-embedding-flash"},
 		},
 		{
 			name: "Extract both embedding models",
 			config: &config.RouterConfig{
 				InlineModels: config.InlineModels{
 					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath: "models/Qwen3-Embedding-0.6B",
-						GemmaModelPath: "models/embeddinggemma-300m",
+						Qwen3ModelPath: "models/mom-embedding-pro",
+						GemmaModelPath: "models/mom-embedding-flash",
 					},
 				},
 			},
-			expected: []string{"models/Qwen3-Embedding-0.6B", "models/embeddinggemma-300m"},
+			expected: []string{"models/mom-embedding-pro", "models/mom-embedding-flash"},
 		},
 		{
 			name: "Extract ModelID from classifier",
@@ -110,8 +110,8 @@ func TestIsModelDirectory(t *testing.T) {
 		{"models/lora_model/adapter_config.json", false},
 		{"models/mapping.json", false},
 		{"config/tools_db.json", false},
-		{"models/Qwen3-Embedding-0.6B", true},
-		{"models/embeddinggemma-300m", true},
+		{"models/mom-embedding-pro", true},
+		{"models/mom-embedding-flash", true},
 	}
 
 	for _, tt := range tests {

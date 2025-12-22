@@ -84,6 +84,15 @@ RUN mkdir -p bin && cd src/semantic-router && \
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream10
 
+# Install runtime dependencies including Python and HuggingFace CLI
+RUN dnf -y update && \
+    dnf -y install \
+    python3 \
+    python3-pip \
+    ca-certificates && \
+    dnf clean all && \
+    pip3 install --no-cache-dir huggingface_hub[cli]
+
 WORKDIR /app
 
 COPY --from=go-builder /app/bin/router /app/extproc-server

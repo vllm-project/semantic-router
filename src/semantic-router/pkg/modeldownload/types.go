@@ -2,7 +2,7 @@ package modeldownload
 
 // ModelSpec represents a model to be downloaded
 type ModelSpec struct {
-	// Local path where the model should be stored (e.g., "models/all-MiniLM-L12-v2")
+	// Local path where the model should be stored (e.g., "models/mom-embedding-light")
 	LocalPath string
 	// HuggingFace repository ID (e.g., "sentence-transformers/all-MiniLM-L12-v2")
 	RepoID string

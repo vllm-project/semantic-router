@@ -69,7 +69,7 @@ def main():
 
     # Model path (relative to project root)
     # Script should be run from project root: python scripts/generate_qwen3_reference.py
-    model_path = Path("models/Qwen3-Embedding-0.6B")
+    model_path = Path("models/mom-embedding-pro")
 
     if not model_path.exists():
         print(f"ERROR: Model not found at {model_path}")

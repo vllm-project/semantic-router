@@ -102,7 +102,7 @@ func main() {
 	// Parse command line flags
 	var (
 		useModernBERT = flag.Bool("modernbert", false, "Use ModernBERT models instead of BERT")
-		jailbreakPath = flag.String("jailbreak-model", "../../../models/jailbreak_classifier_modernbert-base_model", "Path to jailbreak classifier model")
+		jailbreakPath = flag.String("jailbreak-model", "../../../models/mom-jailbreak-classifier", "Path to jailbreak classifier model")
 		simPath       = flag.String("similarity-model", "sentence-transformers/all-MiniLM-L6-v2", "Path/ID for similarity model")
 		useCPU        = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)

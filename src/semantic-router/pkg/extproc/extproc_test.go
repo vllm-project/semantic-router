@@ -466,10 +466,10 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
-					ModelID:             "../../../../models/category_classifier_modernbert-base_model",
+					ModelID:             "../../../../models/mom-domain-classifier",
 					UseCPU:              true,
 					UseModernBERT:       true,
-					CategoryMappingPath: "../../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+					CategoryMappingPath: "../../../../models/mom-domain-classifier/category_mapping.json",
 				},
 				MCPCategoryModel: config.MCPCategoryModel{
 					Enabled: false, // MCP not used in tests
@@ -477,7 +477,7 @@ func CreateTestConfig() *config.RouterConfig {
 				PIIModel: config.PIIModel{
 					ModelID:        "../../../../models/pii_classifier_modernbert-base_presidio_token_model",
 					UseCPU:         true,
-					PIIMappingPath: "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+					PIIMappingPath: "../../../../models/mom-pii-classifier/pii_type_mapping.json",
 				},
 			},
 			PromptGuard: config.PromptGuardConfig{
@@ -616,7 +616,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 
 const (
 	testPIIModelID     = "../../../../models/pii_classifier_modernbert-base_presidio_token_model"
-	testPIIMappingPath = "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+	testPIIMappingPath = "../../../../models/mom-pii-classifier/pii_type_mapping.json"
 	testPIIThreshold   = 0.5
 )
 
@@ -1024,7 +1024,7 @@ var _ = Describe("Security Checks", func() {
 		BeforeEach(func() {
 			cfg.PromptGuard.Enabled = true
 			// TODO: Use a real model path here; this should be moved to an integration test later.
-			cfg.PromptGuard.ModelID = "../../../../models/jailbreak_classifier_modernbert-base_model"
+			cfg.PromptGuard.ModelID = "../../../../models/mom-jailbreak-classifier"
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
 			cfg.PromptGuard.UseModernBERT = true
 			cfg.PromptGuard.UseCPU = true

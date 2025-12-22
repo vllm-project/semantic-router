@@ -349,7 +349,7 @@ fn test_gemma_config_validates_mqa(gemma_config: GemmaEmbeddingConfig) {
 #[rstest]
 #[serial]
 fn test_load_gemma_config_valid() {
-    let config = GemmaEmbeddingConfig::from_pretrained("../models/embeddinggemma-300m").unwrap();
+    let config = GemmaEmbeddingConfig::from_pretrained("../models/mom-embedding-flash").unwrap();
 
     // Validate critical parameters
     assert_eq!(config.vocab_size, 262144, "vocab_size should be 262144");

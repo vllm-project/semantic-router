@@ -214,7 +214,7 @@ persistence:
 config:
   # BERT model configuration
   bert_model:
-    model_id: models/all-MiniLM-L12-v2
+    model_id: models/mom-embedding-light
     threshold: 0.6
     use_cpu: true
 
@@ -239,10 +239,10 @@ config:
   prompt_guard:
     enabled: true
     use_modernbert: true
-    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    model_id: "models/mom-jailbreak-classifier"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Classifier configuration
   classifier:
@@ -257,7 +257,7 @@ config:
       use_modernbert: true
       threshold: 0.7
       use_cpu: true
-      pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
   # Reasoning families
   reasoning_families:

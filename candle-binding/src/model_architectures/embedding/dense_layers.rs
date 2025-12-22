@@ -30,7 +30,7 @@
 //!
 //! ## References
 //! - SentenceTransformers architecture: https://www.sbert.net/docs/package_reference/models.html#dense
-//! - EmbeddingGemma config: models/embeddinggemma-300m/2_Dense/config.json
+//! - EmbeddingGemma config: models/mom-embedding-flash/2_Dense/config.json
 //! - Plan 4 analysis: plan-cursor.md Section 4.2
 
 use crate::core::{from_candle_error, UnifiedError, UnifiedResult};
@@ -254,7 +254,7 @@ impl BottleneckDenseNet {
     ///
     /// # Directory Structure
     /// ```text
-    /// models/embeddinggemma-300m/
+    /// models/mom-embedding-flash/
     ///   ├── 2_Dense/
     ///   │   ├── config.json          (in: 768, out: 3072, bias: false, activation: Identity)
     ///   │   └── model.safetensors    (weight: [3072, 768])
@@ -272,8 +272,8 @@ impl BottleneckDenseNet {
     /// use candle_nn::VarBuilder;
     ///
     /// let vb = VarBuilder::from_safetensors(
-    ///     vec!["models/embeddinggemma-300m/2_Dense/model.safetensors",
-    ///          "models/embeddinggemma-300m/3_Dense/model.safetensors"],
+    ///     vec!["models/mom-embedding-flash/2_Dense/model.safetensors",
+    ///          "models/mom-embedding-flash/3_Dense/model.safetensors"],
     ///     dtype,
     ///     device,
     /// )?;
@@ -306,7 +306,7 @@ impl BottleneckDenseNet {
     /// Load bottleneck from model directory path
     ///
     /// # Arguments
-    /// - `model_path`: Path to model directory (e.g., "../models/embeddinggemma-300m")
+    /// - `model_path`: Path to model directory (e.g., "../models/mom-embedding-flash")
     /// - `device`: Device to load weights on
     ///
     /// # Returns

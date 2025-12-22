@@ -73,7 +73,7 @@ impl Qwen3EmbeddingModelBatched {
     ///     ..Default::default()
     /// };
     /// let model = Qwen3EmbeddingModelBatched::load(
-    ///     "../models/Qwen3-Embedding-0.6B",
+    ///     "../models/mom-embedding-pro",
     ///     &Device::Cuda(0)?,
     ///     config
     /// )?;

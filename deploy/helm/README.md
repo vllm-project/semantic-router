@@ -340,16 +340,18 @@ helm upgrade semantic-router ./deploy/helm/semantic-router \
   --namespace vllm-semantic-router-system
 ```
 
-### Init Container Fails
+### Model Download Issues
 
 ```bash
-# Check init container logs
-kubectl logs <pod-name> -n vllm-semantic-router-system -c model-downloader
+# Models are now downloaded automatically by the router at startup
+# Check router logs for model download progress
+kubectl logs <pod-name> -n vllm-semantic-router-system
 
 # Common causes:
 # - Network issues
 # - HuggingFace rate limits
 # - Insufficient storage
+# - Missing huggingface-cli in container
 
 # Solution: Check PVC and network
 kubectl get pvc -n vllm-semantic-router-system

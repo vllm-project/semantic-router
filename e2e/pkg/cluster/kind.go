@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -221,36 +223,73 @@ func (k *KindCluster) verifyNvidiaRuntime(ctx context.Context) error {
 	return nil
 }
 
-// createClusterConfig creates a Kind config file with /mnt mount for storage
+// getHostMountPath returns the appropriate host path for mounting based on OS
+// On Linux: uses /mnt (standard location)
+// On macOS: creates a temporary directory in /tmp (Docker Desktop compatible)
+// On Windows: creates a temporary directory in user's temp folder
+func (k *KindCluster) getHostMountPath() (string, error) {
+	switch runtime.GOOS {
+	case "linux":
+		// On Linux, use /mnt as it's standard and typically has more space
+		return "/mnt", nil
+	case "darwin":
+		// On macOS, Docker Desktop only allows mounting from specific locations
+		// Use /tmp which is allowed by default
+		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
+		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
+		}
+		k.log("Using macOS-compatible mount path: %s", tmpDir)
+		return tmpDir, nil
+	case "windows":
+		// On Windows, use temp directory
+		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
+		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
+		}
+		k.log("Using Windows-compatible mount path: %s", tmpDir)
+		return tmpDir, nil
+	default:
+		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+}
+
+// createClusterConfig creates a Kind config file with host mount for storage
 // and optionally GPU support if GPUEnabled is true
 func (k *KindCluster) createClusterConfig() (string, error) {
-	// Base config with /mnt mount for storage (always included)
+	// Get OS-appropriate host path for mounting
+	hostPath, err := k.getHostMountPath()
+	if err != nil {
+		return "", err
+	}
+
+	// Base config with host mount for storage (always included)
 	kindConfig := fmt.Sprintf(`kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: %s
 nodes:
   - role: control-plane
     extraMounts:
-      - hostPath: /mnt
-        containerPath: /mnt`, k.Name)
+      - hostPath: %s
+        containerPath: /mnt`, k.Name, hostPath)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
-		kindConfig += `
+		kindConfig += fmt.Sprintf(`
   - role: worker
     extraMounts:
-      - hostPath: /mnt
+      - hostPath: %s
         containerPath: /mnt
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`
+`, hostPath)
 	} else {
-		kindConfig += `
+		kindConfig += fmt.Sprintf(`
   - role: worker
     extraMounts:
-      - hostPath: /mnt
+      - hostPath: %s
         containerPath: /mnt
-`
+`, hostPath)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")

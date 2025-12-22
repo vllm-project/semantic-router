@@ -174,7 +174,7 @@ func classifyJailbreakText(text string, config JailbreakLoRAConfig) (candle.Clas
 func main() {
 	// Parse command line flags
 	var (
-		jailbreakPath = flag.String("jailbreak-model", "../../../../models/lora_jailbreak_classifier_bert-base-uncased_model", "Path to LoRA jailbreak classifier model")
+		jailbreakPath = flag.String("jailbreak-model", "../../../../models/mom-jailbreak-classifier", "Path to LoRA jailbreak classifier model")
 		useModernBERT = flag.Bool("modernbert", true, "Use ModernBERT models (default for LoRA)")
 		useCPU        = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)

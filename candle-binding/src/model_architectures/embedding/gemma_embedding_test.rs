@@ -203,7 +203,7 @@ fn create_test_config() -> GemmaEmbeddingConfig {
 #[rstest]
 #[serial(gemma_model)]
 fn test_config_load_from_pretrained() {
-    let model_path = "../models/embeddinggemma-300m";
+    let model_path = "../models/mom-embedding-flash";
 
     let config = GemmaEmbeddingConfig::from_pretrained(model_path).expect("Failed to load config");
 

@@ -43,7 +43,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, dashboard, model-downloader]
+        image: [extproc, llm-katan, dashboard]
         # Multi-architecture build strategy:
         # - AMD64: Native build on ubuntu-latest (fast)
         # - ARM64: Cross-compilation on ubuntu-latest (faster than emulation)
@@ -175,10 +175,6 @@ jobs:
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
             echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
-          elif [ "${{ matrix.image }}" = "model-downloader" ]; then
-            echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./Dockerfile.model-downloader" >> $GITHUB_OUTPUT
-            echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate tags
@@ -244,7 +240,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, dashboard, model-downloader]
+        image: [extproc, llm-katan, dashboard]
 
     steps:
       - name: Log in to GitHub Container Registry

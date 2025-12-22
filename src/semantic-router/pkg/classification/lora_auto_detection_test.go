@@ -89,7 +89,7 @@ func TestIntentClassificationLoRAAutoDetection(t *testing.T) {
 
 // TestPIIAlreadyHasAutoDetection shows PII detection already works with LoRA auto-detection
 func TestPIIAlreadyHasAutoDetection(t *testing.T) {
-	modelPath := "../../../../models/lora_pii_detector_bert-base-uncased_model"
+	modelPath := "../../../../models/mom-pii-classifier"
 
 	// Check if LoRA model exists
 	if _, err := os.Stat(modelPath + "/lora_config.json"); os.IsNotExist(err) {

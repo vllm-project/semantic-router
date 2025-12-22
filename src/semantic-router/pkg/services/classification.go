@@ -59,7 +59,7 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 	modelsPath := "./models"
 	if config != nil && config.CategoryModel.ModelID != "" {
 		// Extract the models directory from the model path
-		// e.g., "models/category_classifier_modernbert-base_model" -> "models"
+		// e.g., "models/mom-domain-classifier" -> "models"
 		if idx := strings.Index(config.CategoryModel.ModelID, "/"); idx > 0 {
 			modelsPath = config.CategoryModel.ModelID[:idx]
 		}
