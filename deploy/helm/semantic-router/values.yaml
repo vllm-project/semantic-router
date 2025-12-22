@@ -158,7 +158,7 @@ affinity: {}
 
 # Startup probe configuration (for slow-starting containers with model loading)
 # This probe runs FIRST and disables liveness/readiness probes until it succeeds
-# Required when using Gemma embedding model which takes ~35s to load
+# Models are now downloaded automatically at startup, which can take 10-20 minutes depending on network speed
 startupProbe:
   # -- Enable startup probe
   enabled: true
@@ -166,8 +166,8 @@ startupProbe:
   periodSeconds: 10
   # -- Timeout seconds
   timeoutSeconds: 5
-  # -- Failure threshold
-  failureThreshold: 30
+  # -- Failure threshold (360 * 10s = 60 minutes total timeout for model downloads)
+  failureThreshold: 360
 
 # Liveness probe configuration
 livenessProbe:
