@@ -11,6 +11,9 @@ services:
 
   # Semantic Router External Processor Service
   semantic-router:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.extproc
     image: ghcr.io/vllm-project/semantic-router/extproc:latest
     container_name: semantic-router
     ports:
@@ -18,7 +21,7 @@ services:
       - "8080:8080"    # HTTP API (health, classify, metrics)
     volumes:
       - ../../config:/app/config:ro,z
-      - ../../models:/app/models:ro,z
+      - ../../models:/app/models:z  # Writable for model downloads
       - ~/.cache/huggingface:/root/.cache/huggingface:z
     environment:
       - LD_LIBRARY_PATH=/app/lib
@@ -67,7 +70,7 @@ services:
     environment:
       - HF_HUB_ENABLE_HF_TRANSFER=1
     volumes:
-      - ../../models:/app/models:ro,z
+      - ../../models:/app/models:z  # Writable for model downloads
       - hf-cache:/home/llmkatan/.cache/huggingface
     networks:
       semantic-network:

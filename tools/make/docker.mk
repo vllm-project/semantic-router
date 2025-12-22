@@ -184,11 +184,11 @@ docker-compose-down-llm-katan:
 # CI compose file path
 CI_COMPOSE_FILE ?= deploy/docker-compose/docker-compose.ci.yml
 
-docker-compose-up-ci: ## Start minimal CI services (semantic-router, envoy, llm-katan)
+docker-compose-up-ci: ## Start minimal CI services (semantic-router, envoy, llm-katan) with local build
 docker-compose-up-ci:
 	@$(LOG_TARGET)
-	@echo "Starting CI services with $(COMPOSE_CMD) (minimal for CI)..."
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) up -d
+	@echo "Building and starting CI services with $(COMPOSE_CMD) (minimal for CI)..."
+	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) up -d --build
 
 docker-compose-down-ci: ## Stop CI services
 docker-compose-down-ci:
