@@ -431,7 +431,7 @@ config:
   # Prompt guard
   prompt_guard:
     enabled: true
-    use_modernbert: true
+    use_modernbert: false
     model_id: "models/mom-jailbreak-classifier"
     threshold: 0.7
     use_cpu: true

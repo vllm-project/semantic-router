@@ -81,58 +81,56 @@ type JailbreakInitializer interface {
 	Init(modelID string, useCPU bool, numClasses ...int) error
 }
 
-type LinearJailbreakInitializer struct{}
-
-func (c *LinearJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
-	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
-	if err != nil {
-		return err
-	}
-	logging.Infof("Initialized linear jailbreak classifier with %d classes", numClasses[0])
-	return nil
+type JailbreakInitializerImpl struct {
+	usedModernBERT bool // Track which init path succeeded for inference routing
 }
 
-type ModernBertJailbreakInitializer struct{}
+func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	// Try auto-detecting Candle BERT init first - checks for lora_config.json
+	// This enables LoRA Jailbreak models when available
+	success := candle_binding.InitCandleBertClassifier(modelID, numClasses[0], useCPU)
+	if success {
+		c.usedModernBERT = false
+		logging.Infof("Initialized jailbreak classifier with auto-detection")
+		return nil
+	}
 
-func (c *ModernBertJailbreakInitializer) Init(modelID string, useCPU bool, numClasses ...int) error {
+	// Fallback to ModernBERT-specific init for backward compatibility
+	// This handles models with incomplete configs (missing hidden_act, etc.)
+	logging.Infof("Auto-detection failed, falling back to ModernBERT jailbreak initializer")
 	err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize jailbreak classifier (both auto-detect and ModernBERT): %w", err)
 	}
-	logging.Infof("Initialized ModernBERT jailbreak classifier (classes auto-detected from model)")
+	c.usedModernBERT = true
+	logging.Infof("Initialized ModernBERT jailbreak classifier (fallback mode)")
 	return nil
 }
 
-// createJailbreakInitializer creates the appropriate jailbreak initializer based on configuration
-func createJailbreakInitializer(useModernBERT bool) JailbreakInitializer {
-	if useModernBERT {
-		return &ModernBertJailbreakInitializer{}
-	}
-	return &LinearJailbreakInitializer{}
+// createJailbreakInitializer creates the jailbreak initializer (auto-detecting)
+func createJailbreakInitializer() JailbreakInitializer {
+	return &JailbreakInitializerImpl{}
 }
 
 type JailbreakInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
 
-type LinearJailbreakInference struct{}
+type JailbreakInferenceImpl struct{}
 
-func (c *LinearJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassifyJailbreakText(text)
-}
-
-type ModernBertJailbreakInference struct{}
-
-func (c *ModernBertJailbreakInference) Classify(text string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassifyModernBertJailbreakText(text)
-}
-
-// createJailbreakInferenceCandle creates Candle-based jailbreak inference
-func createJailbreakInferenceCandle(useModernBERT bool) JailbreakInference {
-	if useModernBERT {
-		return &ModernBertJailbreakInference{}
+func (c *JailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+	// Try Candle BERT first, fall back to ModernBERT if it fails
+	result, err := candle_binding.ClassifyCandleBertText(text)
+	if err != nil {
+		// Candle BERT not initialized or failed, try ModernBERT
+		return candle_binding.ClassifyModernBertJailbreakText(text)
 	}
-	return &LinearJailbreakInference{}
+	return result, nil
+}
+
+// createJailbreakInferenceCandle creates Candle-based jailbreak inference (auto-detecting)
+func createJailbreakInferenceCandle() JailbreakInference {
+	return &JailbreakInferenceImpl{}
 }
 
 // createJailbreakInference creates the appropriate jailbreak inference based on configuration
@@ -143,7 +141,7 @@ func createJailbreakInference(cfg *config.PromptGuardConfig) (JailbreakInference
 		return NewVLLMJailbreakInference(cfg)
 	}
 	// Use Candle-based inference
-	return createJailbreakInferenceCandle(cfg.UseModernBERT), nil
+	return createJailbreakInferenceCandle(), nil
 }
 
 type PIIInitializer interface {
@@ -376,7 +374,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Create jailbreak initializer (only needed for Candle, nil for vLLM)
 	var jailbreakInitializer JailbreakInitializer
 	if !cfg.PromptGuard.UseVLLM {
-		jailbreakInitializer = createJailbreakInitializer(cfg.PromptGuard.UseModernBERT)
+		jailbreakInitializer = createJailbreakInitializer()
 	}
 
 	options := []option{
