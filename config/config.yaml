@@ -469,7 +469,6 @@ api:
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
   qwen3_model_path: "models/mom-embedding-pro"
-  gemma_model_path: "models/mom-embedding-flash"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
 # Observability Configuration

@@ -295,7 +295,7 @@ config:
   # Embedding Models Configuration
   embedding_models:
     qwen3_model_path: "models/mom-embedding-pro"
-    gemma_model_path: "models/mom-embedding-flash"
+    # gemma_model_path: "models/mom-embedding-flash"
     use_cpu: true
 
   # Observability Configuration
