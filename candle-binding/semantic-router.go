@@ -593,21 +593,7 @@ func GetEmbedding(text string, maxLength int) ([]float32, error) {
 	}
 
 	// Convert the C array to a Go slice
-	length := int(result.length)
-	embedding := make([]float32, length)
-
-	if length > 0 {
-		// Create a slice that refers to the C array
-		cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-		// Copy and convert each value
-		for i := 0; i < length; i++ {
-			embedding[i] = float32(cFloats[i])
-		}
-
-		// Free the memory allocated in Rust
-		C.free_embedding(result.data, result.length)
-	}
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return embedding, nil
 }
@@ -685,18 +671,7 @@ func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return embedding, nil
 }
@@ -780,15 +755,7 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}
 
 	// Convert C array to Go slice
-	length := int(result.length)
-	embedding := make([]float32, length)
-	cArray := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cArray[i])
-	}
-
-	// Free the C memory
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return &EmbeddingOutput{
 		Embedding:        embedding,
@@ -915,18 +882,7 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return embedding, nil
 }
@@ -984,18 +940,7 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	// Convert model_type to string
 	var modelType string
@@ -1074,18 +1019,7 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	// Convert model_type to string
 	var actualModelType string
@@ -1133,6 +1067,28 @@ type SimilarityOutput struct {
 	Similarity       float32 // Cosine similarity score (-1.0 to 1.0)
 	ModelType        string  // Model used: "qwen3", "gemma", or "unknown"
 	ProcessingTimeMs float32 // Processing time in milliseconds
+}
+
+// cFloatArrayToGoSlice converts a C array of floats to a Go slice and frees the C memory
+func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
+	if data == nil || length == 0 {
+		return nil
+	}
+
+	l := int(length)
+	out := make([]float32, l)
+
+	// Create a slice that refers to the C array
+	cArray := (*[1 << 30]C.float)(unsafe.Pointer(data))[:l:l]
+
+	// Copy and convert each value
+	for i := 0; i < l; i++ {
+		out[i] = float32(cArray[i])
+	}
+
+	// Free the memory allocated in Rust
+	C.free_embedding(data, length)
+	return out
 }
 
 // CalculateEmbeddingSimilarity calculates cosine similarity between two texts using embedding models
