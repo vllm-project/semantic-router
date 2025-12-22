@@ -5,7 +5,7 @@ const PlaygroundPage = () => {
     <div className={styles.container}>
       <div className={styles.iframeContainer}>
           <iframe
-          src="/embedded/openwebui/"
+          src="/workspace"
             className={styles.iframe}
             title="Open WebUI Playground"
             allowFullScreen

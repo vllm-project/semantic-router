@@ -102,11 +102,27 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	var openwebuiStaticProxy *httputil.ReverseProxy
 	if cfg.OpenWebUIURL != "" {
 		var err error
-		openwebuiStaticProxy, err = proxy.NewReverseProxy(cfg.OpenWebUIURL, "", false)
+		// Use forwardAuth=true to forward Authorization headers for API authentication
+		openwebuiStaticProxy, err = proxy.NewReverseProxy(cfg.OpenWebUIURL, "", true)
 		if err != nil {
 			log.Printf("Warning: failed to create OpenWebUI static proxy: %v", err)
 			openwebuiStaticProxy = nil
 		}
+	}
+
+	// OpenWebUI is not base-path aware; the Playground iframe loads it at /workspace (root),
+	// and it may redirect to /auth. These must be proxied to OpenWebUI (not served by the dashboard SPA).
+	if openwebuiStaticProxy != nil {
+		openwebuiRootProxy := func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			openwebuiStaticProxy.ServeHTTP(w, r)
+		}
+		mux.HandleFunc("/auth", openwebuiRootProxy)
+		mux.HandleFunc("/auth/", openwebuiRootProxy)
+		mux.HandleFunc("/workspace", openwebuiRootProxy)
+		mux.HandleFunc("/workspace/", openwebuiRootProxy)
 	}
 
 	// Jaeger API proxy (needs to be set up early for the smart router below)
@@ -405,8 +421,9 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			return
 		}
 		// Check if path is a known OpenWebUI API endpoint (even without referer)
-		// OpenWebUI uses /api/config for configuration
-		if openwebuiStaticProxy != nil && strings.HasPrefix(r.URL.Path, "/api/config") {
+		// OpenWebUI uses /api/config for configuration and /api/v1/ for auth/users
+		if openwebuiStaticProxy != nil && (strings.HasPrefix(r.URL.Path, "/api/config") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/")) {
 			log.Printf("Routing to OpenWebUI API: %s (by path pattern)", r.URL.Path)
 			openwebuiStaticProxy.ServeHTTP(w, r)
 			return
