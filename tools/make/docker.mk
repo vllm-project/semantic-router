@@ -37,7 +37,7 @@ docker-build-dashboard: ## Build dashboard Docker image
 docker-build-dashboard:
 	@$(LOG_TARGET)
 	@echo "Building dashboard Docker image..."
-	@$(CONTAINER_RUNTIME) build -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build -f dashboard/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) dashboard/
 
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image

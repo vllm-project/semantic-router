@@ -229,8 +229,8 @@ services:
     # Use pre-built image from GHCR, fallback to local build for development
     # image: ${DASHBOARD_IMAGE:-ghcr.io/vllm-project/semantic-router/dashboard:latest}
     build:
-      context: ../../
-      dockerfile: dashboard/backend/Dockerfile
+      context: ../../dashboard
+      dockerfile: Dockerfile
     container_name: semantic-router-dashboard
     command: ["/app/dashboard-backend", "-port=8700", "-static=/app/frontend", "-config=/app/config/config.yaml"]
     environment:

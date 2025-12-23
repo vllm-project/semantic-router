@@ -172,8 +172,8 @@ jobs:
             echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
             echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "dashboard" ]; then
-            echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
+            echo "context=./dashboard" >> $GITHUB_OUTPUT
+            echo "dockerfile=./dashboard/Dockerfile" >> $GITHUB_OUTPUT
             echo "platform=linux/${{ matrix.arch }}" >> $GITHUB_OUTPUT
           fi
 

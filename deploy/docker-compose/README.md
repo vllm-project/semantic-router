@@ -132,7 +132,7 @@ Volumes:
 
 Image selection:
 
-- Uses `DASHBOARD_IMAGE` if provided; otherwise builds from `dashboard/backend/Dockerfile` at `docker compose up` time.
+- Uses `DASHBOARD_IMAGE` if provided; otherwise builds from `dashboard/Dockerfile` at `docker compose up` time.
 
 ## Chat UI (Hugging Face)
 

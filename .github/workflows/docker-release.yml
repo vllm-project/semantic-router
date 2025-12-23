@@ -135,8 +135,8 @@ jobs:
     - name: Build and push dashboard Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./dashboard/backend/Dockerfile
+        context: ./dashboard
+        file: ./dashboard/Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
         tags: |

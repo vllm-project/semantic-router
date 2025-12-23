@@ -271,7 +271,7 @@ docker logs -f semantic-router-dashboard
 
 ### Dockerfile Build
 
-- A **3-stage multi-stage build** is defined in `dashboard/backend/Dockerfile`:
+- A **3-stage multi-stage build** is defined in `dashboard/Dockerfile`:
   1. **Node.js stage**: Builds the React frontend with Vite (`npm run build` → `dist/`)
   2. **Go builder stage**: Compiles the backend binary with multi-architecture support
   3. **Alpine runtime stage**: Combines backend + frontend dist in minimal image
