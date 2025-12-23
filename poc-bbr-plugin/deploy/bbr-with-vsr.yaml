@@ -1,0 +1,185 @@
+# BBR with vSR Semantic Router Plugin
+# This deploys the Body-Based Router (BBR) ExtProc with vSR guardrails enabled:
+# - Intent Classification (coding, math, creative, general)
+# - PII Detection
+# - Jailbreak Detection
+#
+# Usage: kubectl apply -f bbr-with-vsr.yaml
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway-system
+  labels:
+    app.kubernetes.io/name: bbr-with-vsr
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bbr-vsr-config
+  namespace: gateway-system
+data:
+  # vSR Plugin Configuration
+  config.yaml: |
+    plugin:
+      name: vsr-semantic-router
+      type: Guardrail
+      
+    classifier:
+      enabled: true
+      threshold: 0.7
+      
+    pii:
+      enabled: true
+      threshold: 0.8
+      block_on_detection: true
+      
+    jailbreak:
+      enabled: true
+      threshold: 0.9
+      block_on_detection: true
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bbr-extproc
+  namespace: gateway-system
+  labels:
+    app: bbr-extproc
+    app.kubernetes.io/name: bbr-with-vsr
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bbr-extproc
+  template:
+    metadata:
+      labels:
+        app: bbr-extproc
+    spec:
+      containers:
+      - name: bbr
+        # vSR-provided image with BBR + vSR plugin
+        image: ghcr.io/vllm-project/bbr-with-vsr:latest
+        
+        ports:
+        - name: grpc
+          containerPort: 9002
+          protocol: TCP
+        - name: health
+          containerPort: 8080
+          protocol: TCP
+          
+        env:
+        - name: VSR_CONFIG_PATH
+          value: /config/config.yaml
+        - name: VSR_MODELS_PATH
+          value: /models
+        - name: LOG_LEVEL
+          value: info
+          
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: models
+          mountPath: /models
+          readOnly: true
+          
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"    # ModernBERT models need ~2GB
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+            
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          
+      volumes:
+      - name: config
+        configMap:
+          name: bbr-vsr-config
+      - name: models
+        persistentVolumeClaim:
+          claimName: bbr-vsr-models
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bbr-extproc
+  namespace: gateway-system
+  labels:
+    app: bbr-extproc
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 9002
+    targetPort: 9002
+    protocol: TCP
+  selector:
+    app: bbr-extproc
+
+---
+# PVC for ML models (pre-download or use init container)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bbr-vsr-models
+  namespace: gateway-system
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 5Gi    # ~1.8GB for 3 ModernBERT models
+  storageClassName: standard
+
+---
+# Optional: Init job to download models (run once)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: download-vsr-models
+  namespace: gateway-system
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: downloader
+        image: ghcr.io/vllm-project/model-downloader:latest
+        env:
+        - name: MODELS
+          value: |
+            LLM-Semantic-Router/category_classifier_modernbert-base_model
+            LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model
+            LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model
+        - name: OUTPUT_PATH
+          value: /models
+        volumeMounts:
+        - name: models
+          mountPath: /models
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: bbr-vsr-models
+
