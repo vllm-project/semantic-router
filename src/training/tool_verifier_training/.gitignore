@@ -1,0 +1,14 @@
+# Virtual environments
+venv/
+.venv/
+
+# Generated data
+data/
+output/
+
+# Training logs
+*.log
+
+# Python cache
+__pycache__/
+*.pyc

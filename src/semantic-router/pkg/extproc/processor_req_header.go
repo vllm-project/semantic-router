@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -60,8 +61,6 @@ type RequestContext struct {
 	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
-	// Endpoint tracking for windowed metrics
-	SelectedEndpoint string // The endpoint address selected for this request
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification
 	FactCheckConfidence       float32                    // Confidence score of fact-check classification
@@ -78,8 +77,21 @@ type RequestContext struct {
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
 
-	// Response API context
-	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+	// Tool verification tracking (two-stage jailbreak detection for tool-calling)
+	ToolVerificationStage1Ran           bool    // Whether Stage 1 ran
+	ToolVerificationInjectionRisk       bool    // Result of Stage 1 injection classification
+	ToolVerificationInjectionConfidence float32 // Confidence score from Stage 1
+	ToolVerificationStage1LatencyMs     int64   // Stage 1 latency
+	ToolVerificationStage2Ran           bool    // Whether Stage 2 ran
+	ToolVerificationStage2SkipReason    string  // Why Stage 2 was skipped (if applicable)
+	ToolVerificationHasUnauthorized     bool    // Whether unauthorized tool calls were found
+	ToolVerificationStage2LatencyMs     int64   // Stage 2 latency
+
+	// Tool verification enforcement policy state
+	ToolVerificationBlockReason       string                                // Reason for block/warning
+	ToolVerificationAddWarningHeaders bool                                  // Add warning headers to response
+	ToolVerificationAddWarningBody    bool                                  // Prepend warning to response body
+	ToolVerificationUnauthorizedCalls []classification.UnauthorizedToolCall // List of unauthorized calls (for details)
 }
 
 // handleRequestHeaders processes the request headers
@@ -150,42 +162,6 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.handleModelsRequest(path)
 	}
 
-	// Handle Response API endpoints
-	if r.ResponseAPIFilter != nil && r.ResponseAPIFilter.IsEnabled() && strings.HasPrefix(path, "/v1/responses") {
-		// GET /v1/responses/{id}/input_items - Get input items for a response
-		if method == "GET" && strings.HasSuffix(path, "/input_items") {
-			responseID := extractResponseIDFromInputItemsPath(path)
-			if responseID != "" {
-				logging.Infof("Handling GET /v1/responses/%s/input_items", responseID)
-				return r.ResponseAPIFilter.HandleGetInputItems(ctx.TraceContext, responseID)
-			}
-		}
-
-		// GET /v1/responses/{id} - Get a response
-		if method == "GET" {
-			responseID := extractResponseIDFromPath(path)
-			if responseID != "" {
-				logging.Infof("Handling GET /v1/responses/%s", responseID)
-				return r.ResponseAPIFilter.HandleGetResponse(ctx.TraceContext, responseID)
-			}
-		}
-
-		// DELETE /v1/responses/{id} - Delete a response
-		if method == "DELETE" {
-			responseID := extractResponseIDFromPath(path)
-			if responseID != "" {
-				logging.Infof("Handling DELETE /v1/responses/%s", responseID)
-				return r.ResponseAPIFilter.HandleDeleteResponse(ctx.TraceContext, responseID)
-			}
-		}
-
-		// POST /v1/responses - Create response (mark for body phase processing)
-		if method == "POST" {
-			ctx.ResponseAPICtx = &ResponseAPIContext{IsResponseAPIRequest: true}
-			logging.Infof("Detected Response API POST request: %s", path)
-		}
-	}
-
 	// Prepare base response
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
@@ -203,61 +179,4 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The Accept header is still recorded on context for downstream logic.
 
 	return response, nil
-}
-
-// extractResponseIDFromPath extracts the response ID from a path like /v1/responses/{id}
-func extractResponseIDFromPath(path string) string {
-	// Remove query string if present
-	if idx := strings.Index(path, "?"); idx != -1 {
-		path = path[:idx]
-	}
-
-	// Expected format: /v1/responses/{id}
-	prefix := "/v1/responses/"
-	if !strings.HasPrefix(path, prefix) {
-		return ""
-	}
-
-	id := strings.TrimPrefix(path, prefix)
-	// Remove any trailing slashes
-	id = strings.TrimSuffix(id, "/")
-
-	// Skip if this is an input_items request
-	if strings.Contains(id, "/") {
-		return ""
-	}
-
-	// Validate it looks like a response ID (should start with "resp_")
-	if id != "" && strings.HasPrefix(id, "resp_") {
-		return id
-	}
-
-	return ""
-}
-
-// extractResponseIDFromInputItemsPath extracts the response ID from a path like /v1/responses/{id}/input_items
-func extractResponseIDFromInputItemsPath(path string) string {
-	// Remove query string if present
-	if idx := strings.Index(path, "?"); idx != -1 {
-		path = path[:idx]
-	}
-
-	// Expected format: /v1/responses/{id}/input_items
-	prefix := "/v1/responses/"
-	suffix := "/input_items"
-
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
-		return ""
-	}
-
-	// Extract the ID between prefix and suffix
-	id := strings.TrimPrefix(path, prefix)
-	id = strings.TrimSuffix(id, suffix)
-
-	// Validate it looks like a response ID (should start with "resp_")
-	if id != "" && strings.HasPrefix(id, "resp_") {
-		return id
-	}
-
-	return ""
 }
