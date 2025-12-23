@@ -54,16 +54,31 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 			reasoningApplied = false
 		}
 	} else {
-		// When reasoning is disabled, only preserve reasoning_effort for gpt-oss models
+		// When reasoning is disabled, apply the appropriate "disable" syntax for models
+		// that require an explicit flag (e.g. Qwen3/DeepSeek), and preserve
+		// reasoning_effort for models that use it (e.g. gpt-oss).
 		familyConfig := r.getModelReasoningFamily(model)
-		if familyConfig != nil && familyConfig.Type == "reasoning_effort" {
-			requestMap["reasoning_effort"] = originalReasoningEffort
-			if s, ok := originalReasoningEffort.(string); ok {
-				appliedEffort = s
+		if familyConfig != nil {
+			switch familyConfig.Type {
+			case "reasoning_effort":
+				// Preserve original reasoning_effort for gpt-oss models (don't break upstream defaulting).
+				requestMap["reasoning_effort"] = originalReasoningEffort
+				if s, ok := originalReasoningEffort.(string); ok {
+					appliedEffort = s
+				}
+			case "chat_template_kwargs":
+				// Some models default to "thinking enabled" unless explicitly disabled.
+				// Inject an explicit disable flag (e.g. enable_thinking=false / thinking=false).
+				kwargs := map[string]interface{}{
+					familyConfig.Parameter: false,
+				}
+				requestMap["chat_template_kwargs"] = kwargs
+			default:
+				// Unknown reasoning syntax type - keep fields cleared.
 			}
 		}
 		reasoningApplied = false
-		// For all other models, reasoning fields remain cleared
+		// For models without a reasoning family, fields remain cleared.
 	}
 
 	// Log based on what actually happened

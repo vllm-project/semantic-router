@@ -134,12 +134,14 @@ func TestReasoningModeComprehensive(t *testing.T) {
 		},
 		// Test 2: DeepSeek with reasoning disabled - should clear all fields
 		{
-			name:                   "DeepSeek - reasoning disabled",
-			model:                  "deepseek-v3",
-			categoryName:           "math",
-			enableReasoning:        false,
-			initialReasoningEffort: "low",
-			expectBothFieldsAbsent: true,
+			name:                      "DeepSeek - reasoning disabled",
+			model:                     "deepseek-v3",
+			categoryName:              "math",
+			enableReasoning:           false,
+			initialReasoningEffort:    "low",
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "thinking",
+			expectedChatTemplateValue: false,
 		},
 		// Test 3: Qwen3 with reasoning enabled - should use enable_thinking
 		{
@@ -154,12 +156,14 @@ func TestReasoningModeComprehensive(t *testing.T) {
 		},
 		// Test 4: Qwen3 with reasoning disabled - should clear all fields
 		{
-			name:                   "Qwen3 - reasoning disabled",
-			model:                  "qwen3-model",
-			categoryName:           "code",
-			enableReasoning:        false,
-			initialReasoningEffort: "medium",
-			expectBothFieldsAbsent: true,
+			name:                      "Qwen3 - reasoning disabled",
+			model:                     "qwen3-model",
+			categoryName:              "code",
+			enableReasoning:           false,
+			initialReasoningEffort:    "medium",
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "enable_thinking",
+			expectedChatTemplateValue: false,
 		},
 		// Test 5: GPT-OSS with reasoning enabled - should use reasoning_effort with HIGH
 		{
@@ -192,11 +196,13 @@ func TestReasoningModeComprehensive(t *testing.T) {
 		},
 		// Test 8: Claude with reasoning disabled
 		{
-			name:                   "Claude - reasoning disabled",
-			model:                  "claude-opus",
-			categoryName:           "creative",
-			enableReasoning:        false,
-			expectBothFieldsAbsent: true,
+			name:                      "Claude - reasoning disabled",
+			model:                     "claude-opus",
+			categoryName:              "creative",
+			enableReasoning:           false,
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "thinking",
+			expectedChatTemplateValue: false,
 		},
 		// Test 9: Phi4 (no reasoning family) - should not add any fields
 		{
