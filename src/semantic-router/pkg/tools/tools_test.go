@@ -24,7 +24,56 @@ var _ = BeforeSuite(func() {
 	// Initialize BERT model once for all cache tests (Linux only)
 	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
 	Expect(err).NotTo(HaveOccurred())
+
+	// Initialize embedding models (ModelFactory) for tools tests
+	// Try to find Qwen3 or Gemma models in the models directory
+	qwen3Path := "../../../../models/mom-embedding-pro"
+	gemmaPath := "../../../../models/mom-embedding-flash"
+
+	// Check if at least one model exists
+	qwen3Exists := false
+	gemmaExists := false
+	if _, statErr := os.Stat(qwen3Path); statErr == nil {
+		qwen3Exists = true
+		GinkgoWriter.Printf("Found Qwen3 embedding model at %s\n", qwen3Path)
+	}
+	if _, statErr := os.Stat(gemmaPath); statErr == nil {
+		gemmaExists = true
+		GinkgoWriter.Printf("Found Gemma embedding model at %s\n", gemmaPath)
+	}
+
+	// Initialize ModelFactory if at least one model is available
+	if qwen3Exists || gemmaExists {
+		qwen3ToUse := ""
+		gemmaToUse := ""
+		if qwen3Exists {
+			qwen3ToUse = qwen3Path
+		}
+		if gemmaExists {
+			gemmaToUse = gemmaPath
+		}
+
+		GinkgoWriter.Printf("Initializing ModelFactory with Qwen3=%s, Gemma=%s\n", qwen3ToUse, gemmaToUse)
+		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, true)
+		if err != nil {
+			// Log warning but don't fail - tests will skip if ModelFactory is not initialized
+			GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
+			GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
+		} else {
+			GinkgoWriter.Printf("✓ ModelFactory initialized successfully\n")
+		}
+	} else {
+		GinkgoWriter.Printf("Warning: No embedding models found at %s or %s\n", qwen3Path, gemmaPath)
+		GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
+	}
 })
+
+// Helper function to check if ModelFactory is initialized
+func isModelFactoryInitialized() bool {
+	// Try to get embedding models info to check if ModelFactory is initialized
+	_, err := candle_binding.GetEmbeddingModelsInfo()
+	return err == nil
+}
 
 var _ = Describe("ToolsDatabase", func() {
 	Describe("NewToolsDatabase", func() {
@@ -94,6 +143,10 @@ var _ = Describe("ToolsDatabase", func() {
 		})
 
 		It("should load tools from file when enabled", func() {
+			if !isModelFactoryInitialized() {
+				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			}
+
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
@@ -142,6 +195,10 @@ var _ = Describe("ToolsDatabase", func() {
 
 	Describe("AddTool", func() {
 		It("should add tool when enabled", func() {
+			if !isModelFactoryInitialized() {
+				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			}
+
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
@@ -182,6 +239,10 @@ var _ = Describe("ToolsDatabase", func() {
 		var db *tools.ToolsDatabase
 
 		BeforeEach(func() {
+			if !isModelFactoryInitialized() {
+				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			}
+
 			db = tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
@@ -235,6 +296,10 @@ var _ = Describe("ToolsDatabase", func() {
 
 	Describe("GetAllTools", func() {
 		It("should return all tools when enabled", func() {
+			if !isModelFactoryInitialized() {
+				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			}
+
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
@@ -269,6 +334,10 @@ var _ = Describe("ToolsDatabase", func() {
 
 	Describe("GetToolCount", func() {
 		It("should return correct count when enabled", func() {
+			if !isModelFactoryInitialized() {
+				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			}
+
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,

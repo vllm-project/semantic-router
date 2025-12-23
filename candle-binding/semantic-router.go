@@ -1654,7 +1654,7 @@ func InitFactCheckClassifier(modelPath string, useCPU bool) error {
 	factCheckClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to halugate-sentinel model path
-			modelPath = "./models/halugate-sentinel"
+			modelPath = "./models/mom-halugate-sentinel"
 		}
 
 		log.Printf("Initializing fact-check classifier (halugate-sentinel): %s", modelPath)

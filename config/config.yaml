@@ -69,6 +69,26 @@ classifier:
     use_cpu: true
   pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 
+# Hallucination mitigation configuration
+# Disabled by default - enable in decisions via hallucination plugin
+hallucination_mitigation:
+  enabled: false
+  # Fact-check classifier: determines if a prompt needs fact verification
+  fact_check_model:
+    model_id: "models/mom-halugate-sentinel"
+    threshold: 0.6
+    use_cpu: true
+  # Hallucination detector: verifies if LLM response is grounded in context
+  hallucination_model:
+    model_id: "models/mom-halugate-detector"
+    threshold: 0.8
+    use_cpu: true
+  # NLI model: provides explanations for hallucinated spans
+  nli_model:
+    model_id: "models/mom-halugate-explainer"
+    threshold: 0.9
+    use_cpu: true
+
 # vLLM Endpoints Configuration
 # IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
 # Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1

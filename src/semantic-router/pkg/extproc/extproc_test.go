@@ -576,18 +576,18 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 
 	// Create tools database
 	toolsSimilarityThreshold := float32(0.2) // Default threshold
-	if cfg.Tools.SimilarityThreshold != nil {
-		toolsSimilarityThreshold = *cfg.Tools.SimilarityThreshold
+	if cfg.ToolSelection.Tools.SimilarityThreshold != nil {
+		toolsSimilarityThreshold = *cfg.ToolSelection.Tools.SimilarityThreshold
 	}
 	toolsOptions := tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsSimilarityThreshold,
-		Enabled:             cfg.Tools.Enabled,
+		Enabled:             cfg.ToolSelection.Tools.Enabled,
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
 	// Load tools from file if configured
-	if cfg.Tools.Enabled && cfg.Tools.ToolsDBPath != "" {
-		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
+	if cfg.ToolSelection.Tools.Enabled && cfg.ToolSelection.Tools.ToolsDBPath != "" {
+		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.ToolSelection.Tools.ToolsDBPath); loadErr != nil {
 			return nil, fmt.Errorf("failed to load tools database: %w", loadErr)
 		}
 	}

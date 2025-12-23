@@ -42,13 +42,13 @@ func getHallucinationModelPathForTest() string {
 		return path
 	}
 	// Try relative path from test directory (pkg/classification -> models)
-	relativePath := "../../../../models/halugate-detector"
+	relativePath := "../../../../models/mom-halugate-detector"
 	if _, err := os.Stat(relativePath); err == nil {
 		return relativePath
 	}
 	// Try from project root
 	if root := findProjectRoot(); root != "" {
-		projectPath := filepath.Join(root, "models", "halugate-detector")
+		projectPath := filepath.Join(root, "models", "mom-halugate-detector")
 		if _, err := os.Stat(projectPath); err == nil {
 			return projectPath
 		}
@@ -64,13 +64,13 @@ func getFactCheckModelPathForTest() string {
 		return path
 	}
 	// Try relative path from test directory (pkg/classification -> models)
-	relativePath := "../../../../models/halugate-sentinel"
+	relativePath := "../../../../models/mom-halugate-sentinel"
 	if _, err := os.Stat(relativePath); err == nil {
 		return relativePath
 	}
 	// Try from project root
 	if root := findProjectRoot(); root != "" {
-		projectPath := filepath.Join(root, "models", "halugate-sentinel")
+		projectPath := filepath.Join(root, "models", "mom-halugate-sentinel")
 		if _, err := os.Stat(projectPath); err == nil {
 			return projectPath
 		}
