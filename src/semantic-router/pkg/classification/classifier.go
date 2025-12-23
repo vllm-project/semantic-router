@@ -119,10 +119,10 @@ type JailbreakInference interface {
 type JailbreakInferenceImpl struct{}
 
 func (c *JailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
-	// Try Candle BERT first, fall back to ModernBERT if it fails
-	result, err := candle_binding.ClassifyCandleBertText(text)
+	// Try jailbreak-specific classifier first, fall back to ModernBERT if it fails
+	result, err := candle_binding.ClassifyJailbreakText(text)
 	if err != nil {
-		// Candle BERT not initialized or failed, try ModernBERT
+		// Jailbreak classifier not initialized or failed, try ModernBERT
 		return candle_binding.ClassifyModernBertJailbreakText(text)
 	}
 	return result, nil

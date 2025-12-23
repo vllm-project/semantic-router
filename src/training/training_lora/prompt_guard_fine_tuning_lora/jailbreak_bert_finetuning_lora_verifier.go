@@ -151,8 +151,8 @@ func initializeJailbreakClassifier(config JailbreakLoRAConfig) error {
 func classifyJailbreakText(text string, config JailbreakLoRAConfig) (candle.ClassResult, error) {
 	switch config.ModelArchitecture {
 	case "BertForSequenceClassification", "RobertaForSequenceClassification":
-		// Use Candle BERT classifier for BERT and RoBERTa LoRA models
-		result, err := candle.ClassifyCandleBertText(text)
+		// Use jailbreak-specific classifier for BERT and RoBERTa LoRA models
+		result, err := candle.ClassifyJailbreakText(text)
 		if err != nil {
 			return candle.ClassResult{}, err
 		}
