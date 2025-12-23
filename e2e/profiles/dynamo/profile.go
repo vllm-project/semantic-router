@@ -337,7 +337,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 			"image.pullPolicy": "Never", // Use local image, don't pull from registry
 		},
 		Wait:    true,
-		Timeout: "20m", // Increased timeout for Semantic Router (model downloads can take time)
+		Timeout: "30m", // Increased timeout for Semantic Router (model downloads can take time)
 	}
 
 	if err := deployer.Install(ctx, installOpts); err != nil {
@@ -349,7 +349,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 
 	// Wait for deployment separately with longer timeout
 	// This ensures we wait even if Helm's wait timed out
-	return deployer.WaitForDeployment(ctx, "vllm-semantic-router-system", "semantic-router", 20*time.Minute)
+	return deployer.WaitForDeployment(ctx, "vllm-semantic-router-system", "semantic-router", 30*time.Minute)
 }
 
 func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {

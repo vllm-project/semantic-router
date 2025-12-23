@@ -77,18 +77,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl
-          pip install -r src/model_manager/requirements.txt
+          pip install -U "huggingface_hub[cli]" hf_transfer
 
-      - name: Download models
+      # Download Qwen3-0.6B model for llm-katan service
+      # The semantic-router will auto-download its own models (embedding, classifiers)
+      # but llm-katan needs the LLM model pre-downloaded
+      - name: Download Qwen3-0.6B model for llm-katan
         run: |
-          echo "Downloading minimal models for CI..."
-          make download-models
+          echo "Downloading Qwen3-0.6B model for llm-katan service..."
+          mkdir -p models/Qwen
+
+          # Download the model using huggingface-cli
+          hf download Qwen/Qwen3-0.6B --local-dir models/Qwen/Qwen3-0.6B
+
+          echo "Model download complete. Checking downloaded files:"
+          ls -lh models/Qwen/Qwen3-0.6B/
+
+          echo "Disk space after model download:"
+          df -h / && df -h /mnt
         env:
-          CI: true
-          CI_MINIMAL_MODELS: true
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_ENABLE_HF_TRANSFER: 1
-          HF_HUB_DISABLE_TELEMETRY: 1
 
       - name: Start CI services
         run: |

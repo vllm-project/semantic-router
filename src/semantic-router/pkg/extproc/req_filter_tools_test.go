@@ -31,6 +31,40 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Initialize embedding models (ModelFactory) for tools tests
+		// Try to find Qwen3 or Gemma models in the models directory
+		qwen3Path := "../../../../models/mom-embedding-pro"
+		gemmaPath := "../../../../models/mom-embedding-flash"
+
+		// Check if at least one model exists
+		qwen3Exists := false
+		gemmaExists := false
+		if _, statErr := os.Stat(qwen3Path); statErr == nil {
+			qwen3Exists = true
+		}
+		if _, statErr := os.Stat(gemmaPath); statErr == nil {
+			gemmaExists = true
+		}
+
+		// Initialize ModelFactory if at least one model is available
+		if qwen3Exists || gemmaExists {
+			qwen3ToUse := ""
+			gemmaToUse := ""
+			if qwen3Exists {
+				qwen3ToUse = qwen3Path
+			}
+			if gemmaExists {
+				gemmaToUse = gemmaPath
+			}
+
+			err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, true)
+			if err != nil {
+				// Log warning but don't fail - tests will skip if ModelFactory is not initialized
+				GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
+				GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
+			}
+		}
+
 		// Create temporary directory for tools database
 		tempDir, err = os.MkdirTemp("", "tool_selection_test")
 		Expect(err).NotTo(HaveOccurred())
@@ -97,6 +131,8 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		// Create base config
 		cfg = CreateTestConfig()
+		// Disable PII detection for tool selection tests (not needed and avoids model loading issues)
+		cfg.InlineModels.Classifier.PIIModel.ModelID = ""
 	})
 
 	AfterEach(func() {

@@ -72,17 +72,12 @@ jobs:
       - name: Build Rust library (CPU-only)
         run: make rust-ci
 
-      - name: Install Model Manager dependencies
+      - name: Install HuggingFace CLI
         run: |
-          pip install -r src/model_manager/requirements.txt
+          pip install -U "huggingface_hub[cli]" hf_transfer
 
-      - name: Download models (minimal)
-        env:
-          CI_MINIMAL_MODELS: true
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_HUB_ENABLE_HF_TRANSFER: 1
-          HF_HUB_DISABLE_TELEMETRY: 1
-        run: make download-models
+      # Models are now automatically downloaded by the router at startup
+      # No need to pre-download models - the router will download them on first run
 
       - name: Run component benchmarks
         run: |

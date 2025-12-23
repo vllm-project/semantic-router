@@ -279,12 +279,12 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, opts *framework.Setu
 			"image.pullPolicy": "Never",
 		},
 		Wait:    true,
-		Timeout: "20m",
+		Timeout: "30m",
 	}
 	if err := deployer.Install(ctx, installOpts); err != nil {
 		return err
 	}
-	return deployer.WaitForDeployment(ctx, semanticNamespace, "semantic-router", 10*time.Minute)
+	return deployer.WaitForDeployment(ctx, semanticNamespace, "semantic-router", 30*time.Minute)
 }
 
 func (p *Profile) deployInferenceSim(ctx context.Context, opts *framework.SetupOptions) error {

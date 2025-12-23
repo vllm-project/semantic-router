@@ -57,8 +57,7 @@ kubectl apply -k deploy/kubernetes/
 # Check pods
 kubectl get pods -n vllm-semantic-router-system -o wide
 
-# Check logs
-kubectl logs -n vllm-semantic-router-system deploy/semantic-router -c model-downloader
+# Check logs (models are downloaded automatically at startup)
 kubectl logs -n vllm-semantic-router-system deploy/semantic-router -c semantic-router
 ```
 

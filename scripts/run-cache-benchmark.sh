@@ -233,7 +233,7 @@ main() {
     
     # Set model paths if not already set
     if [ -z "$QWEN3_MODEL_PATH" ]; then
-        export QWEN3_MODEL_PATH="$PROJECT_ROOT/models/Qwen3-Embedding-0.6B"
+        export QWEN3_MODEL_PATH="$PROJECT_ROOT/models/mom-embedding-pro"
         print_info "QWEN3_MODEL_PATH set to: $QWEN3_MODEL_PATH"
     fi
     

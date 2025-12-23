@@ -55,7 +55,7 @@ const (
 	// Timeout constants
 	timeoutSemanticRouterInstall = "30m"
 	timeoutHelmInstall           = "10m"
-	timeoutDeploymentWait        = 10 * time.Minute
+	timeoutDeploymentWait        = 30 * time.Minute
 	timeoutServiceRetry          = 10 * time.Minute
 	intervalServiceRetry         = 5 * time.Second
 

@@ -630,7 +630,7 @@ var _ = Describe("FactCheckClassifier Integration", func() {
 
 	BeforeEach(func() {
 		cfg = &config.FactCheckModelConfig{
-			ModelID:   "../../../../models/halugate-sentinel",
+			ModelID:   "../../../../models/mom-halugate-sentinel",
 			Threshold: 0.7,
 		}
 		var err error
@@ -695,13 +695,13 @@ var _ = Describe("HallucinationDetector Integration", func() {
 			return path
 		}
 		// Try relative path from test directory (extproc -> models)
-		relativePath := "../../../../../models/halugate-detector"
+		relativePath := "../../../../../models/mom-halugate-detector"
 		if _, err := os.Stat(relativePath); err == nil {
 			return relativePath
 		}
 		// Try from project root
 		if root := findProjectRoot(); root != "" {
-			projectPath := filepath.Join(root, "models", "halugate-detector")
+			projectPath := filepath.Join(root, "models", "mom-halugate-detector")
 			if _, err := os.Stat(projectPath); err == nil {
 				return projectPath
 			}

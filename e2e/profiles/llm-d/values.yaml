@@ -8,11 +8,11 @@ config:
   # Using LoRA models for better performance with auto-detection
   classifier:
     category_model:
-      model_id: "models/category_classifier_modernbert-base_model"
-      use_modernbert: true
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: false  # MoM uses LoRA-based model
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
     pii_model:
       model_id: ""
       threshold: 1.0
@@ -213,7 +213,7 @@ config:
   tools:
     enabled: false
   bert_model:
-    model_id: models/all-MiniLM-L12-v2
+    model_id: models/mom-embedding-light
     threshold: 0.6
     use_cpu: true
 

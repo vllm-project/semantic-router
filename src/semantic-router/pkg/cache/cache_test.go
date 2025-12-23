@@ -1600,6 +1600,11 @@ func TestHybridCacheDisabled(t *testing.T) {
 
 // TestHybridCacheBasicOperations tests basic cache operations
 func TestHybridCacheBasicOperations(t *testing.T) {
+	// Skip if Milvus tests are disabled
+	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+		t.Skip("Skipping Milvus-dependent test (SKIP_MILVUS_TESTS=true)")
+	}
+
 	t.Log("Starting TestHybridCacheBasicOperations - this may take 30-60 seconds...")
 
 	// Create a test Milvus config
@@ -1687,6 +1692,11 @@ func TestHybridCacheBasicOperations(t *testing.T) {
 
 // TestHybridCachePendingRequest tests pending request flow
 func TestHybridCachePendingRequest(t *testing.T) {
+	// Skip if Milvus tests are disabled
+	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+		t.Skip("Skipping Milvus-dependent test (SKIP_MILVUS_TESTS=true)")
+	}
+
 	t.Log("Starting TestHybridCachePendingRequest - this may take 30-60 seconds...")
 
 	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_pending", 64, true)
@@ -1739,6 +1749,11 @@ func TestHybridCachePendingRequest(t *testing.T) {
 
 // TestHybridCacheEviction tests memory eviction behavior
 func TestHybridCacheEviction(t *testing.T) {
+	// Skip if Milvus tests are disabled
+	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+		t.Skip("Skipping Milvus-dependent test (SKIP_MILVUS_TESTS=true)")
+	}
+
 	t.Log("Starting TestHybridCacheEviction - this may take 30-60 seconds...")
 
 	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_eviction", 64, true)
@@ -1799,6 +1814,11 @@ func TestHybridCacheEviction(t *testing.T) {
 
 // TestHybridCacheLocalCacheHit tests local cache hot path
 func TestHybridCacheLocalCacheHit(t *testing.T) {
+	// Skip if Milvus tests are disabled
+	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+		t.Skip("Skipping Milvus-dependent test (SKIP_MILVUS_TESTS=true)")
+	}
+
 	t.Log("Starting TestHybridCacheLocalCacheHit - this may take 30-60 seconds...")
 
 	milvusConfig, cleanup, err := createTestMilvusConfig("test_hybrid_local", 64, true)
@@ -2868,6 +2888,11 @@ func writeBenchmarkResultToCSV(file *os.File, result TestBenchmarkResult) {
 
 // TestHybridVsMilvusSmoke is a quick smoke test to verify both caches work
 func TestHybridVsMilvusSmoke(t *testing.T) {
+	// Skip if Milvus tests are disabled
+	if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+		t.Skip("Skipping Milvus-dependent test (SKIP_MILVUS_TESTS=true)")
+	}
+
 	t.Log("Starting TestHybridVsMilvusSmoke - this may take 2-3 minutes...")
 
 	// Create test Milvus config

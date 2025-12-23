@@ -1,5 +1,5 @@
 bert_model:
-  model_id: models/all-MiniLM-L12-v2
+  model_id: models/mom-embedding-light
   threshold: 0.6
   use_cpu: true
 
@@ -21,10 +21,10 @@ tools:
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
   use_modernbert: true
-  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  model_id: "models/mom-jailbreak-classifier"
   threshold: 0.7
   use_cpu: true
-  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
 # vLLM Endpoints Configuration
 # IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
@@ -45,17 +45,17 @@ model_config:
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
   pii_model:
     model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
     use_modernbert: true
     threshold: 0.7
     use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Categories with new use_reasoning field structure
 categories:

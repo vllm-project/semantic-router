@@ -1,4 +1,4 @@
-name: Dashboard Test
+name: Integration Test [Dashboard]
 
 on:
   pull_request:

@@ -214,10 +214,15 @@ RUN mkdir -p bin && cd src/semantic-router && \
 # Final stage: copy the binary and the shared library
 FROM quay.io/centos/centos:stream10
 
-# Install OpenSSL runtime libraries
+# Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
 RUN dnf update -y && \
-    dnf install -y openssl-libs && \
-    dnf clean all
+    dnf install -y \
+    openssl-libs \
+    python3 \
+    python3-pip \
+    ca-certificates && \
+    dnf clean all && \
+    pip3 install --no-cache-dir huggingface_hub[cli]
 
 WORKDIR /app
 

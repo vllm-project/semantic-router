@@ -31,53 +31,10 @@ spec:
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.initContainer.enabled }}
-      initContainers:
-      - name: model-downloader
-        {{- $initImage := .Values.initContainer.image }}
-        image: "{{ $prefix }}{{ $initImage.repository }}:{{ $initImage.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ $initImage.pullPolicy | default "IfNotPresent" }}
-        securityContext:
-          {{- toYaml .Values.securityContext | nindent 10 }}
-        command: ["/bin/bash", "-c"]
-        args:
-        - |
-          set -e
-          echo "Downloading models to persistent volume..."
-          cd /app/models
-
-          {{- range .Values.initContainer.models }}
-          # Download {{ .name }}
-          echo "Downloading {{ .name }} from {{ .repo }}..."
-          # Remove .cache directory to ensure fresh download
-          rm -rf "{{ .name }}/.cache" 2>/dev/null || true
-          # Download with ignore_patterns to exclude ONNX-only files if pytorch model exists
-          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='{{ .repo }}', local_dir='{{ .name }}', ignore_patterns=['*.onnx', '*.msgpack', '*.h5', '*.tflite'] if '{{ .name }}' == 'all-MiniLM-L12-v2' else None)"
-
-          # Check for required model files
-          echo "Checking {{ .name }} for required files:"
-          if [ -f "{{ .name }}/pytorch_model.bin" ] || [ -f "{{ .name }}/model.safetensors" ]; then
-            echo "✓ Found PyTorch model weights in {{ .name }}"
-          else
-            echo "✗ WARNING: No PyTorch model weights found in {{ .name }}"
-            ls -la "{{ .name }}/" | head -20
-          fi
-
-          {{- end }}
-          echo "All models downloaded successfully!"
-          ls -la /app/models/
-        env:
-        - name: HF_HUB_CACHE
-          value: /tmp/hf_cache
-          {{- with .Values.initContainer.env }}
-          {{- toYaml . | nindent 10 }}
-          {{- end }}
-        resources:
-          {{- toYaml .Values.initContainer.resources | nindent 10 }}
-        volumeMounts:
-        - name: models-volume
-          mountPath: /app/models
-      {{- end }}
+      # Models are now automatically downloaded by the router at startup
+      # No initContainer is needed - the router uses its built-in Go-based
+      # modeldownload package to download models from HuggingFace based on
+      # the mom_registry configuration in config.yaml
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ $prefix }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

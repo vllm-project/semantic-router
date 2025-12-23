@@ -20,6 +20,10 @@ ENV GOSUMDB=sum.golang.google.cn
 ARG TARGETARCH
 ARG TARGETOS=linux
 
+# Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
+COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
+COPY src/semantic-router/pkg/ /app/src/semantic-router/pkg/
+
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
 WORKDIR /app/dashboard/backend

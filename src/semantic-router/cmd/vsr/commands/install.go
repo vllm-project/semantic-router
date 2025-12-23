@@ -158,7 +158,7 @@ default_model: your-model
 # Classification models
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true

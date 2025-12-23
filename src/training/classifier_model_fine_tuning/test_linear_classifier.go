@@ -96,7 +96,7 @@ func main() {
 	// Parse command line flags
 	var (
 		useModernBERT = flag.Bool("modernbert", false, "Use ModernBERT models instead of linear classifier")
-		modelPath     = flag.String("model", "../../../models/category_classifier_modernbert-base_model", "Path to classifier model")
+		modelPath     = flag.String("model", "../../../models/mom-domain-classifier", "Path to classifier model")
 		useCPU        = flag.Bool("cpu", false, "Use CPU instead of GPU")
 	)
 	flag.Parse()

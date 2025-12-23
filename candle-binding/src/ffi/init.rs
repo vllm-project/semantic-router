@@ -270,8 +270,6 @@ pub extern "C" fn init_jailbreak_classifier(
 
     match model_type {
         ModelType::LoRA => {
-            eprintln!("🔍 Detected LoRA model for jailbreak classification");
-
             // Check if already initialized
             if LORA_JAILBREAK_CLASSIFIER.get().is_some() {
                 return true; // Already initialized, return success
@@ -281,10 +279,7 @@ pub extern "C" fn init_jailbreak_classifier(
             match crate::classifiers::lora::security_lora::SecurityLoRAClassifier::new(
                 model_path, use_cpu,
             ) {
-                Ok(classifier) => {
-                    eprintln!("✅ LoRA jailbreak classifier initialized successfully");
-                    LORA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok()
-                }
+                Ok(classifier) => LORA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
                 Err(e) => {
                     eprintln!(
                         "  ERROR: Failed to initialize LoRA jailbreak classifier: {}",

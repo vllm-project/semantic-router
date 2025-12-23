@@ -19,6 +19,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 /*
@@ -66,7 +67,6 @@ extern int calculate_similarity_batch(const char* query, const char** candidates
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 */
 import "C"
-import "unsafe"
 
 func printHeader(title string) {
 	fmt.Println()
@@ -222,7 +222,7 @@ func main() {
 	fmt.Println("🔧 Initializing Qwen3 Embedding Model...")
 	modelPath := os.Getenv("MODEL_PATH")
 	if modelPath == "" {
-		modelPath = "../models/Qwen3-Embedding-0.6B"
+		modelPath = "../models/mom-embedding-pro"
 	}
 
 	cModelPath := C.CString(modelPath)

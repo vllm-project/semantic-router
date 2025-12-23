@@ -78,7 +78,6 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 func initClassify(maxRetries int, retryInterval time.Duration) *services.ClassificationService {
 	for i := 0; i < maxRetries; i++ {
 		if svc := services.GetGlobalClassificationService(); svc != nil {
-			logging.Infof("Found global classification service on attempt %d/%d", i+1, maxRetries)
 			return svc
 		}
 

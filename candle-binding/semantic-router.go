@@ -816,12 +816,6 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 	}
 
 	log.Printf("INFO: Embedding models initialized successfully")
-	if qwen3ModelPath != "" {
-		log.Printf("  - Qwen3: %s", qwen3ModelPath)
-	}
-	if gemmaModelPath != "" {
-		log.Printf("  - Gemma: %s", gemmaModelPath)
-	}
 
 	return nil
 }
@@ -1453,7 +1447,7 @@ func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) erro
 	jailbreakClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to the jailbreak classification model if path is empty
-			modelPath = "./models/jailbreak_classifier_modernbert-base_model"
+			modelPath = "./models/mom-jailbreak-classifier"
 		}
 
 		if numClasses < 2 {
@@ -1660,7 +1654,7 @@ func InitFactCheckClassifier(modelPath string, useCPU bool) error {
 	factCheckClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to halugate-sentinel model path
-			modelPath = "./models/halugate-sentinel"
+			modelPath = "./models/mom-halugate-sentinel"
 		}
 
 		log.Printf("Initializing fact-check classifier (halugate-sentinel): %s", modelPath)

@@ -90,7 +90,7 @@ def main():
 
     # Model path (relative to project root)
     # Script should be run from project root: python scripts/generate_gemma_reference.py
-    model_path = Path("models/embeddinggemma-300m")
+    model_path = Path("models/mom-embedding-flash")
 
     if not model_path.exists():
         print(f"ERROR: Model not found at {model_path}")

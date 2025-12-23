@@ -49,7 +49,7 @@ test-cli: build-router
 
 # Run the router
 run-router: ## Run the router with the specified config
-run-router: build-router download-models
+run-router: build-router
 	@echo "Running router with config: ${CONFIG_FILE}"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true

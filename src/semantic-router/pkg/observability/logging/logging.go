@@ -3,7 +3,6 @@ package logging
 import (
 	"os"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -65,11 +64,26 @@ func InitLogger(cfg Config) (*zap.Logger, error) {
 
 	// Common fields
 	zcfg.EncoderConfig.TimeKey = "ts"
-	zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339Nano)
+	// Custom time format: "2006-01-02T15:04:05" (no timezone)
+	zcfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05")
 	zcfg.EncoderConfig.MessageKey = "msg"
 	zcfg.EncoderConfig.LevelKey = "level"
 	zcfg.EncoderConfig.EncodeLevel = zapcore.LowercaseLevelEncoder
 	zcfg.EncoderConfig.CallerKey = "caller"
+	// Custom caller encoder: only filename:line (no package path)
+	zcfg.EncoderConfig.EncodeCaller = func(caller zapcore.EntryCaller, enc zapcore.PrimitiveArrayEncoder) {
+		// Extract just the filename from the full path
+		// e.g., "pkg/modeldownload/downloader.go:82" -> "downloader.go:82"
+		file := caller.TrimmedPath()
+		// Find the last slash to get just filename
+		for i := len(file) - 1; i >= 0; i-- {
+			if file[i] == '/' {
+				file = file[i+1:]
+				break
+			}
+		}
+		enc.AppendString(file)
+	}
 
 	// Build logger
 	logger, err := zcfg.Build()

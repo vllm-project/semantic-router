@@ -159,10 +159,6 @@ impl ModelFactory {
         self.qwen3_tokenizer = Some(tokenizer);
         self.qwen3_model_path = Some(model_path.to_string());
 
-        println!(
-            "INFO: Qwen3 model and tokenizer loaded successfully from {}",
-            model_path
-        );
         Ok(())
     }
 
@@ -200,10 +196,6 @@ impl ModelFactory {
         self.gemma_tokenizer = Some(tokenizer);
         self.gemma_model_path = Some(model_path.to_string());
 
-        println!(
-            "INFO: Gemma model and tokenizer loaded successfully from {}",
-            model_path
-        );
         Ok(())
     }
 

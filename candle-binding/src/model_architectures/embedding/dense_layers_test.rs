@@ -484,7 +484,7 @@ fn test_bottleneck_dimension_preservation() {
 fn test_dense_bottleneck_load_from_path() {
     use candle_core::{DType, Tensor};
 
-    let model_path = "../models/embeddinggemma-300m";
+    let model_path = "../models/mom-embedding-flash";
     let device = test_device();
 
     println!("\n=== Loading Dense Bottleneck from Path ===");
