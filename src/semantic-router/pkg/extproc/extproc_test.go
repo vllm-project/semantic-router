@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -457,6 +458,16 @@ var _ ext_proc.ExternalProcessor_ProcessServer = &MockStream{}
 
 // CreateTestConfig creates a standard test configuration
 func CreateTestConfig() *config.RouterConfig {
+	// Check if PII model files exist - only configure PII if available
+	piiModelID := ""
+	piiMappingPath := ""
+	if _, err := os.Stat("../../../../models/pii_classifier_modernbert-base_presidio_token_model"); err == nil {
+		if _, err := os.Stat("../../../../models/mom-pii-classifier/pii_type_mapping.json"); err == nil {
+			piiModelID = "../../../../models/pii_classifier_modernbert-base_presidio_token_model"
+			piiMappingPath = "../../../../models/mom-pii-classifier/pii_type_mapping.json"
+		}
+	}
+
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			BertModel: config.BertModel{
@@ -475,9 +486,9 @@ func CreateTestConfig() *config.RouterConfig {
 					Enabled: false, // MCP not used in tests
 				},
 				PIIModel: config.PIIModel{
-					ModelID:        "../../../../models/pii_classifier_modernbert-base_presidio_token_model",
+					ModelID:        piiModelID,
 					UseCPU:         true,
-					PIIMappingPath: "../../../../models/mom-pii-classifier/pii_type_mapping.json",
+					PIIMappingPath: piiMappingPath,
 				},
 			},
 			PromptGuard: config.PromptGuardConfig{
@@ -549,9 +560,16 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
-	if err != nil {
-		return nil, err
+	// Only load PII mapping if the file exists
+	// This allows tests to run without PII models in CI environments
+	var piiMapping *classification.PIIMapping
+	if cfg.PIIMappingPath != "" {
+		if _, statErr := os.Stat(cfg.PIIMappingPath); statErr == nil {
+			piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Initialize the BERT model for similarity search
@@ -635,6 +653,15 @@ var _ = Describe("Security Checks", func() {
 
 	Context("with PII token classification", func() {
 		BeforeEach(func() {
+			// Check if PII model files exist before trying to initialize
+			// This allows tests to run in CI environments where models may not be available
+			if _, err := os.Stat(testPIIModelID); os.IsNotExist(err) {
+				Skip("PII model files not available at " + testPIIModelID)
+			}
+			if _, err := os.Stat(testPIIMappingPath); os.IsNotExist(err) {
+				Skip("PII mapping file not available at " + testPIIMappingPath)
+			}
+
 			cfg.PIIModel.ModelID = testPIIModelID
 			cfg.PIIMappingPath = testPIIMappingPath
 			cfg.PIIModel.Threshold = testPIIThreshold
@@ -879,6 +906,15 @@ var _ = Describe("Security Checks", func() {
 
 	Context("PII token classification edge cases", func() {
 		BeforeEach(func() {
+			// Check if PII model files exist before trying to initialize
+			// This allows tests to run in CI environments where models may not be available
+			if _, err := os.Stat(testPIIModelID); os.IsNotExist(err) {
+				Skip("PII model files not available at " + testPIIModelID)
+			}
+			if _, err := os.Stat(testPIIMappingPath); os.IsNotExist(err) {
+				Skip("PII mapping file not available at " + testPIIMappingPath)
+			}
+
 			cfg.PIIModel.ModelID = testPIIModelID
 			cfg.PIIMappingPath = testPIIMappingPath
 			cfg.PIIModel.Threshold = testPIIThreshold
@@ -1138,8 +1174,11 @@ var _ = Describe("ExtProc Package", func() {
 
 			Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
 			Expect(cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
-			Expect(cfg.InlineModels.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
-			Expect(cfg.InlineModels.Classifier.PIIModel.PIIMappingPath).NotTo(BeEmpty())
+			// PII model configuration is optional - only check if files exist
+			// In CI environments without PII models, these may be empty
+			if cfg.InlineModels.Classifier.PIIModel.ModelID != "" {
+				Expect(cfg.InlineModels.Classifier.PIIModel.PIIMappingPath).NotTo(BeEmpty())
+			}
 		})
 
 		It("should have valid tools configuration", func() {
