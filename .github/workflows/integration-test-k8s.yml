@@ -39,8 +39,7 @@ jobs:
           if [[ "${{ needs.changes.outputs.e2e_common }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
-             [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
-             [[ "${{ github.event_name }}" == "push" ]]; then
+             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack"]' >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running all profiles due to common/core changes or push/schedule/manual trigger"

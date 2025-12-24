@@ -114,16 +114,21 @@ jobs:
             # Per-profile e2e filters
             e2e_istio:
               - 'e2e/profiles/istio/**'
+              - 'deploy/kubernetes/istio/**'
             e2e_ai_gateway:
               - 'e2e/profiles/ai-gateway/**'
+              - 'deploy/kubernetes/ai-gateway/**'
             e2e_aibrix:
               - 'e2e/profiles/aibrix/**'
+              - 'deploy/kubernetes/aibrix/**'
             e2e_dynamic_config:
               - 'e2e/profiles/dynamic-config/**'
             e2e_llm_d:
               - 'e2e/profiles/llm-d/**'
+              - 'deploy/kubernetes/llmd-base/**'
             e2e_routing_strategies:
               - 'e2e/profiles/routing-strategies/**'
+              - 'deploy/kubernetes/routing-strategies/**'
             e2e_production_stack:
               - 'e2e/profiles/production-stack/**'
             # Common e2e code that affects all profiles
