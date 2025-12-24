@@ -1,6 +1,8 @@
 package deployment
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/timeout"
 )
 
 const (
@@ -39,22 +42,55 @@ func DeployHelm(configPath, namespace string, releaseName string, withObs bool, 
 
 	// 3. Check cluster connectivity
 	cli.Info("Checking cluster connectivity...")
-	clusterInfoCmd := exec.Command("kubectl", "cluster-info")
-	if err := clusterInfoCmd.Run(); err != nil {
+	var clusterInfoErr error
+	func() {
+		// 10 second timeout for initial cluster connection check
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		clusterInfoCmd := exec.CommandContext(ctx, "kubectl", "cluster-info")
+		clusterInfoErr = clusterInfoCmd.Run()
+	}()
+	if clusterInfoErr != nil {
+		if errors.Is(clusterInfoErr, context.DeadlineExceeded) {
+			cli.Error("kubectl cluster-info timed out after 10 seconds. Your Kubernetes cluster may be unreachable.")
+			return fmt.Errorf("kubectl cluster-info timed out: %w", clusterInfoErr)
+		}
 		cli.Error("Unable to connect to Kubernetes cluster")
 		cli.Info("Check your kubeconfig: kubectl config view")
-		return fmt.Errorf("no connection to Kubernetes cluster")
+		return fmt.Errorf("no connection to Kubernetes cluster: %w", clusterInfoErr)
 	}
 	cli.Success("Cluster connection verified")
 
 	// 4. Check/create namespace
 	cli.Info(fmt.Sprintf("Checking namespace '%s'...", namespace))
-	nsCheckCmd := exec.Command("kubectl", "get", "namespace", namespace)
-	if err := nsCheckCmd.Run(); err != nil {
+	var nsCheckErr error
+	func() {
+		// 10 second timeout for namespace check
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		nsCheckCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", namespace)
+		nsCheckErr = nsCheckCmd.Run()
+	}()
+	if nsCheckErr != nil {
+		if errors.Is(nsCheckErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl get namespace timed out after 10 seconds: %w", nsCheckErr)
+		}
 		cli.Info(fmt.Sprintf("Creating namespace '%s'...", namespace))
-		nsCreateCmd := exec.Command("kubectl", "create", "namespace", namespace)
-		if err := nsCreateCmd.Run(); err != nil {
-			cli.Warning(fmt.Sprintf("Failed to create namespace: %v", err))
+		var nsCreateErr error
+		func() {
+			// 10 second timeout for namespace creation
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			nsCreateCmd := exec.CommandContext(ctx, "kubectl", "create", "namespace", namespace)
+			nsCreateCmd.Stdout = os.Stdout
+			nsCreateCmd.Stderr = os.Stderr
+			nsCreateErr = nsCreateCmd.Run()
+		}()
+		if nsCreateErr != nil {
+			if errors.Is(nsCreateErr, context.DeadlineExceeded) {
+				return fmt.Errorf("kubectl create namespace timed out after 10 seconds: %w", nsCreateErr)
+			}
+			cli.Warning(fmt.Sprintf("Failed to create namespace: %v", nsCreateErr))
 		} else {
 			cli.Success("Namespace created")
 		}
@@ -81,8 +117,22 @@ func DeployHelm(configPath, namespace string, releaseName string, withObs bool, 
 	}
 
 	// Check if release already exists
-	checkCmd := exec.Command("helm", "list", "-n", namespace, "-q")
-	output, _ := checkCmd.Output()
+	var output []byte
+	var helmListErr error
+	func() {
+		// 10 second timeout for listing helm releases
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		checkCmd := exec.CommandContext(ctx, "helm", "list", "-n", namespace, "-q")
+		output, helmListErr = checkCmd.Output()
+	}()
+	if helmListErr != nil {
+		if errors.Is(helmListErr, context.DeadlineExceeded) {
+			cli.Warning("helm list timed out after 10 seconds, proceeding with install...")
+		} else {
+			cli.Warning("Could not check for existing helm releases, proceeding with install...")
+		}
+	}
 	releases := strings.Split(strings.TrimSpace(string(output)), "\n")
 	releaseExists := false
 	for _, r := range releases {
@@ -93,27 +143,24 @@ func DeployHelm(configPath, namespace string, releaseName string, withObs bool, 
 	}
 
 	// Build helm command
-	var cmd *exec.Cmd
+	var cmdArgs []string
 	var action string
 
 	if releaseExists {
 		cli.Info(fmt.Sprintf("Release '%s' already exists, upgrading...", releaseName))
 		action = "upgrade"
-		cmd = exec.Command("helm", "upgrade", releaseName, chartPath, "-n", namespace, "--wait")
+		cmdArgs = []string{"helm", "upgrade", releaseName, chartPath, "-n", namespace, "--wait"}
 	} else {
 		cli.Info("Installing Helm release...")
 		action = "install"
-		cmd = exec.Command("helm", "install", releaseName, chartPath, "-n", namespace, "--wait", "--create-namespace")
+		cmdArgs = []string{"helm", "install", releaseName, chartPath, "-n", namespace, "--wait", "--create-namespace"}
 	}
 
 	// Add config file override if provided
 	if configPath != "" {
 		absConfigPath, err := filepath.Abs(configPath)
 		if err == nil {
-			// Check if config file exists
 			if _, err := os.Stat(absConfigPath); err == nil {
-				// Note: The Helm chart would need to support config file override
-				// For now, we'll note that config should be embedded in values
 				cli.Info(fmt.Sprintf("Note: Using chart default config (custom config at %s)", absConfigPath))
 			}
 		}
@@ -121,34 +168,55 @@ func DeployHelm(configPath, namespace string, releaseName string, withObs bool, 
 
 	// Add custom --set values
 	for _, setValue := range setValues {
-		cmd.Args = append(cmd.Args, "--set", setValue)
+		cmdArgs = append(cmdArgs, "--set", setValue)
 	}
 
 	// Set observability
 	if !withObs {
-		cmd.Args = append(cmd.Args, "--set", "config.observability.tracing.enabled=false")
+		cmdArgs = append(cmdArgs, "--set", "config.observability.tracing.enabled=false")
 	}
 
 	// Set timeout
-	cmd.Args = append(cmd.Args, "--timeout", "10m")
+	cmdArgs = append(cmdArgs, "--timeout", "10m")
 
-	cli.Info(fmt.Sprintf("Running: %s", strings.Join(cmd.Args, " ")))
+	cli.Info(fmt.Sprintf("Running: %s", strings.Join(cmdArgs, " ")))
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	//nolint:gosec // G204: cmdArgs are constructed from validated inputs
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	helmErr := timeout.RunCommandWithIdleTimeoutContext(
+		context.Background(),
+		cmd,
+		timeout.DefaultConfig,
+		fmt.Sprintf("helm %s", action),
+	)
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("helm %s failed: %w", action, err)
+	if helmErr != nil {
+		if timeout.IsIdleTimeout(helmErr) {
+			msg := fmt.Sprintf("helm operation failed. Troubleshooting:\n  - Check cluster: kubectl cluster-info\n  - Verify namespace: kubectl get namespaces\n  - Check Helm status: helm list -n %s", namespace)
+			return fmt.Errorf("%s: %w", msg, helmErr)
+		}
+		return fmt.Errorf("helm %s failed: %w", action, helmErr)
 	}
 
 	cli.Success(fmt.Sprintf("Helm release '%s' %sd successfully", releaseName, action))
 
 	// Get service information
 	cli.Info("Fetching service information...")
-	svcCmd := exec.Command("kubectl", "get", "svc", "-n", namespace, "-l", "app.kubernetes.io/name=semantic-router")
-	svcCmd.Stdout = os.Stdout
-	svcCmd.Stderr = os.Stderr
-	_ = svcCmd.Run()
+	var svcErr error
+	func() {
+		// 10 second timeout for getting service info
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		svcCmd := exec.CommandContext(ctx, "kubectl", "get", "svc", "-n", namespace, "-l", "app.kubernetes.io/name=semantic-router")
+		svcCmd.Stdout = os.Stdout
+		svcCmd.Stderr = os.Stderr
+		svcErr = svcCmd.Run()
+	}()
+	if svcErr != nil {
+		if errors.Is(svcErr, context.DeadlineExceeded) {
+			cli.Warning("Could not get service info: command timed out after 10 seconds")
+		}
+	}
 
 	cli.Info("\nNext steps:")
 	cli.Info(fmt.Sprintf("  Check status: helm status %s -n %s", releaseName, namespace))
@@ -174,9 +242,19 @@ func UndeployHelm(namespace, releaseName string, wait bool) error {
 	}
 
 	// Check if release exists
-	checkCmd := exec.Command("helm", "list", "-n", namespace, "-q")
-	output, err := checkCmd.Output()
+	var output []byte
+	var err error
+	func() {
+		// 10 second timeout for listing helm releases
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		checkCmd := exec.CommandContext(ctx, "helm", "list", "-n", namespace, "-q")
+		output, err = checkCmd.Output()
+	}()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("helm list timed out after 10 seconds: %w", err)
+		}
 		return fmt.Errorf("failed to list releases: %w", err)
 	}
 
@@ -220,16 +298,31 @@ func UndeployHelm(namespace, releaseName string, wait bool) error {
 			time.Sleep(5 * time.Second)
 
 			// Check for pods
-			//nolint:gosec // G204: releaseName and namespace are from internal config
-			checkCmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "app.kubernetes.io/instance="+releaseName, "--no-headers")
-			output, err := checkCmd.Output()
+			var checkOutput []byte
+			var checkErr error
+			func() {
+				// 10 second timeout for getting pod status
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				//nolint:gosec // G204: releaseName and namespace are from internal config
+				checkCmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", "app.kubernetes.io/instance="+releaseName, "--no-headers")
+				checkOutput, checkErr = checkCmd.Output()
+			}()
 
-			if err != nil || len(output) == 0 {
+			if checkErr != nil {
+				if errors.Is(checkErr, context.DeadlineExceeded) {
+					cli.Info("kubectl get pods timed out...")
+				}
 				cleaned = true
 				break
 			}
 
-			podCount := len(splitLines(string(output)))
+			if len(checkOutput) == 0 {
+				cleaned = true
+				break
+			}
+
+			podCount := len(splitLines(string(checkOutput)))
 			if podCount == 0 {
 				cleaned = true
 				break
@@ -266,9 +359,19 @@ func UpgradeHelmRelease(configPath, namespace, releaseName string, timeout int) 
 	}
 
 	// Check if release exists
-	checkCmd := exec.Command("helm", "list", "-n", namespace, "-q")
-	output, err := checkCmd.Output()
+	var output []byte
+	var err error
+	func() {
+		// 10 second timeout for listing helm releases
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		checkCmd := exec.CommandContext(ctx, "helm", "list", "-n", namespace, "-q")
+		output, err = checkCmd.Output()
+	}()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("helm list timed out after 10 seconds: %w", err)
+		}
 		return fmt.Errorf("failed to list releases: %w", err)
 	}
 
@@ -302,32 +405,61 @@ func UpgradeHelmRelease(configPath, namespace, releaseName string, timeout int) 
 
 	// Build upgrade command
 	cli.Info(fmt.Sprintf("Upgrading release '%s'...", releaseName))
-	cmd := exec.Command("helm", "upgrade", releaseName, chartPath, "-n", namespace, "--wait")
+	cmdArgs := []string{"helm", "upgrade", releaseName, chartPath, "-n", namespace, "--wait"}
 
-	// Set timeout
+	// Set timeout for the helm command itself
 	if timeout > 0 {
-		cmd.Args = append(cmd.Args, "--timeout", fmt.Sprintf("%ds", timeout))
+		cmdArgs = append(cmdArgs, "--timeout", fmt.Sprintf("%ds", timeout))
 	} else {
-		cmd.Args = append(cmd.Args, "--timeout", "5m")
+		cmdArgs = append(cmdArgs, "--timeout", "5m")
 	}
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	var upgradeErr error
+	func() {
+		// Use a slightly larger timeout for the context (+30s) to allow Helm to handle
+		// its own timeout first. This ensures we get Helm's more descriptive error messages
+		// rather than a generic context deadline exceeded error.
+		ctxTimeout := time.Duration(timeout+30) * time.Second
+		if timeout == 0 {
+			ctxTimeout = 5*time.Minute + 30*time.Second
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+		defer cancel()
+		//nolint:gosec // G204: cmdArgs are constructed from validated inputs
+		cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		upgradeErr = cmd.Run()
+	}()
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("helm upgrade failed: %w", err)
+	if upgradeErr != nil {
+		if errors.Is(upgradeErr, context.DeadlineExceeded) {
+			return fmt.Errorf("helm upgrade timed out: %w", upgradeErr)
+		}
+		return fmt.Errorf("helm upgrade failed: %w", upgradeErr)
 	}
 
 	cli.Success(fmt.Sprintf("Helm release '%s' upgraded successfully", releaseName))
 
 	// Check rollout status
 	cli.Info("Checking deployment status...")
-	//nolint:gosec // G204: releaseName and namespace are from internal config
-	rolloutCmd := exec.Command("kubectl", "rollout", "status", "deployment/"+releaseName, "-n", namespace, "--timeout=60s")
-	rolloutCmd.Stdout = os.Stdout
-	rolloutCmd.Stderr = os.Stderr
-	if err := rolloutCmd.Run(); err != nil {
-		cli.Warning("Deployment rollout status check failed")
+	var rolloutErr error
+	func() {
+		// 60 second timeout for rollout status check
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		//nolint:gosec // G204: releaseName and namespace are from internal config
+		rolloutCmd := exec.CommandContext(ctx, "kubectl", "rollout", "status", "deployment/"+releaseName, "-n", namespace, "--timeout=60s")
+		rolloutCmd.Stdout = os.Stdout
+		rolloutCmd.Stderr = os.Stderr
+		rolloutErr = rolloutCmd.Run()
+	}()
+	if rolloutErr != nil {
+		if errors.Is(rolloutErr, context.DeadlineExceeded) {
+			cli.Warning("Rollout status check timed out after 60 seconds")
+		} else {
+			cli.Warning("Deployment rollout status check failed")
+		}
 	}
 
 	cli.Info(fmt.Sprintf("Check status: helm status %s -n %s", releaseName, namespace))
@@ -346,7 +478,9 @@ func DetectHelmDeployment(namespace string) *DeploymentStatus {
 	}
 
 	// List releases in namespace
-	cmd := exec.Command("helm", "list", "-n", namespace, "-q")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "helm", "list", "-n", namespace, "-q")
 	output, err := cmd.Output()
 	if err != nil || len(output) == 0 {
 		return status

@@ -252,13 +252,129 @@ func (mm *ModelManager) RemoveModel(modelID string) error {
 }
 
 // DownloadModel downloads a model from HuggingFace
-func (mm *ModelManager) DownloadModel(modelID string, progressCallback func(downloaded, total int64)) error {
-	// For now, this is a placeholder that calls the existing make command
-	// In the future, this could be implemented with direct HuggingFace API calls
-	cli.Warning("Model download currently uses the Makefile 'download-models' command")
-	cli.Info("Downloading all configured models...")
+func (mm *ModelManager) DownloadModel(modelID string, force bool) error {
+	// Map of known models and their HuggingFace repos
+	modelMapping := map[string]string{
+		"lora-intent-classifier":      "vLLM-Project/lora-intent-classifier-v1",
+		"lora-pii-detector":           "vLLM-Project/lora-pii-detector-v1",
+		"lora-security-classifier":    "vLLM-Project/lora-security-classifier-v1",
+		"modernbert-base":             "answer-ai/ModernBERT-base",
+		"modernbert-large":            "answer-ai/ModernBERT-large",
+		"sentence-transformer-minilm": "sentence-transformers/all-MiniLM-L12-v2",
+	}
 
-	return fmt.Errorf("direct model download not yet implemented - use 'make download-models'")
+	repoID, ok := modelMapping[modelID]
+	if !ok {
+		return fmt.Errorf("unknown model: %s", modelID)
+	}
+
+	// Check if model already exists (skip if not force)
+	model, _ := mm.GetModelInfo(modelID)
+	if model != nil && model.Downloaded && !force {
+		cli.Warning(fmt.Sprintf("Model '%s' already downloaded. Use --force to re-download", modelID))
+		return nil
+	}
+
+	// Create model directory
+	modelPath := filepath.Join(mm.ModelsDir, modelID)
+	if err := os.MkdirAll(modelPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create model directory: %w", err)
+	}
+
+	cli.Info(fmt.Sprintf("Downloading model '%s' from %s...", modelID, repoID))
+
+	// Download from HuggingFace
+	return mm.DownloadFromHuggingFace(repoID, modelPath)
+}
+
+// DownloadFromHuggingFace downloads a model from a HuggingFace repository
+func (mm *ModelManager) DownloadFromHuggingFace(repoID, destPath string) error {
+	// Files to download (main model files)
+	requiredFiles := []string{"config.json", "model.safetensors"}
+	optionalFiles := []string{
+		"pytorch_model.bin",
+		"adapter_config.json",
+		"adapter_model.bin",
+		"category_mapping.json",
+		"README.md",
+		"license",
+	}
+
+	// Get HuggingFace token if available (for private repos)
+	hfToken := os.Getenv("HF_TOKEN")
+
+	// Download required files
+	for _, filename := range requiredFiles {
+		url := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", repoID, filename)
+		filepath := filepath.Join(destPath, filename)
+
+		cli.Info(fmt.Sprintf("  Downloading %s...", filename))
+
+		// Create request with auth if token available
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request for %s: %w", filename, err)
+		}
+
+		if hfToken != "" {
+			req.Header.Add("Authorization", "Bearer "+hfToken)
+		}
+
+		// Download the file
+		if err := downloadFileWithRequest(req, filepath); err != nil {
+			return fmt.Errorf("failed to download %s: %w", filename, err)
+		}
+	}
+
+	// Try to download optional files (don't fail if they don't exist)
+	for _, filename := range optionalFiles {
+		url := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", repoID, filename)
+		filepath := filepath.Join(destPath, filename)
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			continue
+		}
+
+		if hfToken != "" {
+			req.Header.Add("Authorization", "Bearer "+hfToken)
+		}
+
+		// Silently skip if optional file doesn't exist
+		_ = downloadFileWithRequest(req, filepath)
+	}
+
+	cli.Success(fmt.Sprintf("Model downloaded successfully to %s", destPath))
+	return nil
+}
+
+// downloadFileWithRequest downloads a file using an HTTP request
+func downloadFileWithRequest(req *http.Request, filepath string) error {
+	//nolint:gosec // G107: URL is from HuggingFace
+	client := &http.Client{
+		Timeout: 5 * time.Minute,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status %d", resp.StatusCode)
+	}
+
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Copy the response body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
 
 // getDirectorySize calculates the total size of a directory

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -47,7 +48,14 @@ Supported environments:
 	}
 
 	cmd.Flags().Bool("with-observability", true, "Deploy with Grafana/Prometheus observability stack")
-	cmd.Flags().String("namespace", "default", "Kubernetes namespace for deployment")
+
+	// Get default from VSR_NAMESPACE env var if set, otherwise use "default"
+	nsDefault := os.Getenv("_VSR_NAMESPACE_DEFAULT")
+	if nsDefault == "" {
+		nsDefault = "default"
+	}
+	cmd.Flags().String("namespace", nsDefault, "Kubernetes namespace for deployment (env: VSR_NAMESPACE)")
+
 	cmd.Flags().String("release-name", "", "Helm release name (default: semantic-router)")
 	cmd.Flags().StringArray("set", []string{}, "Set values for Helm chart (can be used multiple times)")
 	cmd.Flags().Bool("dry-run", false, "Show commands without executing")
@@ -104,7 +112,12 @@ Examples:
 		},
 	}
 
-	cmd.Flags().String("namespace", "default", "Kubernetes namespace")
+	// Get default from VSR_NAMESPACE env var if set, otherwise use "default"
+	nsDefault := os.Getenv("_VSR_NAMESPACE_DEFAULT")
+	if nsDefault == "" {
+		nsDefault = "default"
+	}
+	cmd.Flags().String("namespace", nsDefault, "Kubernetes namespace (env: VSR_NAMESPACE)")
 	cmd.Flags().String("release-name", "", "Helm release name (default: semantic-router)")
 	cmd.Flags().Bool("volumes", false, "Remove volumes (Docker only)")
 	cmd.Flags().Bool("wait", false, "Wait for complete cleanup (Kubernetes/Helm only)")

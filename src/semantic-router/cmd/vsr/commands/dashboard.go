@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/deployment"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/metrics"
 )
 
 // NewDashboardCmd creates the dashboard command
@@ -138,7 +139,12 @@ Examples:
 		},
 	}
 
-	cmd.Flags().String("namespace", "default", "Kubernetes namespace")
+	// Get default from VSR_NAMESPACE env var if set, otherwise use "default"
+	nsDefault := os.Getenv("_VSR_NAMESPACE_DEFAULT")
+	if nsDefault == "" {
+		nsDefault = "default"
+	}
+	cmd.Flags().String("namespace", nsDefault, "Kubernetes namespace (env: VSR_NAMESPACE)")
 	cmd.Flags().Bool("no-open", false, "Don't open browser automatically")
 
 	return cmd
@@ -235,34 +241,35 @@ func openBrowser(url string) error {
 	return cmd.Start()
 }
 
-// displayMetrics displays metrics (placeholder implementation)
+// displayMetrics displays metrics from Prometheus
 func displayMetrics(since string) {
-	cli.Info("╔═══════════════════════════════════════════════════════════════╗")
-	cli.Info("║                     Router Metrics                            ║")
-	cli.Info("╠═══════════════════════════════════════════════════════════════╣")
-	cli.Info(fmt.Sprintf("║ Time Range: %-48s║", since))
-	cli.Info("╠═══════════════════════════════════════════════════════════════╣")
+	// Try to detect metrics endpoint
+	metricsURL := metrics.DetectMetricsEndpoint()
 
-	// Placeholder metrics
-	cli.Info("║                                                               ║")
-	cli.Info("║ 📊 Request Statistics                                         ║")
-	cli.Info("║   Total Requests:        N/A                                  ║")
-	cli.Info("║   Success Rate:          N/A                                  ║")
-	cli.Info("║   Error Rate:            N/A                                  ║")
-	cli.Info("║                                                               ║")
-	cli.Info("║ ⏱️  Latency                                                    ║")
-	cli.Info("║   Avg Response Time:     N/A                                  ║")
-	cli.Info("║   P95 Response Time:     N/A                                  ║")
-	cli.Info("║   P99 Response Time:     N/A                                  ║")
-	cli.Info("║                                                               ║")
-	cli.Info("║ 🤖 Model Usage                                                ║")
-	cli.Info("║   Intent Classifier:     N/A                                  ║")
-	cli.Info("║   PII Detector:          N/A                                  ║")
-	cli.Info("║   Security Classifier:   N/A                                  ║")
-	cli.Info("║                                                               ║")
-	cli.Info("╚═══════════════════════════════════════════════════════════════╝")
+	if metricsURL == "" {
+		// No metrics endpoint available
+		data := &metrics.MetricsData{
+			Available: false,
+			Error:     "No metrics endpoint found. Is the router running?",
+		}
+		metrics.FormatMetricsTable(data, since)
+		fmt.Println()
+		cli.Info("Troubleshooting:")
+		cli.Info("  1. Check if router is running: vsr status")
+		cli.Info("  2. For local deployment: Metrics at http://localhost:9190/metrics")
+		cli.Info("  3. For docker deployment: Metrics at http://localhost:9190/metrics")
+		cli.Info("  4. Deploy with observability for enhanced metrics")
+		return
+	}
 
-	cli.Warning("\nNote: Metrics collection is not yet implemented")
-	cli.Info("This feature requires the router to be running with observability enabled")
-	cli.Info("Deploy with observability: vsr deploy docker --with-observability")
+	// Collect metrics
+	collector := metrics.NewCollector(metricsURL)
+	data, err := collector.Collect()
+	if err != nil {
+		cli.Error(fmt.Sprintf("Failed to collect metrics: %v", err))
+		return
+	}
+
+	// Display metrics
+	metrics.FormatMetricsTable(data, since)
 }

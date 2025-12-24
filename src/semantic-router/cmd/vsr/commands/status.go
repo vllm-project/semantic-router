@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/deployment"
@@ -16,19 +18,29 @@ func NewStatusCmd() *cobra.Command {
 This command auto-detects all running deployments (local, docker, kubernetes, helm)
 and displays their status, components, and endpoints.
 
+Supports environment variable: VSR_NAMESPACE
+
 Examples:
   # Check status in default namespace
   vsr status
 
   # Check status in specific namespace
-  vsr status --namespace production`,
+  vsr status --namespace production
+
+  # Check status in namespace from environment
+  VSR_NAMESPACE=production vsr status`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			namespace, _ := cmd.Flags().GetString("namespace")
 			return deployment.CheckStatus(namespace)
 		},
 	}
 
-	cmd.Flags().String("namespace", "default", "Kubernetes namespace to check")
+	// Get default from VSR_NAMESPACE env var if set, otherwise use "default"
+	nsDefault := os.Getenv("_VSR_NAMESPACE_DEFAULT")
+	if nsDefault == "" {
+		nsDefault = "default"
+	}
+	cmd.Flags().String("namespace", nsDefault, "Kubernetes namespace to check (env: VSR_NAMESPACE)")
 
 	return cmd
 }
@@ -81,7 +93,13 @@ Examples:
 
 	cmd.Flags().BoolP("follow", "f", false, "Follow log output")
 	cmd.Flags().IntP("tail", "n", 100, "Number of lines to show from the end")
-	cmd.Flags().String("namespace", "default", "Kubernetes namespace (for K8s/Helm deployments)")
+
+	// Get default from VSR_NAMESPACE env var if set, otherwise use "default"
+	nsDefault := os.Getenv("_VSR_NAMESPACE_DEFAULT")
+	if nsDefault == "" {
+		nsDefault = "default"
+	}
+	cmd.Flags().String("namespace", nsDefault, "Kubernetes namespace (for K8s/Helm deployments, env: VSR_NAMESPACE)")
 	cmd.Flags().String("env", "", "Deployment type: local, docker, kubernetes, helm (auto-detect if empty)")
 	cmd.Flags().String("component", "", "Filter by component name (e.g., router, envoy, grafana)")
 	cmd.Flags().String("since", "", "Show logs since duration (e.g., 10m, 1h) or timestamp")

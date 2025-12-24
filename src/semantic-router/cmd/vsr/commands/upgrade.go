@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -65,10 +66,11 @@ Examples:
 			if !force {
 				cli.Warning(fmt.Sprintf("This will upgrade the %s deployment", env))
 				cli.Info("The router will be temporarily unavailable during the upgrade")
-				fmt.Print("Continue? (y/N): ")
-				var response string
-				_, _ = fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
+				confirmed, err := cli.ConfirmPrompt("Continue? (y/N): ")
+				if err != nil {
+					return err
+				}
+				if !confirmed {
 					cli.Info("Upgrade cancelled")
 					return nil
 				}
@@ -90,7 +92,14 @@ Examples:
 	}
 
 	cmd.Flags().Bool("with-observability", true, "Include observability stack (Docker only)")
-	cmd.Flags().String("namespace", "default", "Kubernetes namespace (Kubernetes/Helm only)")
+
+	// Get default from VSR_NAMESPACE env var if set, otherwise use "default"
+	nsDefault := os.Getenv("_VSR_NAMESPACE_DEFAULT")
+	if nsDefault == "" {
+		nsDefault = "default"
+	}
+	cmd.Flags().String("namespace", nsDefault, "Kubernetes namespace (Kubernetes/Helm only, env: VSR_NAMESPACE)")
+
 	cmd.Flags().String("release-name", "", "Helm release name (default: semantic-router)")
 	cmd.Flags().Bool("force", false, "Skip confirmation prompt")
 	cmd.Flags().Bool("wait", false, "Wait for upgrade to complete (Kubernetes/Helm only)")

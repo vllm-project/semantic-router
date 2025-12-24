@@ -1,6 +1,8 @@
 package debug
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -96,19 +98,28 @@ func CheckPrerequisites() []CheckResult {
 // checkCommand checks if a command exists and runs successfully
 func checkCommand(name, command string, critical bool) CheckResult {
 	parts := strings.Fields(command)
+	// 5 second timeout for prerequisite checks.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	//nolint:gosec // G204: Command is from internal prerequisite checks, not user input
-	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		severity := "warning"
+		status := "warn" // Default to warn for optional tools
 		if critical {
 			severity = "critical"
+			status = "fail" // Only fail for critical tools
+		}
+		message := fmt.Sprintf("Not found or not working: %v", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			message = fmt.Sprintf("Command timed out after 5 seconds: %v", err)
 		}
 		return CheckResult{
 			Name:     name,
-			Status:   "fail",
-			Message:  fmt.Sprintf("Not found or not working: %v", err),
+			Status:   status,
+			Message:  message,
 			Severity: severity,
 		}
 	}
@@ -568,5 +579,84 @@ func getStatusSymbol(status string) string {
 		return "⚠"
 	default:
 		return "•"
+	}
+}
+
+// GenerateReportText generates a plain text version of the diagnostic report
+func GenerateReportText(report *DiagnosticReport) string {
+	var sb strings.Builder
+
+	sb.WriteString("╔════════════════════════════════════════════════════════════════╗\n")
+	sb.WriteString("║                    Diagnostic Report                          ║\n")
+	sb.WriteString("╚════════════════════════════════════════════════════════════════╝\n\n")
+
+	// System Info
+	sb.WriteString("System Information:\n")
+	sb.WriteString(fmt.Sprintf("  OS: %s (%s)\n", report.SystemInfo.OS, report.SystemInfo.Architecture))
+	sb.WriteString(fmt.Sprintf("  Go: %s\n", report.SystemInfo.GoVersion))
+	sb.WriteString(fmt.Sprintf("  Hostname: %s\n", report.SystemInfo.Hostname))
+	sb.WriteString(fmt.Sprintf("  Working Directory: %s\n", report.SystemInfo.WorkingDir))
+	sb.WriteString(fmt.Sprintf("  Timestamp: %s\n", report.Timestamp.Format(time.RFC3339)))
+
+	// Write each category
+	writeCheckCategory(&sb, "Prerequisites", report.Prerequisites)
+	writeCheckCategory(&sb, "Configuration", report.Configuration)
+	writeCheckCategory(&sb, "Models", report.ModelStatus)
+	writeCheckCategory(&sb, "Resources", report.Resources)
+	writeCheckCategory(&sb, "Connectivity", report.Connectivity)
+
+	// Recommendations
+	if len(report.Recommendations) > 0 {
+		sb.WriteString("\nRecommendations:\n")
+		for i, rec := range report.Recommendations {
+			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, rec))
+		}
+	}
+
+	// Summary
+	totalChecks := len(report.Prerequisites) + len(report.Configuration) +
+		len(report.ModelStatus) + len(report.Resources) + len(report.Connectivity)
+	passedChecks := 0
+	failedChecks := 0
+	warningChecks := 0
+
+	for _, results := range [][]CheckResult{
+		report.Prerequisites,
+		report.Configuration,
+		report.ModelStatus,
+		report.Resources,
+		report.Connectivity,
+	} {
+		for _, result := range results {
+			switch result.Status {
+			case "pass":
+				passedChecks++
+			case "fail":
+				failedChecks++
+			case "warn":
+				warningChecks++
+			}
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("\nSummary: %d checks (%d passed, %d warnings, %d failed)\n",
+		totalChecks, passedChecks, warningChecks, failedChecks))
+
+	return sb.String()
+}
+
+// writeCheckCategory writes a category of checks to the string builder
+func writeCheckCategory(sb *strings.Builder, category string, results []CheckResult) {
+	if len(results) == 0 {
+		return
+	}
+
+	fmt.Fprintf(sb, "\n%s:\n", category)
+	for _, result := range results {
+		symbol := getStatusSymbol(result.Status)
+		fmt.Fprintf(sb, "  %s %-25s %s\n", symbol, result.Name, result.Message)
+		for _, detail := range result.Details {
+			fmt.Fprintf(sb, "      → %s\n", detail)
+		}
 	}
 }

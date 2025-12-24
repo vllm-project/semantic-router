@@ -334,10 +334,11 @@ Examples:
 
 			// Confirmation prompt unless force flag is set
 			if !force {
-				fmt.Print("\nAre you sure? (y/N): ")
-				var response string
-				_, _ = fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
+				confirmed, err := cli.ConfirmPrompt("\nAre you sure? (y/N): ")
+				if err != nil {
+					return err
+				}
+				if !confirmed {
 					cli.Info("Removal cancelled")
 					return nil
 				}
@@ -364,35 +365,89 @@ Examples:
 // NewModelDownloadCmd creates the model download command
 func NewModelDownloadCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "download",
-		Short: "Download models",
-		Long: `Download models for the semantic router.
+		Use:   "download [model-id]",
+		Short: "Download models from HuggingFace",
+		Long: `Download models from HuggingFace for use with the semantic router.
 
-Currently uses the Makefile 'download-models' command.
-Future versions will support direct HuggingFace downloads.
+Download specific models or all configured models. Supports private repositories via HF_TOKEN.
 
 Examples:
+  # Download a specific model
+  vsr model download lora-intent-classifier
+
   # Download all configured models
-  vsr model download
+  vsr model download --all
 
-  # Download with verbose output
-  vsr model download --verbose`,
+  # Re-download a model
+  vsr model download lora-intent-classifier --force
+
+  # Download with HuggingFace token (for private repos)
+  HF_TOKEN=hf_xxxxx vsr model download private-model`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cli.Info("Downloading models...")
-			cli.Warning("Model download currently uses 'make download-models'")
-			cli.Info("Please run: make download-models")
+			downloadAll, _ := cmd.Flags().GetBool("all")
+			force, _ := cmd.Flags().GetBool("force")
 
-			// In the future, this will implement direct downloads:
-			// mgr := model.NewModelManager("./models")
-			// progress := func(downloaded, total int64) {
-			//     percentage := float64(downloaded) / float64(total) * 100
-			//     cli.Info(fmt.Sprintf("Progress: %.1f%%", percentage))
-			// }
-			// return mgr.DownloadModel(modelID, progress)
+			mgr := model.NewModelManager("./models")
 
-			return fmt.Errorf("direct model download not yet implemented")
+			// If --all flag is set, download all models
+			if downloadAll {
+				cli.Info("Downloading all configured models...")
+
+				models, err := mgr.ListModels()
+				if err != nil {
+					return fmt.Errorf("failed to list models: %w", err)
+				}
+
+				if len(models) == 0 {
+					cli.Warning("No models found to download")
+					return nil
+				}
+
+				successCount := 0
+				failureCount := 0
+
+				for _, m := range models {
+					cli.Info(fmt.Sprintf("\nDownloading: %s", m.Name))
+					if err := mgr.DownloadModel(m.ID, force); err != nil {
+						cli.Error(fmt.Sprintf("  ✗ Failed: %v", err))
+						failureCount++
+					} else {
+						cli.Success("  ✓ Success")
+						successCount++
+					}
+				}
+
+				cli.Info(fmt.Sprintf("\nDownload complete: %d succeeded, %d failed", successCount, failureCount))
+				if failureCount > 0 {
+					return fmt.Errorf("%d models failed to download", failureCount)
+				}
+				return nil
+			}
+
+			// Download specific model
+			if len(args) == 0 {
+				cli.Warning("No model specified. Use:")
+				cli.Info("  vsr model download <model-id>")
+				cli.Info("  vsr model download --all")
+				return fmt.Errorf("model-id required (or use --all flag)")
+			}
+
+			modelID := args[0]
+			cli.Info(fmt.Sprintf("Downloading model: %s", modelID))
+
+			if err := mgr.DownloadModel(modelID, force); err != nil {
+				cli.Error(fmt.Sprintf("Download failed: %v", err))
+				return err
+			}
+
+			cli.Success(fmt.Sprintf("Model '%s' downloaded successfully", modelID))
+			return nil
 		},
 	}
+
+	cmd.Flags().Bool("all", false, "Download all configured models")
+	cmd.Flags().Bool("force", false, "Force re-download even if model already exists")
 
 	return cmd
 }

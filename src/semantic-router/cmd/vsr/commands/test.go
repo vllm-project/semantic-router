@@ -87,7 +87,7 @@ func callClassificationAPI(endpoint, prompt string) (*ClassificationResult, erro
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to router API: %w\n\nTroubleshooting:\n  1. Check if router is running: vsr status\n  2. For Docker: ensure semantic-router container is healthy\n  3. For Local: ensure 'vsr deploy local' completed successfully\n  4. Verify port 8080 is accessible (Docker: check port mapping, K8s: use port-forward)\n  5. Check logs: vsr logs", err)
 	}
 	defer resp.Body.Close()
 
