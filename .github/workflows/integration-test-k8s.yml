@@ -119,6 +119,12 @@ jobs:
 
       - name: Run Integration E2E tests (${{ matrix.profile }})
         id: e2e-test
+        env:
+          # HF_TOKEN is required for downloading gated models (e.g., embeddinggemma-300m)
+          # For PRs from forks, this will be empty and the E2E framework will gracefully skip gated model downloads
+          # The hf CLI uses HUGGINGFACE_HUB_TOKEN, so we set both for compatibility
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set +e  # Don't exit on error, we want to capture the result
           make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_VERBOSE=true E2E_KEEP_CLUSTER=false

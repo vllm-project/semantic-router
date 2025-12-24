@@ -35,6 +35,9 @@ spec:
       # No initContainer is needed - the router uses its built-in Go-based
       # modeldownload package to download models from HuggingFace based on
       # the mom_registry configuration in config.yaml
+      # Note: HF_TOKEN secret (hf-token-secret) is still required for downloading
+      # gated models (e.g., embeddinggemma-300m). The E2E framework creates this
+      # secret automatically if HF_TOKEN is available in the test environment.
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ $prefix }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

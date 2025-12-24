@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,9 +13,42 @@ import (
 // hfCommand stores the detected HuggingFace CLI command ("hf" or "huggingface-cli")
 var hfCommand string
 
+// ErrGatedModelSkipped is a sentinel error indicating a gated model was gracefully skipped
+var ErrGatedModelSkipped = fmt.Errorf("gated model skipped")
+
 // DownloadModel downloads a model using huggingface-cli
 func DownloadModel(spec ModelSpec, config DownloadConfig) error {
 	return DownloadModelWithProgress(spec, config)
+}
+
+// IsGatedModelError checks if an error indicates a gated model that requires authentication
+func IsGatedModelError(err error, repoID string) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := strings.ToLower(err.Error())
+	repoIDLower := strings.ToLower(repoID)
+
+	// Known gated models
+	knownGatedModels := []string{"embeddinggemma", "gemma"}
+	isKnownGated := false
+	for _, gatedName := range knownGatedModels {
+		if strings.Contains(repoIDLower, gatedName) {
+			isKnownGated = true
+			break
+		}
+	}
+
+	// Check for authentication-related error patterns
+	isAuthError := strings.Contains(errStr, "401") ||
+		strings.Contains(errStr, "unauthorized") ||
+		strings.Contains(errStr, "gated") ||
+		strings.Contains(errStr, "repository not found") ||
+		strings.Contains(errStr, "404") ||
+		strings.Contains(errStr, "authentication required")
+
+	return isKnownGated || isAuthError
 }
 
 // DownloadModelWithProgress downloads a model with real-time progress output
@@ -59,6 +93,13 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 
 	// Run command with real-time output
 	if err := cmd.Run(); err != nil {
+		// Check if this is a gated model error
+		if IsGatedModelError(err, spec.RepoID) {
+			logging.Warnf("⚠️  Skipping gated model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
+			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
+			logging.Warnf("   To download gated models, set HF_TOKEN environment variable")
+			return fmt.Errorf("%w: %s", ErrGatedModelSkipped, spec.RepoID)
+		}
 		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
 	}
 
@@ -97,16 +138,31 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 
 	// Download missing models serially
 	successCount := 0
+	skippedCount := 0
 	for _, spec := range missing {
 		if err := DownloadModelWithProgress(spec, config); err != nil {
+			// Check if this was a gated model that was gracefully skipped
+			if errors.Is(err, ErrGatedModelSkipped) || strings.Contains(err.Error(), ErrGatedModelSkipped.Error()) {
+				skippedCount++
+				logging.Infof("✓ %s (skipped - gated model, HF_TOKEN not available)", spec.LocalPath)
+				continue
+			}
 			logging.Warnf("Failed to download model %s: %v", spec.RepoID, err)
 			continue
 		}
 		successCount++
 	}
 
-	if successCount < len(missing) {
-		return fmt.Errorf("failed to download %d out of %d models", len(missing)-successCount, len(missing))
+	// Only return error if we failed to download non-gated models
+	// Gated models that were skipped don't count as failures
+	if successCount+skippedCount < len(missing) {
+		return fmt.Errorf("failed to download %d out of %d models", len(missing)-successCount-skippedCount, len(missing))
+	}
+
+	if skippedCount > 0 {
+		logging.Infof("Downloaded %d models, skipped %d gated models (HF_TOKEN not available)", successCount, skippedCount)
+	} else {
+		logging.Infof("Successfully downloaded all %d models", successCount)
 	}
 
 	return nil

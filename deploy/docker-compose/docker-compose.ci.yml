@@ -28,6 +28,8 @@ services:
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
+      - HF_TOKEN=${HF_TOKEN:-}  # Optional: Required for downloading gated models (e.g., embeddinggemma-300m)
+      - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}  # Alternative env var name used by huggingface-cli
     networks:
       - semantic-network
     healthcheck:
