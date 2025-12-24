@@ -148,33 +148,3 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: pod-read
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: auth-reviewer
-rules:
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: auth-reviewer-binding
-subjects:
-- kind: ServiceAccount
-  name: vllm-phi4-mini-epp
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: auth-reviewer
