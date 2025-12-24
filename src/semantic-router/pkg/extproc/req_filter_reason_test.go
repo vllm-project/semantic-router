@@ -290,6 +290,70 @@ func TestReasoningModeComprehensive(t *testing.T) {
 	}
 }
 
+func TestChatTemplateKwargsPreservedWhenTogglingReasoning(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				ReasoningConfig: config.ReasoningConfig{
+					ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+						"qwen3": {
+							Type:      "chat_template_kwargs",
+							Parameter: "enable_thinking",
+						},
+					},
+				},
+			},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"qwen3-model": {
+						ReasoningFamily: "qwen3",
+					},
+				},
+			},
+		},
+	}
+
+	makeBody := func() []byte {
+		b, _ := json.Marshal(map[string]interface{}{
+			"model": "qwen3-model",
+			"messages": []map[string]string{
+				{"role": "user", "content": "test"},
+			},
+			"chat_template_kwargs": map[string]interface{}{
+				"foo":             "bar",
+				"enable_thinking": true,
+			},
+		})
+		return b
+	}
+
+	t.Run("disable reasoning overrides enable_thinking but preserves other keys", func(t *testing.T) {
+		modified, err := router.setReasoningModeToRequestBody(makeBody(), false, "any")
+		require.NoError(t, err)
+
+		var out map[string]interface{}
+		require.NoError(t, json.Unmarshal(modified, &out))
+
+		ctk, ok := out["chat_template_kwargs"].(map[string]interface{})
+		require.True(t, ok, "expected chat_template_kwargs to be a map")
+		assert.Equal(t, "bar", ctk["foo"])
+		assert.Equal(t, false, ctk["enable_thinking"])
+	})
+
+	t.Run("enable reasoning sets enable_thinking true and preserves other keys", func(t *testing.T) {
+		modified, err := router.setReasoningModeToRequestBody(makeBody(), true, "any")
+		require.NoError(t, err)
+
+		var out map[string]interface{}
+		require.NoError(t, json.Unmarshal(modified, &out))
+
+		ctk, ok := out["chat_template_kwargs"].(map[string]interface{})
+		require.True(t, ok, "expected chat_template_kwargs to be a map")
+		assert.Equal(t, "bar", ctk["foo"])
+		assert.Equal(t, true, ctk["enable_thinking"])
+	})
+}
+
 // TestReasoningEffortLevels tests all reasoning effort levels
 func TestReasoningEffortLevels(t *testing.T) {
 	router := &OpenAIRouter{
