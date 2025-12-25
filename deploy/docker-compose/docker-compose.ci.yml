@@ -1,32 +1,27 @@
-# Minimal Docker Compose for CI testing
-# This file contains only essential services needed for integration testing.
-# Excludes: grafana, prometheus, jaeger, openwebui, chat-ui, pipelines, mongo, dashboard
-#
-# Usage:
-#   make docker-compose-up-ci
-#   # or directly:
-#   docker compose -f deploy/docker-compose/docker-compose.ci.yml up -d
+# CI Docker Compose - Minimal services for integration testing
+# Usage: docker compose -f deploy/docker-compose/docker-compose.ci.yml up -d
 
 services:
-
-  # Semantic Router External Processor Service
+  # vLLM Semantic Router
   semantic-router:
     build:
       context: ../..
-      dockerfile: Dockerfile.extproc
-    image: ghcr.io/vllm-project/semantic-router/extproc:latest
+      dockerfile: Dockerfile
+    image: ghcr.io/vllm-project/semantic-router:latest
     container_name: semantic-router
     ports:
-      - "50051:50051"  # gRPC for ExtProc
-      - "8080:8080"    # HTTP API (health, classify, metrics)
+      - "8801:8801"    # Envoy proxy
+      - "8080:8080"    # Health API
+      - "19000:19000"  # Envoy admin
     volumes:
       - ../../config:/app/config:ro,z
-      - ../../models:/app/models:z  # Writable for model downloads
+      - ../../models:/app/models:z
       - ~/.cache/huggingface:/root/.cache/huggingface:z
     environment:
-      - LD_LIBRARY_PATH=/app/lib
-      - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
-      - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
+      - CONFIG_FILE=/app/config/config.yaml
+      - EXTPROC_HOST=localhost
+      - VLLM_BACKEND_HOST=172.28.0.20
+      - VLLM_BACKEND_PORT=8002
       - HF_HUB_ENABLE_HF_TRANSFER=1
     networks:
       - semantic-network
@@ -37,31 +32,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # Envoy Proxy Service
-  envoy:
-    image: envoyproxy/envoy:v1.31.7
-    container_name: envoy-proxy
-    security_opt:
-      - label=disable
-    ports:
-      - "8801:8801"  # Main proxy port
-      - "19000:19000"  # Admin interface
-    volumes:
-      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro,z
-    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:debug,router:debug"]
-    depends_on:
-      semantic-router:
-        condition: service_healthy
-    networks:
-      - semantic-network
-    healthcheck:
-      test: ["CMD", "bash", "-c", "(echo -e 'GET /ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; timeout 2 cat <&3) 3<>/dev/tcp/localhost/19000 | grep -q LIVE"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # LLM Katan service - lightweight mock LLM for testing
+  # LLM Katan - lightweight mock LLM for testing
   llm-katan:
     image: ghcr.io/vllm-project/semantic-router/llm-katan:latest
     container_name: llm-katan
@@ -70,7 +41,7 @@ services:
     environment:
       - HF_HUB_ENABLE_HF_TRANSFER=1
     volumes:
-      - ../../models:/app/models:z  # Writable for model downloads
+      - ../../models:/app/models:z
       - hf-cache:/home/llmkatan/.cache/huggingface
     networks:
       semantic-network:
@@ -92,4 +63,3 @@ networks:
 
 volumes:
   hf-cache:
-

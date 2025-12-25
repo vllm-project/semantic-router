@@ -94,8 +94,8 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: semantic-router  # Use Docker service name
-                port_value: 50051
+                address: ${EXTPROC_HOST}
+                port_value: ${EXTPROC_PORT}
 
   # Dynamic vLLM cluster using original destination
   - name: vllm_dynamic_cluster
