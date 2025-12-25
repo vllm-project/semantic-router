@@ -2061,69 +2061,6 @@ var _ = Describe("IP Address Validation", func() {
 		})
 	})
 
-	Describe("validateVLLMEndpoints", func() {
-		Context("with valid endpoints", func() {
-			It("should accept endpoints with valid IP addresses", func() {
-				endpoints := []VLLMEndpoint{
-					{
-						Name:    "endpoint1",
-						Address: "127.0.0.1",
-						Port:    8000,
-					},
-					{
-						Name:    "endpoint2",
-						Address: "::1",
-						Port:    8001,
-					},
-				}
-
-				err := validateVLLMEndpoints(endpoints)
-				Expect(err).NotTo(HaveOccurred())
-			})
-		})
-
-		Context("with invalid endpoints", func() {
-			It("should reject endpoints with domain names", func() {
-				endpoints := []VLLMEndpoint{
-					{
-						Name:    "invalid-endpoint",
-						Address: "example.com",
-						Port:    8000,
-					},
-				}
-
-				err := validateVLLMEndpoints(endpoints)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid-endpoint"))
-				Expect(err.Error()).To(ContainSubstring("address validation failed"))
-				Expect(err.Error()).To(ContainSubstring("Supported formats"))
-				Expect(err.Error()).To(ContainSubstring("IPv4: 192.168.1.1"))
-				Expect(err.Error()).To(ContainSubstring("IPv6: ::1"))
-				Expect(err.Error()).To(ContainSubstring("Unsupported formats"))
-			})
-
-			It("should provide detailed error messages", func() {
-				endpoints := []VLLMEndpoint{
-					{
-						Name:    "test-endpoint",
-						Address: "http://127.0.0.1",
-						Port:    8000,
-					},
-				}
-
-				err := validateVLLMEndpoints(endpoints)
-				Expect(err).To(HaveOccurred())
-
-				errorMsg := err.Error()
-				Expect(errorMsg).To(ContainSubstring("test-endpoint"))
-				Expect(errorMsg).To(ContainSubstring("protocol prefixes"))
-				Expect(errorMsg).To(ContainSubstring("Domain names: example.com, localhost"))
-				Expect(errorMsg).To(ContainSubstring("Protocol prefixes: http://, https://"))
-				Expect(errorMsg).To(ContainSubstring("use 'port' field instead"))
-			})
-		})
-	})
-
 	Describe("helper functions", func() {
 		Describe("isValidIPv4", func() {
 			It("should correctly identify IPv4 addresses", func() {

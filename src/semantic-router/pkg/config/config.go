@@ -624,6 +624,10 @@ type ModelParams struct {
 	// LoRA adapters available for this model
 	// These must be registered with vLLM using --lora-modules flag
 	LoRAs []LoRAAdapter `yaml:"loras,omitempty"`
+
+	// Access key for authentication with the model endpoint
+	// When set, router will add "Authorization: Bearer {access_key}" header to requests
+	AccessKey string `yaml:"access_key,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model

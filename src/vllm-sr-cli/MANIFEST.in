@@ -1,0 +1,18 @@
+# Include documentation
+include README.md
+include QUICKSTART.md
+include PUBLISHING.md
+
+# Include templates (now in cli package)
+recursive-include cli/templates *.yaml
+recursive-include cli/templates *.json
+
+# Include requirements
+include requirements.txt
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.egg-info
+

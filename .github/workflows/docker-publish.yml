@@ -29,6 +29,7 @@ on:
       - "e2e-tests/llm-katan/**"
       - "dashboard/**"
       - "deploy/stack/**"
+      - "src/vllm-sr-cli/**"
   pull_request:
     paths:
       - ".github/workflows/docker-publish.yml"
@@ -38,6 +39,7 @@ on:
       - "e2e-tests/llm-katan/**"
       - "dashboard/**"
       - "deploy/stack/**"
+      - "src/vllm-sr-cli/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,7 +55,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, dashboard, stack]
+        image: [extproc, llm-katan, dashboard, stack, vllm-sr]
       fail-fast: false
 
     steps:
@@ -210,6 +212,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "stack" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./Dockerfile.stack" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./src/vllm-sr-cli/Dockerfile" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate tags
