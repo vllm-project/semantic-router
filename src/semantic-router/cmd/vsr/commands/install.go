@@ -126,22 +126,15 @@ model_config:
       prompt_per_1m: 0.50
       completion_per_1m: 1.50
 
-# Categories (Metadata)
+# Categories (Metadata for domain matching)
+# Note: Model selection is done via decisions.modelRefs, not categories
 categories:
 - name: math
   description: "Mathematics related queries"
-  model_scores:
-  - model: your-model
-    score: 0.9
-    use_reasoning: true
-    reasoning_description: "Mathematical problems benefit from step-by-step reasoning"
-    reasoning_effort: high
+  mmlu_categories: ["math", "abstract_algebra", "elementary_mathematics"]
 - name: coding
   description: "Programming and code generation"
-  model_scores:
-  - model: your-model
-    score: 0.8
-    use_reasoning: false
+  mmlu_categories: ["computer_science", "machine_learning"]
 
 # Routing Rules
 keyword_rules:
@@ -213,24 +206,21 @@ model_config:
   "your-model":
     preferred_endpoints: ["endpoint1"]
 
+# Categories (Metadata for domain matching)
 categories:
 - name: general
   description: "General queries"
-  model_scores:
-  - model: your-model
-    score: 0.7
-    use_reasoning: false
 
 default_model: your-model
 
 # Classification models
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 `
 
 const fullTemplate = `# vLLM Semantic Router - Comprehensive Configuration
@@ -335,40 +325,26 @@ model_config:
 # ==============================================================================
 # Categories and Classification
 # ==============================================================================
-# Define categories for intent classification and routing
+# Categories provide metadata for domain matching. The decision engine uses
+# mmlu_categories to map detected domains to category names.
+# Note: Model selection is done via decisions.modelRefs, not categories.
 categories:
   - name: math
     description: "Mathematics related queries"
-    model_scores:
-      - model: your-model
-        score: 0.9
-        # Enable extended reasoning for complex problems
-        use_reasoning: true
-        reasoning_description: "Mathematical problems benefit from step-by-step reasoning"
-        # reasoning_effort options: "low", "medium", "high"
-        reasoning_effort: high
+    mmlu_categories: ["math", "abstract_algebra", "elementary_mathematics", "high_school_mathematics"]
 
   - name: coding
     description: "Programming and code generation"
-    model_scores:
-      - model: your-model
-        score: 0.8
-        use_reasoning: false
+    mmlu_categories: ["computer_science", "machine_learning", "college_computer_science"]
 
   - name: writing
     description: "Writing and content generation"
-    model_scores:
-      - model: your-model
-        score: 0.85
-        use_reasoning: false
+    mmlu_categories: ["philosophy", "world_religions", "logical_fallacies"]
 
   # Add more categories as needed
   # - name: general
   #   description: "General knowledge questions"
-  #   model_scores:
-  #     - model: your-model
-  #       score: 0.7
-  #       use_reasoning: false
+  #   mmlu_categories: ["miscellaneous", "global_facts"]
 
 # ==============================================================================
 # Keyword Rules - Pattern Matching for Routing

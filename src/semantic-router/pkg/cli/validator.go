@@ -104,16 +104,8 @@ func validateCategories(cfg *config.RouterConfig) error {
 			Message: "at least one category must be defined",
 		}
 	}
-
-	for _, category := range cfg.Categories {
-		if len(category.ModelScores) == 0 {
-			return ValidationError{
-				Field:   fmt.Sprintf("categories.%s", category.Name),
-				Message: "model_scores must be defined for each category",
-			}
-		}
-	}
-
+	// Note: model_scores validation removed - routing uses decision.ModelRefs
+	// Categories only need metadata (name, description, mmlu_categories) for domain matching
 	return nil
 }
 
