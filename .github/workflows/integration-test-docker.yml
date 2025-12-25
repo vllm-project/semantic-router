@@ -100,7 +100,7 @@ jobs:
 
       - name: Start CI services
         run: |
-          echo "Starting minimal CI services (semantic-router, envoy, llm-katan)..."
+          echo "Starting minimal CI services (semantic-router, llm-katan)..."
           make docker-compose-up-ci
         env:
           CI: true
@@ -118,21 +118,16 @@ jobs:
             if docker ps --filter "name=semantic-router" --filter "health=healthy" --format "{{.Names}}" | grep -q "semantic-router"; then
               echo "✅ semantic-router is healthy"
               
-              # Check envoy health
-              if docker ps --filter "name=envoy-proxy" --filter "health=healthy" --format "{{.Names}}" | grep -q "envoy-proxy"; then
-                echo "✅ envoy-proxy is healthy"
-                
-                # Check llm-katan health
-                if docker ps --filter "name=llm-katan" --filter "health=healthy" --format "{{.Names}}" | grep -q "llm-katan"; then
-                  echo "✅ llm-katan is healthy"
-                  echo "🎉 All services are healthy!"
-                  exit 0
-                fi
+              # Check llm-katan health
+              if docker ps --filter "name=llm-katan" --filter "health=healthy" --format "{{.Names}}" | grep -q "llm-katan"; then
+                echo "✅ llm-katan is healthy"
+                echo "🎉 All services are healthy!"
+                exit 0
               fi
             fi
             
             # Show current status
-            docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|llm-katan" || true
+            docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|llm-katan" || true
             
             sleep 5
             ((attempt++))
@@ -286,8 +281,6 @@ jobs:
           docker ps -a
           echo "=== Semantic Router Logs ==="
           docker logs semantic-router 2>&1 | tail -100 || true
-          echo "=== Envoy Logs ==="
-          docker logs envoy-proxy 2>&1 | tail -100 || true
           echo "=== LLM-Katan Logs ==="
           docker logs llm-katan 2>&1 | tail -100 || true
 

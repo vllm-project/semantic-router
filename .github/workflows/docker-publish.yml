@@ -53,7 +53,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, dashboard, stack]
+        image: [semantic-router, llm-katan, dashboard, stack]
       fail-fast: false
 
     steps:
@@ -130,9 +130,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Enhanced Rust caching for extproc builds
-      - name: Cache Rust dependencies (extproc)
-        if: matrix.image == 'extproc'
+      # Enhanced Rust caching for semantic-router builds
+      - name: Cache Rust dependencies (semantic-router)
+        if: matrix.image == 'semantic-router'
         uses: actions/cache@v4
         with:
           path: |
@@ -198,9 +198,9 @@ jobs:
       - name: Set build parameters
         id: build-params
         run: |
-          if [ "${{ matrix.image }}" = "extproc" ]; then
+          if [ "${{ matrix.image }}" = "semantic-router" ]; then
             echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
+            echo "dockerfile=./Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e-tests/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT

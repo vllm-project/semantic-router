@@ -1,20 +1,25 @@
 services:
 
-  # Semantic Router External Processor Service
+  # vLLM Semantic Router (Envoy + semantic-router)
   semantic-router:
-    image: ghcr.io/vllm-project/semantic-router/extproc:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ghcr.io/vllm-project/semantic-router:latest
     container_name: semantic-router
     ports:
-      - "50051:50051"
+      - "8801:8801"    # Envoy proxy
+      - "8080:8080"    # Health API
+      - "19000:19000"  # Envoy admin
     volumes:
       - ../../config:/app/config:ro,z
       - ../../models:/app/models:ro,z
       - ~/.cache/huggingface:/root/.cache/huggingface:z
     environment:
-      - LD_LIBRARY_PATH=/app/lib
-      # Use main config by default; override via CONFIG_FILE if needed
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
-      # Optional informational envs (router reads YAML for tracing config)
+      - EXTPROC_HOST=localhost
+      - VLLM_BACKEND_HOST=172.28.0.10
+      - VLLM_BACKEND_PORT=8000
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - OTEL_SERVICE_NAME=vllm-semantic-router
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
@@ -27,30 +32,6 @@ services:
       timeout: 10s
       retries: 60
       start_period: 1800s
-
-  # Envoy Proxy Service
-  envoy:
-    image: envoyproxy/envoy:v1.31.7
-    container_name: envoy-proxy
-    security_opt:
-      - label=disable
-    ports:
-      - "8801:8801"  # Main proxy port
-      - "19000:19000"  # Admin interface
-    volumes:
-      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro,z
-    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:trace,router:trace,http:trace"]
-    depends_on:
-      semantic-router:
-        condition: service_healthy
-    networks:
-      - semantic-network
-    healthcheck:
-      test: ["CMD", "bash", "-c", "(echo -e 'GET /ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; timeout 2 cat <&3) 3<>/dev/tcp/localhost/19000 | grep -q LIVE"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # Mock vLLM service for testing profile
   mock-vllm:
@@ -142,8 +123,8 @@ services:
     ports:
       - "3002:3000"  # Expose Chat UI on host 3002
     environment:
-      # Point Chat UI to Envoy's OpenAI-compatible endpoint
-      - OPENAI_BASE_URL=http://envoy-proxy:8801/v1
+      # Point Chat UI to semantic-router's Envoy endpoint
+      - OPENAI_BASE_URL=http://semantic-router:8801/v1
       # Provide a token if your upstream requires it; for HF router use hf_xxx
       - OPENAI_API_KEY=${OPENAI_API_KEY:-changeme}
       # MongoDB for persistence (use Atlas by overriding MONGODB_URL)
@@ -154,8 +135,6 @@ services:
       - PUBLIC_APP_ASSETS=${PUBLIC_APP_ASSETS:-chatui}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
-      envoy:
-        condition: service_started
       semantic-router:
         condition: service_healthy
       mongo:

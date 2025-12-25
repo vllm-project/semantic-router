@@ -1,59 +1,61 @@
+# vLLM Semantic Router
+# Envoy + semantic-router in a single container
+
+# Stage 1: Rust - Build candle binding
+FROM rust:1.90 AS rust-builder
+WORKDIR /build/candle-binding
+COPY candle-binding/Cargo.toml candle-binding/Cargo.lock ./
+COPY candle-binding/src/ src/
+RUN cargo build --release --no-default-features
+
+# Stage 2: Go - Build semantic-router
+FROM golang:1.24 AS go-builder
+WORKDIR /build
+
+# Download dependencies first (cache layer)
+COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
+COPY candle-binding/go.mod candle-binding/
+RUN cd src/semantic-router && go mod download
+
+# Copy source and build
+COPY src/semantic-router/ src/semantic-router/
+COPY candle-binding/semantic-router.go candle-binding/
+COPY --from=rust-builder /build/candle-binding/target/release/libcandle_semantic_router.so candle-binding/target/release/
+
+ENV CGO_ENABLED=1 \
+    LD_LIBRARY_PATH=/build/candle-binding/target/release \
+    GOOS=linux
+RUN cd src/semantic-router && go build -ldflags="-w -s" -o /build/router cmd/main.go
+
+FROM envoyproxy/envoy:v1.31.7 AS envoy
+
 FROM quay.io/centos/centos:stream10
+RUN dnf -y install gettext python3 python3-pip ca-certificates curl \
+    && dnf clean all \
+    && pip3 install --no-cache-dir supervisor huggingface_hub[cli] \
+    && mkdir -p /var/log/supervisor /app/lib /app/config /app/models /etc/envoy
 
-RUN dnf -y update && \
-    dnf -y install epel-release && \
-    dnf -y install \
-    gcc \
-    gcc-c++ \
-    make \
-    cmake \
-    pkg-config \
-    wget \
-    tar \
-    python3 \
-    python3-pip \
-    openssl-devel \
-    gettext \
-    ca-certificates && \
-    dnf clean all
+COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=go-builder /build/router /app/semantic-router
+COPY --from=rust-builder /build/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
 
-# Install HuggingFace CLI for model downloading
-RUN pip3 install --no-cache-dir huggingface_hub[cli]
+COPY config/config.yaml /app/config/
+COPY deploy/docker-compose/addons/envoy.yaml /etc/envoy/envoy.template.yaml
+COPY deploy/docker-compose/supervisord.conf /etc/supervisor/supervisord.conf
+RUN chmod +x /app/semantic-router
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV LD_LIBRARY_PATH=/app/lib \
+    CONFIG_FILE=/app/config/config.yaml \
+    ENVOY_LISTEN_PORT=8801 \
+    ENVOY_ADMIN_PORT=19000 \
+    EXTPROC_HOST=localhost \
+    EXTPROC_PORT=50051 \
+    VLLM_BACKEND_HOST=localhost \
+    VLLM_BACKEND_PORT=8000
 
-# Install Envoy
-ENV ENVOY_VERSION=1.31.7
-RUN ARCH=$(uname -m) && \
-    case ${ARCH} in \
-        x86_64) ENVOY_ARCH="x86_64" ;; \
-        aarch64|arm64) ENVOY_ARCH="aarch64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    curl -OL https://github.com/envoyproxy/envoy/releases/download/v${ENVOY_VERSION}/envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} && \
-    chmod +x envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} && \
-    mv envoy-${ENVOY_VERSION}-linux-${ENVOY_ARCH} /usr/local/bin/envoy
+EXPOSE 8801 19000 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -sf http://localhost:8080/health || exit 1
 
-# Install Golang
-ENV GOLANG_VERSION=1.24.1
-RUN ARCH=$(uname -m) && \
-    case ${ARCH} in \
-        x86_64) GO_ARCH="amd64" ;; \
-        aarch64|arm64) GO_ARCH="arm64" ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    curl -OL https://golang.org/dl/go${GOLANG_VERSION}.linux-${GO_ARCH}.tar.gz && \
-    tar -C /usr/local -xzf go${GOLANG_VERSION}.linux-${GO_ARCH}.tar.gz && \
-    rm go${GOLANG_VERSION}.linux-${GO_ARCH}.tar.gz
-ENV PATH="/usr/local/go/bin:${PATH}"
-ENV GOPATH="/go"
-ENV PATH="/go/bin:${PATH}"
-
-# Set working directory
 WORKDIR /app
-
-# Set environment variables
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
-ENV CGO_ENABLED=1
+ENTRYPOINT ["/usr/local/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
