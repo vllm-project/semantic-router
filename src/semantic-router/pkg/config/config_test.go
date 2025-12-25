@@ -1033,7 +1033,6 @@ default_model: "test-model"
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("example.com"))
 				})
 			})
-
 		})
 	})
 

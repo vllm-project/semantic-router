@@ -14,6 +14,11 @@ import (
 func createValidTestConfig(t *testing.T, dir string) string {
 	configPath := filepath.Join(dir, "config.yaml")
 	validConfig := `
+semantic_cache:
+  enabled: true
+  backend_type: memory
+  similarity_threshold: 0.8
+
 bert_model:
   model_id: models/all-MiniLM-L12-v2
   threshold: 0.6
@@ -135,34 +140,34 @@ func TestUpdateConfigHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Invalid config - localhost instead of IP address",
+			name:   "Valid config - localhost (DNS name now allowed)",
 			method: http.MethodPost,
 			requestBody: map[string]interface{}{
 				"vllm_endpoints": []map[string]interface{}{
 					{
-						"name":    "test",
+						"name":    "test-localhost",
 						"address": "localhost",
 						"port":    8000,
+						"weight":  1,
 					},
 				},
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Config validation failed",
+			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Invalid config - domain name instead of IP address",
+			name:   "Valid config - domain name (DNS names now allowed)",
 			method: http.MethodPost,
 			requestBody: map[string]interface{}{
 				"vllm_endpoints": []map[string]interface{}{
 					{
-						"name":    "test",
+						"name":    "test-domain",
 						"address": "example.com",
 						"port":    8000,
+						"weight":  1,
 					},
 				},
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Config validation failed",
+			expectedStatus: http.StatusOK,
 		},
 		{
 			name:   "Invalid config - protocol prefix in address",
@@ -295,12 +300,12 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	// Test that validation prevents saving invalid config
+	// Test that validation prevents saving invalid config (protocol prefix)
 	invalidConfig := map[string]interface{}{
 		"vllm_endpoints": []map[string]interface{}{
 			{
 				"name":    "invalid-endpoint",
-				"address": "localhost", // Invalid: should be IP address
+				"address": "http://127.0.0.1", // Invalid: protocol prefix not allowed
 				"port":    8000,
 			},
 		},

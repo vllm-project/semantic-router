@@ -81,7 +81,7 @@ Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts t
 
 ## Quick Start 🚀
 
-#### Installation
+### Installation
 
 > [!TIP]
 > We recommend that you setup a Python virtual environment to manage dependencies.
