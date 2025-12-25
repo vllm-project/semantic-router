@@ -17,7 +17,7 @@ func TestCompletionCommandStructure(t *testing.T) {
 		{
 			name:           "completion command has correct structure",
 			expectedUse:    "completion [bash|zsh|fish|powershell]",
-			expectedShort:  "Generate shell completion script",
+			expectedShort:  "Generate or install shell completion scripts",
 			validArgs:      []string{"bash", "zsh", "fish", "powershell"},
 			validArgsCount: 4,
 		},
@@ -111,9 +111,10 @@ func TestCompletionCommandRequiresShell(t *testing.T) {
 
 	rootCmd.SetArgs([]string{"completion"})
 	_, err := rootCmd.ExecuteC()
-
-	if err == nil {
-		t.Error("expected error when no shell specified, got nil")
+	// With subcommands (install/uninstall/status), no error is expected
+	// The command will show help instead
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
