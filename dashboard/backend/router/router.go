@@ -19,7 +19,8 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Health check endpoint
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
 
-	// Config endpoints
+	// Config endpoints - MUST be registered BEFORE proxy to take precedence
+	// In Go's ServeMux, exact path matches registered first take precedence over prefix handlers
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath))
 	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/update")
@@ -29,6 +30,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
 	// Router API proxy (forward Authorization) - MUST be registered before Grafana
+	// Use HandleFunc to explicitly exclude config endpoints
 	var routerAPIProxy *httputil.ReverseProxy
 	if cfg.RouterAPIURL != "" {
 		rp, err := proxy.NewReverseProxy(cfg.RouterAPIURL, "/api/router", true)
@@ -36,8 +38,16 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			log.Fatalf("router API proxy error: %v", err)
 		}
 		routerAPIProxy = rp
-		mux.Handle("/api/router/", rp)
-		log.Printf("Router API proxy configured: %s", cfg.RouterAPIURL)
+		// Explicitly exclude config endpoints from proxy
+		mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
+				// Config endpoints are handled by specific handlers above
+				http.NotFound(w, r)
+				return
+			}
+			rp.ServeHTTP(w, r)
+		})
+		log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)
 	}
 
 	// Grafana proxy and static assets
@@ -397,6 +407,13 @@ func Setup(cfg *config.Config) *http.ServeMux {
 
 		// Log all API requests for debugging
 		log.Printf("API request: %s %s (from: %s)", r.Method, r.URL.Path, r.Header.Get("Referer"))
+
+		// Exclude config endpoints - they're handled by specific handlers registered earlier
+		if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
+			// Config endpoints should be handled by specific handlers, not proxied
+			http.NotFound(w, r)
+			return
+		}
 
 		// If path starts with /api/router/, use Router API proxy
 		if strings.HasPrefix(r.URL.Path, "/api/router/") && routerAPIProxy != nil {

@@ -186,7 +186,9 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 				log.Printf("Error reading response body: %v", err)
 				return err
 			}
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				log.Printf("Error closing response body: %v", err)
+			}
 
 			// Replace hardcoded internal URLs with proxy paths
 			bodyStr := string(bodyBytes)
