@@ -77,6 +77,27 @@ def translate_fact_check_signals(fact_checks: list) -> list:
     return rules
 
 
+def translate_user_feedback_signals(user_feedbacks: list) -> list:
+    """
+    Translate user feedback signals to router format.
+
+    Args:
+        user_feedbacks: List of UserFeedback objects
+
+    Returns:
+        list: Router user feedback rules
+    """
+    rules = []
+    for signal in user_feedbacks:
+        rule = {
+            "name": signal.name,
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
 def translate_domains_to_categories(domains: list) -> list:
     """
     Translate domains to router categories format.
@@ -212,6 +233,17 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(
                 f"  Added {len(user_config.signals.fact_check)} fact check signals"
+            )
+
+        if (
+            user_config.signals.user_feedbacks
+            and len(user_config.signals.user_feedbacks) > 0
+        ):
+            merged["user_feedback_rules"] = translate_user_feedback_signals(
+                user_config.signals.user_feedbacks
+            )
+            log.info(
+                f"  Added {len(user_config.signals.user_feedbacks)} user feedback signals"
             )
 
         # Translate domains to categories

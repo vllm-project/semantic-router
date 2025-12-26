@@ -46,6 +46,13 @@ class FactCheck(BaseModel):
     description: str
 
 
+class UserFeedback(BaseModel):
+    """User feedback signal configuration."""
+
+    name: str
+    description: str
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -53,6 +60,7 @@ class Signals(BaseModel):
     embeddings: Optional[List[EmbeddingSignal]] = []
     domains: Optional[List[Domain]] = []
     fact_check: Optional[List[FactCheck]] = []
+    user_feedbacks: Optional[List[UserFeedback]] = []
 
 
 class Condition(BaseModel):

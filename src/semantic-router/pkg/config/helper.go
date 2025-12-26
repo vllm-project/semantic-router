@@ -524,3 +524,9 @@ func (c *RouterConfig) GetHallucinationAction() string {
 	// Only "warn" is supported now
 	return "warn"
 }
+
+// IsFeedbackDetectorEnabled checks if feedback detection is enabled
+func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
+	return c.InlineModels.FeedbackDetector.Enabled &&
+		c.InlineModels.FeedbackDetector.ModelID != ""
+}

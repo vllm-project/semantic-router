@@ -7,6 +7,7 @@
 #   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
 #   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
 #   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
+#   "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
 #   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
 #   "models/mom-embedding-flash": "google/embeddinggemma-300m"
 
@@ -92,6 +93,14 @@ hallucination_mitigation:
     model_id: "models/mom-halugate-explainer"
     threshold: 0.9
     use_cpu: true
+
+# Feedback detector configuration
+# Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
+feedback_detector:
+  enabled: true
+  model_id: "models/mom-feedback-detector"
+  threshold: 0.7
+  use_cpu: true
 
 # Embedding Models Configuration
 # These models provide intelligent embedding generation with automatic routing:

@@ -45,6 +45,7 @@ signals:
         - "i meet a problem with my code"
         - "need to troubleshooting steps for my code"
       aggregation_method: "max"
+
   # domains - Domain categories (optional, can be auto-generated)
   domains:
     - name: "math"
@@ -62,6 +63,7 @@ signals:
     - name: "other"
       description: "General queries"
       mmlu_categories: ["other"]
+
   # fact_check - Fact-checking signals
   fact_check:
     - name: needs_fact_check
@@ -69,8 +71,36 @@ signals:
     - name: no_fact_check_needed
       description: "Query is creative, code-related, or opinion-based - no fact verification needed"
 
+  # user_feedbacks - User feedback signals
+  user_feedbacks:
+    - name: need_clarification
+      description: "User needs more clarification on the answer"
+    - name: satisfied
+      description: "User is satisfied with the answer"
+    - name: want_different
+      description: "User wants some other different answer"
+    - name: wrong_answer
+      description: "User is not satisfied with the answer and it is wrong"
+
 # Decisions - Routing logic
 decisions:
+  # High priority: Handle user feedback for wrong answers
+  - name: "wrong_answer_route"
+    description: "Handle user feedback indicating wrong answer - rethink and provide correct response"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "wrong_answer"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The user has indicated that the previous answer was incorrect. Please carefully reconsider the question, identify what might have been wrong in the previous response, and provide a corrected and accurate answer. Think step-by-step and verify your reasoning before responding."
+
   - name: "math_route"
     description: "Route mathematical queries with reasoning enabled"
     priority: 100

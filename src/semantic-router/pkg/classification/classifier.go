@@ -260,6 +260,7 @@ type Classifier struct {
 	// Hallucination mitigation classifiers
 	factCheckClassifier   *FactCheckClassifier
 	hallucinationDetector *HallucinationDetector
+	feedbackDetector      *FeedbackDetector
 
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
@@ -355,6 +356,13 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializeHallucinationDetector(); err != nil {
 			logging.Warnf("Failed to initialize hallucination detector: %v", err)
 			// Non-fatal - continue without hallucination detection
+		}
+	}
+
+	if classifier.IsFeedbackDetectorEnabled() {
+		if err := classifier.initializeFeedbackDetector(); err != nil {
+			logging.Warnf("Failed to initialize feedback detector: %v", err)
+			// Non-fatal - continue without feedback detection
 		}
 	}
 
@@ -619,10 +627,11 @@ func (c *Classifier) initializePIIClassifier() error {
 
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
-	MatchedKeywordRules   []string
-	MatchedEmbeddingRules []string
-	MatchedDomainRules    []string
-	MatchedFactCheckRules []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedKeywordRules      []string
+	MatchedEmbeddingRules    []string
+	MatchedDomainRules       []string
+	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 }
 
 // EvaluateAllRules evaluates all rule types and returns matched rule names
@@ -699,6 +708,26 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		}
 	}
 
+	// Evaluate user feedback rules
+	// Only evaluate if user_feedback_rules are configured and feedback detector is enabled
+	if len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled() {
+		feedbackResult, err := c.ClassifyFeedback(text)
+		if err != nil {
+			logging.Errorf("user feedback rule evaluation failed: %v", err)
+		} else if feedbackResult != nil {
+			// Use the feedback type directly as the signal name
+			signalName := feedbackResult.FeedbackType
+
+			// Check if this signal is defined in user_feedback_rules
+			for _, rule := range c.Config.UserFeedbackRules {
+				if rule.Name == signalName {
+					results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
+					break
+				}
+			}
+		}
+	}
+
 	return results
 }
 
@@ -710,11 +739,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	// Evaluate all signals (includes fact_check)
+	// Evaluate all signals (includes fact_check and user_feedback)
 	signals := c.EvaluateAllSignals(text)
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v",
-		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules, signals.MatchedFactCheckRules)
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v",
+		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules, signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules)
 
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
@@ -727,10 +756,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 
 	// Evaluate decisions with all signals
 	result, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{
-		KeywordRules:   signals.MatchedKeywordRules,
-		EmbeddingRules: signals.MatchedEmbeddingRules,
-		DomainRules:    signals.MatchedDomainRules,
-		FactCheckRules: signals.MatchedFactCheckRules,
+		KeywordRules:      signals.MatchedKeywordRules,
+		EmbeddingRules:    signals.MatchedEmbeddingRules,
+		DomainRules:       signals.MatchedDomainRules,
+		FactCheckRules:    signals.MatchedFactCheckRules,
+		UserFeedbackRules: signals.MatchedUserFeedbackRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -1359,6 +1389,11 @@ func (c *Classifier) IsHallucinationDetectionEnabled() bool {
 	return c.Config.IsHallucinationModelEnabled()
 }
 
+// IsFeedbackDetectorEnabled checks if feedback detection is enabled and properly configured
+func (c *Classifier) IsFeedbackDetectorEnabled() bool {
+	return c.Config.IsFeedbackDetectorEnabled()
+}
+
 // initializeFactCheckClassifier initializes the fact-check classification model
 func (c *Classifier) initializeFactCheckClassifier() error {
 	if !c.IsFactCheckEnabled() {
@@ -1407,6 +1442,26 @@ func (c *Classifier) initializeHallucinationDetector() error {
 
 	c.hallucinationDetector = detector
 	logging.Infof("Hallucination detector initialized successfully")
+	return nil
+}
+
+// initializeFeedbackDetector initializes the feedback detection model
+func (c *Classifier) initializeFeedbackDetector() error {
+	if !c.IsFeedbackDetectorEnabled() {
+		return nil
+	}
+
+	detector, err := NewFeedbackDetector(&c.Config.InlineModels.FeedbackDetector)
+	if err != nil {
+		return fmt.Errorf("failed to create feedback detector: %w", err)
+	}
+
+	if err := detector.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize feedback detector: %w", err)
+	}
+
+	c.feedbackDetector = detector
+	logging.Infof("Feedback detector initialized successfully")
 	return nil
 }
 
@@ -1503,6 +1558,26 @@ func (c *Classifier) DetectHallucinationWithNLI(context, question, answer string
 	return result, nil
 }
 
+// ClassifyFeedback performs user feedback classification on the given text
+// Returns the classification result indicating the type of user feedback
+func (c *Classifier) ClassifyFeedback(text string) (*FeedbackResult, error) {
+	if c.feedbackDetector == nil || !c.feedbackDetector.IsInitialized() {
+		return nil, fmt.Errorf("feedback detector is not initialized")
+	}
+
+	result, err := c.feedbackDetector.Classify(text)
+	if err != nil {
+		return nil, fmt.Errorf("feedback classification failed: %w", err)
+	}
+
+	if result != nil {
+		logging.Infof("Feedback classification: feedback_type=%s, confidence=%.3f",
+			result.FeedbackType, result.Confidence)
+	}
+
+	return result, nil
+}
+
 // GetFactCheckClassifier returns the fact-check classifier instance
 func (c *Classifier) GetFactCheckClassifier() *FactCheckClassifier {
 	return c.factCheckClassifier
@@ -1511,4 +1586,9 @@ func (c *Classifier) GetFactCheckClassifier() *FactCheckClassifier {
 // GetHallucinationDetector returns the hallucination detector instance
 func (c *Classifier) GetHallucinationDetector() *HallucinationDetector {
 	return c.hallucinationDetector
+}
+
+// GetFeedbackDetector returns the feedback detector instance
+func (c *Classifier) GetFeedbackDetector() *FeedbackDetector {
+	return c.feedbackDetector
 }

@@ -119,6 +119,9 @@ type InlineModels struct {
 
 	// Hallucination mitigation configuration
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
+
+	// Feedback detector configuration for user satisfaction detection
+	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -151,6 +154,10 @@ type Signals struct {
 	// FactCheck rules for fact-check signal classification
 	// When matched, outputs "needs_fact_check" or "no_fact_check_needed" signal
 	FactCheckRules []FactCheckRule `yaml:"fact_check_rules,omitempty"`
+
+	// UserFeedback rules for user feedback signal classification
+	// When matched, outputs one of: "need_clarification", "satisfied", "want_different", "wrong_answer"
+	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -481,6 +488,29 @@ type PromptGuardConfig struct {
 	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
 	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
+}
+
+// FeedbackDetectorConfig represents configuration for user feedback detection
+type FeedbackDetectorConfig struct {
+	// Enable user feedback detection
+	Enabled bool `yaml:"enabled"`
+
+	// Model ID for the feedback classification model (Candle model path)
+	// Default: "models/feedback-detector"
+	ModelID string `yaml:"model_id"`
+
+	// Threshold for feedback detection (0.0-1.0)
+	// Default: 0.5
+	Threshold float32 `yaml:"threshold"`
+
+	// Use CPU for inference (Candle CPU flag)
+	UseCPU bool `yaml:"use_cpu"`
+
+	// Use ModernBERT for feedback detection (Candle ModernBERT flag)
+	UseModernBERT bool `yaml:"use_modernbert"`
+
+	// Path to the feedback type mapping file
+	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
@@ -1036,6 +1066,20 @@ type RuleCondition struct {
 type FactCheckRule struct {
 	// Name is the signal name that can be referenced in decision rules
 	// e.g., "needs_fact_check" or "no_fact_check_needed"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
+// UserFeedbackRule defines a rule for user feedback signal classification
+// Similar to FactCheckRule, but based on user satisfaction detection
+// The classifier determines user feedback type from follow-up messages and outputs
+// one of the predefined signals: "need_clarification", "satisfied", "want_different", "wrong_answer"
+// Threshold is read from feedback_detector.threshold
+type UserFeedbackRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "need_clarification", "satisfied", "want_different", "wrong_answer"
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of when this signal is triggered
