@@ -136,10 +136,28 @@ func createJailbreakInferenceCandle() JailbreakInference {
 
 // createJailbreakInference creates the appropriate jailbreak inference based on configuration
 // Checks UseVLLM flag to decide between vLLM or Candle implementation
-func createJailbreakInference(cfg *config.PromptGuardConfig) (JailbreakInference, error) {
-	if cfg.UseVLLM {
-		// Use vLLM-based inference
-		return NewVLLMJailbreakInference(cfg)
+// When UseVLLM is true, it will try to find external model config with role="guardrail"
+func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig) (JailbreakInference, error) {
+	if promptGuardCfg.UseVLLM {
+		// Try to find external model configuration with role="guardrail"
+		externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
+		if externalCfg == nil {
+			return nil, fmt.Errorf("external model with model_role='%s' is required when use_vllm=true", config.ModelRoleGuardrail)
+		}
+
+		// Validate required fields
+		if externalCfg.ModelEndpoint.Address == "" {
+			return nil, fmt.Errorf("external guardrail model endpoint address is required")
+		}
+		if externalCfg.ModelName == "" {
+			return nil, fmt.Errorf("external guardrail model name is required")
+		}
+
+		logging.Infof("Found external guardrail model (provider=%s)", externalCfg.Provider)
+
+		// Use vLLM-based inference with external config
+		// Pass default threshold from PromptGuardConfig
+		return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold)
 	}
 	// Use Candle-based inference
 	return createJailbreakInferenceCandle(), nil
@@ -367,7 +385,8 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 // allowing flexible deployment scenarios such as gradual migration.
 func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
 	// Create jailbreak inference (vLLM or Candle)
-	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard)
+	// Pass full RouterConfig to allow lookup of external models
+	jailbreakInference, err := createJailbreakInference(&cfg.PromptGuard, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create jailbreak inference: %w", err)
 	}
@@ -448,10 +467,14 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 
 	// Check configuration based on whether using vLLM or Candle
 	if c.Config.PromptGuard.UseVLLM {
-		// For vLLM: need endpoint, model name, and mapping path
-		return c.Config.PromptGuard.ClassifierVLLMEndpoint.Address != "" &&
-			c.Config.PromptGuard.VLLMModelName != "" &&
-			c.Config.PromptGuard.JailbreakMappingPath != ""
+		// For vLLM: check if external guardrail model is configured
+		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
+		hasExternalConfig := externalCfg != nil &&
+			externalCfg.ModelEndpoint.Address != "" &&
+			externalCfg.ModelName != ""
+
+		// Need mapping path and external config
+		return c.Config.PromptGuard.JailbreakMappingPath != "" && hasExternalConfig
 	}
 
 	// For Candle: need model ID and mapping path

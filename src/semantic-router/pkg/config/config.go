@@ -17,6 +17,13 @@ const (
 	ConfigSourceKubernetes ConfigSource = "kubernetes"
 )
 
+// Model role constants for external models
+const (
+	ModelRoleGuardrail      = "guardrail"
+	ModelRoleClassification = "classification"
+	ModelRoleScoring        = "scoring"
+)
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
 	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)
@@ -34,6 +41,13 @@ type RouterConfig struct {
 	*/
 	// Inline models configuration
 	InlineModels `yaml:",inline"`
+	/*
+		Static: Global Configuration
+		Timing: Should be handled when starting the router.
+	*/
+	// External models configuration
+	ExternalModels []ExternalModelConfig `yaml:"external_models,omitempty"`
+
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
 	// Response API configuration for stateful conversations
@@ -109,6 +123,22 @@ type InlineModels struct {
 
 // IntelligentRouting represents the configuration for intelligent routing
 type IntelligentRouting struct {
+	// Signals extraction rules from user queries
+	Signals `yaml:",inline"`
+
+	// Decisions for routing logic (combines rules with AND/OR operators)
+	Decisions []Decision `yaml:"decisions,omitempty"`
+
+	// Strategy for selecting decision when multiple decisions match
+	// "priority" - select decision with highest priority
+	// "confidence" - select decision with highest confidence score
+	Strategy string `yaml:"strategy,omitempty"`
+
+	// Reasoning mode configuration
+	ReasoningConfig `yaml:",inline"`
+}
+
+type Signals struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
 
@@ -121,17 +151,6 @@ type IntelligentRouting struct {
 	// FactCheck rules for fact-check signal classification
 	// When matched, outputs "needs_fact_check" or "no_fact_check_needed" signal
 	FactCheckRules []FactCheckRule `yaml:"fact_check_rules,omitempty"`
-
-	// Decisions for routing logic (combines rules with AND/OR operators)
-	Decisions []Decision `yaml:"decisions,omitempty"`
-
-	// Strategy for selecting decision when multiple decisions match
-	// "priority" - select decision with highest priority
-	// "confidence" - select decision with highest confidence score
-	Strategy string `yaml:"strategy,omitempty"`
-
-	// Reasoning mode configuration
-	ReasoningConfig `yaml:",inline"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -459,25 +478,32 @@ type PromptGuardConfig struct {
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
 
 	// Use vLLM REST API instead of Candle for guardrail/safety checks
-	// When true, ModelID, UseCPU, and UseModernBERT are ignored
-	// When false (default), uses Candle-based classification
+	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
+	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
+}
 
-	// Dedicated vLLM endpoint configuration for PromptGuard
+// ExternalModelConfig represents configuration for external LLM-based models
+type ExternalModelConfig struct {
+	// Provider (e.g., "vllm")
+	Provider string `yaml:"llm_provider"`
+	// Classifier type (e.g., "guardrail", "classification", "scoring")
+	ModelRole string `yaml:"model_role"`
+	// Dedicated LLM endpoint configuration for PromptGuard
 	// This is separate from vllm_endpoints (which are for backend inference)
-	ClassifierVLLMEndpoint ClassifierVLLMEndpoint `yaml:"classifier_vllm_endpoint,omitempty"`
-
-	// Model name on vLLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
-	VLLMModelName string `yaml:"vllm_model_name,omitempty"`
-
-	// Timeout for vLLM API calls in seconds
+	ModelEndpoint ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
+	// Model name on LLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+	ModelName string `yaml:"llm_model_name,omitempty"`
+	// Timeout for LLM API calls in seconds
 	// Default: 30 seconds if not specified
-	VLLMTimeoutSeconds int `yaml:"vllm_timeout_seconds,omitempty"`
-
+	TimeoutSeconds int `yaml:"llm_timeout_seconds,omitempty"`
 	// Response parser type (optional, auto-detected from model name if not set)
 	// Options: "qwen3guard", "json", "simple", "auto"
 	// "auto" tries multiple parsers (OR logic)
-	ResponseParserType string `yaml:"response_parser_type,omitempty"`
+	ParserType string `yaml:"parser_type,omitempty"`
+	// Threshold for classification (0.0-1.0)
+	// Used for guardrail models to determine detection threshold
+	Threshold float32 `yaml:"threshold,omitempty"`
 }
 
 // ToolsConfig represents configuration for automatic tool selection
@@ -1085,4 +1111,15 @@ type PIIDetectionPolicy struct {
 	// PIIThreshold defines the confidence threshold for PII detection (0.0-1.0)
 	// If nil, uses the global threshold from Classifier.PIIModel.Threshold
 	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
+}
+
+// FindExternalModelByRole searches for an external model configuration by its role
+// Returns nil if no matching model is found
+func (cfg *RouterConfig) FindExternalModelByRole(role string) *ExternalModelConfig {
+	for i := range cfg.ExternalModels {
+		if cfg.ExternalModels[i].ModelRole == role {
+			return &cfg.ExternalModels[i]
+		}
+	}
+	return nil
 }

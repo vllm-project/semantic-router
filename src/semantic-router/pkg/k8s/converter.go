@@ -84,11 +84,13 @@ func (c *CRDConverter) ConvertIntelligentRoute(route *v1alpha1.IntelligentRoute)
 	}
 
 	intelligentRouting := &config.IntelligentRouting{
-		KeywordRules:   make([]config.KeywordRule, 0),
-		EmbeddingRules: make([]config.EmbeddingRule, 0),
-		Categories:     make([]config.Category, 0),
-		Decisions:      make([]config.Decision, 0),
-		Strategy:       "priority", // Always use priority strategy
+		Signals: config.Signals{
+			KeywordRules:   make([]config.KeywordRule, 0),
+			EmbeddingRules: make([]config.EmbeddingRule, 0),
+			Categories:     make([]config.Category, 0),
+		},
+		Decisions: make([]config.Decision, 0),
+		Strategy:  "priority", // Always use priority strategy
 	}
 
 	// Convert keyword signals
