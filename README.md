@@ -17,69 +17,43 @@
 
 *Latest News* 🔥
 
-- [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html) 🚀
-- [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html) 🚪
-- [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html) 🧠
-- [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published 📝
-- [2025/10/21] We announced the [2025 Q4 Roadmap: Journey to Iris](https://vllm-semantic-router.com/blog/q4-roadmap-iris) 📅.
-- [2025/10/12] **Our paper** [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys 🧠.
-- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team 👋.
-- [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway) 🌊.
-- [2025/09/01] We released the project officially: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html) 🚀.
+- [2025/12/16] **Collaboration**: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
+- [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
+- [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html)
+- [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published
+- [2025/10/21] We announced the [2025 Q4 Roadmap: Journey to Iris](https://vllm-semantic-router.com/blog/q4-roadmap-iris)
+- [2025/10/12] **Our paper** [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys.
+- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team.
+- [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway).
+- [2025/09/01] We released the project officially: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html).
 
 ---
 
 ## Innovations ✨
 
+We are building system level intelligence for Mixture-of-Models (MoM), bringing the collective intelligence into LLM systems, anwering the following questions:
+
+1. How to capture the missing signals in request, response and context?
+2. How to combine the signals to make better decisions?
+3. How to collaborate between different models more efficiently?
+4. How to secure the real world and LLM system from jailbreaks, pii leaks, hallucinations?
+5. How to build a self-learning system from valuable signals?
+
+![vLLM Semantic Router Banner](./website/static/img/banner.png)
+
+### Architecture
+
+A quick overview of the current architecture:
+
 ![architecture](./website/static/img/architecture.png)
-
-### Intelligent Routing 🧠
-
-#### Auto-Selection of Models and LoRA Adapters
-
-A **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models or LoRA adapters from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
-
-![mom-overview](./website/static/img/mom-overview.png)
-
-Conceptually similar to Mixture-of-Experts (MoE) which lives *within* a model, this system selects the best *entire model* for the nature of the task.
-
-As such, the overall inference accuracy is improved by using a pool of models that are better suited for different types of tasks:
-
-![Model Accuracy](./website/static/img/category_accuracies.png)
-
-The router is implemented in two ways:
-
-- Golang (with Rust FFI based on the [candle](https://github.com/huggingface/candle) rust ML framework)
-- Python
-Benchmarking will be conducted to determine the best implementation.
 
 #### Request Flow
 
-![architecture](./website/static/img/flow.png)
+A query goes through the following steps before it reaches the LLM:
 
-#### Auto-Selection of Tools
+![flow](./website/static/img/flow.png)
 
-Select the tools to use based on the prompt, avoiding the use of tools that are not relevant to the prompt so as to reduce the number of prompt tokens and improve tool selection accuracy by the LLM.
-
-#### Domain Aware System Prompts
-
-Automatically inject specialized system prompts based on query classification, ensuring optimal model behavior for different domains (math, coding, business, etc.) without manual prompt engineering.
-
-#### Domain Aware Similarity Caching ⚡️
-
-Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
-
-### Enterprise Security 🔒
-
-#### PII detection
-
-Detect PII in the prompt, avoiding sending PII to the LLM so as to protect the privacy of the user.
-
-#### Prompt guard
-
-Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving. Can be configured globally or at the category level for fine-grained security control.
-
-## Quick Start 🚀
+## Quick Start
 
 ### Installation
 
@@ -141,7 +115,7 @@ vllm-sr serve
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
 
-**👉 [Complete Documentation at Read the Docs](https://vllm-semantic-router.com/)**
+Complete Documentation at Read the **[Docs](https://vllm-semantic-router.com/)**
 
 The documentation includes:
 
