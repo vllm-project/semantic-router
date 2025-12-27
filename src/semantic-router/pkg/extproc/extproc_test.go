@@ -2814,13 +2814,13 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			expectedChatTemplateKwargs: false,
 		},
 		{
-			name:                       "DeepSeek model with reasoning disabled - remove reasoning_effort",
+			name:                       "DeepSeek model with reasoning disabled - set chat_template_kwargs (thinking: false)",
 			model:                      "ds-v31-custom",
 			enabled:                    false,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
 			expectedReasoningEffort:    nil,
-			expectedChatTemplateKwargs: false,
+			expectedChatTemplateKwargs: true,
 		},
 		{
 			name:                       "GPT-OSS model with reasoning enabled - set reasoning_effort",
@@ -2865,7 +2865,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
 			expectedReasoningEffort:    nil,
-			expectedChatTemplateKwargs: false,
+			expectedChatTemplateKwargs: true,
 		},
 	}
 
@@ -2922,24 +2922,30 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 					t.Fatalf("Expected non-empty chat_template_kwargs")
 				}
 
-				// Validate the specific parameter based on model type
-				switch tc.model {
-				case "deepseek-v31", "ds-1.5b":
-					if thinkingValue, exists := kwargs["thinking"]; !exists {
-						t.Fatalf("Expected 'thinking' parameter in chat_template_kwargs for DeepSeek model")
-					} else if thinkingValue != true {
-						t.Fatalf("Expected 'thinking' to be true, got %v", thinkingValue)
+				// Validate the specific parameter for chat_template_kwargs families.
+				// (Different families use different parameter names, but the value should match tc.enabled.)
+				if v, exists := kwargs["thinking"]; exists {
+					if v != tc.enabled {
+						t.Fatalf("Expected chat_template_kwargs.thinking to be %v, got %v", tc.enabled, v)
 					}
-				case "qwen3-7b":
-					if thinkingValue, exists := kwargs["enable_thinking"]; !exists {
-						t.Fatalf("Expected 'enable_thinking' parameter in chat_template_kwargs for Qwen3 model")
-					} else if thinkingValue != true {
-						t.Fatalf("Expected 'enable_thinking' to be true, got %v", thinkingValue)
+				} else if v, exists := kwargs["enable_thinking"]; exists {
+					if v != tc.enabled {
+						t.Fatalf("Expected chat_template_kwargs.enable_thinking to be %v, got %v", tc.enabled, v)
 					}
+				} else {
+					t.Fatalf("Expected chat_template_kwargs to contain either 'thinking' or 'enable_thinking', got keys=%v", mapKeys(kwargs))
 				}
 			}
 		})
 	}
+}
+
+func mapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // DemonstrateConfigurationUsage shows how to use the configuration-based reasoning
