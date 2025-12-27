@@ -1,9 +1,7 @@
 package proxy
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -171,50 +169,6 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		resp.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
 		resp.Header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
-
-		// Rewrite URLs in HTML/CSS/JS responses to fix hardcoded internal URLs
-		// This is necessary for Chat UI which may have hardcoded https://chat-ui:3000 URLs
-		contentType := resp.Header.Get("Content-Type")
-		if strings.Contains(contentType, "text/html") ||
-			strings.Contains(contentType, "text/css") ||
-			strings.Contains(contentType, "application/javascript") ||
-			strings.Contains(contentType, "text/javascript") {
-
-			// Read the response body
-			bodyBytes, err := io.ReadAll(resp.Body)
-			if err != nil {
-				log.Printf("Error reading response body: %v", err)
-				return err
-			}
-			resp.Body.Close()
-
-			// Replace hardcoded internal URLs with proxy paths
-			bodyStr := string(bodyBytes)
-
-			// Replace various forms of the internal URL
-			// Note: /chatui/ assets should stay as /chatui/ (not /embedded/chatui/)
-			// because the backend has a separate route for /chatui/ assets
-			replacements := map[string]string{
-				"https://chat-ui:3000/chatui/": "/chatui/",
-				"https://chat-ui:3000/chatui":  "/chatui",
-				"http://chat-ui:3000/chatui/":  "/chatui/",
-				"http://chat-ui:3000/chatui":   "/chatui",
-				"https://chat-ui:3000/":        "/embedded/chatui/",
-				"https://chat-ui:3000":         "/embedded/chatui",
-				"http://chat-ui:3000/":         "/embedded/chatui/",
-				"http://chat-ui:3000":          "/embedded/chatui",
-			}
-
-			for old, new := range replacements {
-				bodyStr = strings.ReplaceAll(bodyStr, old, new)
-			}
-
-			// Create new response body
-			newBody := []byte(bodyStr)
-			resp.Body = io.NopCloser(bytes.NewReader(newBody))
-			resp.ContentLength = int64(len(newBody))
-			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
-		}
 
 		return nil
 	}
