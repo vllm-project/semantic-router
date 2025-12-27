@@ -10,6 +10,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+// getEnvOrDefault returns the environment variable value or the default if not set
+func getEnvOrDefault(envVar, defaultValue string) string {
+	if value := os.Getenv(envVar); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 var (
 	// Version information (set by build flags)
 	version   = "dev"
@@ -44,9 +52,20 @@ For detailed help on any command, use:
 	}
 
 	// Global flags
-	rootCmd.PersistentFlags().StringP("config", "c", "config/config.yaml", "Path to configuration file")
+	// Support VSR_CONFIG environment variable for config path
+	configDefault := getEnvOrDefault("VSR_CONFIG", "config/config.yaml")
+	rootCmd.PersistentFlags().StringP("config", "c", configDefault, "Path to configuration file")
+
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
+	// Check VSR_VERBOSE environment variable
+	if os.Getenv("VSR_VERBOSE") == "true" {
+		_ = rootCmd.PersistentFlags().Set("verbose", "true")
+	}
+
 	rootCmd.PersistentFlags().StringP("output", "o", "table", "Output format: table, json, yaml")
+
+	// Store VSR_NAMESPACE for use by commands that need it
+	os.Setenv("_VSR_NAMESPACE_DEFAULT", getEnvOrDefault("VSR_NAMESPACE", "default"))
 
 	// Add subcommands
 	rootCmd.AddCommand(commands.NewConfigCmd())
