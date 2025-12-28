@@ -495,6 +495,33 @@ embedding_models:
 observability:
   metrics:
     enabled: true  # Set to false to disable the Prometheus /metrics endpoint
+    # Windowed metrics for load balancing and scoring
+    windowed_metrics:
+      enabled: true
+      time_windows: ["1m", "5m", "15m"]
+      update_interval: "10s"
+      model_metrics: true
+      queue_depth_estimation: true
+      max_models: 100
+    # Dynamic Model Scoring Configuration
+    # Enables online model score updates based on accuracy, latency, and cost metrics
+    # Scores are auto-updated and used for intelligent model selection
+    dynamic_scoring:
+      enabled: true                    # Enable dynamic scoring
+      time_window: "5m"                # Time window for score computation
+      update_interval: "30s"           # How often to recompute scores
+      min_samples: 10                  # Minimum samples before scoring kicks in
+      default_score: 0.5               # Score for models with insufficient data
+      decay_factor: 0.1                # EMA decay (higher = more weight on recent data)
+      weights:                         # Component weights (must sum to 1.0)
+        accuracy: 0.5                  # Weight for accuracy (1 - error_rate)
+        latency: 0.3                   # Weight for latency score
+        cost: 0.2                      # Weight for cost score
+      normalization:                   # How to normalize raw metrics to 0-1 scale
+        latency_target: 1.0            # Target latency in seconds (scores ~0.5)
+        latency_max: 10.0              # Max acceptable latency (scores 0.0)
+        cost_target: 0.01              # Target cost per 1K tokens (scores ~0.5)
+        cost_max: 0.1                  # Max acceptable cost per 1K tokens (scores 0.0)
   tracing:
     enabled: true  # Enable distributed tracing for docker-compose stack
     provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry

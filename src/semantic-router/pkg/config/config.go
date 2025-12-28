@@ -354,6 +354,75 @@ type MetricsConfig struct {
 
 	// Enable windowed metrics collection for load balancing
 	WindowedMetrics WindowedMetricsConfig `yaml:"windowed_metrics"`
+
+	// Dynamic model scoring configuration
+	DynamicScoring DynamicScoringConfig `yaml:"dynamic_scoring"`
+}
+
+// DynamicScoringConfig configures the dynamic model scoring system
+// This enables online model score updates based on accuracy, latency, and cost metrics
+type DynamicScoringConfig struct {
+	// Enabled enables dynamic scoring
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// TimeWindow specifies the time window for score computation (e.g., "5m", "1h")
+	// Default: "5m"
+	TimeWindow string `yaml:"time_window,omitempty" json:"time_window,omitempty"`
+
+	// UpdateInterval specifies how often scores are recomputed
+	// Default: "30s"
+	UpdateInterval string `yaml:"update_interval,omitempty" json:"update_interval,omitempty"`
+
+	// Weights for combining component scores (must sum to 1.0)
+	Weights ScoringWeights `yaml:"weights" json:"weights"`
+
+	// Normalization settings for each component
+	Normalization ScoringNormalization `yaml:"normalization" json:"normalization"`
+
+	// MinSamples is the minimum number of samples required before dynamic scoring is used
+	// Below this threshold, the default score is used
+	// Default: 10
+	MinSamples int `yaml:"min_samples,omitempty" json:"min_samples,omitempty"`
+
+	// DefaultScore is used when there's insufficient data for a model
+	// Default: 0.5
+	DefaultScore float64 `yaml:"default_score,omitempty" json:"default_score,omitempty"`
+
+	// DecayFactor for exponential moving average (0.0-1.0)
+	// Higher values give more weight to recent data
+	// Default: 0.1
+	DecayFactor float64 `yaml:"decay_factor,omitempty" json:"decay_factor,omitempty"`
+}
+
+// ScoringWeights defines the weights for combining score components
+type ScoringWeights struct {
+	// Accuracy weight (based on success rate, 1 - error_rate)
+	Accuracy float64 `yaml:"accuracy" json:"accuracy"`
+
+	// Latency weight (lower is better, normalized)
+	Latency float64 `yaml:"latency" json:"latency"`
+
+	// Cost weight (lower is better, normalized)
+	Cost float64 `yaml:"cost" json:"cost"`
+}
+
+// ScoringNormalization configures how raw metrics are normalized to 0-1 scale
+type ScoringNormalization struct {
+	// LatencyTarget is the target latency in seconds (scores 0.5 at target)
+	// Default: 1.0
+	LatencyTarget float64 `yaml:"latency_target,omitempty" json:"latency_target,omitempty"`
+
+	// LatencyMax is the maximum acceptable latency (scores 0.0 at or above)
+	// Default: 10.0
+	LatencyMax float64 `yaml:"latency_max,omitempty" json:"latency_max,omitempty"`
+
+	// CostTarget is the target cost per 1K tokens in USD (scores 0.5 at target)
+	// Default: 0.01
+	CostTarget float64 `yaml:"cost_target,omitempty" json:"cost_target,omitempty"`
+
+	// CostMax is the maximum acceptable cost per 1K tokens (scores 0.0 at or above)
+	// Default: 0.1
+	CostMax float64 `yaml:"cost_max,omitempty" json:"cost_max,omitempty"`
 }
 
 // WindowedMetricsConfig represents configuration for time-windowed metrics
