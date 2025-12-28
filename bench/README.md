@@ -96,7 +96,7 @@ model_config:
 ### Python API
 
 ```python
-from vllm_semantic_router_bench import DatasetFactory, list_available_datasets
+from reasoning import DatasetFactory, list_available_datasets
 
 # Load a dataset
 factory = DatasetFactory()
@@ -278,7 +278,7 @@ pip install -e ".[dev]"
 4. Add tests and documentation
 
 ```python
-from vllm_semantic_router_bench import DatasetInterface, Question, DatasetInfo
+from reasoning import DatasetInterface, Question, DatasetInfo
 
 class MyDataset(DatasetInterface):
     def load_dataset(self, **kwargs):

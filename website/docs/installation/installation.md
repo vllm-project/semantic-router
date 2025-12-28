@@ -2,9 +2,9 @@
 sidebar_position: 2
 ---
 
-# Install in Local
+# Installation
 
-This guide will help you set up and install the Semantic Router on your system. The router runs entirely on CPU and does not require GPU for inference.
+This guide will help you install and run the vLLM Semantic Router. The router runs entirely on CPU and does not require GPU for inference.
 
 ## System Requirements
 
@@ -12,256 +12,170 @@ This guide will help you set up and install the Semantic Router on your system. 
 No GPU required - the router runs efficiently on CPU using optimized BERT models.
 :::
 
-Semantic Router depends on the following software:
+**Requirements:**
 
-- **Go**: v1.24.1 or higher (matches the module requirements)
-- **Rust**: v1.90.0 or higher (for Candle bindings)
-- **Python**: v3.8 or higher (for model downloads)
-- **HuggingFace CLI**: Required for fetching models
+- **Python**: 3.10 or higher
+- **Docker**: Required for running the router container
+- **Optional**: HuggingFace token (only for gated models)
 
-## Local Installation
+## Quick Start
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-router
-```
-
-### 2. Install Dependencies
-
-#### Install Go (if not already installed)
+### 1. Install vLLM Semantic Router
 
 ```bash
-# Check if Go is installed
-go version
+# Create a virtual environment (recommended)
+python -m venv vsr
+source vsr/bin/activate  # On Windows: vsr\Scripts\activate
 
-# If not installed, download from https://golang.org/dl/
-# Or use package manager:
-# macOS: brew install go
-# Ubuntu: sudo apt install golang-go
+# Install from PyPI
+pip install vllm-sr
 ```
 
-#### Install Rust (if not already installed)
+Verify installation:
 
 ```bash
-# Check if Rust is installed
-rustc --version
-
-# If not installed:
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
+vllm-sr --version
 ```
 
-#### Install Python (if not already installed)
+### 2. Initialize Configuration
 
 ```bash
-# Check if Python is installed
-python --version
-
-# If not installed:
-# macOS: brew install python
-# Ubuntu: sudo apt install python3 python3-pip (Tips: need python3.8+)
+# Create config.yaml in current directory
+vllm-sr init
 ```
 
-#### Install HuggingFace CLI
+This creates a `config.yaml` file with default settings.
 
-```bash
-pip install huggingface_hub hf_transfer
-```
+### 3. Configure Your Backend
 
-### 3. Build the Project
-
-```bash
-# Build everything (Rust + Go)
-make build
-```
-
-This command will:
-
-- Build the Rust candle-binding library
-- Build the Go router binary
-- Place the executable in `bin/router`
-
-### 4. Download Pre-trained Models
-
-```bash
-# Download all required models (about 1.5GB total)
-make download-models
-```
-
-This downloads the CPU-optimized BERT models for:
-
-- Category classification
-- PII detection
-- Jailbreak detection
-
-:::tip
-`make test` invokes `make download-models` automatically, so you only need to run this step manually the first time or when refreshing the cache.
-:::
-
-### 5. Configure Backend Endpoints
-
-Edit `config/config.yaml` to point to your vLLM or OpenAI-compatible backend:
+Edit the generated `config.yaml` to configure your model and backend endpoint:
 
 ```yaml
-# Example: Configure your vLLM or Ollama endpoints
-vllm_endpoints:
-  - name: "your-endpoint"
-    address: "127.0.0.1"        # MUST be IP address (IPv4 or IPv6)
-    port: 11434                 # Replace with your port
-    weight: 1
+providers:
+  # Model configuration
+  models:
+    - name: "qwen/qwen3-1.8b"           # Model name
+      endpoints:
+        - name: "my_vllm"
+          weight: 1
+          endpoint: "localhost:8000"    # Domain or IP:port
+          protocol: "http"              # http or https
+      access_key: "your-token-here"     # Optional: for authentication
 
-model_config:
-  "your-model-name":            # Replace with your model name
-    pii_policy:
-      allow_by_default: false  # Deny all PII by default
-      pii_types_allowed: ["EMAIL_ADDRESS", "PERSON", "GPE", "PHONE_NUMBER"]  # Only allow these specific PII types
-    preferred_endpoints: ["your-endpoint"]
-
-default_model: "your-model-name"
+  # Default model for fallback
+  default_model: "qwen/qwen3-1.8b"
 ```
 
-:::note[**Important: Address Format Requirements**]
-The `address` field **must** contain a valid IP address (IPv4 or IPv6). Domain names are not supported.
+**Configuration Options:**
 
-**✅ Correct formats:**
+- **endpoint**: Domain name or IP address with port (e.g., `localhost:8000`, `api.openai.com`)
+- **protocol**: `http` or `https`
+- **access_key**: Optional authentication token (Bearer token)
+- **weight**: Load balancing weight (default: 1)
 
-- `"127.0.0.1"` (IPv4)
-- `"192.168.1.100"` (IPv4)
-
-**❌ Incorrect formats:**
-
-- `"localhost"` → Use `"127.0.0.1"` instead
-- `"your-server.com"` → Use the server's IP address
-- `"http://127.0.0.1"` → Remove protocol prefix
-- `"127.0.0.1:8080"` → Use separate `port` field
-
-:::
-
-:::note[**Important: Model Name Consistency**]
-The model name in `model_config` must **exactly match** the `--served-model-name` used when starting vLLM. If they don't match, the router won't route requests to your model.
-
-If `--served-model-name` is not set, you can also use the default `id` returned by `/v1/models` (e.g., `Qwen/Qwen3-1.8B`) as the key in `model_config` and for `default_model`.
-:::
-
-#### Example: Llama Model
-
-```bash
-# Start vLLM with Llama
-vllm serve meta-llama/Llama-2-7b-hf --port 8000 --served-model-name llama2-7b
-```
+**Example: Local vLLM**
 
 ```yaml
-# config.yaml
-vllm_endpoints:
-  - name: "llama-endpoint"
-    address: "127.0.0.1"
-    port: 8000
-    weight: 1
-
-model_config:
-  "llama2-7b":                    # Must match --served-model-name
-    preferred_endpoints: ["llama-endpoint"]
-
-default_model: "llama2-7b"
+providers:
+  models:
+    - name: "qwen/qwen3-1.8b"
+      endpoints:
+        - name: "local_vllm"
+          weight: 1
+          endpoint: "localhost:8000"
+          protocol: "http"
+  default_model: "qwen/qwen3-1.8b"
 ```
 
-#### Example: Qwen Model
-
-```bash
-# Start vLLM with Qwen
-vllm serve Qwen/Qwen3-1.8B --port 8000 --served-model-name qwen3
-```
+**Example: External API with HTTPS**
 
 ```yaml
-# config.yaml
-vllm_endpoints:
-  - name: "qwen-endpoint"
-    address: "127.0.0.1"
-    port: 8000
-    weight: 1
-
-model_config:
-  "qwen3":                        # Must match --served-model-name
-    reasoning_family: "qwen3"     # Enable Qwen3 reasoning syntax
-    preferred_endpoints: ["qwen-endpoint"]
-
-default_model: "qwen3"
+providers:
+  models:
+    - name: "openai/gpt-4"
+      endpoints:
+        - name: "openai_api"
+          weight: 1
+          endpoint: "api.openai.com"
+          protocol: "https"
+      access_key: "sk-xxxxxx"
+  default_model: "openai/gpt-4"
 ```
 
-For more configuration options, see the [Configuration Guide](configuration.md).
-
-## Running the Router
-
-### 1. Start the Services
-
-Open two terminals and run:
-
-**Terminal 1: Start Envoy Proxy**
+### 4. Start the Router
 
 ```bash
-make run-envoy
+vllm-sr serve
 ```
 
-**Terminal 2: Start Semantic Router**
+The router will:
+
+- Automatically download required ML models (~1.5GB, one-time)
+- Start Envoy proxy on port 8888
+- Start the semantic router service
+- Enable metrics on port 9190
+
+### 5. Test the Router
 
 ```bash
-make run-router
-```
-
-### Step 2: Manual Testing
-
-You can also send custom requests:
-
-```bash
-curl -X POST http://localhost:8801/v1/chat/completions \
+curl http://localhost:8888/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "MoM",
-    "messages": [
-      {"role": "user", "content": "What is the derivative of x^2?"}
-    ]
+    "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-Using `"model": "MoM"` (Mixture of Models) lets the router automatically select the best model based on the query category.
-
-:::tip[VSR Decision Headers]
-Use `curl -i` to see routing decision headers (`x-vsr-selected-category`, `x-vsr-selected-model`). See [VSR Headers](../troubleshooting/vsr-headers.md) for details.
-:::
-
-### 3. Monitoring (Optional)
-
-By default, the router exposes Prometheus metrics at `:9190/metrics`. To disable monitoring:
-
-**Option A: CLI flag**
+## Common Commands
 
 ```bash
-./bin/router -metrics-port=0
+# View logs
+vllm-sr logs router        # Router logs
+vllm-sr logs envoy         # Envoy logs
+vllm-sr logs router -f     # Follow logs
+
+# Check status
+vllm-sr status
+
+# Stop the router
+vllm-sr stop
 ```
 
-**Option B: Configuration**
+## Advanced Configuration
 
-```yaml
-observability:
-  metrics:
-    enabled: false
+### HuggingFace Settings
+
+Set environment variables before starting:
+
+```bash
+export HF_ENDPOINT=https://huggingface.co  # Or mirror: https://hf-mirror.com
+export HF_TOKEN=your_token_here            # Only for gated models
+export HF_HOME=/path/to/cache              # Custom cache directory
+
+vllm-sr serve
 ```
 
-When disabled, the `/metrics` endpoint won't start, but all other functionality remains unaffected.
+### Custom Options
+
+```bash
+# Use custom config file
+vllm-sr serve --config my-config.yaml
+
+# Use custom Docker image
+vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+
+# Control image pull policy
+vllm-sr serve --image-pull-policy always
+```
 
 ## Next Steps
 
-After successful installation:
-
-1. **[Configuration Guide](configuration.md)** - Customize your setup and add your own endpoints
-2. **[API Documentation](../api/router.md)** - Detailed API reference
-3. **[VSR Headers](../troubleshooting/vsr-headers.md)** - Understanding router decision tracking headers
+- **[Configuration Guide](configuration.md)** - Advanced routing and signal configuration
+- **[API Documentation](../api/router.md)** - Complete API reference
+- **[Tutorials](../tutorials/intelligent-route/keyword-routing.md)** - Learn by example
 
 ## Getting Help
 
-- **Issues**: Report bugs on [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
-- **Documentation**: Full documentation at [Read the Docs](https://vllm-semantic-router.com/)
-
-You now have a working Semantic Router that runs entirely on CPU and intelligently routes requests to specialized models!
+- **Issues**: [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
+- **Community**: Join `#semantic-router` channel in vLLM Slack
+- **Documentation**: [vllm-semantic-router.com](https://vllm-semantic-router.com/)

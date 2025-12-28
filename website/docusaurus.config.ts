@@ -82,6 +82,18 @@ const config: Config = {
             from: '/docs/installation/kubernetes',
             to: '/docs/installation/k8s/ai-gateway',
           },
+          {
+            from: '/docs/cli/overview',
+            to: '/docs/installation/',
+          },
+          {
+            from: '/docs/cli/commands-reference',
+            to: '/docs/installation/',
+          },
+          {
+            from: '/docs/cli/troubleshooting',
+            to: '/docs/troubleshooting/common-errors',
+          },
         ],
       },
     ],

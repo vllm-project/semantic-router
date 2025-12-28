@@ -10,8 +10,8 @@ echo "=============================================="
 # Clean previous builds
 echo "🧹 Cleaning previous builds..."
 rm -rf build/ dist/ ./*.egg-info/
-find vllm_semantic_router_bench/ -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-find vllm_semantic_router_bench/ -name "*.pyc" -delete 2>/dev/null || true
+find reasoning/ -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find reasoning/ -name "*.pyc" -delete 2>/dev/null || true
 
 # Build the package
 echo "📦 Building package..."
@@ -27,7 +27,7 @@ pip install dist/*.whl
 
 # Test imports
 echo "🔍 Testing imports..."
-python -m vllm_semantic_router_bench.test_package
+python -m reasoning.test_package
 
 # Test CLI commands
 echo "🖥️  Testing CLI commands..."

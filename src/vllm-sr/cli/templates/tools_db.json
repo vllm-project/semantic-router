@@ -1,0 +1,142 @@
+[
+  {
+    "tool": {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get current weather information for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and state, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "Temperature unit"
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    },
+    "description": "Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow",
+    "category": "weather",
+    "tags": ["weather", "temperature", "forecast", "climate"]
+  },
+  {
+    "tool": {
+      "type": "function",
+      "function": {
+        "name": "search_web",
+        "description": "Search the web for information",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query"
+            },
+            "num_results": {
+              "type": "integer",
+              "description": "Number of results to return",
+              "default": 5
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    "description": "Search the internet, web search, find information online, browse web content, lookup, research, google, find answers, discover, investigate",
+    "category": "search",
+    "tags": ["search", "web", "internet", "information", "browse"]
+  },
+  {
+    "tool": {
+      "type": "function",
+      "function": {
+        "name": "calculate",
+        "description": "Perform mathematical calculations",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string",
+              "description": "Mathematical expression to evaluate"
+            }
+          },
+          "required": ["expression"]
+        }
+      }
+    },
+    "description": "Calculate mathematical expressions, solve math problems, arithmetic operations, compute numbers, addition, subtraction, multiplication, division, equations, formula",
+    "category": "math",
+    "tags": ["math", "calculation", "arithmetic", "compute", "numbers"]
+  },
+  {
+    "tool": {
+      "type": "function",
+      "function": {
+        "name": "send_email",
+        "description": "Send an email message",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "string",
+              "description": "Recipient email address"
+            },
+            "subject": {
+              "type": "string",
+              "description": "Email subject"
+            },
+            "body": {
+              "type": "string",
+              "description": "Email body content"
+            }
+          },
+          "required": ["to", "subject", "body"]
+        }
+      }
+    },
+    "description": "Send email messages, email communication, contact people via email, mail, message, correspondence, notify, inform",
+    "category": "communication",
+    "tags": ["email", "send", "communication", "message", "contact"]
+  },
+  {
+    "tool": {
+      "type": "function",
+      "function": {
+        "name": "create_calendar_event",
+        "description": "Create a new calendar event or appointment",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Event title"
+            },
+            "date": {
+              "type": "string",
+              "description": "Event date in YYYY-MM-DD format"
+            },
+            "time": {
+              "type": "string",
+              "description": "Event time in HH:MM format"
+            },
+            "duration": {
+              "type": "integer",
+              "description": "Duration in minutes"
+            }
+          },
+          "required": ["title", "date", "time"]
+        }
+      }
+    },
+    "description": "Schedule meetings, create calendar events, set appointments, manage calendar, book time, plan meeting, organize schedule, reminder, agenda",
+    "category": "productivity",
+    "tags": ["calendar", "event", "meeting", "appointment", "schedule"]
+  }
+] 

@@ -75,14 +75,14 @@ jobs:
               - 'bench/**'
               - 'config/**'
               - 'scripts/**'
-              - 'examples/**'
+              - 'deploy/examples/**'
               - 'tools/**'
               - 'go.mod'
               - 'go.sum'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'pyproject.toml'
-              - 'e2e-tests/llm-katan/**'
+              - 'e2e/testing/llm-katan/**'
             dashboard:
               - 'dashboard/**'
             website:
@@ -94,7 +94,7 @@ jobs:
             helm:
               - 'deploy/helm/**'
             e2e:
-              - 'e2e-tests/**'
+              - 'e2e/testing/**'
               - 'e2e/**'
               - 'scripts/quickstart.sh'
               - 'deploy/docker-compose/**'

@@ -969,7 +969,7 @@ jobs:
           sleep 5
           
           # Run e2e tests (if available)
-          # pytest e2e-tests/ -v
+          # pytest e2e/testing/ -v
           
           # Or simple health check
           curl -f http://localhost:8000/health

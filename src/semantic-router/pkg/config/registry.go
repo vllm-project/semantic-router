@@ -10,6 +10,7 @@ const (
 	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"  // Detect potential hallucinations
 	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
 	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
+	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
 	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
 	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
 )
@@ -132,6 +133,19 @@ var DefaultModelRegistry = []ModelSpec{
 		NumClasses:       3, // entailment/neutral/contradiction
 		MaxContextLength: 8192,
 		Tags:             []string{"hallucination", "nli", "explainability", "modernbert"},
+	},
+
+	// Feedback Detection
+	{
+		LocalPath:        "models/mom-feedback-detector",
+		RepoID:           "llm-semantic-router/feedback-detector",
+		Aliases:          []string{"feedback-detector", "user-feedback-classifier"},
+		Purpose:          PurposeFeedbackDetection,
+		Description:      "ModernBERT-based user feedback classifier for 4 feedback types",
+		ParameterSize:    "149M",
+		NumClasses:       4, // satisfied/need_clarification/wrong_answer/want_different
+		MaxContextLength: 8192,
+		Tags:             []string{"feedback", "classification", "modernbert", "user-intent"},
 	},
 
 	// Embedding Models - Pro (High Quality)

@@ -74,17 +74,17 @@ Repository = "https://github.com/vllm-project/semantic-router"
 "Bug Tracker" = "https://github.com/vllm-project/semantic-router/issues"
 
 [project.scripts]
-vllm-semantic-router-bench = "vllm_semantic_router_bench.cli:main"
-router-bench = "vllm_semantic_router_bench.router_reason_bench_multi_dataset:main"
-bench-plot = "vllm_semantic_router_bench.bench_plot:main"
-reasoning-mode-eval = "vllm_semantic_router_bench.reasoning_mode_eval:main"
+vllm-semantic-router-bench = "reasoning.cli:main"
+router-bench = "reasoning.router_reason_bench_multi_dataset:main"
+bench-plot = "reasoning.bench_plot:main"
+reasoning-mode-eval = "reasoning.reasoning_mode_eval:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vllm_semantic_router_bench*"]
+include = ["reasoning*"]
 
 [tool.setuptools.package-data]
-vllm_semantic_router_bench = ["*.md", "dataset_implementations/*.py"]
+reasoning = ["*.md", "dataset_implementations/*.py"]
 
 [tool.black]
 line-length = 88
@@ -108,7 +108,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["vllm_semantic_router_bench"]
+known_first_party = ["reasoning"]
 
 [tool.mypy]
 python_version = "3.8"

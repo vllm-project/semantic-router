@@ -30,7 +30,7 @@ docker-build-llm-katan: ## Build llm-katan Docker image
 docker-build-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Building llm-katan Docker image..."
-	@$(CONTAINER_RUNTIME) build -f e2e-tests/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e-tests/llm-katan/
+	@$(CONTAINER_RUNTIME) build -f e2e/testing/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e/testing/llm-katan/
 
 # Build dashboard Docker image
 docker-build-dashboard: ## Build dashboard Docker image

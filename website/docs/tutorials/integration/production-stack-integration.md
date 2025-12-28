@@ -1,13 +1,12 @@
 # Integration with vLLM Semantic Router
 
-- [Integration with vLLM Semantic Router](#integration-with-vllm-semantic-router)
-  - [What is vLLM Semantic Router?](#what-is-vllm-semantic-router)
-  - [What are the benefits of integration?](#what-are-the-benefits-of-integration)
-  - [Prerequisites](#prerequisites)
-  - [Step 1: Deploy the vLLM Production Stack using your Helm values](#step-1-deploy-the-vllm-production-stack-using-your-helm-values)
-  - [Step 2: Deploy vLLM Semantic Router and point it at your vLLM router Service](#step-2-deploy-vllm-semantic-router-and-point-it-at-your-vllm-router-service)
-  - [Step 3: Test the deployment](#step-3-test-the-deployment)
-  - [Troubleshooting](#troubleshooting)
+- [What is vLLM Semantic Router?](#what-is-vllm-semantic-router)
+- [What are the benefits of integration?](#what-are-the-benefits-of-integration)
+- [Prerequisites](#prerequisites)
+- [Step 1: Deploy the vLLM Production Stack using your Helm values](#step-1-deploy-the-vllm-production-stack-using-your-helm-values)
+- [Step 2: Deploy vLLM Semantic Router and point it at your vLLM router Service](#step-2-deploy-vllm-semantic-router-and-point-it-at-your-vllm-router-service)
+- [Step 3: Test the deployment](#step-3-test-the-deployment)
+- [Troubleshooting](#troubleshooting)
 
 > This tutorial is adapted from [vLLM production stack tutorials](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md)
 

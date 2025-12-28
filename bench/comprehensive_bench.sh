@@ -318,7 +318,7 @@ run_dataset_benchmark() {
 
     # Router benchmark (pass vLLM info for consistent token calculation)
     echo -e "${YELLOW}  🤖 Running router evaluation...${NC}"
-    python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
+    python3 -m reasoning.router_reason_bench_multi_dataset \
         --dataset "$dataset" \
         --samples-per-category "$samples" \
         --run-router \
@@ -335,7 +335,7 @@ run_dataset_benchmark() {
 
     # vLLM benchmark
     echo -e "${YELLOW}  ⚡ Running vLLM evaluation...${NC}"
-    python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
+    python3 -m reasoning.router_reason_bench_multi_dataset \
         --dataset "$dataset" \
         --samples-per-category "$samples" \
         --run-vllm \
@@ -412,7 +412,7 @@ generate_dataset_plot() {
     VLLM_SUMMARY=$(find "$OUTPUT_BASE/vllm_$dataset" -name "summary.json" -type f | head -1)
 
     if [[ -f "$VLLM_SUMMARY" ]]; then
-        PLOT_CMD="python3 -m vllm_semantic_router_bench.bench_plot --summary \"$VLLM_SUMMARY\" --out-dir \"$OUTPUT_BASE/plots_$dataset\""
+        PLOT_CMD="python3 -m reasoning.bench_plot --summary \"$VLLM_SUMMARY\" --out-dir \"$OUTPUT_BASE/plots_$dataset\""
 
         if [[ -f "$ROUTER_SUMMARY" ]]; then
             PLOT_CMD="$PLOT_CMD --router-summary \"$ROUTER_SUMMARY\""

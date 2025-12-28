@@ -41,6 +41,8 @@ extern bool init_deberta_jailbreak_classifier(const char* model_id, bool use_cpu
 
 extern bool init_fact_check_classifier(const char* model_id, bool use_cpu);
 
+extern bool init_feedback_detector(const char* model_id, bool use_cpu);
+
 extern bool init_modernbert_pii_token_classifier(const char* model_id, bool use_cpu);
 
 // Token classification structures
@@ -233,6 +235,7 @@ extern ModernBertClassificationResult classify_modernbert_pii_text(const char* t
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
+extern ModernBertClassificationResult classify_feedback_text(const char* text);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -409,6 +412,8 @@ var (
 	debertaJailbreakClassifierInitErr     error
 	factCheckClassifierInitOnce           sync.Once
 	factCheckClassifierInitErr            error
+	feedbackDetectorInitOnce              sync.Once
+	feedbackDetectorInitErr               error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -1682,6 +1687,50 @@ func ClassifyFactCheckText(text string) (ClassResult, error) {
 
 	if result.class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify text for fact-checking")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitFeedbackDetector initializes the feedback detector classifier
+// This model determines user satisfaction from follow-up messages.
+// Model outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func InitFeedbackDetector(modelPath string, useCPU bool) error {
+	var err error
+	feedbackDetectorInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default to feedback-detector model path
+			modelPath = "./models/feedback-detector"
+		}
+
+		log.Printf("Initializing feedback detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_feedback_detector(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize feedback detector model")
+		} else {
+			log.Printf("Feedback detector initialized successfully")
+		}
+	})
+	return err
+}
+
+// ClassifyFeedbackText classifies the provided text to determine user feedback type
+// Returns: 0=SAT (satisfied), 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyFeedbackText(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_feedback_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify feedback text")
 	}
 
 	return ClassResult{

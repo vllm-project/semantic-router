@@ -90,9 +90,9 @@ hallucination_mitigation:
     use_cpu: true
 
 # vLLM Endpoints Configuration
-# IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
-# Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1
-# NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
+# The 'address' field can be an IP address (IPv4 or IPv6) or a domain name
+# Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1, example.com, localhost
+# Note: Use the 'port' field for port numbers, not in the address field
 vllm_endpoints:
   - name: "endpoint1"
     address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network

@@ -56,7 +56,7 @@ echo "Model: $ROUTER_MODEL (router decides)"
 echo ""
 
 # Run router benchmark
-python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
+python3 -m reasoning.router_reason_bench_multi_dataset \
     --dataset "$DATASET" \
     --samples-per-category "$SAMPLES_PER_CATEGORY" \
     --concurrent-requests "$CONCURRENT_REQUESTS" \
@@ -75,7 +75,7 @@ echo "Model: $VLLM_MODEL (direct access)"
 echo ""
 
 # Run direct vLLM benchmark
-python3 -m vllm_semantic_router_bench.router_reason_bench_multi_dataset \
+python3 -m reasoning.router_reason_bench_multi_dataset \
     --dataset "$DATASET" \
     --samples-per-category "$SAMPLES_PER_CATEGORY" \
     --concurrent-requests "$CONCURRENT_REQUESTS" \
@@ -103,7 +103,7 @@ if [ -n "$ROUTER_RESULT" ] && [ -f "$ROUTER_RESULT/summary.json" ] && [ -n "$VLL
     mkdir -p "$PLOTS_DIR"
     
     # Generate vLLM plots with router overlay (router plotted first)
-    python3 -m vllm_semantic_router_bench.bench_plot \
+    python3 -m reasoning.bench_plot \
         --summary "$VLLM_RESULT/summary.json" \
         --router-summary "$ROUTER_RESULT/summary.json" \
         --out-dir "$PLOTS_DIR" \

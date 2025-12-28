@@ -55,10 +55,11 @@ func NewDecisionEngine(
 
 // SignalMatches contains all matched signals for decision evaluation
 type SignalMatches struct {
-	KeywordRules   []string
-	EmbeddingRules []string
-	DomainRules    []string
-	FactCheckRules []string // "needs_fact_check" or "no_fact_check_needed"
+	KeywordRules      []string
+	EmbeddingRules    []string
+	DomainRules       []string
+	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
+	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -154,6 +155,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = e.matchesDomainCondition(condition.Name, signals.DomainRules)
 		case "fact_check":
 			conditionMatched = slices.Contains(signals.FactCheckRules, condition.Name)
+		case "user_feedback":
+			conditionMatched = slices.Contains(signals.UserFeedbackRules, condition.Name)
 		default:
 			continue
 		}

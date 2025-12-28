@@ -279,7 +279,7 @@ COPY --from=pipelines-source /usr/local /opt/pipelines-env
 COPY --from=pipelines-source /app /app/pipelines
 
 # LLM-Katan - source files (will be installed in venv below)
-COPY e2e-tests/llm-katan /app/llm-katan-src
+COPY e2e/testing/llm-katan /app/llm-katan-src
 
 # Install LLM-Katan in a virtual environment
 # Using CPU-only PyTorch to save space (~2GB vs ~8GB with CUDA)

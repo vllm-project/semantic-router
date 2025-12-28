@@ -58,7 +58,7 @@ if _parent_dir not in sys.path:
 
 # Add bench directory to path for dataset implementations
 # Current file: src/training/training_lora/mmlu_pro_solver_lora/script.py
-# Need to go up 5 levels to reach root, then add bench/ (parent of vllm_semantic_router_bench)
+# Need to go up 5 levels to reach root, then add bench/ (parent of reasoning)
 _bench_parent_dir = os.path.join(
     os.path.dirname(
         os.path.dirname(
@@ -98,31 +98,31 @@ from trl import SFTTrainer
 
 # Import bench dataset implementations
 try:
-    from vllm_semantic_router_bench.dataset_implementations.arc_dataset import (
+    from reasoning.dataset_implementations.arc_dataset import (
         ARCDataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.commonsenseqa_dataset import (
+    from reasoning.dataset_implementations.commonsenseqa_dataset import (
         CommonsenseQADataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.gsm8k_dataset import (
+    from reasoning.dataset_implementations.gsm8k_dataset import (
         GSM8KDataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.math_dataset import (
+    from reasoning.dataset_implementations.math_dataset import (
         MATHDataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.openbookqa_dataset import (
+    from reasoning.dataset_implementations.openbookqa_dataset import (
         OpenBookQADataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.openmathrreasoning_dataset import (
+    from reasoning.dataset_implementations.openmathrreasoning_dataset import (
         OpenMathReasoningDataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.sciq_dataset import (
+    from reasoning.dataset_implementations.sciq_dataset import (
         SciQDataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.strategyqa_dataset import (
+    from reasoning.dataset_implementations.strategyqa_dataset import (
         StrategyQADataset,
     )
-    from vllm_semantic_router_bench.dataset_implementations.truthfulqa_dataset import (
+    from reasoning.dataset_implementations.truthfulqa_dataset import (
         TruthfulQADataset,
     )
 except ImportError as e:

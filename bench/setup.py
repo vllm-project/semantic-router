@@ -73,14 +73,14 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "vllm-semantic-router-bench=vllm_semantic_router_bench.cli:main",
-            "router-bench=vllm_semantic_router_bench.router_reason_bench_multi_dataset:main",
-            "bench-plot=vllm_semantic_router_bench.bench_plot:main",
+            "vllm-semantic-router-bench=reasoning.cli:main",
+            "router-bench=reasoning.router_reason_bench_multi_dataset:main",
+            "bench-plot=reasoning.bench_plot:main",
         ],
     },
     include_package_data=True,
     package_data={
-        "vllm_semantic_router_bench": [
+        "reasoning": [
             "*.md",
             "dataset_implementations/*.py",
         ],

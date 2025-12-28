@@ -34,25 +34,10 @@ tools:
 
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-  # Use vLLM for jailbreak detection (set to false to use Candle instead)
-  use_vllm: true
-  # vLLM endpoint configuration for PromptGuard (separate from backend inference endpoints)
-  classifier_vllm_endpoint:
-    address: "127.0.0.1"
-    port: 1235
-    use_chat_template: true  # Qwen3Guard requires chat template format
-  # Model name as served by vLLM server
-  vllm_model_name: "qwen_guard"
-  # Timeout for vLLM API calls (seconds)
-  vllm_timeout_seconds: 30
-  # Response parser type: "qwen3guard", "json", "simple", or "auto" (auto-detects from model name)
-  response_parser_type: "qwen3guard"  # Qwen3Guard uses structured output format
+  use_modernbert: false
+  model_id: "models/mom-jailbreak-classifier"
   threshold: 0.7
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-  # Candle fields (ignored when use_vllm: true)
-  # use_modernbert: false
-  # model_id: "models/mom-jailbreak-classifier"
-  # use_cpu: true
+  use_cpu: true
 
 # vLLM Endpoints Configuration
 # IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)

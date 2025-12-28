@@ -189,11 +189,11 @@ classifier:
 ## Next Steps
 
 - [Protocol Specification](./protocol.md) - Detailed MCP protocol for classification
-- [Example Servers](https://github.com/vllm-project/semantic-router/tree/main/examples/mcp-classifier-server) - Reference implementations
+- [Example Servers](https://github.com/vllm-project/semantic-router/tree/main/deploy/examples/mcp-classifier-server) - Reference implementations
 
 ## Example Servers
 
-The repository includes two reference implementations in `examples/mcp-classifier-server/`:
+The repository includes two reference implementations in `deploy/examples/mcp-classifier-server/`:
 
 ### 1. Regex-Based (`server_keyword.py`)
 
