@@ -1,0 +1,198 @@
+# nginx Ingress for vSR - PRODUCTION Configuration
+# nginx as a FULL-FEATURED alternative to Envoy for vSR deployment
+# See: https://github.com/vllm-project/semantic-router/issues/557
+#
+# This configuration includes ALL nginx production features:
+# ✅ Authentication (auth_request)
+# ✅ Rate limiting
+# ✅ IP whitelisting
+# ✅ TLS/SSL termination
+# ✅ CORS
+# ✅ Custom headers
+# ✅ Request size limits
+# ✅ Timeouts
+# ✅ Streaming support
+#
+# Flow:
+# 1. nginx applies rate limiting
+# 2. nginx checks IP whitelist
+# 3. nginx sends auth_request to Auth Service (validates token)
+# 4. If auth fails: nginx returns 401 to client
+# 5. If auth passes: nginx proxy_pass to vSR (FULL body)
+# 6. vSR classifies content, detects jailbreak/PII
+# 7. If blocked: vSR returns 403 to client
+# 8. If allowed: vSR forwards to LLM backend and returns response
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vsr-proxy
+  namespace: vllm-semantic-router-system
+  annotations:
+    # ============================================
+    # AUTHENTICATION (auth_request)
+    # ============================================
+    # nginx sends headers (Authorization, etc.) to auth service
+    # Auth service returns 200 (valid) or 401 (invalid)
+    # Replace with your auth service URL
+    nginx.ingress.kubernetes.io/auth-url: "http://auth-service.auth.svc.cluster.local:8080/validate"
+    # Headers to pass from auth response to upstream
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-Roles,X-Auth-Tenant"
+    # Cache auth responses (reduce auth service load)
+    nginx.ingress.kubernetes.io/auth-cache-key: "$remote_user$http_authorization"
+    nginx.ingress.kubernetes.io/auth-cache-duration: "200 202 401 5m"
+
+    # ============================================
+    # RATE LIMITING
+    # ============================================
+    # Requests per second per client IP
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    # Concurrent connections per client IP
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # Requests per minute (alternative to rps)
+    nginx.ingress.kubernetes.io/limit-rpm: "3000"
+    # Burst size (allow temporary spikes)
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+
+    # ============================================
+    # IP WHITELISTING
+    # ============================================
+    # Restrict access to specific IP ranges
+    # Replace with your allowed IP ranges
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+    # ============================================
+    # PROXY SETTINGS (required for vSR)
+    # ============================================
+    # Maximum request body size (for large prompts)
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    # Timeouts (LLM responses can be slow)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    # Disable buffering for streaming responses
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    # HTTP/1.1 for streaming
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+    # ============================================
+    # CORS (Cross-Origin Resource Sharing)
+    # ============================================
+    # Enable CORS for web clients
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    # Allowed origins (replace with your domains)
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.your-domain.com,https://admin.your-domain.com"
+    # Allowed methods
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    # Allowed headers
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Requested-With"
+    # Allow credentials
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    # Preflight cache duration
+    nginx.ingress.kubernetes.io/cors-max-age: "3600"
+
+    # ============================================
+    # CUSTOM HEADERS
+    # ============================================
+    # Add security headers and custom tracing
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Security headers
+      add_header X-Frame-Options "DENY" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+      # Custom headers for tracing
+      add_header X-Served-By "vSR-nginx" always;
+      proxy_set_header X-Request-ID $request_id;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+
+    # ============================================
+    # LOGGING
+    # ============================================
+    nginx.ingress.kubernetes.io/enable-access-log: "true"
+
+    # ============================================
+    # GZIP COMPRESSION
+    # ============================================
+    nginx.ingress.kubernetes.io/use-gzip: "true"
+spec:
+  ingressClassName: nginx
+
+  # ============================================
+  # TLS/SSL TERMINATION
+  # ============================================
+  # Replace with your domain and TLS secret
+  tls:
+    - hosts:
+        - api.your-domain.com
+      secretName: your-tls-secret
+
+  rules:
+    - host: api.your-domain.com
+      http:
+        paths:
+          # Route LLM API requests through vSR proxy
+          # Flow: Client → nginx (all features) → vSR (classification) → LLM
+          - path: /v1/chat/completions
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /v1/completions
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          # Health check endpoint
+          - path: /v1/health
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+---
+# Public endpoints (health checks, metrics)
+# No authentication required for these
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vsr-api
+  namespace: vllm-semantic-router-system
+  annotations:
+    # No auth for public endpoints
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    # Rate limit public endpoints more strictly
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.your-domain.com
+      secretName: your-tls-secret
+  rules:
+    - host: api.your-domain.com
+      http:
+        paths:
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /api/v1/classify
+            pathType: Prefix
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+

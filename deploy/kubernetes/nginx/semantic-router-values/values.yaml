@@ -1,0 +1,537 @@
+# Helm values for nginx ingress integration
+# See: https://github.com/vllm-project/semantic-router/issues/557
+# Based on deploy/kubernetes/aibrix/semantic-router-values/values.yaml
+#
+# Usage:
+#   helm install semantic-router ./deploy/helm/semantic-router \
+#     --namespace vllm-semantic-router-system --create-namespace \
+#     --values deploy/kubernetes/nginx/values.yaml
+
+# Single replica for testing (increase for production)
+replicaCount: 1
+
+# Resource configuration
+resources:
+  limits:
+    memory: "4Gi"
+    cpu: "2"
+  requests:
+    memory: "2Gi"
+    cpu: "500m"
+
+# Service configuration
+service:
+  type: ClusterIP
+  api:
+    port: 8080
+    targetPort: 8080
+  grpc:
+    port: 50051
+    targetPort: 50051
+  metrics:
+    enabled: true
+    port: 9190
+    targetPort: 9190
+
+# Persistence for models
+persistence:
+  enabled: true
+  storageClassName: "standard"
+  size: 10Gi
+
+# Probes configuration
+startupProbe:
+  enabled: true
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 360  # 60 minutes for model downloads
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 5
+
+# Environment variables
+env:
+  - name: LD_LIBRARY_PATH
+    value: "/app/lib"
+  - name: VSR_LOG_LEVEL
+    value: "info"
+  # LLM backend URL for proxy mode (nginx integration)
+  # vSR forwards allowed requests to this URL
+  - name: VSR_LLM_BACKEND_URL
+    value: "http://mock-llm.mock-llm.svc.cluster.local:8000"
+
+# Args
+args:
+  - "--secure=false"
+
+# Full vSR configuration matching production
+config:
+  # BERT model for semantic similarity
+  bert_model:
+    model_id: "models/mom-embedding-light"
+    threshold: 0.6
+    use_cpu: true
+
+  # Semantic cache configuration
+  semantic_cache:
+    enabled: true
+    backend_type: "memory"
+    similarity_threshold: 0.8
+    max_entries: 1000
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+    use_hnsw: true
+    hnsw_m: 16
+    hnsw_ef_construction: 200
+    embedding_model: "bert"
+
+  # Tools configuration
+  tools:
+    enabled: true
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
+
+  # Prompt guard (jailbreak detection)
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+
+  # Classifier configuration
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: false
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  # All 14 MMLU categories
+  categories:
+    - name: business
+      description: "Business, corporate strategy, management, finance, marketing"
+    - name: law
+      description: "Legal principles, case law, statutory interpretation, legal procedures"
+    - name: psychology
+      description: "Cognitive processes, behavioral patterns, mental health, developmental psychology"
+    - name: biology
+      description: "Molecular biology, genetics, cell biology, ecology, evolution, anatomy"
+    - name: chemistry
+      description: "Chemical reactions, molecular structures, laboratory techniques"
+    - name: history
+      description: "Historical events, time periods, cultures, civilizations"
+    - name: health
+      description: "Anatomy, physiology, diseases, treatments, preventive care, nutrition"
+    - name: economics
+      description: "Microeconomics, macroeconomics, financial markets, monetary policy, trade"
+    - name: math
+      description: "Mathematics, algebra, calculus, geometry, statistics"
+    - name: physics
+      description: "Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics"
+    - name: computer science
+      description: "Algorithms, data structures, programming, software engineering"
+    - name: philosophy
+      description: "Philosophical traditions, ethics, logic, metaphysics, epistemology"
+    - name: engineering
+      description: "Engineering disciplines, design, problem-solving, systems"
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+
+  # Decision routing strategy
+  strategy: "priority"
+
+  # Default model (mock-llm for testing with real LLM, replace with actual model for production)
+  default_model: "mock-llm"
+
+  # Decisions - routing logic for each category
+  decisions:
+    - name: business_decision
+      description: "Business and management related queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a senior business consultant with expertise in corporate strategy, operations, and finance."
+            mode: "replace"
+
+    - name: law_decision
+      description: "Legal questions and law-related topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a legal expert. Provide accurate legal information for educational purposes only."
+            mode: "replace"
+
+    - name: psychology_decision
+      description: "Psychology and mental health topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "psychology"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.92
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a psychology expert with knowledge of cognitive and behavioral sciences."
+            mode: "replace"
+
+    - name: biology_decision
+      description: "Biology and life sciences questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a biology expert with comprehensive knowledge of life sciences."
+            mode: "replace"
+
+    - name: chemistry_decision
+      description: "Chemistry and chemical sciences questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a chemistry expert. Provide detailed, step-by-step explanations."
+            mode: "replace"
+
+    - name: history_decision
+      description: "Historical questions and cultural topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a historian with expertise across different time periods and cultures."
+            mode: "replace"
+
+    - name: health_decision
+      description: "Health and medical information queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.95
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a health expert. Provide evidence-based health information for educational purposes."
+            mode: "replace"
+
+    - name: economics_decision
+      description: "Economics and financial topics"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an economics expert with deep understanding of micro and macroeconomics."
+            mode: "replace"
+
+    - name: math_decision
+      description: "Mathematics and quantitative reasoning"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
+            mode: "replace"
+
+    - name: physics_decision
+      description: "Physics and physical sciences"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: true
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a physics expert. Provide clear explanations with derivations."
+            mode: "replace"
+
+    - name: computer_science_decision
+      description: "Computer science and programming"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a computer science expert. Provide clear solutions with code examples."
+            mode: "replace"
+
+    - name: philosophy_decision
+      description: "Philosophy and ethical questions"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "philosophy"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a philosophy expert. Present multiple perspectives and encourage critical thinking."
+            mode: "replace"
+
+    - name: engineering_decision
+      description: "Engineering and technical problem-solving"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are an engineering expert across multiple disciplines."
+            mode: "replace"
+
+    - name: other_decision
+      description: "General knowledge and miscellaneous topics"
+      priority: 5
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: mock-llm
+          use_reasoning: false
+      plugins:
+        - type: "pii"
+          configuration:
+            enabled: true
+            pii_types_allowed: []
+        - type: "semantic-cache"
+          configuration:
+            enabled: true
+            similarity_threshold: 0.75
+        - type: "system_prompt"
+          configuration:
+            enabled: true
+            system_prompt: "You are a helpful and knowledgeable assistant."
+            mode: "replace"
+
+  # Reasoning family configurations
+  reasoning_families:
+    deepseek:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    gpt:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  default_reasoning_effort: high
+
+  # API Configuration
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+  # Observability
+  observability:
+    tracing:
+      enabled: false
+      provider: "opentelemetry"
+      exporter:
+        type: "otlp"
+        endpoint: "jaeger:4317"
+        insecure: true
+      sampling:
+        type: "always_on"
+        rate: 1.0
+      resource:
+        service_name: "vllm-semantic-router"
+        service_version: "v0.1.0"
+        deployment_environment: "testing"
+

@@ -1,0 +1,64 @@
+# Helm values for nginx Ingress Controller
+# Used by: helm install ingress-nginx ingress-nginx/ingress-nginx -f values.yaml
+#
+# This configuration is optimized for use with vLLM Semantic Router
+# Reference: https://kubernetes.github.io/ingress-nginx/
+
+controller:
+  # Service type - adjust based on your environment
+  service:
+    type: LoadBalancer
+    # For Kind clusters, use NodePort:
+    # type: NodePort
+    # nodePorts:
+    #   http: 30080
+    #   https: 30443
+
+  # Enable watching Ingress resources without IngressClass
+  watchIngressWithoutClass: true
+
+  # Admission webhook configuration
+  admissionWebhooks:
+    enabled: true
+
+  # Controller configuration for auth_request
+  config:
+    # Allow larger request bodies (default is 1m)
+    proxy-body-size: "8m"
+
+    # Increase timeouts for LLM requests
+    proxy-read-timeout: "300"
+    proxy-send-timeout: "300"
+    proxy-connect-timeout: "60"
+
+    # Enable real IP detection
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+
+    # Logging format with auth headers
+    log-format-upstream: >-
+      $remote_addr - $remote_user [$time_local] "$request"
+      $status $body_bytes_sent "$http_referer" "$http_user_agent"
+      $request_length $request_time [$proxy_upstream_name]
+      [$proxy_alternative_upstream_name] $upstream_addr
+      $upstream_response_length $upstream_response_time $upstream_status
+      $req_id $http_x_vsr_intent_category $http_x_vsr_intent_confidence
+
+  # Resource requests/limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Metrics for monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # Set to true if you have Prometheus Operator
+
+# Default backend (optional)
+defaultBackend:
+  enabled: false
