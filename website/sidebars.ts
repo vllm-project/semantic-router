@@ -49,22 +49,23 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Installation',
       items: [
+        'installation/installation',
         {
           type: 'category',
-          label: 'Kubernetes',
+          label: 'Intall with Gateways',
           items: [
             'installation/k8s/ai-gateway',
-            'installation/k8s/production-stack',
-            'installation/k8s/aibrix',
-            'installation/k8s/gateway-api-inference-extension',
             'installation/k8s/istio',
-            'installation/k8s/llm-d',
-            'installation/milvus',
           ],
         },
-        'installation/docker-compose',
-        'installation/installation',
-        'installation/configuration',
+        {
+          type: 'category',
+          label: 'Intall with Frameworks',
+          items: [
+            'installation/k8s/production-stack',
+            'installation/k8s/aibrix',
+          ],
+        },
       ],
     },
     {

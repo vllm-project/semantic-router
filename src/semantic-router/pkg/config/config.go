@@ -17,6 +17,13 @@ const (
 	ConfigSourceKubernetes ConfigSource = "kubernetes"
 )
 
+// Model role constants for external models
+const (
+	ModelRoleGuardrail      = "guardrail"
+	ModelRoleClassification = "classification"
+	ModelRoleScoring        = "scoring"
+)
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
 	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)
@@ -34,6 +41,13 @@ type RouterConfig struct {
 	*/
 	// Inline models configuration
 	InlineModels `yaml:",inline"`
+	/*
+		Static: Global Configuration
+		Timing: Should be handled when starting the router.
+	*/
+	// External models configuration
+	ExternalModels []ExternalModelConfig `yaml:"external_models,omitempty"`
+
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
 	// Response API configuration for stateful conversations
@@ -105,10 +119,29 @@ type InlineModels struct {
 
 	// Hallucination mitigation configuration
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
+
+	// Feedback detector configuration for user satisfaction detection
+	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
 type IntelligentRouting struct {
+	// Signals extraction rules from user queries
+	Signals `yaml:",inline"`
+
+	// Decisions for routing logic (combines rules with AND/OR operators)
+	Decisions []Decision `yaml:"decisions,omitempty"`
+
+	// Strategy for selecting decision when multiple decisions match
+	// "priority" - select decision with highest priority
+	// "confidence" - select decision with highest confidence score
+	Strategy string `yaml:"strategy,omitempty"`
+
+	// Reasoning mode configuration
+	ReasoningConfig `yaml:",inline"`
+}
+
+type Signals struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
 
@@ -122,16 +155,9 @@ type IntelligentRouting struct {
 	// When matched, outputs "needs_fact_check" or "no_fact_check_needed" signal
 	FactCheckRules []FactCheckRule `yaml:"fact_check_rules,omitempty"`
 
-	// Decisions for routing logic (combines rules with AND/OR operators)
-	Decisions []Decision `yaml:"decisions,omitempty"`
-
-	// Strategy for selecting decision when multiple decisions match
-	// "priority" - select decision with highest priority
-	// "confidence" - select decision with highest confidence score
-	Strategy string `yaml:"strategy,omitempty"`
-
-	// Reasoning mode configuration
-	ReasoningConfig `yaml:",inline"`
+	// UserFeedback rules for user feedback signal classification
+	// When matched, outputs one of: "need_clarification", "satisfied", "want_different", "wrong_answer"
+	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -459,25 +485,55 @@ type PromptGuardConfig struct {
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
 
 	// Use vLLM REST API instead of Candle for guardrail/safety checks
-	// When true, ModelID, UseCPU, and UseModernBERT are ignored
-	// When false (default), uses Candle-based classification
+	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
+	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
+}
 
-	// Dedicated vLLM endpoint configuration for PromptGuard
+// FeedbackDetectorConfig represents configuration for user feedback detection
+type FeedbackDetectorConfig struct {
+	// Enable user feedback detection
+	Enabled bool `yaml:"enabled"`
+
+	// Model ID for the feedback classification model (Candle model path)
+	// Default: "models/feedback-detector"
+	ModelID string `yaml:"model_id"`
+
+	// Threshold for feedback detection (0.0-1.0)
+	// Default: 0.5
+	Threshold float32 `yaml:"threshold"`
+
+	// Use CPU for inference (Candle CPU flag)
+	UseCPU bool `yaml:"use_cpu"`
+
+	// Use ModernBERT for feedback detection (Candle ModernBERT flag)
+	UseModernBERT bool `yaml:"use_modernbert"`
+
+	// Path to the feedback type mapping file
+	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
+}
+
+// ExternalModelConfig represents configuration for external LLM-based models
+type ExternalModelConfig struct {
+	// Provider (e.g., "vllm")
+	Provider string `yaml:"llm_provider"`
+	// Classifier type (e.g., "guardrail", "classification", "scoring")
+	ModelRole string `yaml:"model_role"`
+	// Dedicated LLM endpoint configuration for PromptGuard
 	// This is separate from vllm_endpoints (which are for backend inference)
-	ClassifierVLLMEndpoint ClassifierVLLMEndpoint `yaml:"classifier_vllm_endpoint,omitempty"`
-
-	// Model name on vLLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
-	VLLMModelName string `yaml:"vllm_model_name,omitempty"`
-
-	// Timeout for vLLM API calls in seconds
+	ModelEndpoint ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
+	// Model name on LLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
+	ModelName string `yaml:"llm_model_name,omitempty"`
+	// Timeout for LLM API calls in seconds
 	// Default: 30 seconds if not specified
-	VLLMTimeoutSeconds int `yaml:"vllm_timeout_seconds,omitempty"`
-
+	TimeoutSeconds int `yaml:"llm_timeout_seconds,omitempty"`
 	// Response parser type (optional, auto-detected from model name if not set)
 	// Options: "qwen3guard", "json", "simple", "auto"
 	// "auto" tries multiple parsers (OR logic)
-	ResponseParserType string `yaml:"response_parser_type,omitempty"`
+	ParserType string `yaml:"parser_type,omitempty"`
+	// Threshold for classification (0.0-1.0)
+	// Used for guardrail models to determine detection threshold
+	Threshold float32 `yaml:"threshold,omitempty"`
 }
 
 // ToolsConfig represents configuration for automatic tool selection
@@ -624,6 +680,10 @@ type ModelParams struct {
 	// LoRA adapters available for this model
 	// These must be registered with vLLM using --lora-modules flag
 	LoRAs []LoRAAdapter `yaml:"loras,omitempty"`
+
+	// Access key for authentication with the model endpoint
+	// When set, router will add "Authorization: Bearer {access_key}" header to requests
+	AccessKey string `yaml:"access_key,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1012,6 +1072,20 @@ type FactCheckRule struct {
 	Description string `yaml:"description,omitempty"`
 }
 
+// UserFeedbackRule defines a rule for user feedback signal classification
+// Similar to FactCheckRule, but based on user satisfaction detection
+// The classifier determines user feedback type from follow-up messages and outputs
+// one of the predefined signals: "need_clarification", "satisfied", "want_different", "wrong_answer"
+// Threshold is read from feedback_detector.threshold
+type UserFeedbackRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "need_clarification", "satisfied", "want_different", "wrong_answer"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
 // ModelReasoningControl represents reasoning mode control on model level
 type ModelReasoningControl struct {
 	UseReasoning         *bool  `yaml:"use_reasoning"`                   // Pointer to detect missing field
@@ -1081,4 +1155,15 @@ type PIIDetectionPolicy struct {
 	// PIIThreshold defines the confidence threshold for PII detection (0.0-1.0)
 	// If nil, uses the global threshold from Classifier.PIIModel.Threshold
 	PIIThreshold *float32 `yaml:"pii_threshold,omitempty"`
+}
+
+// FindExternalModelByRole searches for an external model configuration by its role
+// Returns nil if no matching model is found
+func (cfg *RouterConfig) FindExternalModelByRole(role string) *ExternalModelConfig {
+	for i := range cfg.ExternalModels {
+		if cfg.ExternalModels[i].ModelRole == role {
+			return &cfg.ExternalModels[i]
+		}
+	}
+	return nil
 }

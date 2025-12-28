@@ -523,11 +523,13 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Categories: []config.Category{
-				{
-					CategoryMetadata: config.CategoryMetadata{
-						Name:        "coding",
-						Description: "Programming tasks",
+			Signals: config.Signals{
+				Categories: []config.Category{
+					{
+						CategoryMetadata: config.CategoryMetadata{
+							Name:        "coding",
+							Description: "Programming tasks",
+						},
 					},
 				},
 			},

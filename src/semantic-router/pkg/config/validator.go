@@ -50,46 +50,16 @@ func validateIPAddress(address string) error {
 	return nil
 }
 
-// validateVLLMEndpoints validates the address format of all vLLM endpoints
-func validateVLLMEndpoints(endpoints []VLLMEndpoint) error {
-	for _, endpoint := range endpoints {
-		if err := validateIPAddress(endpoint.Address); err != nil {
-			return fmt.Errorf("vLLM endpoint '%s' address validation failed: %w\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n\nUnsupported formats:\n- Domain names: example.com, localhost\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err)
-		}
-	}
-	return nil
-}
-
-// validateClassifierVLLMEndpoint validates a classifier vLLM endpoint configuration
-func validateClassifierVLLMEndpoint(endpoint ClassifierVLLMEndpoint) error {
-	if endpoint.Address == "" {
-		return fmt.Errorf("classifier_vllm_endpoint.address is required")
-	}
-	if err := validateIPAddress(endpoint.Address); err != nil {
-		return fmt.Errorf("classifier_vllm_endpoint address validation failed: %w", err)
-	}
-	if endpoint.Port < 1 || endpoint.Port > 65535 {
-		return fmt.Errorf("classifier_vllm_endpoint.port must be between 1 and 65535, got: %d", endpoint.Port)
-	}
-	return nil
-}
-
 // validateVLLMClassifierConfig validates vLLM classifier configuration when use_vllm is true
+// Note: vLLM configuration is now in external_models, not in PromptGuardConfig
+// This function is kept for backward compatibility but does minimal validation
 func validateVLLMClassifierConfig(cfg *PromptGuardConfig) error {
 	if !cfg.UseVLLM {
 		return nil // Skip validation if not using vLLM
 	}
 
-	// Validate endpoint
-	if err := validateClassifierVLLMEndpoint(cfg.ClassifierVLLMEndpoint); err != nil {
-		return fmt.Errorf("prompt_guard vLLM configuration validation failed: %w", err)
-	}
-
-	// Validate model name
-	if cfg.VLLMModelName == "" {
-		return fmt.Errorf("prompt_guard.vllm_model_name is required when use_vllm is true")
-	}
-
+	// When use_vllm is true, external_models with model_role="guardrail" is required
+	// This will be validated in the main config validation
 	return nil
 }
 
@@ -147,11 +117,6 @@ func validateConfigStructure(cfg *RouterConfig) error {
 				}
 			}
 		}
-	}
-
-	// Validate vLLM endpoints address formats
-	if err := validateVLLMEndpoints(cfg.VLLMEndpoints); err != nil {
-		return err
 	}
 
 	// Validate vLLM classifier configurations

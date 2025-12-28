@@ -163,9 +163,11 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 
 	// Check configuration based on whether using vLLM or Candle
 	if c.PromptGuard.UseVLLM {
-		// For vLLM: need endpoint address and model name
-		return c.PromptGuard.ClassifierVLLMEndpoint.Address != "" &&
-			c.PromptGuard.VLLMModelName != ""
+		// For vLLM: need external model with role="guardrail"
+		externalCfg := c.FindExternalModelByRole(ModelRoleGuardrail)
+		return externalCfg != nil &&
+			externalCfg.ModelEndpoint.Address != "" &&
+			externalCfg.ModelName != ""
 	}
 
 	// For Candle: need model ID
@@ -521,4 +523,10 @@ func (c *RouterConfig) GetHallucinationAction() string {
 	}
 	// Only "warn" is supported now
 	return "warn"
+}
+
+// IsFeedbackDetectorEnabled checks if feedback detection is enabled
+func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
+	return c.InlineModels.FeedbackDetector.Enabled &&
+		c.InlineModels.FeedbackDetector.ModelID != ""
 }

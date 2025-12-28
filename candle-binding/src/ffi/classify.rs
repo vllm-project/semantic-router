@@ -24,7 +24,8 @@ use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
 use crate::ffi::init::{
-    LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER, PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
+    FEEDBACK_DETECTOR_CLASSIFIER, LORA_INTENT_CLASSIFIER, LORA_JAILBREAK_CLASSIFIER,
+    PARALLEL_LORA_ENGINE, UNIFIED_CLASSIFIER,
 };
 // Import DeBERTa classifier for jailbreak detection
 use super::init::DEBERTA_JAILBREAK_CLASSIFIER;
@@ -1287,6 +1288,68 @@ pub extern "C" fn classify_fact_check_text(text: *const c_char) -> ModernBertCla
             predicted_class: -1,
             confidence: 0.0,
         }
+    }
+}
+
+/// Classify text for user feedback detection
+///
+/// This function uses the feedback-detector ModernBERT model to determine
+/// user satisfaction from follow-up messages.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - Caller must ensure proper memory management
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0=NEED_CLARIFICATION, 1=SAT, 2=WANT_DIFFERENT, 3=WRONG_ANSWER, -1=error
+/// - `confidence`: confidence score (0.0-1.0)
+///
+/// # Model Label Mapping (from config.json)
+/// - 0: NEED_CLARIFICATION - User needs more explanation
+/// - 1: SAT - User is satisfied
+/// - 2: WANT_DIFFERENT - User wants alternative options
+/// - 3: WRONG_ANSWER - System provided incorrect information
+///
+/// # Example
+/// ```c
+/// ModernBertClassificationResult result = classify_feedback_text("Thanks!");
+/// if (result.predicted_class == 1) {
+///     printf("User is satisfied with %.2f%% confidence\n", result.confidence * 100.0);
+/// }
+/// ```
+#[no_mangle]
+pub extern "C" fn classify_feedback_text(text: *const c_char) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = FEEDBACK_DETECTOR_CLASSIFIER.get() {
+        let classifier = classifier.clone();
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("Feedback detection failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("Feedback detector not initialized - call init_feedback_detector first");
+        default_result
     }
 }
 

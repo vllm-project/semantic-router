@@ -19,8 +19,6 @@ type Config struct {
 	PrometheusURL string
 	RouterAPIURL  string
 	RouterMetrics string
-	OpenWebUIURL  string
-	ChatUIURL     string
 	JaegerURL     string
 }
 
@@ -46,8 +44,6 @@ func LoadConfig() (*Config, error) {
 	promURL := flag.String("prometheus", env("TARGET_PROMETHEUS_URL", ""), "Prometheus base URL")
 	routerAPI := flag.String("router_api", env("TARGET_ROUTER_API_URL", "http://localhost:8080"), "Router API base URL")
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
-	openwebuiURL := flag.String("openwebui", env("TARGET_OPENWEBUI_URL", ""), "Open WebUI base URL")
-	chatuiURL := flag.String("chatui", env("TARGET_CHATUI_URL", ""), "Hugging Face Chat UI base URL")
 	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
 
 	flag.Parse()
@@ -59,8 +55,6 @@ func LoadConfig() (*Config, error) {
 	cfg.PrometheusURL = *promURL
 	cfg.RouterAPIURL = *routerAPI
 	cfg.RouterMetrics = *routerMetrics
-	cfg.OpenWebUIURL = *openwebuiURL
-	cfg.ChatUIURL = *chatuiURL
 	cfg.JaegerURL = *jaegerURL
 
 	// Resolve config file path to absolute path

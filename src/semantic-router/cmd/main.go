@@ -237,8 +237,12 @@ func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 	// Get download configuration from environment
 	downloadConfig := modeldownload.GetDownloadConfig()
 
-	// Log environment configuration
-	logging.Infof("HF_ENDPOINT: %s; HF_TOKEN: %s; HF_HOME: %s", downloadConfig.HFEndpoint, downloadConfig.HFToken, downloadConfig.HFHome)
+	// Log environment configuration (mask sensitive token)
+	maskedToken := "***"
+	if downloadConfig.HFToken == "" {
+		maskedToken = "<not set>"
+	}
+	logging.Infof("HF_ENDPOINT: %s; HF_TOKEN: %s; HF_HOME: %s", downloadConfig.HFEndpoint, maskedToken, downloadConfig.HFHome)
 	// Ensure all models are downloaded
 	if err := modeldownload.EnsureModels(specs, downloadConfig); err != nil {
 		return fmt.Errorf("failed to download models: %w", err)

@@ -51,12 +51,12 @@ const coreTeam: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: 'Software Engineer',
+    role: 'AI Networking',
     company: 'Tencent',
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: 'Software Engineer at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
+    bio: 'AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
     expertise: ['System Architecture', 'ML Infrastructure', 'Open Source', 'Software Engineering'],
   },
 ]

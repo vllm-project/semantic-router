@@ -42,7 +42,7 @@ config:
       transport_type: "stdio"  # Options: "stdio" or "http"
       # For stdio transport:
       command: "python3"
-      args: ["examples/mcp-classifier-server/server_keyword.py"]
+      args: ["deploy/examples/mcp-classifier-server/server_keyword.py"]
       # For HTTP transport (alternative):
       # transport_type: "http"
       # url: "http://localhost:8090/mcp"
