@@ -240,7 +240,7 @@ def run_test(args):
     cmd = [
         sys.executable,
         "-m",
-        "vllm_semantic_router_bench.router_reason_bench_multi_dataset",
+        "reasoning.router_reason_bench_multi_dataset",
         "--dataset",
         args.dataset,
         "--samples-per-category",
@@ -322,7 +322,7 @@ def run_plot(args):
     cmd = [
         sys.executable,
         "-m",
-        "vllm_semantic_router_bench.bench_plot",
+        "reasoning.bench_plot",
         "--router-dir",
         args.router_dir,
         "--vllm-dir",
@@ -378,7 +378,7 @@ def run_reasoning_eval(args):
     cmd = [
         sys.executable,
         "-m",
-        "vllm_semantic_router_bench.reasoning_mode_eval",
+        "reasoning.reasoning_mode_eval",
         "--datasets",
         *args.datasets,
         "--samples-per-category",
