@@ -49,6 +49,11 @@ e2e-test-dynamo: ## Run E2E tests with Dynamo profile (requires 3+ GPUs)
 e2e-test-dynamo: E2E_PROFILE=dynamo
 e2e-test-dynamo: e2e-test
 
+# Run E2E tests with nginx profile
+e2e-test-nginx: ## Run E2E tests with nginx Ingress profile
+e2e-test-nginx: E2E_PROFILE=nginx
+e2e-test-nginx: e2e-test
+
 # Run E2E tests and keep cluster for debugging
 e2e-test-debug: ## Run E2E tests and keep cluster for debugging
 e2e-test-debug: E2E_KEEP_CLUSTER=true
@@ -104,6 +109,7 @@ e2e-help: ## Show help for E2E testing
 	@echo "  dynamo      - Test Semantic Router with Nvidia Dynamo (requires 3+ GPUs)"
 	@echo "  istio       - Test Semantic Router with Istio service mesh"
 	@echo "  llm-d       - Test Semantic Router with LLM-D"
+	@echo "  nginx       - Test Semantic Router with nginx Ingress Controller"
 	@echo "  production-stack - Test Semantic Router in production-like stack (HA/LB/Obs)"
 	@echo ""
 	@echo "Environment Variables:"
