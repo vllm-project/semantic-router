@@ -1,0 +1,80 @@
+# nginx Ingress for vSR Proxy Mode
+# This enables full classification and blocking with nginx (no Envoy needed!)
+# See: https://github.com/vllm-project/semantic-router/issues/557
+#
+# How it works:
+# 1. nginx routes /v1/chat/completions to vSR
+# 2. vSR receives the FULL request (headers + body)
+# 3. vSR classifies content, detects jailbreak/PII
+# 4. If blocked: vSR returns 403 to client
+# 5. If allowed: vSR forwards to LLM backend and returns response
+#
+# This is NOT using auth_request (which has body forwarding limitations)
+# Instead, vSR acts as an intelligent reverse proxy.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vsr-proxy
+  namespace: vllm-semantic-router-system
+  annotations:
+    # Standard nginx ingress annotations
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          # Route LLM API requests through vSR proxy
+          # vSR will classify, block if needed, or forward to LLM backend
+          - path: /v1/chat/completions
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /v1/completions
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          # Health check endpoint
+          - path: /v1/health
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+---
+# Direct access to vSR API (for debugging/testing)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vsr-api
+  namespace: vllm-semantic-router-system
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /api/v1/classify
+            pathType: Prefix
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080

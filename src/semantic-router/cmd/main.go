@@ -194,7 +194,9 @@ func main() {
 	if *enableAPI {
 		go func() {
 			logging.Infof("Starting API server on port %d", *apiPort)
-			if err := apiserver.Init(*configPath, *apiPort, *enableSystemPromptAPI); err != nil {
+			// Pass the router to enable full vSR pipeline for nginx proxy mode
+			router := server.GetRouter()
+			if err := apiserver.InitWithRouter(*configPath, *apiPort, *enableSystemPromptAPI, router); err != nil {
 				logging.Errorf("Start API server error: %v", err)
 			}
 		}()

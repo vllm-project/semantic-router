@@ -4,14 +4,25 @@ package apiserver
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
+
+// RouterInterface defines the methods we need from OpenAIRouter
+// This allows us to use the full vSR pipeline for nginx proxy mode
+type RouterInterface interface {
+	// ProcessHTTPRequest processes an HTTP request through the full vSR pipeline
+	ProcessHTTPRequest(body []byte, userContent string) (*extproc.HTTPProcessingResult, error)
+	// GetConfig returns the router configuration
+	GetConfig() interface{}
+}
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
 	classificationSvc     *services.ClassificationService
 	config                *config.RouterConfig
 	enableSystemPromptAPI bool
+	router                RouterInterface // Full vSR router for nginx proxy mode
 }
 
 // ModelsInfoResponse represents the response for models info endpoint

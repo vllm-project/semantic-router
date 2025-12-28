@@ -1,0 +1,148 @@
+========================================
+Semantic Router Logs
+========================================
+
+=== Pod: semantic-router-d586cbb7-q59dr (Namespace: vllm-semantic-router-system) ===
+Status: Running
+Node: semantic-router-e2e-worker
+Started: 2025-12-29T12:32:43+02:00
+
+--- Container: semantic-router ---
+[entrypoint] Starting semantic-router with config: /app/config/config.yaml
+[entrypoint] Additional args: --secure=false
+
+[38;2;254;181;22m##[97m          [38;2;48;162;255m##[97m  ##        ##        ##      ##    ######    ########[0m
+[38;2;254;181;22m ##[97m        [38;2;48;162;255m##[97m   ##        ##        ###    ###   ##    ##   ##    ##[0m
+[38;2;254;181;22m  ##[97m      [38;2;48;162;255m##[97m    ##        ##        ####  ####   ##         ##    ##[0m
+[38;2;254;181;22m   ##[97m    [38;2;48;162;255m##[97m     ##        ##        ## #### ##    ####     ########[0m
+[38;2;254;181;22m    ##[97m  [38;2;48;162;255m##[97m      ##        ##        ##  ##  ##       ##    ##  ##[0m
+[38;2;254;181;22m     ##[38;2;48;162;255m##[97m       ##        ##        ##      ##   ##    ##   ##   ##[0m
+[38;2;254;181;22m      [38;2;48;162;255m##[97m        ########  ########  ##      ##    ######    ##    ##[0m
+
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"main.go:220","msg":"Installing required models..."}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"main.go:223","msg":"MoM Families (10 models)"}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"main.go:247","msg":"HF_ENDPOINT: https://huggingface.co; HF_TOKEN: <not set>; HF_HOME: "}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"downloader.go:87","msg":"✗ models/mom-embedding-light (need download)"}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"downloader.go:87","msg":"✗ models/mom-domain-classifier (need download)"}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"downloader.go:87","msg":"✗ models/mom-pii-classifier (need download)"}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"downloader.go:87","msg":"✗ models/mom-jailbreak-classifier (need download)"}
+{"level":"info","ts":"2025-12-29T10:32:44","caller":"downloader.go:22","msg":"Downloading model: models/mom-embedding-light"}
+Fetching 29 files:   0%|          | 0/29 [00:00<?, ?it/s]Fetching 29 files:   3%|▎         | 1/29 [00:00<00:05,  5.29it/s]Fetching 29 files:  24%|██▍       | 7/29 [00:18<01:00,  2.76s/it]Fetching 29 files:  31%|███       | 9/29 [00:25<00:58,  2.91s/it]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 29 files:  34%|███▍      | 10/29 [00:28<00:58,  3.07s/it]Fetching 29 files:  62%|██████▏   | 18/29 [00:32<00:14,  1.36s/it]Fetching 29 files: 100%|██████████| 29/29 [00:32<00:00,  1.14s/it]
+/app/models/mom-embedding-light
+{"level":"info","ts":"2025-12-29T10:33:18","caller":"downloader.go:65","msg":"Successfully downloaded model: models/mom-embedding-light"}
+{"level":"info","ts":"2025-12-29T10:33:18","caller":"downloader.go:22","msg":"Downloading model: models/mom-domain-classifier"}
+Fetching 11 files:   0%|          | 0/11 [00:00<?, ?it/s]Fetching 11 files:   9%|▉         | 1/11 [00:00<00:03,  2.82it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 11 files:  64%|██████▎   | 7/11 [00:12<00:07,  1.85s/it]Fetching 11 files: 100%|██████████| 11/11 [00:12<00:00,  1.14s/it]
+/app/models/mom-domain-classifier
+{"level":"info","ts":"2025-12-29T10:33:31","caller":"downloader.go:65","msg":"Successfully downloaded model: models/mom-domain-classifier"}
+{"level":"info","ts":"2025-12-29T10:33:31","caller":"downloader.go:22","msg":"Downloading model: models/mom-pii-classifier"}
+Fetching 11 files:   0%|          | 0/11 [00:00<?, ?it/s]Still waiting to acquire lock on models/mom-pii-classifier/.cache/huggingface/.gitignore.lock (elapsed: 0.1 seconds)
+Still waiting to acquire lock on models/mom-pii-classifier/.cache/huggingface/.gitignore.lock (elapsed: 0.1 seconds)
+Fetching 11 files:   9%|▉         | 1/11 [00:00<00:05,  1.97it/s]Fetching 11 files:  27%|██▋       | 3/11 [00:00<00:01,  4.33it/s]Fetching 11 files:  55%|█████▍    | 6/11 [00:12<00:12,  2.50s/it]Fetching 11 files: 100%|██████████| 11/11 [00:12<00:00,  1.14s/it]
+/app/models/mom-pii-classifier
+{"level":"info","ts":"2025-12-29T10:33:44","caller":"downloader.go:65","msg":"Successfully downloaded model: models/mom-pii-classifier"}
+{"level":"info","ts":"2025-12-29T10:33:44","caller":"downloader.go:22","msg":"Downloading model: models/mom-jailbreak-classifier"}
+Fetching 11 files:   0%|          | 0/11 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 11 files:   9%|▉         | 1/11 [00:00<00:04,  2.31it/s]Fetching 11 files:  45%|████▌     | 5/11 [00:00<00:00,  9.09it/s]Fetching 11 files:  64%|██████▎   | 7/11 [00:12<00:09,  2.32s/it]Fetching 11 files: 100%|██████████| 11/11 [00:12<00:00,  1.14s/it]
+/app/models/mom-jailbreak-classifier
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"downloader.go:65","msg":"Successfully downloaded model: models/mom-jailbreak-classifier"}
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"main.go:253","msg":"All required models are ready"}
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"main.go:145","msg":"Starting metrics server on :9190"}
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"router.go:65","msg":"Loaded category mapping with 14 categories"}
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"router.go:75","msg":"Loaded PII mapping with 35 PII types"}
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"router.go:85","msg":"Loaded jailbreak mapping with 2 jailbreak types"}
+{"level":"info","ts":"2025-12-29T10:33:57","caller":"once.go:78","msg":"Initializing BERT similarity model: models/mom-embedding-light"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"router.go:93","msg":"BERT similarity model initialized: models/mom-embedding-light"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"router.go:124","msg":"Semantic cache enabled with backend: memory with threshold: 0.8000, TTL: 3600 s"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"router.go:127","msg":"In-memory cache max entries: 1000"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"router.go:148","msg":"Tools database enabled with threshold: 0.2000, top-k: 3 (will load after embedding models init)"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"classifier.go:31","msg":"Initialized category classifier with auto-detection"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"once.go:78","msg":"Initializing jailbreak classifier model: models/mom-jailbreak-classifier"}
+{"level":"info","ts":"2025-12-29T10:33:58","caller":"classifier.go:95","msg":"Initialized jailbreak classifier with auto-detection"}
+  Using merged LoRA model (no separate adapters needed)
+{"level":"info","ts":"2025-12-29T10:33:59","caller":"classifier.go:180","msg":"Initialized PII token classifier with auto-detection"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"unified_classifier.go:444","msg":"LoRA C bindings initialized successfully"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"classifier.go:31","msg":"Initialized category classifier with auto-detection"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"classifier.go:95","msg":"Initialized jailbreak classifier with auto-detection"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"classifier.go:180","msg":"Initialized PII token classifier with auto-detection"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"router.go:169","msg":"Router initialization: Using auto-discovered unified classifier"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:160","msg":"Starting vLLM Semantic Router ExtProc with config: /app/config/config.yaml"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:185","msg":"No embedding models configured, skipping initialization"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:186","msg":"To enable embedding models, add to config.yaml:"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:187","msg":"  embedding_models:"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:188","msg":"    qwen3_model_path: 'models/mom-embedding-pro'"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:189","msg":"    gemma_model_path: 'models/mom-embedding-flash'"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:190","msg":"    use_cpu: true"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:210","msg":"ConfigSource is file (or not specified), using file-based configuration"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"server.go:96","msg":"Starting insecure LLM Router ExtProc server on port 50051..."}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"main.go:196","msg":"Starting API server on port 8080"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"server.go:73","msg":"API server initialized with full vSR router (nginx proxy mode enabled with full pipeline)"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"server.go:156","msg":"System prompt configuration endpoints disabled for security"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"server.go:167","msg":"nginx proxy mode enabled at /v1/chat/completions (LLM backend: http://llm-katan.llm-katan.svc.cluster.local:8000)"}
+{"level":"info","ts":"2025-12-29T10:34:00","caller":"server.go:88","msg":"Classification API server listening on port 8080"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"route_nginx_proxy.go:118","msg":"proxy: using full vSR pipeline"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"classifier.go:745","msg":"Signal evaluation results: keyword=[], embedding=[], domain=[other], fact_check=[], user_feedback=[]"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"classifier.go:769","msg":"Decision evaluation result: decision=other_decision, confidence=1.000, matched_rules=[domain:other]"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"req_filter_classification.go:84","msg":"Decision Evaluation Result: decision=other_decision, category=other, confidence=1.000, matched_rules=[domain:other]"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"req_filter_classification.go:90","msg":"Model llm-katan explicitly specified, keeping original model (decision other_decision plugins will be applied)"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"http_adapter.go:104","msg":"HTTP adapter: decision=other_decision, category=other, confidence=1.000, model="}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"classifier.go:543","msg":"Jailbreak classification result: {0 0.9589195 []}"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"classifier.go:558","msg":"BENIGN: 'benign' (confidence: 0.959, threshold: 0.700)"}
+LoRA token classification completed: 9 tokens in 69.981876ms
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"req_filter_reason.go:75","msg":"Reasoning mode disabled for model: llm-katan"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"req_filter_sys_prompt.go:156","msg":"Added category-specific system prompt to the beginning of messages (mode: replace)"}
+{"level":"info","ts":"2025-12-29T10:34:15","caller":"route_nginx_proxy.go:359","msg":"proxy: forwarding request to http://llm-katan.llm-katan.svc.cluster.local:8000/v1/chat/completions"}
+{"level":"info","ts":"2025-12-29T10:35:15","caller":"route_nginx_proxy.go:118","msg":"proxy: using full vSR pipeline"}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"classifier.go:745","msg":"Signal evaluation results: keyword=[], embedding=[], domain=[economics], fact_check=[], user_feedback=[]"}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"classifier.go:769","msg":"Decision evaluation result: decision=economics_decision, confidence=1.000, matched_rules=[domain:economics]"}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"req_filter_classification.go:84","msg":"Decision Evaluation Result: decision=economics_decision, category=economics, confidence=1.000, matched_rules=[domain:economics]"}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"req_filter_classification.go:90","msg":"Model llm-katan explicitly specified, keeping original model (decision economics_decision plugins will be applied)"}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"http_adapter.go:104","msg":"HTTP adapter: decision=economics_decision, category=economics, confidence=1.000, model="}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"classifier.go:543","msg":"Jailbreak classification result: {1 0.70899475 []}"}
+{"level":"warn","ts":"2025-12-29T10:35:16","caller":"classifier.go:555","msg":"JAILBREAK DETECTED: 'jailbreak' (confidence: 0.709, threshold: 0.700)"}
+{"level":"warn","ts":"2025-12-29T10:35:16","caller":"http_adapter.go:137","msg":"HTTP adapter: JAILBREAK BLOCKED: jailbreak (confidence: 0.709)"}
+{"level":"info","ts":"2025-12-29T10:35:16","caller":"route_nginx_proxy.go:165","msg":"proxy: blocking request, reason: jailbreak_detected"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"route_nginx_proxy.go:118","msg":"proxy: using full vSR pipeline"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:745","msg":"Signal evaluation results: keyword=[], embedding=[], domain=[business], fact_check=[], user_feedback=[]"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:769","msg":"Decision evaluation result: decision=business_decision, confidence=1.000, matched_rules=[domain:business]"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"req_filter_classification.go:84","msg":"Decision Evaluation Result: decision=business_decision, category=business, confidence=1.000, matched_rules=[domain:business]"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"req_filter_classification.go:90","msg":"Model llm-katan explicitly specified, keeping original model (decision business_decision plugins will be applied)"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"http_adapter.go:104","msg":"HTTP adapter: decision=business_decision, category=business, confidence=1.000, model="}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:543","msg":"Jailbreak classification result: {0 0.9111574 []}"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:558","msg":"BENIGN: 'benign' (confidence: 0.911, threshold: 0.700)"}
+LoRA token classification completed: 34 tokens in 145.592819ms
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1025","msg":"PII token classification found 16 entities"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: B-US_SSN → B-US_SSN ('123') at [0-3] with confidence 0.977"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('-') at [1-2] with confidence 0.721"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('67') at [4-6] with confidence 0.734"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('##8') at [9-12] with confidence 0.764"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('##9') at [12-15] with confidence 0.776"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: B-US_SSN → B-US_SSN ('411') at [15-18] with confidence 0.737"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('##1') at [18-21] with confidence 0.827"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('111') at [24-27] with confidence 0.816"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('##1') at [27-30] with confidence 0.767"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('##1') at [36-39] with confidence 0.712"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('-') at [13-14] with confidence 0.789"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1036","msg":"Detected PII entity: I-PHONE_NUMBER → I-PHONE_NUMBER ('##1') at [45-48] with confidence 0.712"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1048","msg":"Detected PII types: [B-US_SSN I-PHONE_NUMBER]"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1136","msg":"Detected PII type 'B-US_SSN' in content"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"classifier.go:1136","msg":"Detected PII type 'I-PHONE_NUMBER' in content"}
+{"level":"warn","ts":"2025-12-29T10:35:18","caller":"policy.go:80","msg":"PII policy violation for decision business_decision: denied PII types [B-US_SSN I-PHONE_NUMBER]"}
+{"level":"warn","ts":"2025-12-29T10:35:18","caller":"http_adapter.go:161","msg":"HTTP adapter: PII BLOCKED: denied types=[B-US_SSN I-PHONE_NUMBER]"}
+{"level":"info","ts":"2025-12-29T10:35:18","caller":"route_nginx_proxy.go:165","msg":"proxy: blocking request, reason: pii_policy_violation"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"route_nginx_proxy.go:118","msg":"proxy: using full vSR pipeline"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"classifier.go:745","msg":"Signal evaluation results: keyword=[], embedding=[], domain=[math], fact_check=[], user_feedback=[]"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"classifier.go:769","msg":"Decision evaluation result: decision=math_decision, confidence=1.000, matched_rules=[domain:math]"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"req_filter_classification.go:84","msg":"Decision Evaluation Result: decision=math_decision, category=math, confidence=1.000, matched_rules=[domain:math]"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"req_filter_classification.go:90","msg":"Model llm-katan explicitly specified, keeping original model (decision math_decision plugins will be applied)"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"http_adapter.go:104","msg":"HTTP adapter: decision=math_decision, category=math, confidence=1.000, model="}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"classifier.go:543","msg":"Jailbreak classification result: {0 0.959959 []}"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"classifier.go:558","msg":"BENIGN: 'benign' (confidence: 0.960, threshold: 0.700)"}
+LoRA token classification completed: 9 tokens in 74.064359ms
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"req_filter_reason.go:75","msg":"Reasoning mode disabled for model: llm-katan"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"req_filter_sys_prompt.go:156","msg":"Added category-specific system prompt to the beginning of messages (mode: replace)"}
+{"level":"info","ts":"2025-12-29T10:35:20","caller":"route_nginx_proxy.go:359","msg":"proxy: forwarding request to http://llm-katan.llm-katan.svc.cluster.local:8000/v1/chat/completions"}
+
+
+

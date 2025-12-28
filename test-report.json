@@ -1,0 +1,231 @@
+{
+  "profile": "nginx",
+  "start_time": "2025-12-29T12:22:50.321998429+02:00",
+  "end_time": "2025-12-29T12:36:25.419944033+02:00",
+  "duration": "13m35s",
+  "status": "FAILED",
+  "exit_code": 1,
+  "cluster_name": "semantic-router-e2e",
+  "test_results": [
+    {
+      "Name": "nginx-proxy-health",
+      "Passed": true,
+      "Error": null,
+      "Duration": "2.041747397s",
+      "Logs": "",
+      "Details": {
+        "endpoint": "/v1/health",
+        "passed": true,
+        "status_code": 200
+      }
+    },
+    {
+      "Name": "nginx-proxy-normal-request",
+      "Passed": false,
+      "Error": {},
+      "Duration": "1m0.542235402s",
+      "Logs": "",
+      "Details": {}
+    },
+    {
+      "Name": "nginx-proxy-jailbreak-block",
+      "Passed": true,
+      "Error": null,
+      "Duration": "2.221443913s",
+      "Logs": "",
+      "Details": {
+        "block_reason": "jailbreak_detected",
+        "endpoint": "/v1/chat/completions",
+        "jailbreak_blocked": "true",
+        "jailbreak_type": "jailbreak",
+        "passed": true,
+        "status_code": 403
+      }
+    },
+    {
+      "Name": "nginx-proxy-pii-block",
+      "Passed": true,
+      "Error": null,
+      "Duration": "2.399467675s",
+      "Logs": "",
+      "Details": {
+        "block_reason": "pii_policy_violation",
+        "endpoint": "/v1/chat/completions",
+        "passed": true,
+        "pii_types": "B-US_SSN,I-PHONE_NUMBER",
+        "pii_violation": "true",
+        "status_code": 403
+      }
+    },
+    {
+      "Name": "nginx-proxy-classification",
+      "Passed": false,
+      "Error": {},
+      "Duration": "1m2.025777184s",
+      "Logs": "",
+      "Details": {}
+    }
+  ],
+  "total_tests": 5,
+  "passed_tests": 3,
+  "failed_tests": 2,
+  "cluster_info": {
+    "total_pods": 14,
+    "running_pods": 14,
+    "pending_pods": 0,
+    "failed_pods": 0,
+    "namespaces": [
+      "default",
+      "ingress-nginx",
+      "kube-node-lease",
+      "kube-public",
+      "kube-system",
+      "llm-katan",
+      "local-path-storage",
+      "vllm-semantic-router-system"
+    ],
+    "pods_by_namespace": {
+      "ingress-nginx": [
+        {
+          "name": "ingress-nginx-controller-5d4d7ddd69-t56f2",
+          "namespace": "ingress-nginx",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "6m39s",
+          "node": "semantic-router-e2e-worker"
+        }
+      ],
+      "kube-system": [
+        {
+          "name": "coredns-66bc5c9577-gpd8w",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "12m59s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "coredns-66bc5c9577-zb9mx",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "12m59s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "etcd-semantic-router-e2e-control-plane",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m17s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "kindnet-qwmg5",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m12s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "kindnet-sg57x",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m9s",
+          "node": "semantic-router-e2e-worker"
+        },
+        {
+          "name": "kube-apiserver-semantic-router-e2e-control-plane",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m17s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "kube-controller-manager-semantic-router-e2e-control-plane",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m17s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "kube-proxy-5jbwm",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m12s",
+          "node": "semantic-router-e2e-control-plane"
+        },
+        {
+          "name": "kube-proxy-q8hqp",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m9s",
+          "node": "semantic-router-e2e-worker"
+        },
+        {
+          "name": "kube-scheduler-semantic-router-e2e-control-plane",
+          "namespace": "kube-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "13m17s",
+          "node": "semantic-router-e2e-control-plane"
+        }
+      ],
+      "llm-katan": [
+        {
+          "name": "llm-katan-7499467f44-zcwfn",
+          "namespace": "llm-katan",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "6m14s",
+          "node": "semantic-router-e2e-worker"
+        }
+      ],
+      "local-path-storage": [
+        {
+          "name": "local-path-provisioner-576879948-vqv8w",
+          "namespace": "local-path-storage",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "12m56s",
+          "node": "semantic-router-e2e-worker"
+        }
+      ],
+      "vllm-semantic-router-system": [
+        {
+          "name": "semantic-router-d586cbb7-q59dr",
+          "namespace": "vllm-semantic-router-system",
+          "phase": "Running",
+          "ready": "1/1",
+          "restarts": 0,
+          "age": "3m38s",
+          "node": "semantic-router-e2e-worker"
+        }
+      ]
+    }
+  },
+  "environment": {
+    "go_version": "1.24",
+    "parallel": "false",
+    "verbose": "true"
+  }
+}
