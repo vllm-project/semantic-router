@@ -54,7 +54,7 @@ jobs:
 
       - name: Verify package version matches tag
         if: github.event_name != 'workflow_dispatch'
-        working-directory: src/vllm-sr-cli
+        working-directory: src/vllm-sr
         run: |
           PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           TAG_VERSION="${{ steps.extract_version.outputs.version }}"
@@ -62,7 +62,7 @@ jobs:
           echo "Tag version: $TAG_VERSION"
           if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
             echo "::error::Package version ($PACKAGE_VERSION) does not match tag version ($TAG_VERSION)"
-            echo "::error::Please update version in src/vllm-sr-cli/pyproject.toml to $TAG_VERSION"
+            echo "::error::Please update version in src/vllm-sr/pyproject.toml to $TAG_VERSION"
             exit 1
           fi
 
@@ -72,7 +72,7 @@ jobs:
           pip install build twine
 
       - name: Build package
-        working-directory: src/vllm-sr-cli
+        working-directory: src/vllm-sr
         run: |
           echo "Building vllm-sr package..."
           python -m build
@@ -80,7 +80,7 @@ jobs:
           ls -la dist/
 
       - name: Verify package contents
-        working-directory: src/vllm-sr-cli
+        working-directory: src/vllm-sr
         run: |
           echo "Verifying package contents..."
           echo ""
@@ -113,13 +113,13 @@ jobs:
           echo "✓ All required template files are present in the package"
 
       - name: Check package with twine
-        working-directory: src/vllm-sr-cli
+        working-directory: src/vllm-sr
         run: |
           twine check dist/*
 
       - name: Publish to Test PyPI (dry run)
         if: github.event_name == 'workflow_dispatch'
-        working-directory: src/vllm-sr-cli
+        working-directory: src/vllm-sr
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Publish to PyPI
         if: github.event_name == 'push'
-        working-directory: src/vllm-sr-cli
+        working-directory: src/vllm-sr
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
@@ -159,7 +159,7 @@ jobs:
             ## What's Changed
             See the full changelog below.
           files: |
-            src/vllm-sr-cli/dist/*
+            src/vllm-sr/dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

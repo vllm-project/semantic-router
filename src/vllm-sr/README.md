@@ -13,7 +13,7 @@ GitHub: https://github.com/vllm-project/semantic-router
 pip install vllm-sr
 
 # Or install from source (development)
-cd src/vllm-sr-cli
+cd src/vllm-sr
 pip install -e .
 ```
 

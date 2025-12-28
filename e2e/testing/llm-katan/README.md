@@ -3,7 +3,7 @@
 A lightweight LLM serving package using FastAPI and HuggingFace transformers,
 designed for testing and development with real tiny models.
 
-> **🎬 [See Live Demo](https://vllm-project.github.io/semantic-router/e2e-tests/llm-katan/terminal-demo.html)**
+> **🎬 [See Live Demo](https://vllm-project.github.io/semantic-router/e2e/testing/llm-katan/terminal-demo.html)**
 > Interactive terminal showing multi-instance setup in action!
 
 ## Features
@@ -47,8 +47,8 @@ make kube-deploy-llm-katan-claude   # Deploy Claude simulation
 make kube-deploy-llm-katan-multi    # Deploy both models
 
 # Or manually with kubectl
-kubectl apply -k e2e-tests/llm-katan/deploy/kubernetes/overlays/gpt35
-kubectl apply -k e2e-tests/llm-katan/deploy/kubernetes/overlays/claude
+kubectl apply -k e2e/testing/llm-katan/deploy/kubernetes/overlays/gpt35
+kubectl apply -k e2e/testing/llm-katan/deploy/kubernetes/overlays/claude
 
 # Port forward and test
 make kube-port-forward-llm-katan LLM_KATAN_OVERLAY=gpt35
@@ -108,7 +108,7 @@ llm-katan --model Qwen/Qwen3-0.6B --port 8000 --backend vllm
 
 ### Multi-Instance Testing
 
-**🎬 [Live Demo](https://vllm-project.github.io/semantic-router/e2e-tests/llm-katan/terminal-demo.html)**
+**🎬 [Live Demo](https://vllm-project.github.io/semantic-router/e2e/testing/llm-katan/terminal-demo.html)**
 See this in action with animated terminals!
 
 > *Note: If GitHub Pages isn't enabled, you can also
@@ -320,7 +320,7 @@ llm-katan --model Qwen/Qwen3-0.6B --port 8001 \
 ```bash
 # Clone and install in development mode
 git clone <repo>
-cd e2e-tests/llm-katan
+cd e2e/testing/llm-katan
 pip install -e .
 
 # Run with development dependencies

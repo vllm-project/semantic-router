@@ -57,21 +57,21 @@ RUN mkdir -p /app /app/models /app/config /etc/envoy /var/log/supervisor /var/lo
 
 # Copy Python CLI (includes templates in cli/templates/)
 WORKDIR /app
-COPY src/vllm-sr-cli/cli/ /app/cli/
-COPY src/vllm-sr-cli/requirements.txt /app/requirements.txt
+COPY src/vllm-sr/cli/ /app/cli/
+COPY src/vllm-sr/requirements.txt /app/requirements.txt
 
 # Copy tools database to config directory
-COPY src/vllm-sr-cli/cli/templates/tools_db.json /app/config/tools_db.json
+COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy start scripts
-COPY src/vllm-sr-cli/start-router.sh /app/start-router.sh
+COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
 
 # Copy supervisord configuration
-COPY src/vllm-sr-cli/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Create log files
 RUN touch /var/log/envoy_access.log /var/log/supervisor/supervisord.log

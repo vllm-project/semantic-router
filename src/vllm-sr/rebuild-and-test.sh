@@ -30,8 +30,8 @@ echo "  Building from: $(pwd)/../.."
 echo "  Note: Use 'make docker-buildx' for multi-platform builds"
 echo ""
 cd ../..
-docker build -t ghcr.io/vllm-project/semantic-router/vllm-sr:latest -f src/vllm-sr-cli/Dockerfile .
-cd src/vllm-sr-cli
+docker build -t ghcr.io/vllm-project/semantic-router/vllm-sr:latest -f src/vllm-sr/Dockerfile .
+cd src/vllm-sr
 echo ""
 echo "✓ Image built: ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 echo ""

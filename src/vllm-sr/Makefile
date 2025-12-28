@@ -93,7 +93,7 @@ docker-build:
 	@echo "Image: $(FULL_IMAGE)"
 	@echo "This may take a few minutes..."
 	@echo ""
-	cd ../.. && docker build -t $(FULL_IMAGE) -f src/vllm-sr-cli/Dockerfile .
+	cd ../.. && docker build -t $(FULL_IMAGE) -f src/vllm-sr/Dockerfile .
 	@echo ""
 	@echo "✓ Docker image built: $(FULL_IMAGE)"
 	@echo ""
@@ -121,7 +121,7 @@ docker-buildx: docker-buildx-setup
 	cd ../.. && docker buildx build \
 		--platform $(PLATFORMS) \
 		--tag $(FULL_IMAGE) \
-		--file src/vllm-sr-cli/Dockerfile \
+		--file src/vllm-sr/Dockerfile \
 		--load \
 		.
 	@echo ""
@@ -138,7 +138,7 @@ docker-buildx-push: docker-buildx-setup
 	cd ../.. && docker buildx build \
 		--platform $(PLATFORMS) \
 		--tag $(FULL_IMAGE) \
-		--file src/vllm-sr-cli/Dockerfile \
+		--file src/vllm-sr/Dockerfile \
 		--push \
 		.
 	@echo ""

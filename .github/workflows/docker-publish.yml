@@ -26,20 +26,20 @@ on:
       - "Dockerfile*"
       - "candle-binding/**"
       - "src/**"
-      - "e2e-tests/llm-katan/**"
+      - "e2e/testing/llm-katan/**"
       - "dashboard/**"
       - "deploy/stack/**"
-      - "src/vllm-sr-cli/**"
+      - "src/vllm-sr/**"
   pull_request:
     paths:
       - ".github/workflows/docker-publish.yml"
       - "Dockerfile*"
       - "candle-binding/**"
       - "src/**"
-      - "e2e-tests/llm-katan/**"
+      - "e2e/testing/llm-katan/**"
       - "dashboard/**"
       - "deploy/stack/**"
-      - "src/vllm-sr-cli/**"
+      - "src/vllm-sr/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -157,8 +157,8 @@ jobs:
         with:
           path: |
             ~/.cache/pip
-            e2e-tests/llm-katan/.venv
-          key: ${{ runner.os }}-pip-multiarch-${{ hashFiles('e2e-tests/llm-katan/requirements.txt', 'e2e-tests/llm-katan/pyproject.toml') }}
+            e2e/testing/llm-katan/.venv
+          key: ${{ runner.os }}-pip-multiarch-${{ hashFiles('e2e/testing/llm-katan/requirements.txt', 'e2e/testing/llm-katan/pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-multiarch-
             ${{ runner.os }}-pip-
@@ -204,8 +204,8 @@ jobs:
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
-            echo "context=./e2e-tests/llm-katan" >> $GITHUB_OUTPUT
-            echo "dockerfile=./e2e-tests/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
+            echo "context=./e2e/testing/llm-katan" >> $GITHUB_OUTPUT
+            echo "dockerfile=./e2e/testing/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "dashboard" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
@@ -214,7 +214,7 @@ jobs:
             echo "dockerfile=./Dockerfile.stack" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
             echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./src/vllm-sr-cli/Dockerfile" >> $GITHUB_OUTPUT
+            echo "dockerfile=./src/vllm-sr/Dockerfile" >> $GITHUB_OUTPUT
           fi
 
       - name: Generate tags

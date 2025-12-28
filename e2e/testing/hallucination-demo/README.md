@@ -39,7 +39,7 @@ This demo creates a complete pipeline to demonstrate hallucination detection:
 make demo-hallucination
 
 # Or manually:
-./e2e-tests/hallucination-demo/run_demo.sh
+./e2e/testing/hallucination-demo/run_demo.sh
 ```
 
 ## Components
@@ -88,14 +88,14 @@ Try these questions to see hallucination detection in action:
 
 ```bash
 # Start services individually
-python3 e2e-tests/hallucination-demo/mock_vllm_toolcall.py --port 8002
-python3 e2e-tests/hallucination-demo/mock_web_search.py --port 8003
+python3 e2e/testing/hallucination-demo/mock_vllm_toolcall.py --port 8002
+python3 e2e/testing/hallucination-demo/mock_web_search.py --port 8003
 
 # Start router
 ./bin/router -config=config/testing/config.hallucination.yaml
 
 # Run client
-python3 e2e-tests/hallucination-demo/chat_client.py \
+python3 e2e/testing/hallucination-demo/chat_client.py \
     --router-url http://localhost:8801 \
     --search-url http://localhost:8003
 ```

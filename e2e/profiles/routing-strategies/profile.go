@@ -366,7 +366,7 @@ func (p *Profile) startMCPServers(ctx context.Context) error {
 	p.log("Starting stdio MCP server (keyword-based)")
 	p.mcpStdioProcess = exec.CommandContext(ctx,
 		"python3",
-		"examples/mcp-classifier-server/server_keyword.py")
+		"deploy/examples/mcp-classifier-server/server_keyword.py")
 
 	// Capture output for debugging
 	if p.verbose {
@@ -385,7 +385,7 @@ func (p *Profile) startMCPServers(ctx context.Context) error {
 	p.log("Starting HTTP MCP server (embedding-based)")
 	p.mcpHTTPProcess = exec.CommandContext(ctx,
 		"python3",
-		"examples/mcp-classifier-server/server_embedding.py",
+		"deploy/examples/mcp-classifier-server/server_embedding.py",
 		"--port", "8090")
 
 	// Capture output for debugging

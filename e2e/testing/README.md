@@ -53,7 +53,7 @@ For fast development and testing with real tiny models (no GPU required):
 
 ```bash
 # Terminal 1: Start LLM Katan servers (shows request logs, Ctrl+C to stop)
-./e2e-tests/start-llm-katan.sh
+./e2e/testing/start-llm-katan.sh
 
 # Or manually start individual servers:
 llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "Model-A"
@@ -66,8 +66,8 @@ make run-envoy
 make run-router-e2e
 
 # Terminal 4: Run tests
-python e2e-tests/00-client-request-test.py    # Individual test
-python e2e-tests/run_all_tests.py             # All available tests
+python e2e/testing/00-client-request-test.py    # Individual test
+python e2e/testing/run_all_tests.py             # All available tests
 ```
 
 **Note**: The LLM Katan servers use real tiny models for actual inference while being lightweight enough for development. The script runs in foreground mode, allowing you to see real-time request logs and use Ctrl+C to stop all servers cleanly.
@@ -88,14 +88,14 @@ Currently implemented:
 Individual tests can be run with:
 
 ```bash
-python e2e-tests/00-client-request-test.py
-python e2e-tests/01-envoy-extproc-test.py
-python e2e-tests/02-router-classification-test.py
-python e2e-tests/03-classification-api-test.py
+python e2e/testing/00-client-request-test.py
+python e2e/testing/01-envoy-extproc-test.py
+python e2e/testing/02-router-classification-test.py
+python e2e/testing/03-classification-api-test.py
 ```
 
 Or run all available tests with:
 
 ```bash
-python e2e-tests/run_all_tests.py
+python e2e/testing/run_all_tests.py
 ```

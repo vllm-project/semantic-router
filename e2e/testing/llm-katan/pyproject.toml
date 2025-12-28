@@ -55,7 +55,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/vllm-project/semantic-router"
-Documentation = "https://github.com/vllm-project/semantic-router/tree/main/e2e-tests/llm-katan"
+Documentation = "https://github.com/vllm-project/semantic-router/tree/main/e2e/testing/llm-katan"
 Repository = "https://github.com/vllm-project/semantic-router.git"
 Issues = "https://github.com/vllm-project/semantic-router/issues"
 
