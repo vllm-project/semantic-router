@@ -1,0 +1,141 @@
+# Mock Auth Service for nginx auth_request
+# Demonstrates that auth_request (headers-only) works alongside vSR proxy mode (full body)
+#
+# Flow:
+# 1. nginx receives request
+# 2. nginx sends auth_request to this service (headers only) → validates token
+# 3. If 200 OK, nginx proxy_pass to vSR (full body) → classification
+# 4. vSR forwards to LLM backend
+#
+# Valid tokens: "valid-token", "test-token", "Bearer valid-token"
+# Invalid tokens: anything else → 401 Unauthorized
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mock-auth
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-config
+  namespace: mock-auth
+data:
+  # Simple nginx config that validates Authorization header
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    http {
+        server {
+            listen 8080;
+
+            # Health check
+            location /health {
+                return 200 'OK';
+                add_header Content-Type text/plain;
+            }
+
+            # Auth validation endpoint
+            location /validate {
+                # Check Authorization header
+                # Valid tokens: "valid-token", "test-token", "Bearer valid-token", "Bearer test-token"
+                set $auth_valid 0;
+
+                if ($http_authorization = "valid-token") {
+                    set $auth_valid 1;
+                }
+                if ($http_authorization = "test-token") {
+                    set $auth_valid 1;
+                }
+                if ($http_authorization = "Bearer valid-token") {
+                    set $auth_valid 1;
+                }
+                if ($http_authorization = "Bearer test-token") {
+                    set $auth_valid 1;
+                }
+                # Also allow requests without auth for testing (optional)
+                if ($http_authorization = "") {
+                    set $auth_valid 1;
+                }
+
+                if ($auth_valid = 0) {
+                    return 401 'Unauthorized: Invalid token';
+                }
+
+                # Valid token - return 200
+                return 200 'Authorized';
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-auth
+  namespace: mock-auth
+  labels:
+    app: mock-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-auth
+  template:
+    metadata:
+      labels:
+        app: mock-auth
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: auth-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-auth
+  namespace: mock-auth
+  labels:
+    app: mock-auth
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: mock-auth
+

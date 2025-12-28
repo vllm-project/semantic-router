@@ -1,0 +1,80 @@
+# nginx Ingress for vSR - E2E Testing Configuration
+# Minimal configuration for automated testing
+# For production, see: ingress-production.yaml
+#
+# Flow:
+# 1. nginx receives request
+# 2. nginx sends auth_request to mock-auth (validates token)
+# 3. If auth passes: nginx proxy_pass to vSR (full body)
+# 4. vSR classifies, blocks threats, or forwards to LLM
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vsr-proxy
+  namespace: vllm-semantic-router-system
+  annotations:
+    # Authentication via auth_request
+    nginx.ingress.kubernetes.io/auth-url: "http://mock-auth.mock-auth.svc.cluster.local:8080/validate"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-User,X-Auth-Roles"
+
+    # Proxy settings for vSR
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /v1/chat/completions
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /v1/completions
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /v1/health
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+---
+# Public endpoints (no auth required)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vsr-api
+  namespace: vllm-semantic-router-system
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
+          - path: /api/v1/classify
+            pathType: Prefix
+            backend:
+              service:
+                name: semantic-router
+                port:
+                  number: 8080
