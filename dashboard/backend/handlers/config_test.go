@@ -47,7 +47,7 @@ model_config:
   test-model:
     reasoning_family: qwen3
 `
-	if err := os.WriteFile(configPath, []byte(validConfig), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(validConfig), 0o644); err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
 	}
 	return configPath
@@ -135,7 +135,7 @@ func TestUpdateConfigHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Invalid config - localhost instead of IP address",
+			name:   "Valid config - localhost (DNS name now allowed)",
 			method: http.MethodPost,
 			requestBody: map[string]interface{}{
 				"vllm_endpoints": []map[string]interface{}{
@@ -146,11 +146,10 @@ func TestUpdateConfigHandler(t *testing.T) {
 					},
 				},
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Config validation failed",
+			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "Invalid config - domain name instead of IP address",
+			name:   "Valid config - domain name (DNS names now allowed)",
 			method: http.MethodPost,
 			requestBody: map[string]interface{}{
 				"vllm_endpoints": []map[string]interface{}{
@@ -161,8 +160,7 @@ func TestUpdateConfigHandler(t *testing.T) {
 					},
 				},
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Config validation failed",
+			expectedStatus: http.StatusOK,
 		},
 		{
 			name:   "Invalid config - protocol prefix in address",
@@ -300,7 +298,7 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 		"vllm_endpoints": []map[string]interface{}{
 			{
 				"name":    "invalid-endpoint",
-				"address": "localhost", // Invalid: should be IP address
+				"address": "http://127.0.0.1", // Invalid: protocol prefix not allowed
 				"port":    8000,
 			},
 		},
