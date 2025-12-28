@@ -47,7 +47,7 @@ model_config:
   test-model:
     reasoning_family: qwen3
 `
-	if err := os.WriteFile(configPath, []byte(validConfig), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(validConfig), 0644); err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
 	}
 	return configPath
