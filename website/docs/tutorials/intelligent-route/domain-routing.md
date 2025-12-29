@@ -32,119 +32,118 @@ Generic classification approaches struggle with domain-specific terminology and 
 Configure the domain classifier in your `config.yaml`:
 
 ```yaml
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
-  
-  pii_model:
-    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-    use_modernbert: true
-    threshold: 0.7
-    use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+# Define domain signals
+signals:
+  domains:
+    - name: "math"
+      description: "Mathematics and quantitative reasoning"
+      mmlu_categories: ["math"]
 
-categories:
-  - name: math
-  - name: physics
-  - name: computer science
-  - name: business
-  - name: health
-  - name: law
+    - name: "physics"
+      description: "Physics and physical sciences"
+      mmlu_categories: ["physics"]
 
+    - name: "computer_science"
+      description: "Programming and computer science"
+      mmlu_categories: ["computer_science"]
+
+    - name: "business"
+      description: "Business and management"
+      mmlu_categories: ["business"]
+
+    - name: "health"
+      description: "Health and medical information"
+      mmlu_categories: ["health"]
+
+    - name: "law"
+      description: "Legal and regulatory information"
+      mmlu_categories: ["law"]
+
+    - name: "other"
+      description: "General queries"
+      mmlu_categories: ["other"]
+
+# Define decisions using domain signals
 decisions:
   - name: math
     description: "Route mathematical queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "domain"
           name: "math"
     modelRefs:
-      - model: qwen3
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
-          mode: "replace"
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions with clear explanations."
 
   - name: physics
     description: "Route physics queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "domain"
           name: "physics"
     modelRefs:
-      - model: qwen3
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          system_prompt: "You are a physics expert with deep understanding of physical laws."
-          mode: "replace"
+          system_prompt: "You are a physics expert with deep understanding of physical laws. Explain concepts clearly with mathematical derivations."
 
-  - name: computer science
+  - name: computer_science
     description: "Route computer science queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "domain"
-          name: "computer science"
+          name: "computer_science"
     modelRefs:
-      - model: qwen3
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          system_prompt: "You are a computer science expert with knowledge of algorithms and data structures."
-          mode: "replace"
+          system_prompt: "You are a computer science expert with knowledge of algorithms and data structures. Provide clear code examples."
 
   - name: business
     description: "Route business queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "domain"
           name: "business"
     modelRefs:
-      - model: qwen3
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
           system_prompt: "You are a senior business consultant and strategic advisor."
-          mode: "replace"
 
   - name: health
     description: "Route health queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "domain"
           name: "health"
     modelRefs:
-      - model: qwen3
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
           system_prompt: "You are a health and medical information expert."
-          mode: "replace"
       - type: "semantic-cache"
         configuration:
           enabled: true
@@ -152,23 +151,36 @@ decisions:
 
   - name: law
     description: "Route legal queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "domain"
           name: "law"
     modelRefs:
-      - model: qwen3
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
           system_prompt: "You are a knowledgeable legal expert."
-          mode: "replace"
 
-default_model: qwen3
+  - name: general_route
+    description: "Default fallback route for general queries"
+    priority: 50
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
 ```
 
 ## Supported Domains
@@ -254,39 +266,51 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 decisions:
 - name: math
   description: "Route mathematical queries"
-  priority: 10  # Highest priority
+  priority: 100
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "math"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: true  # Step-by-step solutions
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        system_prompt: "You are a mathematics expert. Provide step-by-step solutions."
 
 - name: physics
   description: "Route physics queries"
-  priority: 10
+  priority: 100
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "physics"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: true  # Derivations and proofs
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        system_prompt: "You are a physics expert. Explain concepts clearly with mathematical derivations."
 
 - name: chemistry
   description: "Route chemistry queries"
-  priority: 10
+  priority: 100
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "chemistry"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: true  # Reaction mechanisms
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        system_prompt: "You are a chemistry expert. Explain reaction mechanisms clearly."
 ```
 
 ### Professional Domains (PII + Caching)
@@ -295,39 +319,39 @@ decisions:
 decisions:
 - name: health
   description: "Route health queries"
-  priority: 10
+  priority: 100
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "health"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: false
   plugins:
+    - type: "system_prompt"
+      configuration:
+        system_prompt: "You are a health and medical information expert."
     - type: "semantic-cache"
       configuration:
         enabled: true
         similarity_threshold: 0.95  # Very strict
-    - type: "pii"
-      configuration:
-        enabled: true
 
 - name: law
   description: "Route legal queries"
-  priority: 5  # Conservative routing
+  priority: 100
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "law"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: false
   plugins:
-    - type: "pii"
+    - type: "system_prompt"
       configuration:
-        enabled: true
+        system_prompt: "You are a knowledgeable legal expert."
 ```
 
 ### General Domains (Fast + Cached)
@@ -336,30 +360,35 @@ decisions:
 decisions:
 - name: business
   description: "Route business queries"
-  priority: 10
+  priority: 100
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "business"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: false  # Fast responses
+  plugins:
+    - type: "system_prompt"
+      configuration:
+        system_prompt: "You are a senior business consultant and strategic advisor."
 
-- name: other
-  description: "Route general queries"
-  priority: 5
+- name: general_route
+  description: "Default fallback route for general queries"
+  priority: 50
   rules:
     operator: "OR"
     conditions:
       - type: "domain"
         name: "other"
   modelRefs:
-    - model: qwen3
+    - model: "openai/gpt-oss-120b"
       use_reasoning: false
   plugins:
     - type: "semantic-cache"
       configuration:
+        enabled: true
         similarity_threshold: 0.75  # Relaxed
 ```
 

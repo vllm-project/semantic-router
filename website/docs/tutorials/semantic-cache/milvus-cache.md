@@ -108,6 +108,36 @@ semantic_cache:
   ttl_seconds: 7200
 ```
 
+### Decision-Level Configuration (Plugin-Based)
+
+You can also configure Milvus cache at the decision level using plugins:
+
+```yaml
+signals:
+  domains:
+    - name: "math"
+      description: "Mathematical queries"
+      mmlu_categories: ["math"]
+
+decisions:
+  - name: math_route
+    description: "Route math queries with strict caching"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95  # Very strict for math accuracy
+```
+
 Run Semantic Router:
 
 ```bash
@@ -145,6 +175,5 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ## Next Steps
 
 - **[In-Memory Cache](./in-memory-cache.md)** - Compare with in-memory caching
-- **[Cache Overview](./overview.md)** - Learn semantic caching concepts
-- **[Observability](../observability/overview.md)** - Monitor Milvus performance
+- **[Observability](../observability/metrics.md)** - Monitor Milvus performance
 - **[Kubernetes Integration](../../installation/milvus.md)** - Deploy Milvus on Kubernetes

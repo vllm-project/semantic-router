@@ -4,7 +4,15 @@ sidebar_position: 4
 
 # Configuration
 
-This guide covers the configuration options for the Semantic Router. The system uses a single YAML configuration file that controls all aspects of routing, classification, and security.
+This guide covers the configuration options for the Semantic Router. The system uses a single YAML configuration file that controls **signal-driven routing**, **plugin chain processing**, and **model selection**.
+
+## Architecture Overview
+
+The configuration defines three main layers:
+
+1. **Signal Extraction Layer**: Define 6 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference)
+2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
+3. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
 ## Configuration File
 
@@ -85,46 +93,141 @@ classifier:
     threshold: 0.7
     use_cpu: true
 
-# Categories and routing rules
+# Signals - Signal extraction configuration
+signals:
+  # Keyword-based signals (fast pattern matching)
+  keywords:
+    - name: "math_keywords"
+      operator: "OR"
+      keywords:
+        - "calculate"
+        - "equation"
+        - "solve"
+        - "derivative"
+        - "integral"
+      case_sensitive: false
+
+    - name: "code_keywords"
+      operator: "OR"
+      keywords:
+        - "function"
+        - "class"
+        - "debug"
+        - "compile"
+      case_sensitive: false
+
+  # Embedding-based signals (semantic similarity)
+  embeddings:
+    - name: "code_debug"
+      threshold: 0.70
+      candidates:
+        - "how to debug the code"
+        - "troubleshooting steps for my code"
+      aggregation_method: "max"
+
+    - name: "math_intent"
+      threshold: 0.75
+      candidates:
+        - "solve mathematical problem"
+        - "calculate the result"
+      aggregation_method: "max"
+
+  # Domain signals (MMLU classification)
+  domains:
+    - name: "mathematics"
+      description: "Mathematical and computational problems"
+      mmlu_categories:
+        - "abstract_algebra"
+        - "college_mathematics"
+        - "elementary_mathematics"
+
+    - name: "computer_science"
+      description: "Programming and computer science"
+      mmlu_categories:
+        - "computer_security"
+        - "machine_learning"
+
+  # Fact check signals (verification need detection)
+  fact_check:
+    - name: "needs_verification"
+      description: "Queries requiring fact verification"
+
+  # User feedback signals (satisfaction analysis)
+  user_feedbacks:
+    - name: "correction_needed"
+      description: "User indicates previous answer was wrong"
+
+  # Preference signals (LLM-based matching)
+  preferences:
+    - name: "complex_reasoning"
+      description: "Requires deep reasoning and analysis"
+      llm_endpoint: "http://localhost:11434"
+
+# Categories - Define domain categories
 categories:
 - name: math
 - name: computer science
 - name: other
 
-# Decision-based routing
+# Decisions - Combine signals to make routing decisions
 decisions:
 - name: math
   description: "Route mathematical queries"
   priority: 10
   rules:
-    operator: "OR"
+    operator: "OR"  # Match ANY of these conditions
     conditions:
+      - type: "keyword"
+        name: "math_keywords"
+      - type: "embedding"
+        name: "math_intent"
       - type: "domain"
-        name: "math"
+        name: "mathematics"
   modelRefs:
     - model: your-model
       use_reasoning: true  # Enable reasoning for math problems
   # Optional: Decision-level plugins
-  # plugins:
-  #   - type: "semantic-cache"
-  #     configuration:
-  #       enabled: true
-  #       similarity_threshold: 0.9  # Higher threshold for math
-  #   - type: "jailbreak"
-  #     configuration:
-  #       enabled: true  # Override global jailbreak detection
+  plugins:
+    - type: "semantic-cache"
+      configuration:
+        enabled: true
+        similarity_threshold: 0.9  # Higher threshold for math
+    - type: "jailbreak"
+      configuration:
+        enabled: true
+    - type: "pii"
+      configuration:
+        enabled: true
+        threshold: 0.8
+    - type: "system_prompt"
+      configuration:
+        enabled: true
+        prompt: "You are a mathematics expert. Solve problems step by step."
 
-- name: computer science
+- name: computer_science
   description: "Route computer science queries"
   priority: 10
   rules:
     operator: "OR"
     conditions:
+      - type: "keyword"
+        name: "code_keywords"
+      - type: "embedding"
+        name: "code_debug"
       - type: "domain"
-        name: "computer science"
+        name: "computer_science"
   modelRefs:
     - model: your-model
       use_reasoning: true  # Enable reasoning for code
+  plugins:
+    - type: "semantic-cache"
+      configuration:
+        enabled: true
+        similarity_threshold: 0.85
+    - type: "system_prompt"
+      configuration:
+        enabled: true
+        prompt: "You are a programming expert. Provide clear code examples."
 
 - name: other
   description: "Route general queries"
@@ -137,10 +240,11 @@ decisions:
   modelRefs:
     - model: your-model
       use_reasoning: false # No reasoning for general queries
-  # plugins:
-  #   - type: "semantic-cache"
-  #     configuration:
-  #       similarity_threshold: 0.75  # Lower threshold for general queries
+  plugins:
+    - type: "semantic-cache"
+      configuration:
+        enabled: true
+        similarity_threshold: 0.75  # Lower threshold for general queries
 
 default_model: your-model
 
@@ -184,6 +288,208 @@ Quick usage:
   - cp config/config.recipe-accuracy.yaml config/config.yaml
   - make run-router
 - Helm/Argo: reference the recipe file contents in your config map (examples are in the guide above).
+
+## Signals Configuration
+
+Signals are the foundation of intelligent routing. The system supports 6 types of signals that can be combined to make routing decisions.
+
+### 1. Keyword Signals - Fast Pattern Matching
+
+```yaml
+signals:
+  keywords:
+    - name: "math_keywords"
+      operator: "OR"  # OR: match any keyword, AND: match all keywords
+      keywords:
+        - "calculate"
+        - "equation"
+        - "solve"
+      case_sensitive: false
+```
+
+**Use Cases:**
+
+- Deterministic routing for specific terms
+- Compliance and security (PII keywords, banned terms)
+- High-throughput scenarios requiring &lt;1ms latency
+
+### 2. Embedding Signals - Semantic Understanding
+
+```yaml
+signals:
+  embeddings:
+    - name: "code_debug"
+      threshold: 0.70  # Similarity threshold (0-1)
+      candidates:
+        - "how to debug the code"
+        - "troubleshooting steps"
+      aggregation_method: "max"  # max, avg, or min
+```
+
+**Use Cases:**
+
+- Intent detection robust to paraphrasing
+- Semantic similarity matching
+- Handling diverse user phrasings
+
+### 3. Domain Signals - MMLU Classification
+
+```yaml
+signals:
+  domains:
+    - name: "mathematics"
+      description: "Mathematical problems"
+      mmlu_categories:
+        - "abstract_algebra"
+        - "college_mathematics"
+```
+
+**Use Cases:**
+
+- Academic and professional domain routing
+- Subject-matter expert model selection
+- 14 MMLU categories supported
+
+### 4. Fact Check Signals - Verification Need Detection
+
+```yaml
+signals:
+  fact_check:
+    - name: "needs_verification"
+      description: "Queries requiring fact verification"
+```
+
+**Use Cases:**
+
+- Identify factual queries vs creative/code tasks
+- Route to models with hallucination detection
+- Trigger fact-checking plugins
+
+### 5. User Feedback Signals - Satisfaction Analysis
+
+```yaml
+signals:
+  user_feedbacks:
+    - name: "correction_needed"
+      description: "User indicates previous answer was wrong"
+```
+
+**Use Cases:**
+
+- Handle follow-up corrections ("that's wrong", "try again")
+- Detect satisfaction levels
+- Route to more capable models for retries
+
+### 6. Preference Signals - LLM-based Matching
+
+```yaml
+signals:
+  preferences:
+    - name: "complex_reasoning"
+      description: "Requires deep reasoning"
+      llm_endpoint: "http://localhost:11434"
+```
+
+**Use Cases:**
+
+- Complex intent analysis via external LLM
+- Nuanced routing decisions
+- When other signals are insufficient
+
+## Decision Rules - Signal Fusion
+
+Combine signals using AND/OR operators:
+
+```yaml
+decisions:
+  - name: math
+    description: "Route mathematical queries"
+    priority: 10
+    rules:
+      operator: "OR"  # Match ANY condition
+      conditions:
+        - type: "keyword"
+          name: "math_keywords"
+        - type: "embedding"
+          name: "math_intent"
+        - type: "domain"
+          name: "mathematics"
+    modelRefs:
+      - model: math-specialist
+        weight: 1.0
+```
+
+**Strategies:**
+
+- **Priority-based**: Higher priority decisions evaluated first
+- **Confidence-based**: Select decision with highest confidence score
+- **Hybrid**: Combine priority and confidence
+
+## Plugin Chain Configuration
+
+Plugins process requests/responses in a chain. Each decision can override global plugin settings.
+
+### Global Plugin Configuration
+
+```yaml
+# Global defaults
+semantic_cache:
+  enabled: true
+  similarity_threshold: 0.8
+
+prompt_guard:
+  enabled: true
+  threshold: 0.7
+
+classifier:
+  pii_model:
+    enabled: true
+    threshold: 0.8
+```
+
+### Decision-Level Plugin Override
+
+```yaml
+decisions:
+  - name: math
+    description: "Route mathematical queries"
+    priority: 10
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.9  # Higher for math
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.8
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          prompt: "You are a mathematics expert."
+      - type: "header_mutation"
+        configuration:
+          enabled: true
+          headers:
+            X-Math-Mode: "enabled"
+      - type: "hallucination"
+        configuration:
+          enabled: false  # Optional real-time detection
+```
+
+### Plugin Types
+
+| Plugin | Description | Configuration |
+|--------|-------------|---------------|
+| **semantic-cache** | Semantic similarity-based caching | `similarity_threshold`, `ttl_seconds` |
+| **jailbreak** | Adversarial prompt detection | `threshold`, `model_id` |
+| **pii** | PII detection and masking | `threshold`, `pii_types_allowed` |
+| **system_prompt** | Dynamic prompt injection | `prompt` |
+| **header_mutation** | HTTP header manipulation | `headers` |
+| **hallucination** | Token-level hallucination detection | `enabled` |
 
 ## Key Configuration Sections
 

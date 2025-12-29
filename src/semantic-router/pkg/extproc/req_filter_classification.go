@@ -55,7 +55,6 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	}
 
 	if result == nil || result.Decision == nil {
-		logging.Warnf("No decision matched")
 		if r.Config.IsAutoModelName(originalModel) {
 			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
 		}

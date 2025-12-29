@@ -42,13 +42,14 @@ The system can detect the following PII types:
 Enable PII detection in your configuration:
 
 ```yaml
-# config/config.yaml
+# router-defaults.yaml
 classifier:
   pii_model:
-    model_id: "models/pii_classifier_modernbert-base_model"
-    threshold: 0.7                 # Global detection threshold (0.0-1.0)
-    use_cpu: true                  # Run on CPU
-    pii_mapping_path: "config/pii_type_mapping.json"  # Path to PII type mapping
+    model_id: "models/mom-pii-classifier"
+    use_modernbert: false
+    threshold: 0.9                 # Global detection threshold (0.0-1.0)
+    use_cpu: true
+  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 ```
 
 ### Category-Level PII Detection
@@ -59,10 +60,11 @@ classifier:
 # Global PII configuration - applies to all categories by default
 classifier:
   pii_model:
-    model_id: "models/pii_classifier_modernbert-base_model"
-    threshold: 0.7  # Global default threshold
+    model_id: "models/mom-pii-classifier"
+    use_modernbert: false
+    threshold: 0.9  # Global default threshold
     use_cpu: true
-    pii_mapping_path: "config/pii_type_mapping.json"
+  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 
 # Category-specific PII settings
 categories:

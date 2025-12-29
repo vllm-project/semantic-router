@@ -5,7 +5,7 @@ import yaml
 from pathlib import Path
 
 from cli.parser import parse_user_config, ConfigParseError
-from cli.defaults import load_embedded_defaults
+from cli.defaults import load_embedded_defaults, load_defaults
 from cli.merger import merge_configs
 from cli.validator import (
     validate_user_config,
@@ -52,8 +52,8 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
         sys.exit(1)
 
     if config_type == "router":
-        # Generate router config
-        defaults = load_embedded_defaults()
+        # Generate router config (use local defaults if available)
+        defaults = load_defaults(".vllm-sr")
         merged = merge_configs(user_config, defaults)
 
         # Validate merged config

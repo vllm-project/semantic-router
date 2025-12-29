@@ -251,8 +251,6 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 				attribute.String(tracing.AttrEndpointName, endpoints[0].Name),
 				attribute.String(tracing.AttrEndpointAddress, endpointAddress))
 		}
-	} else {
-		logging.Warnf("No endpoint found for model %s, using fallback", model)
 	}
 
 	backendSpan.End()

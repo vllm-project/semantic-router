@@ -5,7 +5,7 @@ import yaml
 from pathlib import Path
 
 from cli.parser import parse_user_config, ConfigParseError
-from cli.defaults import load_embedded_defaults
+from cli.defaults import load_embedded_defaults, load_defaults
 from cli.merger import merge_configs
 from cli.validator import validate_user_config, print_validation_errors
 from cli.utils import getLogger
@@ -92,7 +92,7 @@ def show_config_command(
                 router_config = yaml.safe_load(f)
         else:
             log.info("Generating router configuration...")
-            defaults = load_embedded_defaults()
+            defaults = load_defaults(output_dir)
             router_config = merge_configs(user_config, defaults)
 
         if full:
