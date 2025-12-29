@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-ci-compose:
+  quickstart-test:
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 20 # Reduced from 30 - CI compose is faster

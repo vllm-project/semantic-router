@@ -1,6 +1,7 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './team.module.css'
+import { FaGithub, FaLinkedin } from 'react-icons/fa'
 
 interface TeamMember {
   name: string
@@ -51,12 +52,12 @@ const coreTeam: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: 'Software Engineer',
+    role: 'AI Networking',
     company: 'Tencent',
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: 'Software Engineer at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
+    bio: 'AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
     expertise: ['System Architecture', 'ML Infrastructure', 'Open Source', 'Software Engineering'],
   },
 ]
@@ -112,7 +113,8 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member, isContributor = fal
             rel="noopener noreferrer"
             className={styles.actionLink}
           >
-            📧 GitHub
+            <FaGithub />
+            GitHub
           </a>
         )}
 
@@ -123,7 +125,8 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member, isContributor = fal
             rel="noopener noreferrer"
             className={styles.actionLink}
           >
-            💼 LinkedIn
+            <FaLinkedin />
+            LinkedIn
           </a>
         )}
 

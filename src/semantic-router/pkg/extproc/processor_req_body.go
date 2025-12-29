@@ -251,8 +251,6 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 				attribute.String(tracing.AttrEndpointName, endpoints[0].Name),
 				attribute.String(tracing.AttrEndpointAddress, endpointAddress))
 		}
-	} else {
-		logging.Warnf("No endpoint found for model %s, using fallback", model)
 	}
 
 	backendSpan.End()
@@ -357,6 +355,17 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
 	setHeaders = append(setHeaders, traceContextHeaders...)
 
+	// Add Authorization header if model has access_key configured
+	if accessKey := r.getModelAccessKey(model); accessKey != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "Authorization",
+				RawValue: []byte(fmt.Sprintf("Bearer %s", accessKey)),
+			},
+		})
+		logging.Infof("Added Authorization header for model %s", model)
+	}
+
 	// Add standard routing headers
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
@@ -426,6 +435,17 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
 	setHeaders = append(setHeaders, traceContextHeaders...)
 
+	// Add Authorization header if model has access_key configured
+	if accessKey := r.getModelAccessKey(model); accessKey != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "Authorization",
+				RawValue: []byte(fmt.Sprintf("Bearer %s", accessKey)),
+			},
+		})
+		logging.Infof("Added Authorization header for model %s", model)
+	}
+
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -478,4 +498,19 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 			},
 		},
 	}
+}
+
+// getModelAccessKey retrieves the access_key for a given model from the config
+// Returns empty string if model not found or access_key not configured
+func (r *OpenAIRouter) getModelAccessKey(modelName string) string {
+	if r.Config == nil || r.Config.ModelConfig == nil {
+		return ""
+	}
+
+	modelConfig, ok := r.Config.ModelConfig[modelName]
+	if !ok {
+		return ""
+	}
+
+	return modelConfig.AccessKey
 }

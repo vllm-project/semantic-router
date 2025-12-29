@@ -45,7 +45,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./Dockerfile.extproc
+        file: ./tools/docker/Dockerfile.extproc
         platforms: linux/amd64,linux/arm64
         push: true
         tags: |
@@ -86,14 +86,14 @@ jobs:
     - name: Extract version from pyproject.toml
       id: version
       run: |
-        VERSION=$(grep '^version = ' e2e-tests/llm-katan/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        VERSION=$(grep '^version = ' e2e/testing/llm-katan/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Build and push llm-katan Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./e2e-tests/llm-katan
-        file: ./e2e-tests/llm-katan/Dockerfile
+        context: ./e2e/testing/llm-katan
+        file: ./e2e/testing/llm-katan/Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
         tags: |

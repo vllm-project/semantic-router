@@ -166,3 +166,5 @@ FactCHD_dataset/
 **/lora_*_model/
 **/lora_*_model_rust/
 *.safetensors
+
+.vllm-sr/

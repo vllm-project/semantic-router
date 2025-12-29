@@ -1,0 +1,252 @@
+# vLLM Semantic Router
+# Users only configure: version, listeners, signals, decisions, llm
+# System defaults (semantic_cache, classifier, etc.) are provided by CLI
+
+version: v0.1
+
+# Listeners - Network configuration
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+# Signals - Classification signals for routing
+signals:
+  # Keyword-based signals
+  keywords:
+    - name: "math_keywords"
+      operator: "OR"
+      keywords:
+        - "calculate"
+        - "equation"
+        - "solve"
+        - "compute"
+        - "derivative"
+        - "integral"
+      case_sensitive: false
+
+    - name: "code_keywords"
+      operator: "OR"
+      keywords:
+        - "function"
+        - "class"
+        - "debug"
+        - "compile"
+        - "algorithm"
+      case_sensitive: false
+
+  # Embedding-based signals (semantic similarity)
+  embeddings:
+    - name: "code_debug"
+      threshold: 0.70
+      candidates:
+        - "how to debug the code"
+        - "i meet a problem with my code"
+        - "need to troubleshooting steps for my code"
+      aggregation_method: "max"
+
+  # domains - Domain categories (optional, can be auto-generated)
+  domains:
+    - name: "math"
+      description: "Mathematics and quantitative reasoning"
+      mmlu_categories: ["math"]
+
+    - name: "computer_science"
+      description: "Programming and computer science"
+      mmlu_categories: ["computer_science"]
+
+    - name: "physics"
+      description: "Physics and physical sciences"
+      mmlu_categories: ["physics"]
+
+    - name: "other"
+      description: "General queries"
+      mmlu_categories: ["other"]
+
+  # fact_check - Fact-checking signals
+  fact_check:
+    - name: needs_fact_check
+      description: "Query contains factual claims that should be verified against context"
+    - name: no_fact_check_needed
+      description: "Query is creative, code-related, or opinion-based - no fact verification needed"
+
+  # user_feedbacks - User feedback signals
+  user_feedbacks:
+    - name: need_clarification
+      description: "User needs more clarification on the answer"
+    - name: satisfied
+      description: "User is satisfied with the answer"
+    - name: want_different
+      description: "User wants some other different answer"
+    - name: wrong_answer
+      description: "User is not satisfied with the answer and it is wrong"
+
+  # preferences - Route preferences via external LLM
+  preferences:
+    - name: "code_generation"
+      description: "Generating new code snippets, writing functions, creating classes"
+    - name: "bug_fixing"
+      description: "Identifying and fixing errors, debugging issues, troubleshooting problems"
+    - name: "code_review"
+      description: "Reviewing code quality, suggesting improvements, best practices"
+    - name: "other"
+      description: "Irrelevant queries or already fulfilled requests"
+
+# Decisions - Routing logic
+decisions:
+  # Highest priority: Preference-based routing via external LLM
+  - name: "preference_code_generation"
+    description: "Route code generation requests based on LLM preference matching"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "preference"
+          name: "code_generation"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert code generator. Write clean, efficient, and well-documented code."
+
+  - name: "preference_bug_fixing"
+    description: "Route bug fixing requests based on LLM preference matching"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "preference"
+          name: "bug_fixing"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
+
+  # High priority: Handle user feedback for wrong answers
+  - name: "wrong_answer_route"
+    description: "Handle user feedback indicating wrong answer - rethink and provide correct response"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "wrong_answer"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The user has indicated that the previous answer was incorrect. Please carefully reconsider the question, identify what might have been wrong in the previous response, and provide a corrected and accurate answer. Think step-by-step and verify your reasoning before responding."
+
+  - name: "math_route"
+    description: "Route mathematical queries with reasoning enabled"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "math_keywords"
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions with clear explanations."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+
+  - name: "physics_route"
+    description: "Route physics queries with reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a physics expert. Explain concepts clearly with mathematical derivations."
+
+  - name: "code_route"
+    description: "Route programming queries"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "code_keywords"
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a programming expert. Provide clear code examples."
+
+  - name: "general_route"
+    description: "Default fallback route for general queries"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+# LLM - Backend model configuration
+providers:
+  # Model configuration
+  models:
+    - name: "openai/gpt-oss-120b"
+      reasoning_family: "gpt-oss"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+      access_key: "jGNm/R0CpwDQsvJoaABrymRTrGKt7B63dikib7hW8EyMISRJr"
+    - name: "openai/gpt-5.2"
+      endpoints:
+        - name: "external_provider"
+          weight: 1
+          endpoint: "api.openai.com"
+          protocol: "https"
+      access_key: "sk-xxxxxx"
+
+  # Default model for fallback
+  default_model: "openai/gpt-oss-120b"
+
+  # Reasoning families configuration
+  reasoning_families:
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  # Default reasoning effort level
+  default_reasoning_effort: "high"
+  

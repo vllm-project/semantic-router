@@ -22,29 +22,45 @@ type VLLMJailbreakInference struct {
 }
 
 // NewVLLMJailbreakInference creates a new vLLM-based jailbreak inference instance
-func NewVLLMJailbreakInference(cfg *config.PromptGuardConfig) (*VLLMJailbreakInference, error) {
-	// Use dedicated classifier vLLM endpoint from PromptGuardConfig
-	// This is separate from backend inference endpoints
-	if cfg.ClassifierVLLMEndpoint.Address == "" {
-		return nil, fmt.Errorf("classifier_vllm_endpoint.address is required for PromptGuard")
+// Takes ExternalModelConfig directly
+func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold float32) (*VLLMJailbreakInference, error) {
+	if cfg.ModelEndpoint.Address == "" {
+		return nil, fmt.Errorf("vLLM endpoint address is required for guardrail")
+	}
+	if cfg.ModelName == "" {
+		return nil, fmt.Errorf("vLLM model name is required for guardrail")
 	}
 
-	client := NewVLLMClient(&cfg.ClassifierVLLMEndpoint)
+	// Create client with or without access key
+	var client *VLLMClient
+	if cfg.AccessKey != "" {
+		client = NewVLLMClientWithAuth(&cfg.ModelEndpoint, cfg.AccessKey)
+	} else {
+		client = NewVLLMClient(&cfg.ModelEndpoint)
+	}
+
+	// Use timeout from config, default to 30 seconds
 	timeout := 30 * time.Second
-	if cfg.VLLMTimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.VLLMTimeoutSeconds) * time.Second
+	if cfg.TimeoutSeconds > 0 {
+		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 	}
 
-	// Determine parser type from config or auto-detect
-	parserType := cfg.ResponseParserType
+	// Use threshold from config, fallback to default
+	threshold := defaultThreshold
+	if cfg.Threshold > 0 {
+		threshold = cfg.Threshold
+	}
+
+	// Use parser type from config, default to "auto"
+	parserType := cfg.ParserType
 	if parserType == "" {
-		parserType = "auto" // Default to auto-detection
+		parserType = "auto"
 	}
 
 	return &VLLMJailbreakInference{
 		client:     client,
-		modelName:  cfg.VLLMModelName,
-		threshold:  cfg.Threshold,
+		modelName:  cfg.ModelName,
+		threshold:  threshold,
 		timeout:    timeout,
 		parserType: parserType,
 	}, nil
