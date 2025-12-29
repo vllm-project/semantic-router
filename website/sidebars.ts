@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
         'overview/semantic-router-overview',
         'overview/collective-intelligence',
         'overview/signal-driven-decisions',
+        'overview/mom-model-family',
       ],
     },
     {

@@ -28,32 +28,78 @@ The preference signal uses an external LLM to analyze these complex queries and 
 
 ### Basic Configuration
 
+Define preference signals in your `config.yaml`:
+
 ```yaml
 signals:
   preferences:
-    - name: "complex_reasoning"
-      description: "Requires deep reasoning and analysis"
-      llm_endpoint: "http://localhost:11434"
-      model: "llama3"  # Optional: specify model
-      temperature: 0.1  # Optional: low temperature for consistency
+    - name: "code_generation"
+      description: "Generating new code snippets, writing functions, creating classes"
+
+    - name: "bug_fixing"
+      description: "Identifying and fixing errors, debugging issues, troubleshooting problems"
+
+    - name: "code_review"
+      description: "Reviewing code quality, suggesting improvements, best practices"
+
+    - name: "other"
+      description: "Irrelevant queries or already fulfilled requests"
+```
+
+### External LLM Configuration
+
+Configure external LLM for preference matching in `router-defaults.yaml`:
+
+```yaml
+# External models configuration
+# Used for advanced routing signals like preference-based routing via external LLM
+external_models:
+  - llm_provider: "vllm"
+    model_role: "preference"
+    llm_endpoint:
+      address: "127.0.0.1"
+      port: 8000
+    llm_model_name: "openai/gpt-oss-120b"
+    llm_timeout_seconds: 30
+    parser_type: "json"
+    access_key: ""  # Optional: for Authorization header (Bearer token)
 ```
 
 ### Use in Decision Rules
 
 ```yaml
 decisions:
-  - name: deep_reasoning
-    description: "Route complex reasoning queries"
-    priority: 20
+  - name: preference_code_generation
+    description: "Route code generation requests based on LLM preference matching"
+    priority: 200
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "preference"
-          name: "complex_reasoning"
+          name: "code_generation"
     modelRefs:
-      - model: reasoning-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert code generator. Write clean, efficient, and well-documented code."
+
+  - name: preference_bug_fixing
+    description: "Route bug fixing requests based on LLM preference matching"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "preference"
+          name: "bug_fixing"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
 ```
 
 ## How It Works
@@ -105,7 +151,6 @@ signals:
   preferences:
     - name: "research_analysis"
       description: "Academic research requiring deep analysis and critical thinking"
-      llm_endpoint: "http://localhost:11434"
 
   domains:
     - name: "philosophy"
@@ -115,7 +160,7 @@ signals:
 decisions:
   - name: academic_research
     description: "Route academic research queries"
-    priority: 50
+    priority: 200
     rules:
       operator: "AND"
       conditions:
@@ -124,9 +169,12 @@ decisions:
         - type: "preference"
           name: "research_analysis"
     modelRefs:
-      - model: research-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an academic research specialist with expertise in critical analysis and philosophical reasoning."
 ```
 
 **Example Queries**:
@@ -143,17 +191,17 @@ signals:
   preferences:
     - name: "strategic_thinking"
       description: "Business strategy requiring multi-faceted analysis"
-      llm_endpoint: "http://localhost:11434"
 
   keywords:
     - name: "business_keywords"
       operator: "OR"
       keywords: ["strategy", "market", "competition", "growth"]
+      case_sensitive: false
 
 decisions:
   - name: strategic_analysis
     description: "Route strategic business queries"
-    priority: 50
+    priority: 200
     rules:
       operator: "AND"
       conditions:
@@ -162,8 +210,12 @@ decisions:
         - type: "preference"
           name: "strategic_thinking"
     modelRefs:
-      - model: business-strategist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a senior business strategist with expertise in market analysis and competitive strategy."
 ```
 
 **Example Queries**:
@@ -180,17 +232,17 @@ signals:
   preferences:
     - name: "architecture_design"
       description: "Technical architecture requiring design thinking and trade-off analysis"
-      llm_endpoint: "http://localhost:11434"
 
   keywords:
     - name: "architecture_keywords"
       operator: "OR"
       keywords: ["architecture", "design", "scalability", "performance"]
+      case_sensitive: false
 
 decisions:
   - name: architecture_analysis
     description: "Route architecture design queries"
-    priority: 50
+    priority: 200
     rules:
       operator: "AND"
       conditions:
@@ -199,8 +251,12 @@ decisions:
         - type: "preference"
           name: "architecture_design"
     modelRefs:
-      - model: architecture-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a technical architecture specialist with expertise in system design, scalability, and performance optimization."
 ```
 
 **Example Queries**:

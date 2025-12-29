@@ -50,12 +50,6 @@ signals:
       keywords: ["buy now", "free money", "click here"]
       case_sensitive: false
 
-# Define categories
-categories:
-  - name: urgent_request
-  - name: sensitive_data
-  - name: general
-
 # Define decisions using keyword signals
 decisions:
   - name: urgent_request
@@ -67,13 +61,12 @@ decisions:
         - type: "keyword"
           name: "urgent_keywords"
     modelRefs:
-      - model: fast-response-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          prompt: "You are a highly responsive assistant specialized in handling urgent requests."
+          system_prompt: "You are a highly responsive assistant specialized in handling urgent requests."
 
   - name: sensitive_data
     description: "Route sensitive data queries"
@@ -84,21 +77,12 @@ decisions:
         - type: "keyword"
           name: "sensitive_data_keywords"
     modelRefs:
-      - model: secure-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
     plugins:
-      - type: "jailbreak"
-        configuration:
-          enabled: true
-          threshold: 0.6
-      - type: "pii"
-        configuration:
-          enabled: true
-          threshold: 0.8
       - type: "system_prompt"
         configuration:
-          enabled: true
-          prompt: "You are a security-conscious assistant specialized in handling sensitive data."
+          system_prompt: "You are a security-conscious assistant specialized in handling sensitive data."
 
   - name: filter_spam
     description: "Block spam queries"
@@ -109,13 +93,12 @@ decisions:
         - type: "keyword"
           name: "spam_keywords"
     modelRefs:
-      - model: null  # Block request
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
     plugins:
-      - type: "header_mutation"
+      - type: "system_prompt"
         configuration:
-          enabled: true
-          headers:
-            X-Block-Reason: "spam_detected"
+          system_prompt: "This query appears to be spam. Please provide a polite response."
 ```
 
 ## Operators

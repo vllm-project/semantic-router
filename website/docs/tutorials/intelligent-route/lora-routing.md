@@ -63,11 +63,10 @@ Put this in `config/config.yaml` (or merge into your existing config):
 # Category classifier (required for intent detection)
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
+    model_id: "models/mom-domain-classifier"
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 
 # vLLM endpoint hosting your base model + LoRA adapters
 vllm_endpoints:

@@ -32,14 +32,6 @@ Keyword matching fails when users phrase questions differently. Embedding routin
 Add embedding rules to your `config.yaml`:
 
 ```yaml
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
-
 # Define embedding signals
 signals:
   embeddings:
@@ -68,50 +60,39 @@ signals:
         - "subscription management"
       aggregation_method: "max"
 
-# Define categories
-categories:
-  - name: technical_support
-  - name: product_inquiry
-  - name: account_management
-
 # Define decisions using embedding signals
 decisions:
   - name: technical_support
     description: "Route technical support queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "embedding"
           name: "technical_support"
     modelRefs:
-      - model: technical-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          prompt: "You are a technical support specialist."
-      - type: "jailbreak"
-        configuration:
-          enabled: true
-      - type: "pii"
-        configuration:
-          enabled: true
+          system_prompt: "You are a technical support specialist with deep knowledge of system configuration and troubleshooting."
 
   - name: product_inquiry
     description: "Route product inquiry queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "embedding"
           name: "product_inquiry"
     modelRefs:
-      - model: product-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a product specialist with comprehensive knowledge of features, pricing, and availability."
       - type: "semantic-cache"
         configuration:
           enabled: true
@@ -119,27 +100,19 @@ decisions:
 
   - name: account_management
     description: "Route account management queries"
-    priority: 10
+    priority: 100
     rules:
       operator: "OR"
       conditions:
         - type: "embedding"
           name: "account_management"
     modelRefs:
-      - model: account-specialist
-        weight: 1.0
-    plugins:
-      - type: "pii"
-        configuration:
-          enabled: true
-          threshold: 0.9  # High threshold for account data
-  
-  - name: product_inquiry
-    system_prompt: "You are a product specialist."
-    model_scores:
-      - model: qwen3
-        score: 0.85
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an account management specialist. Handle user account queries with care and security."
 ```
 
 ## Embedding Models

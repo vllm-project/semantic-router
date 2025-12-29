@@ -29,70 +29,89 @@ The user_feedback signal automatically identifies these patterns, allowing you t
 
 ### Basic Configuration
 
+Define user feedback signals in your `config.yaml`:
+
 ```yaml
 signals:
   user_feedbacks:
-    - name: "correction_needed"
-      description: "User indicates previous answer was wrong"
-    
+    - name: "wrong_answer"
+      description: "User indicates previous answer was incorrect"
+
     - name: "satisfied"
       description: "User is satisfied with the answer"
-    
+
     - name: "need_clarification"
-      description: "User needs more explanation"
-    
+      description: "User needs more clarification on the answer"
+
     - name: "want_different"
-      description: "User wants a different approach"
+      description: "User wants some other different answer"
 ```
 
 ### Use in Decision Rules
 
 ```yaml
 decisions:
-  - name: retry_with_better_model
-    description: "Route corrections to more capable model"
-    priority: 50
+  - name: wrong_answer_route
+    description: "Handle user feedback indicating wrong answer - rethink and provide correct response"
+    priority: 150
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
-          name: "correction_needed"
-        - type: "user_feedback"
-          name: "want_different"
+          name: "wrong_answer"
     modelRefs:
-      - model: premium-model  # More capable model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          prompt: "The user was not satisfied with the previous answer. Provide a better, more detailed response."
+          system_prompt: "The user has indicated that the previous answer was incorrect. Please carefully reconsider the question, identify what might have been wrong in the previous response, and provide a corrected and accurate answer. Think step-by-step and verify your reasoning before responding."
+
+  - name: retry_with_different_approach
+    description: "Route requests for different approach"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "want_different"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The user wants a different approach or perspective. Provide an alternative solution or explanation that differs from the previous response."
 ```
 
 ## Feedback Types
 
-### 1. Correction Needed
+### 1. Wrong Answer
 
 **Patterns**: "That's wrong", "No", "Incorrect", "Try again"
 
 ```yaml
 signals:
   user_feedbacks:
-    - name: "correction_needed"
-      description: "User indicates previous answer was wrong"
+    - name: "wrong_answer"
+      description: "User indicates previous answer was incorrect"
 
 decisions:
-  - name: handle_correction
-    description: "Route corrections to better model"
-    priority: 100
+  - name: wrong_answer_route
+    description: "Handle user feedback indicating wrong answer"
+    priority: 150
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
-          name: "correction_needed"
+          name: "wrong_answer"
     modelRefs:
-      - model: premium-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The user has indicated that the previous answer was incorrect. Please carefully reconsider the question and provide a corrected answer."
 ```
 
 **Example Queries**:
@@ -114,15 +133,19 @@ signals:
 decisions:
   - name: track_satisfaction
     description: "Track satisfied users"
-    priority: 10
+    priority: 50
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
           name: "satisfied"
     modelRefs:
-      - model: standard-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The user is satisfied. Continue providing helpful assistance."
 ```
 
 **Example Queries**:
@@ -139,25 +162,24 @@ decisions:
 signals:
   user_feedbacks:
     - name: "need_clarification"
-      description: "User needs more explanation"
+      description: "User needs more clarification on the answer"
 
 decisions:
   - name: provide_clarification
     description: "Provide more detailed explanation"
-    priority: 50
+    priority: 100
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
           name: "need_clarification"
     modelRefs:
-      - model: detailed-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          prompt: "The user needs more clarification. Provide a more detailed, step-by-step explanation."
+          system_prompt: "The user needs more clarification. Provide a more detailed, step-by-step explanation with examples."
 ```
 
 **Example Queries**:
@@ -174,25 +196,24 @@ decisions:
 signals:
   user_feedbacks:
     - name: "want_different"
-      description: "User wants a different approach"
+      description: "User wants some other different answer"
 
 decisions:
-  - name: alternative_approach
+  - name: retry_with_different_approach
     description: "Provide alternative solution"
-    priority: 50
+    priority: 100
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
           name: "want_different"
     modelRefs:
-      - model: creative-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          enabled: true
-          prompt: "Provide an alternative approach or solution. Be creative and think differently."
+          system_prompt: "The user wants a different approach or perspective. Provide an alternative solution or explanation that differs from the previous response."
 ```
 
 **Example Queries**:
@@ -210,21 +231,25 @@ decisions:
 ```yaml
 signals:
   user_feedbacks:
-    - name: "correction_needed"
-      description: "Customer is unsatisfied"
+    - name: "wrong_answer"
+      description: "Customer indicates previous answer was incorrect"
 
 decisions:
   - name: escalate_to_premium
     description: "Escalate to premium model"
-    priority: 100
+    priority: 150
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
-          name: "correction_needed"
+          name: "wrong_answer"
     modelRefs:
-      - model: premium-support-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The customer was not satisfied with the previous answer. Provide a better, more accurate response."
 ```
 
 ### 2. Education - Adaptive Learning
@@ -235,20 +260,24 @@ decisions:
 signals:
   user_feedbacks:
     - name: "need_clarification"
-      description: "Student needs more explanation"
+      description: "Student needs more clarification on the answer"
 
 decisions:
   - name: detailed_explanation
     description: "Provide detailed explanation"
-    priority: 50
+    priority: 100
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "user_feedback"
           name: "need_clarification"
     modelRefs:
-      - model: educational-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "The student needs more clarification. Provide a detailed, step-by-step explanation with examples."
 ```
 
 ## Best Practices

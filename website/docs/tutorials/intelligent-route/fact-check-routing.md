@@ -27,11 +27,16 @@ The fact_check signal automatically identifies which queries need fact verificat
 
 ### Basic Configuration
 
+Define fact check signals in your `config.yaml`:
+
 ```yaml
 signals:
   fact_check:
-    - name: "needs_verification"
-      description: "Queries requiring fact verification"
+    - name: needs_fact_check
+      description: "Query contains factual claims that should be verified against context"
+
+    - name: no_fact_check_needed
+      description: "Query is creative, code-related, or opinion-based - no fact verification needed"
 ```
 
 ### Use in Decision Rules
@@ -40,16 +45,19 @@ signals:
 decisions:
   - name: factual_queries
     description: "Route factual queries with verification"
-    priority: 15
+    priority: 150
     rules:
       operator: "AND"
       conditions:
         - type: "fact_check"
-          name: "needs_verification"
+          name: "needs_fact_check"
     modelRefs:
-      - model: verified-model
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a factual information specialist. Provide accurate, verifiable information with sources when possible."
       - type: "hallucination"
         configuration:
           enabled: true
@@ -65,36 +73,36 @@ decisions:
 ```yaml
 signals:
   fact_check:
-    - name: "medical_facts"
-      description: "Medical factual queries"
+    - name: needs_fact_check
+      description: "Query contains factual claims that should be verified"
 
   domains:
-    - name: "medicine"
+    - name: "health"
       description: "Medical and health queries"
-      mmlu_categories: ["clinical_knowledge", "medical_genetics"]
+      mmlu_categories: ["health"]
 
 decisions:
   - name: verified_medical
     description: "Medical queries with fact verification"
-    priority: 100
+    priority: 200
     rules:
       operator: "AND"
       conditions:
         - type: "domain"
-          name: "medicine"
+          name: "health"
         - type: "fact_check"
-          name: "medical_facts"
+          name: "needs_fact_check"
     modelRefs:
-      - model: medical-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a medical information specialist. Provide accurate, evidence-based health information."
       - type: "hallucination"
         configuration:
           enabled: true
           threshold: 0.8  # High threshold for medical
-      - type: "pii"
-        configuration:
-          enabled: true
 ```
 
 **Example Queries**:
@@ -109,36 +117,37 @@ decisions:
 ```yaml
 signals:
   fact_check:
-    - name: "financial_facts"
-      description: "Financial factual queries"
+    - name: needs_fact_check
+      description: "Query contains factual claims that should be verified"
 
   keywords:
     - name: "financial_keywords"
       operator: "OR"
       keywords: ["stock", "investment", "portfolio", "dividend"]
+      case_sensitive: false
 
 decisions:
   - name: verified_financial
     description: "Financial queries with verification"
-    priority: 100
+    priority: 200
     rules:
       operator: "AND"
       conditions:
         - type: "keyword"
           name: "financial_keywords"
         - type: "fact_check"
-          name: "financial_facts"
+          name: "needs_fact_check"
     modelRefs:
-      - model: financial-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a financial information specialist. Provide accurate financial information with appropriate disclaimers."
       - type: "hallucination"
         configuration:
           enabled: true
-      - type: "system_prompt"
-        configuration:
-          enabled: true
-          prompt: "Provide accurate financial information. Include disclaimers."
+          threshold: 0.8
 ```
 
 **Example Queries**:
@@ -153,32 +162,36 @@ decisions:
 ```yaml
 signals:
   fact_check:
-    - name: "historical_facts"
-      description: "Historical factual queries"
+    - name: needs_fact_check
+      description: "Query contains factual claims that should be verified"
 
   domains:
     - name: "history"
       description: "Historical queries"
-      mmlu_categories: ["high_school_european_history", "high_school_us_history"]
+      mmlu_categories: ["history"]
 
 decisions:
   - name: verified_history
     description: "Historical queries with verification"
-    priority: 50
+    priority: 150
     rules:
       operator: "AND"
       conditions:
         - type: "domain"
           name: "history"
         - type: "fact_check"
-          name: "historical_facts"
+          name: "needs_fact_check"
     modelRefs:
-      - model: history-specialist
-        weight: 1.0
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a history specialist. Provide accurate historical information with proper context."
       - type: "hallucination"
         configuration:
           enabled: true
+          threshold: 0.7
 ```
 
 **Example Queries**:

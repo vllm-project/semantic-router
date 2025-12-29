@@ -112,6 +112,36 @@ semantic_cache:
   ttl_seconds: 3600
 ```
 
+### Decision-Level Configuration (Plugin-Based)
+
+You can also configure Redis cache at the decision level using plugins:
+
+```yaml
+signals:
+  domains:
+    - name: "math"
+      description: "Mathematical queries"
+      mmlu_categories: ["math"]
+
+decisions:
+  - name: math_route
+    description: "Route math queries with strict caching"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95  # Very strict for math accuracy
+```
+
 Run Semantic Router:
 
 ```bash
