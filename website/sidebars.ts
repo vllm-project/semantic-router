@@ -85,6 +85,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/content-safety/pii-detection',
             'tutorials/content-safety/jailbreak-protection',
+            'tutorials/content-safety/hallucination-detection',
           ],
         },
         {
