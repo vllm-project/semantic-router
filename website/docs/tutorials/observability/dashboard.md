@@ -91,6 +91,6 @@ Then open in browser:
 
 ## Related docs
 
-- Installation → Configuration: [installation/configuration.md](../installation/configuration.md)
-- Observability: [tutorials/observability/overview.md](../tutorials/observability/overview.md) and [tutorials/observability/metrics.md](../tutorials/observability/metrics.md)
-- System architecture: [overview/architecture/system-architecture.md](./architecture/system-architecture.md)
+- [Installation Configuration](../../installation/configuration.md)
+- [Observability Metrics](./metrics.md)
+- [Distributed Tracing](./distributed-tracing.md)
