@@ -6,7 +6,7 @@ import yaml
 from pathlib import Path
 
 from cli.parser import parse_user_config, ConfigParseError
-from cli.defaults import load_embedded_defaults, get_defaults_yaml
+from cli.defaults import load_embedded_defaults, get_defaults_yaml, load_defaults
 from cli.merger import merge_configs
 from cli.validator import (
     validate_user_config,
@@ -74,8 +74,15 @@ def generate_router_config(
         print_validation_errors(errors)
         sys.exit(1)
 
-    # Load defaults
-    defaults = load_embedded_defaults()
+    # Load defaults (prefer local router-defaults.yaml if it exists)
+    defaults = load_defaults(output_dir)
+
+    # Log which defaults were used
+    local_defaults_path = Path(output_dir) / "router-defaults.yaml"
+    if local_defaults_path.exists():
+        log.info(f"  Using local defaults: {local_defaults_path}")
+    else:
+        log.info(f"  Using embedded defaults")
 
     # Merge configs
     merged = merge_configs(user_config, defaults)
@@ -99,6 +106,8 @@ def copy_defaults_reference(output_dir: str) -> Path:
     """
     Copy embedded defaults to output directory for reference.
 
+    Will NOT overwrite existing router-defaults.yaml to preserve user modifications.
+
     Args:
         output_dir: Output directory
 
@@ -109,6 +118,7 @@ def copy_defaults_reference(output_dir: str) -> Path:
     defaults_path = output_path / "router-defaults.yaml"
 
     if defaults_path.exists():
+        log.info(f"Using existing {defaults_path} (preserving user modifications)")
         return defaults_path
 
     log.info(f"Copying router-defaults.yaml (for reference)...")

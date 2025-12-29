@@ -22,6 +22,7 @@ const (
 	ModelRoleGuardrail      = "guardrail"
 	ModelRoleClassification = "classification"
 	ModelRoleScoring        = "scoring"
+	ModelRolePreference     = "preference" // For route preference matching via external LLM
 )
 
 // RouterConfig represents the main configuration for the LLM Router
@@ -158,6 +159,10 @@ type Signals struct {
 	// UserFeedback rules for user feedback signal classification
 	// When matched, outputs one of: "need_clarification", "satisfied", "want_different", "wrong_answer"
 	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
+
+	// Preference rules for route preference matching via external LLM
+	// When matched, outputs the preference name (route name) that best matches the conversation
+	PreferenceRules []PreferenceRule `yaml:"preference_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -534,6 +539,9 @@ type ExternalModelConfig struct {
 	// Threshold for classification (0.0-1.0)
 	// Used for guardrail models to determine detection threshold
 	Threshold float32 `yaml:"threshold,omitempty"`
+	// Optional access key for Authorization header
+	// If provided, will be sent as "Authorization: Bearer <access_key>"
+	AccessKey string `yaml:"access_key,omitempty"`
 }
 
 // ToolsConfig represents configuration for automatic tool selection
@@ -1083,6 +1091,20 @@ type UserFeedbackRule struct {
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
+// PreferenceRule defines a rule for route preference matching via external LLM
+// The external LLM analyzes the conversation and route descriptions to determine
+// the best matching route preference using prompt engineering
+// Configuration is read from external_models with model_role="preference"
+type PreferenceRule struct {
+	// Name is the preference name (route name) that can be referenced in decision rules
+	// e.g., "code_generation", "bug_fixing", "other"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of what this route handles
+	// This description is sent to the external LLM for route matching
 	Description string `yaml:"description,omitempty"`
 }
 

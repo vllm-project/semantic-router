@@ -82,8 +82,52 @@ signals:
     - name: wrong_answer
       description: "User is not satisfied with the answer and it is wrong"
 
+  # preferences - Route preferences via external LLM
+  preferences:
+    - name: "code_generation"
+      description: "Generating new code snippets, writing functions, creating classes"
+    - name: "bug_fixing"
+      description: "Identifying and fixing errors, debugging issues, troubleshooting problems"
+    - name: "code_review"
+      description: "Reviewing code quality, suggesting improvements, best practices"
+    - name: "other"
+      description: "Irrelevant queries or already fulfilled requests"
+
 # Decisions - Routing logic
 decisions:
+  # Highest priority: Preference-based routing via external LLM
+  - name: "preference_code_generation"
+    description: "Route code generation requests based on LLM preference matching"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "preference"
+          name: "code_generation"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert code generator. Write clean, efficient, and well-documented code."
+
+  - name: "preference_bug_fixing"
+    description: "Route bug fixing requests based on LLM preference matching"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "preference"
+          name: "bug_fixing"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
+
   # High priority: Handle user feedback for wrong answers
   - name: "wrong_answer_route"
     description: "Handle user feedback indicating wrong answer - rethink and provide correct response"
@@ -205,3 +249,4 @@ providers:
 
   # Default reasoning effort level
   default_reasoning_effort: "high"
+  

@@ -18,6 +18,7 @@ type VLLMClient struct {
 	httpClient *http.Client
 	endpoint   *config.ClassifierVLLMEndpoint
 	baseURL    string
+	accessKey  string // Optional access key for Authorization header
 }
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
@@ -31,6 +32,13 @@ func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
 		endpoint: endpoint,
 		baseURL:  baseURL,
 	}
+}
+
+// NewVLLMClientWithAuth creates a new vLLM REST API client with access key
+func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
+	client := NewVLLMClient(endpoint)
+	client.accessKey = accessKey
+	return client
 }
 
 // ChatCompletionRequest represents OpenAI-compatible chat completion request
@@ -142,6 +150,11 @@ func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt stri
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
+
+	// Add Authorization header if access key is provided
+	if c.accessKey != "" {
+		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessKey))
+	}
 
 	// Send request
 	resp, err := c.httpClient.Do(httpReq)

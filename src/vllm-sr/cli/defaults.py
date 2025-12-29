@@ -35,6 +35,31 @@ def load_embedded_defaults() -> dict:
         return yaml.safe_load(f)
 
 
+def load_defaults(output_dir: str = None) -> dict:
+    """
+    Load default configuration, preferring local router-defaults.yaml if it exists.
+
+    Priority:
+    1. Local .vllm-sr/router-defaults.yaml (if output_dir provided and file exists)
+    2. Embedded router-defaults.yaml template
+
+    Args:
+        output_dir: Optional output directory to check for local router-defaults.yaml
+
+    Returns:
+        dict: Default router configuration
+    """
+    # Check for local router-defaults.yaml first
+    if output_dir:
+        local_defaults_path = Path(output_dir) / "router-defaults.yaml"
+        if local_defaults_path.exists():
+            with open(local_defaults_path, "r") as f:
+                return yaml.safe_load(f)
+
+    # Fall back to embedded defaults
+    return load_embedded_defaults()
+
+
 def get_defaults_yaml() -> str:
     """
     Get default configuration as YAML string.
