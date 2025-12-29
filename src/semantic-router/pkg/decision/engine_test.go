@@ -62,7 +62,7 @@ func TestDecisionEngine_EvaluateDecisions(t *testing.T) {
 			matchedEmbeddingRules: []string{},
 			matchedDomainRules:    []string{}, // Missing domain rule
 			expectedDecision:      "",
-			expectError:           true, // No decision matched
+			expectError:           false, // Changed: no match should return nil result, not error
 		},
 		{
 			name: "Single decision with OR operator - partial match",
@@ -144,6 +144,14 @@ func TestDecisionEngine_EvaluateDecisions(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			// If expectedDecision is empty, we expect nil result (no match)
+			if tt.expectedDecision == "" {
+				if result != nil {
+					t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
+				}
 				return
 			}
 
@@ -247,7 +255,7 @@ func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
 				FactCheckRules: []string{"no_fact_check_needed"},
 			},
 			expectedDecision: "",
-			expectError:      true,
+			expectError:      false, // Changed: no match should return nil result, not error
 		},
 	}
 
@@ -272,6 +280,14 @@ func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			// If expectedDecision is empty, we expect nil result (no match)
+			if tt.expectedDecision == "" {
+				if result != nil {
+					t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
+				}
 				return
 			}
 
