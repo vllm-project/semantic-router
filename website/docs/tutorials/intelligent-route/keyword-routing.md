@@ -29,54 +29,93 @@ ML-based classification is a black box that's hard to audit and explain. Keyword
 
 ## Configuration
 
-Add keyword rules to your `config.yaml`:
+Add keyword signals to your `config.yaml`:
 
 ```yaml
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+# Define keyword signals
+signals:
+  keywords:
+    - name: "urgent_keywords"
+      operator: "OR"  # Match ANY keyword
+      keywords: ["urgent", "immediate", "asap", "emergency"]
+      case_sensitive: false
 
-keyword_rules:
-  - category: "urgent_request"
-    operator: "OR"
-    keywords: ["urgent", "immediate", "asap"]
-    case_sensitive: false
-  
-  - category: "sensitive_data"
-    operator: "AND"
-    keywords: ["SSN", "social security number", "credit card"]
-    case_sensitive: false
-  
-  - category: "exclude_spam"
-    operator: "NOR"
-    keywords: ["buy now", "free money"]
-    case_sensitive: false
-  
-  - category: "regex_pattern_match"
-    operator: "OR"
-    keywords: ["user\\.name@domain\\.com", "C:\\Program Files\\\\"]
-    case_sensitive: false
+    - name: "sensitive_data_keywords"
+      operator: "OR"
+      keywords: ["SSN", "social security", "credit card", "password"]
+      case_sensitive: false
 
+    - name: "spam_keywords"
+      operator: "OR"
+      keywords: ["buy now", "free money", "click here"]
+      case_sensitive: false
+
+# Define categories
 categories:
   - name: urgent_request
-    system_prompt: "You are a highly responsive assistant specialized in handling urgent requests."
-    model_scores:
-      - model: qwen3
-        score: 0.8
-        use_reasoning: false
-  
   - name: sensitive_data
-    system_prompt: "You are a security-conscious assistant specialized in handling sensitive data."
-    jailbreak_enabled: true
-    jailbreak_threshold: 0.6
-    model_scores:
-      - model: qwen3
-        score: 0.9
-        use_reasoning: false
+  - name: general
+
+# Define decisions using keyword signals
+decisions:
+  - name: urgent_request
+    description: "Route urgent requests"
+    priority: 100  # High priority
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "urgent_keywords"
+    modelRefs:
+      - model: fast-response-model
+        weight: 1.0
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          prompt: "You are a highly responsive assistant specialized in handling urgent requests."
+
+  - name: sensitive_data
+    description: "Route sensitive data queries"
+    priority: 90
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "sensitive_data_keywords"
+    modelRefs:
+      - model: secure-model
+        weight: 1.0
+    plugins:
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+          threshold: 0.6
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.8
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          prompt: "You are a security-conscious assistant specialized in handling sensitive data."
+
+  - name: filter_spam
+    description: "Block spam queries"
+    priority: 95
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "spam_keywords"
+    modelRefs:
+      - model: null  # Block request
+    plugins:
+      - type: "header_mutation"
+        configuration:
+          enabled: true
+          headers:
+            X-Block-Reason: "spam_detected"
 ```
 
 ## Operators

@@ -40,54 +40,99 @@ classifier:
     use_cpu: true
     category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
 
-embedding_models:
-  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
-  gemma_model_path: "models/embeddinggemma-300m"
-  use_cpu: true
+# Define embedding signals
+signals:
+  embeddings:
+    - name: "technical_support"
+      threshold: 0.75
+      candidates:
+        - "how to configure the system"
+        - "installation guide"
+        - "troubleshooting steps"
+        - "error message explanation"
+      aggregation_method: "max"
 
-embedding_rules:
-  - category: "technical_support"
-    threshold: 0.75
-    keywords:
-      - "how to configure the system"
-      - "installation guide"
-      - "troubleshooting steps"
-      - "error message explanation"
-    aggregation_method: "max"
-    model: "auto"
-    dimension: 768
-    quality_priority: 0.7
-    latency_priority: 0.3
-  
-  - category: "product_inquiry"
-    threshold: 0.70
-    keywords:
-      - "product features and specifications"
-      - "pricing information"
-      - "availability and stock"
-    aggregation_method: "avg"
-    model: "gemma"
-    dimension: 768
-  
-  - category: "account_management"
-    threshold: 0.72
-    keywords:
-      - "password reset"
-      - "account settings"
-      - "subscription management"
-    aggregation_method: "max"
-    model: "qwen3"
-    dimension: 1024
+    - name: "product_inquiry"
+      threshold: 0.70
+      candidates:
+        - "product features and specifications"
+        - "pricing information"
+        - "availability and stock"
+      aggregation_method: "avg"
 
+    - name: "account_management"
+      threshold: 0.72
+      candidates:
+        - "password reset"
+        - "account settings"
+        - "subscription management"
+      aggregation_method: "max"
+
+# Define categories
 categories:
   - name: technical_support
-    system_prompt: "You are a technical support specialist."
-    model_scores:
-      - model: qwen3
-        score: 0.9
+  - name: product_inquiry
+  - name: account_management
+
+# Define decisions using embedding signals
+decisions:
+  - name: technical_support
+    description: "Route technical support queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "technical_support"
+    modelRefs:
+      - model: technical-specialist
+        weight: 1.0
         use_reasoning: true
-    jailbreak_enabled: true
-    pii_enabled: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          enabled: true
+          prompt: "You are a technical support specialist."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+
+  - name: product_inquiry
+    description: "Route product inquiry queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "product_inquiry"
+    modelRefs:
+      - model: product-specialist
+        weight: 1.0
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  - name: account_management
+    description: "Route account management queries"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "account_management"
+    modelRefs:
+      - model: account-specialist
+        weight: 1.0
+    plugins:
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.9  # High threshold for account data
   
   - name: product_inquiry
     system_prompt: "You are a product specialist."
