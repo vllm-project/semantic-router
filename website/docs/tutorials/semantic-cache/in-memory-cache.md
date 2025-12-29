@@ -314,5 +314,4 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 - **[Hybrid Cache](./hybrid-cache.md)** - Learn about HNSW + Milvus hybrid caching
 - **[Milvus Cache](./milvus-cache.md)** - Learn about persistent vector database caching
-- **[Cache Overview](./overview.md)** - Learn about semantic caching concepts
-- **[Observability](../observability/overview.md)** - Monitor cache performance
+- **[Observability](../observability/metrics.md)** - Monitor cache performance

@@ -150,5 +150,4 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 - **[Milvus Cache](./milvus-cache.md)** - Compare with Milvus vector database
 - **[In-Memory Cache](./in-memory-cache.md)** - Compare with in-memory caching
-- **[Cache Overview](./overview.md)** - Learn semantic caching concepts
-- **[Observability](../observability/overview.md)** - Monitor Redis performance
+- **[Observability](../observability/metrics.md)** - Monitor Redis performance
