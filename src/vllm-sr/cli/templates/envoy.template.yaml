@@ -12,6 +12,7 @@ static_resources:
       socket_address:
         address: {{ listener.address }}
         port_value: {{ listener.port }}
+    perConnectionBufferLimitBytes: 52428800
     filter_chains:
     - filters:
       - name: envoy.filters.network.http_connection_manager
@@ -36,6 +37,7 @@ static_resources:
                 route:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('300s') }}
+                  idleTimeout: 300s
               {% endfor %}
               # Default route (no x-selected-model header)
               - match:
@@ -52,9 +54,11 @@ static_resources:
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+              allow_mode_override: true
               grpc_service:
                 envoy_grpc:
                   cluster_name: extproc_service
+                timeout: 300s
               processing_mode:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
@@ -92,7 +96,7 @@ static_resources:
   {% for model in models %}
   # Cluster for model: {{ model.name }}
   - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 5s
+    connect_timeout: 300s
     type: {{ model.cluster_type }}
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
@@ -133,4 +137,3 @@ layered_runtime:
     static_layer:
       overload:
         global_downstream_max_connections: 50000
-

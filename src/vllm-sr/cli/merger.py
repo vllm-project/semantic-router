@@ -98,6 +98,64 @@ def translate_user_feedback_signals(user_feedbacks: list) -> list:
     return rules
 
 
+def translate_preference_signals(preferences: list) -> list:
+    """
+    Translate preference signals to router format.
+
+    Args:
+        preferences: List of Preference objects
+
+    Returns:
+        list: Router preference rules
+    """
+    rules = []
+    for signal in preferences:
+        rule = {
+            "name": signal.name,
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_external_models(external_models: list) -> list:
+    """
+    Translate external models to router format.
+
+    Args:
+        external_models: List of ExternalModel objects
+
+    Returns:
+        list: Router external model configurations
+    """
+    models = []
+    for model in external_models:
+        # Parse endpoint
+        parts = model.endpoint.split(":")
+        address = parts[0]
+        port = int(parts[1]) if len(parts) > 1 else 8000
+
+        config = {
+            "llm_provider": model.provider,
+            "model_role": model.role,
+            "llm_endpoint": {
+                "address": address,
+                "port": port,
+            },
+            "llm_model_name": model.model_name,
+            "llm_timeout_seconds": model.timeout_seconds,
+            "parser_type": model.parser_type,
+        }
+
+        # Add access_key if provided
+        if model.access_key:
+            config["access_key"] = model.access_key
+
+        models.append(config)
+    return models
+
+
 def translate_domains_to_categories(domains: list) -> list:
     """
     Translate domains to router categories format.
@@ -244,6 +302,14 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(
                 f"  Added {len(user_config.signals.user_feedbacks)} user feedback signals"
+            )
+
+        if user_config.signals.preferences and len(user_config.signals.preferences) > 0:
+            merged["preference_rules"] = translate_preference_signals(
+                user_config.signals.preferences
+            )
+            log.info(
+                f"  Added {len(user_config.signals.preferences)} preference signals"
             )
 
         # Translate domains to categories

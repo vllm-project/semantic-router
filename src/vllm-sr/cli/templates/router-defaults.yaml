@@ -102,6 +102,21 @@ feedback_detector:
   threshold: 0.7
   use_cpu: true
 
+# External models configuration
+# Used for advanced routing signals like preference-based routing via external LLM
+# Users can configure external models in their config to enable these features
+# Example:
+# external_models:
+#   - llm_provider: "vllm"
+#     model_role: "preference"
+#     llm_endpoint:
+#       address: "127.0.0.1"
+#       port: 8000
+#     llm_model_name: "openai/gpt-oss-120b"
+#     llm_timeout_seconds: 30
+#     parser_type: "json"
+#     access_key: ""  # Optional: for Authorization header (Bearer token)
+
 # Embedding Models Configuration
 # These models provide intelligent embedding generation with automatic routing:
 # - Qwen3-Embedding-0.6B: Up to 32K context, high quality,

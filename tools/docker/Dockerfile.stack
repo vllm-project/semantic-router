@@ -17,8 +17,8 @@
 # Supports: linux/amd64, linux/arm64
 #
 # Usage:
-#   docker build -f Dockerfile.stack -t vsr-stack:latest .
-#   docker buildx build -f Dockerfile.stack --platform linux/amd64,linux/arm64 -t vsr-stack:latest .
+#   docker build -f tools/docker/Dockerfile.stack -t vsr-stack:latest .
+#   docker buildx build -f tools/docker/Dockerfile.stack --platform linux/amd64,linux/arm64 -t vsr-stack:latest .
 #
 # Run:
 #   docker run -d --name vsr \

@@ -1,4 +1,4 @@
-# TruthLens: A Cognitive Immune System for Real-Time Hallucination Detection and Mitigation in Large Language Models
+# TruthLens: Real-Time Hallucination Mitigation
 
 **Version:** 1.0
 **Authors:** vLLM Semantic Router Team

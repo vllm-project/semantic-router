@@ -31,7 +31,13 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 		return nil, fmt.Errorf("vLLM model name is required for guardrail")
 	}
 
-	client := NewVLLMClient(&cfg.ModelEndpoint)
+	// Create client with or without access key
+	var client *VLLMClient
+	if cfg.AccessKey != "" {
+		client = NewVLLMClientWithAuth(&cfg.ModelEndpoint, cfg.AccessKey)
+	} else {
+		client = NewVLLMClient(&cfg.ModelEndpoint)
+	}
 
 	// Use timeout from config, default to 30 seconds
 	timeout := 30 * time.Second

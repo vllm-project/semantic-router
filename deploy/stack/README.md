@@ -20,7 +20,7 @@ Single-container deployment for vLLM Semantic Router with all components bundled
 
 ```bash
 # Build
-docker build -f Dockerfile.stack -t vsr-stack:latest .
+docker build -f tools/docker/Dockerfile.stack -t vsr-stack:latest .
 
 # Download models (required)
 make download-models

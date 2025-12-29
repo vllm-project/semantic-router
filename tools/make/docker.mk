@@ -23,7 +23,7 @@ docker-build-extproc: ## Build extproc Docker image
 docker-build-extproc:
 	@$(LOG_TARGET)
 	@echo "Building extproc Docker image..."
-	@$(CONTAINER_RUNTIME) build -f Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
 
 # Build llm-katan Docker image
 docker-build-llm-katan: ## Build llm-katan Docker image
@@ -44,7 +44,7 @@ docker-build-precommit: ## Build precommit Docker image
 docker-build-precommit:
 	@$(LOG_TARGET)
 	@echo "Building precommit Docker image..."
-	@$(CONTAINER_RUNTIME) build -f Dockerfile.precommit -t $(DOCKER_REGISTRY)/precommit:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.precommit -t $(DOCKER_REGISTRY)/precommit:$(DOCKER_TAG) .
 
 # Test llm-katan Docker image locally
 docker-test-llm-katan: ## Test llm-katan Docker image locally

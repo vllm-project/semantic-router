@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-sr"
-version = "0.1.0.rc5"
+version = "0.1.0.rc6"
 description = "vLLM Semantic Router - Intelligent routing for Mixture-of-Models"
 authors = [{name = "vLLM-SR Team"}]
 readme = "README.md"

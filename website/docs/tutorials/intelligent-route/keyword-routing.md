@@ -29,54 +29,76 @@ ML-based classification is a black box that's hard to audit and explain. Keyword
 
 ## Configuration
 
-Add keyword rules to your `config.yaml`:
+Add keyword signals to your `config.yaml`:
 
 ```yaml
-classifier:
-  category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+# Define keyword signals
+signals:
+  keywords:
+    - name: "urgent_keywords"
+      operator: "OR"  # Match ANY keyword
+      keywords: ["urgent", "immediate", "asap", "emergency"]
+      case_sensitive: false
 
-keyword_rules:
-  - category: "urgent_request"
-    operator: "OR"
-    keywords: ["urgent", "immediate", "asap"]
-    case_sensitive: false
-  
-  - category: "sensitive_data"
-    operator: "AND"
-    keywords: ["SSN", "social security number", "credit card"]
-    case_sensitive: false
-  
-  - category: "exclude_spam"
-    operator: "NOR"
-    keywords: ["buy now", "free money"]
-    case_sensitive: false
-  
-  - category: "regex_pattern_match"
-    operator: "OR"
-    keywords: ["user\\.name@domain\\.com", "C:\\Program Files\\\\"]
-    case_sensitive: false
+    - name: "sensitive_data_keywords"
+      operator: "OR"
+      keywords: ["SSN", "social security", "credit card", "password"]
+      case_sensitive: false
 
-categories:
+    - name: "spam_keywords"
+      operator: "OR"
+      keywords: ["buy now", "free money", "click here"]
+      case_sensitive: false
+
+# Define decisions using keyword signals
+decisions:
   - name: urgent_request
-    system_prompt: "You are a highly responsive assistant specialized in handling urgent requests."
-    model_scores:
-      - model: qwen3
-        score: 0.8
+    description: "Route urgent requests"
+    priority: 100  # High priority
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "urgent_keywords"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
-  
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a highly responsive assistant specialized in handling urgent requests."
+
   - name: sensitive_data
-    system_prompt: "You are a security-conscious assistant specialized in handling sensitive data."
-    jailbreak_enabled: true
-    jailbreak_threshold: 0.6
-    model_scores:
-      - model: qwen3
-        score: 0.9
+    description: "Route sensitive data queries"
+    priority: 90
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "sensitive_data_keywords"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a security-conscious assistant specialized in handling sensitive data."
+
+  - name: filter_spam
+    description: "Block spam queries"
+    priority: 95
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "spam_keywords"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "This query appears to be spam. Please provide a polite response."
 ```
 
 ## Operators

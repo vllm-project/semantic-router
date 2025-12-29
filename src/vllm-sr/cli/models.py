@@ -53,6 +53,13 @@ class UserFeedback(BaseModel):
     description: str
 
 
+class Preference(BaseModel):
+    """Route preference signal configuration."""
+
+    name: str
+    description: str
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -61,6 +68,7 @@ class Signals(BaseModel):
     domains: Optional[List[Domain]] = []
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
+    preferences: Optional[List[Preference]] = []
 
 
 class Condition(BaseModel):
@@ -130,6 +138,18 @@ class ReasoningFamily(BaseModel):
     parameter: str
 
 
+class ExternalModel(BaseModel):
+    """External model configuration."""
+
+    role: str  # "preference", "guardrail", etc.
+    provider: str  # "vllm"
+    endpoint: str  # "host:port"
+    model_name: str
+    timeout_seconds: Optional[int] = 30
+    parser_type: Optional[str] = "json"
+    access_key: Optional[str] = None  # Optional access key for Authorization header
+
+
 class Providers(BaseModel):
     """Provider configuration."""
 
@@ -137,6 +157,7 @@ class Providers(BaseModel):
     default_model: Optional[str] = None
     reasoning_families: Optional[Dict[str, ReasoningFamily]] = {}
     default_reasoning_effort: Optional[str] = "high"
+    external_models: Optional[List[ExternalModel]] = []
 
 
 class UserConfig(BaseModel):

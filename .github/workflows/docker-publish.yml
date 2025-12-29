@@ -23,7 +23,7 @@ on:
     branches: ["main"]
     paths:
       - ".github/workflows/docker-publish.yml"
-      - "Dockerfile*"
+      - "tools/docker/Dockerfile*"
       - "candle-binding/**"
       - "src/**"
       - "e2e/testing/llm-katan/**"
@@ -33,7 +33,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/docker-publish.yml"
-      - "Dockerfile*"
+      - "tools/docker/Dockerfile*"
       - "candle-binding/**"
       - "src/**"
       - "e2e/testing/llm-katan/**"
@@ -202,7 +202,7 @@ jobs:
         run: |
           if [ "${{ matrix.image }}" = "extproc" ]; then
             echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./Dockerfile.extproc" >> $GITHUB_OUTPUT
+            echo "dockerfile=./tools/docker/Dockerfile.extproc" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e/testing/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e/testing/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
@@ -211,7 +211,7 @@ jobs:
             echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "stack" ]; then
             echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./Dockerfile.stack" >> $GITHUB_OUTPUT
+            echo "dockerfile=./tools/docker/Dockerfile.stack" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "vllm-sr" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./src/vllm-sr/Dockerfile" >> $GITHUB_OUTPUT

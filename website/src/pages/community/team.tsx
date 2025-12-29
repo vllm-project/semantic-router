@@ -1,6 +1,7 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import styles from './team.module.css'
+import { FaGithub, FaLinkedin } from 'react-icons/fa'
 
 interface TeamMember {
   name: string
@@ -112,7 +113,8 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member, isContributor = fal
             rel="noopener noreferrer"
             className={styles.actionLink}
           >
-            📧 GitHub
+            <FaGithub />
+            GitHub
           </a>
         )}
 
@@ -123,7 +125,8 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member, isContributor = fal
             rel="noopener noreferrer"
             className={styles.actionLink}
           >
-            💼 LinkedIn
+            <FaLinkedin />
+            LinkedIn
           </a>
         )}
 

@@ -221,10 +221,6 @@ const config: Config = {
               to: '/docs/installation',
             },
             {
-              label: 'Architecture',
-              to: '/docs/overview/architecture/system-architecture',
-            },
-            {
               label: 'API Reference',
               to: '/docs/api/router',
             },

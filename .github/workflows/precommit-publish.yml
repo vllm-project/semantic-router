@@ -3,11 +3,11 @@ name: Create and publish Precommit Image
 on:
   push:
     paths:
-      - 'Dockerfile.precommit'
+      - 'tools/docker/Dockerfile.precommit'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - 'Dockerfile.precommit'
+      - 'tools/docker/Dockerfile.precommit'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,7 +45,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.precommit
+          file: ./tools/docker/Dockerfile.precommit
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }} # Only push on merge to main, not on PRs
           tags: ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/precommit:latest

@@ -4,127 +4,174 @@ sidebar_position: 1
 
 # vLLM Semantic Router
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/vllm-project/semantic-router/blob/main/LICENSE)
-[![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Community-yellow)](https://huggingface.co/LLM-Semantic-Router)
-[![Go Report Card](https://goreportcard.com/badge/github.com/vllm-project/semantic-router/src/semantic-router)](https://goreportcard.com/report/github.com/vllm-project/semantic-router/src/semantic-router)
-![Test And Build](https://github.com/vllm-project/semantic-router/workflows/Test%20And%20Build/badge.svg)
+**System-Level Intelligence for Mixture-of-Models (MoM)** - An intelligent routing layer that brings collective intelligence to LLM systems. Acting as an Envoy External Processor (ExtProc), it uses a **signal-driven decision engine** and **plugin chain architecture** to capture missing signals, make better routing decisions, and secure your LLM infrastructure.
 
-An intelligent **Mixture-of-Models (MoM)** router that acts as an Envoy External Processor (ExtProc) to intelligently direct OpenAI API requests to the most suitable backend model from a defined pool. Using BERT-based semantic understanding and classification, it optimizes both performance and cost efficiency.
+## Project Goals
 
-## 🚀 Key Features
+We are building the **System Level Intelligence** for Mixture-of-Models (MoM), bringing **Collective Intelligence** into **LLM systems**, answering:
 
-### 🎯 **Auto-selection of Models**
+1. **How to capture the missing signals** in request, response and context?
+2. **How to combine the signals** to make better decisions?
+3. **How to collaborate more efficiently** between different models?
+4. **How to secure** the real world and LLM system from jailbreaks, PII leaks, hallucinations?
+5. **How to collect valuable signals** and build a self-learning system?
 
-Intelligently routes requests to specialized models based on semantic understanding:
+## Core Architecture
 
-- **Math queries** → Math-specialized models
-- **Creative writing** → Creative-specialized models
-- **Code generation** → Code-specialized models
-- **General queries** → Balanced general-purpose models
+### Signal-Driven Decision Engine
 
-### 🛡️ **Security & Privacy**
+Captures and combines **6 types of signals** to make intelligent routing decisions:
 
-- **PII Detection**: Automatically detects and handles personally identifiable information
-- **Prompt Guard**: Identifies and blocks jailbreak attempts
-- **Safe Routing**: Ensures sensitive prompts are handled appropriately
+| Signal Type | Description | Use Case |
+|------------|-------------|----------|
+| **keyword** | Pattern matching with AND/OR operators | Fast rule-based routing for specific terms |
+| **embedding** | Semantic similarity using embeddings | Intent detection and semantic understanding |
+| **domain** | MMLU domain classification (14 categories) | Academic and professional domain routing |
+| **fact_check** | ML-based fact-checking requirement detection | Identify queries needing fact verification |
+| **user_feedback** | User satisfaction and feedback classification | Handle follow-up messages and corrections |
+| **preference** | LLM-based route preference matching | Complex intent analysis via external LLM |
 
-### ⚡ **Performance Optimization**
+**How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
 
-- **Semantic Cache**: Caches semantic representations to reduce latency
-- **Tool Selection**: Auto-selects relevant tools to reduce token usage and improve tool selection accuracy
+### Plugin Chain Architecture
 
-### 🏗️ **Architecture**
+Extensible plugin system for request/response processing:
 
-- **Envoy ExtProc Integration**: Seamlessly integrates with Envoy proxy
-- **Dual Implementation**: Available in both Go (with Rust FFI) and Python
-- **Scalable Design**: Production-ready with comprehensive monitoring
+| Plugin Type | Description | Use Case |
+|------------|-------------|----------|
+| **semantic-cache** | Semantic similarity-based caching | Reduce latency and costs for similar queries |
+| **jailbreak** | Adversarial prompt detection | Block prompt injection and jailbreak attempts |
+| **pii** | Personally identifiable information detection | Protect sensitive data and ensure compliance |
+| **system_prompt** | Dynamic system prompt injection | Add context-aware instructions per route |
+| **header_mutation** | HTTP header manipulation | Control routing and backend behavior |
+| **hallucination** | Token-level hallucination detection | Real-time fact verification during generation |
 
-## 📊 Performance Benefits
+**How it works**: Plugins form a processing chain, each plugin can inspect/modify requests and responses, with configurable enable/disable per decision.
 
-Our testing shows significant improvements in model accuracy through specialized routing:
-
-![Model Accuracy](/img/category_accuracies.png)
-
-## 🛠️ Architecture Overview
+## Architecture Overview
 
 import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
 
-<ZoomableMermaid title="Architecture Overview" defaultZoom={3.1}>
+<ZoomableMermaid title="Signal-Driven Decision + Plugin Chain Architecture" defaultZoom={3.5}>
 {`graph TB
     Client[Client Request] --> Envoy[Envoy Proxy]
     Envoy --> Router[Semantic Router ExtProc]
-    
-    subgraph "Classification Modules"
-        direction LR
-        PII[PII Detector] 
-        Jailbreak[Jailbreak Guard]
-        Category[Category Classifier]
-        Cache[Semantic Cache]
+
+    subgraph "Signal Extraction Layer"
+        direction TB
+        Keyword[Keyword Signals<br/>Pattern Matching]
+        Embedding[Embedding Signals<br/>Semantic Similarity]
+        Domain[Domain Signals<br/>MMLU Classification]
+        FactCheck[Fact Check Signals<br/>Verification Need]
+        Feedback[User Feedback Signals<br/>Satisfaction Analysis]
+        Preference[Preference Signals<br/>LLM-based Matching]
     end
-    
-    Router --> PII
-    Router --> Jailbreak  
-    Router --> Category
-    Router --> Cache
-    
-    PII --> Decision{Security Check}
-    Jailbreak --> Decision
-    Decision -->|Block| Block[Block Request]
-    Decision -->|Pass| Category
-    Category --> Models[Route to Specialized Model]
-    Cache -->|Hit| FastResponse[Return Cached Response]
-    
-    Models --> Math[Math Model]
-    Models --> Creative[Creative Model] 
-    Models --> Code[Code Model]
-    Models --> General[General Model]`}
+
+    subgraph "Decision Engine"
+        Rules[Decision Rules<br/>AND/OR Operators]
+        ModelSelect[Model Selection<br/>Priority/Confidence]
+    end
+
+    subgraph "Plugin Chain"
+        direction LR
+        Cache[Semantic Cache]
+        Jailbreak[Jailbreak Guard]
+        PII[PII Detector]
+        SysPrompt[System Prompt]
+        HeaderMut[Header Mutation]
+        Hallucination[Hallucination Detection]
+    end
+
+    Router --> Keyword
+    Router --> Embedding
+    Router --> Domain
+    Router --> FactCheck
+    Router --> Feedback
+    Router --> Preference
+
+    Keyword --> Rules
+    Embedding --> Rules
+    Domain --> Rules
+    FactCheck --> Rules
+    Feedback --> Rules
+    Preference --> Rules
+
+    Rules --> ModelSelect
+    ModelSelect --> Cache
+    Cache --> Jailbreak
+    Jailbreak --> PII
+    PII --> SysPrompt
+    SysPrompt --> HeaderMut
+    HeaderMut --> Hallucination
+
+    Hallucination --> Backend[Backend Models]
+    Backend --> Math[Math Model]
+    Backend --> Creative[Creative Model]
+    Backend --> Code[Code Model]
+    Backend --> General[General Model]`}
 </ZoomableMermaid>
 
-## 🎯 Use Cases
+## Key Benefits
 
-- **Enterprise API Gateways**: Route different types of queries to cost-optimized models
-- **Multi-tenant Platforms**: Provide specialized routing for different customer needs
-- **Development Environments**: Balance cost and performance for different workloads
-- **Production Services**: Ensure optimal model selection with built-in safety measures
+### Intelligent Routing
 
-## 📈 Monitoring & Observability
+- **Signal Fusion**: Combine multiple signals (keyword + embedding + domain) for accurate routing
+- **Adaptive Decisions**: Use AND/OR operators to create complex routing logic
+- **Model Specialization**: Route math to math models, code to code models, etc.
 
-The router provides comprehensive monitoring through:
+### Security & Compliance
 
-- **Grafana Dashboard**: Real-time metrics and performance tracking
-- **Prometheus Metrics**: Detailed routing statistics and performance data
-- **Request Tracing**: Full visibility into routing decisions and performance
+- **Multi-layer Protection**: PII detection, jailbreak prevention, hallucination detection
+- **Policy Enforcement**: Model-specific PII policies and security rules
+- **Audit Trail**: Complete logging of all security decisions
 
-![LLM Router Dashboard](/img/grafana_screenshot.png)
+### Performance & Cost
 
-## 🔗 Quick Links
+- **Semantic Caching**: 10-100x latency reduction for similar queries
+- **Smart Model Selection**: Use smaller models for simple tasks, larger for complex
+- **Tool Optimization**: Auto-select relevant tools to reduce token usage
+
+### Flexibility & Extensibility
+
+- **Plugin Architecture**: Add custom processing logic without modifying core
+- **Signal Extensibility**: Define new signal types for your use cases
+- **Configuration-Driven**: Change routing behavior without code changes
+
+## Use Cases
+
+- **Enterprise API Gateways**: Intelligent routing with security and compliance
+- **Multi-tenant Platforms**: Per-tenant routing policies and model selection
+- **Development Environments**: Cost optimization through smart model selection
+- **Production Services**: High-performance routing with comprehensive monitoring
+- **Regulated Industries**: Compliance-ready with PII detection and audit trails
+
+## Quick Links
 
 - [**Installation**](installation/installation.md) - Setup and installation guide
-- [**Overview**](overview/semantic-router-overview.md) - Deep dive into semantic routing concepts
-- [**Architecture**](overview/architecture/system-architecture.md) - Technical architecture and design
-- [**Model Training**](training/training-overview.md) - How classification models are trained
-- [**Dashboard**](overview/dashboard.md) - Unified UI for config, monitoring, topology, and playground
+- [**Overview**](overview/goals.md) - Project goals and core concepts
+- [**Configuration**](installation/configuration.md) - Configure signals and routing decisions
+- [**Tutorials**](tutorials/intelligent-route/keyword-routing.md) - Step-by-step guides
 
-## 📚 Documentation Structure
+## Documentation Structure
 
 This documentation is organized into the following sections:
 
-### 🎯 [Overview](overview/semantic-router-overview.md)
+### [Overview](overview/goals.md)
 
-Learn about semantic routing concepts, mixture of models, and how this compares to other routing approaches like RouteLLM and GPT-5's router architecture.
+Learn about our goals, semantic routing concepts, collective intelligence, and signal-driven decisions.
 
-### 🏗️ [Architecture](overview/architecture/system-architecture.md)
+### [Installation & Configuration](installation/installation.md)
 
-Understand the system design, Envoy ExtProc integration, and how the router communicates with backend models.
+Get started with installation and learn how to configure signals, decisions, and plugins.
 
-### 🤖 [Model Training](training/training-overview.md)
+### [Tutorials](tutorials/intelligent-route/keyword-routing.md)
 
-Explore how classification models are trained, what datasets are used, and the purpose of each model type.
+Step-by-step guides for implementing intelligent routing, semantic caching, content safety, and observability.
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
 
-## 📄 License
+## License
 
 This project is licensed under the Apache 2.0 License - see the [LICENSE](https://github.com/vllm-project/semantic-router/blob/main/LICENSE) file for details.

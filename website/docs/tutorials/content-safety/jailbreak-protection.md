@@ -41,14 +41,13 @@ The system can identify various attack patterns:
 Enable jailbreak detection in your configuration:
 
 ```yaml
-# config/config.yaml
+# router-defaults.yaml
 prompt_guard:
-  enabled: true  # Global default - can be overridden per category
-  model_id: "models/jailbreak_classifier_modernbert-base_model"
-  threshold: 0.7                   # Detection sensitivity (0.0-1.0)
-  use_cpu: true                    # Run on CPU
-  use_modernbert: true             # Use ModernBERT architecture
-  jailbreak_mapping_path: "config/jailbreak_type_mapping.json"  # Path to jailbreak type mapping
+  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+  use_modernbert: false
+  model_id: "models/mom-jailbreak-classifier"
+  threshold: 0.7
+  use_cpu: true
 ```
 
 ### Category-Level Jailbreak Protection

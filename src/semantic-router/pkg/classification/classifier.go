@@ -262,6 +262,9 @@ type Classifier struct {
 	hallucinationDetector *HallucinationDetector
 	feedbackDetector      *FeedbackDetector
 
+	// Preference classifier for route matching via external LLM
+	preferenceClassifier *PreferenceClassifier
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -363,6 +366,13 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializeFeedbackDetector(); err != nil {
 			logging.Warnf("Failed to initialize feedback detector: %v", err)
 			// Non-fatal - continue without feedback detection
+		}
+	}
+
+	if classifier.IsPreferenceClassifierEnabled() {
+		if err := classifier.initializePreferenceClassifier(); err != nil {
+			logging.Warnf("Failed to initialize preference classifier: %v", err)
+			// Non-fatal - continue without preference classification
 		}
 	}
 
@@ -632,6 +642,7 @@ type SignalResults struct {
 	MatchedDomainRules       []string
 	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 }
 
 // EvaluateAllRules evaluates all rule types and returns matched rule names
@@ -728,6 +739,30 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		}
 	}
 
+	// Evaluate preference rules
+	// Only evaluate if preference_rules are configured and preference classifier is enabled
+	if len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled() {
+		// Build conversation JSON from text (simple single-turn format)
+		conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
+
+		preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
+		if err != nil {
+			logging.Errorf("preference rule evaluation failed: %v", err)
+		} else if preferenceResult != nil {
+			// Use the preference name directly as the signal name
+			preferenceName := preferenceResult.Preference
+
+			// Check if this preference is defined in preference_rules
+			for _, rule := range c.Config.PreferenceRules {
+				if rule.Name == preferenceName {
+					results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
+					logging.Infof("Preference rule matched: %s", rule.Name)
+					break
+				}
+			}
+		}
+	}
+
 	return results
 }
 
@@ -739,11 +774,12 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	// Evaluate all signals (includes fact_check and user_feedback)
+	// Evaluate all signals (includes fact_check, user_feedback, and preference)
 	signals := c.EvaluateAllSignals(text)
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v",
-		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules, signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules)
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v",
+		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules)
 
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
@@ -761,9 +797,13 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		DomainRules:       signals.MatchedDomainRules,
 		FactCheckRules:    signals.MatchedFactCheckRules,
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
+		PreferenceRules:   signals.MatchedPreferenceRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
+	}
+	if result == nil {
+		return nil, nil
 	}
 
 	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v",
@@ -1462,6 +1502,40 @@ func (c *Classifier) initializeFeedbackDetector() error {
 
 	c.feedbackDetector = detector
 	logging.Infof("Feedback detector initialized successfully")
+	return nil
+}
+
+// IsPreferenceClassifierEnabled checks if preference classification is enabled and properly configured
+func (c *Classifier) IsPreferenceClassifierEnabled() bool {
+	// Need preference rules configured and external model with role="preference"
+	if len(c.Config.PreferenceRules) == 0 {
+		return false
+	}
+
+	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
+	return externalCfg != nil &&
+		externalCfg.ModelEndpoint.Address != "" &&
+		externalCfg.ModelName != ""
+}
+
+// initializePreferenceClassifier initializes the preference classifier with external LLM
+func (c *Classifier) initializePreferenceClassifier() error {
+	if !c.IsPreferenceClassifierEnabled() {
+		return nil
+	}
+
+	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
+	if externalCfg == nil {
+		return fmt.Errorf("external model with role='preference' not found")
+	}
+
+	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules)
+	if err != nil {
+		return fmt.Errorf("failed to create preference classifier: %w", err)
+	}
+
+	c.preferenceClassifier = classifier
+	logging.Infof("Preference classifier initialized successfully with %d routes", len(c.Config.PreferenceRules))
 	return nil
 }
 

@@ -714,7 +714,7 @@ kubectl exec -it milvus-cluster-minio-0 -n vllm-semantic-router-system -- mc adm
 ## Next Steps
 
 - [Configuration Guide](configuration.md) - Semantic cache configuration options
-- [Observability](../tutorials/observability/overview.md) - Monitoring and metrics
+- [Observability](../tutorials/observability/metrics.md) - Monitoring and metrics
 
 ## References
 
