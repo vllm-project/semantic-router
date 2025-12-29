@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './team.module.css'
 import { FaGithub, FaLinkedin } from 'react-icons/fa'
 
@@ -152,17 +153,20 @@ const Team: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1>Meet Our Team 👥</h1>
+          <h1><Translate id="team.title">Meet Our Team 👥</Translate></h1>
           <p className={styles.subtitle}>
-            The passionate individuals building the future of intelligent LLM routing
+            <Translate id="team.subtitle">The passionate individuals building the future of intelligent LLM routing</Translate>
           </p>
         </header>
 
         <main className={styles.main}>
           <section className={styles.section}>
-            <h2>🌟 Core Team</h2>
+            <h2>
+              🌟
+              <Translate id="team.coreTeam.title">Core Team</Translate>
+            </h2>
             <p className={styles.sectionDescription}>
-              The core maintainers who drive the project forward and make key decisions.
+              <Translate id="team.coreTeam.description">The core maintainers who drive the project forward and make key decisions.</Translate>
             </p>
             <div className={styles.teamGrid}>
               {coreTeam.map((member, index) => (
@@ -172,9 +176,12 @@ const Team: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>🤝 Join Our Team</h2>
+            <h2>
+              🤝
+              <Translate id="team.joinTeam.title">Join Our Team</Translate>
+            </h2>
             <p className={styles.sectionDescription}>
-              We're always looking for passionate contributors to join our community!
+              <Translate id="team.joinTeam.description">We're always looking for passionate contributors to join our community!</Translate>
             </p>
             <div className={styles.joinTeamGrid}>
               {contributors.map((member, index) => (
@@ -184,9 +191,12 @@ const Team: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>🏆 Recognition</h2>
+            <h2>
+              🏆
+              <Translate id="team.recognition.title">Recognition</Translate>
+            </h2>
             <div className={styles.recognitionCard}>
-              <h3>Contributor Recognition</h3>
+              <h3><Translate id="team.recognition.subtitle">Contributor Recognition</Translate></h3>
               <p>
                 We believe in recognizing the valuable contributions of our community members.
                 Contributors who show consistent dedication and quality work in specific areas
@@ -236,7 +246,10 @@ const Team: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>📞 Get Involved</h2>
+            <h2>
+              📞
+              <Translate id="team.getInvolved.title">Get Involved</Translate>
+            </h2>
             <div className={styles.involvementGrid}>
               <div className={styles.involvementCard}>
                 <h3>🚀 Start Contributing</h3>

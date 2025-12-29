@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './community-page.module.css'
 
 const CodeOfConduct: React.FC = () => {
@@ -10,15 +11,18 @@ const CodeOfConduct: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1>Code of Conduct 📜</h1>
+          <h1><Translate id="codeOfConduct.title">Code of Conduct 📜</Translate></h1>
           <p className={styles.subtitle}>
-            Our commitment to fostering an open, welcoming, and inclusive community.
+            <Translate id="codeOfConduct.subtitle">Our commitment to fostering an open, welcoming, and inclusive community.</Translate>
           </p>
         </header>
 
         <main className={styles.main}>
           <section className={styles.section}>
-            <h2>🤝 Our Pledge</h2>
+            <h2>
+              🤝
+              <Translate id="codeOfConduct.pledge.title">Our Pledge</Translate>
+            </h2>
             <div className={styles.card}>
               <p>
                 We as members, contributors, and leaders pledge to make participation in our
@@ -36,7 +40,10 @@ const CodeOfConduct: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>✅ Our Standards</h2>
+            <h2>
+              ✅
+              <Translate id="codeOfConduct.standards.title">Our Standards</Translate>
+            </h2>
             <div className={styles.grid}>
               <div className={styles.card}>
                 <h3>Examples of behavior that contributes to a positive environment:</h3>
@@ -63,7 +70,10 @@ const CodeOfConduct: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>🛡️ Enforcement Responsibilities</h2>
+            <h2>
+              🛡️
+              <Translate id="codeOfConduct.enforcement.title">Enforcement Responsibilities</Translate>
+            </h2>
             <div className={styles.card}>
               <p>
                 Community leaders are responsible for clarifying and enforcing our standards of
@@ -81,7 +91,10 @@ const CodeOfConduct: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>🌍 Scope</h2>
+            <h2>
+              🌍
+              <Translate id="codeOfConduct.scope.title">Scope</Translate>
+            </h2>
             <div className={styles.card}>
               <p>
                 This Code of Conduct applies within all community spaces, and also applies when
@@ -94,7 +107,10 @@ const CodeOfConduct: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>📢 Reporting</h2>
+            <h2>
+              📢
+              <Translate id="codeOfConduct.reporting.title">Reporting</Translate>
+            </h2>
             <div className={styles.card}>
               <p>
                 Instances of abusive, harassing, or otherwise unacceptable behavior may be
@@ -118,7 +134,10 @@ const CodeOfConduct: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>⚖️ Enforcement Guidelines</h2>
+            <h2>
+              ⚖️
+              <Translate id="codeOfConduct.guidelines.title">Enforcement Guidelines</Translate>
+            </h2>
             <div className={styles.card}>
               <p>
                 Community leaders will follow these Community Impact Guidelines in determining
@@ -186,7 +205,10 @@ const CodeOfConduct: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>📚 Attribution</h2>
+            <h2>
+              📚
+              <Translate id="codeOfConduct.attribution.title">Attribution</Translate>
+            </h2>
             <div className={styles.card}>
               <p>
                 This Code of Conduct is adapted from the

@@ -416,6 +416,12 @@ h1.title {
   box-shadow: 0 4px 8px rgba(9, 105, 218, 0.3);
 }
 
+[data-theme='dark'] .primaryLink {
+  background: var(--tech-primary-blue);
+  color: white !important;
+  border-color: var(--tech-primary-blue);
+}
+
 [data-theme='dark'] .primaryLink:hover {
   box-shadow: 0 4px 8px rgba(88, 166, 255, 0.4);
 }
