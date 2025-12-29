@@ -13,7 +13,7 @@ services:
   semantic-router:
     build:
       context: ../..
-      dockerfile: Dockerfile.extproc
+      dockerfile: tools/docker/Dockerfile.extproc
     image: ghcr.io/vllm-project/semantic-router/extproc:latest
     container_name: semantic-router
     ports:
@@ -92,4 +92,3 @@ networks:
 
 volumes:
   hf-cache:
-

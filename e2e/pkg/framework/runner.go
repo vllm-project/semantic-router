@@ -230,7 +230,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 	r.log("Building and loading Docker images")
 
 	buildOpts := docker.BuildOptions{
-		Dockerfile:   "Dockerfile.extproc",
+		Dockerfile:   "tools/docker/Dockerfile.extproc",
 		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/extproc:%s", r.opts.ImageTag),
 		BuildContext: ".",
 	}
