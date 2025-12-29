@@ -38,8 +38,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	}
 
 	// Validate dimension
-	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
-	if !validDimensions[req.Dimension] {
+	if !isValidDimension(req.Dimension) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
 			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
 		return
@@ -135,8 +134,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	}
 
 	// Validate dimension
-	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
-	if !validDimensions[req.Dimension] {
+	if !isValidDimension(req.Dimension) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
 			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
 		return
@@ -202,8 +200,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 	}
 
 	// Validate dimension
-	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
-	if !validDimensions[req.Dimension] {
+	if !isValidDimension(req.Dimension) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
 			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
 		return
@@ -244,4 +241,10 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		req.Query, len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// isValidDimension checks if the provided dimension is valid
+func isValidDimension(dim int) bool {
+	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	return validDimensions[dim]
 }
