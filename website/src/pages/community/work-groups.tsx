@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './work-groups.module.css'
 
 interface WorkGroup {
@@ -132,12 +133,15 @@ const WorkGroups: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1>vLLM Semantic Router Work Groups 👋</h1>
+          <h1><Translate id="workGroups.title">vLLM Semantic Router Work Groups 👋</Translate></h1>
         </header>
 
         <main className={styles.main}>
           <section className={styles.intro}>
-            <h2>🌍 WG Initialization</h2>
+            <h2>
+              🌍
+              <Translate id="workGroups.init.title">WG Initialization</Translate>
+            </h2>
             <p>
               We are looking for interests around vLLM Semantic Router project and separate it into different WGs.
             </p>
@@ -158,7 +162,10 @@ const WorkGroups: React.FC = () => {
           </section>
 
           <section className={styles.workingGroupsSection}>
-            <h2>⛰️ vLLM Semantic Router Community WG</h2>
+            <h2>
+              ⛰️
+              <Translate id="workGroups.community.title">vLLM Semantic Router Community WG</Translate>
+            </h2>
             <p>This section is about setting WG around this project, to gather focus on specify areas.</p>
 
             <div className={styles.workGroupsGrid}>
@@ -169,7 +176,10 @@ const WorkGroups: React.FC = () => {
           </section>
 
           <section className={styles.promotion}>
-            <h2>🔝 Community Promotion</h2>
+            <h2>
+              🔝
+              <Translate id="workGroups.promotion.title">Community Promotion</Translate>
+            </h2>
             <p>
               We are grateful for any contributions, and if you show consistent contributions to the above specify area,
               you will be promoting as its maintainer after votes from maintainer team, and you will be invited to
@@ -178,7 +188,7 @@ const WorkGroups: React.FC = () => {
           </section>
 
           <section className={styles.getInvolved}>
-            <h2>How to Get Involved</h2>
+            <h2><Translate id="workGroups.getInvolved.title">How to Get Involved</Translate></h2>
             <ol className={styles.stepsList}>
               <li>
                 <strong>Choose Your Interest Area:</strong>
@@ -214,7 +224,7 @@ const WorkGroups: React.FC = () => {
           </section>
 
           <section className={styles.contact}>
-            <h2>Contact</h2>
+            <h2><Translate id="workGroups.contact.title">Contact</Translate></h2>
             <p>For questions about working groups or to get involved:</p>
             <ul>
               <li>

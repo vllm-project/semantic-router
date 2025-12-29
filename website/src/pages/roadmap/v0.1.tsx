@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './roadmap.module.css'
 
 type Priority = 'P0' | 'P1' | 'P2'
@@ -90,13 +91,13 @@ const RoadmapV01: React.FC = () => {
       <div className="container margin-vert--lg">
         <div className="row">
           <div className="col col--12">
-            <h1>Roadmap v0.1</h1>
+            <h1><Translate id="roadmap.v01.title">Roadmap v0.1</Translate></h1>
             <p className={styles.subtitle}>
-              Productizing Intelligent Routing with Comprehensive Evaluation
+              <Translate id="roadmap.v01.subtitle">Productizing Intelligent Routing with Comprehensive Evaluation</Translate>
             </p>
 
             <div className={styles.goalSection}>
-              <h2>Release Goal</h2>
+              <h2><Translate id="roadmap.releaseGoal.title">Release Goal</Translate></h2>
               <p>
                 This release focuses on productizing the semantic router with:
               </p>
@@ -108,7 +109,7 @@ const RoadmapV01: React.FC = () => {
               </ol>
 
               <div className={styles.keyDeliverables}>
-                <h3>Key P0 Deliverables</h3>
+                <h3><Translate id="roadmap.deliverables.title">Key P0 Deliverables</Translate></h3>
                 <ul>
                   <li>
                     <strong>Router intelligence:</strong>
@@ -130,7 +131,7 @@ const RoadmapV01: React.FC = () => {
             </div>
 
             <div className={styles.priorityLegend}>
-              <h3>Priority Criteria</h3>
+              <h3><Translate id="roadmap.criteria.title">Priority Criteria</Translate></h3>
               <div className={styles.priorityItems}>
                 <div className={styles.priorityItem}>
                   <PriorityBadge priority="P0" />
