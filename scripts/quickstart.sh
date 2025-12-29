@@ -172,7 +172,7 @@ start_services() {
 
     # Start docker-compose services (runs in detached mode via Makefile)
     # Timeout: 600 seconds (10 minutes) to allow for:
-    #   - Image pulls (semantic-router, envoy, jaeger, prometheus, grafana, openwebui, pipelines, llm-katan)
+    #   - Image pulls (semantic-router, envoy, jaeger, prometheus, grafana, llm-katan)
     #   - Dashboard build from Dockerfile (Go compilation can take 5-10 minutes)
     #   - Network/system variations
     # Save output to log file for debugging
@@ -232,7 +232,7 @@ wait_for_services() {
             echo
             # Show status of all containers
             section_header "📊 Container Status:"
-            "$CONTAINER_RUNTIME" ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|openwebui|pipelines|llm-katan"
+            "$CONTAINER_RUNTIME" ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|llm-katan"
             echo
             return 0
         fi
@@ -263,7 +263,6 @@ show_service_info() {
     print_color "$GREEN" "│  📊 Dashboard:               http://localhost:8700          │"
     print_color "$GREEN" "│  📈 Prometheus:              http://localhost:9090          │"
     print_color "$GREEN" "│  📊 Grafana:                 http://localhost:3000          │"
-    print_color "$GREEN" "│  🌐 Open WebUI:              http://localhost:3001          │"
     print_color "$WHITE" "└─────────────────────────────────────────────────────────────┘"
     echo
     section_header "🔧 Useful Commands:"

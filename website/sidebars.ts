@@ -95,7 +95,6 @@ const sidebars: SidebarsConfig = {
             'tutorials/observability/metrics',
             'tutorials/observability/dashboard',
             'tutorials/observability/distributed-tracing',
-            'tutorials/observability/open-webui-integration',
           ],
         },
       ],
