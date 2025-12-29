@@ -341,6 +341,27 @@ func (c *RedisCache) IsEnabled() bool {
 	return c.enabled
 }
 
+// ensureIndexExists checks if the Redis search index exists and recreates it if necessary.
+// This handles the case where the index was deleted (e.g., by FLUSHALL) while the router
+// was still running with a stale RedisCache object in memory.
+func (c *RedisCache) ensureIndexExists() error {
+	if !c.enabled {
+		return nil
+	}
+
+	ctx := context.Background()
+	_, err := c.client.FTInfo(ctx, c.indexName).Result()
+	if err != nil {
+		// Index doesn't exist, recreate it
+		logging.Warnf("RedisCache: index '%s' not found, recreating...", c.indexName)
+		if initErr := c.initializeIndex(); initErr != nil {
+			return fmt.Errorf("failed to recreate index: %w", initErr)
+		}
+		logging.Infof("RedisCache: index '%s' recreated successfully", c.indexName)
+	}
+	return nil
+}
+
 // CheckConnection verifies the Redis connection is healthy
 func (c *RedisCache) CheckConnection() error {
 	if !c.enabled {
@@ -392,6 +413,11 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte) e
 
 	if !c.enabled {
 		return nil
+	}
+
+	// Ensure the Redis search index exists (may have been deleted by FLUSHALL)
+	if err := c.ensureIndexExists(); err != nil {
+		return fmt.Errorf("failed to ensure index exists: %w", err)
 	}
 
 	logging.Debugf("RedisCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d)",
@@ -580,6 +606,11 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	if !c.enabled {
 		logging.Infof("FindSimilarWithThreshold: cache disabled, returning early")
 		return nil, false, nil
+	}
+
+	// Ensure the Redis search index exists (may have been deleted by FLUSHALL)
+	if err := c.ensureIndexExists(); err != nil {
+		return nil, false, fmt.Errorf("failed to ensure index exists: %w", err)
 	}
 
 	logging.Infof("FindSimilarWithThreshold: cache enabled, generating embedding for query")
