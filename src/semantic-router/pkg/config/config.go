@@ -173,8 +173,11 @@ type BackendModels struct {
 	// Default LLM model to use if no match is found
 	DefaultModel string `yaml:"default_model"`
 
-	// vLLM endpoints configuration for multiple backend support
+	// vLLM endpoints configuration for multiple backend support (legacy format)
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+
+	// Providers configuration (new format supporting external APIs)
+	Providers *ProvidersConfig `yaml:"providers,omitempty"`
 }
 
 type ReasoningConfig struct {
@@ -662,6 +665,51 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
+}
+
+// ProviderEndpoint represents an endpoint in the new providers format
+type ProviderEndpoint struct {
+	// Name identifier for the endpoint
+	Name string `yaml:"name"`
+
+	// Endpoint URL (can include path, e.g., "dashscope.aliyuncs.com/compatible-mode/v1")
+	Endpoint string `yaml:"endpoint"`
+
+	// Protocol to use (http or https)
+	Protocol string `yaml:"protocol"`
+
+	// Load balancing weight for this endpoint
+	Weight int `yaml:"weight,omitempty"`
+}
+
+// ProviderModel represents a model in the new providers format
+type ProviderModel struct {
+	// Model name (e.g., "qwen3/qwen3-235b-a22b-thinking-2507")
+	Name string `yaml:"name"`
+
+	// Reasoning family for this model
+	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
+
+	// Endpoints for this model
+	Endpoints []ProviderEndpoint `yaml:"endpoints"`
+
+	// Access key for authentication
+	AccessKey string `yaml:"access_key,omitempty"`
+}
+
+// ProvidersConfig represents the new providers configuration format
+type ProvidersConfig struct {
+	// List of models with their endpoints
+	Models []ProviderModel `yaml:"models"`
+
+	// Default model to use
+	DefaultModel string `yaml:"default_model,omitempty"`
+
+	// Reasoning families configuration
+	ReasoningFamilies map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+
+	// Default reasoning effort level
+	DefaultReasoningEffort string `yaml:"default_reasoning_effort,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters

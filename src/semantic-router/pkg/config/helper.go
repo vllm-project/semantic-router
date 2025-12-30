@@ -237,28 +237,28 @@ func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, boo
 	return bestEndpoint.Name, true
 }
 
-// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port
-// Returns the endpoint address:port string and whether selection was successful
+// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the endpoint URL
+// Returns the endpoint URL/address and whether selection was successful
+// For new provider format: returns full URL (e.g., "https://dashscope.aliyuncs.com/compatible-mode/v1")
+// For legacy format: returns "address:port"
 func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool) {
 	endpoints := c.GetEndpointsForModel(modelName)
 	if len(endpoints) == 0 {
 		return "", false
 	}
 
-	// If only one endpoint, return it
-	if len(endpoints) == 1 {
-		return fmt.Sprintf("%s:%d", endpoints[0].Address, endpoints[0].Port), true
-	}
-
-	// Select endpoint with highest weight
+	// Select endpoint with highest weight (if multiple)
 	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
+	if len(endpoints) > 1 {
+		for _, endpoint := range endpoints[1:] {
+			if endpoint.Weight > bestEndpoint.Weight {
+				bestEndpoint = endpoint
+			}
 		}
 	}
 
-	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), true
+	// Use the new GetEndpointURL method which handles both formats
+	return bestEndpoint.GetEndpointURL(), true
 }
 
 // GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
@@ -529,4 +529,85 @@ func (c *RouterConfig) GetHallucinationAction() string {
 func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
 	return c.InlineModels.FeedbackDetector.Enabled &&
 		c.InlineModels.FeedbackDetector.ModelID != ""
+}
+
+// ProcessProvidersConfig converts the new providers format to internal structures
+// This enables support for external APIs like Aliyun, OpenAI, etc.
+func (c *RouterConfig) ProcessProvidersConfig() error {
+	if c.Providers == nil || len(c.Providers.Models) == 0 {
+		return nil // No providers config, nothing to process
+	}
+
+	// Initialize maps if needed
+	if c.ModelConfig == nil {
+		c.ModelConfig = make(map[string]ModelParams)
+	}
+
+	// Process each model in providers
+	for _, providerModel := range c.Providers.Models {
+		// Create/update model config entry
+		modelParams := ModelParams{
+			ReasoningFamily: providerModel.ReasoningFamily,
+			AccessKey:       providerModel.AccessKey,
+		}
+
+		// Convert provider endpoints to internal VLLMEndpoint format
+		var preferredEndpoints []string
+		for _, providerEndpoint := range providerModel.Endpoints {
+			endpointName := fmt.Sprintf("%s-%s", providerModel.Name, providerEndpoint.Name)
+			preferredEndpoints = append(preferredEndpoints, endpointName)
+
+			// Create a VLLMEndpoint with the full URL support
+			vllmEndpoint := VLLMEndpoint{
+				Name:   endpointName,
+				Weight: providerEndpoint.Weight,
+			}
+
+			// For new format with protocol and endpoint path, store as special marker
+			// We'll handle URL construction differently in the client code
+			if providerEndpoint.Protocol != "" && providerEndpoint.Endpoint != "" {
+				// Use special markers to indicate this is a full URL endpoint
+				vllmEndpoint.Address = fmt.Sprintf("__PROVIDER_URL__%s://%s", providerEndpoint.Protocol, providerEndpoint.Endpoint)
+				vllmEndpoint.Port = 0 // Port 0 indicates full URL format
+			}
+
+			c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
+		}
+
+		modelParams.PreferredEndpoints = preferredEndpoints
+		c.ModelConfig[providerModel.Name] = modelParams
+	}
+
+	// Set default model from providers if not already set
+	if c.DefaultModel == "" && c.Providers.DefaultModel != "" {
+		c.DefaultModel = c.Providers.DefaultModel
+	}
+
+	// Merge reasoning families
+	if c.ReasoningFamilies == nil {
+		c.ReasoningFamilies = make(map[string]ReasoningFamilyConfig)
+	}
+	for family, config := range c.Providers.ReasoningFamilies {
+		c.ReasoningFamilies[family] = config
+	}
+
+	// Set default reasoning effort if not set
+	if c.DefaultReasoningEffort == "" && c.Providers.DefaultReasoningEffort != "" {
+		c.DefaultReasoningEffort = c.Providers.DefaultReasoningEffort
+	}
+
+	return nil
+}
+
+// GetEndpointURL returns the full URL for an endpoint
+// Supports both legacy (address:port) and new (full URL) formats
+func (e *VLLMEndpoint) GetEndpointURL() string {
+	// Check if this is a new-format provider endpoint
+	if e.Port == 0 && len(e.Address) > 16 && e.Address[:16] == "__PROVIDER_URL__" {
+		// Extract the full URL (remove the marker prefix)
+		return e.Address[16:]
+	}
+
+	// Legacy format: construct URL from address and port
+	return fmt.Sprintf("http://%s:%d", e.Address, e.Port)
 }
