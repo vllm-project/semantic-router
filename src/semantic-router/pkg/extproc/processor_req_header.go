@@ -60,6 +60,14 @@ type RequestContext struct {
 	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
+	// VSR signal tracking - stores all matched signals for response headers
+	VSRMatchedKeywords     []string // Matched keyword rule names
+	VSRMatchedEmbeddings   []string // Matched embedding rule names
+	VSRMatchedDomains      []string // Matched domain rule names
+	VSRMatchedFactCheck    []string // Matched fact-check signals
+	VSRMatchedUserFeedback []string // Matched user feedback signals
+	VSRMatchedPreference   []string // Matched preference signals
+
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
 	// Hallucination mitigation tracking

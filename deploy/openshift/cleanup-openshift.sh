@@ -340,15 +340,12 @@ cleanup_deployment() {
 
         # Observability resources
         "deployment/dashboard"
-        "deployment/openwebui"
         "deployment/grafana"
         "deployment/prometheus"
         "service/dashboard"
-        "service/openwebui"
         "service/grafana"
         "service/prometheus"
         "route/dashboard"
-        "route/openwebui"
         "route/grafana"
         "route/prometheus"
         "configmap/dashboard-config"

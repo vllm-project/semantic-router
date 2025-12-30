@@ -281,9 +281,21 @@ def docker_start_vllm_sr(
         ]
     )
 
+    # Mount .vllm-sr directory for user-customizable router defaults
+    # This allows users to modify router-defaults.yaml (e.g., external_models)
+    config_dir = os.path.dirname(os.path.abspath(config_file))
+    vllm_sr_dir = os.path.join(config_dir, ".vllm-sr")
+    if os.path.exists(vllm_sr_dir):
+        cmd.extend(
+            [
+                "-v",
+                f"{vllm_sr_dir}:/app/.vllm-sr",
+            ]
+        )
+        log.info(f"Mounting .vllm-sr directory: {vllm_sr_dir}")
+
     # Mount models directory for caching downloaded models
     # This allows models to persist across container restarts
-    config_dir = os.path.dirname(os.path.abspath(config_file))
     models_dir = os.path.join(config_dir, "models")
     os.makedirs(models_dir, exist_ok=True)  # Create if doesn't exist
     cmd.extend(

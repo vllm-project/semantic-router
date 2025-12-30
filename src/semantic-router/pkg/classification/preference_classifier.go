@@ -14,7 +14,7 @@ import (
 
 // PreferenceResult represents the result of preference classification
 type PreferenceResult struct {
-	Preference string  `json:"preference"` // The matched route name
+	Preference string  `json:"route"` // The matched route name
 	Confidence float32 `json:"confidence,omitempty"`
 }
 
@@ -51,7 +51,7 @@ func NewPreferenceClassifier(cfg *config.ExternalModelConfig, rules []config.Pre
 	}
 
 	// Default prompts
-	systemPrompt := "You are a routing classifier. Output ONLY a JSON object like {\"preference\":\"...\"} with no extra text."
+	systemPrompt := "You are a routing classifier. Output ONLY a JSON object like {\"route\":\"...\"} with no extra text."
 
 	userPromptTemplate := `You are a helpful assistant designed to find the best suited route.
 You are provided with route description within <routes></routes> XML tags:
@@ -64,11 +64,11 @@ You are provided with route description within <routes></routes> XML tags:
 </conversation>
 
 Your task is to decide which route is best suit with user intent on the conversation in <conversation></conversation> XML tags. Follow the instruction:
-1. If the latest intent from user is irrelevant or user intent is full filled, response with other route {"preference": "other"}.
+1. If the latest intent from user is irrelevant or user intent is full filled, response with other route {"route": "other"}.
 2. You must analyze the route descriptions and find the best match route for user latest intent.
 3. You only response the name of the route that best matches the user's request, use the exact name in the <routes></routes>.
 Return ONLY the JSON in the exact format:
-{"preference":"route_name"}`
+{"route":"route_name"}`
 
 	return &PreferenceClassifier{
 		client:             client,
@@ -102,7 +102,7 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 		Temperature: 0.0,
 	})
 
-	metrics.RecordClassifierLatency("preference", time.Since(start).Seconds())
+	metrics.RecordClassifierLatency("route", time.Since(start).Seconds())
 
 	if err != nil {
 		return nil, fmt.Errorf("external LLM API call failed: %w", err)
@@ -114,7 +114,7 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 
 	// Parse JSON response
 	output := resp.Choices[0].Message.Content
-	logging.Debugf("Preference classification response: %s", output)
+	logging.Infof("Preference classification response: %s", output)
 
 	result, err := p.parsePreferenceOutput(output)
 	if err != nil {
@@ -163,6 +163,10 @@ func (p *PreferenceClassifier) parsePreferenceOutput(output string) (*Preference
 	}
 
 	jsonStr := output[start : end+1]
+
+	// Replace single quotes with double quotes for JSON compatibility
+	// Some LLMs return {'key': 'value'} instead of {"key": "value"}
+	jsonStr = strings.ReplaceAll(jsonStr, "'", "\"")
 
 	var result PreferenceResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {

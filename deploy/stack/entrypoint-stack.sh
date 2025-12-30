@@ -17,29 +17,8 @@ export GF_SECURITY_ADMIN_PASSWORD="${GF_SECURITY_ADMIN_PASSWORD:-admin}"
 export TARGET_GRAFANA_URL="${TARGET_GRAFANA_URL:-http://localhost:3000}"
 export TARGET_JAEGER_URL="${TARGET_JAEGER_URL:-http://localhost:16686}"
 export TARGET_PROMETHEUS_URL="${TARGET_PROMETHEUS_URL:-http://localhost:9090}"
-export TARGET_CHATUI_URL="${TARGET_CHATUI_URL:-http://localhost:${CHATUI_PORT:-5173}}"
 export TARGET_ROUTER_API_URL="${TARGET_ROUTER_API_URL:-http://localhost:8080}"
 export TARGET_ROUTER_METRICS_URL="${TARGET_ROUTER_METRICS_URL:-http://localhost:9190/metrics}"
-
-# MongoDB and chat-ui
-export MONGODB_DATA_PATH="${MONGODB_DATA_PATH:-/var/lib/mongodb}"
-export MONGODB_URL="${MONGODB_URL:-mongodb://127.0.0.1:27017}"
-export MONGODB_DB_NAME="${MONGODB_DB_NAME:-chat-ui}"
-export CHATUI_PORT="${CHATUI_PORT:-5173}"
-export OPENAI_BASE_URL="${OPENAI_BASE_URL:-http://localhost:8801/v1}"
-export OPENAI_API_KEY="${OPENAI_API_KEY:-placeholder}"
-export PUBLIC_APP_NAME="${PUBLIC_APP_NAME:-HuggingChat}"
-export PUBLIC_APP_ASSETS="${PUBLIC_APP_ASSETS:-chatui}"
-export COOKIE_SECURE="${COOKIE_SECURE:-false}"
-export COOKIE_NAME="${COOKIE_NAME:-hf-chat}"
-export COOKIE_SAMESITE="${COOKIE_SAMESITE:-lax}"
-export APP_BASE_URL="${APP_BASE_URL:-http://localhost:${CHATUI_PORT}}"
-
-# Open WebUI and Pipelines
-export OPENWEBUI_PORT="${OPENWEBUI_PORT:-3001}"
-export OPENWEBUI_DATA_DIR="${OPENWEBUI_DATA_DIR:-/var/lib/openwebui}"
-export PIPELINES_PORT="${PIPELINES_PORT:-9099}"
-export TARGET_OPENWEBUI_URL="${TARGET_OPENWEBUI_URL:-http://localhost:${OPENWEBUI_PORT}}"
 
 # LLM-Katan (lightweight LLM server)
 export LLMKATAN_PORT="${LLMKATAN_PORT:-8002}"
@@ -67,9 +46,6 @@ echo ""
 echo "Endpoints:"
 echo "  API Gateway:       http://0.0.0.0:${ENVOY_LISTEN_PORT}"
 echo "  Dashboard:         http://0.0.0.0:${DASHBOARD_PORT}"
-echo "  HuggingChat:       http://0.0.0.0:${CHATUI_PORT}"
-echo "  Open WebUI:        http://0.0.0.0:${OPENWEBUI_PORT}"
-echo "  Pipelines:         http://0.0.0.0:${PIPELINES_PORT}"
 echo "  LLM-Katan:         http://0.0.0.0:${LLMKATAN_PORT} (model: ${LLMKATAN_SERVED_MODEL_NAME})"
 echo "  Prometheus:        http://0.0.0.0:9090"
 echo "  Grafana:           http://0.0.0.0:3000 (${GF_SECURITY_ADMIN_USER}/${GF_SECURITY_ADMIN_PASSWORD})"
@@ -110,7 +86,7 @@ if [ -f /app/config/envoy.yaml ]; then
 fi
 
 # Create required directories
-mkdir -p /var/log/supervisor /var/lib/grafana /var/lib/prometheus "${MONGODB_DATA_PATH}" "${OPENWEBUI_DATA_DIR}"
+mkdir -p /var/log/supervisor /var/lib/grafana /var/lib/prometheus
 chown -R nobody:nogroup /var/lib/grafana 2>/dev/null || true
 
 echo ""

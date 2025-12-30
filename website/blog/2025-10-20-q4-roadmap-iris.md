@@ -296,12 +296,6 @@ Deep integration with the vLLM Production Stack will enable seamless model servi
 
 Integration with llm-d will bring intelligent semantic routing to Kubernetes-native distributed inference deployments. This partnership will enable llm-d users to leverage MoM models and fusion routing for efficient model selection across distributed inference clusters, optimizing resource utilization and performance in cloud-native environments.
 
-### HuggingChat
-
-[HuggingChat](https://huggingface.co/chat/) is Hugging Face's open-source conversational AI platform powered by state-of-the-art open models. It democratizes access to advanced AI chat capabilities without requiring API keys or paid subscriptions.
-
-Integration with HuggingChat will bring intelligent semantic routing to conversational AI applications. This partnership will enable HuggingChat users to leverage MoM models and fusion routing capabilities, providing cost-effective and high-performance model selection for chat-based workloads.
-
 ### NVIDIA Dynamo
 
 [NVIDIA Dynamo](https://developer.nvidia.com/dynamo) is NVIDIA's high-performance, low-latency inference platform that supports all major frameworks including TensorRT-LLM. It delivers scalable, efficient inference with GPU optimization and includes intelligent inference optimizations that boost token generation performance by over 30x per GPU, with support for advanced features like disaggregated serving.

@@ -11,5 +11,3 @@ data:
   TARGET_PROMETHEUS_URL: http://prometheus.vllm-semantic-router-system.svc.cluster.local:9090
   TARGET_ROUTER_API_URL: http://semantic-router.vllm-semantic-router-system.svc.cluster.local:8080
   TARGET_ROUTER_METRICS_URL: http://semantic-router-metrics.vllm-semantic-router-system.svc.cluster.local:9190/metrics
-  TARGET_OPENWEBUI_URL: http://openwebui.vllm-semantic-router-system.svc.cluster.local:8080
-  TARGET_CHATUI_URL: http://chat-ui.vllm-semantic-router-system.svc.cluster.local:3000

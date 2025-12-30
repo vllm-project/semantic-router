@@ -126,21 +126,9 @@ oc get route semantic-router-metrics -n vllm-semantic-router-system -o jsonpath=
 
 # Observability (if deployed)
 oc get route dashboard -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
-oc get route openwebui -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
 oc get route grafana -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
 oc get route prometheus -n vllm-semantic-router-system -o jsonpath='{.spec.host}'
 ```
-
-### Dashboard Playground
-
-Access the OpenWebUI playground through the dashboard:
-
-```bash
-DASHBOARD_URL=$(oc get route dashboard -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
-echo "Playground: https://$DASHBOARD_URL/playground"
-```
-
-The playground automatically detects the OpenWebUI URL by replacing `dashboard` with `openwebui` in the hostname - no configuration needed!
 
 ### Example Usage
 

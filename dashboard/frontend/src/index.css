@@ -1,24 +1,24 @@
 :root {
-  /* Colors - inspired by vLLM theme */
-  --color-primary: #3b82f6;
-  --color-primary-dark: #2563eb;
-  --color-secondary: #8b5cf6;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  /* Apple-style monochrome colors */
+  --color-primary: #000000;
+  --color-primary-dark: #000000;
+  --color-secondary: #000000;
+  --color-success: #000000;
+  --color-warning: #000000;
+  --color-danger: #000000;
 
-  /* Light theme */
+  /* Light theme - Apple style */
   --color-bg: #ffffff;
-  --color-bg-secondary: #f9fafb;
-  --color-bg-tertiary: #f3f4f6;
-  --color-text: #111827;
-  --color-text-secondary: #6b7280;
-  --color-border: #e5e7eb;
-  --color-shadow: rgba(0, 0, 0, 0.1);
+  --color-bg-secondary: #f5f5f7;
+  --color-bg-tertiary: #e8e8ed;
+  --color-text: #1d1d1f;
+  --color-text-secondary: #86868b;
+  --color-border: #d2d2d7;
+  --color-shadow: rgba(0, 0, 0, 0.08);
 
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace;
+  /* Typography - Apple system fonts */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
 
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -27,24 +27,25 @@
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
 
-  /* Border radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  /* Border radius - Apple style */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
 
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease;
+  /* Transitions - Apple style */
+  --transition-fast: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 [data-theme='dark'] {
-  --color-bg: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
-  --color-text: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-border: #334155;
+  --color-bg: #000000;
+  --color-bg-secondary: #1c1c1e;
+  --color-bg-tertiary: #2c2c2e;
+  --color-text: #f5f5f7;
+  --color-text-secondary: #86868b;
+  --color-border: #38383a;
   --color-shadow: rgba(0, 0, 0, 0.5);
 }
 
@@ -117,4 +118,19 @@ textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-secondary);
+}
+
+/* Fullscreen mode - hide Layout sidebar and header */
+body.playground-fullscreen aside {
+  display: none !important;
+}
+
+body.playground-fullscreen header {
+  display: none !important;
+}
+
+body.playground-fullscreen main {
+  margin-left: 0 !important;
+  width: 100% !important;
+  padding: 0 !important;
 }

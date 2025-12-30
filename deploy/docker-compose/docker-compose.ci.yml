@@ -1,6 +1,6 @@
 # Minimal Docker Compose for CI testing
 # This file contains only essential services needed for integration testing.
-# Excludes: grafana, prometheus, jaeger, openwebui, chat-ui, pipelines, mongo, dashboard
+# Excludes: grafana, prometheus, jaeger, dashboard
 #
 # Usage:
 #   make docker-compose-up-ci

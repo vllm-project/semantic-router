@@ -8,10 +8,6 @@
 # - Prometheus (metrics collection)
 # - Grafana (monitoring dashboards)
 # - Jaeger (distributed tracing)
-# - MongoDB (database)
-# - chat-ui (web UI)
-# - open-webui (web UI)
-# - pipelines (web UI)
 # - LLM-katan (LLM)
 #
 # Supports: linux/amd64, linux/arm64
@@ -26,10 +22,7 @@
 #     -p 8002:8002 \
 #     -p 8700:8700 \
 #     -p 3000:3000 \
-#     -p 3001:3001 \
-#     -p 5173:5173 \
 #     -p 9090:9090 \
-#     -p 9099:9099 \
 #     -p 16686:16686 \
 #     -v ./models:/app/models:ro \  # need run make download-models
 #     vsr-stack:latest
@@ -44,8 +37,6 @@ ARG ENVOY_VERSION=1.31.7
 ARG PROMETHEUS_VERSION=2.53.0
 ARG GRAFANA_VERSION=11.5.1
 ARG JAEGER_VERSION=1.62.0
-ARG MONGODB_VERSION=8.0.4
-ARG CHATUI_VERSION=latest
 
 # Stage 1: Rust library (candle-binding)
 FROM rustlang/rust:nightly AS rust-builder
@@ -121,9 +112,6 @@ COPY dashboard/frontend/index.html ./
 
 RUN npm install --include=dev
 
-# Stack: configure Open WebUI port for direct access
-ENV VITE_OPENWEBUI_PORT=3001
-
 RUN npm run build
 
 # Stage 4: Dashboard backend (Go)
@@ -146,20 +134,8 @@ RUN go mod download
 COPY dashboard/backend/ /app/dashboard/backend/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/dashboard-backend main.go
 
-# Stage 5: chat-ui
-FROM ghcr.io/huggingface/chat-ui-db:latest AS chatui-source
-
-# Stage 5b: Open WebUI
-FROM ghcr.io/open-webui/open-webui:main AS openwebui-source
-
-# Stage 5c: Pipelines
-FROM ghcr.io/open-webui/pipelines:main AS pipelines-source
-
 # Stage 6a: Envoy
 FROM envoyproxy/envoy:v1.31.7 AS envoy-source
-
-# Stage 6b: MongoDB
-FROM mongo:7 AS mongodb-source
 
 # Stage 6c: Download binaries (Prometheus, Grafana, Jaeger)
 FROM debian:testing AS downloader
@@ -168,7 +144,6 @@ ARG TARGETARCH
 ARG PROMETHEUS_VERSION
 ARG GRAFANA_VERSION
 ARG JAEGER_VERSION
-ARG MONGODB_VERSION
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -198,7 +173,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then JAEGER_ARCH="arm64"; else JAEGER_ARCH
 FROM debian:testing
 
 LABEL maintainer="vLLM Semantic Router Team"
-LABEL description="Stack image with semantic-router, dashboard, chat-ui, llm-katan, Envoy, MongoDB, Prometheus, Grafana, and Jaeger"
+LABEL description="Stack image with semantic-router, dashboard, llm-katan, Envoy, Prometheus, Grafana, and Jaeger"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
@@ -210,38 +185,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libc6 \
     libstdc++6 \
-    libgcc-s1 \
-    gettext-base \
-    adduser \
-    libfontconfig1 \
-    nodejs \
-    npm \
-    python3 \
-    python3-pip \
-    python3-venv \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /var/log/supervisor /var/run/supervisor \
-    && pip3 install --no-cache-dir --break-system-packages huggingface_hub[cli]
+	    libgcc-s1 \
+	    gettext-base \
+	    adduser \
+	    libfontconfig1 \
+	    python3 \
+	    python3-pip \
+	    python3-venv \
+	    && rm -rf /var/lib/apt/lists/* \
+	    && mkdir -p /var/log/supervisor /var/run/supervisor \
+	    && pip3 install --no-cache-dir --break-system-packages huggingface_hub[cli]
 
 # Create application directories
-RUN mkdir -p \
-    /app/config \
-    /app/lib \
-    /app/models \
-    /app/frontend \
-    /app/chatui \
-    /app/openwebui \
-    /app/pipelines \
-    /etc/envoy \
-    /etc/prometheus \
-    /etc/grafana/provisioning/datasources \
-    /etc/grafana/provisioning/dashboards \
-    /var/lib/grafana \
-    /var/lib/prometheus \
-    /var/lib/mongodb \
-    /var/lib/openwebui \
-    /opt/llmkatan-env \
-    /etc/supervisor/conf.d
+	RUN mkdir -p \
+	    /app/config \
+	    /app/lib \
+	    /app/models \
+	    /app/frontend \
+	    /etc/envoy \
+	    /etc/prometheus \
+	    /etc/grafana/provisioning/datasources \
+	    /etc/grafana/provisioning/dashboards \
+	    /var/lib/grafana \
+	    /var/lib/prometheus \
+	    /opt/llmkatan-env \
+	    /etc/supervisor/conf.d
 
 # Copy binaries
 COPY --from=envoy-source /usr/local/bin/envoy /usr/local/bin/envoy
@@ -264,22 +232,8 @@ COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_r
 COPY --from=dashboard-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
 
-# MongoDB (from official Docker image)
-COPY --from=mongodb-source /usr/bin/mongod /usr/local/bin/mongod
-
-# chat-ui (HuggingChat) - from pre-built image
-COPY --from=chatui-source /app /app/chatui
-
-# Open WebUI - independent Python environment at /opt/openwebui-env
-COPY --from=openwebui-source /usr/local /opt/openwebui-env
-COPY --from=openwebui-source /app /app/openwebui
-
-# Pipelines - independent Python environment at /opt/pipelines-env
-COPY --from=pipelines-source /usr/local /opt/pipelines-env
-COPY --from=pipelines-source /app /app/pipelines
-
-# LLM-Katan - source files (will be installed in venv below)
-COPY e2e/testing/llm-katan /app/llm-katan-src
+	# LLM-Katan - source files (will be installed in venv below)
+	COPY e2e/testing/llm-katan /app/llm-katan-src
 
 # Install LLM-Katan in a virtual environment
 # Using CPU-only PyTorch to save space (~2GB vs ~8GB with CUDA)
@@ -289,9 +243,6 @@ RUN python3 -m venv /opt/llmkatan-env && \
     /opt/llmkatan-env/bin/pip install --no-cache-dir -r /app/llm-katan-src/requirements.txt && \
     /opt/llmkatan-env/bin/pip install --no-cache-dir /app/llm-katan-src && \
     rm -rf /app/llm-katan-src
-
-# vllm semantic router pipeline config (stack version with localhost:8801)
-COPY deploy/stack/vllm_semantic_router_pipe.py /app/pipelines/vllm_semantic_router_pipe.py
 
 # Configuration files
 COPY deploy/stack/config.stack.yaml /app/config/config.yaml
@@ -339,30 +290,6 @@ ENV GF_SECURITY_ADMIN_PASSWORD=admin
 # Jaeger
 ENV COLLECTOR_OTLP_ENABLED=true
 
-# MongoDB
-ENV MONGODB_DATA_PATH=/var/lib/mongodb
-
-# chat-ui (HuggingChat)
-ENV CHATUI_PORT=5173
-ENV MONGODB_URL=mongodb://127.0.0.1:27017
-ENV MONGODB_DB_NAME=chat-ui
-ENV OPENAI_BASE_URL=http://localhost:8801/v1
-ENV OPENAI_API_KEY=placeholder
-ENV PUBLIC_APP_NAME=HuggingChat
-ENV PUBLIC_APP_ASSETS=chatui
-ENV COOKIE_SECURE=false
-ENV COOKIE_NAME=hf-chat
-ENV COOKIE_SAMESITE=lax
-ENV APP_BASE_URL=http://localhost:5173
-
-# Open WebUI
-ENV OPENWEBUI_PORT=3001
-ENV OPENWEBUI_DATA_DIR=/var/lib/openwebui
-ENV OPENAI_API_BASE_URL=http://localhost:9099
-
-# Pipelines
-ENV PIPELINES_PORT=9099
-
 # LLM-Katan (lightweight LLM server)
 ENV LLMKATAN_PORT=8002
 ENV LLMKATAN_MODEL=/app/models/Qwen/Qwen3-0.6B
@@ -378,11 +305,8 @@ ENV LLMKATAN_SERVED_MODEL_NAME=qwen3
 # 3000  - Grafana
 # 16686 - Jaeger UI
 # 4317  - Jaeger OTLP gRPC
-# 5173  - chat-ui (HuggingChat)
-# 3001  - Open WebUI
-# 9099  - Pipelines
 # 8002  - LLM-Katan
-EXPOSE 8801 19000 50051 8080 8700 9090 3000 16686 4317 5173 3001 9099 8002
+EXPOSE 8801 19000 50051 8080 8700 9090 3000 16686 4317 8002
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \

@@ -6,7 +6,7 @@ const PlaygroundPage = () => {
     <div className={styles.container}>
       <ChatComponent
         endpoint="/api/router/v1/chat/completions"
-        defaultModel="auto"
+        defaultModel="MoM"
         defaultSystemPrompt="You are a helpful assistant."
       />
     </div>
