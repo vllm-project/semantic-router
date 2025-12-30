@@ -32,8 +32,18 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		originalReasoningEffort = "low" // Default for compatibility
 	}
 
-	// Clear both reasoning fields to start with a clean state
-	delete(requestMap, "chat_template_kwargs")
+	// Keep any user-provided chat_template_kwargs and only override the reasoning-related
+	// parameter when needed (do not drop unrelated chat_template_kwargs keys).
+	chatTemplateKwargs := map[string]interface{}{}
+	if v, ok := requestMap["chat_template_kwargs"]; ok {
+		if m, ok := v.(map[string]interface{}); ok && m != nil {
+			chatTemplateKwargs = m
+		}
+	}
+
+	// Clear reasoning_effort by default to avoid leaking unsupported or irrelevant reasoning
+	// parameters to models. We will re-set it as needed (e.g., preserve for reasoning_effort
+	// families when disabled, or set configured effort when enabled).
 	delete(requestMap, "reasoning_effort")
 
 	appliedEffort := ""
@@ -41,29 +51,50 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	var reasoningApplied bool
 
 	if enabled {
-		// When reasoning is enabled, build the appropriate fields
-		reasoningFields, effort := r.buildReasoningRequestFields(model, enabled, categoryName)
-		if reasoningFields != nil {
-			for key, value := range reasoningFields {
-				requestMap[key] = value
-			}
-			appliedEffort = effort
-			reasoningApplied = true
-		} else {
+		familyConfig := r.getModelReasoningFamily(model)
+		if familyConfig == nil {
 			// Model has no reasoning family configured
 			reasoningApplied = false
+		} else {
+			switch familyConfig.Type {
+			case "chat_template_kwargs":
+				chatTemplateKwargs[familyConfig.Parameter] = true
+				requestMap["chat_template_kwargs"] = chatTemplateKwargs
+				reasoningApplied = true
+			case "reasoning_effort":
+				effort := r.getReasoningEffort(categoryName, model)
+				requestMap["reasoning_effort"] = effort
+				appliedEffort = effort
+				reasoningApplied = true
+			default:
+				// Unknown reasoning syntax type - don't apply anything
+				reasoningApplied = false
+			}
 		}
 	} else {
-		// When reasoning is disabled, only preserve reasoning_effort for gpt-oss models
+		// When reasoning is disabled, apply the appropriate "disable" syntax for models
+		// that require an explicit flag (e.g. Qwen3/DeepSeek), and preserve
+		// reasoning_effort for models that use it (e.g. gpt-oss).
 		familyConfig := r.getModelReasoningFamily(model)
-		if familyConfig != nil && familyConfig.Type == "reasoning_effort" {
-			requestMap["reasoning_effort"] = originalReasoningEffort
-			if s, ok := originalReasoningEffort.(string); ok {
-				appliedEffort = s
+		if familyConfig != nil {
+			switch familyConfig.Type {
+			case "reasoning_effort":
+				// Preserve original reasoning_effort for gpt-oss models (don't break upstream defaulting).
+				requestMap["reasoning_effort"] = originalReasoningEffort
+				if s, ok := originalReasoningEffort.(string); ok {
+					appliedEffort = s
+				}
+			case "chat_template_kwargs":
+				// Some models default to "thinking enabled" unless explicitly disabled.
+				// Inject an explicit disable flag (e.g. enable_thinking=false / thinking=false).
+				chatTemplateKwargs[familyConfig.Parameter] = false
+				requestMap["chat_template_kwargs"] = chatTemplateKwargs
+			default:
+				// Unknown reasoning syntax type - keep fields cleared.
 			}
 		}
 		reasoningApplied = false
-		// For all other models, reasoning fields remain cleared
+		// For models without a reasoning family, fields remain cleared.
 	}
 
 	// Log based on what actually happened
