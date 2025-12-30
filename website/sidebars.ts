@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/ai-gateway',
             'installation/k8s/istio',
+            'installation/k8s/gateway-api-inference-extension',
           ],
         },
         {
@@ -95,7 +96,6 @@ const sidebars: SidebarsConfig = {
             'tutorials/observability/metrics',
             'tutorials/observability/dashboard',
             'tutorials/observability/distributed-tracing',
-            'tutorials/observability/open-webui-integration',
           ],
         },
       ],

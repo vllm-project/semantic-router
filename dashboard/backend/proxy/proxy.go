@@ -21,7 +21,7 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
-	// Enable streaming responses (critical for SSE/ChatUI)
+	// Enable streaming responses (critical for SSE)
 	// FlushInterval = 0 means flush immediately, supporting real-time streaming
 	proxy.FlushInterval = -1 // -1 means flush immediately after each write
 
@@ -60,7 +60,7 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		}
 
 		// Set Origin header to match the target URL for iframe embedding
-		// This is required for services like Grafana, Chat UI, and OpenWebUI to accept the iframe embedding
+		// This is required for embedded services to accept iframe embedding
 		// and pass CSRF/Origin validation checks. The original Origin is preserved in X-Forwarded-Origin
 		// for CORS response handling. This override is intentional and necessary for iframe embedding to work.
 		r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
@@ -133,7 +133,7 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 			resp.Header.Set("Content-Security-Policy", "frame-ancestors 'self'")
 		} else {
 			// If CSP exists, modify frame-ancestors directive
-			// This ensures the embedded service (like Chat UI) can be displayed in an iframe
+			// This ensures the embedded service can be displayed in an iframe
 			lower := strings.ToLower(csp)
 			if strings.Contains(lower, "frame-ancestors") {
 				// Split directives by ';'
