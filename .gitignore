@@ -49,6 +49,7 @@ Thumbs.db
 
 # Project specific
 bin/
+tools/bin/
 
 # Model files (too large for git)
 *.pt

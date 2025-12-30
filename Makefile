@@ -5,6 +5,7 @@ _run:
 	@$(MAKE) --warn-undefined-variables \
 		-f tools/make/common.mk \
 		-f tools/make/envs.mk \
+		-f tools/make/deps.mk \
 		-f tools/make/envoy.mk \
 		-f tools/make/golang.mk \
 		-f tools/make/rust.mk \
