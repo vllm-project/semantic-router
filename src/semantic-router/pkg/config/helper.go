@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -563,11 +564,18 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 				Weight: providerEndpoint.Weight,
 			}
 
-			// For new format with protocol and endpoint, just use the host part
-			// Note: This doesn't support custom paths yet, only host:port
+			// For new format with protocol and endpoint, parse host and path
 			if providerEndpoint.Endpoint != "" {
-				// Use the endpoint as address (host only, no path support yet)
-				vllmEndpoint.Address = providerEndpoint.Endpoint
+				// Split endpoint into host and path
+				// e.g., "dashscope.aliyuncs.com/compatible-mode/v1" 
+				// -> host: "dashscope.aliyuncs.com", path: "/compatible-mode/v1"
+				parts := strings.SplitN(providerEndpoint.Endpoint, "/", 2)
+				vllmEndpoint.Address = parts[0] // Host only
+				
+				// Set path if it exists
+				if len(parts) > 1 {
+					vllmEndpoint.Path = "/" + parts[1]
+				}
 				
 				// Set port based on protocol
 				if providerEndpoint.Protocol == "https" {
@@ -605,7 +613,7 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 	return nil
 }
 
-// GetEndpointURL returns the full URL for an endpoint
+// GetEndpointURL returns the full URL for an endpoint including path
 func (e *VLLMEndpoint) GetEndpointURL() string {
 	// Determine protocol based on port
 	protocol := "http"
@@ -613,6 +621,13 @@ func (e *VLLMEndpoint) GetEndpointURL() string {
 		protocol = "https"
 	}
 	
-	// Construct URL from address and port
-	return fmt.Sprintf("%s://%s:%d", protocol, e.Address, e.Port)
+	// Construct URL from address, port, and path
+	baseURL := fmt.Sprintf("%s://%s:%d", protocol, e.Address, e.Port)
+	
+	// Add path if it exists
+	if e.Path != "" {
+		return baseURL + e.Path
+	}
+	
+	return baseURL
 }

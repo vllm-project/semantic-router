@@ -665,6 +665,9 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
+
+	// Path for the endpoint URL (e.g., "/compatible-mode/v1")
+	Path string `yaml:"path,omitempty"`
 }
 
 // ProviderEndpoint represents an endpoint in the new providers format
