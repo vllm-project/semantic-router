@@ -1,0 +1,58 @@
+# Redis Store Configuration for Response API - Simple Standalone Mode
+# This is the simplest configuration for local development and testing.
+# To use this configuration:
+# 1. Set store_backend: "redis" in your main config.yaml
+# 2. Set redis.config_path: "config/response-api/redis-simple.yaml" in response_api section
+# 3. Ensure Redis server is running on localhost:6379
+
+# Basic connection
+address: "localhost:6379"
+password: ""  # Leave empty if Redis has no authentication
+db: 0         # Database number 0 (shared with semantic cache, separated by prefix)
+
+# Key management
+key_prefix: "sr:"  # Base prefix - creates keys like: sr:response:xxx, sr:conversation:xxx
+
+# Connection pooling
+pool_size: 10        # Maximum connections (good for local dev)
+min_idle_conns: 2    # Keep 2 connections ready
+max_retries: 3       # Retry failed operations up to 3 times
+
+# Timeouts (in seconds)
+dial_timeout: 5      # 5 seconds to establish connection
+read_timeout: 3      # 3 seconds to read response
+write_timeout: 3     # 3 seconds to write data
+
+# Cluster mode (disabled for simple standalone)
+cluster_mode: false
+
+# TLS (disabled for local development)
+tls_enabled: false
+
+# Usage Example in main config:
+# response_api:
+#   enabled: true
+#   store_backend: "redis"
+#   ttl_seconds: 86400  # 24 hours
+#   redis:
+#     config_path: "config/response-api/redis-simple.yaml"
+
+# Or use inline configuration instead:
+# response_api:
+#   enabled: true
+#   store_backend: "redis"
+#   ttl_seconds: 86400
+#   redis:
+#     address: "localhost:6379"
+#     db: 0
+#     key_prefix: "sr:"
+#     pool_size: 10
+
+# Redis Key Schema:
+# sr:response:{response_id}      → JSON blob of StoredResponse
+# sr:conversation:{conv_id}      → JSON blob of StoredConversation
+#
+# Both Response API and Semantic Cache share DB 0 but use different base prefixes:
+# - Response API: sr:*
+# - Semantic Cache: doc:*
+

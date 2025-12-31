@@ -496,7 +496,7 @@ type ResponseAPIConfig struct {
 	// Enable Response API endpoints
 	Enabled bool `yaml:"enabled"`
 
-	// Storage backend type: "memory", "milvus"
+	// Storage backend type: "memory", "milvus", "redis"
 	// Default: "memory"
 	StoreBackend string `yaml:"store_backend,omitempty"`
 
@@ -511,6 +511,9 @@ type ResponseAPIConfig struct {
 
 	// Milvus configuration (when store_backend is "milvus")
 	Milvus ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
+
+	// Redis configuration (when store_backend is "redis")
+	Redis ResponseAPIRedisConfig `yaml:"redis,omitempty"`
 }
 
 // ResponseAPIMilvusConfig configures Milvus storage for Response API.
@@ -523,6 +526,42 @@ type ResponseAPIMilvusConfig struct {
 
 	// Collection name for storing responses
 	Collection string `yaml:"collection,omitempty"`
+}
+
+// ResponseAPIRedisConfig configures Redis storage for Response API.
+// Supports both inline configuration and external config file.
+type ResponseAPIRedisConfig struct {
+	// Basic connection (inline)
+	Address  string `yaml:"address,omitempty" json:"address,omitempty"`
+	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	DB       int    `yaml:"db" json:"db"`
+
+	// Key management
+	// Default: "sr:" (base prefix for keys like sr:response:xxx, sr:conversation:xxx)
+	KeyPrefix string `yaml:"key_prefix,omitempty" json:"key_prefix,omitempty"`
+
+	// Cluster support
+	ClusterMode      bool     `yaml:"cluster_mode,omitempty" json:"cluster_mode,omitempty"`
+	ClusterAddresses []string `yaml:"cluster_addresses,omitempty" json:"cluster_addresses,omitempty"`
+
+	// Connection pooling
+	PoolSize     int `yaml:"pool_size,omitempty" json:"pool_size,omitempty"`
+	MinIdleConns int `yaml:"min_idle_conns,omitempty" json:"min_idle_conns,omitempty"`
+	MaxRetries   int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+
+	// Timeouts (seconds)
+	DialTimeout  int `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+	ReadTimeout  int `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
+	WriteTimeout int `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+
+	// TLS
+	TLSEnabled  bool   `yaml:"tls_enabled,omitempty" json:"tls_enabled,omitempty"`
+	TLSCertPath string `yaml:"tls_cert_path,omitempty" json:"tls_cert_path,omitempty"`
+	TLSKeyPath  string `yaml:"tls_key_path,omitempty" json:"tls_key_path,omitempty"`
+	TLSCAPath   string `yaml:"tls_ca_path,omitempty" json:"tls_ca_path,omitempty"`
+
+	// Optional external config file
+	ConfigPath string `yaml:"config_path,omitempty" json:"config_path,omitempty"`
 }
 
 // KeywordRule defines a rule for keyword-based classification.

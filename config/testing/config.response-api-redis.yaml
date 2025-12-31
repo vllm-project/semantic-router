@@ -1,0 +1,119 @@
+# Response API with Redis Store - Testing Configuration
+# This configuration is for testing Redis backend for Response API
+
+bert_model:
+  model_id: models/mom-embedding-light
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+
+# Response API Configuration with Redis Backend
+response_api:
+  enabled: true
+  store_backend: "redis"  # Using Redis store
+  ttl_seconds: 86400      # 24 hours (responses auto-expire)
+
+  # Option 1: Inline Redis configuration (simple, recommended for testing)
+  redis:
+    address: "localhost:6379"
+    password: ""
+    db: 0  # Use DB 0 with unique key_prefix to separate from semantic cache
+    key_prefix: "sr:"  # Base prefix - produces keys like sr:response:resp_xxx
+
+    # Connection pooling
+    pool_size: 10
+    min_idle_conns: 2
+    max_retries: 3
+
+    # Timeouts (seconds)
+    dial_timeout: 5
+    read_timeout: 3
+    write_timeout: 3
+
+    # Cluster mode (disabled for local testing)
+    cluster_mode: false
+
+    # TLS (disabled for local testing)
+    tls_enabled: false
+
+    # Option 2: External config file (uncomment to use)
+    # redis:
+    #   config_path: "config/response-api/redis-simple.yaml"
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "test-endpoint"
+    address: "0.0.0.0"
+    port: 8000
+    weight: 1
+
+model_config:
+  "openai/gpt-oss-120b":
+    use_reasoning: false
+    preferred_endpoints: ["test-endpoint"]
+
+# Minimal classifier configuration
+classifier:
+  category_model:
+    model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+    use_modernbert: false
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
+
+categories:
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+decisions:
+  - name: "default_decision"
+    description: "Default catch-all decision"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+
+default_model: "openai/gpt-oss-120b"
+
+# Reasoning family configurations
+reasoning_families:
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+
+# Testing Notes:
+# 1. Make sure Redis is running on localhost:6379
+#    - Docker: docker run -d -p 6379:6379 redis:latest
+#    - Systemd: sudo systemctl start redis
+#
+# 2. Verify Redis is accessible:
+#    redis-cli ping  # Should return "PONG"
+#
+# 3. Monitor Redis keys:
+#    redis-cli -n 0  # Connect to DB 0
+#    KEYS sr:response:*  # List all response keys
+#    KEYS sr:conversation:*  # List all conversation keys
+#    GET sr:response:resp_xxxxx  # Get specific response
+#
+# 4. Clear test data:
+#    redis-cli -n 0
+#    KEYS sr:* | xargs redis-cli DEL  # Delete all Response API keys
+#
+# 5. Check TTL:
+#    redis-cli -n 0
+#    TTL sr:response:resp_xxxxx  # Should show ~86400 seconds
+
