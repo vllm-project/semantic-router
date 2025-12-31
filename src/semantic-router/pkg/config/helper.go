@@ -567,29 +567,30 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 			// For new format with protocol and endpoint, parse host and path
 			if providerEndpoint.Endpoint != "" {
 				// Split endpoint into host and path
-			// e.g., "dashscope.aliyuncs.com/compatible-mode/v1"
-			// -> host: "dashscope.aliyuncs.com", path: "/compatible-mode/v1"
-			parts := strings.SplitN(providerEndpoint.Endpoint, "/", 2)
-			vllmEndpoint.Address = parts[0] // Host only
+				// e.g., "dashscope.aliyuncs.com/compatible-mode/v1"
+				// -> host: "dashscope.aliyuncs.com", path: "/compatible-mode/v1"
+				parts := strings.SplitN(providerEndpoint.Endpoint, "/", 2)
+				vllmEndpoint.Address = parts[0] // Host only
 
-			// Set path if it exists
-			if len(parts) > 1 {
-				vllmEndpoint.Path = "/" + parts[1]
+				// Set path if it exists
+				if len(parts) > 1 {
+					vllmEndpoint.Path = "/" + parts[1]
+				}
+
+				// Set port based on protocol
+				if providerEndpoint.Protocol == "https" {
+					vllmEndpoint.Port = 443
+				} else {
+					vllmEndpoint.Port = 80
+				}
 			}
 
-			// Set port based on protocol
-			if providerEndpoint.Protocol == "https" {
-				vllmEndpoint.Port = 443
-			} else {
-				vllmEndpoint.Port = 80
-			}
+			c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
 		}
 
-		c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
+		modelParams.PreferredEndpoints = preferredEndpoints
+		c.ModelConfig[providerModel.Name] = modelParams
 	}
-
-	modelParams.PreferredEndpoints = preferredEndpoints
-	c.ModelConfig[providerModel.Name] = modelParams
 
 	// Set default model from providers if not already set
 	if c.DefaultModel == "" && c.Providers.DefaultModel != "" {
