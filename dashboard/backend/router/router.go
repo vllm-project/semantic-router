@@ -29,6 +29,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
+	// Status endpoint - shows service health status (aligns with vllm-sr status)
+	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
+	log.Printf("Status API endpoint registered: /api/status")
+
+	// Logs endpoint - shows service logs (aligns with vllm-sr logs)
+	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))
+	log.Printf("Logs API endpoint registered: /api/logs")
+
 	// Router API proxy (forward Authorization) - MUST be registered before Grafana
 	// Use HandleFunc to explicitly exclude config endpoints
 	var routerAPIProxy *httputil.ReverseProxy
