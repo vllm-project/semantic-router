@@ -610,21 +610,19 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 	return nil
 }
 
-// GetEndpointURL returns the full URL for an endpoint including path
+// GetEndpointURL returns the endpoint address for routing
+// For endpoints with custom paths: returns full URL (e.g., "https://api.example.com:443/v1/chat")
+// For standard endpoints: returns host:port only (e.g., "172.28.0.20:8002") for Envoy compatibility
 func (e *VLLMEndpoint) GetEndpointURL() string {
-	// Determine protocol based on port
-	protocol := "http"
-	if e.Port == 443 {
-		protocol = "https"
-	}
-
-	// Construct URL from address, port, and path
-	baseURL := fmt.Sprintf("%s://%s:%d", protocol, e.Address, e.Port)
-
-	// Add path if it exists
+	// If there's a custom path, return full URL
 	if e.Path != "" {
-		return baseURL + e.Path
+		protocol := "http"
+		if e.Port == 443 {
+			protocol = "https"
+		}
+		return fmt.Sprintf("%s://%s:%d%s", protocol, e.Address, e.Port, e.Path)
 	}
 
-	return baseURL
+	// For standard endpoints without path, return host:port only (Envoy format)
+	return fmt.Sprintf("%s:%d", e.Address, e.Port)
 }
