@@ -567,19 +567,16 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 			// For new format with protocol and endpoint, parse host and path
 			if providerEndpoint.Endpoint != "" {
 				// Split endpoint into host and path
-				// e.g., "dashscope.aliyuncs.com/compatible-mode/v1" 
-				// -> host: "dashscope.aliyuncs.com", path: "/compatible-mode/v1"
-				parts := strings.SplitN(providerEndpoint.Endpoint, "/", 2)
-				vllmEndpoint.Address = parts[0] // Host only
-				
-				// Set path if it exists
-				if len(parts) > 1 {
-					vllmEndpoint.Path = "/" + parts[1]
-				}
-				
-				// Set port based on protocol
-				if providerEndpoint.Protocol == "https" {
-					vllmEndpoint.Port = 443
+			// e.g., "dashscope.aliyuncs.com/compatible-mode/v1"
+			// -> host: "dashscope.aliyuncs.com", path: "/compatible-mode/v1"
+			parts := strings.SplitN(providerEndpoint.Endpoint, "/", 2)
+			vllmEndpoint.Address = parts[0] // Host only
+
+			// Set path if it exists
+			if len(parts) > 1 {
+				vllmEndpoint.Path = "/" + parts[1]
+			}
+
 				} else {
 					vllmEndpoint.Port = 80
 				}
@@ -620,14 +617,14 @@ func (e *VLLMEndpoint) GetEndpointURL() string {
 	if e.Port == 443 {
 		protocol = "https"
 	}
-	
+
 	// Construct URL from address, port, and path
 	baseURL := fmt.Sprintf("%s://%s:%d", protocol, e.Address, e.Port)
-	
+
 	// Add path if it exists
 	if e.Path != "" {
 		return baseURL + e.Path
 	}
-	
+
 	return baseURL
 }
