@@ -563,12 +563,18 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 				Weight: providerEndpoint.Weight,
 			}
 
-			// For new format with protocol and endpoint path, store as special marker
-			// We'll handle URL construction differently in the client code
-			if providerEndpoint.Protocol != "" && providerEndpoint.Endpoint != "" {
-				// Use special markers to indicate this is a full URL endpoint
-				vllmEndpoint.Address = fmt.Sprintf("__PROVIDER_URL__%s://%s", providerEndpoint.Protocol, providerEndpoint.Endpoint)
-				vllmEndpoint.Port = 0 // Port 0 indicates full URL format
+			// For new format with protocol and endpoint, just use the host part
+			// Note: This doesn't support custom paths yet, only host:port
+			if providerEndpoint.Endpoint != "" {
+				// Use the endpoint as address (host only, no path support yet)
+				vllmEndpoint.Address = providerEndpoint.Endpoint
+				
+				// Set port based on protocol
+				if providerEndpoint.Protocol == "https" {
+					vllmEndpoint.Port = 443
+				} else {
+					vllmEndpoint.Port = 80
+				}
 			}
 
 			c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
@@ -600,14 +606,13 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 }
 
 // GetEndpointURL returns the full URL for an endpoint
-// Supports both legacy (address:port) and new (full URL) formats
 func (e *VLLMEndpoint) GetEndpointURL() string {
-	// Check if this is a new-format provider endpoint
-	if e.Port == 0 && len(e.Address) > 16 && e.Address[:16] == "__PROVIDER_URL__" {
-		// Extract the full URL (remove the marker prefix)
-		return e.Address[16:]
+	// Determine protocol based on port
+	protocol := "http"
+	if e.Port == 443 {
+		protocol = "https"
 	}
-
-	// Legacy format: construct URL from address and port
-	return fmt.Sprintf("http://%s:%d", e.Address, e.Port)
+	
+	// Construct URL from address and port
+	return fmt.Sprintf("%s://%s:%d", protocol, e.Address, e.Port)
 }
