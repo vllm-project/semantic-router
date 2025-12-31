@@ -580,14 +580,16 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 			// Set port based on protocol
 			if providerEndpoint.Protocol == "https" {
 				vllmEndpoint.Port = 443
+			} else {
+				vllmEndpoint.Port = 80
 			}
-
-			c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
 		}
 
-		modelParams.PreferredEndpoints = preferredEndpoints
-		c.ModelConfig[providerModel.Name] = modelParams
+		c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
 	}
+
+	modelParams.PreferredEndpoints = preferredEndpoints
+	c.ModelConfig[providerModel.Name] = modelParams
 
 	// Set default model from providers if not already set
 	if c.DefaultModel == "" && c.Providers.DefaultModel != "" {
