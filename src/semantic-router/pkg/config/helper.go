@@ -577,9 +577,9 @@ func (c *RouterConfig) ProcessProvidersConfig() error {
 				vllmEndpoint.Path = "/" + parts[1]
 			}
 
-				} else {
-					vllmEndpoint.Port = 80
-				}
+			// Set port based on protocol
+			if providerEndpoint.Protocol == "https" {
+				vllmEndpoint.Port = 443
 			}
 
 			c.VLLMEndpoints = append(c.VLLMEndpoints, vllmEndpoint)
