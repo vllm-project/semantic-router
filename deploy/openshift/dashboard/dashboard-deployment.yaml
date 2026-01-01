@@ -10,8 +10,6 @@ data:
   TARGET_PROMETHEUS_URL: "http://prometheus:9090"
   TARGET_ROUTER_API_URL: "http://semantic-router:8080"
   TARGET_ROUTER_METRICS_URL: "http://semantic-router:9190/metrics"
-  TARGET_OPENWEBUI_URL: "http://openwebui:3000"
-  TARGET_CHATUI_URL: "http://chatui:3000"
   ROUTER_CONFIG_PATH: "/app/config/config.yaml"
 
 ---

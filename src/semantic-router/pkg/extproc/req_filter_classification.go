@@ -42,6 +42,17 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
+	// Evaluate all signals first to get detailed signal information
+	signals := r.Classifier.EvaluateAllSignals(evaluationText)
+
+	// Store signal results in context for response headers
+	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
+	ctx.VSRMatchedEmbeddings = signals.MatchedEmbeddingRules
+	ctx.VSRMatchedDomains = signals.MatchedDomainRules
+	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
+	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
+	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
+
 	// Perform decision evaluation using DecisionEngine
 	// This is ALWAYS done when decisions are configured, regardless of model type,
 	// because plugins (e.g., hallucination detection) depend on the matched decision

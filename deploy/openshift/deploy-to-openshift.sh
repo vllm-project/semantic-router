@@ -218,18 +218,8 @@ rm -f "$TEMP_CONFIG"
 
 success "Deployment manifests applied"
 
-# Deploy MongoDB (required for ChatUI)
-log "Deploying MongoDB for ChatUI..."
-oc apply -f "$SCRIPT_DIR/mongo/deployment.yaml" -n "$NAMESPACE"
-success "MongoDB deployment applied"
-
-# Deploy ChatUI (HuggingChat interface)
-log "Deploying ChatUI (HuggingChat)..."
-oc apply -f "$SCRIPT_DIR/chatui/deployment.yaml" -n "$NAMESPACE"
-success "ChatUI deployment applied"
-
-# Deploy Dashboard with ChatUI integration
-log "Deploying Dashboard with ChatUI integration..."
+# Deploy Dashboard
+log "Deploying Dashboard..."
 oc apply -f "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml" -n "$NAMESPACE"
 success "Dashboard deployment applied"
 
@@ -321,32 +311,6 @@ log "This may take several minutes as models are downloaded..."
 if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     log "Deploying observability components..."
 
-    # Create OpenWebUI PVC
-    log "Creating OpenWebUI PVC..."
-    cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: openwebui-data
-  labels:
-    app: openwebui
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: gp3-csi
-EOF
-    success "OpenWebUI PVC created"
-
-    # Deploy OpenWebUI
-    log "Deploying OpenWebUI..."
-    oc apply -f "$SCRIPT_DIR/openwebui/deployment.yaml" -n "$NAMESPACE"
-    oc apply -f "$SCRIPT_DIR/openwebui/service.yaml" -n "$NAMESPACE"
-    oc apply -f "$SCRIPT_DIR/openwebui/route.yaml" -n "$NAMESPACE"
-    success "OpenWebUI deployed"
-
     # Deploy Grafana with dynamic route URL
     log "Deploying Grafana..."
 
@@ -426,13 +390,11 @@ EOF
 
     # Wait for observability deployments
     log "Waiting for observability components to be ready..."
-    oc rollout status deployment/openwebui -n "$NAMESPACE" --timeout=5m || warn "OpenWebUI may still be starting"
     oc rollout status deployment/dashboard -n "$NAMESPACE" --timeout=5m || warn "Dashboard may still be starting"
 
     success "Observability components deployed!"
     echo ""
     echo "  Dashboard: https://$(oc get route dashboard -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
-    echo "  OpenWebUI: https://$(oc get route openwebui -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
     echo "  Grafana:   https://$(oc get route grafana -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
     echo "  Prometheus: https://$(oc get route prometheus -n $NAMESPACE -o jsonpath='{.spec.host}' 2>/dev/null || echo 'route-not-ready')"
     echo ""
@@ -466,15 +428,6 @@ echo ""
 echo "  # Check logs for Envoy"
 echo "  oc logs -f deployment/semantic-router -c envoy-proxy -n $NAMESPACE"
 echo ""
-echo "  # Check logs for MongoDB"
-echo "  oc logs -f deployment/mongo -n $NAMESPACE"
-echo ""
-echo "  # Check logs for ChatUI (HuggingChat)"
-echo "  oc logs -f deployment/chatui -n $NAMESPACE"
-echo ""
 echo "  # Check logs for Dashboard"
 echo "  oc logs -f deployment/dashboard -n $NAMESPACE"
 echo ""
-echo "  # Access ChatUI through Dashboard"
-echo "  DASHBOARD_URL=\$(oc get route dashboard -n $NAMESPACE -o jsonpath='{.spec.host}')"
-echo "  echo \"HuggingChat: https://\$DASHBOARD_URL/huggingchat\""

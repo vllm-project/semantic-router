@@ -3,7 +3,7 @@
 The Semantic Router Dashboard is a unified operator UI that brings together Configuration Management, an Interactive Playground, and Real-time Monitoring & Observability. It provides a single entry point across local development, Docker Compose, and Kubernetes deployments.
 
 - One place to view and edit configuration (with guardrails)
-- One tab to test prompts via your preferred UI (Open WebUI)
+- One tab to test prompts via a built-in chat playground
 - One tab to view metrics/dashboards (Grafana/Prometheus)
 - Single backend proxy that normalizes auth, CORS, and CSP across services
 
@@ -25,9 +25,7 @@ Pages:
 
 ![Dashboard Landing](/img/dashboard/landing.png)
 
-- Playground: Embedded Open WebUI for quick testing
-
-![Open WebUI Embedded](/img/dashboard/openwebui.png)
+- Playground: Built-in chat playground for quick testing
 
 - Config: Real-time configuration viewer/editor with structured panels and raw view
 
@@ -56,7 +54,6 @@ Key routes:
 - Router API: `GET/POST /api/router/*` (Authorization header forwarded)
 - Grafana (embed): `GET /embedded/grafana/*`
 - Prometheus (embed): `GET /embedded/prometheus/*`
-- Open WebUI (embed): `GET /embedded/openwebui/*`
 - Router metrics passthrough: `GET /metrics/router` → redirects to router metrics
 
 The proxy strips/overrides `X-Frame-Options` and adjusts `Content-Security-Policy` to allow `frame-ancestors 'self'`, enabling safe embedding under the dashboard origin.
@@ -70,7 +67,6 @@ Supply upstream targets and runtime settings via env vars (defaults in parenthes
 - `TARGET_PROMETHEUS_URL`
 - `TARGET_ROUTER_API_URL` (http://localhost:8080)
 - `TARGET_ROUTER_METRICS_URL` (http://localhost:9190/metrics)
-- `TARGET_OPENWEBUI_URL` (optional)
 - `ROUTER_CONFIG_PATH` (../../config/config.yaml)
 - `DASHBOARD_STATIC_DIR` (../frontend)
 
@@ -95,6 +91,6 @@ Then open in browser:
 
 ## Related docs
 
-- Installation → Configuration: [Configuration Guide](../../installation/configuration.md)
-- Observability: [Metrics](./metrics.md)
-- Open WebUI integration: [Open WebUI Integration](./open-webui-integration.md)
+- [Installation Configuration](../../installation/configuration.md)
+- [Observability Metrics](./metrics.md)
+- [Distributed Tracing](./distributed-tracing.md)

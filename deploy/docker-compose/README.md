@@ -6,8 +6,6 @@ This directory contains the primary `docker-compose.yml` used to run the Semanti
 - Semantic Router (extproc)
 - Observability (Prometheus + Grafana + Jaeger)
 - Dashboard (unified UI: config, monitoring, topology, playground)
-- Chat UI (Hugging Face Chat UI with MongoDB)
-- Open WebUI + Pipelines (for the Playground tab)
 - Optional test services (mock-vllm, llm-katan via profiles)
 
 ## Path Layout
@@ -19,7 +17,7 @@ Example mappings:
 - `../../config` -> mounts to `/app/config` inside containers
 - `../../models` -> shared model files
 - `../../tools/observability/...` -> Prometheus / Grafana provisioning assets
-- `./addons/*` -> Compose-local Envoy/Grafana/Prometheus configs and Open WebUI pipeline
+- `./addons/*` -> Compose-local Envoy/Grafana/Prometheus configs
 
 ## Services & Ports
 
@@ -28,10 +26,6 @@ Example mappings:
 - `prometheus` (port: 9090)
 - `grafana` (port: 3000)
 - `jaeger` (ports: 4318, 16686)
-- `chat-ui` (port: 3002 → 3000 in-container)
-- `mongo` (no host port by default)
-- `openwebui` (port: 3001 → 8080 in-container)
-- `pipelines` (no host port by default)
 - `dashboard` (port: 8700)
 - `mock-vllm` (port: 8000; profile: testing)
 - `llm-katan` (port: 8002; profiles: testing, llm-katan)
@@ -51,8 +45,6 @@ These host ports are exposed when you bring the stack up:
 - Grafana: http://localhost:3000 (admin/admin)
 - Prometheus: http://localhost:9090
 - Jaeger: http://localhost:16686 (tracing UI)
-- Chat UI: http://localhost:3002 (Hugging Face Chat UI)
-- Open WebUI: http://localhost:3001
 - Mock vLLM (testing profile): http://localhost:8000
 - LLM Katan (testing/llm-katan profiles): http://localhost:8002
 
@@ -113,7 +105,7 @@ The `dashboard` service exposes a unified UI at http://localhost:8700 with:
 - Monitoring: iframe embed of Grafana
 - Config: `GET /api/router/config/all` and `POST /api/router/config/update` mapped to `/app/config/config.yaml`
 - Topology: visualizes routing/config
-- Playground: iframe embed of Open WebUI and Chat UI
+- Playground: built-in chat playground calling the router API
 
 Environment variables set in Compose:
 
@@ -122,8 +114,6 @@ Environment variables set in Compose:
 - `TARGET_JAEGER_URL=http://jaeger:16686`
 - `TARGET_ROUTER_API_URL=http://semantic-router:8080`
 - `TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics`
-- `TARGET_OPENWEBUI_URL=http://openwebui:8080`
-- `TARGET_CHATUI_URL=http://chat-ui:3000`
 - `ROUTER_CONFIG_PATH=/app/config/config.yaml`
 
 Volumes:
@@ -133,39 +123,6 @@ Volumes:
 Image selection:
 
 - Uses `DASHBOARD_IMAGE` if provided; otherwise builds from `dashboard/backend/Dockerfile` at `docker compose up` time.
-
-## Chat UI (Hugging Face)
-
-The `chat-ui` service provides a modern chat interface using Hugging Face's Chat UI:
-
-- **URL**: http://localhost:3002
-- **Database**: MongoDB for conversation persistence
-- **API Integration**: Routes through Envoy proxy for OpenAI-compatible API calls
-- **Configuration**:
-  - `OPENAI_BASE_URL=http://envoy-proxy:8801/v1` (routes through Envoy)
-  - `OPENAI_API_KEY` (configurable via environment variable)
-  - `MONGODB_URL=mongodb://mongo:27017` (local MongoDB by default)
-
-### Environment Variables
-
-You can customize Chat UI behavior by setting these environment variables:
-
-```bash
-# API Configuration
-export OPENAI_API_KEY="your-api-key-here"
-export MONGODB_URL="mongodb://mongo:27017"  # or Atlas URL for production
-export MONGODB_DB_NAME="chat-ui"
-
-# UI Customization
-export PUBLIC_APP_NAME="HuggingChat"
-export PUBLIC_APP_ASSETS="chatui"
-export LOG_LEVEL="info"
-```
-
-## Open WebUI + Pipelines
-
-- `openwebui` is exposed at http://localhost:3001 (proxied via the Dashboard too)
-- `pipelines` mounts `./addons/vllm_semantic_router_pipe.py` into `/app/pipelines/` for easy integration
 
 ## Observability Stack
 

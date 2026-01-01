@@ -11,10 +11,6 @@ This guide adds a production-ready Prometheus + Grafana stack to the existing Se
 | Prometheus             | Scrapes Semantic Router metrics and stores them with persistent retention                            | `prometheus/` (`rbac.yaml`, `configmap.yaml`, `deployment.yaml`, `pvc.yaml`, `service.yaml`)  |
 | Grafana                | Visualizes metrics using the bundled LLM Router dashboard and a pre-configured Prometheus datasource | `grafana/` (`secret.yaml`, `configmap-*.yaml`, `deployment.yaml`, `pvc.yaml`, `service.yaml`) |
 | Dashboard              | Unified UI that links Router, Prometheus, and embeds Grafana; reads Router config                    | `dashboard/` (`configmap.yaml`, `deployment.yaml`, `service.yaml`)                            |
-| Open WebUI             | Playground UI for interacting with the router via a Manifold Pipeline                                | `openwebui/` (`deployment.yaml`, `service.yaml`)                                              |
-| Chat UI                | Hugging Face chat UI wired to the router via Envoy                                                   | `chat-ui/` (`deployment.yaml`, `service.yaml`)                                                |
-| Mongo (optional)       | Persistence for Chat UI conversations                                                                | `mongo/` (`deployment.yaml`, `service.yaml`)                                                  |
-| Pipelines              | Executes the `vllm_semantic_router_pipe.py` manifold for Open WebUI                                  | `pipelines/deployment.yaml` (includes a ConfigMap with the pipeline code)                     |
 | Ingress (optional)     | Exposes the UIs outside the cluster                                                                  | `ingress.yaml`                                                                                |
 | Dashboard provisioning | Automatically loads `deploy/llm-router-dashboard.json` into Grafana                                  | `grafana/configmap-dashboard.yaml`                                                            |
 
@@ -53,15 +49,6 @@ deploy/kubernetes/observability/
 │   ├── service.yaml
 │   ├── config.yaml                 # Router config copied locally for CM
 │   └── tools_db.json               # Tools DB copied locally for CM
-├── openwebui/
-│   └── deployment.yaml
-├── chat-ui/
-│   └── deployment.yaml
-├── mongo/
-│   └── deployment.yaml
-└── pipelines/
-    ├── deployment.yaml             # Uses emptyDir + subPath for pipeline file
-    └── vllm_semantic_router_pipe.py
 ```
 
 ## 3. Prometheus Configuration Highlights
@@ -154,8 +141,6 @@ You should see `prometheus-...`, `grafana-...`, and `semantic-router-dashboard-.
   kubectl port-forward svc/prometheus 9090:9090 -n vllm-semantic-router-system
   kubectl port-forward svc/grafana 3000:3000 -n vllm-semantic-router-system
   kubectl port-forward svc/semantic-router-dashboard 8700:80 -n vllm-semantic-router-system
-  kubectl port-forward svc/openwebui 3001:8080 -n vllm-semantic-router-system
-  kubectl port-forward svc/chat-ui 3002:3000 -n vllm-semantic-router-system
   ```
 
   Prometheus → http://localhost:9090, Grafana → http://localhost:3000, Dashboard → http://localhost:8700, Open WebUI → http://localhost:3001, Chat UI → http://localhost:3002
@@ -175,7 +160,7 @@ helm upgrade -i ingress-nginx ingress-nginx/ingress-nginx \
 
 2. Set your ingress class and hostnames
 
-- Edit `deploy/kubernetes/observability/ingress.yaml` and replace `grafana.example.com`, `prometheus.example.com`, `dashboard.example.com`, `openwebui.example.com`, `chatui.example.com` with your domains.
+- Edit `deploy/kubernetes/observability/ingress.yaml` and replace `grafana.example.com`, `prometheus.example.com`, `dashboard.example.com` with your domains.
 - Prefer using `spec.ingressClassName: nginx` instead of the deprecated annotation. You can add it via Kustomize for all Ingresses:
 
 ```yaml
@@ -196,8 +181,6 @@ patches:
 kubectl create secret tls grafana-tls --cert=/path/to/grafana.crt --key=/path/to/grafana.key -n vllm-semantic-router-system
 kubectl create secret tls prometheus-tls --cert=/path/to/prometheus.crt --key=/path/to/prometheus.key -n vllm-semantic-router-system
 kubectl create secret tls dashboard-tls --cert=/path/to/dashboard.crt --key=/path/to/dashboard.key -n vllm-semantic-router-system
-kubectl create secret tls openwebui-tls --cert=/path/to/openwebui.crt --key=/path/to/openwebui.key -n vllm-semantic-router-system
-kubectl create secret tls chatui-tls --cert=/path/to/chatui.crt --key=/path/to/chatui.key -n vllm-semantic-router-system
 ```
 
 - Option B (recommended): use cert-manager; reference your `ClusterIssuer` via annotations in `ingress.yaml`.
@@ -222,7 +205,6 @@ Dev tip: to run HTTP without TLS, remove the `tls:` blocks and set `nginx.ingres
 2. Query `rate(llm_model_completion_tokens_total[5m])` – should return data after traffic.
 3. Open Grafana, log in with the admin credentials, and confirm the **LLM Router Metrics** dashboard exists under the _Semantic Router_ folder.
 4. Generate traffic to Semantic Router (classification or routing requests). Key panels should start populating:
-   5.Playground: open Open WebUI (port-forward or ingress), select the `vllm-semantic-router/auto` model (from the Manifold pipeline), and send prompts. The Dashboard Monitoring page should reflect traffic, and the pipeline will display VSR decision headers inline.
    - Prompt Category counts
    - Token usage rate per model
    - Routing modifications between models
@@ -230,7 +212,6 @@ Dev tip: to run HTTP without TLS, remove the `tls:` blocks and set `nginx.ingres
 
 ## 7. Playground UIs
 
-- Open WebUI uses the Manifold pipeline `vllm_semantic_router_pipe.py` via the `openwebui-pipelines` service.
 - Chat UI is configured with `OPENAI_BASE_URL` pointing at Envoy's OpenAI-compatible endpoint and uses Mongo for persistence (development default). For production, switch Mongo to a managed service.
 
 ## 8. Dashboard Customization
