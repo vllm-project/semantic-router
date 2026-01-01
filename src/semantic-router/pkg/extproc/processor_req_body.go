@@ -110,8 +110,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 
 	// Handle caching with decision-specific settings
-	logging.Infof("About to call handleCaching - decisionName=%s, cacheEnabled=%v", decisionName, r.Config.SemanticCache.Enabled)
-	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
+	// Use the category (domain) name for cache lookup, not the decision name
+	// This ensures the same cache instance is used for both request and response phases
+	cacheDomain := ctx.VSRSelectedCategory
+	if cacheDomain == "" {
+		cacheDomain = "general"
+	}
+	logging.Infof("About to call handleCaching - decisionName=%s, cacheDomain=%s, cacheEnabled=%v", decisionName, cacheDomain, r.Config.SemanticCache.Enabled)
+	if response, shouldReturn := r.handleCaching(ctx, cacheDomain); shouldReturn {
 		logging.Infof("handleCaching returned a response, returning immediately")
 		return response, nil
 	}

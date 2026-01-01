@@ -344,6 +344,11 @@ func (c *MilvusCache) createCollection() error {
 				TypeParams: map[string]string{"max_length": "64"},
 			},
 			{
+				Name:       "namespace",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "64"},
+			},
+			{
 				Name:       "model",
 				DataType:   entity.FieldTypeVarChar,
 				TypeParams: map[string]string{"max_length": "256"},
@@ -428,7 +433,7 @@ func (c *MilvusCache) CheckConnection() error {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *MilvusCache) AddPendingRequest(requestID string, namespace string, model string, query string, requestBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -436,7 +441,7 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil)
+	err := c.addEntry("", requestID, namespace, model, query, requestBody, nil)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -466,9 +471,9 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
 	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
-	// We request model, query, request_body and will detect which column is which
+	// We request namespace, model, query, request_body and will detect which column is which
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"model", "query", "request_body"})
+		[]string{"namespace", "model", "query", "request_body"})
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -482,15 +487,15 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 	}
 
 	// Milvus automatically includes the primary key in results but order is non-deterministic
-	// We requested ["model", "query", "request_body"], expect 3-4 columns (primary key may be auto-included)
+	// We requested ["namespace", "model", "query", "request_body"], expect 4-5 columns (primary key may be auto-included)
 	// Strategy: Find the ID column (32-char hex string), then map remaining columns
-	if len(results) < 3 {
+	if len(results) < 4 {
 		logging.Debugf("MilvusCache.UpdateWithResponse: unexpected result count: %d", len(results))
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("incomplete query result: expected 3+ columns, got %d", len(results))
+		return fmt.Errorf("incomplete query result: expected 4+ columns, got %d", len(results))
 	}
 
-	var id, model, query, requestBody string
+	var id, namespace, model, query, requestBody string
 	idColIndex := -1
 
 	// First pass: find the ID column (32-char hex string = MD5 hash)
@@ -515,27 +520,29 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 			val := col.Data()[0]
 			switch dataFieldIndex {
 			case 0:
-				model = val
+				namespace = val
 			case 1:
-				query = val
+				model = val
 			case 2:
+				query = val
+			case 3:
 				requestBody = val
 			}
 			dataFieldIndex++
 		}
 	}
 
-	if id == "" || model == "" || query == "" {
-		logging.Debugf("MilvusCache.UpdateWithResponse: failed to extract all required fields (id: %s, model: %s, query_len: %d)",
-			id, model, len(query))
+	if id == "" || namespace == "" || model == "" || query == "" {
+		logging.Debugf("MilvusCache.UpdateWithResponse: failed to extract all required fields (id: %s, namespace: %s, model: %s, query_len: %d)",
+			id, namespace, model, len(query))
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to extract required fields from query result")
 	}
 
-	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
+	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, namespace: %s, model: %s)", id, namespace, model)
 
 	// Create the complete entry with response data
-	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
+	err = c.addEntry(id, requestID, namespace, model, query, []byte(requestBody), responseBody)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to add complete entry: %w", err)
@@ -548,14 +555,14 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *MilvusCache) AddEntry(requestID string, namespace string, model string, query string, requestBody, responseBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody)
+	err := c.addEntry("", requestID, namespace, model, query, requestBody, responseBody)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_entry", "error", time.Since(start).Seconds())
@@ -663,7 +670,7 @@ func (c *MilvusCache) Flush() error {
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
-func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *MilvusCache) addEntry(id string, requestID string, namespace string, model string, query string, requestBody, responseBody []byte) error {
 	// Generate semantic embedding for the query
 	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
 	if err != nil {
@@ -680,6 +687,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	// Prepare data for upsert
 	ids := []string{id}
 	requestIDs := []string{requestID}
+	namespaces := []string{namespace}
 	models := []string{model}
 	queries := []string{query}
 	requestBodies := []string{string(requestBody)}
@@ -690,6 +698,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	// Create columns
 	idColumn := entity.NewColumnVarChar("id", ids)
 	requestIDColumn := entity.NewColumnVarChar("request_id", requestIDs)
+	namespaceColumn := entity.NewColumnVarChar("namespace", namespaces)
 	modelColumn := entity.NewColumnVarChar("model", models)
 	queryColumn := entity.NewColumnVarChar("query", queries)
 	requestColumn := entity.NewColumnVarChar("request_body", requestBodies)
@@ -698,9 +707,9 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 
 	// Upsert the entry into the collection
-	logging.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d)",
-		c.collectionName, len(embedding), len(requestBody), len(responseBody))
-	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
+	logging.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (namespace: %s, embedding_dim: %d, request_size: %d, response_size: %d)",
+		c.collectionName, namespace, len(embedding), len(requestBody), len(responseBody))
+	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, namespaceColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
 	if err != nil {
 		logging.Debugf("MilvusCache.addEntry: upsert failed: %v", err)
 		return fmt.Errorf("failed to upsert cache entry: %w", err)
@@ -724,12 +733,14 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 }
 
 // FindSimilar searches for semantically similar cached requests
+// Uses default "general" namespace for backward compatibility
 func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+	defaultNamespace := "general"
+	return c.FindSimilarWithThreshold(defaultNamespace, model, query, c.similarityThreshold)
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (c *MilvusCache) FindSimilarWithThreshold(namespace string, model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
 
 	if !c.enabled {
@@ -740,8 +751,8 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	logging.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
-		model, queryPreview, len(query), threshold)
+	logging.Debugf("MilvusCache.FindSimilarWithThreshold: searching for namespace='%s', model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		namespace, model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding for similarity comparison
 	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
@@ -758,12 +769,12 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		return nil, false, fmt.Errorf("failed to create search parameters: %w", err)
 	}
 
-	// Use Milvus Search for efficient similarity search
+	// Use Milvus Search for efficient similarity search with namespace filtering
 	searchResult, err := c.client.Search(
 		ctx,
 		c.collectionName,
 		[]string{},
-		fmt.Sprintf("model == \"%s\" && response_body != \"\"", model),
+		fmt.Sprintf("namespace == \"%s\" && model == \"%s\" && response_body != \"\"", namespace, model),
 		[]string{"response_body"},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
 		c.config.Collection.VectorField.Name,

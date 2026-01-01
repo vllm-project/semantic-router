@@ -367,7 +367,7 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 		}
 	}
 	// Fall back to global setting
-	return c.Enabled
+	return c.SemanticCache.Enabled
 }
 
 // GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision

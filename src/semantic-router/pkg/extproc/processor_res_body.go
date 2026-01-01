@@ -116,14 +116,33 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
-	// Update the cache
+	// Update the cache with domain-specific cache manager
 	if ctx.RequestID != "" && responseBody != nil {
-		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody)
+		// Determine domain from category (use "general" as fallback)
+		domain := ctx.VSRSelectedCategory
+		if domain == "" {
+			domain = "general"
+		}
+
+		// Get domain-specific cache
+		domainCache, err := r.CacheManager.GetCache(domain)
 		if err != nil {
-			logging.Errorf("Error updating cache: %v", err)
-			// Continue even if cache update fails
-		} else {
-			logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
+			logging.Warnf("Failed to get cache for domain '%s' during response update: %v", domain, err)
+			// Try fallback to general cache
+			domainCache, err = r.CacheManager.GetCache("general")
+			if err != nil {
+				logging.Errorf("Failed to get fallback general cache for response update: %v", err)
+			}
+		}
+
+		if domainCache != nil {
+			err := domainCache.UpdateWithResponse(ctx.RequestID, responseBody)
+			if err != nil {
+				logging.Errorf("Error updating cache for domain '%s': %v", domain, err)
+				// Continue even if cache update fails
+			} else {
+				logging.Infof("Cache updated for request ID: %s (domain: %s)", ctx.RequestID, domain)
+			}
 		}
 	}
 

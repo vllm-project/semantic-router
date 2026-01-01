@@ -25,7 +25,7 @@ type OpenAIRouter struct {
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
 	PIIChecker           *pii.PolicyChecker
-	Cache                cache.CacheBackend
+	CacheManager         *cache.CacheManager
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
 }
@@ -98,36 +98,135 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	categoryDescriptions := cfg.GetCategoryDescriptions()
 	logging.Debugf("Category descriptions: %v", categoryDescriptions)
 
-	// Create semantic cache with config options
-	cacheConfig := cache.CacheConfig{
-		BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
-		Enabled:             cfg.SemanticCache.Enabled,
-		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.SemanticCache.MaxEntries,
-		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
-		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
-	}
+	// Create semantic cache manager for per-domain caching
+	var cacheManager *cache.CacheManager
 
-	// Use default backend type if not specified
-	if cacheConfig.BackendType == "" {
-		cacheConfig.BackendType = cache.InMemoryCacheType
-	}
+	// Check if per-domain caching is configured
+	if len(cfg.SemanticCache.Domains) > 0 || cfg.SemanticCache.GlobalCache != nil {
+		logging.Infof("Initializing CacheManager with per-domain configurations")
 
-	semanticCache, err := cache.NewCacheBackend(cacheConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create semantic cache: %w", err)
-	}
+		// Convert config.DomainCacheConfig to cache.CacheConfig
+		domainCacheConfigs := make(map[string]cache.CacheConfig)
+		for domain, domainConfig := range cfg.SemanticCache.Domains {
+			cacheConfig := cache.CacheConfig{
+				BackendType:         cache.CacheBackendType(domainConfig.BackendType),
+				Enabled:             domainConfig.Enabled,
+				SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
+				MaxEntries:          domainConfig.MaxEntries,
+				TTLSeconds:          domainConfig.TTLSeconds,
+				EvictionPolicy:      cache.EvictionPolicyType(domainConfig.EvictionPolicy),
+				BackendConfigPath:   domainConfig.BackendConfigPath,
+				EmbeddingModel:      domainConfig.EmbeddingModel,
+				EmbeddingModelPath:  domainConfig.EmbeddingModelPath,
+				UseHNSW:             domainConfig.UseHNSW,
+				HNSWM:               domainConfig.HNSWM,
+				HNSWEfConstruction:  domainConfig.HNSWEfConstruction,
+				MaxMemoryEntries:    domainConfig.MaxMemoryEntries,
+			}
 
-	if semanticCache.IsEnabled() {
-		logging.Infof("Semantic cache enabled with backend: %s with threshold: %.4f, TTL: %d s",
+			// Override with domain-specific threshold if set
+			if domainConfig.SimilarityThreshold != nil {
+				cacheConfig.SimilarityThreshold = *domainConfig.SimilarityThreshold
+			}
+
+			// Inherit from global semantic_cache config when not specified at domain level
+			if cacheConfig.BackendType == "" {
+				if cfg.SemanticCache.BackendType != "" {
+					cacheConfig.BackendType = cache.CacheBackendType(cfg.SemanticCache.BackendType)
+				} else {
+					cacheConfig.BackendType = cache.InMemoryCacheType
+				}
+			}
+
+			// Inherit backend_config_path from global if not specified
+			if cacheConfig.BackendConfigPath == "" && cfg.SemanticCache.BackendConfigPath != "" {
+				cacheConfig.BackendConfigPath = cfg.SemanticCache.BackendConfigPath
+			}
+
+			// Inherit embedding_model from global if not specified (and no custom path)
+			if cacheConfig.EmbeddingModel == "" && cacheConfig.EmbeddingModelPath == "" && cfg.SemanticCache.EmbeddingModel != "" {
+				cacheConfig.EmbeddingModel = cfg.SemanticCache.EmbeddingModel
+			}
+
+			domainCacheConfigs[domain] = cacheConfig
+			logging.Debugf("Configured cache for domain '%s': backend=%s, threshold=%.2f, embedding=%s, custom_model=%s",
+				domain, cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.EmbeddingModel, cacheConfig.EmbeddingModelPath)
+		}
+
+		// Convert global cache config if present
+		var globalCacheConfig *cache.CacheConfig
+		if cfg.SemanticCache.GlobalCache != nil {
+			gc := cfg.SemanticCache.GlobalCache
+			globalCacheConfig = &cache.CacheConfig{
+				BackendType:         cache.CacheBackendType(gc.BackendType),
+				Enabled:             gc.Enabled,
+				SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
+				MaxEntries:          gc.MaxEntries,
+				TTLSeconds:          gc.TTLSeconds,
+				EvictionPolicy:      cache.EvictionPolicyType(gc.EvictionPolicy),
+				BackendConfigPath:   gc.BackendConfigPath,
+				EmbeddingModel:      gc.EmbeddingModel,
+				EmbeddingModelPath:  gc.EmbeddingModelPath,
+			}
+
+			// Override with global threshold if set
+			if gc.SimilarityThreshold != nil {
+				globalCacheConfig.SimilarityThreshold = *gc.SimilarityThreshold
+			}
+
+			// Use default backend type if not specified
+			if globalCacheConfig.BackendType == "" {
+				globalCacheConfig.BackendType = cache.InMemoryCacheType
+			}
+
+			logging.Infof("Configured global cache fallback: backend=%s, threshold=%.2f, embedding=%s, custom_model=%s",
+				globalCacheConfig.BackendType, globalCacheConfig.SimilarityThreshold, globalCacheConfig.EmbeddingModel, globalCacheConfig.EmbeddingModelPath)
+		}
+
+		// Create cache manager
+		cacheManager, err = cache.NewCacheManager(&cache.CacheManagerConfig{
+			Domains:     domainCacheConfigs,
+			GlobalCache: globalCacheConfig,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cache manager: %w", err)
+		}
+
+		logging.Infof("CacheManager initialized with %d domain configurations", len(domainCacheConfigs))
+	} else {
+		// Backward compatibility: create single-cache manager with global config
+		logging.Infof("Using legacy single-cache configuration (backward compatibility)")
+
+		cacheConfig := cache.CacheConfig{
+			BackendType:         cache.CacheBackendType(cfg.SemanticCache.BackendType),
+			Enabled:             cfg.SemanticCache.Enabled,
+			SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
+			MaxEntries:          cfg.SemanticCache.MaxEntries,
+			TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+			EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+			BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
+			EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		}
+
+		// Use default backend type if not specified
+		if cacheConfig.BackendType == "" {
+			cacheConfig.BackendType = cache.InMemoryCacheType
+		}
+
+		// Create cache manager with single global cache
+		cacheManager, err = cache.NewCacheManager(&cache.CacheManagerConfig{
+			Domains:     make(map[string]cache.CacheConfig),
+			GlobalCache: &cacheConfig,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cache manager: %w", err)
+		}
+
+		logging.Infof("Semantic cache enabled (backend: %s) with threshold: %.4f, TTL: %d seconds",
 			cacheConfig.BackendType, cacheConfig.SimilarityThreshold, cacheConfig.TTLSeconds)
 		if cacheConfig.BackendType == cache.InMemoryCacheType {
 			logging.Infof("In-memory cache max entries: %d", cacheConfig.MaxEntries)
 		}
-	} else {
-		logging.Infof("Semantic cache is disabled")
 	}
 
 	// Create tools database with config options (but don't load tools yet)
@@ -188,7 +287,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		CategoryDescriptions: categoryDescriptions,
 		Classifier:           classifier,
 		PIIChecker:           piiChecker,
-		Cache:                semanticCache,
+		CacheManager:         cacheManager,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
 	}

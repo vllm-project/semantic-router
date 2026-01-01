@@ -15,76 +15,43 @@ build-router: $(if $(CI),rust-ci,rust)
 	@mkdir -p bin
 	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
 
-# Build vsr CLI
-build-cli: ## Build the vsr CLI tool
-build-cli: $(if $(CI),rust-ci,rust)
-	@$(LOG_TARGET)
-	@mkdir -p bin
-	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev"))
-	$(eval GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"))
-	$(eval BUILD_DATE := $(shell date -u '+%Y-%m-%d_%H:%M:%S'))
-	@echo "Building vsr CLI with version: $(VERSION), commit: $(GIT_COMMIT), date: $(BUILD_DATE)"
-	@cd src/semantic-router && go build \
-		-ldflags="-r $(PWD)/candle-binding/target/release -X main.version=$(VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)" \
-		-o ../../bin/vsr cmd/vsr/main.go
-	@echo "vsr CLI built successfully: bin/vsr"
-
-# Build all (router + CLI)
-build-all: ## Build both router and CLI
-build-all: build-router build-cli
-
-# Install vsr CLI to system
-install-cli: ## Install vsr CLI to /usr/local/bin
-install-cli: build-cli
-	@cp bin/vsr /usr/local/bin/vsr
-	@chmod +x /usr/local/bin/vsr
-	@echo "vsr installed to /usr/local/bin/vsr"
-
-# Test CLI (requires Rust library for CGO dependencies)
-test-cli: ## Run CLI unit tests
-test-cli: build-router
-	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		cd src/semantic-router && CGO_ENABLED=1 go test -v ./cmd/vsr/...
-
 # Run the router
 run-router: ## Run the router with the specified config
-run-router: build-router
+run-router: build-router download-models
 	@echo "Running router with config: ${CONFIG_FILE}"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
 
 # Run the router with e2e config for testing
 run-router-e2e: ## Run the router with e2e config for testing
-run-router-e2e: build-router download-models
+run-router-e2e: build-router setup-cache-models
 	@echo "Running router with e2e config: config/testing/config.e2e.yaml"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
-		./bin/router -config=config/testing/config.e2e.yaml
+		./bin/router -config=config/testing/config.e2e.yaml -skip-model-validation
 
-# Unit test semantic-router (excluding CLI tests)
+# Unit test semantic-router
 # By default, Milvus and Redis tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false and/or SKIP_REDIS_TESTS=false
 # Example: make test-semantic-router SKIP_MILVUS_TESTS=false
-test-semantic-router: ## Run unit tests for semantic-router (excluding CLI, set SKIP_MILVUS_TESTS=false to enable Milvus tests)
+test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false to enable Milvus tests)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
 	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
-		cd src/semantic-router && CGO_ENABLED=1 go test -v $$(go list ./... | grep -v '/cmd/vsr')
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
 #   1. Run test-binding-minimal with minimal models
-#   2. Run test-cli (CLI tests with Rust library)
-#   3. Run test-semantic-router (also uses minimal models, excludes CLI to avoid re-testing)
-#   4. Clean up minimal models, download LoRA/embedding models
-#   5. Run test-binding-lora
+#   2. Run test-semantic-router (also uses minimal models)
+#   3. Clean up minimal models, download LoRA/embedding models
+#   4. Run test-binding-lora
 # In local dev, run all tests together
 ifeq ($(CI),true)
-test: vet check-go-mod-tidy download-models test-binding-minimal test-cli test-semantic-router clean-minimal-models download-models-lora test-binding-lora
+test: vet check-go-mod-tidy download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
 else
-test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-cli test-semantic-router
+test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
 endif
 
 # Clean built artifacts
@@ -168,39 +135,14 @@ start-llm-katan: ## Start LLM Katan servers in foreground mode for e2e testing
 start-llm-katan:
 	@echo "Starting LLM Katan servers in foreground mode..."
 	@echo "Press Ctrl+C to stop servers"
-	@./e2e/testing/start-llm-katan.sh
+	@./e2e-tests/start-llm-katan.sh
 
 # Run e2e tests with LLM Katan (lightweight real models)
 test-e2e-vllm: ## Run e2e tests with LLM Katan servers (make sure servers are running)
 test-e2e-vllm:
 	@echo "Running e2e tests with LLM Katan servers..."
-	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
-	@python3 e2e/testing/run_all_tests.py
-
-# Run hallucination detection benchmark
-# Requires: router running with hallucination config, vLLM endpoint, envoy proxy
-bench-hallucination: ## Run hallucination detection benchmark (requires router + vLLM + envoy running)
-bench-hallucination:
-	@echo "Running hallucination detection benchmark..."
-	@echo "⚠️  Prerequisites:"
-	@echo "   1. vLLM server running (e.g., docker container on port 8083)"
-	@echo "   2. Router: make run-router CONFIG_FILE=bench/hallucination/config-7b.yaml"
-	@echo "   3. Envoy: make run-envoy"
-	@echo ""
-	python3 -m bench.hallucination.evaluate \
-		--endpoint http://localhost:8801 \
-		--dataset halueval \
-		--max-samples $${MAX_SAMPLES:-50}
-
-# Run hallucination benchmark with custom parameters
-# Usage: make bench-hallucination-full MAX_SAMPLES=200 DATASET=halueval
-bench-hallucination-full: ## Run full hallucination benchmark with more samples
-bench-hallucination-full:
-	@echo "Running full hallucination detection benchmark..."
-	python3 -m bench.hallucination.evaluate \
-		--endpoint http://localhost:8801 \
-		--dataset $${DATASET:-halueval} \
-		--max-samples $${MAX_SAMPLES:-200}
+	@echo "⚠️  Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
+	@python3 e2e-tests/run_all_tests.py
 
 # Note: Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
 
@@ -221,7 +163,7 @@ test-hallucination-detection: build-router download-models
 	@echo "=============================================="
 	@echo ""
 	@echo "1. Starting mock vLLM server on port 8002..."
-	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@nohup python3 e2e-tests/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
 	@echo ""
@@ -308,7 +250,7 @@ test-hallucination-detection-manual: build-router download-models
 	@echo "   ✓ Cleanup complete"
 	@echo ""
 	@echo "1. Starting mock vLLM server on port 8002..."
-	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@nohup python3 e2e-tests/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
 	@echo ""
@@ -378,14 +320,14 @@ stop-hallucination-services:
 demo-hallucination: ## Run interactive hallucination detection demo (CLI)
 demo-hallucination: build-router download-models
 	@echo "Starting Hallucination Detection Demo (CLI)..."
-	@./e2e/testing/hallucination-demo/run_demo.sh
+	@./e2e-tests/hallucination-demo/run_demo.sh
 
 demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
 demo-hallucination-web: build-router download-models
 	@echo "Starting Hallucination Detection Demo (Web UI)..."
-	@./e2e/testing/hallucination-demo/run_demo.sh --web
+	@./e2e-tests/hallucination-demo/run_demo.sh --web
 
 demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
 demo-hallucination-auto: build-router download-models
 	@echo "Starting Hallucination Detection Demo (auto mode)..."
-	@./e2e/testing/hallucination-demo/run_demo.sh --demo
+	@./e2e-tests/hallucination-demo/run_demo.sh --demo

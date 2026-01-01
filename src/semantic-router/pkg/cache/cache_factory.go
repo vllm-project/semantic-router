@@ -24,8 +24,12 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
 		// Use in-memory cache as the default backend
+		modelInfo := config.EmbeddingModel
+		if config.EmbeddingModelPath != "" {
+			modelInfo = config.EmbeddingModelPath
+		}
 		logging.Debugf("Creating in-memory cache backend - MaxEntries: %d, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s, UseHNSW: %t",
-			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel, config.UseHNSW)
+			config.MaxEntries, config.TTLSeconds, config.SimilarityThreshold, modelInfo, config.UseHNSW)
 
 		options := InMemoryCacheOptions{
 			Enabled:             config.Enabled,
@@ -37,6 +41,7 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			HNSWM:               config.HNSWM,
 			HNSWEfConstruction:  config.HNSWEfConstruction,
 			EmbeddingModel:      config.EmbeddingModel,
+			EmbeddingModelPath:  config.EmbeddingModelPath,
 		}
 		return NewInMemoryCache(options), nil
 
