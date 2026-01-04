@@ -363,6 +363,10 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 					logging.Errorf("Cached response has no valid choices or content")
 					responseBody = []byte("data: {\"error\": \"Cached response has no content\"}\n\ndata: [DONE]\n\n")
 				} else {
+					// Generate new ID and timestamp for this cache hit (each request is a distinct event)
+					unixTimeStep := time.Now().Unix()
+					newID := fmt.Sprintf("chatcmpl-cache-%d", unixTimeStep)
+
 					// Extract content and split into chunks
 					content := cachedCompletion.Choices[0].Message.Content
 					chunks := splitContentIntoChunks(content)
@@ -378,9 +382,9 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 					// Send incremental content chunks
 					for i, chunkContent := range chunks {
 						streamChunk := map[string]interface{}{
-							"id":      cachedCompletion.ID,
+							"id":      newID,
 							"object":  "chat.completion.chunk",
-							"created": cachedCompletion.Created,
+							"created": unixTimeStep,
 							"model":   cachedCompletion.Model,
 							"choices": []map[string]interface{}{
 								{
@@ -406,9 +410,9 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 
 					// Add final chunk with finish_reason
 					finalChunk := map[string]interface{}{
-						"id":      cachedCompletion.ID,
+						"id":      newID,
 						"object":  "chat.completion.chunk",
-						"created": cachedCompletion.Created,
+						"created": unixTimeStep,
 						"model":   cachedCompletion.Model,
 						"choices": []map[string]interface{}{
 							{
@@ -441,9 +445,37 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 			}
 		}
 	} else {
-		// For non-streaming responses, use cached JSON directly
+		// For non-streaming responses, parse and regenerate ID/timestamp
 		contentType = "application/json"
-		responseBody = cachedResponse
+
+		// Check if cached response is an error response
+		if isErrorResponse(cachedResponse) {
+			// For error responses, use as-is (they already have unique IDs)
+			responseBody = cachedResponse
+		} else {
+			// Parse cached response to regenerate ID and timestamp
+			var cachedCompletion openai.ChatCompletion
+			if err := json.Unmarshal(cachedResponse, &cachedCompletion); err != nil {
+				logging.Errorf("Error parsing cached response for ID regeneration: %v", err)
+				// Fallback: use cached response as-is if parsing fails
+				responseBody = cachedResponse
+			} else {
+				// Generate new ID and timestamp for this cache hit
+				unixTimeStep := time.Now().Unix()
+				cachedCompletion.ID = fmt.Sprintf("chatcmpl-cache-%d", unixTimeStep)
+				cachedCompletion.Created = unixTimeStep
+
+				// Marshal back to JSON
+				marshaledBody, marshalErr := json.Marshal(cachedCompletion)
+				if marshalErr != nil {
+					logging.Errorf("Error marshaling regenerated cache response: %v", marshalErr)
+					// Fallback: use cached response as-is if marshaling fails
+					responseBody = cachedResponse
+				} else {
+					responseBody = marshaledBody
+				}
+			}
+		}
 	}
 
 	immediateResponse := &ext_proc.ImmediateResponse{
