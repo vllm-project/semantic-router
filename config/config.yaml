@@ -1,26 +1,12 @@
-# You can override by specifying your own mappings below:
-# Uncomment and customize if you need different model mappings:
-# mom_registry:
-#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
-#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
-#   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
-#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
-#   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
-#   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
-#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
-
-# Response API Configuration
-# Enables OpenAI Response API support with conversation chaining
-response_api:
-  enabled: true
-  store_backend: "memory"  # Options: "memory", "milvus", "redis"
-  ttl_seconds: 86400       # 24 hours
-  max_responses: 1000
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
 
 semantic_cache:
   enabled: true
-  backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
+  backend_type: "redis"  # Options: "memory", "milvus", "redis" or "hybrid"
+  backend_config_path: "config/semantic-cache/redis.yaml"  # Backend configuration (inherited by all domains)
   similarity_threshold: 0.8
   max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
@@ -38,7 +24,147 @@ semantic_cache:
   # Embedding model for semantic similarity matching
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
-  embedding_model: "qwen3"
+  embedding_model: "bert"
+
+  # Per-domain cache configurations (optional)
+  # When configured, each domain gets its own dedicated cache instance with domain-specific settings
+  #
+  # IMPORTANT: Domains automatically inherit global settings (backend_type, backend_config_path, embedding_model)
+  # when not explicitly specified. This means you only need to override what's different per domain!
+  #
+  # You can use either preset models (embedding_model) or custom models (embedding_model_path):
+  # - embedding_model: "bert", "qwen3", or "gemma" (preset models)
+  # - embedding_model_path: path to your custom domain-specific model (e.g., "models/math-cache-model")
+  # When embedding_model_path is specified, it overrides embedding_model
+
+  # Global cache fallback configuration (used when domain is not configured in 'domains' map)
+  global_cache:
+    enabled: true
+    similarity_threshold: 0.75
+    ttl_seconds: 3600
+    embedding_model: "bert"  # Or use embedding_model_path: "models/general-cache-model"
+    # backend_type and backend_config_path inherited from semantic_cache above
+
+  # Per-domain cache configurations
+  domains:
+    # Health/Medical domain - only override what's different from global
+    health:
+      enabled: true
+      namespace: "medical"
+      embedding_model_path: "models/medical-cache-model"
+      # backend_type and backend_config_path inherited from semantic_cache above
+      similarity_threshold: 0.95  # Higher threshold for medical precision
+      ttl_seconds: 86400  # 24 hours
+
+    # Mathematics domain - uses custom trained model
+    math:
+      enabled: true
+      namespace: "mathematics"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model_path: "models/math-cache-model"  # Custom model for math domain
+      similarity_threshold: 0.85
+      ttl_seconds: 3600  # 1 hour
+
+    # Computer Science domain - uses custom coding model
+    computer_science:
+      enabled: true
+      namespace: "programming"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model_path: "models/coding-cache-model"  # Custom model for coding domain
+      similarity_threshold: 0.80
+      ttl_seconds: 7200  # 2 hours
+
+    # Business/Finance domain - uses custom trained model
+    business:
+      enabled: true
+      namespace: "business"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model_path: "models/finance-cache-model"  # Custom model for finance domain
+      similarity_threshold: 0.85
+      ttl_seconds: 14400  # 4 hours
+
+    # Psychology domain - uses preset Gemma model
+    psychology:
+      enabled: true
+      namespace: "psychology"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model: "gemma"  # Override to use Gemma instead of global BERT
+      similarity_threshold: 0.92
+      ttl_seconds: 43200  # 12 hours
+
+    # Law domain - high precision
+    law:
+      enabled: true
+      namespace: "legal"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.90
+      ttl_seconds: 21600  # 6 hours
+
+    # Biology domain
+    biology:
+      enabled: true
+      namespace: "biology"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.88
+      ttl_seconds: 10800  # 3 hours
+
+    # Chemistry domain
+    chemistry:
+      enabled: true
+      namespace: "chemistry"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.88
+      ttl_seconds: 10800  # 3 hours
+
+    # Physics domain - benefits from Qwen3 for complex physics
+    physics:
+      enabled: true
+      namespace: "physics"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model: "qwen3"  # Override to use Qwen3 for physics
+      similarity_threshold: 0.87
+      ttl_seconds: 7200  # 2 hours
+
+    # Engineering domain
+    engineering:
+      enabled: true
+      namespace: "engineering"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.85
+      ttl_seconds: 7200  # 2 hours
+
+    # Economics domain
+    economics:
+      enabled: true
+      namespace: "economics"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.85
+      ttl_seconds: 7200  # 2 hours
+
+    # History domain
+    history:
+      enabled: true
+      namespace: "history"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.82
+      ttl_seconds: 14400  # 4 hours
+
+    # Philosophy domain - benefits from Gemma
+    philosophy:
+      enabled: true
+      namespace: "philosophy"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model: "gemma"  # Override to use Gemma for philosophy
+      similarity_threshold: 0.85
+      ttl_seconds: 14400  # 4 hours
+
+    # General/Other domain - catch-all with lower threshold
+    other:
+      enabled: true
+      namespace: "general"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.75
+      ttl_seconds: 1800  # 30 minutes
 
 tools:
   enabled: true
@@ -50,49 +176,15 @@ tools:
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
   use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
+  model_id: "models/lora_jailbreak_classifier_bert-base-uncased_model"
   threshold: 0.7
   use_cpu: true
-jailbreak_mapping_path: "models/mom-jailbreak-classifier/label_mapping.json"
-
-# Classifier configuration
-classifier:
-  category_model:
-    model_id: "models/mom-domain-classifier"
-    threshold: 0.6
-    use_cpu: true
-    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-  pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
-    threshold: 0.9
-    use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
-
-# Hallucination mitigation configuration
-# Disabled by default - enable in decisions via hallucination plugin
-hallucination_mitigation:
-  enabled: false
-  # Fact-check classifier: determines if a prompt needs fact verification
-  fact_check_model:
-    model_id: "models/mom-halugate-sentinel"
-    threshold: 0.6
-    use_cpu: true
-  # Hallucination detector: verifies if LLM response is grounded in context
-  hallucination_model:
-    model_id: "models/mom-halugate-detector"
-    threshold: 0.8
-    use_cpu: true
-  # NLI model: provides explanations for hallucinated spans
-  nli_model:
-    model_id: "models/mom-halugate-explainer"
-    threshold: 0.9
-    use_cpu: true
+  jailbreak_mapping_path: "models/lora_jailbreak_classifier_bert-base-uncased_model/jailbreak_type_mapping.json"
 
 # vLLM Endpoints Configuration
-# The 'address' field can be an IP address (IPv4 or IPv6) or a domain name
-# Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1, example.com, localhost
-# Note: Use the 'port' field for port numbers, not in the address field
+# IMPORTANT: 'address' field must be a valid IP address (IPv4 or IPv6)
+# Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1
+# NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
     address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
@@ -103,6 +195,20 @@ model_config:
   "qwen3":
     reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
     preferred_endpoints: ["endpoint1"]  # Optional: omit to let upstream handle endpoint selection
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/lora_intent_classifier_bert-base-uncased_model/category_mapping.json"
+  pii_model:
+    model_id: "models/lora_pii_detector_bert-base-uncased_model"
+    use_modernbert: false
+    threshold: 0.9
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
 # Categories define domain metadata only (no routing logic)
 categories:
@@ -445,6 +551,52 @@ decisions:
           enabled: true
           pii_types_allowed: []
 
+# Router Configuration for Dual-Path Selection
+router:
+  # High confidence threshold for automatic LoRA selection
+  high_confidence_threshold: 0.99
+  # Low latency threshold in milliseconds for LoRA path selection
+  low_latency_threshold_ms: 2000
+  # Baseline scores for path evaluation
+  lora_baseline_score: 0.8
+  traditional_baseline_score: 0.7
+  embedding_baseline_score: 0.75
+  # Success rate calculation threshold
+  success_confidence_threshold: 0.8
+  # Large batch size threshold for parallel processing
+  large_batch_threshold: 4
+  # Default performance metrics (milliseconds)
+  lora_default_execution_time_ms: 1345
+  traditional_default_execution_time_ms: 4567
+  # Default processing requirements
+  default_confidence_threshold: 0.95
+  default_max_latency_ms: 5000
+  default_batch_size: 4
+  default_avg_execution_time_ms: 3000
+  # Default confidence and success rates
+  lora_default_confidence: 0.99
+  traditional_default_confidence: 0.95
+  lora_default_success_rate: 0.98
+  traditional_default_success_rate: 0.95
+  # Scoring weights for intelligent path selection (balanced approach)
+  multi_task_lora_weight: 0.30  # LoRA advantage for multi-task processing
+  single_task_traditional_weight: 0.30  # Traditional advantage for single tasks
+  large_batch_lora_weight: 0.25  # LoRA advantage for large batches (≥4)
+  small_batch_traditional_weight: 0.25  # Traditional advantage for single items
+  medium_batch_weight: 0.10  # Neutral weight for medium batches (2-3)
+  high_confidence_lora_weight: 0.25  # LoRA advantage for high confidence (≥0.99)
+  low_confidence_traditional_weight: 0.25  # Traditional for lower confidence (≤0.9)
+  low_latency_lora_weight: 0.30  # LoRA advantage for low latency (≤2000ms)
+  high_latency_traditional_weight: 0.10  # Traditional acceptable for relaxed timing
+  performance_history_weight: 0.20  # Historical performance comparison factor
+  # Traditional model specific configurations
+  traditional_bert_confidence_threshold: 0.95  # Traditional BERT confidence threshold
+  traditional_modernbert_confidence_threshold: 0.8  # Traditional ModernBERT confidence threshold
+  traditional_pii_detection_threshold: 0.5  # Traditional PII detection confidence threshold
+  traditional_token_classification_threshold: 0.9  # Traditional token classification threshold
+  traditional_dropout_prob: 0.1  # Traditional model dropout probability
+  traditional_attention_dropout_prob: 0.1  # Traditional model attention dropout probability
+  tie_break_confidence: 0.5  # Confidence value for tie-breaking situations
 
 default_model: qwen3
 
@@ -488,7 +640,8 @@ api:
 # - Qwen3-Embedding-0.6B: Up to 32K context, high quality,
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
-  qwen3_model_path: "models/mom-embedding-pro"
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/embeddinggemma-300m"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
 # Observability Configuration

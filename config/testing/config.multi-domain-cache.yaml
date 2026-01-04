@@ -1,0 +1,245 @@
+# Multi-Domain Semantic Cache Example Configuration
+# This example demonstrates how to configure domain-specific semantic caching
+# with namespace isolation and domain-optimized settings.
+
+bert_model:
+  model_id: models/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "redis"  # Options: "redis", "milvus", "memory", "hybrid"
+
+  # Global defaults (used when domain doesn't specify)
+  similarity_threshold: 0.85
+  ttl_seconds: 3600
+  embedding_model: "bert"  # Default embedding model
+  backend_config_path: "config/semantic-cache/redis.yaml"
+
+  # Classifier fallback configuration
+  classifier:
+    min_confidence: 0.7  # Minimum confidence to use domain namespace
+    fallback_namespace: "general"  # Namespace for low-confidence or failed classifications
+
+  # Domain-specific configurations
+  domains:
+    # Coding domain - strict threshold, uses default BERT (can upgrade to CodeBERT later)
+    coding:
+      namespace: "coding"
+      embedding_model: "bert"  # Future: "microsoft/codebert-base" for better code understanding
+      similarity_threshold: 0.95  # Strict - code queries need exact matches
+      ttl_seconds: 7200  # 2 hours
+
+    # Medical domain - very strict threshold for accuracy
+    medical:
+      namespace: "medical"
+      embedding_model: "bert"  # Future: "microsoft/BiomedNLP-PubMedBERT" for medical terms
+      similarity_threshold: 0.98  # Very strict - medical accuracy is critical
+      ttl_seconds: 3600  # 1 hour
+
+    # Math domain - moderate threshold
+    math:
+      namespace: "math"
+      embedding_model: "bert"
+      similarity_threshold: 0.92
+      ttl_seconds: 3600
+
+    # Business domain - moderate threshold
+    business:
+      namespace: "business"
+      embedding_model: "bert"
+      similarity_threshold: 0.90
+      ttl_seconds: 7200
+
+    # General domain - relaxed threshold for general queries
+    general:
+      namespace: "general"
+      embedding_model: "bert"
+      similarity_threshold: 0.80
+      ttl_seconds: 3600
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: false
+  model_id: "models/lora_jailbreak_classifier_bert-base-uncased_model"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/lora_jailbreak_classifier_bert-base-uncased_model/jailbreak_type_mapping.json"
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "local_vllm"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+
+model_config:
+  "openai/gpt-oss-20b":
+    reasoning_family: "gpt-oss"
+    preferred_endpoints: ["local_vllm"]
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/category_classifier_modernbert-base_model"
+    use_modernbert: false
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: false
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+
+# Categories define domain metadata
+categories:
+  - name: business
+    description: "Business and management related queries"
+    mmlu_categories: ["business"]
+  - name: health
+    description: "Health and medical information queries"
+    mmlu_categories: ["health"]
+  - name: math
+    description: "Mathematics and quantitative reasoning"
+    mmlu_categories: ["math"]
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+
+# Decisions with semantic cache enabled per domain
+strategy: "priority"
+
+decisions:
+  - name: "coding_decision"
+    description: "Computer science and programming - with domain-specific caching"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95  # Overrides domain default if needed
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "medical_decision"
+    description: "Health and medical queries - with strict caching"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a health and medical information expert. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.98
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous topics"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.80
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+default_model: openai/gpt-oss-20b
+
+# Reasoning family configurations
+reasoning_families:
+  deepseek:
+    type: "chat_template_kwargs"
+    parameter: "thinking"
+  qwen3:
+    type: "chat_template_kwargs"
+    parameter: "enable_thinking"
+  gpt-oss:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+  gpt:
+    type: "reasoning_effort"
+    parameter: "reasoning_effort"
+
+default_reasoning_effort: high
+
+# Embedding Models Configuration
+embedding_models:
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/embeddinggemma-300m"
+  use_cpu: true

@@ -269,6 +269,122 @@ type SemanticCache struct {
 	// - "gemma": Balanced, 768-dim, supports 8K context
 	// Default: "bert"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// Classifier configuration for automatic namespace detection
+	Classifier ClassifierFallbackConfig `yaml:"classifier,omitempty"`
+
+	// Domain-specific cache configurations for per-domain caching
+	// Maps domain names (e.g., "medical", "mathematics", "business") to their cache settings
+	// When configured, CacheManager will create separate cache instances for each domain
+	Domains map[string]DomainCacheConfig `yaml:"domains,omitempty"`
+
+	// Global cache configuration used as fallback when domain not configured
+	// This maintains backward compatibility with single-cache setups
+	// When Domains is configured, this acts as the default for unconfigured domains
+	GlobalCache *GlobalCacheConfig `yaml:"global_cache,omitempty"`
+}
+
+// GlobalCacheConfig defines the fallback cache configuration
+// Used when a domain is not explicitly configured in Domains map
+type GlobalCacheConfig struct {
+	// Enable global cache fallback
+	Enabled bool `yaml:"enabled"`
+
+	// Backend type for global cache
+	BackendType string `yaml:"backend_type,omitempty"`
+
+	// Similarity threshold for global cache
+	SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+
+	// Maximum entries for global cache (in-memory only)
+	MaxEntries int `yaml:"max_entries,omitempty"`
+
+	// TTL for global cache entries
+	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+	// Eviction policy for global cache
+	EvictionPolicy string `yaml:"eviction_policy,omitempty"`
+
+	// Backend config path for global cache
+	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+	// Embedding model for global cache
+	// Options: "bert", "qwen3", "gemma"
+	// If EmbeddingModelPath is specified, this field is ignored
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// EmbeddingModelPath specifies a custom path to a global embedding model
+	// When specified, overrides EmbeddingModel setting
+	// Example: "models/general-cache-model"
+	EmbeddingModelPath string `yaml:"embedding_model_path,omitempty"`
+}
+
+// ClassifierFallbackConfig controls how to handle low-confidence classifications
+type ClassifierFallbackConfig struct {
+	// Minimum confidence threshold to use domain namespace (0.0-1.0)
+	// If classification confidence is below this, fallback_namespace is used
+	// Default: 0.7
+	MinConfidence float32 `yaml:"min_confidence,omitempty"`
+
+	// Namespace to use when classification confidence is low or fails
+	// Default: "general"
+	FallbackNamespace string `yaml:"fallback_namespace,omitempty"`
+}
+
+// DomainCacheConfig defines cache settings for a specific domain
+// This structure is compatible with cache.CacheConfig and will be converted
+// by the cache initialization logic
+type DomainCacheConfig struct {
+	// Enable caching for this domain
+	Enabled bool `yaml:"enabled"`
+
+	// Backend type for this domain's cache
+	// Options: "memory", "redis", "milvus", "hybrid"
+	BackendType string `yaml:"backend_type,omitempty"`
+
+	// Namespace identifier for this domain (e.g., "coding", "medical")
+	// If not specified, defaults to the domain key
+	Namespace string `yaml:"namespace,omitempty"`
+
+	// Embedding model for this domain
+	// If not specified, uses global EmbeddingModel
+	// Options: "bert", "qwen3", "gemma"
+	// If EmbeddingModelPath is specified, this field is ignored
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// EmbeddingModelPath specifies a custom path to a domain-specific embedding model
+	// When specified, overrides EmbeddingModel setting
+	// Example: "models/math-cache-model", "models/finance-cache-model"
+	EmbeddingModelPath string `yaml:"embedding_model_path,omitempty"`
+
+	// Similarity threshold for this domain
+	// If not specified, uses global SimilarityThreshold
+	SimilarityThreshold *float32 `yaml:"similarity_threshold,omitempty"`
+
+	// Maximum number of cache entries (for in-memory cache)
+	MaxEntries int `yaml:"max_entries,omitempty"`
+
+	// TTL for cache entries in this domain (in seconds)
+	// If not specified, uses global TTLSeconds
+	TTLSeconds int `yaml:"ttl_seconds,omitempty"`
+
+	// Eviction policy for in-memory cache ("fifo", "lru", "lfu")
+	EvictionPolicy string `yaml:"eviction_policy,omitempty"`
+
+	// Path to backend-specific configuration file
+	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+
+	// Enable HNSW index for in-memory cache
+	UseHNSW bool `yaml:"use_hnsw,omitempty"`
+
+	// HNSW M parameter (number of bi-directional links)
+	HNSWM int `yaml:"hnsw_m,omitempty"`
+
+	// HNSW EfConstruction parameter
+	HNSWEfConstruction int `yaml:"hnsw_ef_construction,omitempty"`
+
+	// Max memory entries for hybrid cache
+	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.
