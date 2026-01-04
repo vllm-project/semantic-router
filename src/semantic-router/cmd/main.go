@@ -22,6 +22,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/scoring"
 )
 
 func main() {
@@ -113,6 +114,17 @@ func main() {
 		} else {
 			logging.Infof("Windowed metrics initialized successfully")
 		}
+	}
+
+	// Initialize dynamic model scoring if enabled
+	if cfg.Observability.Metrics.DynamicScoring.Enabled {
+		logging.Infof("Initializing dynamic model scoring...")
+		if initErr := scoring.InitializeDynamicScoring(cfg.Observability.Metrics.DynamicScoring); initErr != nil {
+			logging.Warnf("Failed to initialize dynamic scoring: %v", initErr)
+		} else {
+			logging.Infof("Dynamic model scoring initialized successfully")
+		}
+		defer scoring.StopDynamicScoring()
 	}
 
 	// Set up signal handling for graceful shutdown
