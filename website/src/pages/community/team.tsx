@@ -225,8 +225,8 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
             {member.role}
             {member.company && (
               <span className={styles.company}>
-                {' '}
-                @ {member.company}
+                {' @'}
+                {member.company}
               </span>
             )}
           </p>
