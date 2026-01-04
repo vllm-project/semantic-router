@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './promotion.module.css'
 
 interface PromotionRule {
@@ -116,15 +117,18 @@ const Promotion: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1>Community Promotion 🚀</h1>
+          <h1><Translate id="promotion.title">Community Promotion 🚀</Translate></h1>
           <p className={styles.subtitle}>
-            Contributor advancement rules - Recognizing your contributions and elevating your impact
+            <Translate id="promotion.subtitle">Contributor advancement rules - Recognizing your contributions and elevating your impact</Translate>
           </p>
         </header>
 
         <main className={styles.main}>
           <section className={styles.overview}>
-            <h2>📖 Promotion Overview</h2>
+            <h2>
+              📖
+              <Translate id="promotion.overview.title">Promotion Overview</Translate>
+            </h2>
             <div className={styles.overviewContent}>
               <div className={styles.overviewCard}>
                 <h3>🎯 Promotion Timing</h3>
@@ -160,7 +164,10 @@ const Promotion: React.FC = () => {
           </section>
 
           <section className={styles.promotionRules}>
-            <h2>📊 Promotion Rules</h2>
+            <h2>
+              📊
+              <Translate id="promotion.rules.title">Promotion Rules</Translate>
+            </h2>
             <p className={styles.rulesDescription}>
               Detailed requirements and permissions for each role. Each role builds upon the previous one with increasing responsibilities and impact.
             </p>
@@ -172,7 +179,10 @@ const Promotion: React.FC = () => {
           </section>
 
           <section className={styles.applicationProcess}>
-            <h2>📋 Application Process</h2>
+            <h2>
+              📋
+              <Translate id="promotion.process.title">Application Process</Translate>
+            </h2>
             <div className={styles.processSteps}>
               <div className={styles.step}>
                 <div className={styles.stepNumber}>1</div>
@@ -206,7 +216,10 @@ const Promotion: React.FC = () => {
           </section>
 
           <section className={styles.getStarted}>
-            <h2>🚀 Get Started</h2>
+            <h2>
+              🚀
+              <Translate id="promotion.getStarted.title">Get Started</Translate>
+            </h2>
             <p>Ready to begin your contribution journey?</p>
             <div className={styles.actionButtons}>
               <a href="/community/work-groups" className={styles.actionButton}>

@@ -1,6 +1,7 @@
 import React from 'react'
 import clsx from 'clsx'
 import Link from '@docusaurus/Link'
+import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import Layout from '@theme/Layout'
 import HomepageFeatures from '@site/src/components/HomepageFeatures'
@@ -26,24 +27,37 @@ const HomepageHeader: React.FC = () => {
                 className={styles.vllmLogo}
               />
               <h1 className="hero__title">
-                <span className={styles.aiGlow}>AI-Powered</span>
+                <span className={styles.aiGlow}>
+                  <Translate id="homepage.hero.aiPowered">AI-Powered</Translate>
+                </span>
                 {' '}
                 vLLM Semantic Router
               </h1>
             </div>
             <p className="hero__subtitle">
-              🧠 Intelligent
+              🧠
               {' '}
-              <strong>Auto Reasoning</strong>
+              <Translate id="homepage.hero.intelligent">Intelligent</Translate>
               {' '}
-              Router for Efficient LLM Inference on
+              <strong><Translate id="homepage.hero.autoReasoning">Auto Reasoning</Translate></strong>
               {' '}
-              <strong>Mixture-of-Models</strong>
+              <Translate id="homepage.hero.routerFor">Router for Efficient LLM Inference on</Translate>
+              {' '}
+              <strong><Translate id="homepage.hero.mixtureOfModels">Mixture-of-Models</Translate></strong>
               <br />
               <span className={styles.techBadges}>
-                <span className={styles.techBadge}>🧬 Neural Networks</span>
-                <span className={styles.techBadge}>⚡ LLM Optimization</span>
-                <span className={styles.techBadge}>♻️ Per-token Unit Economics</span>
+                <span className={styles.techBadge}>
+                  🧬
+                  <Translate id="homepage.hero.badge.neural">Neural Networks</Translate>
+                </span>
+                <span className={styles.techBadge}>
+                  ⚡
+                  <Translate id="homepage.hero.badge.llm">LLM Optimization</Translate>
+                </span>
+                <span className={styles.techBadge}>
+                  ♻️
+                  <Translate id="homepage.hero.badge.economics">Per-token Unit Economics</Translate>
+                </span>
               </span>
             </p>
           </div>
@@ -56,7 +70,9 @@ const HomepageHeader: React.FC = () => {
             className="button button--secondary button--lg"
             to="/docs/intro"
           >
-            🚀 Get Started - 5min ⏱️
+            🚀
+            {' '}
+            <Translate id="homepage.hero.getStarted">Get Started - 5min ⏱️</Translate>
           </Link>
         </div>
       </div>
@@ -71,29 +87,33 @@ const AITechShowcase: React.FC = () => {
         <div className={styles.aiTechContainer}>
           <div className={styles.aiTechLeft}>
             <h2 className={styles.aiTechTitle}>
-              🧠 Neural Processing Architecture
+              🧠
+              {' '}
+              <Translate id="homepage.aiTech.title">Neural Processing Architecture</Translate>
             </h2>
             <p className={styles.aiTechDescription}>
-              Powered by cutting-edge AI technologies including ModernBERT fine-tuned models,
-              and advanced semantic understanding for intelligent
-              model routing and selection.
+              <Translate id="homepage.aiTech.description">
+                Powered by cutting-edge AI technologies including ModernBERT fine-tuned models,
+                and advanced semantic understanding for intelligent
+                model routing and selection.
+              </Translate>
             </p>
             <div className={styles.aiFeatures}>
               <div className={styles.aiFeature}>
                 <span className={styles.aiFeatureIcon}>🤖</span>
-                <span>Small Language Models</span>
+                <span><Translate id="homepage.aiTech.feature.slm">Small Language Models</Translate></span>
               </div>
               <div className={styles.aiFeature}>
                 <span className={styles.aiFeatureIcon}>🧬</span>
-                <span>Neural Network Processing</span>
+                <span><Translate id="homepage.aiTech.feature.neural">Neural Network Processing</Translate></span>
               </div>
               <div className={styles.aiFeature}>
                 <span className={styles.aiFeatureIcon}>⚡</span>
-                <span>Real-time Inference</span>
+                <span><Translate id="homepage.aiTech.feature.inference">Real-time Inference</Translate></span>
               </div>
               <div className={styles.aiFeature}>
                 <span className={styles.aiFeatureIcon}>🎯</span>
-                <span>Semantic Understanding</span>
+                <span><Translate id="homepage.aiTech.feature.semantic">Semantic Understanding</Translate></span>
               </div>
             </div>
           </div>
@@ -112,7 +132,9 @@ const FlowDiagram: React.FC = () => {
       <div className="container">
         <div className={styles.architectureContainer}>
           <h2 className={styles.architectureTitle}>
-            🏗️ Intent Aware Semantic Router Architecture
+            🏗️
+            {' '}
+            <Translate id="homepage.architecture.title">Intent Aware Semantic Router Architecture</Translate>
           </h2>
           <div className={styles.architectureImageWrapper}>
             <img

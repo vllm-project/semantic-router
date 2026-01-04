@@ -1,0 +1,35 @@
+rootfs:
+  name: Huamin Chen
+  title: Distinguished Engineer @ Red Hat
+  url: https://github.com/rootfs
+  image_url: /img/team/huamin.png
+
+wangchen615:
+  name: Chen Wang
+  title: Senior Staff Research Scientist @ IBM
+  url: https://github.com/wangchen615
+  image_url: /img/team/chen.png
+
+yuezhu1:
+  name: Yue Zhu
+  title: Staff Research Scientist @ IBM
+  url: https://github.com/yuezhu1
+  image_url: /img/team/yue.png
+
+Xunzhuo:
+  name: Xunzhuo Liu
+  title: AI Networking @ Tencent
+  url: https://github.com/Xunzhuo
+  image_url: /img/team/xunzhuo.png
+
+ivar:
+  name: Ivar Flakstad
+  title: Machine Learning @ Hugging Face
+  url: https://github.com/ivarflakstad
+  image_url: /img/team/ivar.jpeg
+
+onezero:
+  name: OneZero-Y
+  title: "LLM Inference"
+  url: https://github.com/OneZero-Y
+  image_url: /img/team/onezero.jpeg

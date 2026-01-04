@@ -1,4 +1,5 @@
 import React from 'react'
+import Translate from '@docusaurus/Translate'
 import styles from './styles.module.css'
 
 const YouTubeSection: React.FC = () => {
@@ -7,29 +8,33 @@ const YouTubeSection: React.FC = () => {
       <div className="container">
         <div className={styles.youtubeContainer}>
           <h2 className={styles.youtubeTitle}>
-            🎥 vLLM Semantic Router Demos
+            🎥
+            {' '}
+            <Translate id="youtube.title">vLLM Semantic Router Demos</Translate>
           </h2>
           <p className={styles.youtubeDescription}>
-            <strong>Latest News</strong>
+            <strong><Translate id="youtube.latestNews">Latest News</Translate></strong>
             {' '}
-            🎉: User Experience is something we do care about. Introducing vLLM-SR dashboard:
+            🎉:
+            {' '}
+            <Translate id="youtube.description">User Experience is something we do care about. Introducing vLLM-SR dashboard:</Translate>
           </p>
           <div className={styles.featureList}>
             <div className={styles.featureItem}>
               <span className={styles.featureIcon}>💬</span>
-              <span>Chat with vLLM-SR and see its thinking chain</span>
+              <span><Translate id="youtube.feature.chat">Chat with vLLM-SR and see its thinking chain</Translate></span>
             </div>
             <div className={styles.featureItem}>
               <span className={styles.featureIcon}>🗺️</span>
-              <span>View the topology of the intents for Models</span>
+              <span><Translate id="youtube.feature.topology">View the topology of the intents for Models</Translate></span>
             </div>
             <div className={styles.featureItem}>
               <span className={styles.featureIcon}>📊</span>
-              <span>Monitor real-time Metrics with Grafana Dashboard</span>
+              <span><Translate id="youtube.feature.metrics">Monitor real-time Metrics with Grafana Dashboard</Translate></span>
             </div>
             <div className={styles.featureItem}>
               <span className={styles.featureIcon}>⚙️</span>
-              <span>Configure Mixture-of-Models with different Domains</span>
+              <span><Translate id="youtube.feature.configure">Configure Mixture-of-Models with different Domains</Translate></span>
             </div>
           </div>
           <div className={styles.videoWrapper}>

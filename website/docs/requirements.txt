@@ -1,4 +1,0 @@
-mkdocs-material
-mkdocstrings
-mkdocstrings-python
-mkdocs-mermaid2-plugin

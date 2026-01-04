@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './news.module.css'
 
 const newsArticles = [
@@ -78,7 +79,7 @@ function NewsCard({ article }) {
           rel="noopener noreferrer"
           className={`button button--primary button--outline ${styles.readMoreButton}`}
         >
-          Read More →
+          <Translate id="news.readMore">Read More →</Translate>
         </a>
       </div>
     </div>
@@ -95,10 +96,12 @@ export default function News() {
         <div className="row">
           <div className="col col--12">
             <div className={styles.heroSection}>
-              <h1 className={styles.heroTitle}>News & Articles</h1>
+              <h1 className={styles.heroTitle}><Translate id="news.title">News & Articles</Translate></h1>
               <p className={styles.heroDescription}>
-                Stay updated with the latest news, research papers, blog posts, and articles
-                about vLLM Semantic Router and its impact on LLM inference efficiency.
+                <Translate id="news.description">
+                  Stay updated with the latest news, research papers, blog posts, and articles
+                  about vLLM Semantic Router and its impact on LLM inference efficiency.
+                </Translate>
               </p>
             </div>
           </div>
@@ -119,10 +122,12 @@ export default function News() {
         <div className="row">
           <div className="col col--12">
             <div className={styles.contributeSection}>
-              <h2>Contribute to News</h2>
+              <h2><Translate id="news.contribute.title">Contribute to News</Translate></h2>
               <p>
-                Know of an article, blog post, or publication about vLLM Semantic Router
-                that should be featured here?
+                <Translate id="news.contribute.description">
+                  Know of an article, blog post, or publication about vLLM Semantic Router
+                  that should be featured here?
+                </Translate>
               </p>
               <p className={styles.contributeActions}>
                 <a
