@@ -287,14 +287,19 @@ pub extern "C" fn init_embedding_models(
     }
 
     // Register Gemma model if path provided
+    // Note: Gemma is optional - if it fails to load, we continue with Qwen3 only
     if let Some(path) = gemma_path {
         match factory.register_gemma_embedding_model(&path) {
             Ok(_) => {
-                // Model registered successfully
+                println!(
+                    "INFO: Gemma embedding model registered successfully from {}",
+                    path
+                );
             }
             Err(e) => {
-                eprintln!("ERROR: Failed to register Gemma model: {:?}", e);
-                return false;
+                eprintln!("WARNING: Failed to register Gemma model: {:?}", e);
+                eprintln!("WARNING: Continuing with Qwen3 only. This is expected if Gemma model is not downloaded (e.g., missing HF_TOKEN for gated models)");
+                // Don't return false - Gemma is optional, continue with Qwen3
             }
         }
     }

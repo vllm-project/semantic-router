@@ -104,6 +104,10 @@ jobs:
           make docker-compose-up-ci
         env:
           CI: true
+          # HF_TOKEN is required for semantic-router to auto-download gated models (e.g., embeddinggemma-300m)
+          # For PRs from forks, this will be empty and gated models will gracefully skip
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
 
       - name: Wait for services to be healthy
         run: |

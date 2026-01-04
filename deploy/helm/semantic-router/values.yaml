@@ -417,3 +417,18 @@ args:
 env:
   - name: LD_LIBRARY_PATH
     value: "/app/lib"
+  # HF_TOKEN for downloading gated models (e.g., embeddinggemma-300m)
+  # The E2E framework creates this secret if HF_TOKEN is available in the environment
+  # For local deployments, create the secret manually or set HF_TOKEN directly
+  - name: HF_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: hf-token-secret
+        key: token
+        optional: true  # Allow deployment even if secret doesn't exist (for local testing)
+  - name: HUGGINGFACE_HUB_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: hf-token-secret
+        key: token
+        optional: true  # Alternative env var name used by huggingface-cli
