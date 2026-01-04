@@ -170,55 +170,6 @@ func TestContainsString(t *testing.T) {
 	}
 }
 
-func TestFindSubstring(t *testing.T) {
-	tests := []struct {
-		name     string
-		s        string
-		substr   string
-		expected bool
-	}{
-		{
-			name:     "substring found",
-			s:        "hello world",
-			substr:   "world",
-			expected: true,
-		},
-		{
-			name:     "substring not found",
-			s:        "hello world",
-			substr:   "foo",
-			expected: false,
-		},
-		{
-			name:     "substring at beginning",
-			s:        "hello world",
-			substr:   "hello",
-			expected: true,
-		},
-		{
-			name:     "multiple occurrences",
-			s:        "hello hello",
-			substr:   "hello",
-			expected: true,
-		},
-		{
-			name:     "overlapping patterns",
-			s:        "aaaa",
-			substr:   "aa",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := findSubstring(tt.s, tt.substr)
-			if result != tt.expected {
-				t.Errorf("findSubstring(%q, %q) = %v, expected %v", tt.s, tt.substr, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestGetDockerContainers(t *testing.T) {
 	// Skip if docker is not available
 	if !commandExists("docker") {
