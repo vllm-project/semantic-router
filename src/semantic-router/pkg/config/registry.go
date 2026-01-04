@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // ModelPurpose describes what the model is used for
 type ModelPurpose string
 
@@ -58,7 +60,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-domain-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
-		Aliases:          []string{"domain-classifier", "intent-classifier", "category-classifier"},
+		Aliases:          []string{"domain-classifier", "intent-classifier", "category-classifier", "category_classifier_modernbert-base_model", "lora_intent_classifier_bert-base-uncased_model"},
 		Purpose:          PurposeDomainClassification,
 		Description:      "BERT-based domain/intent classifier with LoRA adapters for MMLU categories",
 		ParameterSize:    "110M + LoRA",
@@ -72,7 +74,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-pii-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model",
-		Aliases:          []string{"pii-detector", "pii-classifier", "privacy-guard"},
+		Aliases:          []string{"pii-detector", "pii-classifier", "privacy-guard", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "lora_pii_detector_bert-base-uncased_model"},
 		Purpose:          PurposePIIDetection,
 		Description:      "BERT-based PII detector with LoRA adapters for 35 PII types",
 		ParameterSize:    "110M + LoRA",
@@ -86,7 +88,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-jailbreak-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model",
-		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier"},
+		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model"},
 		Purpose:          PurposeJailbreakDetection,
 		Description:      "BERT-based jailbreak/prompt injection detector with LoRA adapters",
 		ParameterSize:    "110M + LoRA",
@@ -152,7 +154,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-embedding-pro",
 		RepoID:           "Qwen/Qwen3-Embedding-0.6B",
-		Aliases:          []string{"qwen3-embedding", "embedding-pro", "qwen3"},
+		Aliases:          []string{"Qwen3-Embedding-0.6B", "embedding-pro", "qwen3"},
 		Purpose:          PurposeEmbedding,
 		Description:      "High-quality embedding model with 32K context support",
 		ParameterSize:    "600M",
@@ -165,7 +167,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-embedding-flash",
 		RepoID:           "google/embeddinggemma-300m",
-		Aliases:          []string{"gemma-embedding", "embedding-flash", "gemma"},
+		Aliases:          []string{"embeddinggemma-300m", "embedding-flash", "gemma"},
 		Purpose:          PurposeEmbedding,
 		Description:      "Fast embedding model with Matryoshka support (768/512/256/128 dims)",
 		ParameterSize:    "300M",
@@ -178,7 +180,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-embedding-light",
 		RepoID:           "sentence-transformers/all-MiniLM-L12-v2",
-		Aliases:          []string{"minilm", "embedding-light", "bert-light"},
+		Aliases:          []string{"all-MiniLM-L12-v2", "embedding-light", "bert-light"},
 		Purpose:          PurposeSemanticSimilarity,
 		Description:      "Lightweight sentence transformer for fast semantic similarity",
 		ParameterSize:    "33M",
@@ -233,10 +235,22 @@ func GetModelsByTag(tag string) []ModelSpec {
 
 // ToLegacyRegistry converts the structured registry to the legacy map format
 // This maintains backward compatibility with existing code
+// It includes both the primary LocalPath and all aliases
 func ToLegacyRegistry() map[string]string {
 	legacy := make(map[string]string)
 	for _, model := range DefaultModelRegistry {
+		// Add primary path
 		legacy[model.LocalPath] = model.RepoID
+
+		// Add all aliases (with and without "models/" prefix)
+		for _, alias := range model.Aliases {
+			// Add alias as-is
+			legacy[alias] = model.RepoID
+			// Add alias with "models/" prefix if not already present
+			if !strings.HasPrefix(alias, "models/") {
+				legacy["models/"+alias] = model.RepoID
+			}
+		}
 	}
 	return legacy
 }
