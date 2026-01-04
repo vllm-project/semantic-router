@@ -1,9 +1,15 @@
 package extproc
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // =============================================================================
@@ -489,4 +495,372 @@ func TestIsGreeting_EdgePatterns(t *testing.T) {
 		assert.False(t, IsGreeting("Hi 123"), "greeting with numbers")
 		assert.False(t, IsGreeting("Hello 2024"), "greeting with year")
 	})
+}
+
+// =============================================================================
+// BuildSearchQuery Tests
+// =============================================================================
+
+func TestBuildSearchQuery_DisabledConfig(t *testing.T) {
+	cfg := &config.QueryRewriteConfig{
+		Enabled: false,
+	}
+
+	history := []ConversationMessage{
+		{Role: "user", Content: "Planning vacation to Hawaii"},
+	}
+
+	result, err := BuildSearchQuery(context.Background(), history, "How much?", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "How much?", result, "should return original when disabled")
+}
+
+func TestBuildSearchQuery_NoEndpoint(t *testing.T) {
+	cfg := &config.QueryRewriteConfig{
+		Enabled:  true,
+		Endpoint: "", // No endpoint
+	}
+
+	result, err := BuildSearchQuery(context.Background(), nil, "test query", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "test query", result, "should return original when no endpoint")
+}
+
+func TestBuildSearchQuery_NilConfig(t *testing.T) {
+	// With nil config, should use defaults (which has no endpoint, so returns original)
+	result, err := BuildSearchQuery(context.Background(), nil, "test query", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "test query", result, "should return original with nil config")
+}
+
+func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
+	// Create mock LLM server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		// Parse request body
+		var req llmChatRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+
+		assert.Equal(t, "test-model", req.Model)
+		assert.Len(t, req.Messages, 2) // system + user
+		assert.Equal(t, "system", req.Messages[0].Role)
+		assert.Equal(t, "user", req.Messages[1].Role)
+		assert.Contains(t, req.Messages[1].Content, "How much?")
+		assert.Contains(t, req.Messages[1].Content, "Hawaii")
+
+		// Return mock response
+		resp := llmChatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: "What is the budget for the Hawaii vacation?"}},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := &config.QueryRewriteConfig{
+		Enabled:        true,
+		Endpoint:       server.URL,
+		Model:          "test-model",
+		MaxTokens:      50,
+		Temperature:    0.1,
+		TimeoutSeconds: 5,
+	}
+
+	history := []ConversationMessage{
+		{Role: "user", Content: "Planning vacation to Hawaii"},
+		{Role: "assistant", Content: "Hawaii sounds great! What's your budget?"},
+	}
+
+	result, err := BuildSearchQuery(context.Background(), history, "How much?", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "What is the budget for the Hawaii vacation?", result)
+}
+
+func TestBuildSearchQuery_SelfContainedQuery(t *testing.T) {
+	// Create mock LLM server that returns the query unchanged
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := llmChatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: "What is the capital of France?"}}, // Unchanged
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := &config.QueryRewriteConfig{
+		Enabled:        true,
+		Endpoint:       server.URL,
+		Model:          "test-model",
+		TimeoutSeconds: 5,
+	}
+
+	result, err := BuildSearchQuery(context.Background(), nil, "What is the capital of France?", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "What is the capital of France?", result, "self-contained query should remain unchanged")
+}
+
+func TestBuildSearchQuery_LLMError_FallbackToOriginal(t *testing.T) {
+	// Create mock LLM server that returns error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	cfg := &config.QueryRewriteConfig{
+		Enabled:        true,
+		Endpoint:       server.URL,
+		Model:          "test-model",
+		TimeoutSeconds: 1,
+	}
+
+	result, err := BuildSearchQuery(context.Background(), nil, "original query", cfg)
+	require.NoError(t, err) // Should not return error, just fallback
+	assert.Equal(t, "original query", result, "should fallback to original on error")
+}
+
+func TestBuildSearchQuery_CleanupQuotes(t *testing.T) {
+	// Create mock LLM server that returns quoted response
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := llmChatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: `"What is my budget for Hawaii?"`}}, // With quotes
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := &config.QueryRewriteConfig{
+		Enabled:        true,
+		Endpoint:       server.URL,
+		Model:          "test-model",
+		TimeoutSeconds: 5,
+	}
+
+	result, err := BuildSearchQuery(context.Background(), nil, "How much?", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "What is my budget for Hawaii?", result, "should strip quotes")
+}
+
+func TestBuildSearchQuery_CleanupWhitespace(t *testing.T) {
+	// Create mock LLM server that returns response with whitespace
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := llmChatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{
+				{Message: struct {
+					Content string `json:"content"`
+				}{Content: "  What is the budget?  \n"}}, // With whitespace
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := &config.QueryRewriteConfig{
+		Enabled:        true,
+		Endpoint:       server.URL,
+		Model:          "test-model",
+		TimeoutSeconds: 5,
+	}
+
+	result, err := BuildSearchQuery(context.Background(), nil, "How much?", cfg)
+	require.NoError(t, err)
+	assert.Equal(t, "What is the budget?", result, "should trim whitespace")
+}
+
+func TestBuildSearchQuery_EmptyChoices(t *testing.T) {
+	// Create mock LLM server that returns empty choices
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := llmChatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{}, // Empty
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := &config.QueryRewriteConfig{
+		Enabled:        true,
+		Endpoint:       server.URL,
+		Model:          "test-model",
+		TimeoutSeconds: 5,
+	}
+
+	result, err := BuildSearchQuery(context.Background(), nil, "original query", cfg)
+	require.NoError(t, err) // Should fallback gracefully
+	assert.Equal(t, "original query", result, "should fallback on empty choices")
+}
+
+// =============================================================================
+// ExtractConversationHistory Tests
+// =============================================================================
+
+func TestExtractConversationHistory(t *testing.T) {
+	messagesJSON := `[
+		{"role": "system", "content": "You are a helpful assistant"},
+		{"role": "user", "content": "Hello"},
+		{"role": "assistant", "content": "Hi there!"},
+		{"role": "user", "content": "What's the weather?"}
+	]`
+
+	history, err := ExtractConversationHistory([]byte(messagesJSON))
+	require.NoError(t, err)
+
+	// Should skip system message
+	assert.Len(t, history, 3)
+	assert.Equal(t, "user", history[0].Role)
+	assert.Equal(t, "Hello", history[0].Content)
+	assert.Equal(t, "assistant", history[1].Role)
+	assert.Equal(t, "Hi there!", history[1].Content)
+	assert.Equal(t, "user", history[2].Role)
+	assert.Equal(t, "What's the weather?", history[2].Content)
+}
+
+func TestExtractConversationHistory_EmptyContent(t *testing.T) {
+	messagesJSON := `[
+		{"role": "user", "content": "Hello"},
+		{"role": "assistant", "content": ""},
+		{"role": "user", "content": "Test"}
+	]`
+
+	history, err := ExtractConversationHistory([]byte(messagesJSON))
+	require.NoError(t, err)
+
+	// Should skip empty content
+	assert.Len(t, history, 2)
+	assert.Equal(t, "Hello", history[0].Content)
+	assert.Equal(t, "Test", history[1].Content)
+}
+
+func TestExtractConversationHistory_OnlySystemMessages(t *testing.T) {
+	messagesJSON := `[
+		{"role": "system", "content": "You are a helpful assistant"}
+	]`
+
+	history, err := ExtractConversationHistory([]byte(messagesJSON))
+	require.NoError(t, err)
+	assert.Len(t, history, 0, "should return empty for system-only messages")
+}
+
+func TestExtractConversationHistory_InvalidJSON(t *testing.T) {
+	_, err := ExtractConversationHistory([]byte("invalid json"))
+	assert.Error(t, err)
+}
+
+func TestExtractConversationHistory_EmptyArray(t *testing.T) {
+	history, err := ExtractConversationHistory([]byte("[]"))
+	require.NoError(t, err)
+	assert.Len(t, history, 0)
+}
+
+func TestExtractConversationHistory_MissingRole(t *testing.T) {
+	messagesJSON := `[
+		{"content": "No role here"},
+		{"role": "user", "content": "With role"}
+	]`
+
+	history, err := ExtractConversationHistory([]byte(messagesJSON))
+	require.NoError(t, err)
+	assert.Len(t, history, 1)
+	assert.Equal(t, "With role", history[0].Content)
+}
+
+// =============================================================================
+// FormatHistoryForPrompt Tests
+// =============================================================================
+
+func TestFormatHistoryForPrompt_Empty(t *testing.T) {
+	result := formatHistoryForPrompt(nil)
+	assert.Equal(t, "(no previous conversation)", result)
+}
+
+func TestFormatHistoryForPrompt_SingleMessage(t *testing.T) {
+	history := []ConversationMessage{
+		{Role: "user", Content: "Hello"},
+	}
+
+	result := formatHistoryForPrompt(history)
+	assert.Equal(t, "[user]: Hello", result)
+}
+
+func TestFormatHistoryForPrompt_MultipleMessages(t *testing.T) {
+	history := []ConversationMessage{
+		{Role: "user", Content: "Hello"},
+		{Role: "assistant", Content: "Hi there!"},
+	}
+
+	result := formatHistoryForPrompt(history)
+	assert.Contains(t, result, "[user]: Hello")
+	assert.Contains(t, result, "[assistant]: Hi there!")
+}
+
+func TestFormatHistoryForPrompt_LimitToLast5(t *testing.T) {
+	history := []ConversationMessage{
+		{Role: "user", Content: "Message 1"},
+		{Role: "assistant", Content: "Response 1"},
+		{Role: "user", Content: "Message 2"},
+		{Role: "assistant", Content: "Response 2"},
+		{Role: "user", Content: "Message 3"},
+		{Role: "assistant", Content: "Response 3"},
+		{Role: "user", Content: "Message 4"}, // Only last 5 should be included
+	}
+
+	result := formatHistoryForPrompt(history)
+
+	// Should only include last 5 messages
+	assert.NotContains(t, result, "Message 1")
+	assert.NotContains(t, result, "Response 1")
+	assert.Contains(t, result, "Message 2")
+	assert.Contains(t, result, "Response 2")
+	assert.Contains(t, result, "Message 3")
+	assert.Contains(t, result, "Response 3")
+	assert.Contains(t, result, "Message 4")
+}
+
+// =============================================================================
+// TruncateForLog Tests
+// =============================================================================
+
+func TestTruncateForLog(t *testing.T) {
+	assert.Equal(t, "short", truncateForLog("short", 10))
+	assert.Equal(t, "this is a ...", truncateForLog("this is a long string", 10))
+	assert.Equal(t, "", truncateForLog("", 10))
+	assert.Equal(t, "exactly10!", truncateForLog("exactly10!", 10))
 }
