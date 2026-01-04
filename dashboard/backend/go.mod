@@ -2,8 +2,6 @@ module github.com/vllm-project/semantic-router/dashboard/backend
 
 go 1.24.1
 
-toolchain go1.24.11
-
 require (
 	github.com/vllm-project/semantic-router/src/semantic-router v0.0.0
 	gopkg.in/yaml.v3 v3.0.1

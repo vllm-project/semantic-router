@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -254,6 +255,64 @@ func CreateJailbreakViolationResponse(jailbreakType string, confidence float32, 
 	}
 }
 
+// isErrorResponse checks if a JSON response is an error response
+func isErrorResponse(responseBytes []byte) bool {
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(responseBytes, &responseMap); err != nil {
+		return false
+	}
+	// Check for common error response structures
+	_, hasError := responseMap["error"]
+	_, hasDetail := responseMap["detail"]
+	// If it has "error" or "detail" but no "choices", it's likely an error response
+	_, hasChoices := responseMap["choices"]
+	return (hasError || hasDetail) && !hasChoices
+}
+
+// extractErrorMessage extracts error message from error response
+func extractErrorMessage(responseBytes []byte) string {
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(responseBytes, &responseMap); err != nil {
+		return "Failed to parse error response"
+	}
+
+	// Try to extract error message from various formats
+	if errorObj, ok := responseMap["error"].(map[string]interface{}); ok {
+		if msg, ok := errorObj["message"].(string); ok {
+			return msg
+		}
+	}
+	if detail, ok := responseMap["detail"].(string); ok {
+		return detail
+	}
+	return "Error response from cache"
+}
+
+// splitContentIntoChunks splits content into word-by-word chunks for streaming
+func splitContentIntoChunks(content string) []string {
+	if content == "" {
+		return []string{}
+	}
+
+	// Split by words (preserving spaces)
+	words := strings.Fields(content)
+	if len(words) == 0 {
+		return []string{content}
+	}
+
+	chunks := make([]string, 0, len(words))
+	for i, word := range words {
+		if i < len(words)-1 {
+			// Add space after word (except last word)
+			chunks = append(chunks, word+" ")
+		} else {
+			// Last word without trailing space
+			chunks = append(chunks, word)
+		}
+	}
+	return chunks
+}
+
 // CreateCacheHitResponse creates an immediate response from cache
 func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string) *ext_proc.ProcessingResponse {
 	var responseBody []byte
@@ -263,40 +322,122 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 		// For streaming responses, convert cached JSON to SSE format
 		contentType = "text/event-stream"
 
-		// Parse the cached JSON response
-		var cachedCompletion openai.ChatCompletion
-		if err := json.Unmarshal(cachedResponse, &cachedCompletion); err != nil {
-			logging.Errorf("Error parsing cached response for streaming conversion: %v", err)
-			responseBody = []byte("data: {\"error\": \"Failed to convert cached response\"}\n\ndata: [DONE]\n\n")
-		} else {
-			// Convert chat.completion to chat.completion.chunk format
-			streamChunk := map[string]interface{}{
-				"id":      cachedCompletion.ID,
+		// Check if cached response is an error response BEFORE parsing
+		if isErrorResponse(cachedResponse) {
+			errorMsg := extractErrorMessage(cachedResponse)
+			logging.Errorf("Cached response is an error response, cannot convert to streaming: %s", errorMsg)
+
+			// Return error in SSE format
+			now := time.Now().Unix()
+			errorChunk := map[string]interface{}{
+				"id":      fmt.Sprintf("chatcmpl-cache-error-%d", now),
 				"object":  "chat.completion.chunk",
-				"created": cachedCompletion.Created,
-				"model":   cachedCompletion.Model,
-				"choices": []map[string]interface{}{},
-			}
-
-			// Convert choices from message format to delta format
-			for _, choice := range cachedCompletion.Choices {
-				streamChoice := map[string]interface{}{
-					"index": choice.Index,
-					"delta": map[string]interface{}{
-						"role":    choice.Message.Role,
-						"content": choice.Message.Content,
+				"created": now,
+				"model":   "cache",
+				"choices": []map[string]interface{}{
+					{
+						"index": 0,
+						"delta": map[string]interface{}{
+							"role":    "assistant",
+							"content": fmt.Sprintf("Error: %s", errorMsg),
+						},
+						"finish_reason": "error",
 					},
-					"finish_reason": choice.FinishReason,
-				}
-				streamChunk["choices"] = append(streamChunk["choices"].([]map[string]interface{}), streamChoice)
+				},
 			}
-
-			chunkJSON, err := json.Marshal(streamChunk)
+			chunkJSON, err := json.Marshal(errorChunk)
 			if err != nil {
-				logging.Errorf("Error marshaling streaming cache response: %v", err)
-				responseBody = []byte("data: {\"error\": \"Failed to generate response\"}\n\ndata: [DONE]\n\n")
+				responseBody = []byte("data: {\"error\": \"Failed to convert cached error response\"}\n\ndata: [DONE]\n\n")
 			} else {
 				responseBody = []byte(fmt.Sprintf("data: %s\n\ndata: [DONE]\n\n", chunkJSON))
+			}
+		} else {
+			// Parse the cached JSON response as ChatCompletion
+			var cachedCompletion openai.ChatCompletion
+			if err := json.Unmarshal(cachedResponse, &cachedCompletion); err != nil {
+				logging.Errorf("Error parsing cached response for streaming conversion: %v", err)
+				responseBody = []byte("data: {\"error\": \"Failed to convert cached response\"}\n\ndata: [DONE]\n\n")
+			} else {
+				// Validate that we have valid choices with content
+				if len(cachedCompletion.Choices) == 0 || cachedCompletion.Choices[0].Message.Content == "" {
+					logging.Errorf("Cached response has no valid choices or content")
+					responseBody = []byte("data: {\"error\": \"Cached response has no content\"}\n\ndata: [DONE]\n\n")
+				} else {
+					// Extract content and split into chunks
+					content := cachedCompletion.Choices[0].Message.Content
+					chunks := splitContentIntoChunks(content)
+
+					if len(chunks) == 0 {
+						// Fallback: if splitting failed, use original content as single chunk
+						chunks = []string{content}
+					}
+
+					// Build SSE response with multiple chunks
+					var sseChunks []string
+
+					// Send incremental content chunks
+					for i, chunkContent := range chunks {
+						streamChunk := map[string]interface{}{
+							"id":      cachedCompletion.ID,
+							"object":  "chat.completion.chunk",
+							"created": cachedCompletion.Created,
+							"model":   cachedCompletion.Model,
+							"choices": []map[string]interface{}{
+								{
+									"index": cachedCompletion.Choices[0].Index,
+									"delta": map[string]interface{}{
+										"content": chunkContent,
+									},
+									"finish_reason": nil,
+								},
+							},
+						}
+
+						chunkJSON, err := json.Marshal(streamChunk)
+						if err != nil {
+							logging.Errorf("Error marshaling streaming chunk %d: %v", i, err)
+							// Add error chunk instead of silently skipping
+							errorChunk := fmt.Sprintf("data: {\"error\": \"Failed to marshal chunk %d\"}\n\n", i)
+							sseChunks = append(sseChunks, errorChunk)
+							continue
+						}
+						sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", chunkJSON))
+					}
+
+					// Add final chunk with finish_reason
+					finalChunk := map[string]interface{}{
+						"id":      cachedCompletion.ID,
+						"object":  "chat.completion.chunk",
+						"created": cachedCompletion.Created,
+						"model":   cachedCompletion.Model,
+						"choices": []map[string]interface{}{
+							{
+								"index":         cachedCompletion.Choices[0].Index,
+								"delta":         map[string]interface{}{},
+								"finish_reason": cachedCompletion.Choices[0].FinishReason,
+							},
+						},
+					}
+
+					finalChunkJSON, err := json.Marshal(finalChunk)
+					if err != nil {
+						logging.Errorf("Error marshaling final streaming chunk: %v", err)
+						// Still add a basic final chunk to ensure proper SSE termination
+						sseChunks = append(sseChunks, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+					} else {
+						sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", finalChunkJSON))
+					}
+
+					// Add [DONE] marker (always, even if final chunk failed)
+					sseChunks = append(sseChunks, "data: [DONE]\n\n")
+
+					// Use bytes.Buffer for more efficient string building
+					var buf bytes.Buffer
+					for _, chunk := range sseChunks {
+						buf.WriteString(chunk)
+					}
+					responseBody = buf.Bytes()
+				}
 			}
 		}
 	} else {

@@ -374,13 +374,15 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     # Check if dashboard buildconfig exists
     if ! oc get buildconfig dashboard-custom -n "$NAMESPACE" &>/dev/null; then
         log "Creating dashboard build configuration..."
-        cd "$SCRIPT_DIR/../../dashboard"
+        cd "$SCRIPT_DIR/../.."
         oc new-build --name=dashboard-custom --binary --strategy=docker --to=dashboard-custom:latest -n "$NAMESPACE"
+        oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='json' \
+            -p='[{"op":"add","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"}]'
     fi
 
-    # Start the build from local dashboard directory
+    # Start the build from repo root so the dashboard build can access src/semantic-router
     log "Building dashboard image from source..."
-    cd "$SCRIPT_DIR/../../dashboard"
+    cd "$SCRIPT_DIR/../.."
     oc start-build dashboard-custom --from-dir=. --follow -n "$NAMESPACE" || warn "Dashboard build may still be in progress"
 
     # Deploy dashboard

@@ -218,10 +218,10 @@ dimension: 768  # or 512, 256, 128 for Matryoshka
 
 | Model | Dimension | Latency | Accuracy | Memory |
 |-------|-----------|---------|----------|--------|
-| Qwen3 | 1024 | 30-50ms | Highest | 600MB |
-| Gemma | 768 | 10-20ms | High | 300MB |
-| Gemma | 512 | 8-15ms | Medium | 300MB |
-| Gemma | 256 | 5-10ms | Lower | 300MB |
+| Qwen3 | 1024 | 30-50ms | Highest | ~2.4GB |
+| Gemma | 768 | 10-20ms | High | ~1.2GB |
+| Gemma | 512 | 8-15ms | Medium | ~1.2GB |
+| Gemma | 256 | 5-10ms | Lower | ~1.2GB |
 
 ## Reference
 

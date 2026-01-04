@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -22,7 +23,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	responseBody := v.ResponseBody.Body
 
 	// If this is a streaming response (e.g., SSE), record TTFT on the first body chunk
-	// and skip JSON parsing/caching which are not applicable for SSE chunks.
+	// and accumulate chunks for caching when stream completes.
 	if ctx.IsStreamingResponse {
 		if ctx != nil && !ctx.TTFTRecorded && !ctx.ProcessingStartTime.IsZero() && ctx.RequestModel != "" {
 			ttft := time.Since(ctx.ProcessingStartTime).Seconds()
@@ -34,7 +35,29 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			}
 		}
 
-		// For streaming chunks, just continue (no token parsing or cache update)
+		// Accumulate streaming chunks for caching
+		chunk := string(responseBody)
+		if ctx.StreamingChunks == nil {
+			ctx.StreamingChunks = make([]string, 0)
+			ctx.StreamingMetadata = make(map[string]interface{})
+		}
+		ctx.StreamingChunks = append(ctx.StreamingChunks, chunk)
+
+		// Parse chunk to extract content and metadata
+		r.parseStreamingChunk(chunk, ctx)
+
+		// Check for [DONE] marker - stream is complete
+		if strings.Contains(chunk, "data: [DONE]") {
+			ctx.StreamingComplete = true
+			logging.Infof("Streaming response completed, attempting to cache")
+			// Reconstruct and cache the complete response
+			if err := r.cacheStreamingResponse(ctx); err != nil {
+				logging.Errorf("Failed to cache streaming response: %v", err)
+				// Continue even if caching fails
+			}
+		}
+
+		// For streaming chunks, just continue (chunks are forwarded immediately)
 		response := &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseBody{
 				ResponseBody: &ext_proc.BodyResponse{
@@ -213,4 +236,183 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	}
 
 	return response, nil
+}
+
+// parseStreamingChunk parses an SSE chunk to extract content and metadata
+func (r *OpenAIRouter) parseStreamingChunk(chunk string, ctx *RequestContext) {
+	// Parse SSE format: "data: {...}\n\n"
+	lines := strings.Split(chunk, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			data = strings.TrimSpace(data)
+
+			// Skip [DONE] marker
+			if data == "[DONE]" {
+				continue
+			}
+
+			// Parse JSON chunk
+			var chunkData map[string]interface{}
+			if err := json.Unmarshal([]byte(data), &chunkData); err != nil {
+				// Skip malformed JSON chunks
+				continue
+			}
+
+			// Extract metadata from first chunk (id, model, created)
+			if ctx.StreamingMetadata["id"] == nil {
+				if id, ok := chunkData["id"].(string); ok {
+					ctx.StreamingMetadata["id"] = id
+				}
+				if model, ok := chunkData["model"].(string); ok {
+					ctx.StreamingMetadata["model"] = model
+				}
+				if created, ok := chunkData["created"].(float64); ok {
+					ctx.StreamingMetadata["created"] = int64(created)
+				}
+			}
+
+			// Extract content from delta
+			if choices, ok := chunkData["choices"].([]interface{}); ok && len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]interface{}); ok {
+					if delta, ok := choice["delta"].(map[string]interface{}); ok {
+						if content, ok := delta["content"].(string); ok && content != "" {
+							ctx.StreamingContent += content
+						}
+					}
+					// Extract finish_reason if present
+					if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
+						ctx.StreamingMetadata["finish_reason"] = finishReason
+					}
+				}
+			}
+
+			// Extract usage information if present (usually in final chunk)
+			if usage, ok := chunkData["usage"].(map[string]interface{}); ok {
+				ctx.StreamingMetadata["usage"] = usage
+			}
+		}
+	}
+}
+
+// cacheStreamingResponse reconstructs a ChatCompletion from accumulated chunks and caches it
+func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
+	// Safety check 1: Only cache if completed normally
+	if !ctx.StreamingComplete {
+		logging.Warnf("Stream not completed (no [DONE] marker), skipping cache")
+		return nil
+	}
+
+	// Safety check 2: Don't cache if aborted
+	if ctx.StreamingAborted {
+		logging.Warnf("Stream was aborted, skipping cache")
+		return nil
+	}
+
+	// Safety check 3: Validate we have content
+	if ctx.StreamingContent == "" {
+		logging.Warnf("Streaming response has no content, skipping cache")
+		return nil
+	}
+
+	// Safety check 4: Validate we have metadata
+	if ctx.StreamingMetadata["id"] == nil || ctx.StreamingMetadata["model"] == nil {
+		logging.Warnf("Streaming response missing required metadata, skipping cache")
+		return nil
+	}
+
+	// Get finish_reason (default to "stop" if not present)
+	finishReason := "stop"
+	if fr, ok := ctx.StreamingMetadata["finish_reason"].(string); ok && fr != "" {
+		finishReason = fr
+	}
+
+	// Extract usage information if available (usually in final chunk)
+	usage := openai.CompletionUsage{
+		PromptTokens:     0, // Default to zero if not available
+		CompletionTokens: 0, // Default to zero if not available
+		TotalTokens:      0, // Default to zero if not available
+	}
+	if usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{}); ok {
+		if promptTokens, ok := usageMap["prompt_tokens"].(float64); ok {
+			usage.PromptTokens = int64(promptTokens)
+		}
+		if completionTokens, ok := usageMap["completion_tokens"].(float64); ok {
+			usage.CompletionTokens = int64(completionTokens)
+		}
+		if totalTokens, ok := usageMap["total_tokens"].(float64); ok {
+			usage.TotalTokens = int64(totalTokens)
+		}
+	}
+
+	// Reconstruct ChatCompletion JSON
+	reconstructed := openai.ChatCompletion{
+		ID:      ctx.StreamingMetadata["id"].(string),
+		Object:  "chat.completion",
+		Created: ctx.StreamingMetadata["created"].(int64),
+		Model:   ctx.StreamingMetadata["model"].(string),
+		Choices: []openai.ChatCompletionChoice{
+			{
+				Index: 0,
+				Message: openai.ChatCompletionMessage{
+					Role:    "assistant",
+					Content: ctx.StreamingContent,
+				},
+				FinishReason: finishReason,
+			},
+		},
+		Usage: usage, // Use extracted usage or zero values
+	}
+
+	// Marshal to JSON
+	reconstructedJSON, err := json.Marshal(reconstructed)
+	if err != nil {
+		logging.Errorf("Failed to marshal reconstructed response: %v", err)
+		return err
+	}
+
+	// Safety check 5: Validate reconstructed structure
+	if len(reconstructed.Choices) == 0 || reconstructed.Choices[0].Message.Content == "" {
+		logging.Warnf("Reconstructed response has no valid choices or content, skipping cache")
+		return nil
+	}
+
+	// Cache the reconstructed response
+	// Use AddEntry if we have all required information (works even if AddPendingRequest failed)
+	// Otherwise fall back to UpdateWithResponse (requires pending request)
+	if ctx.RequestID != "" && ctx.RequestQuery != "" && ctx.RequestModel != "" {
+		// We have all info needed for AddEntry - use it directly
+		// This works even if AddPendingRequest failed due to embedding errors
+		requestBody := ctx.OriginalRequestBody
+		if requestBody == nil {
+			// If we don't have the original request body, create a minimal one
+			// This is a fallback - ideally we'd have the original body
+			requestBody = []byte("{}")
+		}
+		err = r.Cache.AddEntry(ctx.RequestID, ctx.RequestModel, ctx.RequestQuery, requestBody, reconstructedJSON)
+		if err != nil {
+			logging.Errorf("Error caching streaming response with AddEntry: %v", err)
+			// Fall back to UpdateWithResponse in case AddEntry fails
+			err = r.Cache.UpdateWithResponse(ctx.RequestID, reconstructedJSON)
+			if err != nil {
+				logging.Errorf("Error caching streaming response with UpdateWithResponse: %v", err)
+				return err
+			}
+			logging.Infof("Successfully cached streaming response (via UpdateWithResponse) for request ID: %s", ctx.RequestID)
+		} else {
+			logging.Infof("Successfully cached streaming response (via AddEntry) for request ID: %s", ctx.RequestID)
+		}
+	} else if ctx.RequestID != "" {
+		// Fall back to UpdateWithResponse if we don't have query/model
+		err = r.Cache.UpdateWithResponse(ctx.RequestID, reconstructedJSON)
+		if err != nil {
+			logging.Errorf("Error caching streaming response: %v", err)
+			return err
+		}
+		logging.Infof("Successfully cached streaming response for request ID: %s", ctx.RequestID)
+	} else {
+		logging.Warnf("No request ID available, cannot cache streaming response")
+	}
+
+	return nil
 }

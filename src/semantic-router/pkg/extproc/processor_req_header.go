@@ -47,6 +47,13 @@ type RequestContext struct {
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
 
+	// Streaming accumulation for caching
+	StreamingChunks   []string               // Accumulated SSE chunks
+	StreamingContent  string                 // Accumulated content from delta.content
+	StreamingMetadata map[string]interface{} // id, model, created from first chunk
+	StreamingComplete bool                   // True when [DONE] marker received
+	StreamingAborted  bool                   // True if stream ended abnormally (EOF, cancel, timeout)
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64

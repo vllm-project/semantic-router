@@ -12,17 +12,18 @@ RUN npm run build
 FROM golang:1.24 AS backend-builder
 WORKDIR /app
 
-# Use Chinese Go proxy to avoid network timeout issues
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOSUMDB=sum.golang.google.cn
+# Use Go proxy for reliable downloads
+ENV GOPROXY=https://proxy.golang.org,direct
 
 # Accept build arguments for target architecture
 ARG TARGETARCH
 ARG TARGETOS=linux
 
 # Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
+# Only copy the packages we actually need (config, observability) - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
-COPY src/semantic-router/pkg/ /app/src/semantic-router/pkg/
+COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
