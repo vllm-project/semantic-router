@@ -47,6 +47,7 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/production-stack',
             'installation/k8s/aibrix',
             'installation/k8s/llm-d',
+            'installation/k8s/dynamo',
           ],
         },
       ],
