@@ -151,15 +151,7 @@ func main() {
 		logging.Infof("Metrics server disabled")
 	}
 
-	// Create and start the ExtProc server
-	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
-	if err != nil {
-		logging.Fatalf("Failed to create ExtProc server: %v", err)
-	}
-
-	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
-
-	// Initialize embedding models if configured (Long-context support)
+	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma models are ready when semantic cache is initialized
 	// Use the already loaded config instead of calling config.Load() again
 	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
 		if err := candle_binding.InitEmbeddingModels(
@@ -171,23 +163,26 @@ func main() {
 			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
 		} else {
 			logging.Infof("Embedding models initialized successfully")
-
-			// Load tools database after embedding models are initialized
-			// This ensures ModelFactory is ready when generating tool embeddings
-			router := server.GetRouter()
-			if router != nil {
-				if err := router.LoadToolsDatabase(); err != nil {
-					logging.Warnf("Failed to load tools database: %v", err)
-				}
-			}
 		}
 	} else {
-		logging.Infof("No embedding models configured, skipping initialization")
-		logging.Infof("To enable embedding models, add to config.yaml:")
-		logging.Infof("  embedding_models:")
-		logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
-		logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
-		logging.Infof("    use_cpu: true")
+		logging.Infof("Embedding models not configured, skipping initialization")
+	}
+
+	// Create and start the ExtProc server
+	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
+	if err != nil {
+		logging.Fatalf("Failed to create ExtProc server: %v", err)
+	}
+
+	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
+
+	// Load tools database after server initialization
+	// Tools database can work with or without embedding models
+	router := server.GetRouter()
+	if router != nil {
+		if err := router.LoadToolsDatabase(); err != nil {
+			logging.Warnf("Failed to load tools database: %v", err)
+		}
 	}
 
 	// Start API server if enabled
