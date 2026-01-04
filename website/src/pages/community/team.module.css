@@ -144,6 +144,7 @@
 .company {
   color: var(--ifm-color-primary);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .memberBio {

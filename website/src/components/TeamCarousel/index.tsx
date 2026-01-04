@@ -205,15 +205,19 @@ const TeamCarousel: React.FC = () => {
                     {member.memberType === 'maintainer'
                       ? 'Maintainer'
                       : member.memberType === 'committer'
-                      ? 'Committer'
-                      : 'Contributor'}
+                        ? 'Committer'
+                        : 'Contributor'}
                   </span>
                 </div>
                 <h3 className={styles.memberName}>{member.name}</h3>
                 <p className={styles.memberRole}>
                   {member.role}
                   {member.company && (
-                    <span className={styles.company}> @ {member.company}</span>
+                    <span className={styles.company}>
+                      {' '}
+                      @
+                      {member.company}
+                    </span>
                   )}
                 </p>
               </div>
@@ -232,4 +236,3 @@ const TeamCarousel: React.FC = () => {
 }
 
 export default TeamCarousel
-

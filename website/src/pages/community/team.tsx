@@ -217,16 +217,16 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
               {member.memberType === 'maintainer'
                 ? 'Maintainer'
                 : member.memberType === 'committer'
-                ? 'Committer'
-                : 'Contributor'}
+                  ? 'Committer'
+                  : 'Contributor'}
             </span>
           </div>
           <p className={styles.memberRole}>
             {member.role}
             {member.company && (
               <span className={styles.company}>
-                {' '}
-                @ {member.company}
+                {' @'}
+                {member.company}
               </span>
             )}
           </p>
