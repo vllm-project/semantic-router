@@ -75,11 +75,6 @@ func TestCreateCacheHitResponse_NonStreaming(t *testing.T) {
 		t.Errorf("Expected x-vsr-cache-hit true, got %s", cacheHit)
 	}
 
-	// Verify body is unchanged
-	if string(immediateResp.Body) != string(cachedResponse) {
-		t.Error("Body was modified for non-streaming response")
-	}
-
 	// Verify body can be parsed as JSON
 	var parsedResponse openai.ChatCompletion
 	if err := json.Unmarshal(immediateResp.Body, &parsedResponse); err != nil {
@@ -88,6 +83,29 @@ func TestCreateCacheHitResponse_NonStreaming(t *testing.T) {
 
 	if parsedResponse.Object != "chat.completion" {
 		t.Errorf("Expected object chat.completion, got %s", parsedResponse.Object)
+	}
+
+	// Verify ID is regenerated (should have "chatcmpl-cache-" prefix)
+	if !strings.HasPrefix(parsedResponse.ID, "chatcmpl-cache-") {
+		t.Errorf("Expected ID to start with 'chatcmpl-cache-', got %s", parsedResponse.ID)
+	}
+
+	// Verify ID is different from cached ID
+	if parsedResponse.ID == "chatcmpl-test-123" {
+		t.Error("ID was not regenerated - still using cached ID")
+	}
+
+	// Verify created timestamp is updated (should be recent, not the old timestamp)
+	if parsedResponse.Created == 1234567890 {
+		t.Error("Created timestamp was not updated - still using cached timestamp")
+	}
+
+	// Verify other fields are preserved
+	if parsedResponse.Model != "test-model" {
+		t.Errorf("Expected model test-model, got %s", parsedResponse.Model)
+	}
+	if len(parsedResponse.Choices) == 0 || parsedResponse.Choices[0].Message.Content != "This is a cached response." {
+		t.Error("Content was not preserved correctly")
 	}
 }
 
@@ -199,8 +217,27 @@ func TestCreateCacheHitResponse_Streaming(t *testing.T) {
 		t.Errorf("Expected object chat.completion.chunk, got %v", firstChunk["object"])
 	}
 
-	if firstChunk["id"] != "chatcmpl-test-456" {
-		t.Errorf("Expected id chatcmpl-test-456, got %v", firstChunk["id"])
+	// Verify ID is regenerated (should have "chatcmpl-cache-" prefix)
+	chunkID, ok := firstChunk["id"].(string)
+	if !ok {
+		t.Fatal("ID is not a string")
+	}
+	if !strings.HasPrefix(chunkID, "chatcmpl-cache-") {
+		t.Errorf("Expected ID to start with 'chatcmpl-cache-', got %s", chunkID)
+	}
+
+	// Verify ID is different from cached ID
+	if chunkID == "chatcmpl-test-456" {
+		t.Error("ID was not regenerated - still using cached ID")
+	}
+
+	// Verify created timestamp is updated
+	chunkCreated, ok := firstChunk["created"].(float64)
+	if !ok {
+		t.Fatal("Created is not a number")
+	}
+	if int64(chunkCreated) == 1234567890 {
+		t.Error("Created timestamp was not updated - still using cached timestamp")
 	}
 
 	// Verify choices structure in first chunk
