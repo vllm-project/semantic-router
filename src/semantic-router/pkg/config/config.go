@@ -75,6 +75,8 @@ type RouterConfig struct {
 
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
+	// Memory configuration for agentic memory (cross-session context)
+	Memory MemoryConfig `yaml:"memory"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
 	// Router Replay configuration for recording routing decisions
@@ -710,6 +712,36 @@ type SemanticCache struct {
 	// - "gemma": Balanced, 768-dim, supports 8K context
 	// Default: "bert"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+// MemoryConfig represents the configuration for agentic memory
+type MemoryConfig struct {
+	// Enable memory features
+	Enabled bool `yaml:"enabled"`
+
+	// Query rewriting configuration
+	QueryRewrite QueryRewriteConfig `yaml:"query_rewrite"`
+}
+
+// QueryRewriteConfig holds configuration for LLM-based query rewriting
+type QueryRewriteConfig struct {
+	// Enable query rewriting
+	Enabled bool `yaml:"enabled"`
+
+	// LLM endpoint for query rewriting (e.g., "http://localhost:8080")
+	Endpoint string `yaml:"endpoint"`
+
+	// Model to use for query rewriting (e.g., "qwen3-7b")
+	Model string `yaml:"model"`
+
+	// Maximum tokens for rewritten query (default: 50)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+
+	// Temperature for LLM generation (default: 0.1)
+	Temperature float64 `yaml:"temperature,omitempty"`
+
+	// Timeout in seconds for LLM request (default: 5)
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.
