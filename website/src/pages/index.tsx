@@ -8,7 +8,7 @@ import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
 import NeuralNetworkBackground from '@site/src/components/NeuralNetworkBackground'
 import AIChipAnimation from '@site/src/components/AIChipAnimation'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
-import YouTubeSection from '@site/src/components/YouTubeSection'
+import TeamCarousel from '@site/src/components/TeamCarousel'
 
 import styles from './index.module.css'
 
@@ -32,17 +32,11 @@ const HomepageHeader: React.FC = () => {
               </h1>
             </div>
             <p className="hero__subtitle">
-              🧠 Intelligent
-              {' '}
-              <strong>Auto Reasoning</strong>
-              {' '}
-              Router for Efficient LLM Inference on
-              {' '}
-              <strong>Mixture-of-Models</strong>
-              <br />
+              <strong>System Level</strong> Intelligent Router for <strong>Mixture-of-Models</strong>
+              🧠
               <span className={styles.techBadges}>
                 <span className={styles.techBadge}>🧬 Neural Networks</span>
-                <span className={styles.techBadge}>⚡ LLM Optimization</span>
+                <span className={styles.techBadge}>⚡ LLM Routing</span>
                 <span className={styles.techBadge}>♻️ Per-token Unit Economics</span>
               </span>
             </p>
@@ -74,7 +68,7 @@ const AITechShowcase: React.FC = () => {
               🧠 Neural Processing Architecture
             </h2>
             <p className={styles.aiTechDescription}>
-              Powered by cutting-edge AI technologies including ModernBERT fine-tuned models,
+              Powered by cutting-edge AI technologies including Encoder Only Models, SLMs and LLMs,
               and advanced semantic understanding for intelligent
               model routing and selection.
             </p>
@@ -112,15 +106,37 @@ const FlowDiagram: React.FC = () => {
       <div className="container">
         <div className={styles.architectureContainer}>
           <h2 className={styles.architectureTitle}>
-            🏗️ Intent Aware Semantic Router Architecture
+            🏗️ Architecture
           </h2>
           <div className={styles.architectureImageWrapper}>
             <img
               src="/img/architecture.png"
-              alt="Intent Aware Semantic Router Architecture"
+              alt="Architecture"
               className={styles.architectureImage}
             />
           </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+const WhereItLives: React.FC = () => {
+  return (
+    <section className={styles.whereItLivesSection}>
+      <div className="container">
+        <h2 className={styles.whereItLivesTitle}>
+          📍 Where it lives
+        </h2>
+        <p className={styles.whereItLivesSubtitle}>
+          It lives between the real world and models
+        </p>
+        <div className={styles.whereItLivesImageWrapper}>
+          <img
+            src="/img/level.png"
+            alt="Where vLLM Semantic Router Lives"
+            className={styles.whereItLivesImage}
+          />
         </div>
       </div>
     </section>
@@ -151,14 +167,21 @@ const Home: React.FC = () => {
             <div className={`${styles.connectionLine} ${styles.connectionLine5}`}></div>
           </div>
         </div>
-        <YouTubeSection />
+        <HomepageFeatures />
         <div className={styles.connectionSection}>
           <div className={styles.connectionLines}>
             <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
             <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
           </div>
         </div>
-        <HomepageFeatures />
+        <WhereItLives />
+        <div className={styles.connectionSection}>
+          <div className={styles.connectionLines}>
+            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
+            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
+          </div>
+        </div>
+        <TeamCarousel />
         <div className={styles.connectionSection}>
           <div className={styles.connectionLines}>
             <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>

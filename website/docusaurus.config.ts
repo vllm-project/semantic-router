@@ -7,7 +7,7 @@ const darkCodeTheme = themes.vsDark
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models',
+  tagline: 'System Level Intelligent Router for Mixture-of-Models',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -102,16 +102,16 @@ const config: Config = {
   themeConfig: {
     image: 'img/docusaurus-social-card.jpg',
     metadata: [
-      { name: 'description', content: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models' },
+      { name: 'description', content: 'System Level Intelligent Router for Mixture-of-Models' },
       { name: 'keywords', content: 'LLM, Semantic Router, Mixture of Models, vLLM, Routing, AI Gateway, Envoy, ExtProc' },
       { name: 'author', content: 'vLLM Semantic Router Team' },
       { property: 'og:title', content: 'vLLM Semantic Router' },
-      { property: 'og:description', content: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models' },
+      { property: 'og:description', content: 'System Level Intelligent Router for Mixture-of-Models' },
       { property: 'og:type', content: 'website' },
       { property: 'og:site_name', content: 'vLLM Semantic Router' },
       { name: 'twitter:card', content: 'summary_large_image' },
       { name: 'twitter:title', content: 'vLLM Semantic Router' },
-      { name: 'twitter:description', content: 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models' },
+      { name: 'twitter:description', content: 'System Level Intelligent Router for Mixture-of-Models' },
 
       // GEO metadata config
       { name: 'geo.region', content: 'US-CA' },
@@ -284,7 +284,7 @@ const config: Config = {
         'name': 'vLLM Semantic Router',
         'applicationCategory': 'AIInfrastructure',
         'operatingSystem': 'Cross-platform',
-        'description': 'Intelligent Auto Reasoning Router for Efficient LLM Inference on Mixture-of-Models',
+        'description': 'System Level Intelligent Router for Mixture-of-Models',
         'url': 'https://vllm-semantic-router.com',
         'publisher': {
           '@type': 'Organization',
