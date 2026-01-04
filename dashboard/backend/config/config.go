@@ -20,6 +20,7 @@ type Config struct {
 	RouterAPIURL  string
 	RouterMetrics string
 	JaegerURL     string
+	EnvoyURL      string // Envoy proxy for chat completions
 }
 
 // env returns the env var or default
@@ -45,6 +46,7 @@ func LoadConfig() (*Config, error) {
 	routerAPI := flag.String("router_api", env("TARGET_ROUTER_API_URL", "http://localhost:8080"), "Router API base URL")
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
 	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
+	envoyURL := flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions")
 
 	flag.Parse()
 
@@ -56,6 +58,7 @@ func LoadConfig() (*Config, error) {
 	cfg.RouterAPIURL = *routerAPI
 	cfg.RouterMetrics = *routerMetrics
 	cfg.JaegerURL = *jaegerURL
+	cfg.EnvoyURL = *envoyURL
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)

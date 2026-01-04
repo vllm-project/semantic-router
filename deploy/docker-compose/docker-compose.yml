@@ -159,6 +159,7 @@ services:
       - TARGET_JAEGER_URL=http://jaeger:16686
       - TARGET_ROUTER_API_URL=http://semantic-router:8080
       - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
+      - TARGET_ENVOY_URL=http://envoy:8801
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
     volumes:
       - ../../config:/app/config:rw,z
@@ -172,6 +173,8 @@ services:
       grafana:
         condition: service_started
       prometheus:
+        condition: service_started
+      envoy:
         condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8700/healthz"]
