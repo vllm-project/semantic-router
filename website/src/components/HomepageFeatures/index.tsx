@@ -9,7 +9,7 @@ const GoalsList: string[] = [
   'How to collect the valuable signals and build a self-learning system?',
 ]
 
-const GoalItem: React.FC<{ goal: string; index: number }> = ({ goal, index }) => {
+const GoalItem: React.FC<{ goal: string, index: number }> = ({ goal, index }) => {
   return (
     <div className={styles.goalItem}>
       <div className={styles.goalNumber}>{index + 1}</div>

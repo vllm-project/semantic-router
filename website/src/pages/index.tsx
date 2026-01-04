@@ -32,7 +32,10 @@ const HomepageHeader: React.FC = () => {
               </h1>
             </div>
             <p className="hero__subtitle">
-              <strong>System Level</strong> Intelligent Router for <strong>Mixture-of-Models</strong>
+              <strong>System Level</strong>
+              {' '}
+              Intelligent Router for
+              <strong>Mixture-of-Models</strong>
               🧠
               <span className={styles.techBadges}>
                 <span className={styles.techBadge}>🧬 Neural Networks</span>
