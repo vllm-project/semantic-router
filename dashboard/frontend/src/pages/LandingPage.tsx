@@ -311,7 +311,7 @@ const LandingPage: React.FC = () => {
 
             <div className={styles.features}>
               <div className={styles.featureTag}>🧬 Neural Networks</div>
-              <div className={styles.featureTag}>⚡ LLM Optimization</div>
+              <div className={styles.featureTag}>⚡ LLM Routing</div>
               <div className={styles.featureTag}>♻️ Per-token Unit Economics</div>
             </div>
 

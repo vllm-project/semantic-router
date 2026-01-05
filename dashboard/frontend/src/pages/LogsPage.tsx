@@ -101,21 +101,21 @@ const LogsPage: React.FC = () => {
       </div>
 
       <div className={styles.controls}>
-        <div className={styles.componentSelector}>
+        <div className={styles.serviceSelector}>
           <button
-            className={`${styles.componentButton} ${selectedComponent === 'router' ? styles.active : ''}`}
+            className={`${styles.serviceButton} ${selectedComponent === 'router' ? styles.active : ''}`}
             onClick={() => setSelectedComponent('router')}
           >
             🤖 Router
           </button>
           <button
-            className={`${styles.componentButton} ${selectedComponent === 'envoy' ? styles.active : ''}`}
+            className={`${styles.serviceButton} ${selectedComponent === 'envoy' ? styles.active : ''}`}
             onClick={() => setSelectedComponent('envoy')}
           >
             🔀 Envoy
           </button>
           <button
-            className={`${styles.componentButton} ${selectedComponent === 'all' ? styles.active : ''}`}
+            className={`${styles.serviceButton} ${selectedComponent === 'all' ? styles.active : ''}`}
             onClick={() => setSelectedComponent('all')}
           >
             📦 All

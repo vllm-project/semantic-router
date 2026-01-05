@@ -194,7 +194,7 @@ const StatusPage: React.FC = () => {
               <div className={styles.startOptions}>
                 <div className={styles.startOption}>
                   <strong>Local:</strong>
-                  <code>vsr serve</code>
+                  <code>vllm-sr serve</code>
                 </div>
                 <div className={styles.startOption}>
                   <strong>Docker:</strong>
