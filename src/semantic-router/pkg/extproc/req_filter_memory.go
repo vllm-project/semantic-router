@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -377,4 +378,129 @@ func ExtractConversationHistory(messagesJSON []byte) ([]ConversationMessage, err
 	}
 
 	return history, nil
+}
+
+// =============================================================================
+// Memory Injection into LLM Request
+// =============================================================================
+
+// InjectMemories adds retrieved memories to the LLM request as system context.
+// The memories are formatted as a system message and prepended to the messages array.
+//
+// Format:
+//
+//	## User's Relevant Context
+//
+//	- Hawaii trip budget is $10,000
+//	- User prefers direct flights
+//
+// Graceful handling:
+//   - If no memories found → returns original request unchanged
+//   - If injection fails → logs warning and returns original request
+//
+// See: https://github.com/yehudit1987/semantic-router/issues/5
+func InjectMemories(requestBody []byte, memories []*memory.RetrieveResult) ([]byte, error) {
+	// No memories to inject
+	if len(memories) == 0 {
+		logging.Debugf("Memory: No memories to inject, returning original request")
+		return requestBody, nil
+	}
+
+	// Format memories as context
+	contextContent := FormatMemoriesAsContext(memories)
+
+	// Inject as system message
+	modifiedBody, err := injectSystemMessage(requestBody, contextContent)
+	if err != nil {
+		logging.Warnf("Memory: Failed to inject memories: %v, returning original request", err)
+		return requestBody, nil // Graceful fallback
+	}
+
+	logging.Infof("Memory: Injected %d memories into request", len(memories))
+	return modifiedBody, nil
+}
+
+// FormatMemoriesAsContext formats retrieved memories as a context block
+// for injection into the LLM request.
+//
+// Output format:
+//
+//	## User's Relevant Context
+//
+//	- Hawaii trip budget is $10,000 (relevance: 0.85)
+//	- User prefers direct flights (relevance: 0.72)
+func FormatMemoriesAsContext(memories []*memory.RetrieveResult) string {
+	if len(memories) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## User's Relevant Context\n\n")
+
+	for _, result := range memories {
+		if result.Memory != nil && result.Memory.Content != "" {
+			sb.WriteString(fmt.Sprintf("- %s\n", result.Memory.Content))
+		}
+	}
+
+	return sb.String()
+}
+
+// injectSystemMessage adds a system message with the given content to the request.
+// It parses the request body as JSON, finds or creates the messages array,
+// and prepends a new system message.
+func injectSystemMessage(requestBody []byte, content string) ([]byte, error) {
+	// Parse request body
+	var request map[string]interface{}
+	if err := json.Unmarshal(requestBody, &request); err != nil {
+		return nil, fmt.Errorf("failed to parse request body: %w", err)
+	}
+
+	// Get or create messages array
+	messages, ok := request["messages"].([]interface{})
+	if !ok {
+		// No messages array - create one with just the system message
+		messages = []interface{}{}
+	}
+
+	// Create system message for memory context
+	memorySystemMessage := map[string]interface{}{
+		"role":    "system",
+		"content": content,
+	}
+
+	// Find existing system message to append to, or prepend new one
+	injected := false
+	for i, msg := range messages {
+		msgMap, ok := msg.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if role, ok := msgMap["role"].(string); ok && role == "system" {
+			// Append memory context to existing system message
+			existingContent, _ := msgMap["content"].(string)
+			msgMap["content"] = existingContent + "\n\n" + content
+			messages[i] = msgMap
+			injected = true
+			logging.Debugf("Memory: Appended context to existing system message")
+			break
+		}
+	}
+
+	if !injected {
+		// No system message found - prepend new one
+		messages = append([]interface{}{memorySystemMessage}, messages...)
+		logging.Debugf("Memory: Prepended new system message with context")
+	}
+
+	// Update request and marshal back to JSON
+	request["messages"] = messages
+
+	modifiedBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal modified request: %w", err)
+	}
+
+	return modifiedBody, nil
 }
