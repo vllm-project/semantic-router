@@ -1,5 +1,4 @@
 import React from 'react'
-import clsx from 'clsx'
 import Translate from '@docusaurus/Translate'
 import styles from './styles.module.css'
 

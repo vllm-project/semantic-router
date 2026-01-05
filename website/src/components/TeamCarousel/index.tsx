@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import Translate from '@docusaurus/Translate'
 import styles from './styles.module.css'
 
 interface TeamMember {
@@ -186,9 +187,13 @@ const TeamCarousel: React.FC = () => {
   return (
     <section className={styles.teamCarousel}>
       <div className="container">
-        <h2 className={styles.title}>👥 Meet Our Team</h2>
+        <h2 className={styles.title}>
+          👥
+          {' '}
+          <Translate id="teamCarousel.title">Meet Our Team</Translate>
+        </h2>
         <p className={styles.subtitle}>
-          The amazing people behind vLLM Semantic Router
+          <Translate id="teamCarousel.subtitle">The amazing people behind vLLM Semantic Router</Translate>
         </p>
 
         <div className={styles.carouselContainer}>
@@ -203,10 +208,10 @@ const TeamCarousel: React.FC = () => {
                   />
                   <span className={`${styles.badge} ${styles[member.memberType]}`}>
                     {member.memberType === 'maintainer'
-                      ? 'Maintainer'
+                      ? <Translate id="team.badge.maintainer">Maintainer</Translate>
                       : member.memberType === 'committer'
-                        ? 'Committer'
-                        : 'Contributor'}
+                        ? <Translate id="team.badge.committer">Committer</Translate>
+                        : <Translate id="team.badge.contributor">Contributor</Translate>}
                   </span>
                 </div>
                 <h3 className={styles.memberName}>{member.name}</h3>
@@ -227,7 +232,9 @@ const TeamCarousel: React.FC = () => {
 
         <div className={styles.viewAllLink}>
           <a href="/community/team" className={styles.viewAllButton}>
-            View All Team Members →
+            <Translate id="teamCarousel.viewAll">View All Team Members</Translate>
+            {' '}
+            →
           </a>
         </div>
       </div>

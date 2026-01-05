@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react'
+import Translate from '@docusaurus/Translate'
 import styles from './AIChipAnimation.module.css'
 
 const AIChipAnimation: React.FC = () => {
@@ -170,8 +171,12 @@ const AIChipAnimation: React.FC = () => {
       </svg>
 
       <div className={styles.chipLabel}>
-        <span className={styles.chipTitle}>Neural Processing Unit</span>
-        <span className={styles.chipSubtitle}>Embedding • Classify • Similarity</span>
+        <span className={styles.chipTitle}>
+          <Translate id="aiChip.title">Neural Processing Unit</Translate>
+        </span>
+        <span className={styles.chipSubtitle}>
+          <Translate id="aiChip.subtitle">Embedding • Classify • Similarity</Translate>
+        </span>
       </div>
     </div>
   )

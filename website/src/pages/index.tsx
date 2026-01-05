@@ -40,6 +40,7 @@ const HomepageHeader: React.FC = () => {
               </strong>
               {' '}
               <Translate id="homepage.hero.intelligentRouter">Intelligent Router for</Translate>
+              {' '}
               <strong>
                 <Translate id="homepage.hero.mixtureOfModels">Mixture-of-Models</Translate>
               </strong>

@@ -380,7 +380,10 @@ const Team: React.FC = () => {
             </h2>
             <div className={styles.involvementGrid}>
               <div className={styles.involvementCard}>
-                <h3>🚀 <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate></h3>
+                <h3>
+                  🚀
+                  <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate>
+                </h3>
                 <p><Translate id="team.getInvolved.contribute.desc">Ready to make your first contribution?</Translate></p>
                 <a href="/community/contributing" className={styles.actionButton}>
                   <Translate id="team.getInvolved.contribute.link">Contributing Guide</Translate>
@@ -388,7 +391,10 @@ const Team: React.FC = () => {
               </div>
 
               <div className={styles.involvementCard}>
-                <h3>👥 <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate></h3>
+                <h3>
+                  👥
+                  <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate>
+                </h3>
                 <p><Translate id="team.getInvolved.workGroups.desc">Find your area of expertise and connect with like-minded contributors.</Translate></p>
                 <a href="/community/work-groups" className={styles.actionButton}>
                   <Translate id="team.getInvolved.workGroups.link">View Work Groups</Translate>
@@ -396,7 +402,10 @@ const Team: React.FC = () => {
               </div>
 
               <div className={styles.involvementCard}>
-                <h3>💬 <Translate id="team.getInvolved.discussions.title">Join Discussions</Translate></h3>
+                <h3>
+                  💬
+                  <Translate id="team.getInvolved.discussions.title">Join Discussions</Translate>
+                </h3>
                 <p><Translate id="team.getInvolved.discussions.desc">Participate in community discussions and share your ideas.</Translate></p>
                 <a href="https://github.com/vllm-project/semantic-router/discussions" target="_blank" rel="noopener noreferrer" className={styles.actionButton}>
                   <Translate id="team.getInvolved.discussions.link">GitHub Discussions</Translate>

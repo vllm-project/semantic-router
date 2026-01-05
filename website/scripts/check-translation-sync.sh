@@ -52,7 +52,9 @@ else
     LOCALES=()
     for dir in "$I18N_BASE"/*/docusaurus-plugin-content-docs/current; do
         if [[ -d "$dir" ]]; then
-            locale=$(echo "$dir" | sed "s|$I18N_BASE/\([^/]*\)/.*|\1|")
+            # Extract locale from path: i18n/LOCALE/docusaurus-plugin-content-docs/current
+            locale="${dir#"$I18N_BASE"/}"
+            locale="${locale%%/*}"
             LOCALES+=("$locale")
         fi
     done
@@ -86,7 +88,7 @@ check_locale() {
     declare -a missing_files
     
     while IFS= read -r -d '' source_file; do
-        local rel_path="${source_file#$DOCS_DIR/}"
+        local rel_path="${source_file#"$DOCS_DIR"/}"
         
         [[ "$rel_path" == "OWNER" ]] && continue
         

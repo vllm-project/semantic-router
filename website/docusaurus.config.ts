@@ -48,9 +48,14 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           versions: {
-            current: {
+            'current': {
               label: 'Next 🚧',
               path: '',
+              badge: true,
+            },
+            'v0.1': {
+              label: 'v0.1',
+              path: 'v0.1',
               badge: true,
             },
           },

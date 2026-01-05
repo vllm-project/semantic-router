@@ -1,4 +1,5 @@
 import React from 'react'
+import Translate from '@docusaurus/Translate'
 import styles from './index.module.css'
 import acknowledgementsData from './data.json'
 
@@ -10,25 +11,25 @@ interface Project {
 }
 
 interface AcknowledgementsData {
-  title: string
-  subtitle: string
   projects: Project[]
 }
 
 const typedData: AcknowledgementsData = acknowledgementsData as AcknowledgementsData
 
 const AcknowledgementsSection: React.FC = () => {
-  const { title, subtitle, projects } = typedData
+  const { projects } = typedData
 
   return (
     <section className={styles.acknowledgementsSection}>
       <div className="container">
         <div className={styles.acknowledgementsContainer}>
           <h2 className={styles.acknowledgementsTitle}>
-            {title}
+            <Translate id="acknowledgements.title">Acknowledgements</Translate>
           </h2>
           <p className={styles.acknowledgementsSubtitle}>
-            {subtitle}
+            <Translate id="acknowledgements.subtitle">vLLM Semantic Router is born in open source and built on open source</Translate>
+            {' '}
+            ❤️
           </p>
           <div className={styles.projectsGrid}>
             {projects.map(project => (

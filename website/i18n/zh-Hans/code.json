@@ -323,7 +323,7 @@
     "description": "The title of the tag list page"
   },
   "homepage.hero.aiPowered": {
-    "message": "AI 驱动"
+    "message": "AI 赋能"
   },
   "homepage.hero.intelligent": {
     "message": "智能"
@@ -350,7 +350,7 @@
     "message": "快速开始 - 5分钟 ⏱️"
   },
   "homepage.aiTech.title": {
-    "message": "神经处理架构"
+    "message": "神经网络处理架构"
   },
   "homepage.aiTech.description": {
     "message": "采用前沿 AI 技术，包括 ModernBERT 微调模型和先进的语义理解能力，实现智能模型路由和选择。"
@@ -368,13 +368,13 @@
     "message": "语义理解"
   },
   "homepage.architecture.title": {
-    "message": "意图感知 Semantic Router 架构"
+    "message": "架构"
   },
   "features.sectionTitle": {
     "message": "我们的目标"
   },
   "features.sectionSubtitle": {
-    "message": "为混合模型（MoM）构建系统级智能，将集体智慧引入 LLM 系统"
+    "message": "为混合模型（MoM）构建系统级智能，将全局智能引入 LLM 系统"
   },
   "translationBanner.outdated": {
     "message": "此翻译可能已过时。英文原文已更新，中文尚未同步。",
@@ -619,7 +619,7 @@
     "message": "系统级"
   },
   "homepage.hero.intelligentRouter": {
-    "message": "智能路由器"
+    "message": "智能路由"
   },
   "homepage.whereItLives.title": {
     "message": "它的位置"
@@ -710,5 +710,26 @@
   },
   "team.getInvolved.discussions.link": {
     "message": "GitHub 讨论区"
+  },
+  "teamCarousel.title": {
+    "message": "认识我们的团队"
+  },
+  "teamCarousel.subtitle": {
+    "message": "vLLM Semantic Router 背后的优秀成员"
+  },
+  "teamCarousel.viewAll": {
+    "message": "查看所有团队成员"
+  },
+  "acknowledgements.title": {
+    "message": "致谢"
+  },
+  "acknowledgements.subtitle": {
+    "message": "vLLM Semantic Router 诞生于开源，构建于开源"
+  },
+  "aiChip.title": {
+    "message": "神经处理单元"
+  },
+  "aiChip.subtitle": {
+    "message": "嵌入式 • 分级 • 相似度"
   }
 }
