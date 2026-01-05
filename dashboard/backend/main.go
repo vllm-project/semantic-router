@@ -33,6 +33,9 @@ func main() {
 	if cfg.JaegerURL != "" {
 		log.Printf("Jaeger: %s → /embedded/jaeger/", cfg.JaegerURL)
 	}
+	if cfg.EnvoyURL != "" {
+		log.Printf("Envoy: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
+	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
 
