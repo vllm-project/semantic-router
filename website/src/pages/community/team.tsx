@@ -70,6 +70,16 @@ const allTeamMembers: TeamMember[] = [
     memberType: 'committer',
   },
   {
+    name: 'Yossi Ovadia',
+    company: 'Red Hat',
+    role: 'Senior Principal Engineer',
+    avatar: 'https://github.com/yossiovadia.png',
+    github: 'https://github.com/yossiovadia',
+    linkedin: 'https://www.linkedin.com/in/yossi-ovadia-336b314/',
+    bio: 'Making life easier for developers and customers through innovative tooling. From the Red Hat Office of the CTO.',
+    memberType: 'committer',
+  },
+  {
     name: 'samzong',
     role: 'AI Infrastructure / Cloud-Native PM',
     company: 'DaoCloud',
@@ -129,6 +139,26 @@ const allTeamMembers: TeamMember[] = [
     memberType: 'committer',
   },
   {
+    name: 'Abdallah Samara',
+    company: 'Red Hat',
+    role: 'Senior Software Engineer',
+    avatar: 'https://github.com/abdallahsamabd.png',
+    github: 'https://github.com/abdallahsamabd',
+    linkedin: 'https://www.linkedin.com/in/abdallah-samara',
+    bio: 'Software engineer with a research-driven approach, focused on cloud-native platforms and AI infrastructure. Building semantic routing systems and contributing to open-source LLM orchestration projects.',
+    memberType: 'committer',
+  },
+  {
+    name: 'Hen Schwartz',
+    company: 'Red Hat',
+    role: 'Software Engineer',
+    avatar: 'https://github.com/henschwartz.png',
+    github: 'https://github.com/henschwartz',
+    linkedin: 'https://www.linkedin.com/in/henschwartz',
+    bio: 'Software engineer with a research-driven approach, focused on cloud-native platforms and AI infrastructure. Building semantic routing systems and contributing to open-source LLM orchestration projects.',
+    memberType: 'committer',
+  },
+  {
     name: 'Srinivas A',
     role: 'Software Engineer',
     company: 'Yokogawa',
@@ -145,16 +175,6 @@ const allTeamMembers: TeamMember[] = [
     avatar: 'https://avatars.githubusercontent.com/u/28390961?v=4',
     github: 'https://github.com/carlory',
     bio: 'Open Source Engineer at DaoCloud, focusing on container technology and cloud-native solutions. Passionate about contributing to vllm and other open source projects.',
-    memberType: 'committer',
-  },
-  {
-    name: 'Yossi Ovadia',
-    company: 'Red Hat',
-    role: 'Senior Principal Engineer',
-    avatar: 'https://github.com/yossiovadia.png',
-    github: 'https://github.com/yossiovadia',
-    linkedin: 'https://www.linkedin.com/in/yossi-ovadia-336b314/',
-    bio: 'Making life easier for developers and customers through innovative tooling. From the Red Hat Office of the CTO.',
     memberType: 'committer',
   },
   {
@@ -217,16 +237,16 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
               {member.memberType === 'maintainer'
                 ? 'Maintainer'
                 : member.memberType === 'committer'
-                ? 'Committer'
-                : 'Contributor'}
+                  ? 'Committer'
+                  : 'Contributor'}
             </span>
           </div>
           <p className={styles.memberRole}>
             {member.role}
             {member.company && (
               <span className={styles.company}>
-                {' '}
-                @ {member.company}
+                {' @'}
+                {member.company}
               </span>
             )}
           </p>
