@@ -3,12 +3,14 @@
 import click
 import os
 import sys
+import webbrowser
 from pathlib import Path
 from cli import __version__
 from cli.utils import getLogger
 from cli.core import start_vllm_sr, stop_vllm_sr, show_logs, show_status
 from cli.consts import (
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
+    VLLM_SR_DOCKER_NAME,
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
@@ -16,6 +18,7 @@ from cli.consts import (
 )
 from cli.commands.init import init_command
 from cli.commands.config import config_command
+from cli.docker_cli import docker_container_status
 
 log = getLogger(__name__)
 
@@ -169,16 +172,19 @@ def config(config_type, config):
 
 
 @click.command()
-@click.argument("service", type=click.Choice(["envoy", "router", "all"]), default="all")
+@click.argument(
+    "service", type=click.Choice(["envoy", "router", "dashboard", "all"]), default="all"
+)
 def status(service):
     """
     Show status of vLLM Semantic Router services.
 
     Examples:
-        vllm-sr status          # Show all services
-        vllm-sr status all      # Show all services
-        vllm-sr status envoy    # Show envoy status
-        vllm-sr status router   # Show router status
+        vllm-sr status              # Show all services
+        vllm-sr status all          # Show all services
+        vllm-sr status envoy        # Show envoy status
+        vllm-sr status router       # Show router status
+        vllm-sr status dashboard    # Show dashboard status
     """
     try:
         show_status(service)
@@ -188,7 +194,7 @@ def status(service):
 
 
 @click.command()
-@click.argument("service", type=click.Choice(["envoy", "router"]))
+@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 def logs(service, follow):
     """
@@ -197,6 +203,7 @@ def logs(service, follow):
     Examples:
         vllm-sr logs envoy
         vllm-sr logs router
+        vllm-sr logs dashboard
         vllm-sr logs envoy --follow
         vllm-sr logs router -f
     """
@@ -224,6 +231,38 @@ def stop():
         sys.exit(1)
 
 
+@click.command()
+@click.option("--no-open", is_flag=True, help="Don't open browser, just show URL")
+def dashboard(no_open):
+    """
+    Open the dashboard in your default web browser.
+
+    Examples:
+        vllm-sr dashboard
+        vllm-sr dashboard --no-open
+    """
+    try:
+        # Check if container is running
+        status = docker_container_status(VLLM_SR_DOCKER_NAME)
+        if status != "running":
+            log.error("vLLM Semantic Router is not running")
+            log.info("Start it with: vllm-sr serve")
+            sys.exit(1)
+
+        dashboard_url = "http://localhost:8700"
+
+        if no_open:
+            log.info(f"Dashboard URL: {dashboard_url}")
+        else:
+            log.info(f"Opening dashboard: {dashboard_url}")
+            webbrowser.open(dashboard_url)
+            log.info("✓ Dashboard opened in browser")
+
+    except Exception as e:
+        log.error(f"Error: {e}")
+        sys.exit(1)
+
+
 # Register commands
 main.add_command(init)
 main.add_command(serve)
@@ -231,6 +270,7 @@ main.add_command(config)
 main.add_command(status)
 main.add_command(logs)
 main.add_command(stop)
+main.add_command(dashboard)
 
 
 if __name__ == "__main__":

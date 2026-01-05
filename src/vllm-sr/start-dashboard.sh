@@ -1,0 +1,31 @@
+#!/bin/sh
+# Start dashboard with dynamically determined Envoy port from config.yaml
+
+CONFIG_FILE="${1:-/app/config.yaml}"
+
+# Extract the first listener port from config.yaml using Python
+ENVOY_PORT=$(python3 -c "
+import yaml
+try:
+    with open('$CONFIG_FILE', 'r') as f:
+        config = yaml.safe_load(f)
+    listeners = config.get('listeners', [])
+    if listeners:
+        port = listeners[0].get('port', 8888)
+        print(port)
+    else:
+        print(8888)
+except Exception as e:
+    print(8888)
+")
+
+echo "Starting dashboard with Envoy at http://localhost:${ENVOY_PORT}"
+
+exec /usr/local/bin/dashboard-backend \
+    -port=8700 \
+    -static=/app/frontend \
+    -config=/app/config.yaml \
+    -router_api=http://localhost:8080 \
+    -router_metrics=http://localhost:9190/metrics \
+    -envoy="http://localhost:${ENVOY_PORT}"
+
