@@ -1,0 +1,26 @@
+# yamllint disable-file
+{{/*
+Service for Dynamo Frontend
+Exposes the HTTP API for inference requests
+*/}}
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dynamo-vllm.fullname" . }}-frontend
+  namespace: {{ include "dynamo-vllm.namespace" . }}
+  labels:
+    {{- include "dynamo-vllm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+  selector:
+    {{- include "dynamo-vllm.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+{{- end }}
+

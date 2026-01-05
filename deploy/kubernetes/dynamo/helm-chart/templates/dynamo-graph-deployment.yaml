@@ -1,0 +1,169 @@
+# yamllint disable-file
+{{/*
+DynamoGraphDeployment - Main deployment resource for Dynamo vLLM
+Each worker runs exactly ONE model
+*/}}
+---
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: {{ include "dynamo-vllm.fullname" . }}
+  namespace: {{ include "dynamo-vllm.namespace" . }}
+  labels:
+    {{- include "dynamo-vllm.labels" . | nindent 4 }}
+spec:
+  backendFramework: {{ .Values.global.backendFramework }}
+  envs:
+    - name: DYN_LOG
+      value: {{ .Values.global.logLevel | quote }}
+  services:
+    {{/* Frontend Service */}}
+    {{- if .Values.frontend.enabled }}
+    Frontend:
+      dynamoNamespace: {{ .Values.frontend.dynamoNamespace }}
+      componentType: frontend
+      replicas: {{ .Values.frontend.replicas }}
+      resources:
+        requests:
+          cpu: {{ .Values.frontend.resources.requests.cpu | quote }}
+          memory: {{ .Values.frontend.resources.requests.memory | quote }}
+          gpu: {{ .Values.frontend.resources.requests.gpu | quote }}
+        limits:
+          cpu: {{ .Values.frontend.resources.limits.cpu | quote }}
+          memory: {{ .Values.frontend.resources.limits.memory | quote }}
+          gpu: {{ .Values.frontend.resources.limits.gpu | quote }}
+      extraPodSpec:
+        {{- if .Values.frontend.nodeSelector }}
+        nodeSelector:
+          {{- toYaml .Values.frontend.nodeSelector | nindent 10 }}
+        {{- end }}
+        {{- if .Values.frontend.tolerations }}
+        tolerations:
+          {{- toYaml .Values.frontend.tolerations | nindent 10 }}
+        {{- end }}
+        {{- if .Values.frontend.affinity }}
+        affinity:
+          {{- toYaml .Values.frontend.affinity | nindent 10 }}
+        {{- end }}
+        mainContainer:
+          image: {{ include "dynamo-vllm.image" . }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - {{ include "dynamo-vllm.frontendCommand" (dict "gpuDevice" .Values.frontend.gpuDevice "routerMode" .Values.frontend.routerMode "httpPort" .Values.frontend.httpPort) | quote }}
+          securityContext:
+            privileged: {{ .Values.security.privileged }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.frontend.httpPort }}
+            initialDelaySeconds: {{ .Values.frontend.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.frontend.probes.liveness.failureThreshold }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.frontend.httpPort }}
+            initialDelaySeconds: {{ .Values.frontend.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.frontend.probes.readiness.failureThreshold }}
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.frontend.httpPort }}
+            initialDelaySeconds: {{ .Values.frontend.probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.frontend.probes.startup.failureThreshold }}
+          env:
+            {{- include "dynamo-vllm.commonEnv" . | nindent 12 }}
+            {{- range .Values.frontend.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          volumeMounts:
+            {{- include "dynamo-vllm.commonVolumeMounts" . | nindent 12 }}
+        volumes:
+          {{- include "dynamo-vllm.commonVolumes" . | nindent 10 }}
+    {{- end }}
+
+    {{/* Worker Services - Each worker runs exactly ONE model */}}
+    {{- range $index, $worker := .Values.workers }}
+    {{/* Worker type defaults to "both" (combined). Set explicitly for disaggregated mode. */}}
+    {{- $workerType := $worker.workerType | default "both" }}
+    {{/* Generate default name: worker0/worker1 for "both", prefillworker0/decodeworker1 for explicit types */}}
+    {{- $defaultName := "" }}
+    {{- if or (eq $workerType "prefill") (eq $workerType "decode") }}
+    {{- $defaultName = printf "%sworker%d" $workerType $index }}
+    {{- else }}
+    {{- $defaultName = printf "worker%d" $index }}
+    {{- end }}
+    {{- $workerName := include "dynamo-vllm.workerName" (dict "worker" $worker "index" $index "workerType" $workerType) }}
+    
+    {{/* Generate a valid service name (CamelCase for DynamoGraphDeployment) */}}
+    {{- $serviceName := ($worker.name | default $defaultName) | replace "-" "" | title }}
+    {{ $serviceName }}:
+      dynamoNamespace: {{ $.Values.frontend.dynamoNamespace }}
+      componentType: worker
+      replicas: {{ $worker.replicas | default 1 }}
+      resources:
+        requests:
+          cpu: {{ if $worker.resources }}{{ $worker.resources.requests.cpu | default "1" | quote }}{{ else }}"1"{{ end }}
+          memory: {{ if $worker.resources }}{{ $worker.resources.requests.memory | default "4Gi" | quote }}{{ else }}"4Gi"{{ end }}
+          gpu: {{ if $worker.resources }}{{ $worker.resources.requests.gpu | default "1" | quote }}{{ else }}"1"{{ end }}
+        limits:
+          cpu: {{ if $worker.resources }}{{ $worker.resources.limits.cpu | default "2" | quote }}{{ else }}"2"{{ end }}
+          memory: {{ if $worker.resources }}{{ $worker.resources.limits.memory | default "8Gi" | quote }}{{ else }}"8Gi"{{ end }}
+          gpu: {{ if $worker.resources }}{{ $worker.resources.limits.gpu | default "1" | quote }}{{ else }}"1"{{ end }}
+      extraPodSpec:
+        {{- if $worker.nodeSelector }}
+        nodeSelector:
+          {{- toYaml $worker.nodeSelector | nindent 10 }}
+        {{- end }}
+        {{- if $worker.tolerations }}
+        tolerations:
+          {{- toYaml $worker.tolerations | nindent 10 }}
+        {{- end }}
+        {{- if $worker.affinity }}
+        affinity:
+          {{- toYaml $worker.affinity | nindent 10 }}
+        {{- end }}
+        mainContainer:
+          image: {{ include "dynamo-vllm.image" $ }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - {{ include "dynamo-vllm.workerCommand" (dict "worker" $worker "index" $index) | quote }}
+          securityContext:
+            privileged: {{ $.Values.security.privileged }}
+          livenessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            failureThreshold: 10
+          startupProbe:
+            tcpSocket:
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          env:
+            {{- include "dynamo-vllm.commonEnv" $ | nindent 12 }}
+            - name: DYNAMO_WORKER_MODEL
+              value: {{ $worker.model.path | quote }}
+            - name: DYNAMO_WORKER_TYPE
+              value: {{ $workerType | quote }}
+            {{- range $worker.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          volumeMounts:
+            {{- include "dynamo-vllm.commonVolumeMounts" $ | nindent 12 }}
+        volumes:
+          {{- include "dynamo-vllm.commonVolumes" $ | nindent 10 }}
+    {{- end }}
