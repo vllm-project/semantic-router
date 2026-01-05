@@ -41,7 +41,7 @@ jobs:
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
              [[ "${{ github.event_name }}" == "push" ]]; then
-            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "nginx"]' >> $GITHUB_OUTPUT
+            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "nginx", "response-api"]' >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
@@ -57,6 +57,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_production_stack }}" == "true" ]] && profiles+=("production-stack")
           [[ "${{ needs.changes.outputs.e2e_dynamic_config }}" == "true" ]] && profiles+=("dynamic-config")
           [[ "${{ needs.changes.outputs.e2e_nginx }}" == "true" ]] && profiles+=("nginx")
+          [[ "${{ needs.changes.outputs.e2e_response_api }}" == "true" ]] && profiles+=("response-api")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then

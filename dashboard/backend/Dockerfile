@@ -36,13 +36,17 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s
 
 # Stage 3: Final runtime image
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates wget
+RUN apk --no-cache add ca-certificates wget su-exec
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
+# Copy entrypoint script
+COPY dashboard/backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 RUN addgroup -g 65532 nonroot && \
     adduser -D -u 65532 -G nonroot nonroot && \
     chown -R nonroot:nonroot /app
 EXPOSE 8700
-USER nonroot:nonroot
-ENTRYPOINT ["/app/dashboard-backend", "-port=8700", "-static=/app/frontend"]
+# Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/dashboard-backend", "-port=8700", "-static=/app/frontend", "-config=/app/config/config.yaml"]

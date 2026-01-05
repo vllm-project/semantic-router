@@ -1,17 +1,22 @@
 # Build frontend
 FROM node:18-alpine AS frontend-builder
+ARG BASE_DIR=dashboard
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
+COPY ${BASE_DIR}/frontend/package*.json ./
 RUN npm ci --include=dev   # Ensure devDependencies are installed regardless of NODE_ENV
-COPY frontend/ ./
+COPY ${BASE_DIR}/frontend/ ./
 RUN npm run build
 
-# Build backend
+# Build backend (needs src/semantic-router for replace directive)
 FROM golang:1.24.1-alpine AS backend-builder
+ARG BASE_DIR=dashboard
+ARG ROUTER_DIR=src/semantic-router
+WORKDIR /app
+COPY ${ROUTER_DIR} /src/semantic-router
 WORKDIR /app/backend
-COPY backend/go.* ./
+COPY ${BASE_DIR}/backend/go.* ./
 RUN go mod download
-COPY backend/ ./
+COPY ${BASE_DIR}/backend/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o dashboard-server .
 
 # Final image

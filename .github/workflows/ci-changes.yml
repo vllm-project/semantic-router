@@ -37,6 +37,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_production_stack }}
       e2e_nginx:
         value: ${{ jobs.filter.outputs.e2e_nginx }}
+      e2e_response_api:
+        value: ${{ jobs.filter.outputs.e2e_response_api }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
 
@@ -62,6 +64,7 @@ jobs:
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
       e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
       e2e_nginx: ${{ steps.changes.outputs.e2e_nginx }}
+      e2e_response_api: ${{ steps.changes.outputs.e2e_response_api }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
@@ -137,6 +140,8 @@ jobs:
             e2e_nginx:
               - 'e2e/profiles/nginx/**'
               - 'deploy/kubernetes/nginx/**'
+            e2e_response_api:
+              - 'e2e/profiles/response-api/**'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'
