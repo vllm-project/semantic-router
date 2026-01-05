@@ -162,12 +162,12 @@ func main() {
 	// Initialize embedding models if configured (Long-context support)
 	// Use the already loaded config instead of calling config.Load() again
 	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
-		if err := candle_binding.InitEmbeddingModels(
+		if initErr := candle_binding.InitEmbeddingModels(
 			cfg.Qwen3ModelPath,
 			cfg.GemmaModelPath,
 			cfg.EmbeddingModels.UseCPU,
-		); err != nil {
-			logging.Errorf("Failed to initialize embedding models: %v", err)
+		); initErr != nil {
+			logging.Errorf("Failed to initialize embedding models: %v", initErr)
 			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
 		} else {
 			logging.Infof("Embedding models initialized successfully")
