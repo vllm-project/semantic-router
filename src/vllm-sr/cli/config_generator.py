@@ -92,12 +92,23 @@ def generate_envoy_config_from_user_config(
         uses_dns = False
 
         for endpoint in model.endpoints:
-            # Parse endpoint (host:port or just host)
-            if ":" in endpoint.endpoint:
-                host, port = endpoint.endpoint.split(":", 1)
+            # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
+            endpoint_str = endpoint.endpoint
+            path = ""
+
+            # Extract path if present (e.g., "host/path" or "host:port/path")
+            if "/" in endpoint_str:
+                # Split by first "/" to separate host[:port] from path
+                parts = endpoint_str.split("/", 1)
+                endpoint_str = parts[0]  # host or host:port
+                path = "/" + parts[1]  # /path
+
+            # Parse host and port
+            if ":" in endpoint_str:
+                host, port = endpoint_str.split(":", 1)
                 port = int(port)
             else:
-                host = endpoint.endpoint
+                host = endpoint_str
                 # Default port based on protocol
                 port = 443 if endpoint.protocol == "https" else 80
 
@@ -117,6 +128,7 @@ def generate_envoy_config_from_user_config(
                     "name": endpoint.name,
                     "address": host,
                     "port": int(port),
+                    "path": path,
                     "weight": endpoint.weight,
                     "protocol": endpoint.protocol,
                     "is_https": is_https,
@@ -131,6 +143,13 @@ def generate_envoy_config_from_user_config(
         # Domain names → LOGICAL_DNS, IP addresses → STATIC
         cluster_type = "LOGICAL_DNS" if uses_dns else "STATIC"
 
+        # Determine path prefix - use the first endpoint's path if all endpoints have the same path
+        path_prefix = ""
+        if endpoints:
+            first_path = endpoints[0].get("path", "")
+            if first_path and all(ep.get("path", "") == first_path for ep in endpoints):
+                path_prefix = first_path
+
         models.append(
             {
                 "name": model.name,
@@ -138,6 +157,7 @@ def generate_envoy_config_from_user_config(
                 "endpoints": endpoints,
                 "cluster_type": cluster_type,
                 "has_https": has_https,
+                "path_prefix": path_prefix,
             }
         )
 

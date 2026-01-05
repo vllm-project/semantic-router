@@ -38,6 +38,14 @@ static_resources:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('300s') }}
                   idleTimeout: 300s
+                  {% if model.path_prefix %}
+                  # Prepend path prefix to all requests (e.g., /openapi + /v1/chat/completions = /openapi/v1/chat/completions)
+                  regex_rewrite:
+                    pattern:
+                      google_re2: {}
+                      regex: "^/"
+                    substitution: "{{ model.path_prefix }}/"
+                  {% endif %}
               {% endfor %}
               # Default route (no x-selected-model header)
               - match:

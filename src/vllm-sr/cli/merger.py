@@ -226,25 +226,40 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
 
         # Add endpoints for this model
         for endpoint in model.endpoints:
-            # Parse endpoint (host:port or just host)
-            if ":" in endpoint.endpoint:
-                host, port = endpoint.endpoint.split(":", 1)
+            # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
+            endpoint_str = endpoint.endpoint
+            path = ""
+
+            # Extract path if present (e.g., "host/path" or "host:port/path")
+            if "/" in endpoint_str:
+                # Split by first "/" to separate host[:port] from path
+                parts = endpoint_str.split("/", 1)
+                endpoint_str = parts[0]  # host or host:port
+                path = "/" + parts[1]  # /path
+
+            # Parse host and port
+            if ":" in endpoint_str:
+                host, port = endpoint_str.split(":", 1)
                 port = int(port)
             else:
-                host = endpoint.endpoint
+                host = endpoint_str
                 # Use default port based on protocol
                 port = 443 if endpoint.protocol == "https" else 80
 
-            vllm_endpoints.append(
-                {
-                    "name": f"{model.name}_{endpoint.name}",
-                    "address": host,
-                    "port": port,
-                    "weight": endpoint.weight,
-                    "protocol": endpoint.protocol,
-                    "model": model.name,
-                }
-            )
+            endpoint_config = {
+                "name": f"{model.name}_{endpoint.name}",
+                "address": host,
+                "port": port,
+                "weight": endpoint.weight,
+                "protocol": endpoint.protocol,
+                "model": model.name,
+            }
+
+            # Add path if present
+            if path:
+                endpoint_config["path"] = path
+
+            vllm_endpoints.append(endpoint_config)
 
     return {
         "vllm_endpoints": vllm_endpoints,
