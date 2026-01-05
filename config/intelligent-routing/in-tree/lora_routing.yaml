@@ -19,7 +19,7 @@
 # - vLLM automatically routes to the appropriate LoRA adapter
 
 bert_model:
-  model_id: models/all-MiniLM-L12-v2
+  model_id: models/mom-embedding-light
   threshold: 0.6
   use_cpu: true
 
@@ -49,11 +49,11 @@ model_config:
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 
 # Categories with LoRA routing
 categories:

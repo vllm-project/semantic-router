@@ -50,6 +50,11 @@ func NewServer(configPath string, port int, secure bool, certPath string) (*Serv
 	}, nil
 }
 
+// GetRouter returns the current router instance
+func (s *Server) GetRouter() *OpenAIRouter {
+	return s.service.GetRouter()
+}
+
 // Start starts the gRPC server
 func (s *Server) Start() error {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
@@ -150,6 +155,11 @@ func NewRouterService(r *OpenAIRouter) *RouterService {
 
 // Swap replaces the current router implementation.
 func (rs *RouterService) Swap(r *OpenAIRouter) { rs.current.Store(r) }
+
+// GetRouter returns the current router implementation.
+func (rs *RouterService) GetRouter() *OpenAIRouter {
+	return rs.current.Load()
+}
 
 // Process delegates to the current router.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {

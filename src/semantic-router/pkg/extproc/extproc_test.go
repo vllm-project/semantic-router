@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -459,6 +460,16 @@ var _ ext_proc.ExternalProcessor_ProcessServer = &MockStream{}
 
 // CreateTestConfig creates a standard test configuration
 func CreateTestConfig() *config.RouterConfig {
+	// Check if PII model files exist - only configure PII if available
+	piiModelID := ""
+	piiMappingPath := ""
+	if _, err := os.Stat("../../../../models/pii_classifier_modernbert-base_presidio_token_model"); err == nil {
+		if _, err := os.Stat("../../../../models/mom-pii-classifier/pii_type_mapping.json"); err == nil {
+			piiModelID = "../../../../models/pii_classifier_modernbert-base_presidio_token_model"
+			piiMappingPath = "../../../../models/mom-pii-classifier/pii_type_mapping.json"
+		}
+	}
+
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			BertModel: config.BertModel{
@@ -468,18 +479,18 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
-					ModelID:             "../../../../models/category_classifier_modernbert-base_model",
+					ModelID:             "../../../../models/mom-domain-classifier",
 					UseCPU:              true,
 					UseModernBERT:       true,
-					CategoryMappingPath: "../../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+					CategoryMappingPath: "../../../../models/mom-domain-classifier/category_mapping.json",
 				},
 				MCPCategoryModel: config.MCPCategoryModel{
 					Enabled: false, // MCP not used in tests
 				},
 				PIIModel: config.PIIModel{
-					ModelID:        "../../../../models/pii_classifier_modernbert-base_presidio_token_model",
+					ModelID:        piiModelID,
 					UseCPU:         true,
-					PIIMappingPath: "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json",
+					PIIMappingPath: piiMappingPath,
 				},
 			},
 			PromptGuard: config.PromptGuardConfig{
@@ -514,11 +525,13 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 		},
 		IntelligentRouting: config.IntelligentRouting{
-			Categories: []config.Category{
-				{
-					CategoryMetadata: config.CategoryMetadata{
-						Name:        "coding",
-						Description: "Programming tasks",
+			Signals: config.Signals{
+				Categories: []config.Category{
+					{
+						CategoryMetadata: config.CategoryMetadata{
+							Name:        "coding",
+							Description: "Programming tasks",
+						},
 					},
 				},
 			},
@@ -557,9 +570,16 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
-	if err != nil {
-		return nil, err
+	// Only load PII mapping if the file exists
+	// This allows tests to run without PII models in CI environments
+	var piiMapping *classification.PIIMapping
+	if cfg.PIIMappingPath != "" {
+		if _, statErr := os.Stat(cfg.PIIMappingPath); statErr == nil {
+			piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Initialize the BERT model for similarity search
@@ -584,18 +604,18 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 
 	// Create tools database
 	toolsSimilarityThreshold := float32(0.2) // Default threshold
-	if cfg.Tools.SimilarityThreshold != nil {
-		toolsSimilarityThreshold = *cfg.Tools.SimilarityThreshold
+	if cfg.ToolSelection.Tools.SimilarityThreshold != nil {
+		toolsSimilarityThreshold = *cfg.ToolSelection.Tools.SimilarityThreshold
 	}
 	toolsOptions := tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsSimilarityThreshold,
-		Enabled:             cfg.Tools.Enabled,
+		Enabled:             cfg.ToolSelection.Tools.Enabled,
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
 	// Load tools from file if configured
-	if cfg.Tools.Enabled && cfg.Tools.ToolsDBPath != "" {
-		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.Tools.ToolsDBPath); loadErr != nil {
+	if cfg.ToolSelection.Tools.Enabled && cfg.ToolSelection.Tools.ToolsDBPath != "" {
+		if loadErr := toolsDatabase.LoadToolsFromFile(cfg.ToolSelection.Tools.ToolsDBPath); loadErr != nil {
 			return nil, fmt.Errorf("failed to load tools database: %w", loadErr)
 		}
 	}
@@ -632,7 +652,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 
 const (
 	testPIIModelID     = "../../../../models/pii_classifier_modernbert-base_presidio_token_model"
-	testPIIMappingPath = "../../../../models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+	testPIIMappingPath = "../../../../models/mom-pii-classifier/pii_type_mapping.json"
 	testPIIThreshold   = 0.5
 )
 
@@ -651,6 +671,15 @@ var _ = Describe("Security Checks", func() {
 
 	Context("with PII token classification", func() {
 		BeforeEach(func() {
+			// Check if PII model files exist before trying to initialize
+			// This allows tests to run in CI environments where models may not be available
+			if _, err := os.Stat(testPIIModelID); os.IsNotExist(err) {
+				Skip("PII model files not available at " + testPIIModelID)
+			}
+			if _, err := os.Stat(testPIIMappingPath); os.IsNotExist(err) {
+				Skip("PII mapping file not available at " + testPIIMappingPath)
+			}
+
 			cfg.PIIModel.ModelID = testPIIModelID
 			cfg.PIIMappingPath = testPIIMappingPath
 			cfg.PIIModel.Threshold = testPIIThreshold
@@ -895,6 +924,15 @@ var _ = Describe("Security Checks", func() {
 
 	Context("PII token classification edge cases", func() {
 		BeforeEach(func() {
+			// Check if PII model files exist before trying to initialize
+			// This allows tests to run in CI environments where models may not be available
+			if _, err := os.Stat(testPIIModelID); os.IsNotExist(err) {
+				Skip("PII model files not available at " + testPIIModelID)
+			}
+			if _, err := os.Stat(testPIIMappingPath); os.IsNotExist(err) {
+				Skip("PII mapping file not available at " + testPIIMappingPath)
+			}
+
 			cfg.PIIModel.ModelID = testPIIModelID
 			cfg.PIIMappingPath = testPIIMappingPath
 			cfg.PIIModel.Threshold = testPIIThreshold
@@ -1040,7 +1078,7 @@ var _ = Describe("Security Checks", func() {
 		BeforeEach(func() {
 			cfg.PromptGuard.Enabled = true
 			// TODO: Use a real model path here; this should be moved to an integration test later.
-			cfg.PromptGuard.ModelID = "../../../../models/jailbreak_classifier_modernbert-base_model"
+			cfg.PromptGuard.ModelID = "../../../../models/mom-jailbreak-classifier"
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
 			cfg.PromptGuard.UseModernBERT = true
 			cfg.PromptGuard.UseCPU = true
@@ -1154,8 +1192,11 @@ var _ = Describe("ExtProc Package", func() {
 
 			Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
 			Expect(cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
-			Expect(cfg.InlineModels.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
-			Expect(cfg.InlineModels.Classifier.PIIModel.PIIMappingPath).NotTo(BeEmpty())
+			// PII model configuration is optional - only check if files exist
+			// In CI environments without PII models, these may be empty
+			if cfg.InlineModels.Classifier.PIIModel.ModelID != "" {
+				Expect(cfg.InlineModels.Classifier.PIIModel.PIIMappingPath).NotTo(BeEmpty())
+			}
 		})
 
 		It("should have valid tools configuration", func() {
@@ -2789,13 +2830,13 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			expectedChatTemplateKwargs: false,
 		},
 		{
-			name:                       "DeepSeek model with reasoning disabled - remove reasoning_effort",
+			name:                       "DeepSeek model with reasoning disabled - set chat_template_kwargs (thinking: false)",
 			model:                      "ds-v31-custom",
 			enabled:                    false,
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
 			expectedReasoningEffort:    nil,
-			expectedChatTemplateKwargs: false,
+			expectedChatTemplateKwargs: true,
 		},
 		{
 			name:                       "GPT-OSS model with reasoning enabled - set reasoning_effort",
@@ -2840,7 +2881,7 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			initialReasoningEffort:     "low",
 			expectReasoningEffortKey:   false,
 			expectedReasoningEffort:    nil,
-			expectedChatTemplateKwargs: false,
+			expectedChatTemplateKwargs: true,
 		},
 	}
 
@@ -2897,24 +2938,30 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 					t.Fatalf("Expected non-empty chat_template_kwargs")
 				}
 
-				// Validate the specific parameter based on model type
-				switch tc.model {
-				case "deepseek-v31", "ds-1.5b":
-					if thinkingValue, exists := kwargs["thinking"]; !exists {
-						t.Fatalf("Expected 'thinking' parameter in chat_template_kwargs for DeepSeek model")
-					} else if thinkingValue != true {
-						t.Fatalf("Expected 'thinking' to be true, got %v", thinkingValue)
+				// Validate the specific parameter for chat_template_kwargs families.
+				// (Different families use different parameter names, but the value should match tc.enabled.)
+				if v, exists := kwargs["thinking"]; exists {
+					if v != tc.enabled {
+						t.Fatalf("Expected chat_template_kwargs.thinking to be %v, got %v", tc.enabled, v)
 					}
-				case "qwen3-7b":
-					if thinkingValue, exists := kwargs["enable_thinking"]; !exists {
-						t.Fatalf("Expected 'enable_thinking' parameter in chat_template_kwargs for Qwen3 model")
-					} else if thinkingValue != true {
-						t.Fatalf("Expected 'enable_thinking' to be true, got %v", thinkingValue)
+				} else if v, exists := kwargs["enable_thinking"]; exists {
+					if v != tc.enabled {
+						t.Fatalf("Expected chat_template_kwargs.enable_thinking to be %v, got %v", tc.enabled, v)
 					}
+				} else {
+					t.Fatalf("Expected chat_template_kwargs to contain either 'thinking' or 'enable_thinking', got keys=%v", mapKeys(kwargs))
 				}
 			}
 		})
 	}
+}
+
+func mapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // DemonstrateConfigurationUsage shows how to use the configuration-based reasoning

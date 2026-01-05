@@ -1,0 +1,105 @@
+# Example configuration showing how to use ExternalModels for PromptGuard
+# This demonstrates the new hybrid approach where vLLM configuration can be
+# specified in external_models with model_role="guardrail"
+
+# Embedding models configuration
+embedding_models:
+  qwen3_model_path: "models/Qwen3-Embedding-0.6B"
+  gemma_model_path: "models/EmbeddingGemma-300M"
+  use_cpu: true
+
+# BERT model for semantic similarity
+bert_model:
+  model_id: "models/all-MiniLM-L6-v2"
+  threshold: 0.85
+  use_cpu: true
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    use_modernbert: false
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+  pii_model:
+    model_id: "models/mom-pii-classifier"
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+# Prompt Guard Configuration
+# When use_vllm=true, the system will look for an external model with model_role="guardrail"
+# vLLM endpoint/model configuration is now in external_models section below
+prompt_guard:
+  enabled: true
+  use_vllm: true  # Enable vLLM mode - will use external_models configuration
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+  threshold: 0.7  # Default threshold (can be overridden by external_models)
+
+  # Note: When use_vllm=true, the following vLLM fields are NOT needed here:
+  # - classifier_vllm_endpoint (use external_models.llm_endpoint instead)
+  # - vllm_model_name (use external_models.llm_model_name instead)
+  # - vllm_timeout_seconds (use external_models.llm_timeout_seconds instead)
+  # - response_parser_type (use external_models.parser_type instead)
+
+  # The following Candle fields are only used when use_vllm=false:
+  # use_modernbert: false
+  # model_id: "models/mom-jailbreak-classifier"
+  # use_cpu: true
+
+# External Models Configuration
+# This is the new recommended way to configure vLLM-based guardrails
+# Note: jailbreak_mapping_path and threshold are still in prompt_guard because they are
+# used by the classification logic (not by the vLLM model itself)
+external_models:
+  - llm_provider: "vllm"
+    model_role: "guardrail"  # This identifies it as a guardrail/safety model
+    llm_endpoint:
+      address: "127.0.0.1"
+      port: 1235
+      name: "qwen3guard-endpoint"
+      use_chat_template: true  # Qwen3Guard requires chat template format
+      # prompt_template: "Custom template with %s placeholder"  # Optional
+    llm_model_name: "qwen_guard"  # Model name as served by vLLM
+    llm_timeout_seconds: 30
+    parser_type: "qwen3guard"  # Response parser type
+    threshold: 0.75  # Optional: Override the default threshold from prompt_guard
+
+# vLLM Endpoints Configuration (for backend inference)
+# These are separate from the guardrail endpoint above
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "127.0.0.1"
+    port: 1234
+    weight: 1
+
+# Backend model configuration
+model_config:
+  "qwen3":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+
+default_model: "qwen3"
+
+# API configuration
+api:
+  batch_classification:
+    metrics:
+      enabled: true
+
+# Observability
+observability:
+  tracing:
+    enabled: false
+  metrics:
+    enabled: true
+
+# Semantic cache
+semantic_cache:
+  enabled: false
+
+# Response API
+response_api:
+  enabled: false
+

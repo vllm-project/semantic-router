@@ -276,10 +276,9 @@ pub extern "C" fn init_embedding_models(
     // Register Qwen3 model if path provided
     if let Some(path) = qwen3_path {
         match factory.register_qwen3_embedding_model(&path) {
-            Ok(_) => println!(
-                "INFO: Qwen3 embedding model registered successfully from {}",
-                path
-            ),
+            Ok(_) => {
+                // Model registered successfully
+            }
             Err(e) => {
                 eprintln!("ERROR: Failed to register Qwen3 model: {:?}", e);
                 return false;
@@ -290,10 +289,9 @@ pub extern "C" fn init_embedding_models(
     // Register Gemma model if path provided
     if let Some(path) = gemma_path {
         match factory.register_gemma_embedding_model(&path) {
-            Ok(_) => println!(
-                "INFO: Gemma embedding model registered successfully from {}",
-                path
-            ),
+            Ok(_) => {
+                // Model registered successfully
+            }
             Err(e) => {
                 eprintln!("ERROR: Failed to register Gemma model: {:?}", e);
                 return false;
@@ -303,13 +301,10 @@ pub extern "C" fn init_embedding_models(
 
     // Try to initialize the global factory
     match GLOBAL_MODEL_FACTORY.set(factory) {
-        Ok(_) => {
-            println!("INFO: ModelFactory initialized successfully");
-            true
-        }
+        Ok(_) => true,
         Err(_) => {
-            eprintln!("WARNING: ModelFactory already initialized");
-            true // Return success - idempotent behavior
+            // Already initialized - idempotent behavior
+            true
         }
     }
 }
@@ -1511,10 +1506,7 @@ pub extern "C" fn init_embedding_models_batched(
     // Load tokenizer
     let tokenizer_path = format!("{}/tokenizer.json", model_path);
     let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
-        Ok(t) => {
-            println!("INFO: Tokenizer loaded successfully");
-            t
-        }
+        Ok(t) => t,
         Err(e) => {
             eprintln!(
                 "ERROR: Failed to load tokenizer from {}: {:?}",
@@ -1525,12 +1517,8 @@ pub extern "C" fn init_embedding_models_batched(
     };
 
     // Load base model
-    println!("Loading Qwen3 embedding model from: {}", model_path);
     let base_model = match Qwen3EmbeddingModel::load(&model_path, &device) {
-        Ok(model) => {
-            println!("INFO: Qwen3 embedding model loaded successfully");
-            model
-        }
+        Ok(model) => model,
         Err(e) => {
             eprintln!("ERROR: Failed to load Qwen3 model: {:?}", e);
             return false;

@@ -50,7 +50,7 @@ Before you begin, ensure you have the following installed:
    pip install -r requirements.txt
    
    # For end-to-end testing
-   pip install -r e2e-tests/requirements.txt
+   pip install -r e2e/testing/requirements.txt
    ```
 
 ## Building the Project
@@ -139,16 +139,16 @@ Ensure both Envoy and the router are running, then:
 
 ```bash
 # Run all e2e tests
-python e2e-tests/run_all_tests.py
+python e2e/testing/run_all_tests.py
 
 # Run specific test
-python e2e-tests/00-client-request-test.py
+python e2e/testing/00-client-request-test.py
 
 # Run tests matching a pattern
-python e2e-tests/run_all_tests.py --pattern "0*-*.py"
+python e2e/testing/run_all_tests.py --pattern "0*-*.py"
 
 # Check if services are running
-python e2e-tests/run_all_tests.py --check-only
+python e2e/testing/run_all_tests.py --check-only
 ```
 
 The test suite includes:
@@ -188,7 +188,7 @@ The test suite includes:
    make run-router &
    
    # Run tests
-   python e2e-tests/run_all_tests.py
+   python e2e/testing/run_all_tests.py
    ```
 
 5. **Commit your changes:**
@@ -266,7 +266,7 @@ pre-commit run --all-files
 
    ```bash
    make test
-   python e2e-tests/run_all_tests.py
+   python e2e/testing/run_all_tests.py
    ```
 
    The `make test` command includes:
@@ -287,7 +287,7 @@ pre-commit run --all-files
 ├── candle-binding/          # Rust library for BERT classification
 ├── src/semantic-router/     # Go implementation of the router
 ├── src/training/           # Model training scripts
-├── e2e-tests/              # End-to-end test suite
+├── e2e/testing/              # End-to-end test suite
 ├── config/                 # Configuration files
 ├── docs/                   # Documentation
 ├── deploy/                 # Deployment configurations

@@ -21,6 +21,8 @@ FIX #xxxx (*link existing issues this PR will resolve*)
 <ul>
     <li><code>[Bugfix]</code> for bug fixes.</li>
     <li><code>[CI/Build]</code> for build or continuous integration improvements.</li>
+    <li><code>[CLI]</code> for changes to the command-line interface tools.</li>
+    <li><code>[Dashboard]</code> for changes to the dashboard or web UI.</li>
     <li><code>[Doc]</code> for documentation fixes and improvements.</li>
     <li><code>[Feat]</code> for new features in the cluster (e.g., autoscaling, disaggregated prefill, etc.).</li>
     <li><code>[Router]</code> for changes to the <code>vllm_router</code> (e.g., routing algorithm, router observability, etc.).</li>

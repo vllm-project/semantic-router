@@ -198,6 +198,60 @@ semantic_cache:
 
 Category-level settings override global settings. If not specified, the category uses the global cache configuration.
 
+### Decision-Level Configuration (Plugin-Based)
+
+Configure semantic cache at the decision level using plugins for fine-grained control:
+
+```yaml
+signals:
+  domains:
+    - name: "math"
+      description: "Mathematical queries"
+      mmlu_categories: ["math"]
+
+decisions:
+  - name: math_route
+    description: "Route math queries with strict caching"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95  # Very strict for math accuracy
+
+  - name: general_route
+    description: "General queries with relaxed caching"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.75  # Relaxed for better hit rate
+```
+
+**Plugin Configuration Options**:
+
+- **`enabled`**: Enable/disable caching for this decision (boolean)
+- **`similarity_threshold`**: Decision-specific similarity threshold (0.0-1.0)
+
+Decision-level plugin settings override both global and category-level settings.
+
 ### Environment Examples
 
 #### Development Environment
@@ -314,5 +368,4 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 - **[Hybrid Cache](./hybrid-cache.md)** - Learn about HNSW + Milvus hybrid caching
 - **[Milvus Cache](./milvus-cache.md)** - Learn about persistent vector database caching
-- **[Cache Overview](./overview.md)** - Learn about semantic caching concepts
-- **[Observability](../observability/overview.md)** - Monitor cache performance
+- **[Observability](../observability/metrics.md)** - Monitor cache performance

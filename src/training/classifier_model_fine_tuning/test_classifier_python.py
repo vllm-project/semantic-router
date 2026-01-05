@@ -17,7 +17,7 @@ def load_category_mapping(path):
 def predict_category(
     model_path,
     question,
-    mapping_path="../../../models/category_classifier_modernbert-base_model/category_mapping.json",
+    mapping_path="../../../models/mom-domain-classifier/category_mapping.json",
 ):
     """Predict category for a given question using the trained model"""
     # Load the category mapping
@@ -53,7 +53,7 @@ def main():
     print()
 
     # Try to load the category mapping
-    mapping_path = "../../../models/category_classifier_modernbert-base_model/category_mapping.json"
+    mapping_path = "../../../models/mom-domain-classifier/category_mapping.json"
     try:
         mapping = load_category_mapping(mapping_path)
         print("Successfully loaded category mapping")
@@ -62,7 +62,7 @@ def main():
         return {}
 
     # Load the model
-    model_path = "../../../models/category_classifier_modernbert-base_model"
+    model_path = "../../../models/mom-domain-classifier"
     num_classes = len(mapping["category_to_idx"])
     print(f"Using classifier with {num_classes} classes...")
 

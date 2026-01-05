@@ -77,7 +77,7 @@ pub enum AttentionLayerType {
 /// # Usage
 /// ```ignore
 /// let config = GemmaEmbeddingConfig::from_pretrained(
-///     "models/embeddinggemma-300m"
+///     "models/mom-embedding-flash"
 /// )?;
 /// ```
 #[derive(Debug, Clone, Deserialize)]
@@ -170,7 +170,7 @@ impl GemmaEmbeddingConfig {
     /// # Example
     /// ```ignore
     /// let config = GemmaEmbeddingConfig::from_pretrained(
-    ///     "models/embeddinggemma-300m"
+    ///     "models/mom-embedding-flash"
     /// )?;
     /// println!("Loaded config: {} layers, {} hidden size",
     ///          config.num_hidden_layers, config.hidden_size);
@@ -369,9 +369,9 @@ use candle_nn::VarBuilder;
 ///
 /// ## Usage
 /// ```ignore
-/// let config = GemmaEmbeddingConfig::from_pretrained("../models/embeddinggemma-300m")?;
+/// let config = GemmaEmbeddingConfig::from_pretrained("../models/mom-embedding-flash")?;
 /// let vb = VarBuilder::from_mmaped_safetensors(...)?;
-/// let model = GemmaEmbeddingModel::load("../models/embeddinggemma-300m", &config, vb)?;
+/// let model = GemmaEmbeddingModel::load("../models/mom-embedding-flash", &config, vb)?;
 ///
 /// let embeddings = model.embedding_forward(&input_ids, Some(&attention_mask))?;
 /// ```
@@ -404,14 +404,14 @@ impl GemmaEmbeddingModel {
     ///
     /// # Example
     /// ```ignore
-    /// let config = GemmaEmbeddingConfig::from_pretrained("../models/embeddinggemma-300m")?;
+    /// let config = GemmaEmbeddingConfig::from_pretrained("../models/mom-embedding-flash")?;
     /// let device = Device::Cpu;
     /// let vb = VarBuilder::from_mmaped_safetensors(
-    ///     &["../models/embeddinggemma-300m/model.safetensors"],
+    ///     &["../models/mom-embedding-flash/model.safetensors"],
     ///     DType::F32,
     ///     &device
     /// )?;
-    /// let model = GemmaEmbeddingModel::load("../models/embeddinggemma-300m", &config, vb)?;
+    /// let model = GemmaEmbeddingModel::load("../models/mom-embedding-flash", &config, vb)?;
     /// ```
     pub fn load(
         model_path: &str,

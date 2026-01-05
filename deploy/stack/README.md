@@ -11,16 +11,13 @@ Single-container deployment for vLLM Semantic Router with all components bundled
 | Grafana    | 3000  | Metrics dashboards          |
 | Prometheus | 9090  | Metrics collection          |
 | Jaeger     | 16686 | Distributed tracing         |
-| chat-ui    | 5173  | HuggingChat interface       |
-| Open WebUI | 3001  | LLM chat interface          |
-| Pipelines  | 9099  | Pipeline backend            |
 | LLM-Katan  | 8002  | Lightweight LLM server      |
 
 ## Quick Start
 
 ```bash
 # Build
-docker build -f Dockerfile.stack -t vsr-stack:latest .
+docker build -f tools/docker/Dockerfile.stack -t vsr-stack:latest .
 
 # Download models (required)
 make download-models
@@ -28,7 +25,7 @@ make download-models
 # Run
 docker run -d --name vsr \
   -p 8801:8801 -p 8002:8002 -p 8700:8700 -p 3000:3000 -p 9090:9090 \
-  -p 16686:16686 -p 5173:5173 -p 3001:3001 -p 9099:9099 \
+  -p 16686:16686 \
   -v $(pwd)/models:/app/models:ro \
   vsr-stack:latest
 ```
@@ -43,7 +40,6 @@ docker run -d --name vsr \
 | `entrypoint-stack.sh`          | Container entrypoint          |
 | `prometheus.yaml`              | Prometheus scrape config      |
 | `grafana-*.yaml`               | Grafana provisioning          |
-| `vllm_semantic_router_pipe.py` | Open WebUI pipeline           |
 
 ## Environment Variables
 
@@ -72,10 +68,6 @@ tail -f /var/log/supervisor/envoy.log
 # Restart a service
 supervisorctl restart semantic-router
 supervisorctl restart envoy
-
-# Stop/Start a service
-supervisorctl stop chatui
-supervisorctl start chatui
 
 # Restart all services
 supervisorctl restart all

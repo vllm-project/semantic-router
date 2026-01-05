@@ -17,12 +17,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 func main() {
+	// Display vLLM logo
+	logo.PrintVLLMLogo()
+
 	// Parse command-line flags
 	var (
 		configPath            = flag.String("config", "config/config.yaml", "Path to the configuration file")
@@ -35,6 +40,7 @@ func main() {
 		certPath              = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 		kubeconfig            = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace             = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
+		downloadOnly          = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 	)
 	flag.Parse()
 
@@ -58,6 +64,17 @@ func main() {
 	// Set the initial configuration in the global config
 	// This is important for Kubernetes mode where the controller will update it
 	config.Replace(cfg)
+
+	// Ensure required models are downloaded
+	if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
+		logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
+	}
+
+	// If download-only mode, exit after downloading models
+	if *downloadOnly {
+		logging.Infof("Download-only mode: models downloaded successfully, exiting")
+		os.Exit(0)
+	}
 
 	// Initialize distributed tracing if enabled
 	ctx := context.Background()
@@ -134,6 +151,23 @@ func main() {
 		logging.Infof("Metrics server disabled")
 	}
 
+	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma models are ready when semantic cache is initialized
+	// Use the already loaded config instead of calling config.Load() again
+	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
+		if initErr := candle_binding.InitEmbeddingModels(
+			cfg.Qwen3ModelPath,
+			cfg.GemmaModelPath,
+			cfg.EmbeddingModels.UseCPU,
+		); initErr != nil {
+			logging.Errorf("Failed to initialize embedding models: %v", initErr)
+			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
+		} else {
+			logging.Infof("Embedding models initialized successfully")
+		}
+	} else {
+		logging.Infof("Embedding models not configured, skipping initialization")
+	}
+
 	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
 	if err != nil {
@@ -142,31 +176,13 @@ func main() {
 
 	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
-	// Initialize embedding models if configured (Long-context support)
-	// Use the already loaded config instead of calling config.Load() again
-	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
-		logging.Infof("Initializing embedding models...")
-		logging.Infof("  Qwen3 model: %s", cfg.Qwen3ModelPath)
-		logging.Infof("  Gemma model: %s", cfg.GemmaModelPath)
-		logging.Infof("  Use CPU: %v", cfg.EmbeddingModels.UseCPU)
-
-		if err := candle_binding.InitEmbeddingModels(
-			cfg.Qwen3ModelPath,
-			cfg.GemmaModelPath,
-			cfg.EmbeddingModels.UseCPU,
-		); err != nil {
-			logging.Errorf("Failed to initialize embedding models: %v", err)
-			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
-		} else {
-			logging.Infof("Embedding models initialized successfully")
+	// Load tools database after server initialization
+	// Tools database can work with or without embedding models
+	router := server.GetRouter()
+	if router != nil {
+		if err := router.LoadToolsDatabase(); err != nil {
+			logging.Warnf("Failed to load tools database: %v", err)
 		}
-	} else {
-		logging.Infof("No embedding models configured, skipping initialization")
-		logging.Infof("To enable embedding models, add to config.yaml:")
-		logging.Infof("  embedding_models:")
-		logging.Infof("    qwen3_model_path: 'models/Qwen3-Embedding-0.6B'")
-		logging.Infof("    gemma_model_path: 'models/embeddinggemma-300m'")
-		logging.Infof("    use_cpu: true")
 	}
 
 	// Start API server if enabled
@@ -190,6 +206,45 @@ func main() {
 	if err := server.Start(); err != nil {
 		logging.Fatalf("ExtProc server error: %v", err)
 	}
+}
+
+// ensureModelsDownloaded checks and downloads required models
+func ensureModelsDownloaded(cfg *config.RouterConfig) error {
+	logging.Infof("Installing required models...")
+
+	// Print model registry configuration
+	logging.Infof("MoM Families (%d models)", len(cfg.MoMRegistry))
+	for localPath, repoID := range cfg.MoMRegistry {
+		logging.Debugf("  %s -> %s", localPath, repoID)
+	}
+
+	// Check if huggingface-cli is available
+	if err := modeldownload.CheckHuggingFaceCLI(); err != nil {
+		return fmt.Errorf("huggingface-cli check failed: %w", err)
+	}
+
+	// Build model specs from config
+	specs, err := modeldownload.BuildModelSpecs(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to build model specs: %w", err)
+	}
+
+	// Get download configuration from environment
+	downloadConfig := modeldownload.GetDownloadConfig()
+
+	// Log environment configuration (mask sensitive token)
+	maskedToken := "***"
+	if downloadConfig.HFToken == "" {
+		maskedToken = "<not set>"
+	}
+	logging.Infof("HF_ENDPOINT: %s; HF_TOKEN: %s; HF_HOME: %s", downloadConfig.HFEndpoint, maskedToken, downloadConfig.HFHome)
+	// Ensure all models are downloaded
+	if err := modeldownload.EnsureModels(specs, downloadConfig); err != nil {
+		return fmt.Errorf("failed to download models: %w", err)
+	}
+
+	logging.Infof("All required models are ready")
+	return nil
 }
 
 // startKubernetesController starts the Kubernetes controller for watching CRDs

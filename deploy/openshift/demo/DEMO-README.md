@@ -70,7 +70,6 @@ python3 deploy/openshift/demo/demo-semantic-router.py
 # http://grafana-vllm-semantic-router-system.apps.cluster-pbd96.pbd96.sandbox5333.opentlc.com
 
 # Browser Tab 2: Open OpenWebUI
-# http://openwebui-vllm-semantic-router-system.apps.cluster-pbd96.pbd96.sandbox5333.opentlc.com
 ```
 
 ### During Demo

@@ -19,9 +19,8 @@ type Config struct {
 	PrometheusURL string
 	RouterAPIURL  string
 	RouterMetrics string
-	OpenWebUIURL  string
-	ChatUIURL     string
 	JaegerURL     string
+	EnvoyURL      string // Envoy proxy for chat completions
 }
 
 // env returns the env var or default
@@ -46,9 +45,8 @@ func LoadConfig() (*Config, error) {
 	promURL := flag.String("prometheus", env("TARGET_PROMETHEUS_URL", ""), "Prometheus base URL")
 	routerAPI := flag.String("router_api", env("TARGET_ROUTER_API_URL", "http://localhost:8080"), "Router API base URL")
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
-	openwebuiURL := flag.String("openwebui", env("TARGET_OPENWEBUI_URL", ""), "Open WebUI base URL")
-	chatuiURL := flag.String("chatui", env("TARGET_CHATUI_URL", ""), "Hugging Face Chat UI base URL")
 	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
+	envoyURL := flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions")
 
 	flag.Parse()
 
@@ -59,9 +57,8 @@ func LoadConfig() (*Config, error) {
 	cfg.PrometheusURL = *promURL
 	cfg.RouterAPIURL = *routerAPI
 	cfg.RouterMetrics = *routerMetrics
-	cfg.OpenWebUIURL = *openwebuiURL
-	cfg.ChatUIURL = *chatuiURL
 	cfg.JaegerURL = *jaegerURL
+	cfg.EnvoyURL = *envoyURL
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)

@@ -162,45 +162,8 @@ install_hf_cli() {
     echo
 }
 
-# Function to download models with progress
-download_models() {
-    info_msg "📥 Downloading AI models..."
-    echo
-
-    # Try full model set first (includes embeddinggemma-300m which may require auth)
-    # If that fails (e.g., 401 on gated models), fall back to minimal set
-    if [ "${CI_MINIMAL_MODELS:-}" = "true" ]; then
-        info_msg "CI_MINIMAL_MODELS=true detected, using minimal model set"
-        export CI_MINIMAL_MODELS=true
-    else
-        info_msg "Attempting to download full model set (includes embeddinggemma-300m)..."
-        export CI_MINIMAL_MODELS=false
-    fi
-
-    # Download models and save output to log (visible in real-time)
-    if make download-models 2>&1 | tee /tmp/download-models-output.log; then
-        success_msg "✅ Models downloaded successfully!"
-    else
-        # Check if failure was due to gated model (embeddinggemma-300m)
-        if grep -q "embeddinggemma.*401\|embeddinggemma.*Unauthorized\|embeddinggemma.*GatedRepoError" /tmp/download-models-output.log 2>/dev/null; then
-            info_msg "⚠️  Full model download failed (gated model requires auth)"
-            info_msg "📋 Falling back to minimal model set..."
-            export CI_MINIMAL_MODELS=true
-            if make download-models 2>&1 | tee /tmp/download-models-output.log; then
-                success_msg "✅ Minimal models downloaded successfully!"
-            else
-                error_msg "❌ Failed to download even minimal models!"
-                info_msg "📋 Check logs: cat /tmp/download-models-output.log"
-                exit 1
-            fi
-        else
-            error_msg "❌ Failed to download models!"
-            info_msg "📋 Check logs: cat /tmp/download-models-output.log"
-            exit 1
-        fi
-    fi
-    echo
-}
+# Models are now automatically downloaded by the router at startup
+# No need to pre-download models - the router will download them on first run
 
 # Function to start services
 start_services() {
@@ -209,7 +172,7 @@ start_services() {
 
     # Start docker-compose services (runs in detached mode via Makefile)
     # Timeout: 600 seconds (10 minutes) to allow for:
-    #   - Image pulls (semantic-router, envoy, jaeger, prometheus, grafana, openwebui, pipelines, llm-katan)
+    #   - Image pulls (semantic-router, envoy, jaeger, prometheus, grafana, llm-katan)
     #   - Dashboard build from Dockerfile (Go compilation can take 5-10 minutes)
     #   - Network/system variations
     # Save output to log file for debugging
@@ -269,7 +232,7 @@ wait_for_services() {
             echo
             # Show status of all containers
             section_header "📊 Container Status:"
-            "$CONTAINER_RUNTIME" ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|openwebui|pipelines|llm-katan"
+            "$CONTAINER_RUNTIME" ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|dashboard|prometheus|grafana|jaeger|llm-katan"
             echo
             return 0
         fi
@@ -300,7 +263,6 @@ show_service_info() {
     print_color "$GREEN" "│  📊 Dashboard:               http://localhost:8700          │"
     print_color "$GREEN" "│  📈 Prometheus:              http://localhost:9090          │"
     print_color "$GREEN" "│  📊 Grafana:                 http://localhost:3000          │"
-    print_color "$GREEN" "│  🌐 Open WebUI:              http://localhost:3001          │"
     print_color "$WHITE" "└─────────────────────────────────────────────────────────────┘"
     echo
     section_header "🔧 Useful Commands:"
@@ -356,8 +318,9 @@ main() {
     # Install HuggingFace CLI if needed
     install_hf_cli
 
-    # Download models
-    download_models
+    # Models will be automatically downloaded by the router at startup
+    info_msg "📥 Models will be automatically downloaded by the router on first startup..."
+    echo
 
     # Start services
     start_services

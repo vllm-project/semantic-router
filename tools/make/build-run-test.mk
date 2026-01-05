@@ -17,6 +17,7 @@ build-router: $(if $(CI),rust-ci,rust)
 
 # Build vsr CLI
 build-cli: ## Build the vsr CLI tool
+build-cli: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev"))
@@ -48,7 +49,7 @@ test-cli: build-router
 
 # Run the router
 run-router: ## Run the router with the specified config
-run-router: build-router download-models
+run-router: build-router
 	@echo "Running router with config: ${CONFIG_FILE}"
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
@@ -167,14 +168,14 @@ start-llm-katan: ## Start LLM Katan servers in foreground mode for e2e testing
 start-llm-katan:
 	@echo "Starting LLM Katan servers in foreground mode..."
 	@echo "Press Ctrl+C to stop servers"
-	@./e2e-tests/start-llm-katan.sh
+	@./e2e/testing/start-llm-katan.sh
 
 # Run e2e tests with LLM Katan (lightweight real models)
 test-e2e-vllm: ## Run e2e tests with LLM Katan servers (make sure servers are running)
 test-e2e-vllm:
 	@echo "Running e2e tests with LLM Katan servers..."
 	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
-	@python3 e2e-tests/run_all_tests.py
+	@python3 e2e/testing/run_all_tests.py
 
 # Run hallucination detection benchmark
 # Requires: router running with hallucination config, vLLM endpoint, envoy proxy
@@ -220,7 +221,7 @@ test-hallucination-detection: build-router download-models
 	@echo "=============================================="
 	@echo ""
 	@echo "1. Starting mock vLLM server on port 8002..."
-	@nohup python3 e2e-tests/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
 	@echo ""
@@ -307,7 +308,7 @@ test-hallucination-detection-manual: build-router download-models
 	@echo "   ✓ Cleanup complete"
 	@echo ""
 	@echo "1. Starting mock vLLM server on port 8002..."
-	@nohup python3 e2e-tests/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
 	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
 	@echo ""
@@ -377,14 +378,14 @@ stop-hallucination-services:
 demo-hallucination: ## Run interactive hallucination detection demo (CLI)
 demo-hallucination: build-router download-models
 	@echo "Starting Hallucination Detection Demo (CLI)..."
-	@./e2e-tests/hallucination-demo/run_demo.sh
+	@./e2e/testing/hallucination-demo/run_demo.sh
 
 demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
 demo-hallucination-web: build-router download-models
 	@echo "Starting Hallucination Detection Demo (Web UI)..."
-	@./e2e-tests/hallucination-demo/run_demo.sh --web
+	@./e2e/testing/hallucination-demo/run_demo.sh --web
 
 demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
 demo-hallucination-auto: build-router download-models
 	@echo "Starting Hallucination Detection Demo (auto mode)..."
-	@./e2e-tests/hallucination-demo/run_demo.sh --demo
+	@./e2e/testing/hallucination-demo/run_demo.sh --demo

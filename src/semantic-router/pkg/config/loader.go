@@ -57,6 +57,12 @@ func Parse(configPath string) (*RouterConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// Apply default model registry if not specified in config
+	// If user specifies mom_registry in config.yaml, it completely replaces the defaults
+	if len(cfg.MoMRegistry) == 0 {
+		cfg.MoMRegistry = ToLegacyRegistry()
+	}
+
 	// Validation after parsing
 	if err := validateConfigStructure(cfg); err != nil {
 		return nil, err

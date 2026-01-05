@@ -17,7 +17,7 @@ services:
   semantic-router:
     build:
       context: ../../
-      dockerfile: Dockerfile.extproc
+      dockerfile: tools/docker/Dockerfile.extproc
     image: semantic-router-tracing:latest
     container_name: semantic-router-tracing
     depends_on:

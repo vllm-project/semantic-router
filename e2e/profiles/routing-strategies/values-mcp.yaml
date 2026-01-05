@@ -3,7 +3,7 @@
 
 config:
   bert_model:
-    model_id: models/all-MiniLM-L12-v2
+    model_id: models/mom-embedding-light
     threshold: 0.6
     use_cpu: true
 
@@ -28,11 +28,11 @@ config:
 
   prompt_guard:
     enabled: true
-    use_modernbert: true
-    model_id: "models/jailbreak_classifier_modernbert-base_model"
+    use_modernbert: false  # MoM uses LoRA-based model
+    model_id: "models/mom-jailbreak-classifier"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Classifier configuration with MCP enabled
   classifier:
@@ -42,7 +42,7 @@ config:
       transport_type: "stdio"  # Options: "stdio" or "http"
       # For stdio transport:
       command: "python3"
-      args: ["examples/mcp-classifier-server/server_keyword.py"]
+      args: ["deploy/examples/mcp-classifier-server/server_keyword.py"]
       # For HTTP transport (alternative):
       # transport_type: "http"
       # url: "http://localhost:8090/mcp"
@@ -52,18 +52,18 @@ config:
 
     # Fallback to in-tree classifiers if MCP fails
     category_model:
-      model_id: "models/category_classifier_modernbert-base_model"
-      use_modernbert: true
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: false  # MoM uses LoRA-based model
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 
     pii_model:
       model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
       use_modernbert: true
       threshold: 0.7
       use_cpu: true
-      pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
   # Categories will be loaded dynamically from MCP server via list_categories tool
   # These are fallback categories if MCP is unavailable
@@ -260,8 +260,8 @@ config:
 
   # Embedding Models Configuration
   embedding_models:
-    qwen3_model_path: "models/Qwen3-Embedding-0.6B"
-    gemma_model_path: "models/embeddinggemma-300m"
+    qwen3_model_path: "models/mom-embedding-pro"
+    # gemma_model_path: "models/mom-embedding-flash"
     use_cpu: true
 
   # Observability Configuration

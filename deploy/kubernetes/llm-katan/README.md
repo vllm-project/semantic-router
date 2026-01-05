@@ -15,7 +15,7 @@ This directory provides production-ready Kubernetes manifests using Kustomize fo
 Each deployment consists of two containers:
 
 - **initContainer (model-downloader)**: Downloads models from HuggingFace to PVC
-  - Image: `python:3.11-slim` (~45MB)
+  - Image: `python:3.11-slim` (~45MB) with huggingface_hub installed on-the-fly
   - Checks if model exists before downloading
   - Runs once before main container starts
 
@@ -969,7 +969,7 @@ jobs:
           sleep 5
           
           # Run e2e tests (if available)
-          # pytest e2e-tests/ -v
+          # pytest e2e/testing/ -v
           
           # Or simple health check
           curl -f http://localhost:8000/health

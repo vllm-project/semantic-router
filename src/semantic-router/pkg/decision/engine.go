@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // DecisionEngine evaluates routing decisions based on rule combinations
@@ -55,10 +56,12 @@ func NewDecisionEngine(
 
 // SignalMatches contains all matched signals for decision evaluation
 type SignalMatches struct {
-	KeywordRules   []string
-	EmbeddingRules []string
-	DomainRules    []string
-	FactCheckRules []string // "needs_fact_check" or "no_fact_check_needed"
+	KeywordRules      []string
+	EmbeddingRules    []string
+	DomainRules       []string
+	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
+	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
+	PreferenceRules   []string // Route preference names matched via external LLM
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -110,7 +113,8 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 	}
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no decision matched")
+		logging.Infof("No decision matched")
+		return nil, nil
 	}
 
 	// Select best decision based on strategy
@@ -154,6 +158,10 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = e.matchesDomainCondition(condition.Name, signals.DomainRules)
 		case "fact_check":
 			conditionMatched = slices.Contains(signals.FactCheckRules, condition.Name)
+		case "user_feedback":
+			conditionMatched = slices.Contains(signals.UserFeedbackRules, condition.Name)
+		case "preference":
+			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
 		default:
 			continue
 		}

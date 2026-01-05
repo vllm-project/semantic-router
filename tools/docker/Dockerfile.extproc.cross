@@ -1,0 +1,241 @@
+# Cross-compilation optimized Dockerfile for ARM64
+FROM --platform=linux/amd64 rust:1.90 AS rust-cross-builder
+
+# Install cross-compilation dependencies
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    make \
+    build-essential \
+    pkg-config \
+    lld \
+    clang \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    binutils-aarch64-linux-gnu \
+    libssl-dev:arm64 \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cross-compilation target
+RUN rustup target add aarch64-unknown-linux-gnu
+
+# Verify cross-compilation toolchain
+RUN echo "Verifying cross-compilation toolchain..." && \
+    aarch64-linux-gnu-gcc --version && \
+    aarch64-linux-gnu-ld --version && \
+    which aarch64-linux-gnu-gcc && \
+    which aarch64-linux-gnu-ld
+
+# Configure cross-compilation environment
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+ENV STRIP_aarch64_unknown_linux_gnu=aarch64-linux-gnu-strip
+ENV OBJCOPY_aarch64_unknown_linux_gnu=aarch64-linux-gnu-objcopy
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64
+
+# Configure OpenSSL for cross-compilation
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+ENV OPENSSL_DIR=/usr
+ENV OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+
+# Optimize Rust compilation
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+ENV CARGO_INCREMENTAL=1
+ENV CARGO_PROFILE_RELEASE_LTO=thin
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+
+# Set target architecture for cross-compilation
+ARG TARGETARCH
+ENV RUST_TARGET=${TARGETARCH:-x86_64}-unknown-linux-gnu
+
+# Map Docker TARGETARCH to Rust target
+RUN echo "Mapping TARGETARCH=$TARGETARCH to Rust target" && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "export RUST_TARGET=aarch64-unknown-linux-gnu" >> ~/.bashrc; \
+        export RUST_TARGET=aarch64-unknown-linux-gnu; \
+    elif [ "$TARGETARCH" = "amd64" ]; then \
+        echo "export RUST_TARGET=x86_64-unknown-linux-gnu" >> ~/.bashrc; \
+        export RUST_TARGET=x86_64-unknown-linux-gnu; \
+    fi
+
+WORKDIR /app
+
+# Copy dependency files first for better layer caching
+COPY candle-binding/Cargo.toml ./candle-binding/
+# Copy Cargo.lock if it exists in the build context
+COPY candle-binding/Cargo.loc[k] ./candle-binding/
+COPY tools/make/ tools/make/
+COPY Makefile ./
+
+# Create a modified Makefile for cross-compilation (CPU-only, no CUDA)
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Modifying rust.mk for ARM64 cross-compilation (CPU-only, no CUDA)..."; \
+        sed -i 's/cd candle-binding && cargo build --release/cd candle-binding \&\& cargo build --release --no-default-features --target aarch64-unknown-linux-gnu/' tools/make/rust.mk; \
+        cat tools/make/rust.mk | grep "cargo build"; \
+    fi
+
+# Pre-build dependencies to cache them (CPU-only, no CUDA)
+RUN cd candle-binding && \
+    mkdir -p src && \
+    echo "fn main() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --no-default-features; \
+    fi && \
+    rm -rf src
+
+# Copy source code and build
+COPY candle-binding/src/ ./candle-binding/src/
+
+# Build with cross-compilation (rebuild with actual source code, CPU-only, no CUDA)
+RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." && \
+    echo "Current directory: $(pwd)" && \
+    echo "TARGETARCH: $TARGETARCH" && \
+    ls -la candle-binding/src/ && \
+    echo "Forcing clean rebuild..." && \
+    cd candle-binding && \
+    cargo clean && \
+    # Set up environment for cross-compilation
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc; \
+        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc; \
+        export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++; \
+        export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar; \
+        cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
+    fi && \
+    echo "Checking built library..." && \
+    find target -name "*.so" -type f
+
+# Build the Go application
+FROM --platform=linux/amd64 golang:1.24 AS go-builder
+
+# Install cross-compilation tools for Go
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libssl-dev:arm64 \
+    libssl-dev \
+    file \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Go module files first for better layer caching
+RUN mkdir -p src/semantic-router
+COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+
+# Download Go dependencies (cached layer)
+RUN cd src/semantic-router && go mod download
+
+# Copy semantic-router source code
+COPY src/semantic-router/ src/semantic-router/
+
+# Copy the built Rust library from rust-cross-builder
+ARG TARGETARCH
+
+# Use a script to copy the correct library
+RUN mkdir -p /app/candle-binding/target/release
+
+# Copy all possible library locations and let the script figure it out
+COPY --from=rust-cross-builder /app/candle-binding/target/ /tmp/rust-target/
+
+# Copy the appropriate library to the expected location
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        if [ -f "/tmp/rust-target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so" ]; then \
+            cp /tmp/rust-target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/; \
+            echo "Copied ARM64 cross-compiled library"; \
+        else \
+            echo "ERROR: ARM64 library not found"; \
+            ls -la /tmp/rust-target/*/release/ || echo "No target directories found"; \
+            exit 1; \
+        fi; \
+    else \
+        if [ -f "/tmp/rust-target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.so" ]; then \
+            cp /tmp/rust-target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/; \
+            echo "Copied AMD64 library"; \
+        elif [ -f "/tmp/rust-target/release/libcandle_semantic_router.so" ]; then \
+            cp /tmp/rust-target/release/libcandle_semantic_router.so /app/candle-binding/target/release/; \
+            echo "Copied native library"; \
+        else \
+            echo "ERROR: AMD64 library not found"; \
+            ls -la /tmp/rust-target/*/release/ || echo "No target directories found"; \
+            exit 1; \
+        fi; \
+    fi
+
+# Set environment variables for CGO to find the library
+ENV CGO_ENABLED=1
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
+ENV GOOS=linux
+ENV GOARCH=${TARGETARCH:-amd64}
+
+# Set up cross-compilation for Go if needed
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        export CC=aarch64-linux-gnu-gcc; \
+        export CXX=aarch64-linux-gnu-g++; \
+        export CGO_CFLAGS="-I/app/candle-binding"; \
+        export CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router"; \
+    fi
+
+# Verify the library exists and has the expected symbols
+RUN ls -la /app/candle-binding/target/release/libcandle_semantic_router.so && \
+    file /app/candle-binding/target/release/libcandle_semantic_router.so
+
+# Build the router binary with cross-compilation support (with OpenSSL linking)
+RUN mkdir -p bin && cd src/semantic-router && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "Building for ARM64 with cross-compilation..." && \
+        echo "Checking OpenSSL libraries..." && \
+        ls -la /usr/lib/aarch64-linux-gnu/libssl* /usr/lib/aarch64-linux-gnu/libcrypto* || true && \
+        CC=aarch64-linux-gnu-gcc \
+        CXX=aarch64-linux-gnu-g++ \
+        PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lssl -lcrypto" \
+        GOOS=linux GOARCH=arm64 \
+        go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
+    else \
+        echo "Building for AMD64..." && \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router -lssl -lcrypto" \
+        go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
+    fi
+
+# Final stage: copy the binary and the shared library
+FROM quay.io/centos/centos:stream10
+
+# Install runtime dependencies including OpenSSL, Python and HuggingFace CLI
+RUN dnf update -y && \
+    dnf install -y \
+    openssl-libs \
+    python3 \
+    python3-pip \
+    ca-certificates && \
+    dnf clean all && \
+    pip3 install --no-cache-dir huggingface_hub[cli]
+
+WORKDIR /app
+
+COPY --from=go-builder /app/bin/router /app/extproc-server
+COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
+COPY config/config.yaml /app/config/
+
+ENV LD_LIBRARY_PATH=/app/lib
+
+EXPOSE 50051
+
+# Copy entrypoint to allow switching config via env var CONFIG_FILE
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]

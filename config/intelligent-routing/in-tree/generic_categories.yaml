@@ -9,11 +9,11 @@ bert_model:
 
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 
 # Define your generic categories and map them to MMLU-Pro categories.
 # The classifier will translate predicted MMLU categories into these generic names.

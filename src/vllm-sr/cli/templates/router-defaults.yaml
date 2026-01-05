@@ -1,0 +1,148 @@
+# You can override by specifying your own mappings below:
+# Uncomment and customize if you need different model mappings:
+# mom_registry:
+#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
+#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
+#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
+#   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
+#   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
+#   "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
+#   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
+#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
+
+# Response API Configuration
+# Enables OpenAI Response API support with conversation chaining
+response_api:
+  enabled: true
+  store_backend: "memory"  # Options: "memory", "milvus", "redis"
+  ttl_seconds: 86400       # 24 hours
+  max_responses: 1000
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
+  similarity_threshold: 0.8
+  max_entries: 1000  # Only applies to memory backend
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  # HNSW index configuration (for memory backend only)
+  use_hnsw: true  # Enable HNSW index for faster similarity search
+  hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
+  hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
+
+  # Hybrid cache configuration (when backend_type: "hybrid")
+  # Combines in-memory HNSW for fast search with Milvus for scalable storage
+  # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
+  # backend_config_path: "config/milvus.yaml" # Path to Milvus config
+
+  # Embedding model for semantic similarity matching
+  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  # Default: "bert" (fastest, lowest memory)
+  embedding_model: "bert"
+
+bert_model:
+  model_id: models/mom-embedding-light
+  threshold: 0.6
+  use_cpu: true
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+  use_modernbert: false
+  model_id: "models/mom-jailbreak-classifier"
+  threshold: 0.7
+  use_cpu: true
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+  pii_model:
+    model_id: "models/mom-pii-classifier"
+    use_modernbert: false
+    threshold: 0.9
+    use_cpu: true
+  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
+
+# Hallucination mitigation configuration
+# Disabled by default - enable in decisions via hallucination plugin
+hallucination_mitigation:
+  enabled: false
+  # Fact-check classifier: determines if a prompt needs fact verification
+  fact_check_model:
+    model_id: "models/mom-halugate-sentinel"
+    threshold: 0.6
+    use_cpu: true
+  # Hallucination detector: verifies if LLM response is grounded in context
+  hallucination_model:
+    model_id: "models/mom-halugate-detector"
+    threshold: 0.8
+    use_cpu: true
+  # NLI model: provides explanations for hallucinated spans
+  nli_model:
+    model_id: "models/mom-halugate-explainer"
+    threshold: 0.9
+    use_cpu: true
+
+# Feedback detector configuration
+# Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
+feedback_detector:
+  enabled: true
+  model_id: "models/mom-feedback-detector"
+  threshold: 0.7
+  use_cpu: true
+
+# External models configuration
+# Used for advanced routing signals like preference-based routing via external LLM
+# Users can configure external models in their config to enable these features
+# Example:
+# external_models:
+#   - llm_provider: "vllm"
+#     model_role: "preference"
+#     llm_endpoint:
+#       address: "127.0.0.1"
+#       port: 8000
+#     llm_model_name: "openai/gpt-oss-120b"
+#     llm_timeout_seconds: 30
+#     parser_type: "json"
+#     access_key: ""  # Optional: for Authorization header (Bearer token)
+
+# Embedding Models Configuration
+# These models provide intelligent embedding generation with automatic routing:
+# - Qwen3-Embedding-0.6B: Up to 32K context, high quality,
+# - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+embedding_models:
+  qwen3_model_path: "models/mom-embedding-pro"
+  gemma_model_path: "models/mom-embedding-flash"
+  use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
+
+# Observability Configuration
+observability:
+  metrics:
+    enabled: false  # Set to false to disable the Prometheus /metrics endpoint
+  tracing:
+    enabled: false  # Enable distributed tracing for docker-compose stack
+    provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
+    exporter:
+      type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)
+      endpoint: "jaeger:4317"  # Jaeger collector inside compose network
+      insecure: true  # Use insecure connection (no TLS)
+    sampling:
+      type: "always_on"  # Sampling: always_on, always_off, probabilistic
+      rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
+    resource:
+      service_name: "vllm-semantic-router"
+      service_version: "v0.1.0"
+      deployment_environment: "development"
+
+clear_route_cache: true

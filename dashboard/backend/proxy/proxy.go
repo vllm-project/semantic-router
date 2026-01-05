@@ -1,9 +1,7 @@
 package proxy
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -23,7 +21,7 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
-	// Enable streaming responses (critical for SSE/ChatUI)
+	// Enable streaming responses (critical for SSE)
 	// FlushInterval = 0 means flush immediately, supporting real-time streaming
 	proxy.FlushInterval = -1 // -1 means flush immediately after each write
 
@@ -62,7 +60,7 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		}
 
 		// Set Origin header to match the target URL for iframe embedding
-		// This is required for services like Grafana, Chat UI, and OpenWebUI to accept the iframe embedding
+		// This is required for embedded services to accept iframe embedding
 		// and pass CSRF/Origin validation checks. The original Origin is preserved in X-Forwarded-Origin
 		// for CORS response handling. This override is intentional and necessary for iframe embedding to work.
 		r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
@@ -135,7 +133,7 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 			resp.Header.Set("Content-Security-Policy", "frame-ancestors 'self'")
 		} else {
 			// If CSP exists, modify frame-ancestors directive
-			// This ensures the embedded service (like Chat UI) can be displayed in an iframe
+			// This ensures the embedded service can be displayed in an iframe
 			lower := strings.ToLower(csp)
 			if strings.Contains(lower, "frame-ancestors") {
 				// Split directives by ';'
@@ -171,50 +169,6 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		resp.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
 		resp.Header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
-
-		// Rewrite URLs in HTML/CSS/JS responses to fix hardcoded internal URLs
-		// This is necessary for Chat UI which may have hardcoded https://chat-ui:3000 URLs
-		contentType := resp.Header.Get("Content-Type")
-		if strings.Contains(contentType, "text/html") ||
-			strings.Contains(contentType, "text/css") ||
-			strings.Contains(contentType, "application/javascript") ||
-			strings.Contains(contentType, "text/javascript") {
-
-			// Read the response body
-			bodyBytes, err := io.ReadAll(resp.Body)
-			if err != nil {
-				log.Printf("Error reading response body: %v", err)
-				return err
-			}
-			resp.Body.Close()
-
-			// Replace hardcoded internal URLs with proxy paths
-			bodyStr := string(bodyBytes)
-
-			// Replace various forms of the internal URL
-			// Note: /chatui/ assets should stay as /chatui/ (not /embedded/chatui/)
-			// because the backend has a separate route for /chatui/ assets
-			replacements := map[string]string{
-				"https://chat-ui:3000/chatui/": "/chatui/",
-				"https://chat-ui:3000/chatui":  "/chatui",
-				"http://chat-ui:3000/chatui/":  "/chatui/",
-				"http://chat-ui:3000/chatui":   "/chatui",
-				"https://chat-ui:3000/":        "/embedded/chatui/",
-				"https://chat-ui:3000":         "/embedded/chatui",
-				"http://chat-ui:3000/":         "/embedded/chatui/",
-				"http://chat-ui:3000":          "/embedded/chatui",
-			}
-
-			for old, new := range replacements {
-				bodyStr = strings.ReplaceAll(bodyStr, old, new)
-			}
-
-			// Create new response body
-			newBody := []byte(bodyStr)
-			resp.Body = io.NopCloser(bytes.NewReader(newBody))
-			resp.ContentLength = int64(len(newBody))
-			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
-		}
 
 		return nil
 	}

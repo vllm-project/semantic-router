@@ -18,7 +18,7 @@
 /// cargo run --release --features flash-attn --example embedding_benchmark
 ///
 /// # Custom model path
-/// cargo run --release --example embedding_benchmark -- --model ./models/Qwen3-Embedding-0.6B
+/// cargo run --release --example embedding_benchmark -- --model ./models/mom-embedding-pro
 ///
 /// # Quick test (fewer iterations)
 /// cargo run --release --example embedding_benchmark -- --quick
@@ -37,7 +37,7 @@ use tokenizers::Tokenizer;
 // Configuration
 // ========================================================================================
 
-const DEFAULT_MODEL_PATH: &str = "./models/Qwen3-Embedding-0.6B";
+const DEFAULT_MODEL_PATH: &str = "./models/mom-embedding-pro";
 
 const TEST_TEXTS: &[&str] = &[
     "What is machine learning?",

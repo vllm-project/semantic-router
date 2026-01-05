@@ -63,11 +63,10 @@ Put this in `config/config.yaml` (or merge into your existing config):
 # Category classifier (required for intent detection)
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
-    use_modernbert: true
+    model_id: "models/mom-domain-classifier"
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 
 # vLLM endpoint hosting your base model + LoRA adapters
 vllm_endpoints:
@@ -225,5 +224,5 @@ Check the router logs to confirm the correct LoRA adapter is selected for each q
 ## Next Steps
 
 - See [complete LoRA routing example](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/lora_routing.yaml)
-- Learn about [category configuration](../../overview/categories/configuration.md#lora_name-optional)
+- Learn about [decision configuration](../../installation/configuration.md#decision-rules---signal-fusion)
 - Read [modular LoRA blog post](https://blog.vllm.ai/2025/10/27/semantic-router-modular.html) for architecture details

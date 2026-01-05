@@ -229,9 +229,9 @@ objects:
     config.yaml: "server:\n  port: 50051\n  secure: ${SECURE_MODE}\n\nmetrics:\n \
       \ enabled: true\n  port: 9190\n\nclassification:\n  api:\n    enabled: true\n\
       \    port: 8080\n\n  router:\n    category:\n      enabled: true\n      model_path:\
-      \ \"models/category_classifier_modernbert-base_model\"\n\n    pii:\n      enabled:\
+      \ \"models/mom-domain-classifier\"\n\n    pii:\n      enabled:\
       \ true\n      model_path: \"models/pii_classifier_modernbert-base_model\"\n\n\
-      \    jailbreak:\n      enabled: true\n      model_path: \"models/jailbreak_classifier_modernbert-base_model\"\
+      \    jailbreak:\n      enabled: true\n      model_path: \"models/mom-jailbreak-classifier\"\
       \n\n    pii_token:\n      enabled: true\n      model_path: \"models/pii_classifier_modernbert-base_presidio_token_model\"\
       \n\n  tools:\n    enabled: true\n    database_path: \"/app/config/tools_db.json\"\
       \n\nlogging:\n  level: ${LOG_LEVEL}\n  format: \"json\"\n\ncache:\n  enabled:\

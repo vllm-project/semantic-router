@@ -11,11 +11,11 @@ classifier:
     pii_mapping_path: "models/pii_classifier_modernbert-base_model/pii_type_mapping.json"
 
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
 
 # Categories define domain metadata only (no routing logic)
 categories:

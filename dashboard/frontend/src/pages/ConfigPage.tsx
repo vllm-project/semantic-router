@@ -263,7 +263,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        // Try to read error message from response body
+        const errorText = await response.text()
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText)
+            if (errorJson.error || errorJson.message) {
+              errorMessage = errorJson.error || errorJson.message
+            } else {
+              errorMessage = errorText
+            }
+          } catch {
+            // If not JSON, use the text as-is
+            errorMessage = errorText
+          }
+        }
+        throw new Error(errorMessage)
       }
 
       // Refresh config after save
@@ -325,8 +341,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                 ],
                 async (data) => {
                   const newConfig = { ...config }
-                  if (!newConfig.vllm_endpoints) newConfig.vllm_endpoints = []
-                  newConfig.vllm_endpoints.push(data)
+                  // Create a new array to avoid mutating the original state
+                  newConfig.vllm_endpoints = [...(newConfig.vllm_endpoints || []), data]
                   await saveConfig(newConfig)
                 },
                 'add'
@@ -359,6 +375,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                         async (data) => {
                           const newConfig = { ...config }
                           if (newConfig.vllm_endpoints) {
+                            // Create a new array to avoid mutating the original state
+                            newConfig.vllm_endpoints = [...newConfig.vllm_endpoints]
                             newConfig.vllm_endpoints[index] = data
                           }
                           await saveConfig(newConfig)
@@ -372,11 +390,48 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   <button
                     className={styles.deleteButton}
                     onClick={() => {
-                      if (confirm(`Are you sure you want to delete endpoint "${endpoint.name}"?`)) {
+                      // Check if endpoint is referenced in model_config
+                      const referencedIn: string[] = []
+                      if (config?.model_config) {
+                        Object.entries(config.model_config).forEach(([modelName, modelConfig]) => {
+                          if (modelConfig.preferred_endpoints?.includes(endpoint.name)) {
+                            referencedIn.push(modelName)
+                          }
+                        })
+                      }
+
+                      let confirmMessage = `Delete endpoint "${endpoint.name}"?`
+                      if (referencedIn.length > 0) {
+                        const modelList = referencedIn.length === 1 
+                          ? `model "${referencedIn[0]}"` 
+                          : `${referencedIn.length} models (${referencedIn.join(', ')})`
+                        confirmMessage += `\n\n⚠️ This endpoint is currently used in ${modelList}.\nIt will be automatically removed from their preferred endpoints.`
+                      }
+
+                      if (confirm(confirmMessage)) {
                         const newConfig = { ...config }
                         if (newConfig.vllm_endpoints) {
-                          newConfig.vllm_endpoints.splice(index, 1)
+                          // Create a new array to avoid mutating the original state
+                          newConfig.vllm_endpoints = newConfig.vllm_endpoints.filter((_, i) => i !== index)
                         }
+
+                        // Remove endpoint from all model_config preferred_endpoints
+                        if (newConfig.model_config) {
+                          Object.keys(newConfig.model_config).forEach((modelName) => {
+                            const modelConfig = newConfig.model_config![modelName]
+                            if (modelConfig.preferred_endpoints) {
+                              // Filter out the deleted endpoint
+                              modelConfig.preferred_endpoints = modelConfig.preferred_endpoints.filter(
+                                (ep) => ep !== endpoint.name
+                              )
+                              // Remove preferred_endpoints if array becomes empty
+                              if (modelConfig.preferred_endpoints.length === 0) {
+                                delete modelConfig.preferred_endpoints
+                              }
+                            }
+                          })
+                        }
+
                         saveConfig(newConfig)
                       }
                     }}

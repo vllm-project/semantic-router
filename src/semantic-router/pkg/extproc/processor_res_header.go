@@ -124,6 +124,61 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			},
 		})
 
+		// Add signal tracking headers
+		if len(ctx.VSRMatchedKeywords) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedKeywords,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedKeywords, ",")),
+				},
+			})
+		}
+
+		if len(ctx.VSRMatchedEmbeddings) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedEmbeddings,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedEmbeddings, ",")),
+				},
+			})
+		}
+
+		if len(ctx.VSRMatchedDomains) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedDomains,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedDomains, ",")),
+				},
+			})
+		}
+
+		if len(ctx.VSRMatchedFactCheck) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedFactCheck,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedFactCheck, ",")),
+				},
+			})
+		}
+
+		if len(ctx.VSRMatchedUserFeedback) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedUserFeedback,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedUserFeedback, ",")),
+				},
+			})
+		}
+
+		if len(ctx.VSRMatchedPreference) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedPreference,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedPreference, ",")),
+				},
+			})
+		}
+
 		// Create header mutation if we have headers to add
 		if len(setHeaders) > 0 {
 			headerMutation = &ext_proc.HeaderMutation{

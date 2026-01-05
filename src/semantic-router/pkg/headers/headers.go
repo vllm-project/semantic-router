@@ -51,6 +51,35 @@ const (
 	VSRCacheHit = "x-vsr-cache-hit"
 )
 
+// VSR Signal Tracking Headers
+// These headers track which signals were matched during request evaluation.
+// They provide visibility into the signal-driven decision process.
+const (
+	// VSRMatchedKeywords contains comma-separated list of matched keyword rule names.
+	// Example: "code_keywords,urgent_keywords"
+	VSRMatchedKeywords = "x-vsr-matched-keywords"
+
+	// VSRMatchedEmbeddings contains comma-separated list of matched embedding rule names.
+	// Example: "code_debug,technical_help"
+	VSRMatchedEmbeddings = "x-vsr-matched-embeddings"
+
+	// VSRMatchedDomains contains comma-separated list of matched domain rule names.
+	// Example: "computer_science,mathematics"
+	VSRMatchedDomains = "x-vsr-matched-domains"
+
+	// VSRMatchedFactCheck contains the fact-check signal result.
+	// Values: "needs_fact_check" or "no_fact_check_needed"
+	VSRMatchedFactCheck = "x-vsr-matched-fact-check"
+
+	// VSRMatchedUserFeedback contains comma-separated list of matched user feedback signals.
+	// Example: "need_clarification,wrong_answer"
+	VSRMatchedUserFeedback = "x-vsr-matched-user-feedback"
+
+	// VSRMatchedPreference contains comma-separated list of matched preference signals.
+	// Example: "creative_writing,technical_analysis"
+	VSRMatchedPreference = "x-vsr-matched-preference"
+)
+
 // Security Headers
 // These headers are added to responses when security policies are violated
 // or security checks detect potential threats.

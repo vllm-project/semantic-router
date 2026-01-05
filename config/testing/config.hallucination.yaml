@@ -2,7 +2,7 @@
 # Tests: fact-check classifier, hallucination detector, and NLI explainer
 
 bert_model:
-  model_id: models/all-MiniLM-L12-v2
+  model_id: models/mom-embedding-light
   threshold: 0.6
   use_cpu: true
 
@@ -12,17 +12,17 @@ semantic_cache:
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/category_classifier_modernbert-base_model"
+    model_id: "models/mom-domain-classifier"
     use_modernbert: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/category_classifier_modernbert-base_model/category_mapping.json"
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
   pii_model:
     model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
     use_modernbert: true
     threshold: 0.7
     use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Fact-check rules for signal classification
 # Similar to keyword_rules and embedding_rules, but based on ML model classification
@@ -39,19 +39,19 @@ fact_check_rules:
 hallucination_mitigation:
   # Fact-check classifier: determines if a prompt needs fact verification
   fact_check_model:
-    model_id: "models/halugate-sentinel"
+    model_id: "models/mom-halugate-sentinel"
     threshold: 0.6
     use_cpu: true
 
   # Hallucination detector: verifies if LLM response is grounded in context
   hallucination_model:
-    model_id: "models/halugate-detector"
+    model_id: "models/mom-halugate-detector"
     threshold: 0.8
     use_cpu: true
 
   # NLI model: provides explanations for hallucinated spans
   nli_model:
-    model_id: "models/ModernBERT-base-nli"
+    model_id: "models/mom-halugate-explainer"
     threshold: 0.9
     use_cpu: true
 
@@ -59,10 +59,10 @@ hallucination_mitigation:
 prompt_guard:
   enabled: true
   use_modernbert: true
-  model_id: "models/jailbreak_classifier_modernbert-base_model"
+  model_id: "models/mom-jailbreak-classifier"
   threshold: 0.7
   use_cpu: true
-  jailbreak_mapping_path: "models/jailbreak_classifier_modernbert-base_model/jailbreak_type_mapping.json"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
 # vLLM endpoints - mock server for testing
 vllm_endpoints:

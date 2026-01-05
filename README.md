@@ -17,142 +17,104 @@
 
 *Latest News* 🔥
 
-- [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html) 🚪
-- [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html) 🧠
-- [2025/11/03] **Our paper** [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published 📝
-- [2025/10/21] We announced the [2025 Q4 Roadmap: Journey to Iris](https://vllm-semantic-router.com/blog/q4-roadmap-iris) 📅.
-- [2025/10/12] **Our paper** [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys 🧠.
-- [2025/10/08] We announced the integration with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team 👋.
-- [2025/10/01] We supported to deploy on [Kubernetes](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway) 🌊.
-- [2025/09/01] We released the project officially: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html) 🚀.
+- [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
+- [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
+- [2025/11/19] New Blog: [Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale](https://blog.vllm.ai/2025/11/19/signal-decision.html)
+- [2025/11/03] Our paper [Category-Aware Semantic Caching for Heterogeneous LLM Workloads](https://arxiv.org/abs/2510.26835) published
+- [2025/10/27] New Blog: [Scaling Semantic Routing with Extensible LoRA](https://blog.vllm.ai/2025/10/27/semantic-router-modular.html)
+- [2025/10/12] Our paper [When to Reason: Semantic Router for vLLM](https://arxiv.org/abs/2510.08731) accepted by NeurIPS 2025 MLForSys.
+- [2025/10/08] Collaboration: vLLM Semantic Router with [vLLM Production Stack](https://github.com/vllm-project/production-stack) Team.
+- [2025/09/01] Released the project: [vLLM Semantic Router: Next Phase in LLM inference](https://blog.vllm.ai/2025/09/11/semantic-router.html).
 
 ---
 
-## Innovations ✨
+## Goals
+
+We are building the **System Level Intelligence** for Mixture-of-Models (MoM), bringing the **Collective Intelligence** into **LLM systems**, answering the following questions:
+
+1. How to capture the missing signals in request, response and context?
+2. How to combine the signals to make better decisions?
+3. How to collaborate more efficiently between different models?
+4. How to secure the real world and LLM system from jailbreaks, pii leaks, hallucinations?
+5. How to collect the valuable signals and build a self-learning system?
+
+![vLLM Semantic Router Banner](./website/static/img/banner.png)
+
+### Where it lives
+
+It lives between the real world and models:
+
+![level](./website/static/img/level.png)
+
+### Architecture
+
+A quick overview of the current architecture:
 
 ![architecture](./website/static/img/architecture.png)
 
-### Intelligent Routing 🧠
+## Quick Start
 
-#### Auto-Selection of Models and LoRA Adapters
+### Installation
 
-A **Mixture-of-Models** (MoM) router that intelligently directs OpenAI API requests to the most suitable models or LoRA adapters from a defined pool based on **Semantic Understanding** of the request's intent (Complexity, Task, Tools).
-
-![mom-overview](./website/static/img/mom-overview.png)
-
-Conceptually similar to Mixture-of-Experts (MoE) which lives *within* a model, this system selects the best *entire model* for the nature of the task.
-
-As such, the overall inference accuracy is improved by using a pool of models that are better suited for different types of tasks:
-
-![Model Accuracy](./website/static/img/category_accuracies.png)
-
-The router is implemented in two ways:
-
-- Golang (with Rust FFI based on the [candle](https://github.com/huggingface/candle) rust ML framework)
-- Python
-Benchmarking will be conducted to determine the best implementation.
-
-#### Request Flow
-
-![architecture](./website/static/img/flow.png)
-
-#### Auto-Selection of Tools
-
-Select the tools to use based on the prompt, avoiding the use of tools that are not relevant to the prompt so as to reduce the number of prompt tokens and improve tool selection accuracy by the LLM.
-
-#### Domain Aware System Prompts
-
-Automatically inject specialized system prompts based on query classification, ensuring optimal model behavior for different domains (math, coding, business, etc.) without manual prompt engineering.
-
-#### Domain Aware Similarity Caching ⚡️
-
-Cache the semantic representation of the prompt so as to reduce the number of prompt tokens and improve the overall inference latency.
-
-### Enterprise Security 🔒
-
-#### PII detection
-
-Detect PII in the prompt, avoiding sending PII to the LLM so as to protect the privacy of the user.
-
-#### Prompt guard
-
-Detect if the prompt is a jailbreak prompt, avoiding sending jailbreak prompts to the LLM so as to prevent the LLM from misbehaving. Can be configured globally or at the category level for fine-grained security control.
-
-## Quick Start 🚀
-
-### Using VSR CLI (Recommended)
-
-The `vsr` CLI tool provides a unified interface for managing the vLLM Semantic Router across all environments. It reduces setup time from hours to minutes with intelligent auto-detection, comprehensive diagnostics, and beautiful CLI output.
-
-#### Installation
+> [!TIP]
+> We recommend that you setup a Python virtual environment to manage dependencies.
 
 ```bash
-# Clone and build
-cd semantic-router/src/semantic-router
-make build-cli
-export PATH=$PATH:$(pwd)/bin
-
-# Verify installation
-vsr --version
+$ python -m venv vsr
+$ source vsr/bin/activate
+$ pip install vllm-sr
 ```
 
-#### Get Started in 4 Commands
+Installed successfully if you see the following help message:
 
 ```bash
-vsr init                    # Initialize configuration
-make download-models        # Download AI models
-vsr config validate        # Validate setup
-vsr deploy docker          # Deploy with Docker Compose
+$ vllm-sr
+
+       _ _     __  __       ____  ____
+__   _| | |_ _|  \/  |     / ___||  _ \
+\ \ / / | | | | |\/| |_____\___ \| |_) |
+ \ V /| | | |_| | |  |_____|___) |  _ <
+  \_/ |_|_|\__,_|_|  |     |____/|_| \_\
+
+vLLM Semantic Router - Intelligent routing for vLLM
+
+Usage: vllm-sr [OPTIONS] COMMAND [ARGS]...
+
+  vLLM Semantic Router CLI - Intelligent routing and caching for vLLM
+  endpoints.
+
+Options:
+  --version  Show version and exit.
+  --help     Show this message and exit.
+
+Commands:
+  config  Print generated configuration.
+  init    Initialize vLLM Semantic Router configuration.
+  logs    Show logs from vLLM Semantic Router service.
+  serve   Start vLLM Semantic Router.
+  status  Show status of vLLM Semantic Router services.
+  stop    Stop vLLM Semantic Router.
 ```
 
-#### Key Features
-
-- **Multi-Environment Support**: Deploy to Local, Docker, Kubernetes, or Helm
-- **Model Management**: Download, validate, list, and inspect models
-- **Health Monitoring**: Status checks, diagnostics, and health reports
-- **Debug Tools**: Interactive debugging and troubleshooting
-- **Dashboard Integration**: Auto-detect and open dashboard in browser
-- **Enhanced Logging**: Multi-environment log fetching with filtering
-
-#### Common Commands
+> [!TIP]
+> You can specify the HF_ENDPOINT, HF_TOKEN, and HF_HOME environment variables to configure the Hugging Face credentials.
 
 ```bash
-vsr status                  # Check deployment status
-vsr logs --follow          # View logs in real-time
-vsr health                 # Quick health check
-vsr dashboard              # Open dashboard
-vsr model list             # List available models
-vsr debug                  # Run diagnostics
-vsr upgrade docker         # Upgrade deployment
-vsr undeploy docker        # Stop deployment
+# Set environment variables (optional)
+export HF_ENDPOINT=https://huggingface.co  # Or use mirror: https://hf-mirror.com
+export HF_TOKEN=your_token_here  # Only for gated models
+export HF_HOME=/path/to/cache  # Optional: custom cache directory
+
+# Start the service - models download automatically
+# Environment variables are automatically passed to the container
+vllm-sr serve
 ```
-
-For complete CLI documentation, see [src/semantic-router/cmd/vsr/README.md](src/semantic-router/cmd/vsr/README.md) or [Quick Start Guide](src/semantic-router/cmd/vsr/QUICKSTART.md).
-
-### Using Quickstart Script
-
-Alternatively, get up and running in seconds with our interactive setup script:
-
-```bash
-bash ./scripts/quickstart.sh
-```
-
-This command will:
-
-- 🔍 Check all prerequisites automatically
-- 📦 Install HuggingFace CLI if needed
-- 📥 Download all required AI models (~1.5GB)
-- 🐳 Start all Docker services
-- ⏳ Wait for services to become healthy
-- 🌐 Show you all the endpoints and next steps
-
-For detailed installation and configuration instructions, see the [Complete Documentation](https://vllm-semantic-router.com/docs/installation/).
 
 ## Documentation 📖
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:
 
-**👉 [Complete Documentation at Read the Docs](https://vllm-semantic-router.com/)**
+Complete Documentation at Read the **[Docs](https://vllm-semantic-router.com/)**
 
 The documentation includes:
 

@@ -19,52 +19,37 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Overview',
       items: [
+        'overview/goals',
         'overview/semantic-router-overview',
-        'overview/mixture-of-models',
-        'overview/dashboard',
-        {
-          type: 'category',
-          label: 'Architecture',
-          items: [
-            'overview/architecture/system-architecture',
-            'overview/architecture/gateway-integrations',
-            'overview/architecture/envoy-extproc',
-            'overview/architecture/router-implementation',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Categories',
-          items: [
-            'overview/categories/overview',
-            'overview/categories/supported-categories',
-            'overview/categories/configuration',
-            'overview/categories/keyword-configuration',
-            'overview/categories/technical-details',
-          ],
-        },
+        'overview/collective-intelligence',
+        'overview/signal-driven-decisions',
+        'overview/mom-model-family',
       ],
     },
     {
       type: 'category',
       label: 'Installation',
       items: [
+        'installation/installation',
         {
           type: 'category',
-          label: 'Kubernetes',
+          label: 'Intall with Gateways',
           items: [
             'installation/k8s/ai-gateway',
-            'installation/k8s/production-stack',
-            'installation/k8s/aibrix',
-            'installation/k8s/gateway-api-inference-extension',
             'installation/k8s/istio',
-            'installation/k8s/llm-d',
-            'installation/milvus',
+            'installation/k8s/gateway-api-inference-extension',
           ],
         },
-        'installation/docker-compose',
-        'installation/installation',
-        'installation/configuration',
+        {
+          type: 'category',
+          label: 'Intall with Frameworks',
+          items: [
+            'installation/k8s/production-stack',
+            'installation/k8s/aibrix',
+            'installation/k8s/llm-d',
+            'installation/k8s/dynamo',
+          ],
+        },
       ],
     },
     {
@@ -75,9 +60,12 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Intelligent Route',
           items: [
-            'tutorials/intelligent-route/domain-routing',
-            'tutorials/intelligent-route/embedding-routing',
             'tutorials/intelligent-route/keyword-routing',
+            'tutorials/intelligent-route/embedding-routing',
+            'tutorials/intelligent-route/domain-routing',
+            'tutorials/intelligent-route/fact-check-routing',
+            'tutorials/intelligent-route/user-feedback-routing',
+            'tutorials/intelligent-route/preference-routing',
             'tutorials/intelligent-route/mcp-routing',
             'tutorials/intelligent-route/lora-routing',
             'tutorials/intelligent-route/router-memory',
@@ -87,7 +75,6 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Semantic Cache',
           items: [
-            'tutorials/semantic-cache/overview',
             'tutorials/semantic-cache/in-memory-cache',
             'tutorials/semantic-cache/redis-cache',
             'tutorials/semantic-cache/milvus-cache',
@@ -98,34 +85,18 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Content Safety',
           items: [
-            'tutorials/content-safety/overview',
             'tutorials/content-safety/pii-detection',
             'tutorials/content-safety/jailbreak-protection',
+            'tutorials/content-safety/hallucination-detection',
           ],
         },
         {
           type: 'category',
           label: 'Observability',
           items: [
-            'tutorials/observability/overview',
             'tutorials/observability/metrics',
+            'tutorials/observability/dashboard',
             'tutorials/observability/distributed-tracing',
-            'tutorials/observability/open-webui-integration',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Integration',
-          items: [
-            'tutorials/integration/production-stack-integration',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'MCP Classification',
-          items: [
-            'tutorials/mcp-classification/overview',
-            'tutorials/mcp-classification/protocol',
           ],
         },
       ],
@@ -152,7 +123,6 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Cookbook',
       items: [
-        'cookbook/categories-configuration',
         'cookbook/classifier-tuning',
         'cookbook/pii-policy',
         'cookbook/vllm-endpoints',

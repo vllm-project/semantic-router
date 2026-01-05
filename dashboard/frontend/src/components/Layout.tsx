@@ -53,17 +53,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         </div>
         <nav className={styles.nav}>
           <NavLink
-            to="/huggingchat"
-            className={({ isActive }) =>
-              isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-            }
-            title="HuggingChat"
-          >
-            <span className={styles.navIcon}>🤗</span>
-            {!sidebarCollapsed && <span className={styles.navText}>HuggingChat</span>}
-          </NavLink>
-
-          <NavLink
             to="/playground"
             className={({ isActive }) =>
               isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
@@ -131,6 +120,28 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
           >
             <span className={styles.navIcon}>🔎</span>
             {!sidebarCollapsed && <span className={styles.navText}>Tracing</span>}
+          </NavLink>
+
+          <NavLink
+            to="/status"
+            className={({ isActive }) =>
+              isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+            }
+            title="Status"
+          >
+            <span className={styles.navIcon}>🩺</span>
+            {!sidebarCollapsed && <span className={styles.navText}>Status</span>}
+          </NavLink>
+
+          <NavLink
+            to="/logs"
+            className={({ isActive }) =>
+              isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+            }
+            title="Logs"
+          >
+            <span className={styles.navIcon}>📜</span>
+            {!sidebarCollapsed && <span className={styles.navText}>Logs</span>}
           </NavLink>
         </nav>
         <div className={styles.sidebarFooter}>

@@ -174,11 +174,8 @@ oc get routes -n $NAMESPACE
 ### View Logs
 
 ```bash
-# Router logs
+# Router logs (models are downloaded automatically at startup)
 oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
-
-# Model download logs (init container)
-oc logs -l app=semantic-router -c model-downloader -n $NAMESPACE
 
 # Envoy logs
 oc logs -l app=semantic-router -c envoy-proxy -n $NAMESPACE -f

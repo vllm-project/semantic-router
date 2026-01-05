@@ -44,7 +44,7 @@ echo "  Output:      ${OUTPUT_DIR}"
 echo ""
 
 # Build command
-CMD="python -m vllm_semantic_router_bench.reasoning_mode_eval \
+CMD="python -m reasoning.reasoning_mode_eval \
     --datasets ${DATASETS} \
     --endpoint ${VLLM_ENDPOINT} \
     --api-key ${VLLM_API_KEY} \

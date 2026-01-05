@@ -197,8 +197,8 @@ impl Default for EmbeddingConfig {
             gemma_batch_size: 16,
             // Maximum sequence length: 32K for Qwen3, 8K for Gemma
             max_sequence_length: 32768,
-            // Enable performance tracking by default
-            enable_performance_tracking: true,
+            // Disable performance tracking by default to reduce log noise
+            enable_performance_tracking: false,
         }
     }
 }

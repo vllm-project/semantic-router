@@ -20,6 +20,10 @@ pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
 static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+// Feedback detector classifier (exported for use in classify.rs)
+pub static FEEDBACK_DETECTOR_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
 // DeBERTa v3 jailbreak/prompt injection classifier (exported for use in classify.rs)
 pub static DEBERTA_JAILBREAK_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier>,
@@ -270,8 +274,6 @@ pub extern "C" fn init_jailbreak_classifier(
 
     match model_type {
         ModelType::LoRA => {
-            eprintln!("🔍 Detected LoRA model for jailbreak classification");
-
             // Check if already initialized
             if LORA_JAILBREAK_CLASSIFIER.get().is_some() {
                 return true; // Already initialized, return success
@@ -281,10 +283,7 @@ pub extern "C" fn init_jailbreak_classifier(
             match crate::classifiers::lora::security_lora::SecurityLoRAClassifier::new(
                 model_path, use_cpu,
             ) {
-                Ok(classifier) => {
-                    eprintln!("✅ LoRA jailbreak classifier initialized successfully");
-                    LORA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok()
-                }
+                Ok(classifier) => LORA_JAILBREAK_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
                 Err(e) => {
                     eprintln!(
                         "  ERROR: Failed to initialize LoRA jailbreak classifier: {}",
@@ -483,6 +482,60 @@ pub extern "C" fn init_fact_check_classifier(model_id: *const c_char, use_cpu: b
         }
         Err(e) => {
             eprintln!("Failed to initialize fact-check classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize ModernBERT feedback detector classifier
+///
+/// This initializes the feedback-detector ModernBERT model for classifying
+/// user feedback from follow-up messages.
+///
+/// Model outputs:
+/// - 0: SAT (satisfied)
+/// - 1: NEED_CLARIFICATION
+/// - 2: WRONG_ANSWER
+/// - 3: WANT_DIFFERENT
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+/// - Caller must ensure proper memory management
+///
+/// # Returns
+/// `true` if initialization succeeds, `false` otherwise
+#[no_mangle]
+pub extern "C" fn init_feedback_detector(model_id: *const c_char, use_cpu: bool) -> bool {
+    // Check if already initialized - return true if so (idempotent)
+    if FEEDBACK_DETECTOR_CLASSIFIER.get().is_some() {
+        println!("✓ Feedback detector already initialized");
+        return true;
+    }
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    println!("🔧 Initializing feedback detector: {}", model_id);
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
+        Ok(model) => {
+            match FEEDBACK_DETECTOR_CLASSIFIER.set(Arc::new(model)) {
+                Ok(_) => {
+                    println!("✓ Feedback detector initialized successfully");
+                    true
+                }
+                Err(_) => {
+                    println!("✓ Feedback detector already initialized (race condition)");
+                    true
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to initialize feedback detector: {}", e);
             false
         }
     }

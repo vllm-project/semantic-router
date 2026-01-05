@@ -41,6 +41,8 @@ extern bool init_deberta_jailbreak_classifier(const char* model_id, bool use_cpu
 
 extern bool init_fact_check_classifier(const char* model_id, bool use_cpu);
 
+extern bool init_feedback_detector(const char* model_id, bool use_cpu);
+
 extern bool init_modernbert_pii_token_classifier(const char* model_id, bool use_cpu);
 
 // Token classification structures
@@ -233,6 +235,7 @@ extern ModernBertClassificationResult classify_modernbert_pii_text(const char* t
 extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const char* text);
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
+extern ModernBertClassificationResult classify_feedback_text(const char* text);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -409,6 +412,8 @@ var (
 	debertaJailbreakClassifierInitErr     error
 	factCheckClassifierInitOnce           sync.Once
 	factCheckClassifierInitErr            error
+	feedbackDetectorInitOnce              sync.Once
+	feedbackDetectorInitErr               error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -593,21 +598,7 @@ func GetEmbedding(text string, maxLength int) ([]float32, error) {
 	}
 
 	// Convert the C array to a Go slice
-	length := int(result.length)
-	embedding := make([]float32, length)
-
-	if length > 0 {
-		// Create a slice that refers to the C array
-		cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-		// Copy and convert each value
-		for i := 0; i < length; i++ {
-			embedding[i] = float32(cFloats[i])
-		}
-
-		// Free the memory allocated in Rust
-		C.free_embedding(result.data, result.length)
-	}
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return embedding, nil
 }
@@ -685,18 +676,7 @@ func GetEmbeddingSmart(text string, qualityPriority, latencyPriority float32) ([
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return embedding, nil
 }
@@ -780,15 +760,7 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}
 
 	// Convert C array to Go slice
-	length := int(result.length)
-	embedding := make([]float32, length)
-	cArray := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cArray[i])
-	}
-
-	// Free the C memory
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return &EmbeddingOutput{
 		Embedding:        embedding,
@@ -849,12 +821,6 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 	}
 
 	log.Printf("INFO: Embedding models initialized successfully")
-	if qwen3ModelPath != "" {
-		log.Printf("  - Qwen3: %s", qwen3ModelPath)
-	}
-	if gemmaModelPath != "" {
-		log.Printf("  - Gemma: %s", gemmaModelPath)
-	}
 
 	return nil
 }
@@ -915,18 +881,7 @@ func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, 
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	return embedding, nil
 }
@@ -984,18 +939,7 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	// Convert model_type to string
 	var modelType string
@@ -1074,18 +1018,7 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 		return nil, fmt.Errorf("embedding generation returned zero-length result")
 	}
 
-	embedding := make([]float32, length)
-
-	// Create a slice that refers to the C array
-	cFloats := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:length:length]
-
-	// Copy and convert each value
-	for i := 0; i < length; i++ {
-		embedding[i] = float32(cFloats[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(result.data, result.length)
+	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
 	// Convert model_type to string
 	var actualModelType string
@@ -1133,6 +1066,28 @@ type SimilarityOutput struct {
 	Similarity       float32 // Cosine similarity score (-1.0 to 1.0)
 	ModelType        string  // Model used: "qwen3", "gemma", or "unknown"
 	ProcessingTimeMs float32 // Processing time in milliseconds
+}
+
+// cFloatArrayToGoSlice converts a C array of floats to a Go slice and frees the C memory
+func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
+	if data == nil || length == 0 {
+		return nil
+	}
+
+	l := int(length)
+	out := make([]float32, l)
+
+	// Create a slice that refers to the C array
+	cArray := (*[1 << 30]C.float)(unsafe.Pointer(data))[:l:l]
+
+	// Copy and convert each value
+	for i := 0; i < l; i++ {
+		out[i] = float32(cArray[i])
+	}
+
+	// Free the memory allocated in Rust
+	C.free_embedding(data, length)
+	return out
 }
 
 // CalculateEmbeddingSimilarity calculates cosine similarity between two texts using embedding models
@@ -1497,7 +1452,7 @@ func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) erro
 	jailbreakClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to the jailbreak classification model if path is empty
-			modelPath = "./models/jailbreak_classifier_modernbert-base_model"
+			modelPath = "./models/mom-jailbreak-classifier"
 		}
 
 		if numClasses < 2 {
@@ -1704,7 +1659,7 @@ func InitFactCheckClassifier(modelPath string, useCPU bool) error {
 	factCheckClassifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to halugate-sentinel model path
-			modelPath = "./models/halugate-sentinel"
+			modelPath = "./models/mom-halugate-sentinel"
 		}
 
 		log.Printf("Initializing fact-check classifier (halugate-sentinel): %s", modelPath)
@@ -1732,6 +1687,50 @@ func ClassifyFactCheckText(text string) (ClassResult, error) {
 
 	if result.class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify text for fact-checking")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitFeedbackDetector initializes the feedback detector classifier
+// This model determines user satisfaction from follow-up messages.
+// Model outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func InitFeedbackDetector(modelPath string, useCPU bool) error {
+	var err error
+	feedbackDetectorInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default to feedback-detector model path
+			modelPath = "./models/feedback-detector"
+		}
+
+		log.Printf("Initializing feedback detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_feedback_detector(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize feedback detector model")
+		} else {
+			log.Printf("Feedback detector initialized successfully")
+		}
+	})
+	return err
+}
+
+// ClassifyFeedbackText classifies the provided text to determine user feedback type
+// Returns: 0=SAT (satisfied), 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyFeedbackText(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_feedback_text(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify feedback text")
 	}
 
 	return ClassResult{

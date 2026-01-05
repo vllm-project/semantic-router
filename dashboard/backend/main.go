@@ -33,11 +33,8 @@ func main() {
 	if cfg.JaegerURL != "" {
 		log.Printf("Jaeger: %s → /embedded/jaeger/", cfg.JaegerURL)
 	}
-	if cfg.OpenWebUIURL != "" {
-		log.Printf("OpenWebUI: %s → /embedded/openwebui/", cfg.OpenWebUIURL)
-	}
-	if cfg.ChatUIURL != "" {
-		log.Printf("HuggingChat: %s → /embedded/chatui/", cfg.ChatUIURL)
+	if cfg.EnvoyURL != "" {
+		log.Printf("Envoy: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)

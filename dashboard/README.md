@@ -5,7 +5,7 @@ Unified dashboard that brings together Configuration Management, an Interactive 
 ## Goals
 
 - Single landing page for new/existing users
-- Embed Observability (Grafana/Prometheus) and Playground (Open WebUI) via iframes behind a single backend proxy for auth and CORS/CSP control
+- Embed Observability (Grafana/Prometheus) via iframes behind a single backend proxy for auth and CORS/CSP control
 - Read-only configuration viewer powered by the existing Semantic Router Classification API
 - Environment-agnostic: consistent URLs and behavior for local dev, Compose, and K8s
 
@@ -19,8 +19,6 @@ Unified dashboard that brings together Configuration Management, an Interactive 
 - Router metrics and API
   - Metrics at `:9190/metrics` (Prometheus format)
   - Classification API on `:8080` with endpoints like `GET /api/v1`, `GET /config/classification`
-- Open WebUI integration
-  - Pipe in `tools/openwebui-pipe/vllm_semantic_router_pipe.py`
 
 These are sufficient to embed and proxy—no need to duplicate core functionality.
 
@@ -41,7 +39,7 @@ Pages:
 - **Monitoring** (`/monitoring`): Grafana dashboard embedding with custom path input
 - **Config** (`/config`): Real-time configuration viewer with editable panels and save support
 - **Topology** (`/topology`): Visual topology of request flow and model selection using React Flow
-- **Playground** (`/playground`): Open WebUI interface for testing
+- **Playground** (`/playground`): Built-in chat playground for testing
 
 Features:
 
@@ -67,7 +65,6 @@ Config editing:
 - Reverse proxy with auth/cors/csp controls:
   - `GET /embedded/grafana/*` → Grafana
   - `GET /embedded/prometheus/*` → Prometheus (optional link-outs)
-  - `GET /embedded/openwebui/*` → Open WebUI (optional)
   - `GET /api/router/*` → Router Classification API (`:8080`)
   - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
   - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (parsed from YAML)
@@ -96,7 +93,7 @@ dashboard/
 │   │   │   ├── LandingPage.tsx     # Welcome page with terminal demo
 │   │   │   ├── MonitoringPage.tsx  # Grafana iframe with path control
 │   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
-│   │   │   ├── PlaygroundPage.tsx  # Open WebUI iframe
+│   │   │   ├── PlaygroundPage.tsx  # Built-in chat playground
 │   │   │   └── *.module.css        # Scoped styles per page
 │   │   ├── App.tsx                 # Root component with routing
 │   │   ├── main.tsx                # Entry point
@@ -125,8 +122,10 @@ Required env vars (with sensible defaults per environment):
 - `TARGET_PROMETHEUS_URL`
 - `TARGET_ROUTER_API_URL` (router `:8080`)
 - `TARGET_ROUTER_METRICS_URL` (router `:9190/metrics`)
-- `TARGET_OPENWEBUI_URL` (optional; enable playground tab only if present)
-  Optional:
+- `TARGET_ENVOY_URL` — Envoy proxy URL for chat completions (e.g., `http://envoy:8801`). Required for Playground chat to work.
+
+Optional:
+
 - `ROUTER_CONFIG_PATH` (default: `../../config/config.yaml`) — path to the router config file used by the config APIs and Tools DB.
 - `DASHBOARD_STATIC_DIR` — override static assets directory (defaults to `../frontend`).
   Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.
@@ -134,7 +133,6 @@ Required env vars (with sensible defaults per environment):
 Recommended upstream settings for embedding:
 
 - Grafana: set `GF_SECURITY_ALLOW_EMBEDDING=true` and prefer `access: proxy` datasource (already configured)
-- Open WebUI: ensure CSP/frame-ancestors allows embedding, or rely on dashboard proxy to strip/override; configure Open WebUI auth/session to work under proxied path
 
 ## URL strategy (stable, user-facing)
 
@@ -142,7 +140,7 @@ Recommended upstream settings for embedding:
 - Monitoring tab: iframe `src="/embedded/grafana/d/<dashboard-uid>?kiosk&theme=light"`
 - Config tab: frontend fetch `GET /api/router/config/all` (demo edit modals; see note above)
 - Topology tab: client fetch of `GET /api/router/config/all` to render the flow graph
-- Playground tab: iframe `src="/embedded/openwebui/"` (rendered only if `TARGET_OPENWEBUI_URL` is set)
+- Playground tab: built-in chat UI calling the router API (`POST /api/router/v1/chat/completions`)
 
 ## Deployment matrix
 
@@ -155,7 +153,6 @@ Recommended upstream settings for embedding:
   - `TARGET_PROMETHEUS_URL=http://localhost:9090`
   - `TARGET_ROUTER_API_URL=http://localhost:8080`
   - `TARGET_ROUTER_METRICS_URL=http://localhost:9190/metrics`
-  - `TARGET_OPENWEBUI_URL=http://localhost:3001` (if running)
 
 2. Docker Compose (all-in-one)
 
@@ -165,7 +162,6 @@ Recommended upstream settings for embedding:
   - `TARGET_PROMETHEUS_URL=http://prometheus:9090`
   - `TARGET_ROUTER_API_URL=http://semantic-router:8080`
   - `TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics`
-  - `TARGET_OPENWEBUI_URL=http://openwebui:8080` (if included)
 
 3. Kubernetes
 
@@ -176,14 +172,13 @@ Recommended upstream settings for embedding:
   - `TARGET_PROMETHEUS_URL=http://prometheus.<ns>.svc.cluster.local:9090`
   - `TARGET_ROUTER_API_URL=http://semantic-router.<ns>.svc.cluster.local:8080`
   - `TARGET_ROUTER_METRICS_URL=http://semantic-router.<ns>.svc.cluster.local:9190/metrics`
-  - `TARGET_OPENWEBUI_URL=http://openwebui.<ns>.svc.cluster.local:8080` (if installed)
 - Expose the dashboard via Ingress/Gateway to the outside; upstreams remain ClusterIP
 
 ## Security & access control
 
 - MVP: bearer token/JWT support via `Authorization: Bearer <token>` in requests to `/api/router/*` (forwarded to router API)
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only
-- Future: OIDC login on dashboard, session cookie, and per-route RBAC; signed proxy sessions to Grafana/Open WebUI
+- Future: OIDC login on dashboard, session cookie, and per-route RBAC; signed proxy sessions to embedded services
 
 Write access warning for config updates:
 
@@ -199,7 +194,7 @@ Write access warning for config updates:
 ## Implementation notes
 
 — Backend: Go server with reverse proxies for `/embedded/*` and `/api/router/*`, plus `/api/router/config/all`
-— Frontend: SPA with three tabs and iframes + structured config viewer
+— Frontend: SPA with embedded observability + built-in chat playground + structured config viewer
 — K8s manifests: Deployment + Service + ConfigMap; optional Ingress (add per cluster)
 — Future: OIDC, per-route RBAC, metrics summary endpoint
 

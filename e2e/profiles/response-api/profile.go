@@ -120,7 +120,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 			"image.tag":        imageTag,
 		},
 		Wait:    true,
-		Timeout: "300s",
+		Timeout: "30m",
 	})
 }
 
@@ -156,7 +156,7 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 }
 
 func (p *Profile) waitForDeployment(ctx context.Context, client *kubernetes.Clientset, namespace, name string) error {
-	timeout := 5 * time.Minute
+	timeout := 30 * time.Minute
 	interval := 5 * time.Second
 	deadline := time.Now().Add(timeout)
 

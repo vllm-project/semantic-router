@@ -14,7 +14,7 @@ func getHalugateSentinelModelPath() string {
 		return path
 	}
 	// Default path - relative to pkg/classification directory (test working dir)
-	return "../../../../models/halugate-sentinel"
+	return "../../../../models/mom-halugate-sentinel"
 }
 
 // skipIfNoFactCheckModel skips the test if the halugate-sentinel model is not available
