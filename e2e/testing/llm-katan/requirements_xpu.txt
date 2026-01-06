@@ -1,0 +1,26 @@
+# Core dependencies for yLLM
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+transformers>=4.35.0
+click>=8.0.0
+pydantic>=2.0.0
+numpy>=1.21.0
+
+
+
+# torch dependency
+--extra-index-url=https://download.pytorch.org/whl/xpu
+torch==2.9.0+xpu
+# may need oneapi packages
+
+# Optional dependencies
+# Uncomment for vLLM support:
+# vllm>=0.2.0
+
+# Development dependencies
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
+# httpx>=0.24.0
+# black>=23.0.0
+# isort>=5.12.0
+# flake8>=6.0.0

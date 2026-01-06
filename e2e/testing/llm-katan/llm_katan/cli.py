@@ -80,7 +80,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--device",
     "-d",
-    type=click.Choice(["auto", "cpu", "cuda"], case_sensitive=False),
+    type=click.Choice(["auto", "cpu", "cuda", "xpu"], case_sensitive=False),
     default="auto",
     help="Device to use (default: auto)",
 )

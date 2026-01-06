@@ -41,6 +41,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+xpu = [
+    "torch==2.9.0+xpu",
+]
 vllm = [
     "vllm>=0.2.0",
 ]
