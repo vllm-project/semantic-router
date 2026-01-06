@@ -17,6 +17,18 @@ const (
 	// MemoryTypeEpisodic represents session summaries, past events
 	// Example: "On Dec 29 2024, user planned Hawaii vacation with $10K budget"
 	MemoryTypeEpisodic MemoryType = "episodic"
+
+	// MemoryTypeConversation represents conversation memory
+	MemoryTypeConversation MemoryType = "conversation"
+
+	// MemoryTypeFact represents fact memory
+	MemoryTypeFact MemoryType = "fact"
+
+	// MemoryTypeContext represents context memory
+	MemoryTypeContext MemoryType = "context"
+
+	// MemoryTypeUser represents user-specific memory
+	MemoryTypeUser MemoryType = "user"
 )
 
 // Memory represents a stored memory unit in the agentic memory system
@@ -56,34 +68,79 @@ type Memory struct {
 	Importance float32 `json:"importance"`
 }
 
-// RetrieveResult represents a memory retrieved from search with its relevance score
-type RetrieveResult struct {
-	// Memory is the retrieved memory
-	Memory *Memory `json:"memory"`
-
-	// Score is the similarity score (0.0 to 1.0, higher = more relevant)
-	Score float32 `json:"score"`
-}
-
 // RetrieveOptions configures memory retrieval
+//
+//	Query is the search query (will be embedded for vector search)
+//	UserID filters memories to this user only
+//	ProjectID optionally filters to a specific project
+//	Types optionally filters to specific memory types
+//	Limit is the maximum number of results to return (default: 5)
+//	Threshold is the minimum similarity score (default: 0.6)
 type RetrieveOptions struct {
-	// Query is the search query (will be embedded for vector search)
+	// Query is the search query text
 	Query string
 
-	// UserID filters memories to this user only
+	// UserID is the user identifier for filtering
 	UserID string
 
 	// ProjectID optionally filters to a specific project
 	ProjectID string
 
-	// Types optionally filters to specific memory types
+	// Types is an optional filter for memory types
 	Types []MemoryType
 
-	// Limit is the maximum number of results to return
+	// Limit is the maximum number of results to return (default: 5)
 	Limit int
 
-	// Threshold is the minimum similarity score (0.0 to 1.0)
+	// Threshold is the minimum similarity score (default: 0.6)
 	Threshold float32
+}
+
+// MemoryConfig contains configuration for memory operations
+//
+//	Embedding contains embedding model configuration
+//	DefaultRetrievalLimit is the default limit for retrieval (default: 5)
+//	DefaultSimilarityThreshold is the default similarity threshold (default: 0.6)
+type MemoryConfig struct {
+	Embedding                  EmbeddingConfig `yaml:"embedding"`
+	DefaultRetrievalLimit      int             `yaml:"default_retrieval_limit"`
+	DefaultSimilarityThreshold float32         `yaml:"default_similarity_threshold"`
+}
+
+// EmbeddingConfig contains configuration for embedding generation
+//
+//	Model is the embedding model name (default: "all-MiniLM-L6-v2")
+//	Dimension is the embedding dimension (default: 384 for all-MiniLM-L6-v2)
+type EmbeddingConfig struct {
+	Model     string `yaml:"model"`
+	Dimension int    `yaml:"dimension"`
+}
+
+// DefaultMemoryConfig returns a default memory configuration
+func DefaultMemoryConfig() MemoryConfig {
+	return MemoryConfig{
+		Embedding: EmbeddingConfig{
+			Model:     "all-MiniLM-L6-v2",
+			Dimension: 384,
+		},
+		DefaultRetrievalLimit:      5,
+		DefaultSimilarityThreshold: 0.6,
+	}
+}
+
+// RetrieveResult represents a single memory retrieval result
+//
+//	ID is the unique identifier of the memory entry
+//	Content is the content of the memory entry
+//	Type is the type of memory
+//	Similarity is the similarity score (0.0 to 1.0)
+//	Metadata contains additional metadata
+type RetrieveResult struct {
+	ID         string
+	Content    string
+	Type       MemoryType
+	Similarity float32
+	Metadata   map[string]interface{}
 }
 
 // MemoryScope defines the scope for bulk operations (e.g., ForgetByScope)
