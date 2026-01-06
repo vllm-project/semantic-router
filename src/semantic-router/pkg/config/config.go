@@ -725,6 +725,9 @@ type MemoryConfig struct {
 	// Embedding configuration for memory retrieval
 	Embedding MemoryEmbeddingConfig `yaml:"embedding,omitempty"`
 
+	// Fact extraction configuration
+	Extraction ExtractionConfig `yaml:"extraction"`
+
 	// Default retrieval limit (max number of results to return)
 	// Default: 5
 	DefaultRetrievalLimit int `yaml:"default_retrieval_limit,omitempty"`
@@ -762,6 +765,31 @@ type QueryRewriteConfig struct {
 
 	// Timeout in seconds for LLM request (default: 5)
 	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
+}
+
+// ExtractionConfig holds configuration for LLM-based fact extraction from conversations.
+// Facts are extracted from conversation history and stored in long-term memory.
+type ExtractionConfig struct {
+	// Enable fact extraction
+	Enabled bool `yaml:"enabled"`
+
+	// LLM endpoint for fact extraction (e.g., "http://localhost:8080")
+	Endpoint string `yaml:"endpoint"`
+
+	// Model to use for extraction (e.g., "qwen3-7b")
+	Model string `yaml:"model"`
+
+	// Maximum tokens for extracted facts (default: 500)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+
+	// Temperature for LLM generation (default: 0.1)
+	Temperature float64 `yaml:"temperature,omitempty"`
+
+	// Timeout in seconds for LLM request (default: 30)
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
+
+	// BatchSize is the number of turns between extraction runs (default: 10)
+	BatchSize int `yaml:"batch_size,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.

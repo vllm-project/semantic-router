@@ -6,22 +6,39 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// MemoryType represents the category of a memory
+// MemoryType represents the category of a memory in the agentic memory system.
 type MemoryType string
 
 const (
-	// MemoryTypeSemantic represents facts, preferences, knowledge
+	// MemoryTypeSemantic represents facts, preferences, knowledge.
 	// Example: "User's budget for Hawaii is $10,000"
 	MemoryTypeSemantic MemoryType = "semantic"
 
-	// MemoryTypeProcedural represents instructions, how-to, steps
+	// MemoryTypeProcedural represents instructions, how-to, steps.
 	// Example: "To deploy payment-service: run npm build, then docker push"
 	MemoryTypeProcedural MemoryType = "procedural"
 
-	// MemoryTypeEpisodic represents session summaries, past events
+	// MemoryTypeEpisodic represents session summaries, past events.
 	// Example: "On Dec 29 2024, user planned Hawaii vacation with $10K budget"
 	MemoryTypeEpisodic MemoryType = "episodic"
 )
+
+// ExtractedFact represents a fact extracted by the LLM from conversation.
+// This is the output of ExtractFacts().
+type ExtractedFact struct {
+	// Type is the category (semantic, procedural, episodic)
+	Type MemoryType `json:"type"`
+
+	// Content is the extracted fact with context.
+	// Should be self-contained: "budget for Hawaii is $10K" not just "$10K"
+	Content string `json:"content"`
+}
+
+// Message represents a conversation message used for fact extraction.
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
 
 // Memory represents a stored memory unit in the agentic memory system
 type Memory struct {
