@@ -149,6 +149,7 @@ def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
     log.info("✓ vLLM Semantic Router is running!")
     log.info("")
     log.info("Endpoints:")
+    log.info(f"  • Dashboard: http://localhost:8700")
     for listener in listeners:
         name = listener.get("name", "unknown")
         port = listener.get("port", "unknown")
@@ -156,8 +157,9 @@ def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
     log.info(f"  • Metrics: http://localhost:9190/metrics")
     log.info("")
     log.info("Commands:")
-    log.info("  • vllm-sr logs <envoy|router> [-f]")
-    log.info("  • vllm-sr status [envoy|router|all]")
+    log.info("  • vllm-sr dashboard              Open dashboard in browser")
+    log.info("  • vllm-sr logs <envoy|router|dashboard> [-f]")
+    log.info("  • vllm-sr status [envoy|router|dashboard|all]")
     log.info("  • vllm-sr stop")
     log.info("=" * 60)
 
@@ -199,12 +201,12 @@ def show_logs(service: str, follow: bool = False):
     Show logs from vLLM Semantic Router service.
 
     Args:
-        service: Service to show logs for ('envoy' or 'router')
+        service: Service to show logs for ('envoy', 'router', or 'dashboard')
         follow: Whether to follow log output
     """
-    if service not in ["envoy", "router"]:
+    if service not in ["envoy", "router", "dashboard"]:
         log.error(f"Invalid service: {service}")
-        log.error("Must be 'envoy' or 'router'")
+        log.error("Must be 'envoy', 'router', or 'dashboard'")
         sys.exit(1)
 
     status = docker_container_status(VLLM_SR_DOCKER_NAME)
@@ -221,6 +223,11 @@ def show_logs(service: str, follow: bool = False):
         # Match router-specific logs: Go router logs contain "caller" field in JSON
         # Also include supervisor messages about router and CLI logs
         grep_pattern = r'"caller"|spawned: \'router\'|success: router|cli\.commands'
+    elif service == "dashboard":
+        # Match dashboard-specific logs
+        grep_pattern = (
+            r"dashboard|Dashboard|spawned: \'dashboard\'|success: dashboard|:8700"
+        )
     else:  # envoy
         # Match envoy-specific logs: envoy log format [timestamp][level]
         # Also include supervisor messages about envoy
@@ -307,6 +314,20 @@ def show_status(service: str = "all"):
         except Exception as e:
             log.error(f"Failed to check envoy status: {e}")
 
+    # Check dashboard status
+    if service in ["all", "dashboard"]:
+        try:
+            # Check if dashboard is responding - look for "dashboard entered RUNNING"
+            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'dashboard entered RUNNING' | tail -1"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.stdout.strip():
+                log.info("✓ Dashboard: Running (http://localhost:8700)")
+            else:
+                log.info("⚠ Dashboard: Status unknown (check logs)")
+        except Exception as e:
+            log.error(f"Failed to check dashboard status: {e}")
+
     log.info("")
-    log.info("For detailed logs: vllm-sr logs <envoy|router>")
+    log.info("For detailed logs: vllm-sr logs <envoy|router|dashboard>")
     log.info("=" * 60)

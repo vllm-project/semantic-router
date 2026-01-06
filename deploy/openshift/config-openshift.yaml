@@ -61,7 +61,7 @@ classifier:
     use_modernbert: true
     threshold: 0.7
     use_cpu: true
-    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
 
 # Categories - now only contain metadata for domain classification
 categories:

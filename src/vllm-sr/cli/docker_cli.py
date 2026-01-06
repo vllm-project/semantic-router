@@ -268,6 +268,8 @@ def docker_start_vllm_sr(
             "50051:50051",  # Router gRPC port (internal)
             "-p",
             "9190:9190",  # Metrics port
+            "-p",
+            "8700:8700",  # Dashboard UI
             # Note: 8080 (Router API) is not exposed by default
             # Health checks are done inside the container via docker exec
         ]

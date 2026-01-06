@@ -9,7 +9,7 @@ GitHub: https://github.com/vllm-project/semantic-router
 ### Installation
 
 ```bash
-# Install from PyPI (when published)
+# Install from PyPI
 pip install vllm-sr
 
 # Or install from source (development)
@@ -23,11 +23,16 @@ pip install -e .
 # Initialize vLLM Semantic Router Configuration
 vllm-sr init
 
-# Start with config
-vllm-sr serve config.yaml
+# Start the router (includes dashboard)
+vllm-sr serve
+
+# Open dashboard in browser
+vllm-sr dashboard
 
 # View logs
-vllm-sr logs
+vllm-sr logs router
+vllm-sr logs envoy
+vllm-sr logs dashboard
 
 # Check status
 vllm-sr status
@@ -35,6 +40,26 @@ vllm-sr status
 # Stop
 vllm-sr stop
 ```
+
+## Features
+
+- **Router**: Intelligent request routing based on intent classification
+- **Envoy Proxy**: High-performance proxy with ext_proc integration
+- **Dashboard**: Web UI for monitoring and testing (http://localhost:8700)
+- **Metrics**: Prometheus metrics endpoint (http://localhost:9190/metrics)
+
+## Endpoints
+
+After running `vllm-sr serve`, the following endpoints are available:
+
+| Endpoint | Port | Description |
+|----------|------|-------------|
+| Dashboard | 8700 | Web UI for monitoring and Playground |
+| API | 8888* | Chat completions API (configurable in config.yaml) |
+| Metrics | 9190 | Prometheus metrics |
+| gRPC | 50051 | Router gRPC (internal) |
+
+*Default port, configurable via `listeners` in config.yaml
 
 ## License
 

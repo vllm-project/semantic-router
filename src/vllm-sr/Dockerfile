@@ -10,6 +10,36 @@ RUN cargo build --release --no-default-features && \
     find target -name "*.so" -type f && \
     ls -la target/release/
 
+# Stage 1b: Build dashboard frontend with Node.js
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
+RUN npm ci --include=dev
+COPY dashboard/frontend/ ./
+RUN npm run build
+
+# Stage 1c: Build dashboard backend with Go
+# Note: dashboard/backend/go.mod has a replace directive for src/semantic-router
+FROM golang:1.24 AS dashboard-builder
+WORKDIR /app
+
+# Use Go proxy for reliable downloads
+ENV GOPROXY=https://proxy.golang.org,direct
+
+# Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
+COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
+COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+
+# Copy go.mod and go.sum first for better caching
+COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
+WORKDIR /app/dashboard/backend
+RUN go mod download
+
+# Copy source code and build
+COPY dashboard/backend/ /app/dashboard/backend/
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go
+
 # Stage 2: Build Go semantic router
 FROM golang:1.24 AS go-builder
 WORKDIR /build
@@ -48,6 +78,8 @@ RUN set -eux; \
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
+COPY --from=frontend-builder /app/frontend/dist /app/frontend
 
 # Set library path
 ENV LD_LIBRARY_PATH=/usr/local/lib
@@ -68,7 +100,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy start scripts
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
-RUN chmod +x /app/start-router.sh
+COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
+RUN chmod +x /app/start-router.sh /app/start-dashboard.sh
 
 # Copy supervisord configuration
 COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -81,7 +114,8 @@ RUN touch /var/log/envoy_access.log /var/log/supervisor/supervisord.log
 # 50051: Router gRPC (ExtProc)
 # 9190: Prometheus metrics
 # 9901: Envoy admin
-EXPOSE 50051 9190 9901
+# 8700: Dashboard UI
+EXPOSE 50051 9190 9901 8700
 
 # Volume for model cache
 # Mount host's ./models directory to persist downloaded models
