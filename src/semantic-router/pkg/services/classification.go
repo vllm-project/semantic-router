@@ -415,8 +415,40 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 
 // Helper methods
 func (s *ClassificationService) getRecommendedModel(category string, _ float64) string {
-	// TODO: Implement model recommendation logic based on category
-	return fmt.Sprintf("%s-specialized-model", category)
+	// Use classifier's existing logic if available
+	if s.classifier != nil {
+		model := s.classifier.SelectBestModelForCategory(category)
+		if model != "" {
+			return model
+		}
+	}
+
+	// Fallback: Access config directly to find decision and model
+	if s.config != nil {
+		// Find decision by category name (case-insensitive)
+		for _, decision := range s.config.IntelligentRouting.Decisions {
+			if strings.EqualFold(decision.Name, category) {
+				// Get first model from ModelRefs
+				if len(decision.ModelRefs) > 0 {
+					modelRef := decision.ModelRefs[0]
+					// Use LoRA name if specified, otherwise base model
+					if modelRef.LoRAName != "" {
+						return modelRef.LoRAName
+					}
+					return modelRef.Model
+				}
+				break
+			}
+		}
+
+		// Fallback to default model if no decision found
+		if s.config.BackendModels.DefaultModel != "" {
+			return s.config.BackendModels.DefaultModel
+		}
+	}
+
+	// Return empty string if no recommendation available
+	return ""
 }
 
 func (s *ClassificationService) getRoutingDecision(confidence float64, options *IntentOptions) string {

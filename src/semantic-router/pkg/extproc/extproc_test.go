@@ -28,6 +28,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
@@ -551,6 +553,12 @@ func CreateTestConfig() *config.RouterConfig {
 				FallbackToEmpty: true,
 			},
 		},
+		ResponseAPI: config.ResponseAPIConfig{
+			Enabled:      true,
+			StoreBackend: "memory",
+			MaxResponses: 100,
+			TTLSeconds:   86400,
+		},
 	}
 }
 
@@ -621,6 +629,13 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	// Create PII checker
 	piiChecker := pii.NewPolicyChecker(cfg)
 
+	// Create Response API filter if enabled
+	var responseAPIFilter *ResponseAPIFilter
+	if cfg.ResponseAPI.Enabled {
+		mockStore := NewMockResponseStore()
+		responseAPIFilter = NewResponseAPIFilter(mockStore)
+	}
+
 	// Create router manually with proper initialization
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -629,6 +644,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
+		ResponseAPIFilter:    responseAPIFilter,
 	}
 
 	return router, nil
@@ -3716,4 +3732,626 @@ func TestUpstreamStatusIncrements4xx5xxCounters(t *testing.T) {
 	if !(after4xx > before4xx) {
 		t.Fatalf("expected upstream_4xx to increase for model m: before=%v after=%v", before4xx, after4xx)
 	}
+}
+
+// Response API Translation Tests
+// These tests verify the translation between OpenAI Response API and Chat Completions API formats
+
+var _ = Describe("Response API Translation", func() {
+	var (
+		filter    *ResponseAPIFilter
+		mockStore *MockResponseStore
+	)
+
+	BeforeEach(func() {
+		mockStore = NewMockResponseStore()
+		filter = NewResponseAPIFilter(mockStore)
+	})
+
+	Describe("Request Body Translation", func() {
+		It("should translate Response API request to Chat Completions format", func() {
+			// Response API request format
+			responseAPIReq := `{
+				"model": "gpt-4",
+				"input": "Hello, how are you?"
+			}`
+
+			respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(respCtx).NotTo(BeNil())
+			Expect(respCtx.IsResponseAPIRequest).To(BeTrue())
+
+			// Verify translated body is valid Chat Completions format
+			var chatReq map[string]interface{}
+			err = json.Unmarshal(translatedBody, &chatReq)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chatReq["model"]).To(Equal("gpt-4"))
+
+			// Messages should be present
+			messages, ok := chatReq["messages"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(len(messages)).To(BeNumerically(">", 0))
+
+			// First message should be user role
+			firstMsg, ok := messages[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(firstMsg["role"]).To(Equal("user"))
+		})
+
+		It("should include system instructions in translated request", func() {
+			responseAPIReq := `{
+				"model": "gpt-4",
+				"input": "What is 2+2?",
+				"instructions": "You are a math assistant. Always show your work."
+			}`
+
+			respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(respCtx).NotTo(BeNil())
+
+			var chatReq map[string]interface{}
+			err = json.Unmarshal(translatedBody, &chatReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			messages, ok := chatReq["messages"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(len(messages)).To(Equal(2)) // system + user
+
+			// First message should be system
+			firstMsg, ok := messages[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(firstMsg["role"]).To(Equal("system"))
+			Expect(firstMsg["content"]).To(Equal("You are a math assistant. Always show your work."))
+		})
+
+		It("should include conversation history from previous responses", func() {
+			// Create previous response with conversation history
+			previousResp := &responseapi.StoredResponse{
+				ID:        "resp_previous123",
+				CreatedAt: 1234567890,
+				Model:     "gpt-4",
+				Status:    "completed",
+				Input: []responseapi.InputItem{
+					{
+						Type:    "message",
+						Role:    "user",
+						Content: json.RawMessage(`"Hello"`),
+					},
+				},
+				Output: []responseapi.OutputItem{
+					{
+						Type:    "message",
+						Role:    "assistant",
+						Content: []responseapi.ContentPart{{Type: "output_text", Text: "Hi there!"}},
+					},
+				},
+			}
+			mockStore.responses["resp_previous123"] = previousResp
+
+			// Current request with previous_response_id
+			responseAPIReq := `{
+				"model": "gpt-4",
+				"input": "How are you?",
+				"previous_response_id": "resp_previous123"
+			}`
+
+			respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(respCtx).NotTo(BeNil())
+
+			var chatReq map[string]interface{}
+			err = json.Unmarshal(translatedBody, &chatReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			messages, ok := chatReq["messages"].([]interface{})
+			Expect(ok).To(BeTrue())
+			// Should have: user (history), assistant (history), user (current) = 3 messages
+			Expect(len(messages)).To(Equal(3))
+		})
+
+		It("should translate array input to messages", func() {
+			responseAPIReq := `{
+				"model": "gpt-4",
+				"input": [
+					{"type": "message", "role": "user", "content": "Hello"},
+					{"type": "message", "role": "assistant", "content": "Hi!"}
+				]
+			}`
+
+			respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(respCtx).NotTo(BeNil())
+
+			var chatReq map[string]interface{}
+			err = json.Unmarshal(translatedBody, &chatReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			messages, ok := chatReq["messages"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(len(messages)).To(Equal(2))
+		})
+
+		It("should pass through non-Response API requests", func() {
+			// Regular Chat Completions request
+			chatReq := `{
+				"model": "gpt-4",
+				"messages": [{"role": "user", "content": "Hello"}]
+			}`
+
+			respCtx, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(chatReq))
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(respCtx).To(BeNil())
+			Expect(translatedBody).To(BeNil())
+		})
+	})
+
+	Describe("Response Body Translation", func() {
+		It("should translate Chat Completions response to Response API format", func() {
+			// Response API request (needed for context)
+			responseAPIReq := &responseapi.ResponseAPIRequest{
+				Model: "gpt-4",
+				Input: json.RawMessage(`"Test"`),
+			}
+
+			respCtx := &ResponseAPIContext{
+				IsResponseAPIRequest: true,
+				OriginalRequest:      responseAPIReq,
+				PreviousResponseID:   "",
+				GeneratedResponseID:  "resp_new123",
+			}
+
+			// Chat Completions response
+			completionResp := []byte(`{
+				"id": "chatcmpl-abc123",
+				"object": "chat.completion",
+				"created": 1234567890,
+				"model": "gpt-4",
+				"choices": [
+					{
+						"index": 0,
+						"message": {
+							"role": "assistant",
+							"content": "Hello! How can I help you?"
+						},
+						"finish_reason": "stop"
+					}
+				],
+				"usage": {
+					"prompt_tokens": 5,
+					"completion_tokens": 10,
+					"total_tokens": 15
+				}
+			}`)
+
+			translatedBody, err := filter.TranslateResponse(context.Background(), respCtx, completionResp)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(translatedBody).NotTo(BeNil())
+
+			// Verify Response API format
+			var responseAPIResp map[string]interface{}
+			err = json.Unmarshal(translatedBody, &responseAPIResp)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(responseAPIResp["object"]).To(Equal("response"))
+			Expect(responseAPIResp["status"]).To(Equal("completed"))
+
+			// Verify output items
+			output, ok := responseAPIResp["output"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(len(output)).To(BeNumerically(">", 0))
+
+			firstOutput, ok := output[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(firstOutput["type"]).To(Equal("message"))
+
+			// Verify usage
+			usage, ok := responseAPIResp["usage"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(usage["input_tokens"]).To(Equal(float64(5)))
+			Expect(usage["output_tokens"]).To(Equal(float64(10)))
+		})
+
+		It("should translate tool calls in response", func() {
+			responseAPIReq := &responseapi.ResponseAPIRequest{
+				Model: "gpt-4",
+				Input: json.RawMessage(`"What's the weather?"`),
+			}
+
+			respCtx := &ResponseAPIContext{
+				IsResponseAPIRequest: true,
+				OriginalRequest:      responseAPIReq,
+			}
+
+			completionResp := []byte(`{
+				"id": "chatcmpl-abc456",
+				"object": "chat.completion",
+				"created": 1234567890,
+				"model": "gpt-4",
+				"choices": [
+					{
+						"index": 0,
+						"message": {
+							"role": "assistant",
+							"content": null,
+							"tool_calls": [
+								{
+									"id": "call_123",
+									"type": "function",
+									"function": {
+										"name": "get_weather",
+										"arguments": "{\"location\": \"San Francisco\"}"
+									}
+								}
+							]
+						},
+						"finish_reason": "tool_calls"
+					}
+				]
+			}`)
+
+			translatedBody, err := filter.TranslateResponse(context.Background(), respCtx, completionResp)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(translatedBody).NotTo(BeNil())
+
+			var responseAPIResp map[string]interface{}
+			err = json.Unmarshal(translatedBody, &responseAPIResp)
+			Expect(err).NotTo(HaveOccurred())
+
+			output, ok := responseAPIResp["output"].([]interface{})
+			Expect(ok).To(BeTrue())
+
+			// First output should be function_call
+			firstOutput, ok := output[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(firstOutput["type"]).To(Equal("function_call"))
+			Expect(firstOutput["name"]).To(Equal("get_weather"))
+		})
+
+		It("should pass through error responses unchanged", func() {
+			responseAPIReq := &responseapi.ResponseAPIRequest{
+				Model: "gpt-4",
+				Input: json.RawMessage(`"Test"`),
+			}
+
+			respCtx := &ResponseAPIContext{
+				IsResponseAPIRequest: true,
+				OriginalRequest:      responseAPIReq,
+			}
+
+			errorResp := []byte(`{"error": {"message": "Model not found", "type": "invalid_request_error"}}`)
+
+			translatedBody, err := filter.TranslateResponse(context.Background(), respCtx, errorResp)
+
+			Expect(err).NotTo(HaveOccurred())
+			// Error responses should be passed through unchanged
+			Expect(translatedBody).To(Equal(errorResp))
+		})
+	})
+})
+
+var _ = Describe("Response API Header Rewriting", func() {
+	var router *OpenAIRouter
+	var cfg *config.RouterConfig
+
+	BeforeEach(func() {
+		cfg = CreateTestConfig()
+		var err error
+		router, err = CreateTestRouter(cfg)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should rewrite :path header from /v1/responses to /v1/chat/completions", Pending, func() {
+		// Create a request that mimics a Response API request
+		requests := []*ext_proc.ProcessingRequest{
+			{
+				Request: &ext_proc.ProcessingRequest_RequestHeaders{
+					RequestHeaders: &ext_proc.HttpHeaders{
+						Headers: &core.HeaderMap{
+							Headers: []*core.HeaderValue{
+								{Key: ":path", Value: "/v1/responses"},
+								{Key: ":method", Value: "POST"},
+								{Key: "content-type", Value: "application/json"},
+							},
+						},
+					},
+				},
+			},
+			{
+				Request: &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{
+						Body: []byte(`{"model": "gpt-4", "input": "Hello"}`),
+					},
+				},
+			},
+		}
+
+		stream := NewMockStream(requests)
+		err := router.Process(stream)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify request headers response includes path rewriting
+		Expect(len(stream.Responses)).To(Equal(2))
+
+		headersResp := stream.Responses[0].GetRequestHeaders()
+		Expect(headersResp).NotTo(BeNil())
+
+		// Check for header mutations in the response
+		headerMutation := headersResp.Response.GetHeaderMutation()
+		Expect(headerMutation).NotTo(BeNil())
+
+		// Verify that path header was set to /v1/chat/completions
+		hasChatCompletionsPath := false
+		for _, setHeader := range headerMutation.GetSetHeaders() {
+			if setHeader.GetHeader().GetKey() == ":path" {
+				hasChatCompletionsPath = true
+				Expect(setHeader.GetHeader().GetRawValue()).To(Equal([]byte("/v1/chat/completions")))
+				break
+			}
+		}
+		Expect(hasChatCompletionsPath).To(BeTrue())
+	})
+
+	It("should include translated body in request body response", func() {
+		requests := []*ext_proc.ProcessingRequest{
+			{
+				Request: &ext_proc.ProcessingRequest_RequestHeaders{
+					RequestHeaders: &ext_proc.HttpHeaders{
+						Headers: &core.HeaderMap{
+							Headers: []*core.HeaderValue{
+								{Key: ":path", Value: "/v1/responses"},
+								{Key: ":method", Value: "POST"},
+								{Key: "content-type", Value: "application/json"},
+							},
+						},
+					},
+				},
+			},
+			{
+				Request: &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{
+						Body: []byte(`{"model": "gpt-4", "input": "Hello", "instructions": "Be helpful"}`),
+					},
+				},
+			},
+		}
+
+		stream := NewMockStream(requests)
+		err := router.Process(stream)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify body response includes translated body
+		Expect(len(stream.Responses)).To(Equal(2))
+
+		bodyResp := stream.Responses[1].GetRequestBody()
+		Expect(bodyResp).NotTo(BeNil())
+
+		bodyMutation := bodyResp.Response.GetBodyMutation()
+		Expect(bodyMutation).NotTo(BeNil())
+
+		translatedBody := bodyMutation.GetBody()
+		Expect(translatedBody).NotTo(BeNil())
+
+		// Verify translated body contains Chat Completions format
+		var chatReq map[string]interface{}
+		err = json.Unmarshal(translatedBody, &chatReq)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chatReq["model"]).To(Equal("gpt-4"))
+
+		// Messages should be present (from instructions + input)
+		messages, ok := chatReq["messages"].([]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(len(messages)).To(Equal(2)) // system + user
+	})
+})
+
+var _ = Describe("Response API Content-Length Recalculation", func() {
+	var router *OpenAIRouter
+	var cfg *config.RouterConfig
+
+	BeforeEach(func() {
+		cfg = CreateTestConfig()
+		var err error
+		router, err = CreateTestRouter(cfg)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should remove content-length header when response body is modified", func() {
+		// Simulate processing a Response API request and receiving a Chat Completions response
+		ctx := &RequestContext{
+			RequestID: "test-req-123",
+			ResponseAPICtx: &ResponseAPIContext{
+				IsResponseAPIRequest: true,
+				OriginalRequest: &responseapi.ResponseAPIRequest{
+					Model: "gpt-4",
+					Input: json.RawMessage(`"Test"`),
+				},
+				GeneratedResponseID: "resp_new123",
+			},
+		}
+
+		// Chat Completions response (will be translated to Response API format)
+		completionResp := []byte(`{
+			"id": "chatcmpl-abc123",
+			"object": "chat.completion",
+			"created": 1234567890,
+			"model": "gpt-4",
+			"choices": [{"message": {"role": "assistant", "content": "Response"}}],
+			"usage": {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
+		}`)
+
+		responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
+			ResponseBody: &ext_proc.HttpBody{Body: completionResp},
+		}
+
+		response, err := router.HandleResponseBody(responseBodyReq, ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify content-length header is removed from response
+		bodyResponse := response.GetResponseBody()
+		Expect(bodyResponse).NotTo(BeNil())
+
+		headerMutation := bodyResponse.Response.GetHeaderMutation()
+		Expect(headerMutation).NotTo(BeNil())
+
+		// content-length should be in the remove headers list
+		removedHeaders := headerMutation.GetRemoveHeaders()
+		Expect(removedHeaders).To(ContainElement("content-length"))
+	})
+
+	It("should recalculate content-length after body translation", func() {
+		ctx := &RequestContext{
+			RequestID: "test-req-456",
+			ResponseAPICtx: &ResponseAPIContext{
+				IsResponseAPIRequest: true,
+				OriginalRequest: &responseapi.ResponseAPIRequest{
+					Model: "gpt-4",
+					Input: json.RawMessage(`"Test message"`),
+				},
+				GeneratedResponseID: "resp_new456",
+			},
+		}
+
+		// Simulate a Chat Completions response
+		completionResp := []byte(`{
+			"id": "chatcmpl-xyz789",
+			"object": "chat.completion",
+			"created": 1234567890,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {"role": "assistant", "content": "This is a translated response from the Response API format"},
+					"finish_reason": "stop"
+				}
+			],
+			"usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
+		}`)
+
+		responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
+			ResponseBody: &ext_proc.HttpBody{Body: completionResp},
+		}
+
+		response, err := router.HandleResponseBody(responseBodyReq, ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Verify the response body is in Response API format
+		bodyResponse := response.GetResponseBody()
+		Expect(bodyResponse).NotTo(BeNil())
+
+		bodyMutation := bodyResponse.Response.GetBodyMutation()
+		Expect(bodyMutation).NotTo(BeNil())
+
+		translatedBody := bodyMutation.GetBody()
+		Expect(translatedBody).NotTo(BeNil())
+
+		// Verify Response API format
+		var responseAPIResp map[string]interface{}
+		err = json.Unmarshal(translatedBody, &responseAPIResp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(responseAPIResp["object"]).To(Equal("response"))
+		Expect(responseAPIResp["status"]).To(Equal("completed"))
+
+		// Verify content-length is removed so Envoy recalculates it
+		headerMutation := bodyResponse.Response.GetHeaderMutation()
+		Expect(headerMutation).NotTo(BeNil())
+		Expect(headerMutation.GetRemoveHeaders()).To(ContainElement("content-length"))
+	})
+
+	It("should not modify non-Response API responses", func() {
+		ctx := &RequestContext{
+			RequestID: "test-req-789",
+		}
+
+		// Regular Chat Completions response
+		completionResp := []byte(`{
+			"id": "chatcmpl-regular",
+			"object": "chat.completion",
+			"choices": [{"message": {"role": "assistant", "content": "Hello"}}]
+		}`)
+
+		responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
+			ResponseBody: &ext_proc.HttpBody{Body: completionResp},
+		}
+
+		response, err := router.HandleResponseBody(responseBodyReq, ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// For non-Response API requests, no body mutation should occur
+		bodyResponse := response.GetResponseBody()
+		Expect(bodyResponse).NotTo(BeNil())
+
+		// No header mutation for non-Response API requests
+		headerMutation := bodyResponse.Response.GetHeaderMutation()
+		// May be nil or empty for non-Response API requests
+		if headerMutation != nil {
+			Expect(headerMutation.GetRemoveHeaders()).NotTo(ContainElement("content-length"))
+		}
+	})
+})
+
+// MockResponseStore for Response API tests
+type MockResponseStore struct {
+	responses map[string]*responseapi.StoredResponse
+}
+
+func NewMockResponseStore() *MockResponseStore {
+	return &MockResponseStore{
+		responses: make(map[string]*responseapi.StoredResponse),
+	}
+}
+
+func (m *MockResponseStore) StoreResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+	m.responses[response.ID] = response
+	return nil
+}
+
+func (m *MockResponseStore) GetResponse(ctx context.Context, id string) (*responseapi.StoredResponse, error) {
+	if resp, ok := m.responses[id]; ok {
+		return resp, nil
+	}
+	return nil, responsestore.ErrNotFound
+}
+
+func (m *MockResponseStore) UpdateResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+	if _, ok := m.responses[response.ID]; !ok {
+		return responsestore.ErrNotFound
+	}
+	m.responses[response.ID] = response
+	return nil
+}
+
+func (m *MockResponseStore) DeleteResponse(ctx context.Context, id string) error {
+	delete(m.responses, id)
+	return nil
+}
+
+func (m *MockResponseStore) GetConversationChain(ctx context.Context, responseID string) ([]*responseapi.StoredResponse, error) {
+	// Return the response as a single-item chain if it exists
+	if resp, ok := m.responses[responseID]; ok {
+		return []*responseapi.StoredResponse{resp}, nil
+	}
+	return nil, responsestore.ErrNotFound
+}
+
+func (m *MockResponseStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts responsestore.ListOptions) ([]*responseapi.StoredResponse, error) {
+	return nil, nil
+}
+
+func (m *MockResponseStore) IsEnabled() bool {
+	return true
+}
+
+func (m *MockResponseStore) Close() error {
+	return nil
+}
+
+func (m *MockResponseStore) CheckConnection(ctx context.Context) error {
+	return nil
 }

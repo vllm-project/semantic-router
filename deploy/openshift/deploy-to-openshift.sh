@@ -318,7 +318,9 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     oc apply -f "$SCRIPT_DIR/observability/grafana/pvc.yaml" -n "$NAMESPACE" 2>/dev/null || true
     oc apply -f "$SCRIPT_DIR/observability/grafana/service.yaml" -n "$NAMESPACE" 2>/dev/null || true
     oc apply -f "$SCRIPT_DIR/observability/grafana/route.yaml" -n "$NAMESPACE" 2>/dev/null || true
-    oc apply -f "$SCRIPT_DIR/observability/grafana/configmaps.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    oc apply -f "$SCRIPT_DIR/observability/grafana/configmap-dashboard.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    oc apply -f "$SCRIPT_DIR/observability/grafana/configmap-datasource.yaml" -n "$NAMESPACE" 2>/dev/null || true
+    oc apply -f "$SCRIPT_DIR/observability/grafana/configmap-provisioning.yaml" -n "$NAMESPACE" 2>/dev/null || true
 
     # Wait for route to be created and get its URL
     log "Waiting for Grafana route to be created..."
@@ -376,9 +378,13 @@ if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
         log "Creating dashboard build configuration..."
         cd "$SCRIPT_DIR/../.."
         oc new-build --name=dashboard-custom --binary --strategy=docker --to=dashboard-custom:latest -n "$NAMESPACE"
-        oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='json' \
-            -p='[{"op":"add","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"}]'
     fi
+    # Build context is repo root, so we must point the BuildConfig at dashboard/Dockerfile.
+    # Ensure dockerfilePath is set whether it already exists (replace) or not (add).
+    oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='json' \
+        -p='[{"op":"test","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"},{"op":"replace","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"}]' \
+        2>/dev/null || oc patch buildconfig/dashboard-custom -n "$NAMESPACE" --type='json' \
+        -p='[{"op":"add","path":"/spec/strategy/dockerStrategy/dockerfilePath","value":"dashboard/Dockerfile"}]'
 
     # Start the build from repo root so the dashboard build can access src/semantic-router
     log "Building dashboard image from source..."
