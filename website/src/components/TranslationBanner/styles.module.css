@@ -1,0 +1,89 @@
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  margin: 0 0 1.5rem 0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  border-left: 4px solid;
+}
+
+.icon {
+  flex-shrink: 0;
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+
+.translated {
+  background-color: #f0f7ff;
+  border-left-color: #3b82f6;
+  color: #1e40af;
+}
+
+.outdated {
+  background-color: #fffbeb;
+  border-left-color: #f59e0b;
+  color: #92400e;
+}
+
+/* Dark mode */
+[data-theme='dark'] .translated {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left-color: #60a5fa;
+  color: #93c5fd;
+}
+
+[data-theme='dark'] .outdated {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-left-color: #fbbf24;
+  color: #fcd34d;
+}
+
+.editLink {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.translated .editLink {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #1e40af;
+}
+
+.translated .editLink:hover {
+  background-color: rgba(59, 130, 246, 0.25);
+}
+
+.outdated .editLink {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #92400e;
+}
+
+.outdated .editLink:hover {
+  background-color: rgba(245, 158, 11, 0.25);
+}
+
+[data-theme='dark'] .translated .editLink {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+[data-theme='dark'] .translated .editLink:hover {
+  background-color: rgba(59, 130, 246, 0.3);
+}
+
+[data-theme='dark'] .outdated .editLink {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+
+[data-theme='dark'] .outdated .editLink:hover {
+  background-color: rgba(245, 158, 11, 0.3);
+}

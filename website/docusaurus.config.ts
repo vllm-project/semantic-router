@@ -29,7 +29,11 @@ const config: Config = {
   // to replace "en" with "zh-Hans".
   i18n: {
     defaultLocale: 'en',
-    locales: ['en'],
+    locales: ['en', 'zh-Hans'],
+    localeConfigs: {
+      'en': { label: 'English', htmlLang: 'en-US' },
+      'zh-Hans': { label: '简体中文', htmlLang: 'zh-Hans' },
+    },
   },
 
   markdown: {
@@ -43,6 +47,18 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          versions: {
+            'current': {
+              label: 'Next 🚧',
+              path: '',
+              badge: true,
+            },
+            'v0.1': {
+              label: 'v0.1',
+              path: 'v0.1',
+              badge: true,
+            },
+          },
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
@@ -128,6 +144,15 @@ const config: Config = {
       },
       items: [
         {
+          type: 'localeDropdown',
+          position: 'right',
+        },
+        {
+          type: 'docsVersionDropdown',
+          position: 'right',
+          dropdownActiveClassDisabled: true,
+        },
+        {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
@@ -150,8 +175,19 @@ const config: Config = {
         },
         {
           type: 'dropdown',
+          label: 'Roadmap',
+          position: 'left',
+          items: [
+            {
+              label: 'v0.1',
+              to: '/roadmap/v0.1',
+            },
+          ],
+        },
+        {
+          type: 'dropdown',
           label: 'Community',
-          position: 'right',
+          position: 'left',
           items: [
             {
               label: 'vLLM-SR Team',
@@ -184,17 +220,6 @@ const config: Config = {
             {
               label: 'GitHub Issues',
               href: 'https://github.com/vllm-project/semantic-router/issues',
-            },
-          ],
-        },
-        {
-          type: 'dropdown',
-          label: 'Roadmap',
-          position: 'right',
-          items: [
-            {
-              label: 'v0.1',
-              to: '/roadmap/v0.1',
             },
           ],
         },
@@ -273,6 +298,14 @@ const config: Config = {
         rel: 'alternate',
         hreflang: 'en',
         href: 'https://vllm-semantic-router.com/',
+      },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'alternate',
+        hreflang: 'zh-Hans',
+        href: 'https://vllm-semantic-router.com/zh-Hans/',
       },
     },
     {

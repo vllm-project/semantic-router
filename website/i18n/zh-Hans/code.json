@@ -1,0 +1,735 @@
+{
+  "theme.ErrorPageContent.title": {
+    "message": "页面已崩溃。",
+    "description": "The title of the fallback page when the page crashed"
+  },
+  "theme.BackToTopButton.buttonAriaLabel": {
+    "message": "回到顶部",
+    "description": "The ARIA label for the back to top button"
+  },
+  "theme.blog.paginator.navAriaLabel": {
+    "message": "博文列表分页导航",
+    "description": "The ARIA label for the blog pagination"
+  },
+  "theme.blog.paginator.newerEntries": {
+    "message": "较新的博文",
+    "description": "The label used to navigate to the newer blog posts page (previous page)"
+  },
+  "theme.blog.paginator.olderEntries": {
+    "message": "较旧的博文",
+    "description": "The label used to navigate to the older blog posts page (next page)"
+  },
+  "theme.blog.archive.title": {
+    "message": "历史博文",
+    "description": "The page & hero title of the blog archive page"
+  },
+  "theme.blog.archive.description": {
+    "message": "历史博文",
+    "description": "The page & hero description of the blog archive page"
+  },
+  "theme.blog.post.paginator.navAriaLabel": {
+    "message": "博文分页导航",
+    "description": "The ARIA label for the blog posts pagination"
+  },
+  "theme.blog.post.paginator.newerPost": {
+    "message": "较新一篇",
+    "description": "The blog post button label to navigate to the newer/previous post"
+  },
+  "theme.blog.post.paginator.olderPost": {
+    "message": "较旧一篇",
+    "description": "The blog post button label to navigate to the older/next post"
+  },
+  "theme.tags.tagsPageLink": {
+    "message": "查看所有标签",
+    "description": "The label of the link targeting the tag list page"
+  },
+  "theme.colorToggle.ariaLabel.mode.system": {
+    "message": "system mode",
+    "description": "The name for the system color mode"
+  },
+  "theme.colorToggle.ariaLabel.mode.light": {
+    "message": "浅色模式",
+    "description": "The name for the light color mode"
+  },
+  "theme.colorToggle.ariaLabel.mode.dark": {
+    "message": "暗黑模式",
+    "description": "The name for the dark color mode"
+  },
+  "theme.colorToggle.ariaLabel": {
+    "message": "切换浅色/暗黑模式（当前为{mode}）",
+    "description": "The ARIA label for the color mode toggle"
+  },
+  "theme.docs.breadcrumbs.navAriaLabel": {
+    "message": "页面路径",
+    "description": "The ARIA label for the breadcrumbs"
+  },
+  "theme.docs.DocCard.categoryDescription.plurals": {
+    "message": "{count} 个项目",
+    "description": "The default description for a category card in the generated index about how many items this category includes"
+  },
+  "theme.docs.paginator.navAriaLabel": {
+    "message": "文件选项卡",
+    "description": "The ARIA label for the docs pagination"
+  },
+  "theme.docs.paginator.previous": {
+    "message": "上一页",
+    "description": "The label used to navigate to the previous doc"
+  },
+  "theme.docs.paginator.next": {
+    "message": "下一页",
+    "description": "The label used to navigate to the next doc"
+  },
+  "theme.docs.tagDocListPageTitle.nDocsTagged": {
+    "message": "{count} 篇文档带有标签",
+    "description": "Pluralized label for \"{count} docs tagged\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
+  },
+  "theme.docs.tagDocListPageTitle": {
+    "message": "{nDocsTagged}「{tagName}」",
+    "description": "The title of the page for a docs tag"
+  },
+  "theme.docs.versionBadge.label": {
+    "message": "版本：{versionLabel}"
+  },
+  "theme.common.editThisPage": {
+    "message": "编辑此页",
+    "description": "The link label to edit the current page"
+  },
+  "theme.docs.versions.unreleasedVersionLabel": {
+    "message": "此为 {siteTitle} {versionLabel} 版尚未发行的文档。",
+    "description": "The label used to tell the user that he's browsing an unreleased doc version"
+  },
+  "theme.docs.versions.unmaintainedVersionLabel": {
+    "message": "此为 {siteTitle} {versionLabel} 版的文档，现已不再积极维护。",
+    "description": "The label used to tell the user that he's browsing an unmaintained doc version"
+  },
+  "theme.docs.versions.latestVersionSuggestionLabel": {
+    "message": "最新的文档请参阅 {latestVersionLink} ({versionLabel})。",
+    "description": "The label used to tell the user to check the latest version"
+  },
+  "theme.docs.versions.latestVersionLinkLabel": {
+    "message": "最新版本",
+    "description": "The label used for the latest version suggestion link label"
+  },
+  "theme.common.headingLinkTitle": {
+    "message": "{heading}的直接链接",
+    "description": "Title for link to heading"
+  },
+  "theme.lastUpdated.atDate": {
+    "message": "于 {date} ",
+    "description": "The words used to describe on which date a page has been last updated"
+  },
+  "theme.lastUpdated.byUser": {
+    "message": "由 {user} ",
+    "description": "The words used to describe by who the page has been last updated"
+  },
+  "theme.lastUpdated.lastUpdatedAtBy": {
+    "message": "最后{byUser}{atDate}更新",
+    "description": "The sentence used to display when a page has been last updated, and by who"
+  },
+  "theme.navbar.mobileVersionsDropdown.label": {
+    "message": "选择版本",
+    "description": "The label for the navbar versions dropdown on mobile view"
+  },
+  "theme.NotFound.title": {
+    "message": "找不到页面",
+    "description": "The title of the 404 page"
+  },
+  "theme.tags.tagsListLabel": {
+    "message": "标签：",
+    "description": "The label alongside a tag list"
+  },
+  "theme.admonition.caution": {
+    "message": "警告",
+    "description": "The default label used for the Caution admonition (:::caution)"
+  },
+  "theme.admonition.danger": {
+    "message": "危险",
+    "description": "The default label used for the Danger admonition (:::danger)"
+  },
+  "theme.admonition.info": {
+    "message": "信息",
+    "description": "The default label used for the Info admonition (:::info)"
+  },
+  "theme.admonition.note": {
+    "message": "备注",
+    "description": "The default label used for the Note admonition (:::note)"
+  },
+  "theme.admonition.tip": {
+    "message": "提示",
+    "description": "The default label used for the Tip admonition (:::tip)"
+  },
+  "theme.admonition.warning": {
+    "message": "注意",
+    "description": "The default label used for the Warning admonition (:::warning)"
+  },
+  "theme.AnnouncementBar.closeButtonAriaLabel": {
+    "message": "关闭",
+    "description": "The ARIA label for close button of announcement bar"
+  },
+  "theme.blog.sidebar.navAriaLabel": {
+    "message": "最近博文导航",
+    "description": "The ARIA label for recent posts in the blog sidebar"
+  },
+  "theme.DocSidebarItem.expandCategoryAriaLabel": {
+    "message": "展开侧边栏分类 '{label}'",
+    "description": "The ARIA label to expand the sidebar category"
+  },
+  "theme.DocSidebarItem.collapseCategoryAriaLabel": {
+    "message": "折叠侧边栏分类 '{label}'",
+    "description": "The ARIA label to collapse the sidebar category"
+  },
+  "theme.navbar.mobileLanguageDropdown.label": {
+    "message": "选择语言",
+    "description": "The label for the mobile language switcher dropdown"
+  },
+  "theme.NavBar.navAriaLabel": {
+    "message": "主导航",
+    "description": "The ARIA label for the main navigation"
+  },
+  "theme.TOCCollapsible.toggleButtonLabel": {
+    "message": "本页总览",
+    "description": "The label used by the button on the collapsible TOC component"
+  },
+  "theme.NotFound.p1": {
+    "message": "我们找不到您要找的页面。",
+    "description": "The first paragraph of the 404 page"
+  },
+  "theme.NotFound.p2": {
+    "message": "请联系原始链接来源网站的所有者，并告知他们链接已损坏。",
+    "description": "The 2nd paragraph of the 404 page"
+  },
+  "theme.blog.post.readMore": {
+    "message": "阅读更多",
+    "description": "The label used in blog post item excerpts to link to full blog posts"
+  },
+  "theme.blog.post.readMoreLabel": {
+    "message": "阅读 {title} 的全文",
+    "description": "The ARIA label for the link to full blog posts from excerpts"
+  },
+  "theme.blog.post.readingTime.plurals": {
+    "message": "阅读需 {readingTime} 分钟",
+    "description": "Pluralized label for \"{readingTime} min read\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
+  },
+  "theme.CodeBlock.wordWrapToggle": {
+    "message": "切换自动换行",
+    "description": "The title attribute for toggle word wrapping button of code block lines"
+  },
+  "theme.CodeBlock.copy": {
+    "message": "复制",
+    "description": "The copy button label on code blocks"
+  },
+  "theme.CodeBlock.copied": {
+    "message": "复制成功",
+    "description": "The copied button label on code blocks"
+  },
+  "theme.CodeBlock.copyButtonAriaLabel": {
+    "message": "复制代码到剪贴板",
+    "description": "The ARIA label for copy code blocks button"
+  },
+  "theme.docs.breadcrumbs.home": {
+    "message": "主页面",
+    "description": "The ARIA label for the home page in the breadcrumbs"
+  },
+  "theme.docs.sidebar.navAriaLabel": {
+    "message": "文档侧边栏",
+    "description": "The ARIA label for the sidebar navigation"
+  },
+  "theme.docs.sidebar.collapseButtonTitle": {
+    "message": "收起侧边栏",
+    "description": "The title attribute for collapse button of doc sidebar"
+  },
+  "theme.docs.sidebar.collapseButtonAriaLabel": {
+    "message": "收起侧边栏",
+    "description": "The title attribute for collapse button of doc sidebar"
+  },
+  "theme.docs.sidebar.closeSidebarButtonAriaLabel": {
+    "message": "关闭导航栏",
+    "description": "The ARIA label for close button of mobile sidebar"
+  },
+  "theme.navbar.mobileSidebarSecondaryMenu.backButtonLabel": {
+    "message": "← 回到主菜单",
+    "description": "The label of the back button to return to main menu, inside the mobile navbar sidebar secondary menu (notably used to display the docs sidebar)"
+  },
+  "theme.docs.sidebar.toggleSidebarButtonAriaLabel": {
+    "message": "切换导航栏",
+    "description": "The ARIA label for hamburger menu button of mobile navigation"
+  },
+  "theme.docs.sidebar.expandButtonTitle": {
+    "message": "展开侧边栏",
+    "description": "The ARIA label and title attribute for expand button of doc sidebar"
+  },
+  "theme.docs.sidebar.expandButtonAriaLabel": {
+    "message": "展开侧边栏",
+    "description": "The ARIA label and title attribute for expand button of doc sidebar"
+  },
+  "theme.navbar.mobileDropdown.collapseButton.expandAriaLabel": {
+    "message": "Expand the dropdown",
+    "description": "The ARIA label of the button to expand the mobile dropdown navbar item"
+  },
+  "theme.navbar.mobileDropdown.collapseButton.collapseAriaLabel": {
+    "message": "Collapse the dropdown",
+    "description": "The ARIA label of the button to collapse the mobile dropdown navbar item"
+  },
+  "theme.blog.post.plurals": {
+    "message": "{count} 篇博文",
+    "description": "Pluralized label for \"{count} posts\". Use as much plural forms (separated by \"|\") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)"
+  },
+  "theme.blog.tagTitle": {
+    "message": "{nPosts} 含有标签「{tagName}」",
+    "description": "The title of the page for a blog tag"
+  },
+  "theme.blog.author.pageTitle": {
+    "message": "{authorName} - {nPosts}",
+    "description": "The title of the page for a blog author"
+  },
+  "theme.blog.authorsList.pageTitle": {
+    "message": "作者",
+    "description": "The title of the authors page"
+  },
+  "theme.blog.authorsList.viewAll": {
+    "message": "查看所有作者",
+    "description": "The label of the link targeting the blog authors page"
+  },
+  "theme.blog.author.noPosts": {
+    "message": "该作者尚未撰写任何文章。",
+    "description": "The text for authors with 0 blog post"
+  },
+  "theme.contentVisibility.unlistedBanner.title": {
+    "message": "未列出页",
+    "description": "The unlisted content banner title"
+  },
+  "theme.contentVisibility.unlistedBanner.message": {
+    "message": "此页面未列出。搜索引擎不会对其索引，只有拥有直接链接的用户才能访问。",
+    "description": "The unlisted content banner message"
+  },
+  "theme.contentVisibility.draftBanner.title": {
+    "message": "草稿页",
+    "description": "The draft content banner title"
+  },
+  "theme.contentVisibility.draftBanner.message": {
+    "message": "此页面是草稿，仅在开发环境中可见，不会包含在正式版本中。",
+    "description": "The draft content banner message"
+  },
+  "theme.ErrorPageContent.tryAgain": {
+    "message": "重试",
+    "description": "The label of the button to try again rendering when the React error boundary captures an error"
+  },
+  "theme.common.skipToMainContent": {
+    "message": "跳到主要内容",
+    "description": "The skip to content label used for accessibility, allowing to rapidly navigate to main content with keyboard tab/enter navigation"
+  },
+  "theme.tags.tagsPageTitle": {
+    "message": "标签",
+    "description": "The title of the tag list page"
+  },
+  "homepage.hero.aiPowered": {
+    "message": "AI 赋能"
+  },
+  "homepage.hero.intelligent": {
+    "message": "智能"
+  },
+  "homepage.hero.autoReasoning": {
+    "message": "自动推理"
+  },
+  "homepage.hero.routerFor": {
+    "message": "高效 LLM 推理路由器，基于"
+  },
+  "homepage.hero.mixtureOfModels": {
+    "message": "混合模型"
+  },
+  "homepage.hero.badge.neural": {
+    "message": "神经网络"
+  },
+  "homepage.hero.badge.llm": {
+    "message": "LLM 优化"
+  },
+  "homepage.hero.badge.economics": {
+    "message": "按 Token 计费"
+  },
+  "homepage.hero.getStarted": {
+    "message": "快速开始 - 5分钟 ⏱️"
+  },
+  "homepage.aiTech.title": {
+    "message": "神经网络处理架构"
+  },
+  "homepage.aiTech.description": {
+    "message": "采用前沿 AI 技术，包括 ModernBERT 微调模型和先进的语义理解能力，实现智能模型路由和选择。"
+  },
+  "homepage.aiTech.feature.slm": {
+    "message": "小型语言模型"
+  },
+  "homepage.aiTech.feature.neural": {
+    "message": "神经网络处理"
+  },
+  "homepage.aiTech.feature.inference": {
+    "message": "实时推理"
+  },
+  "homepage.aiTech.feature.semantic": {
+    "message": "语义理解"
+  },
+  "homepage.architecture.title": {
+    "message": "架构"
+  },
+  "features.sectionTitle": {
+    "message": "我们的目标"
+  },
+  "features.sectionSubtitle": {
+    "message": "为混合模型（MoM）构建系统级智能，将全局智能引入 LLM 系统"
+  },
+  "translationBanner.outdated": {
+    "message": "此翻译可能已过时。英文原文已更新，中文尚未同步。",
+    "description": "Warning shown when translation is outdated"
+  },
+  "translationBanner.aiTranslated": {
+    "message": "本页面由 AI 从英文翻译，可能存在错误或不准确之处。",
+    "description": "Notice shown for AI translated content"
+  },
+  "youtube.title": {
+    "message": "vLLM Semantic Router 演示"
+  },
+  "youtube.latestNews": {
+    "message": "最新动态"
+  },
+  "youtube.description": {
+    "message": "用户体验是我们非常关注的。隆重推出 vLLM-SR 控制面板："
+  },
+  "youtube.feature.chat": {
+    "message": "与 vLLM-SR 对话并查看其思维链"
+  },
+  "youtube.feature.topology": {
+    "message": "查看模型意图的拓扑结构"
+  },
+  "youtube.feature.metrics": {
+    "message": "通过 Grafana 面板监控实时指标"
+  },
+  "youtube.feature.configure": {
+    "message": "配置不同领域的混合模型"
+  },
+  "codeOfConduct.title": {
+    "message": "行为准则 📜"
+  },
+  "codeOfConduct.subtitle": {
+    "message": "我们致力于构建一个开放、友好、包容的社区。"
+  },
+  "codeOfConduct.pledge.title": {
+    "message": "我们的承诺"
+  },
+  "codeOfConduct.standards.title": {
+    "message": "行为标准"
+  },
+  "codeOfConduct.enforcement.title": {
+    "message": "执行责任"
+  },
+  "codeOfConduct.scope.title": {
+    "message": "适用范围"
+  },
+  "codeOfConduct.reporting.title": {
+    "message": "举报"
+  },
+  "codeOfConduct.guidelines.title": {
+    "message": "执行指南"
+  },
+  "codeOfConduct.attribution.title": {
+    "message": "来源说明"
+  },
+  "contributing.title": {
+    "message": "为 vLLM Semantic Router 贡献 🤝"
+  },
+  "contributing.subtitle": {
+    "message": "我们欢迎社区贡献！以下是您可以帮助改进 vLLM Semantic Router 的方式。"
+  },
+  "contributing.waysToContribute": {
+    "message": "贡献方式"
+  },
+  "contributing.process.title": {
+    "message": "贡献流程"
+  },
+  "contributing.precommit.title": {
+    "message": "预提交钩子"
+  },
+  "contributing.workGroups.title": {
+    "message": "工作组领域"
+  },
+  "contributing.getHelp.title": {
+    "message": "获取帮助"
+  },
+  "team.title": {
+    "message": "团队成员 👥"
+  },
+  "team.subtitle": {
+    "message": "构建智能 LLM 路由未来的热情成员们"
+  },
+  "team.coreTeam.title": {
+    "message": "核心团队"
+  },
+  "team.coreTeam.description": {
+    "message": "推动项目发展并做出关键决策的核心维护者。"
+  },
+  "team.joinTeam.title": {
+    "message": "加入我们"
+  },
+  "team.joinTeam.description": {
+    "message": "我们一直在寻找热情的贡献者加入我们的社区！"
+  },
+  "team.recognition.title": {
+    "message": "荣誉表彰"
+  },
+  "team.recognition.subtitle": {
+    "message": "贡献者表彰"
+  },
+  "team.getInvolved.title": {
+    "message": "参与方式"
+  },
+  "workGroups.title": {
+    "message": "vLLM Semantic Router 工作组 👋"
+  },
+  "workGroups.init.title": {
+    "message": "工作组初始化"
+  },
+  "workGroups.community.title": {
+    "message": "vLLM Semantic Router 社区工作组"
+  },
+  "workGroups.promotion.title": {
+    "message": "社区晋升"
+  },
+  "workGroups.getInvolved.title": {
+    "message": "如何参与"
+  },
+  "workGroups.contact.title": {
+    "message": "联系我们"
+  },
+  "news.readMore": {
+    "message": "阅读更多 →"
+  },
+  "news.title": {
+    "message": "新闻与文章"
+  },
+  "news.description": {
+    "message": "获取关于 vLLM Semantic Router 的最新新闻、研究论文、博客文章及其对 LLM 推理效率影响的文章。"
+  },
+  "news.contribute.title": {
+    "message": "投稿新闻"
+  },
+  "news.contribute.description": {
+    "message": "知道关于 vLLM Semantic Router 的文章、博客或出版物想要在此展示？"
+  },
+  "publications.title": {
+    "message": "论文与演讲"
+  },
+  "publications.subtitle": {
+    "message": "当智慧交汇，创新便会绽放 ❤️"
+  },
+  "publications.papers.title": {
+    "message": "研究论文"
+  },
+  "publications.talks.title": {
+    "message": "会议演讲"
+  },
+  "roadmap.v01.title": {
+    "message": "路线图 v0.1"
+  },
+  "roadmap.v01.subtitle": {
+    "message": "产品化智能路由与全面评估"
+  },
+  "roadmap.releaseGoal.title": {
+    "message": "发布目标"
+  },
+  "roadmap.deliverables.title": {
+    "message": "P0 关键交付物"
+  },
+  "roadmap.criteria.title": {
+    "message": "优先级标准"
+  },
+  "promotion.title": {
+    "message": "社区晋升 🚀"
+  },
+  "promotion.subtitle": {
+    "message": "贡献者晋升规则 - 认可您的贡献并提升您的影响力"
+  },
+  "promotion.overview.title": {
+    "message": "晋升概述"
+  },
+  "promotion.rules.title": {
+    "message": "晋升规则"
+  },
+  "promotion.process.title": {
+    "message": "申请流程"
+  },
+  "promotion.getStarted.title": {
+    "message": "开始行动"
+  },
+  "features.intelligentRouting.title": {
+    "message": "🧠 智能路由"
+  },
+  "features.intelligentRouting.description": {
+    "message": "由 ModernBERT 微调模型驱动，具备智能意图理解能力，能够理解上下文、意图和复杂性，将请求路由到最佳 LLM。"
+  },
+  "features.aiSecurity.title": {
+    "message": "🛡️ AI 安全防护"
+  },
+  "features.aiSecurity.description": {
+    "message": "先进的 PII 检测和 Prompt Guard 功能，识别和阻止越狱攻击，确保整个基础设施中安全负责任的 AI 交互。"
+  },
+  "features.semanticCaching.title": {
+    "message": "⚡ 语义缓存"
+  },
+  "features.semanticCaching.description": {
+    "message": "智能相似度缓存，存储提示的语义表示，通过智能内容匹配大幅降低 Token 使用量和延迟。"
+  },
+  "features.autoReasoning.title": {
+    "message": "🤖 自动推理引擎"
+  },
+  "features.autoReasoning.description": {
+    "message": "自动推理引擎分析请求复杂度、领域专业知识需求和性能约束，自动为每个任务选择最佳模型。"
+  },
+  "features.analytics.title": {
+    "message": "🔬 实时分析"
+  },
+  "features.analytics.description": {
+    "message": "全面的监控和分析仪表板，提供神经网络洞察、模型性能指标和智能路由决策可视化。"
+  },
+  "features.scalable.title": {
+    "message": "🚀 可扩展架构"
+  },
+  "features.scalable.description": {
+    "message": "云原生设计，支持分布式神经处理、自动扩缩容能力，与现有 LLM 基础设施和模型服务平台无缝集成。"
+  },
+  "publications.label.paper": {
+    "message": "📄 论文"
+  },
+  "publications.label.watchRecording": {
+    "message": "🎤 观看录播"
+  },
+  "publications.label.eventPage": {
+    "message": "🎤 活动页面"
+  },
+  "publications.label.videoRecording": {
+    "message": "📹 观看录播"
+  },
+  "publications.filter.all": {
+    "message": "全部"
+  },
+  "publications.filter.papers": {
+    "message": "📄 论文"
+  },
+  "publications.filter.talks": {
+    "message": "🎤 演讲"
+  },
+  "homepage.hero.systemLevel": {
+    "message": "系统级"
+  },
+  "homepage.hero.intelligentRouter": {
+    "message": "智能路由"
+  },
+  "homepage.whereItLives.title": {
+    "message": "它的位置"
+  },
+  "homepage.whereItLives.subtitle": {
+    "message": "它位于现实世界和模型之间"
+  },
+  "features.goal1": {
+    "message": "如何捕获请求、响应和上下文中的缺失信号？"
+  },
+  "features.goal2": {
+    "message": "如何结合这些信号做出更好的决策？"
+  },
+  "features.goal3": {
+    "message": "如何在不同模型之间更高效地协作？"
+  },
+  "features.goal4": {
+    "message": "如何保护现实世界和 LLM 系统免受越狱攻击、PII 泄露和幻觉的影响？"
+  },
+  "features.goal5": {
+    "message": "如何收集有价值的信号并构建自学习系统？"
+  },
+  "team.badge.maintainer": {
+    "message": "维护者"
+  },
+  "team.badge.committer": {
+    "message": "提交者"
+  },
+  "team.badge.contributor": {
+    "message": "贡献者"
+  },
+  "team.recognition.description": {
+    "message": "我们相信认可社区成员的宝贵贡献。在特定领域展现持续奉献和高质量工作的贡献者可能会被邀请成为维护者，获得仓库的写入权限。"
+  },
+  "team.recognition.pathTitle": {
+    "message": "成为维护者之路："
+  },
+  "team.recognition.step1.title": {
+    "message": "定期贡献"
+  },
+  "team.recognition.step1.desc": {
+    "message": "在你感兴趣的领域做出持续、高质量的贡献"
+  },
+  "team.recognition.step2.title": {
+    "message": "加入工作组"
+  },
+  "team.recognition.step2.desc": {
+    "message": "积极参与我们的"
+  },
+  "team.recognition.step2.link": {
+    "message": "工作组"
+  },
+  "team.recognition.step3.title": {
+    "message": "社区投票"
+  },
+  "team.recognition.step3.desc": {
+    "message": "获得维护者团队的提名和批准"
+  },
+  "team.recognition.step4.title": {
+    "message": "维护者权限"
+  },
+  "team.recognition.step4.desc": {
+    "message": "获邀加入维护者团队并获得写入权限"
+  },
+  "team.getInvolved.contribute.title": {
+    "message": "开始贡献"
+  },
+  "team.getInvolved.contribute.desc": {
+    "message": "准备好做出你的第一个贡献了吗？"
+  },
+  "team.getInvolved.contribute.link": {
+    "message": "贡献指南"
+  },
+  "team.getInvolved.workGroups.title": {
+    "message": "加入工作组"
+  },
+  "team.getInvolved.workGroups.desc": {
+    "message": "找到你的专业领域，与志同道合的贡献者联系。"
+  },
+  "team.getInvolved.workGroups.link": {
+    "message": "查看工作组"
+  },
+  "team.getInvolved.discussions.title": {
+    "message": "参与讨论"
+  },
+  "team.getInvolved.discussions.desc": {
+    "message": "参与社区讨论并分享你的想法。"
+  },
+  "team.getInvolved.discussions.link": {
+    "message": "GitHub 讨论区"
+  },
+  "teamCarousel.title": {
+    "message": "认识我们的团队"
+  },
+  "teamCarousel.subtitle": {
+    "message": "vLLM Semantic Router 背后的优秀成员"
+  },
+  "teamCarousel.viewAll": {
+    "message": "查看所有团队成员"
+  },
+  "acknowledgements.title": {
+    "message": "致谢"
+  },
+  "acknowledgements.subtitle": {
+    "message": "vLLM Semantic Router 诞生于开源，构建于开源"
+  },
+  "aiChip.title": {
+    "message": "神经处理单元"
+  },
+  "aiChip.subtitle": {
+    "message": "嵌入式 • 分级 • 相似度"
+  }
+}

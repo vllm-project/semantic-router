@@ -1,5 +1,6 @@
 import React from 'react'
 import Layout from '@theme/Layout'
+import Translate from '@docusaurus/Translate'
 import styles from './team.module.css'
 import { FaGithub, FaLinkedin } from 'react-icons/fa'
 
@@ -235,10 +236,10 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
             <h3 className={styles.memberName}>{member.name}</h3>
             <span className={`${styles.badge} ${styles[member.memberType]}`}>
               {member.memberType === 'maintainer'
-                ? 'Maintainer'
+                ? <Translate id="team.badge.maintainer">Maintainer</Translate>
                 : member.memberType === 'committer'
-                  ? 'Committer'
-                  : 'Contributor'}
+                  ? <Translate id="team.badge.committer">Committer</Translate>
+                  : <Translate id="team.badge.contributor">Contributor</Translate>}
             </span>
           </div>
           <p className={styles.memberRole}>
@@ -292,17 +293,20 @@ const Team: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1>Meet Our Team 👥</h1>
+          <h1><Translate id="team.title">Meet Our Team 👥</Translate></h1>
           <p className={styles.subtitle}>
-            Innovation thrives when great minds come together
+            <Translate id="team.subtitle">Innovation thrives when great minds come together</Translate>
           </p>
         </header>
 
         <main className={styles.main}>
           <section className={styles.section}>
-            <h2>👥 Our Team</h2>
+            <h2>
+              👥
+              <Translate id="team.coreTeam.title">Our Team</Translate>
+            </h2>
             <p className={styles.sectionDescription}>
-              Meet the talented people who make vLLM Semantic Router possible.
+              <Translate id="team.coreTeam.description">Meet the talented people who make vLLM Semantic Router possible.</Translate>
             </p>
             <div className={styles.teamGrid}>
               {allTeamMembers.map((member, index) => (
@@ -312,33 +316,39 @@ const Team: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>🏆 Recognition</h2>
+            <h2>
+              🏆
+              <Translate id="team.recognition.title">Recognition</Translate>
+            </h2>
             <div className={styles.recognitionCard}>
-              <h3>Contributor Recognition</h3>
+              <h3><Translate id="team.recognition.subtitle">Contributor Recognition</Translate></h3>
               <p>
-                We believe in recognizing the valuable contributions of our community members.
-                Contributors who show consistent dedication and quality work in specific areas
-                may be invited to become maintainers with write access to the repository.
+                <Translate id="team.recognition.description">
+                  We believe in recognizing the valuable contributions of our community members.
+                  Contributors who show consistent dedication and quality work in specific areas
+                  may be invited to become maintainers with write access to the repository.
+                </Translate>
               </p>
 
               <div className={styles.pathToMaintainer}>
-                <h4>Path to Maintainership:</h4>
+                <h4><Translate id="team.recognition.pathTitle">Path to Maintainership:</Translate></h4>
                 <div className={styles.steps}>
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>1</span>
                     <div>
-                      <h5>Contribute Regularly</h5>
-                      <p>Make consistent, quality contributions to your area of interest</p>
+                      <h5><Translate id="team.recognition.step1.title">Contribute Regularly</Translate></h5>
+                      <p><Translate id="team.recognition.step1.desc">Make consistent, quality contributions to your area of interest</Translate></p>
                     </div>
                   </div>
 
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>2</span>
                     <div>
-                      <h5>Join a Working Group</h5>
+                      <h5><Translate id="team.recognition.step2.title">Join a Working Group</Translate></h5>
                       <p>
-                        Participate actively in one of our
-                        <a href="/community/work-groups">Working Groups</a>
+                        <Translate id="team.recognition.step2.desc">Participate actively in one of our</Translate>
+                        {' '}
+                        <a href="/community/work-groups"><Translate id="team.recognition.step2.link">Working Groups</Translate></a>
                       </p>
                     </div>
                   </div>
@@ -346,16 +356,16 @@ const Team: React.FC = () => {
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>3</span>
                     <div>
-                      <h5>Community Vote</h5>
-                      <p>Receive nomination and approval from the maintainer team</p>
+                      <h5><Translate id="team.recognition.step3.title">Community Vote</Translate></h5>
+                      <p><Translate id="team.recognition.step3.desc">Receive nomination and approval from the maintainer team</Translate></p>
                     </div>
                   </div>
 
                   <div className={styles.step}>
                     <span className={styles.stepNumber}>4</span>
                     <div>
-                      <h5>Maintainer Access</h5>
-                      <p>Get invited to the maintainer group with write access</p>
+                      <h5><Translate id="team.recognition.step4.title">Maintainer Access</Translate></h5>
+                      <p><Translate id="team.recognition.step4.desc">Get invited to the maintainer group with write access</Translate></p>
                     </div>
                   </div>
                 </div>
@@ -364,29 +374,41 @@ const Team: React.FC = () => {
           </section>
 
           <section className={styles.section}>
-            <h2>📞 Get Involved</h2>
+            <h2>
+              📞
+              <Translate id="team.getInvolved.title">Get Involved</Translate>
+            </h2>
             <div className={styles.involvementGrid}>
               <div className={styles.involvementCard}>
-                <h3>🚀 Start Contributing</h3>
-                <p>Ready to make your first contribution?</p>
+                <h3>
+                  🚀
+                  <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate>
+                </h3>
+                <p><Translate id="team.getInvolved.contribute.desc">Ready to make your first contribution?</Translate></p>
                 <a href="/community/contributing" className={styles.actionButton}>
-                  Contributing Guide
+                  <Translate id="team.getInvolved.contribute.link">Contributing Guide</Translate>
                 </a>
               </div>
 
               <div className={styles.involvementCard}>
-                <h3>👥 Join Working Groups</h3>
-                <p>Find your area of expertise and connect with like-minded contributors.</p>
+                <h3>
+                  👥
+                  <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate>
+                </h3>
+                <p><Translate id="team.getInvolved.workGroups.desc">Find your area of expertise and connect with like-minded contributors.</Translate></p>
                 <a href="/community/work-groups" className={styles.actionButton}>
-                  View Work Groups
+                  <Translate id="team.getInvolved.workGroups.link">View Work Groups</Translate>
                 </a>
               </div>
 
               <div className={styles.involvementCard}>
-                <h3>💬 Join Discussions</h3>
-                <p>Participate in community discussions and share your ideas.</p>
+                <h3>
+                  💬
+                  <Translate id="team.getInvolved.discussions.title">Join Discussions</Translate>
+                </h3>
+                <p><Translate id="team.getInvolved.discussions.desc">Participate in community discussions and share your ideas.</Translate></p>
                 <a href="https://github.com/vllm-project/semantic-router/discussions" target="_blank" rel="noopener noreferrer" className={styles.actionButton}>
-                  GitHub Discussions
+                  <Translate id="team.getInvolved.discussions.link">GitHub Discussions</Translate>
                 </a>
               </div>
             </div>

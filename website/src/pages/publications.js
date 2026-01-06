@@ -1,6 +1,24 @@
 import React, { useState } from 'react'
 import Layout from '@theme/Layout'
+import Translate, { translate } from '@docusaurus/Translate'
 import styles from './publications.module.css'
+
+// 翻译 link label
+const getLabelTranslation = (type, label) => {
+  switch (type) {
+    case 'paper':
+      return translate({ id: 'publications.label.paper', message: '📄 Paper' })
+    case 'event':
+      if (label.includes('Watch')) {
+        return translate({ id: 'publications.label.watchRecording', message: '🎤 Watch Recording' })
+      }
+      return translate({ id: 'publications.label.eventPage', message: '🎤 Event Page' })
+    case 'video':
+      return translate({ id: 'publications.label.videoRecording', message: '📹 Watch Recording' })
+    default:
+      return label
+  }
+}
 
 const papers = [
   {
@@ -168,7 +186,7 @@ function AwardCard({ item, index }) {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {link.label}
+                  {getLabelTranslation(link.type, link.label)}
                 </a>
               ))}
             </>
@@ -227,10 +245,13 @@ export default function Publications() {
           <div className={styles.wallDecoration}>
             <div className={styles.wallPattern}></div>
           </div>
-          <h1 className={styles.title}>🏆 Papers & Talks</h1>
+          <h1 className={styles.title}>
+            🏆
+            <Translate id="publications.title">Papers & Talks</Translate>
+          </h1>
           <p className={styles.subtitle}>
             <span className={styles.subtitleHighlight}>
-              Innovation thrives when great minds come together ❤️
+              <Translate id="publications.subtitle">Innovation thrives when great minds come together ❤️</Translate>
             </span>
           </p>
         </header>
@@ -241,7 +262,9 @@ export default function Publications() {
               className={`${styles.filterButton} ${activeFilter === 'all' ? styles.active : ''}`}
               onClick={() => setActiveFilter('all')}
             >
-              All (
+              <Translate id="publications.filter.all">All</Translate>
+              {' '}
+              (
               {totalCount}
               )
             </button>
@@ -249,7 +272,9 @@ export default function Publications() {
               className={`${styles.filterButton} ${activeFilter === 'paper' ? styles.active : ''}`}
               onClick={() => setActiveFilter('paper')}
             >
-              📄 Papers (
+              <Translate id="publications.filter.papers">📄 Papers</Translate>
+              {' '}
+              (
               {paperCount}
               )
             </button>
@@ -257,7 +282,9 @@ export default function Publications() {
               className={`${styles.filterButton} ${activeFilter === 'talk' ? styles.active : ''}`}
               onClick={() => setActiveFilter('talk')}
             >
-              🎤 Talks (
+              <Translate id="publications.filter.talks">🎤 Talks</Translate>
+              {' '}
+              (
               {talkCount}
               )
             </button>
@@ -271,7 +298,10 @@ export default function Publications() {
                   {/* Research Publications Wall */}
                   <section className={styles.awardSection}>
                     <div className={styles.sectionHeader}>
-                      <h2 className={styles.sectionTitle}>🏆 Research Publications</h2>
+                      <h2 className={styles.sectionTitle}>
+                        🏆
+                        <Translate id="publications.papers.title">Research Publications</Translate>
+                      </h2>
                       <div className={styles.sectionDivider}></div>
                     </div>
                     <div className={styles.awardsGrid}>
@@ -284,7 +314,10 @@ export default function Publications() {
                   {/* Conference Presentations Wall */}
                   <section className={styles.awardSection}>
                     <div className={styles.sectionHeader}>
-                      <h2 className={styles.sectionTitle}>🏆 Conference Presentations</h2>
+                      <h2 className={styles.sectionTitle}>
+                        🏆
+                        <Translate id="publications.talks.title">Conference Presentations</Translate>
+                      </h2>
                       <div className={styles.sectionDivider}></div>
                     </div>
                     <div className={styles.awardsGrid}>
