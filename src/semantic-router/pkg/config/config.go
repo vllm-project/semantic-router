@@ -735,6 +735,9 @@ type MemoryConfig struct {
 	// Default similarity threshold for memory retrieval (0.0-1.0)
 	// Default: 0.6
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+
+	// Fact extraction configuration
+	Extraction ExtractionConfig `yaml:"extraction"`
 }
 
 // MemoryEmbeddingConfig contains configuration for embedding generation in memory operations
