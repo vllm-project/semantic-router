@@ -721,6 +721,26 @@ type MemoryConfig struct {
 
 	// Query rewriting configuration
 	QueryRewrite QueryRewriteConfig `yaml:"query_rewrite"`
+
+	// Embedding configuration for memory retrieval
+	Embedding MemoryEmbeddingConfig `yaml:"embedding,omitempty"`
+
+	// Default retrieval limit (max number of results to return)
+	// Default: 5
+	DefaultRetrievalLimit int `yaml:"default_retrieval_limit,omitempty"`
+
+	// Default similarity threshold for memory retrieval (0.0-1.0)
+	// Default: 0.6
+	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+}
+
+// MemoryEmbeddingConfig contains configuration for embedding generation in memory operations
+type MemoryEmbeddingConfig struct {
+	// Model is the embedding model name (default: "all-MiniLM-L6-v2")
+	Model string `yaml:"model,omitempty"`
+
+	// Dimension is the embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	Dimension int `yaml:"dimension,omitempty"`
 }
 
 // QueryRewriteConfig holds configuration for LLM-based query rewriting

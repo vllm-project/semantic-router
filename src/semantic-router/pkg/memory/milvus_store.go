@@ -11,6 +11,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -25,7 +26,7 @@ const (
 type MilvusStore struct {
 	client         client.Client
 	collectionName string
-	config         MemoryConfig
+	config         config.MemoryConfig
 	enabled        bool
 	maxRetries     int
 	retryBaseDelay time.Duration
@@ -39,7 +40,7 @@ type MilvusStore struct {
 type MilvusStoreOptions struct {
 	Client client.Client
 	CollectionName string
-	Config MemoryConfig
+	Config config.MemoryConfig
 	Enabled bool
 }
 
