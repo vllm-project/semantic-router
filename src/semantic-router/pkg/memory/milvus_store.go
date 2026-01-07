@@ -220,17 +220,15 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 			continue
 		}
 
-		// Extract fields
-		result := RetrieveResult{
-			Similarity: score,
-			Metadata:   make(map[string]interface{}),
-		}
+		// Extract fields to build Memory object
+		var id, content, memType string
+		var metadata map[string]interface{} = make(map[string]interface{})
 
 		// Extract ID
 		if idIdx >= 0 && idIdx < len(fields) {
 			if col, ok := fields[idIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if val, err := col.ValueByIdx(i); err == nil {
-					result.ID = val
+					id = val
 				}
 			}
 		}
@@ -239,7 +237,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 		if contentIdx >= 0 && contentIdx < len(fields) {
 			if col, ok := fields[contentIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if val, err := col.ValueByIdx(i); err == nil {
-					result.Content = val
+					content = val
 				}
 			}
 		}
@@ -248,7 +246,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 		if typeIdx >= 0 && typeIdx < len(fields) {
 			if col, ok := fields[typeIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if val, err := col.ValueByIdx(i); err == nil {
-					result.Type = MemoryType(val)
+					memType = val
 				}
 			}
 		}
@@ -258,21 +256,61 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 			if col, ok := fields[metadataIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if metadataVal, err := col.ValueByIdx(i); err == nil && metadataVal != "" {
 					// Inflate JSON string into the map for downstream code accessibility
-					if err := json.Unmarshal([]byte(metadataVal), &result.Metadata); err != nil {
+					if err := json.Unmarshal([]byte(metadataVal), &metadata); err != nil {
 						// Fallback if JSON is malformed
-						result.Metadata["raw"] = metadataVal
+						metadata["raw"] = metadataVal
 					} else {
 						// Reference for debugging/audit
-						result.Metadata["_raw_source"] = metadataVal
+						metadata["_raw_source"] = metadataVal
 					}
 				}
 			}
 		}
 
 		// Only add if we have at least ID and content
-		if result.ID != "" && result.Content != "" {
-			results = append(results, result)
+		if id == "" || content == "" {
+			continue
 		}
+
+		// Build Memory object
+		memory := &Memory{
+			ID:      id,
+			Content: content,
+			Type:    MemoryType(memType),
+		}
+
+		// Extract user_id from metadata if available
+		if userID, ok := metadata["user_id"].(string); ok {
+			memory.UserID = userID
+		} else if opts.UserID != "" {
+			memory.UserID = opts.UserID
+		}
+
+		// Extract project_id from metadata if available
+		if projectID, ok := metadata["project_id"].(string); ok {
+			memory.ProjectID = projectID
+		}
+
+		// Extract source from metadata if available
+		if source, ok := metadata["source"].(string); ok {
+			memory.Source = source
+		}
+
+		// Extract importance from metadata if available
+		// Handle both float64 (from JSON) and string (like "high" - skip non-numeric)
+		if importance, ok := metadata["importance"].(float64); ok {
+			memory.Importance = float32(importance)
+		} else if importance, ok := metadata["importance"].(float32); ok {
+			memory.Importance = importance
+		}
+
+		// Create RetrieveResult with Memory and Score
+		result := RetrieveResult{
+			Memory: memory,
+			Score:  score,
+		}
+
+		results = append(results, result)
 	}
 
 	logging.Debugf("MilvusStore.Retrieve: returning %d results (filtered from %d candidates)",

@@ -60,6 +60,30 @@ type Memory struct {
 	Importance float32 `json:"importance"`
 }
 
+// RetrieveResult represents a memory retrieved from search with its relevance score
+type RetrieveResult struct {
+	// Memory is the retrieved memory
+	Memory *Memory `json:"memory"`
+
+	// Score is the similarity score (0.0 to 1.0, higher = more relevant)
+	Score float32 `json:"score"`
+}
+
+// MemoryHit represents a single memory retrieval result in flat structure
+//
+// ID is the unique identifier of the memory entry
+// Content is the content of the memory entry
+// Type is the type of memory
+// Similarity is the similarity score (0.0 to 1.0)
+// Metadata contains additional metadata
+type MemoryHit struct {
+	ID         string
+	Content    string
+	Type       MemoryType
+	Similarity float32
+	Metadata   map[string]interface{}
+}
+
 // RetrieveOptions configures memory retrieval
 type RetrieveOptions struct {
 	// Query is the search query (will be embedded for vector search)
@@ -92,21 +116,6 @@ func DefaultMemoryConfig() config.MemoryConfig {
 		DefaultRetrievalLimit:      5,
 		DefaultSimilarityThreshold: 0.6,
 	}
-}
-
-// RetrieveResult represents a single memory retrieval result
-//
-//	ID is the unique identifier of the memory entry
-//	Content is the content of the memory entry
-//	Type is the type of memory
-//	Similarity is the similarity score (0.0 to 1.0)
-//	Metadata contains additional metadata
-type RetrieveResult struct {
-	ID         string
-	Content    string
-	Type       MemoryType
-	Similarity float32
-	Metadata   map[string]interface{}
 }
 
 // MemoryScope defines the scope for bulk operations (e.g., ForgetByScope)

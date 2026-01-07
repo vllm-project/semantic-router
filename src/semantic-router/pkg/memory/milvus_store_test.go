@@ -179,10 +179,14 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 
-	// Verify Metadata Inflation
-	assert.Equal(t, "slack", results[0].Metadata["source"])
-	assert.Equal(t, "high", results[0].Metadata["importance"])
-	assert.Contains(t, results[0].Metadata["_raw_source"], "slack")
+	// Verify Memory structure and metadata inflation
+	require.NotNil(t, results[0].Memory)
+	assert.Equal(t, "mem_1", results[0].Memory.ID)
+	assert.Equal(t, "The budget is $50k", results[0].Memory.Content)
+	assert.Equal(t, MemoryTypeSemantic, results[0].Memory.Type)
+	assert.Equal(t, "slack", results[0].Memory.Source)
+	assert.Equal(t, float32(0.95), results[0].Score)
+	// Note: "importance": "high" is a string, so it won't be set in Memory.Importance (which is float32)
 }
 
 func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
@@ -210,7 +214,9 @@ func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, "id1", results[0].ID)
+	require.NotNil(t, results[0].Memory)
+	assert.Equal(t, "id1", results[0].Memory.ID)
+	assert.Equal(t, float32(0.85), results[0].Score)
 }
 
 func TestMilvusStore_Retrieve_EmptyResults(t *testing.T) {
