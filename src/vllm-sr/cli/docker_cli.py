@@ -275,11 +275,12 @@ def docker_start_vllm_sr(
         ]
     )
 
-    # Mount config file
+    # Mount config file (read-write to allow dashboard edits)
+    # Use :z for SELinux compatibility on Fedora/RHEL systems
     cmd.extend(
         [
             "-v",
-            f"{os.path.abspath(config_file)}:/app/config.yaml:ro",
+            f"{os.path.abspath(config_file)}:/app/config.yaml:z",
         ]
     )
 
@@ -291,7 +292,7 @@ def docker_start_vllm_sr(
         cmd.extend(
             [
                 "-v",
-                f"{vllm_sr_dir}:/app/.vllm-sr",
+                f"{vllm_sr_dir}:/app/.vllm-sr:z",
             ]
         )
         log.info(f"Mounting .vllm-sr directory: {vllm_sr_dir}")
@@ -303,7 +304,7 @@ def docker_start_vllm_sr(
     cmd.extend(
         [
             "-v",
-            f"{models_dir}:/app/models",
+            f"{models_dir}:/app/models:z",
         ]
     )
 

@@ -88,7 +88,9 @@ def init_command(force: bool = False):
     log.info("")
     log.info("Next steps:")
     log.info("  1. Edit config.yaml to configure your setup")
+    log.info("     Or use the dashboard for visual configuration")
     log.info("  2. Start service: vllm-sr serve")
+    log.info("  3. Open dashboard: http://localhost:8700")
     log.info("=" * 60)
 
     return True
