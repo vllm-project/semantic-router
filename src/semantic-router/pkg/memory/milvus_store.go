@@ -220,7 +220,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 			continue
 		}
 
-		// Extract fields to build Memory object
+		// Extract fields to build MemoryHit
 		var id, content, memType string
 		var metadata map[string]interface{} = make(map[string]interface{})
 
@@ -272,42 +272,51 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 			continue
 		}
 
-		// Build Memory object
+		// Build MemoryHit as intermediate structure
+		hit := MemoryHit{
+			ID:         id,
+			Content:    content,
+			Type:       MemoryType(memType),
+			Similarity: score,
+			Metadata:   metadata,
+		}
+
+		// Convert MemoryHit to Memory object
 		memory := &Memory{
-			ID:      id,
-			Content: content,
-			Type:    MemoryType(memType),
+			ID:      hit.ID,
+			Content: hit.Content,
+			Type:    hit.Type,
 		}
 
 		// Extract user_id from metadata if available
-		if userID, ok := metadata["user_id"].(string); ok {
+		if userID, ok := hit.Metadata["user_id"].(string); ok {
 			memory.UserID = userID
 		} else if opts.UserID != "" {
 			memory.UserID = opts.UserID
 		}
 
 		// Extract project_id from metadata if available
-		if projectID, ok := metadata["project_id"].(string); ok {
+		if projectID, ok := hit.Metadata["project_id"].(string); ok {
 			memory.ProjectID = projectID
 		}
 
 		// Extract source from metadata if available
-		if source, ok := metadata["source"].(string); ok {
+		if source, ok := hit.Metadata["source"].(string); ok {
 			memory.Source = source
 		}
 
 		// Extract importance from metadata if available
 		// Handle both float64 (from JSON) and string (like "high" - skip non-numeric)
-		if importance, ok := metadata["importance"].(float64); ok {
+		if importance, ok := hit.Metadata["importance"].(float64); ok {
 			memory.Importance = float32(importance)
-		} else if importance, ok := metadata["importance"].(float32); ok {
+		} else if importance, ok := hit.Metadata["importance"].(float32); ok {
 			memory.Importance = importance
 		}
 
 		// Create RetrieveResult with Memory and Score
 		result := RetrieveResult{
 			Memory: memory,
-			Score:  score,
+			Score:  hit.Similarity,
 		}
 
 		results = append(results, result)
