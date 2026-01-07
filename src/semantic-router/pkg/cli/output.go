@@ -2,10 +2,12 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,6 +37,25 @@ func Warning(msg string) {
 // Info prints an info message in cyan
 func Info(msg string) {
 	infoColor.Println(msg)
+}
+
+// IsTerminal returns true if stdin is attached to a terminal.
+// Use this to check if interactive prompts are safe to use.
+func IsTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// ConfirmPrompt prompts the user for confirmation and returns true if they agree.
+// Returns an error if stdin is not a terminal (non-interactive mode).
+// Callers should use the --force flag to skip prompts in CI/CD environments.
+func ConfirmPrompt(message string) (bool, error) {
+	if !IsTerminal() {
+		return false, fmt.Errorf("cannot prompt for confirmation in non-interactive mode; use --force flag")
+	}
+	fmt.Print(message)
+	var response string
+	_, _ = fmt.Scanln(&response)
+	return response == "y" || response == "Y", nil
 }
 
 // PrintTable prints data in table format

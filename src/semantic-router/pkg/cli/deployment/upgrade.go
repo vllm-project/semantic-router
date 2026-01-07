@@ -1,6 +1,8 @@
 package deployment
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/timeout"
 )
 
 // UpgradeLocal upgrades the local router deployment
@@ -115,11 +118,20 @@ func UpgradeDocker(configPath string, withObservability bool) error {
 	} else {
 		pullCmd = exec.Command("docker", "compose", "-f", composeFile, "pull")
 	}
-
-	pullCmd.Stdout = os.Stdout
-	pullCmd.Stderr = os.Stderr
-
-	if err := pullCmd.Run(); err != nil {
+	if err := timeout.RunCommandWithIdleTimeoutContext(
+		context.Background(),
+		pullCmd,
+		timeout.DefaultConfig,
+		"docker-compose pull",
+	); err != nil {
+		if timeout.IsIdleTimeout(err) {
+			return fmt.Errorf("image pull failed: %w\n"+
+				"Troubleshooting:\n"+
+				"  - Check internet connection\n"+
+				"  - Verify Docker Hub access: docker login\n"+
+				"  - Check disk space: df -h",
+				err)
+		}
 		return fmt.Errorf("failed to pull latest images: %w", err)
 	}
 	cli.Success("Images pulled successfully")
@@ -132,11 +144,20 @@ func UpgradeDocker(configPath string, withObservability bool) error {
 	} else {
 		upCmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d", "--force-recreate", "--no-deps")
 	}
-
-	upCmd.Stdout = os.Stdout
-	upCmd.Stderr = os.Stderr
-
-	if err := upCmd.Run(); err != nil {
+	if err := timeout.RunCommandWithIdleTimeoutContext(
+		context.Background(),
+		upCmd,
+		timeout.DefaultConfig,
+		"docker-compose up",
+	); err != nil {
+		if timeout.IsIdleTimeout(err) {
+			return fmt.Errorf("docker compose startup failed: %w\n"+
+				"Troubleshooting:\n"+
+				"  - Check Docker daemon: docker ps\n"+
+				"  - Check logs: docker-compose logs\n"+
+				"  - Verify ports: netstat -tulpn | grep LISTEN",
+				err)
+		}
 		return fmt.Errorf("failed to recreate containers: %w", err)
 	}
 
@@ -181,8 +202,18 @@ func UpgradeKubernetes(configPath, namespace string, timeout int, wait bool) err
 	}
 
 	// Check if deployment exists
-	checkCmd := exec.Command("kubectl", "get", "deployment", "semantic-router", "-n", namespace)
-	if err := checkCmd.Run(); err != nil {
+	var checkErr error
+	func() {
+		// 10 second timeout for checking deployment existence
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		checkCmd := exec.CommandContext(ctx, "kubectl", "get", "deployment", "semantic-router", "-n", namespace)
+		checkErr = checkCmd.Run()
+	}()
+	if checkErr != nil {
+		if errors.Is(checkErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl get deployment timed out after 10 seconds: %w", checkErr)
+		}
 		cli.Warning("No deployment found in namespace: " + namespace)
 		cli.Info("Use 'vsr deploy kubernetes' to create a new deployment")
 		return nil
@@ -195,23 +226,43 @@ func UpgradeKubernetes(configPath, namespace string, timeout int, wait bool) err
 		return fmt.Errorf("kubernetes manifests not found: %s", manifestDir)
 	}
 
-	applyCmd := exec.Command("kubectl", "apply", "-f", manifestDir, "-n", namespace)
-	applyCmd.Stdout = os.Stdout
-	applyCmd.Stderr = os.Stderr
+	var applyErr error
+	func() {
+		// 120 second timeout for applying manifests
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		applyCmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", manifestDir, "-n", namespace)
+		applyCmd.Stdout = os.Stdout
+		applyCmd.Stderr = os.Stderr
+		applyErr = applyCmd.Run()
+	}()
 
-	if err := applyCmd.Run(); err != nil {
-		return fmt.Errorf("failed to apply manifests: %w", err)
+	if applyErr != nil {
+		if errors.Is(applyErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl apply timed out after 120 seconds: %w", applyErr)
+		}
+		return fmt.Errorf("failed to apply manifests: %w", applyErr)
 	}
 	cli.Success("Manifests applied successfully")
 
 	// Trigger rolling restart
 	cli.Info("Triggering rolling restart...")
-	restartCmd := exec.Command("kubectl", "rollout", "restart", "deployment/semantic-router", "-n", namespace)
-	restartCmd.Stdout = os.Stdout
-	restartCmd.Stderr = os.Stderr
+	var restartErr error
+	func() {
+		// 10 second timeout for triggering restart
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		restartCmd := exec.CommandContext(ctx, "kubectl", "rollout", "restart", "deployment/semantic-router", "-n", namespace)
+		restartCmd.Stdout = os.Stdout
+		restartCmd.Stderr = os.Stderr
+		restartErr = restartCmd.Run()
+	}()
 
-	if err := restartCmd.Run(); err != nil {
-		return fmt.Errorf("failed to restart deployment: %w", err)
+	if restartErr != nil {
+		if errors.Is(restartErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl rollout restart timed out after 10 seconds: %w", restartErr)
+		}
+		return fmt.Errorf("failed to restart deployment: %w", restartErr)
 	}
 
 	// Wait for rollout to complete if requested
@@ -248,9 +299,24 @@ func UpgradeHelm(configPath, namespace string, timeout int) error {
 	}
 
 	// Check if release exists
-	checkCmd := exec.Command("helm", "list", "-n", namespace, "-q")
-	output, err := checkCmd.Output()
-	if err != nil || len(output) == 0 {
+	var output []byte
+	var err error
+	func() {
+		// 10 second timeout for listing helm releases
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		checkCmd := exec.CommandContext(ctx, "helm", "list", "-n", namespace, "-q")
+		output, err = checkCmd.Output()
+	}()
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("helm list timed out after 10 seconds: %w", err)
+		}
+		cli.Warning("No Helm release found in namespace: " + namespace)
+		cli.Info("Use 'vsr deploy helm' to create a new deployment")
+		return nil
+	}
+	if len(output) == 0 {
 		cli.Warning("No Helm release found in namespace: " + namespace)
 		cli.Info("Use 'vsr deploy helm' to create a new deployment")
 		return nil

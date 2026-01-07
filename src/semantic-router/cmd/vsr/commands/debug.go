@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -218,7 +219,7 @@ Examples:
   vsr diagnose --output report.txt
 
   # Generate with custom config
-  vsr diagnose --config /path/to/config.yaml --output report.txt`,
+  vsr diagnose --config /path/to/config.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath := cmd.Parent().Flag("config").Value.String()
 			modelsDir, _ := cmd.Flags().GetString("models-dir")
@@ -227,19 +228,16 @@ Examples:
 			// Run diagnostics
 			report := debug.RunFullDiagnostics(configPath, modelsDir)
 
-			// Display to stdout
+			// Display or save report
 			if outputFile == "" {
 				debug.DisplayReport(report)
 			} else {
-				// Save to file
-				cli.Info(fmt.Sprintf("Generating diagnostic report to: %s", outputFile))
-
-				// TODO: Implement file output
-				// For now, display and inform user
-				debug.DisplayReport(report)
-
-				cli.Info(fmt.Sprintf("\n📄 Report would be saved to: %s", outputFile))
-				cli.Info("Note: File output not yet implemented")
+				// Generate report text and save to file
+				reportText := debug.GenerateReportText(report)
+				if err := os.WriteFile(outputFile, []byte(reportText), 0o644); err != nil {
+					return fmt.Errorf("failed to write report to %s: %w", outputFile, err)
+				}
+				cli.Success(fmt.Sprintf("Diagnostic report saved to: %s", outputFile))
 			}
 
 			return nil
@@ -247,7 +245,7 @@ Examples:
 	}
 
 	cmd.Flags().String("models-dir", "./models", "Models directory to check")
-	cmd.Flags().String("output", "", "Output file for the report")
+	cmd.Flags().StringP("output", "o", "", "Output file for the report (default: stdout)")
 
 	return cmd
 }

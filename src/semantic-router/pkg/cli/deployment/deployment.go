@@ -1,9 +1,12 @@
 package deployment
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cli/timeout"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -167,6 +171,7 @@ func DeployLocal(configPath string, force bool) error {
 	cmd := exec.Command(binPath, "--config", absConfigPath)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
+	cmd.Stdin = nil // Detach stdin to prevent shell from hanging when vsr exits
 
 	// Set library path for candle binding (Rust FFI library)
 	// Get current working directory to construct the library path
@@ -195,6 +200,10 @@ func DeployLocal(configPath string, force bool) error {
 	} else {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("DYLD_LIBRARY_PATH=%s", candleLibPath))
 	}
+
+	// Inform user about library path configuration
+	cli.Info("Library path configured for router process:")
+	cli.Info(fmt.Sprintf("  LD_LIBRARY_PATH=%s", candleLibPath))
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start router: %w", err)
@@ -237,9 +246,20 @@ func DeployDocker(configPath string, withObservability bool) error {
 	// Download models first
 	cli.Info("Downloading models...")
 	cmd := exec.Command("make", "download-models")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := timeout.RunCommandWithIdleTimeoutContext(
+		context.Background(),
+		cmd,
+		timeout.LongRunningConfig,
+		"make download-models",
+	); err != nil {
+		if timeout.IsIdleTimeout(err) {
+			return fmt.Errorf("model download failed: %w\n"+
+				"Troubleshooting:\n"+
+				"  - Check your internet connection\n"+
+				"  - Verify disk space: df -h\n"+
+				"  - Test Python setup: python3 scripts/model_manager.py --help",
+				err)
+		}
 		return fmt.Errorf("failed to download models: %w", err)
 	}
 
@@ -256,11 +276,20 @@ func DeployDocker(configPath string, withObservability bool) error {
 	} else {
 		upCmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d")
 	}
-
-	upCmd.Stdout = os.Stdout
-	upCmd.Stderr = os.Stderr
-
-	if err := upCmd.Run(); err != nil {
+	if err := timeout.RunCommandWithIdleTimeoutContext(
+		context.Background(),
+		upCmd,
+		timeout.DefaultConfig,
+		"docker-compose up",
+	); err != nil {
+		if timeout.IsIdleTimeout(err) {
+			return fmt.Errorf("docker compose startup failed: %w\n"+
+				"Troubleshooting:\n"+
+				"  - Check Docker daemon: docker ps\n"+
+				"  - Check logs: docker-compose logs\n"+
+				"  - Verify ports: netstat -tulpn | grep LISTEN",
+				err)
+		}
 		return fmt.Errorf("failed to deploy with docker-compose: %w", err)
 	}
 
@@ -287,26 +316,57 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 
 	// 2. Check cluster connectivity
 	cli.Info("Checking cluster connectivity...")
-	clusterInfoCmd := exec.Command("kubectl", "cluster-info")
-	if err := clusterInfoCmd.Run(); err != nil {
+	var clusterInfoErr error
+	func() {
+		// 10 second timeout for initial cluster connection check
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		clusterInfoCmd := exec.CommandContext(ctx, "kubectl", "cluster-info")
+		clusterInfoErr = clusterInfoCmd.Run()
+	}()
+	if clusterInfoErr != nil {
+		if errors.Is(clusterInfoErr, context.DeadlineExceeded) {
+			cli.Error("kubectl cluster-info timed out after 10 seconds. Your Kubernetes cluster may be unreachable.")
+			return fmt.Errorf("kubectl cluster-info timed out: %w", clusterInfoErr)
+		}
 		cli.Error("Unable to connect to Kubernetes cluster")
 		cli.Info("Check your kubeconfig: kubectl config view")
 		cli.Info("List available contexts: kubectl config get-contexts")
-		return fmt.Errorf("no connection to Kubernetes cluster")
+		return fmt.Errorf("no connection to Kubernetes cluster: %w", clusterInfoErr)
 	}
 	cli.Success("Cluster connection verified")
 
 	// 3. Check/create namespace
 	cli.Info(fmt.Sprintf("Checking namespace '%s'...", namespace))
-	nsCheckCmd := exec.Command("kubectl", "get", "namespace", namespace)
-	if err := nsCheckCmd.Run(); err != nil {
+	var nsCheckErr error
+	func() {
+		// 10 second timeout for namespace check
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		nsCheckCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", namespace)
+		nsCheckErr = nsCheckCmd.Run()
+	}()
+	if nsCheckErr != nil {
+		if errors.Is(nsCheckErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl get namespace timed out after 10 seconds: %w", nsCheckErr)
+		}
 		// Namespace doesn't exist, create it
 		cli.Info(fmt.Sprintf("Creating namespace '%s'...", namespace))
-		nsCreateCmd := exec.Command("kubectl", "create", "namespace", namespace)
-		nsCreateCmd.Stdout = os.Stdout
-		nsCreateCmd.Stderr = os.Stderr
-		if err := nsCreateCmd.Run(); err != nil {
-			cli.Warning(fmt.Sprintf("Failed to create namespace: %v", err))
+		var nsCreateErr error
+		func() {
+			// 10 second timeout for namespace creation
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			nsCreateCmd := exec.CommandContext(ctx, "kubectl", "create", "namespace", namespace)
+			nsCreateCmd.Stdout = os.Stdout
+			nsCreateCmd.Stderr = os.Stderr
+			nsCreateErr = nsCreateCmd.Run()
+		}()
+		if nsCreateErr != nil {
+			if errors.Is(nsCreateErr, context.DeadlineExceeded) {
+				return fmt.Errorf("kubectl create namespace timed out after 10 seconds: %w", nsCreateErr)
+			}
+			cli.Warning(fmt.Sprintf("Failed to create namespace: %v", nsCreateErr))
 			cli.Info("You may need to create it manually: kubectl create namespace " + namespace)
 		} else {
 			cli.Success("Namespace created")
@@ -317,8 +377,18 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 
 	// 4. Check permissions
 	cli.Info("Checking permissions...")
-	permCheckCmd := exec.Command("kubectl", "auth", "can-i", "create", "pods", "-n", namespace)
-	if err := permCheckCmd.Run(); err != nil {
+	var permCheckErr error
+	func() {
+		// 10 second timeout for permission check
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		permCheckCmd := exec.CommandContext(ctx, "kubectl", "auth", "can-i", "create", "pods", "-n", namespace)
+		permCheckErr = permCheckCmd.Run()
+	}()
+	if permCheckErr != nil {
+		if errors.Is(permCheckErr, context.DeadlineExceeded) {
+			cli.Warning("Permission check timed out after 10 seconds.")
+		}
 		cli.Warning("You may not have sufficient permissions")
 		cli.Info("Check RBAC: kubectl auth can-i create pods -n " + namespace)
 		cli.Info("You may need cluster-admin privileges for deployment")
@@ -333,12 +403,22 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 		return fmt.Errorf("kubernetes manifests not found: %s", manifestDir)
 	}
 
-	cmd := exec.Command("kubectl", "apply", "-f", manifestDir, "-n", namespace)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	var applyErr error
+	func() {
+		// 120 second timeout for applying manifests
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", manifestDir, "-n", namespace)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		applyErr = cmd.Run()
+	}()
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to apply kubernetes manifests: %w", err)
+	if applyErr != nil {
+		if errors.Is(applyErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl apply timed out after 120 seconds: %w", applyErr)
+		}
+		return fmt.Errorf("failed to apply kubernetes manifests: %w", applyErr)
 	}
 
 	cli.Success("Manifests applied successfully")
@@ -352,10 +432,21 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 		time.Sleep(5 * time.Second)
 
 		// Check pod status
-		podsCmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
-		output, err := podsCmd.Output()
-		if err != nil {
-			cli.Info(fmt.Sprintf("Waiting for pods... (%ds/%ds)", i+5, timeout))
+		var output []byte
+		var podsErr error
+		func() {
+			// 10 second timeout for getting pod status
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			podsCmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
+			output, podsErr = podsCmd.Output()
+		}()
+		if podsErr != nil {
+			if errors.Is(podsErr, context.DeadlineExceeded) {
+				cli.Info(fmt.Sprintf("kubectl get pods timed out... (%ds/%ds)", i+5, timeout))
+			} else {
+				cli.Info(fmt.Sprintf("Waiting for pods... (%ds/%ds)", i+5, timeout))
+			}
 			continue
 		}
 
@@ -371,8 +462,6 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 
 		for _, line := range lines {
 			if len(line) > 0 {
-				// Simple check: if line contains "Running" and "1/1" or "2/2", etc.
-				// This is a basic heuristic
 				if containsString(line, "Running") {
 					readyPods++
 				}
@@ -408,11 +497,22 @@ func DeployKubernetes(configPath, namespace string, withObservability bool) erro
 
 	// Verify service endpoints
 	cli.Info("Verifying service endpoints...")
-	svcCmd := exec.Command("kubectl", "get", "svc", "-n", namespace, "-l", "app=semantic-router")
-	svcCmd.Stdout = os.Stdout
-	svcCmd.Stderr = os.Stderr
-	if err := svcCmd.Run(); err != nil {
-		cli.Warning("Could not verify service endpoints")
+	var svcErr error
+	func() {
+		// 10 second timeout for getting service info
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		svcCmd := exec.CommandContext(ctx, "kubectl", "get", "svc", "-n", namespace, "-l", "app=semantic-router")
+		svcCmd.Stdout = os.Stdout
+		svcCmd.Stderr = os.Stderr
+		svcErr = svcCmd.Run()
+	}()
+	if svcErr != nil {
+		if errors.Is(svcErr, context.DeadlineExceeded) {
+			cli.Warning("Could not verify service endpoints: command timed out after 10 seconds")
+		} else {
+			cli.Warning("Could not verify service endpoints")
+		}
 	}
 
 	cli.Success(fmt.Sprintf("Router deployed successfully to Kubernetes namespace: %s", namespace))
@@ -603,8 +703,18 @@ func UndeployKubernetes(namespace string, wait bool) error {
 	}
 
 	// Check if namespace exists
-	checkCmd := exec.Command("kubectl", "get", "namespace", namespace)
-	if err := checkCmd.Run(); err != nil {
+	var nsCheckErr error
+	func() {
+		// 10 second timeout for namespace check
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		checkCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", namespace)
+		nsCheckErr = checkCmd.Run()
+	}()
+	if nsCheckErr != nil {
+		if errors.Is(nsCheckErr, context.DeadlineExceeded) {
+			return fmt.Errorf("kubectl get namespace timed out after 10 seconds: %w", nsCheckErr)
+		}
 		cli.Warning(fmt.Sprintf("Namespace '%s' not found or not accessible", namespace))
 		return nil
 	}
@@ -614,20 +724,41 @@ func UndeployKubernetes(namespace string, wait bool) error {
 		cli.Warning(fmt.Sprintf("Manifest directory not found: %s", manifestDir))
 		cli.Info("Attempting to delete by label...")
 		// Try deleting by common labels
-		labelCmd := exec.Command("kubectl", "delete", "all", "-l", "app=semantic-router", "-n", namespace)
-		labelCmd.Stdout = os.Stdout
-		labelCmd.Stderr = os.Stderr
-		if err := labelCmd.Run(); err != nil {
-			return fmt.Errorf("failed to delete resources: %w", err)
+		var labelErr error
+		func() {
+			// 120 second timeout for deleting resources by label
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			labelCmd := exec.CommandContext(ctx, "kubectl", "delete", "all", "-l", "app=semantic-router", "-n", namespace)
+			labelCmd.Stdout = os.Stdout
+			labelCmd.Stderr = os.Stderr
+			labelErr = labelCmd.Run()
+		}()
+		if labelErr != nil {
+			if errors.Is(labelErr, context.DeadlineExceeded) {
+				return fmt.Errorf("kubectl delete by label timed out after 120 seconds: %w", labelErr)
+			}
+			return fmt.Errorf("failed to delete resources: %w", labelErr)
 		}
 	} else {
 		// Delete using manifest files
-		cmd := exec.Command("kubectl", "delete", "-f", manifestDir, "-n", namespace)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		var deleteErr error
+		func() {
+			// 120 second timeout for deleting resources from manifest
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "kubectl", "delete", "-f", manifestDir, "-n", namespace)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			deleteErr = cmd.Run()
+		}()
 
-		if err := cmd.Run(); err != nil {
-			cli.Warning(fmt.Sprintf("Some resources may not have been deleted: %v", err))
+		if deleteErr != nil {
+			if errors.Is(deleteErr, context.DeadlineExceeded) {
+				cli.Warning(fmt.Sprintf("kubectl delete from manifest timed out after 120 seconds: %v", deleteErr))
+			} else {
+				cli.Warning(fmt.Sprintf("Some resources may not have been deleted: %v", deleteErr))
+			}
 			// Don't return error, continue to wait/verify
 		}
 	}
@@ -642,11 +773,26 @@ func UndeployKubernetes(namespace string, wait bool) error {
 			time.Sleep(2 * time.Second)
 
 			// Check for pods
-			checkCmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
-			output, err := checkCmd.Output()
+			var output []byte
+			var podsErr error
+			func() {
+				// 10 second timeout for getting pod status
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				checkCmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
+				output, podsErr = checkCmd.Output()
+			}()
 
-			if err != nil || len(output) == 0 {
+			if podsErr != nil {
+				if errors.Is(podsErr, context.DeadlineExceeded) {
+					cli.Info(fmt.Sprintf("kubectl get pods timed out... (%ds/%ds)", i+2, timeout))
+				}
 				// No pods found or error (likely no resources)
+				stopped = true
+				break
+			}
+
+			if len(output) == 0 {
 				stopped = true
 				break
 			}
@@ -660,7 +806,7 @@ func UndeployKubernetes(namespace string, wait bool) error {
 
 			// Show progress every 10 seconds
 			if i%10 == 0 {
-				cli.Info(fmt.Sprintf("Waiting for pods to terminate... (%ds/%ds, %d pods remaining)", i, timeout, podCount))
+				cli.Info(fmt.Sprintf("Waiting for pods to terminate... (%ds/%ds, %d pods remaining)", i+2, timeout, podCount))
 			}
 		}
 
@@ -673,14 +819,23 @@ func UndeployKubernetes(namespace string, wait bool) error {
 	}
 
 	// Verify cleanup
-	verifyCmd := exec.Command("kubectl", "get", "all", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
-	output, err := verifyCmd.Output()
-	if err == nil && len(output) > 0 {
+	var output []byte
+	var verifyErr error
+	func() {
+		// 10 second timeout for verification
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		verifyCmd := exec.CommandContext(ctx, "kubectl", "get", "all", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
+		output, verifyErr = verifyCmd.Output()
+	}()
+	if verifyErr == nil && len(output) > 0 {
 		remainingResources := len(splitLines(string(output)))
 		if remainingResources > 0 {
 			cli.Warning(fmt.Sprintf("Warning: %d resource(s) may still exist", remainingResources))
 			cli.Info("Check with: kubectl get all -n " + namespace + " -l app=semantic-router")
 		}
+	} else if verifyErr != nil && !errors.Is(verifyErr, context.DeadlineExceeded) {
+		cli.Warning(fmt.Sprintf("Could not verify cleanup: %v", verifyErr))
 	}
 
 	cli.Success(fmt.Sprintf("Router undeployed from Kubernetes namespace: %s", namespace))
@@ -804,18 +959,27 @@ func DetectDockerDeployment() *DeploymentStatus {
 
 	// Get detailed status for each container
 	for _, container := range containers {
-		inspectCmd := exec.Command("docker", "inspect", "--format", "{{.State.Status}}", container)
-		output, err := inspectCmd.Output()
-		containerStatus := "unknown"
-		if err == nil {
-			containerStatus = strings.TrimSpace(string(output))
-		}
+		func(containerName string) {
+			// 5 second timeout for docker inspect
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			inspectCmd := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.Status}}", containerName)
+			output, err := inspectCmd.Output()
+			containerStatus := "unknown"
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					containerStatus = "timed-out"
+				}
+			} else {
+				containerStatus = strings.TrimSpace(string(output))
+			}
 
-		status.Components = append(status.Components, ComponentStatus{
-			Name:    container,
-			Status:  containerStatus,
-			Message: "",
-		})
+			status.Components = append(status.Components, ComponentStatus{
+				Name:    containerName,
+				Status:  containerStatus,
+				Message: "",
+			})
+		}(container)
 	}
 
 	return status
@@ -834,9 +998,13 @@ func DetectKubernetesDeployment(namespace string) *DeploymentStatus {
 	}
 
 	// Check for pods
-	cmd := exec.Command("kubectl", "get", "pods", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
+	// 5 second timeout for this detection check is sufficient.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "kubectl", "get", "pods", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
 	output, err := cmd.Output()
-	if err != nil || len(output) == 0 {
+	if err != nil {
+		// Don't log error, just return empty status
 		return status
 	}
 
@@ -865,9 +1033,13 @@ func DetectKubernetesDeployment(namespace string) *DeploymentStatus {
 	}
 
 	// Get service info
-	svcCmd := exec.Command("kubectl", "get", "svc", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
+	svcCtx, svcCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer svcCancel()
+	svcCmd := exec.CommandContext(svcCtx, "kubectl", "get", "svc", "-n", namespace, "-l", "app=semantic-router", "--no-headers")
 	svcOutput, err := svcCmd.Output()
-	if err == nil && len(svcOutput) > 0 {
+	if err != nil {
+		// Don't log error, just continue
+	} else if len(svcOutput) > 0 {
 		status.Endpoints = []string{
 			fmt.Sprintf("Check services: kubectl get svc -n %s", namespace),
 		}
@@ -975,6 +1147,11 @@ func fetchLocalLogs(follow bool, tail int, since string, grep string) error {
 	}
 
 	if follow {
+		// Setup signal handling for graceful shutdown
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(sigChan)
+
 		// Use tail -f for following logs
 		args := []string{"-f"}
 		if tail > 0 {
@@ -987,19 +1164,45 @@ func fetchLocalLogs(follow bool, tail int, since string, grep string) error {
 		if grep != "" {
 			// Pipe through grep if pattern specified
 			grepCmd := exec.Command("grep", "--color=always", grep)
-			grepCmd.Stdin, _ = cmd.StdoutPipe()
+			pipe, err := cmd.StdoutPipe()
+			if err != nil {
+				return fmt.Errorf("failed to create stdout pipe: %w", err)
+			}
+			grepCmd.Stdin = pipe
 			grepCmd.Stdout = os.Stdout
 			grepCmd.Stderr = os.Stderr
 
 			if err := cmd.Start(); err != nil {
 				return fmt.Errorf("failed to start tail: %w", err)
 			}
+
+			// Cleanup goroutine for signal handling
+			go func() {
+				<-sigChan
+				_ = cmd.Process.Kill()
+				if grepCmd.Process != nil {
+					_ = grepCmd.Process.Kill()
+				}
+			}()
+
 			if err := grepCmd.Run(); err != nil {
 				_ = cmd.Process.Kill()
+				// Don't error on signal interrupt - exit gracefully
+				if errors.Is(err, os.ErrProcessDone) {
+					return nil
+				}
 				return fmt.Errorf("grep failed: %w", err)
 			}
 			return cmd.Wait()
 		}
+
+		// No grep - setup signal handling for tail only
+		go func() {
+			<-sigChan
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		}()
 
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -1017,7 +1220,11 @@ func fetchLocalLogs(follow bool, tail int, since string, grep string) error {
 
 	if grep != "" {
 		grepCmd := exec.Command("grep", "--color=always", grep)
-		grepCmd.Stdin, _ = cmd.StdoutPipe()
+		pipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout pipe: %w", err)
+		}
+		grepCmd.Stdin = pipe
 		grepCmd.Stdout = os.Stdout
 		grepCmd.Stderr = os.Stderr
 
@@ -1082,7 +1289,11 @@ func fetchDockerLogsEnhanced(follow bool, tail int, component string, since stri
 
 		if grep != "" {
 			grepCmd := exec.Command("grep", "--color=always", grep)
-			grepCmd.Stdin, _ = cmd.StdoutPipe()
+			pipe, err := cmd.StdoutPipe()
+			if err != nil {
+				return fmt.Errorf("failed to create stdout pipe: %w", err)
+			}
+			grepCmd.Stdin = pipe
 			grepCmd.Stdout = os.Stdout
 			grepCmd.Stderr = os.Stderr
 
@@ -1139,7 +1350,11 @@ func fetchKubernetesLogs(follow bool, tail int, namespace string, component stri
 
 	if grep != "" {
 		grepCmd := exec.Command("grep", "--color=always", grep)
-		grepCmd.Stdin, _ = cmd.StdoutPipe()
+		pipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout pipe: %w", err)
+		}
+		grepCmd.Stdin = pipe
 		grepCmd.Stdout = os.Stdout
 		grepCmd.Stderr = os.Stderr
 
@@ -1195,7 +1410,11 @@ func fetchHelmLogs(follow bool, tail int, namespace string, component string, si
 
 	if grep != "" {
 		grepCmd := exec.Command("grep", "--color=always", grep)
-		grepCmd.Stdin, _ = cmd.StdoutPipe()
+		pipe, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("failed to create stdout pipe: %w", err)
+		}
+		grepCmd.Stdin = pipe
 		grepCmd.Stdout = os.Stdout
 		grepCmd.Stderr = os.Stderr
 
@@ -1229,13 +1448,17 @@ func commandExists(cmd string) bool {
 }
 
 func isDockerRunning() bool {
-	cmd := exec.Command("docker", "ps")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", "ps")
 	return cmd.Run() == nil
 }
 
 func getDockerContainers(nameFilter string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	//nolint:gosec // G204: nameFilter is from internal use, not user input
-	cmd := exec.Command("docker", "ps", "--filter", fmt.Sprintf("name=%s", nameFilter), "--format", "{{.Names}}")
+	cmd := exec.CommandContext(ctx, "docker", "ps", "--filter", fmt.Sprintf("name=%s", nameFilter), "--format", "{{.Names}}")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -1269,14 +1492,5 @@ func splitLines(s string) []string {
 }
 
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, substr)
 }
