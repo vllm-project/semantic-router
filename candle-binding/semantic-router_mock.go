@@ -465,10 +465,10 @@ func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
 
 	// Fallback for partial matches if needed, or simple keyword checks if exact match fails
 	// but the tests use specific strings usually.
-	
-	// If entities is empty but we see keywords, maybe add dummy? 
+
+	// If entities is empty but we see keywords, maybe add dummy?
 	// The test expects positions to match content. So we MUST match actual content.
-	
+
 	return TokenClassificationResult{Entities: entities}, nil
 }
 
@@ -567,15 +567,14 @@ func IsQwen3MultiLoRAInitialized() bool {
 	return true
 }
 
-
 // NLI constants and types
 type NLILabel int
 
 const (
-	NLIEntailment NLILabel = 0
-	NLINeutral    NLILabel = 1
+	NLIEntailment    NLILabel = 0
+	NLINeutral       NLILabel = 1
 	NLIContradiction NLILabel = 2
-	NLIError      NLILabel = -1
+	NLIError         NLILabel = -1
 )
 
 // InitHallucinationModel initializes the hallucination model
@@ -586,7 +585,7 @@ func InitHallucinationModel(modelPath string, useCPU bool) error {
 
 // FactCheckResult represents the result of fact checking
 type FactCheckResult struct {
-	Class int
+	Class      int
 	Label      NLILabel
 	Confidence float32
 }
@@ -607,7 +606,7 @@ func ClassifyFactCheckText(text string) (FactCheckResult, error) {
 
 // FeedbackResult represents the result of feedback detection
 type FeedbackResult struct {
-	Class int
+	Class      int
 	Label      string
 	Confidence float32
 }
@@ -629,7 +628,6 @@ func ClassifyFeedbackText(text string) (FeedbackResult, error) {
 // InitHallucinationDetector (if different from Model) - check usage
 // The error was undefined: candle.InitHallucinationModel
 
-
 // DetectHallucinations detects hallucinations
 func DetectHallucinations(text, context, modelPath string, threshold float32) (HallucinationResult, error) {
 	return HallucinationResult{}, nil
@@ -643,12 +641,12 @@ func InitNLIModel(modelPath string, useCPU bool) error {
 
 // NLIResult represents NLI classification result
 type NLIResult struct {
-	LabelStr string
+	LabelStr       string
 	EntailmentProb float32
-	NeutralProb float32
+	NeutralProb    float32
 	ContradictProb float32
-	Label      NLILabel
-	Confidence float32
+	Label          NLILabel
+	Confidence     float32
 }
 
 // ClassifyNLI classifies NLI
