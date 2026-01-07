@@ -5,29 +5,31 @@ package memory
 import (
 	"context"
 	"errors"
-	"fmt"
+	"os"
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
-func TestMemory(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Memory Package Suite")
-}
-
-var _ = BeforeSuite(func() {
-	// Initialize embedding model for tests (Mocking the binder would be faster, but this tests real vectors)
+// TestMain initializes the embedding model before running tests
+func TestMain(m *testing.M) {
+	// Initialize embedding model for tests
 	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
-	Expect(err).NotTo(HaveOccurred())
-})
+	if err != nil {
+		os.Exit(1)
+	}
+	
+	// Run tests
+	code := m.Run()
+	os.Exit(code)
+}
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
@@ -41,7 +43,7 @@ func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []stri
 	if m.SearchFunc != nil {
 		return m.SearchFunc(ctx, coll, parts, expr, out, vectors, vField, mType, topK, sp, opts...)
 	}
-	return nil, fmt.Errorf("SearchFunc not implemented")
+	return nil, errors.New("SearchFunc not implemented")
 }
 
 func (m *MockMilvusClient) HasCollection(ctx context.Context, coll string) (bool, error) {
@@ -138,121 +140,134 @@ func (m *MockMilvusClient) GetVersion(context.Context) (string, error) { return 
 func (m *MockMilvusClient) HybridSearch(context.Context, string, []string, int, []string, client.Reranker, []*client.ANNSearchRequest, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) { return nil, nil }
 func (m *MockMilvusClient) ReplicateMessage(context.Context, string, uint64, uint64, [][]byte, []*msgpb.MsgPosition, []*msgpb.MsgPosition, ...client.ReplicateMessageOption) (*entity.MessageInfo, error) { return nil, nil }
 
-var _ = Describe("MilvusStore", func() {
-	var (
-		mockClient *MockMilvusClient
-		store      *MilvusStore
-		ctx        context.Context
-	)
+func setupTestStore() (*MilvusStore, *MockMilvusClient) {
+	mockClient := &MockMilvusClient{}
+	options := MilvusStoreOptions{
+		Client:         mockClient,
+		CollectionName: "test_memories",
+		Config:         DefaultMemoryConfig(),
+		Enabled:        true,
+	}
+	store, _ := NewMilvusStore(options)
+	return store, mockClient
+}
 
-	BeforeEach(func() {
-		mockClient = &MockMilvusClient{}
-		ctx = context.Background()
-		options := MilvusStoreOptions{
-			Client:         mockClient,
-			CollectionName: "test_memories",
-			Config:         DefaultMemoryConfig(),
-			Enabled:        true,
-		}
-		store, _ = NewMilvusStore(options)
+func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 1,
+			Scores:      []float32{0.95},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"mem_1"}),
+				entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic"}),
+				entity.NewColumnVarChar("metadata", []string{`{"source": "slack", "importance": "high"}`}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		// Verify TopK floor of 20 (default limit 5 * 4 = 20, or minimum 20)
+		assert.GreaterOrEqual(t, topK, 20, "Expected topK to be at least 20, got %d", topK)
+		return mockResults, nil
+	}
+
+	results, err := store.Retrieve(ctx, RetrieveOptions{Query: "budget", UserID: "u1", Limit: 5})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	// Verify Metadata Inflation
+	assert.Equal(t, "slack", results[0].Metadata["source"])
+	assert.Equal(t, "high", results[0].Metadata["importance"])
+	assert.Contains(t, results[0].Metadata["_raw_source"], "slack")
+}
+
+func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 2,
+			Scores:      []float32{0.85, 0.45}, // 0.45 should be dropped
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	results, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0.6,
 	})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "id1", results[0].ID)
+}
 
-	Describe("Retrieve", func() {
-		It("should successfully inflate JSON metadata (Point 3 Fix)", func() {
-			mockResults := []client.SearchResult{
-				{
-					ResultCount: 1,
-					Scores:      []float32{0.95},
-					Fields: []entity.Column{
-						entity.NewColumnVarChar("id", []string{"mem_1"}),
-						entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
-						entity.NewColumnVarChar("memory_type", []string{"conversation"}),
-						entity.NewColumnVarChar("metadata", []string{`{"source": "slack", "importance": "high"}`}),
-					},
-				},
-			}
+func TestMilvusStore_Retrieve_EmptyResults(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
 
-			mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
-				// Verify Point 2: TopK floor of 20 (default limit 5 * 4 = 20, or minimum 20)
-				Expect(topK).To(BeNumerically(">=", 20), "Expected topK to be at least 20, got %d", topK)
-				return mockResults, nil
-			}
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return []client.SearchResult{{ResultCount: 0}}, nil
+	}
 
-			results, err := store.Retrieve(ctx, RetrieveOptions{Query: "budget", UserID: "u1", Limit: 5})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(HaveLen(1))
-			
-			// Verify Metadata Inflation
-			Expect(results[0].Metadata["source"]).To(Equal("slack"))
-			Expect(results[0].Metadata["importance"]).To(Equal("high"))
-			Expect(results[0].Metadata["_raw_source"]).To(ContainSubstring("slack"))
+	results, err := store.Retrieve(ctx, RetrieveOptions{Query: "test", UserID: "u1"})
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestMilvusStore_RetryLogic_TransientErrors(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return nil, errors.New("connection timeout")
+	}
+
+	_, err := store.Retrieve(ctx, RetrieveOptions{Query: "test", UserID: "u1"})
+	require.Error(t, err)
+	assert.Equal(t, DefaultMaxRetries, mockClient.SearchCallCount)
+}
+
+func TestMilvusStore_RetryLogic_ContextCancellation(t *testing.T) {
+	store, mockClient := setupTestStore()
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return nil, errors.New("connection timeout")
+	}
+
+	_, err := store.Retrieve(cancelCtx, RetrieveOptions{Query: "test", UserID: "u1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context cancelled")
+}
+
+func TestIsTransientError(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		transient bool
+	}{
+		{"connection refused", errors.New("connection refused"), true},
+		{"deadline exceeded", errors.New("deadline exceeded"), true},
+		{"invalid schema", errors.New("invalid schema"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isTransientError(tt.err)
+			assert.Equal(t, tt.transient, result)
 		})
-
-		It("should filter results below threshold", func() {
-			mockResults := []client.SearchResult{
-				{
-					ResultCount: 2,
-					Scores:      []float32{0.85, 0.45}, // 0.45 should be dropped
-					Fields: []entity.Column{
-						entity.NewColumnVarChar("id", []string{"id1", "id2"}),
-						entity.NewColumnVarChar("content", []string{"c1", "c2"}),
-					},
-				},
-			}
-
-			mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
-				return mockResults, nil
-			}
-
-			results, err := store.Retrieve(ctx, RetrieveOptions{
-				Query: "test", UserID: "u1", Threshold: 0.6,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(HaveLen(1))
-			Expect(results[0].ID).To(Equal("id1"))
-		})
-
-		It("should handle empty search results gracefully", func() {
-			mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
-				return []client.SearchResult{{ResultCount: 0}}, nil
-			}
-
-			results, err := store.Retrieve(ctx, RetrieveOptions{Query: "test", UserID: "u1"})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(results).To(BeEmpty())
-		})
-	})
-
-	Describe("Retry Logic", func() {
-		It("should retry exactly DefaultMaxRetries times on transient errors", func() {
-			mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
-				return nil, errors.New("connection timeout")
-			}
-
-			_, err := store.Retrieve(ctx, RetrieveOptions{Query: "test", UserID: "u1"})
-			Expect(err).To(HaveOccurred())
-			Expect(mockClient.SearchCallCount).To(Equal(DefaultMaxRetries))
-		})
-
-		It("should stop retrying if context is cancelled", func() {
-			cancelCtx, cancel := context.WithCancel(ctx)
-			cancel() // Cancel immediately
-
-			mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
-				return nil, errors.New("connection timeout")
-			}
-
-			_, err := store.Retrieve(cancelCtx, RetrieveOptions{Query: "test", UserID: "u1"})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context cancelled"))
-		})
-	})
-
-	Describe("Error Detection", func() {
-		It("should identify specific strings as transient errors", func() {
-			Expect(isTransientError(errors.New("connection refused"))).To(BeTrue())
-			Expect(isTransientError(errors.New("deadline exceeded"))).To(BeTrue())
-			Expect(isTransientError(errors.New("invalid schema"))).To(BeFalse())
-		})
-	})
-})
+	}
+}
