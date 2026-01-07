@@ -26,8 +26,8 @@ def setup_logging(log_level: str = "INFO") -> logging.Logger:
     """
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     logger = logging.getLogger(__name__)
     return logger
@@ -101,7 +101,7 @@ def save_model_artifacts(
     tokenizer,
     output_dir: Path,
     config: Dict,
-    metrics: Optional[Dict] = None
+    metrics: Optional[Dict] = None,
 ):
     """
     Save model, tokenizer, and training artifacts.
@@ -122,6 +122,7 @@ def save_model_artifacts(
 
     # Save config
     import json
+
     with open(output_dir / "training_config.json", "w") as f:
         json.dump(config, f, indent=2)
 
@@ -144,8 +145,9 @@ def load_jsonl(file_path: Path) -> List[Dict]:
         List of dictionaries
     """
     import json
+
     data = []
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         for line in f:
             data.append(json.loads(line.strip()))
     return data
@@ -160,18 +162,17 @@ def save_jsonl(data: List[Dict], file_path: Path):
         file_path: Output file path
     """
     import json
+
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(file_path, 'w') as f:
+    with open(file_path, "w") as f:
         for item in data:
-            f.write(json.dumps(item) + '\n')
+            f.write(json.dumps(item) + "\n")
 
 
 def calculate_cache_metrics(
-    similarities: List[float],
-    labels: List[int],
-    threshold: float = 0.85
+    similarities: List[float], labels: List[int], threshold: float = 0.85
 ) -> Dict[str, float]:
     """
     Calculate cache-specific metrics (precision, recall, F1).
@@ -193,7 +194,11 @@ def calculate_cache_metrics(
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
 
     return {
         "precision": precision,
@@ -203,7 +208,7 @@ def calculate_cache_metrics(
         "false_positives": fp,
         "false_negatives": fn,
         "true_negatives": tn,
-        "threshold": threshold
+        "threshold": threshold,
     }
 
 

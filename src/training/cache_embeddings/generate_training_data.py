@@ -26,11 +26,13 @@ import os
 # Global flag for graceful shutdown
 shutdown_requested = False
 
+
 def signal_handler(sig, frame):
     """Handle SIGINT/SIGTERM for graceful shutdown."""
     global shutdown_requested
     print("\n⚠️  Shutdown requested. Finishing current batch...")
     shutdown_requested = True
+
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
@@ -39,8 +41,8 @@ signal.signal(signal.SIGTERM, signal_handler)
 def extract_text(value):
     """Extract text from either string or {"text": "..."} format."""
     if isinstance(value, dict):
-        return value.get('text', '')
-    return str(value) if value else ''
+        return value.get("text", "")
+    return str(value) if value else ""
 
 
 class StreamingWriter:
@@ -53,25 +55,25 @@ class StreamingWriter:
         self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Open in append mode for crash recovery
-        self.file = open(output_path, 'a', buffering=1)  # Line buffered
+        self.file = open(output_path, "a", buffering=1)  # Line buffered
         self.samples_written = 0
 
     def write_samples(self, samples: List[Dict]):
         """Write samples immediately and flush."""
         for sample in samples:
-            self.file.write(json.dumps(sample) + '\n')
+            self.file.write(json.dumps(sample) + "\n")
             self.samples_written += 1
         self.file.flush()
 
     def write_checkpoint(self, queries_processed: int, total_queries: int):
         """Write checkpoint for resume capability."""
         checkpoint = {
-            'queries_processed': queries_processed,
-            'total_queries': total_queries,
-            'samples_written': self.samples_written,
-            'timestamp': time.time()
+            "queries_processed": queries_processed,
+            "total_queries": total_queries,
+            "samples_written": self.samples_written,
+            "timestamp": time.time(),
         }
-        with open(self.checkpoint_path, 'w') as f:
+        with open(self.checkpoint_path, "w") as f:
             json.dump(checkpoint, f)
 
     def load_checkpoint(self) -> Optional[Dict]:
@@ -83,7 +85,7 @@ class StreamingWriter:
 
     def close(self):
         """Close file handles."""
-        if hasattr(self, 'file'):
+        if hasattr(self, "file"):
             self.file.close()
 
     def __enter__(self):
@@ -93,7 +95,9 @@ class StreamingWriter:
         self.close()
 
 
-def generate_paraphrases_batch_vllm(queries: List[str], llm, num_paraphrases: int) -> List[List[str]]:
+def generate_paraphrases_batch_vllm(
+    queries: List[str], llm, num_paraphrases: int
+) -> List[List[str]]:
     """Generate paraphrases for a batch using vLLM."""
     from vllm import SamplingParams
 
@@ -120,11 +124,7 @@ Format: {{"paraphrases": ["string1", "string2", "string3"]}}
 """
         prompts.append(prompt)
 
-    sampling_params = SamplingParams(
-        temperature=0.7,
-        max_tokens=512,
-        stop=None
-    )
+    sampling_params = SamplingParams(temperature=0.7, max_tokens=512, stop=None)
 
     outputs = llm.generate(prompts, sampling_params)
 
@@ -132,12 +132,12 @@ Format: {{"paraphrases": ["string1", "string2", "string3"]}}
     for output in outputs:
         try:
             text = output.outputs[0].text.strip()
-            if '{' in text:
-                json_start = text.index('{')
-                json_end = text.rindex('}') + 1
+            if "{" in text:
+                json_start = text.index("{")
+                json_end = text.rindex("}") + 1
                 json_str = text[json_start:json_end]
                 data = json.loads(json_str)
-                paraphrases = [extract_text(p) for p in data.get('paraphrases', [])]
+                paraphrases = [extract_text(p) for p in data.get("paraphrases", [])]
                 results.append([p for p in paraphrases if p])
             else:
                 results.append([])
@@ -147,7 +147,9 @@ Format: {{"paraphrases": ["string1", "string2", "string3"]}}
     return results
 
 
-def generate_negatives_batch_vllm(queries: List[str], llm, num_negatives: int) -> List[List[str]]:
+def generate_negatives_batch_vllm(
+    queries: List[str], llm, num_negatives: int
+) -> List[List[str]]:
     """Generate hard negatives for a batch using vLLM."""
     from vllm import SamplingParams
 
@@ -179,11 +181,7 @@ Format: {{"negatives": ["string1", "string2"]}}
 """
         prompts.append(prompt)
 
-    sampling_params = SamplingParams(
-        temperature=0.7,
-        max_tokens=512,
-        stop=None
-    )
+    sampling_params = SamplingParams(temperature=0.7, max_tokens=512, stop=None)
 
     outputs = llm.generate(prompts, sampling_params)
 
@@ -191,12 +189,12 @@ Format: {{"negatives": ["string1", "string2"]}}
     for output in outputs:
         try:
             text = output.outputs[0].text.strip()
-            if '{' in text:
-                json_start = text.index('{')
-                json_end = text.rindex('}') + 1
+            if "{" in text:
+                json_start = text.index("{")
+                json_end = text.rindex("}") + 1
                 json_str = text[json_start:json_end]
                 data = json.loads(json_str)
-                negatives = [extract_text(n) for n in data.get('negatives', [])]
+                negatives = [extract_text(n) for n in data.get("negatives", [])]
                 results.append([n for n in negatives if n])
             else:
                 results.append([])
@@ -214,11 +212,15 @@ def process_batch_vllm(batch_queries: List[str], llm, args) -> List[Dict]:
     - Positive: paraphrased version (semantically identical)
     - Negative: related but distinct query (different intent/focus)
     """
-    paraphrases_batch = generate_paraphrases_batch_vllm(batch_queries, llm, args.paraphrases)
+    paraphrases_batch = generate_paraphrases_batch_vllm(
+        batch_queries, llm, args.paraphrases
+    )
     negatives_batch = generate_negatives_batch_vllm(batch_queries, llm, args.negatives)
 
     samples = []
-    for query, paraphrases, negatives in zip(batch_queries, paraphrases_batch, negatives_batch):
+    for query, paraphrases, negatives in zip(
+        batch_queries, paraphrases_batch, negatives_batch
+    ):
         # Create triplets: each paraphrase paired with a negative
         # This ensures proper contrastive learning with MNR loss
         for i, paraphrase in enumerate(paraphrases):
@@ -226,32 +228,55 @@ def process_batch_vllm(batch_queries: List[str], llm, args) -> List[Dict]:
             negative_idx = i % len(negatives) if negatives else None
 
             if negative_idx is not None:
-                samples.append({
-                    "anchor": paraphrase,
-                    "positive": query,
-                    "negative": negatives[negative_idx],
-                    "is_duplicate": 1  # Anchor-positive are duplicates
-                })
+                samples.append(
+                    {
+                        "anchor": paraphrase,
+                        "positive": query,
+                        "negative": negatives[negative_idx],
+                        "is_duplicate": 1,  # Anchor-positive are duplicates
+                    }
+                )
 
     return samples
 
 
 def main():
     # Disable vLLM's verbose progress bars to show clean overall progress
-    os.environ['VLLM_DISABLE_PROGRESS_BAR'] = '1'
+    os.environ["VLLM_DISABLE_PROGRESS_BAR"] = "1"
 
-    parser = argparse.ArgumentParser(description="Production vLLM augmentation with streaming and checkpointing")
-    parser.add_argument("--input", required=True, help="Input JSONL with unlabeled queries")
+    parser = argparse.ArgumentParser(
+        description="Production vLLM augmentation with streaming and checkpointing"
+    )
+    parser.add_argument(
+        "--input", required=True, help="Input JSONL with unlabeled queries"
+    )
     parser.add_argument("--output", required=True, help="Output JSONL for training")
-    parser.add_argument("--model", default="Qwen/Qwen2.5-1.5B-Instruct", help="Model name")
-    parser.add_argument("--paraphrases", type=int, default=3, help="Paraphrases per query")
-    parser.add_argument("--negatives", type=int, default=2, help="Hard negatives per query")
+    parser.add_argument(
+        "--model", default="Qwen/Qwen2.5-1.5B-Instruct", help="Model name"
+    )
+    parser.add_argument(
+        "--paraphrases", type=int, default=3, help="Paraphrases per query"
+    )
+    parser.add_argument(
+        "--negatives", type=int, default=2, help="Hard negatives per query"
+    )
     parser.add_argument("--max-queries", type=int, help="Max queries to process")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for vLLM")
-    parser.add_argument("--gpu-memory", type=float, default=0.9, help="GPU memory utilization")
-    parser.add_argument("--tensor-parallel", type=int, default=1, help="Number of GPUs for tensor parallelism")
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="Batch size for vLLM"
+    )
+    parser.add_argument(
+        "--gpu-memory", type=float, default=0.9, help="GPU memory utilization"
+    )
+    parser.add_argument(
+        "--tensor-parallel",
+        type=int,
+        default=1,
+        help="Number of GPUs for tensor parallelism",
+    )
     parser.add_argument("--resume", action="store_true", help="Resume from checkpoint")
-    parser.add_argument("--checkpoint-interval", type=int, default=10, help="Checkpoint every N batches")
+    parser.add_argument(
+        "--checkpoint-interval", type=int, default=10, help="Checkpoint every N batches"
+    )
 
     args = parser.parse_args()
 
@@ -265,10 +290,10 @@ def main():
     with open(args.input) as f:
         for line in f:
             data = json.loads(line)
-            queries.append(data['query'])
+            queries.append(data["query"])
 
     if args.max_queries:
-        queries = queries[:args.max_queries]
+        queries = queries[: args.max_queries]
         print(f"Limited to {args.max_queries} queries")
 
     print(f"Loaded {len(queries)} queries")
@@ -283,8 +308,10 @@ def main():
         if args.resume:
             checkpoint = writer.load_checkpoint()
             if checkpoint:
-                start_idx = checkpoint['queries_processed']
-                print(f"✓ Resuming from checkpoint: {start_idx}/{len(queries)} queries processed")
+                start_idx = checkpoint["queries_processed"]
+                print(
+                    f"✓ Resuming from checkpoint: {start_idx}/{len(queries)} queries processed"
+                )
                 print(f"  {checkpoint['samples_written']} samples already written")
                 print()
 
@@ -297,7 +324,7 @@ def main():
             gpu_memory_utilization=args.gpu_memory,
             max_model_len=2048,
             trust_remote_code=True,
-            tensor_parallel_size=args.tensor_parallel
+            tensor_parallel_size=args.tensor_parallel,
         )
         print(f"✓ vLLM initialized with {args.tensor_parallel} GPU(s)")
         print()
@@ -306,9 +333,11 @@ def main():
         batch_size = args.batch_size
         num_batches = (len(queries) - start_idx + batch_size - 1) // batch_size
 
-        for batch_idx in tqdm(range(0, len(queries) - start_idx, batch_size),
-                             desc="Processing batches",
-                             total=num_batches):
+        for batch_idx in tqdm(
+            range(0, len(queries) - start_idx, batch_size),
+            desc="Processing batches",
+            total=num_batches,
+        ):
 
             if shutdown_requested:
                 print("\n⚠️  Shutdown requested. Saving checkpoint...")
@@ -317,7 +346,7 @@ def main():
                 sys.exit(0)
 
             actual_idx = start_idx + batch_idx
-            batch_queries = queries[actual_idx:actual_idx + batch_size]
+            batch_queries = queries[actual_idx : actual_idx + batch_size]
 
             # Generate samples and write immediately
             samples = process_batch_vllm(batch_queries, llm, args)

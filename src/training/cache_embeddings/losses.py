@@ -35,7 +35,7 @@ class TripletLoss(nn.Module):
         self,
         margin: float = 1.0,
         distance_metric: str = "cosine",
-        reduction: str = "mean"
+        reduction: str = "mean",
     ):
         """
         Args:
@@ -48,13 +48,12 @@ class TripletLoss(nn.Module):
         self.distance_metric = distance_metric
         self.reduction = reduction
 
-        logger.info(f"TripletLoss initialized: margin={margin}, metric={distance_metric}")
+        logger.info(
+            f"TripletLoss initialized: margin={margin}, metric={distance_metric}"
+        )
 
     def forward(
-        self,
-        anchor: torch.Tensor,
-        positive: torch.Tensor,
-        negative: torch.Tensor
+        self, anchor: torch.Tensor, positive: torch.Tensor, negative: torch.Tensor
     ) -> torch.Tensor:
         """
         Compute triplet loss.
@@ -110,10 +109,7 @@ class InfoNCELoss(nn.Module):
         logger.info(f"InfoNCELoss initialized: temperature={temperature}")
 
     def forward(
-        self,
-        anchor: torch.Tensor,
-        positive: torch.Tensor,
-        negatives: torch.Tensor
+        self, anchor: torch.Tensor, positive: torch.Tensor, negatives: torch.Tensor
     ) -> torch.Tensor:
         """
         Compute InfoNCE loss.
@@ -134,17 +130,21 @@ class InfoNCELoss(nn.Module):
         negatives = F.normalize(negatives, p=2, dim=-1)
 
         # Compute similarities
-        pos_sim = torch.sum(anchor * positive, dim=-1) / self.temperature  # [batch_size]
+        pos_sim = (
+            torch.sum(anchor * positive, dim=-1) / self.temperature
+        )  # [batch_size]
 
         # If negatives has shape [batch_size, num_neg, dim]
         if negatives.dim() == 3:
-            neg_sim = torch.bmm(
-                negatives,
-                anchor.unsqueeze(-1)
-            ).squeeze(-1) / self.temperature  # [batch_size, num_neg]
+            neg_sim = (
+                torch.bmm(negatives, anchor.unsqueeze(-1)).squeeze(-1)
+                / self.temperature
+            )  # [batch_size, num_neg]
 
             # Concatenate positive and negative similarities
-            logits = torch.cat([pos_sim.unsqueeze(1), neg_sim], dim=1)  # [batch_size, 1 + num_neg]
+            logits = torch.cat(
+                [pos_sim.unsqueeze(1), neg_sim], dim=1
+            )  # [batch_size, 1 + num_neg]
         else:
             # Single negative per sample: [batch_size, dim]
             neg_sim = torch.sum(anchor * negatives, dim=-1) / self.temperature
@@ -179,13 +179,11 @@ class MultipleNegativesRankingLoss(nn.Module):
         self.temperature = temperature
         self.reduction = reduction
 
-        logger.info(f"MultipleNegativesRankingLoss initialized: temperature={temperature}")
+        logger.info(
+            f"MultipleNegativesRankingLoss initialized: temperature={temperature}"
+        )
 
-    def forward(
-        self,
-        anchor: torch.Tensor,
-        positive: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, anchor: torch.Tensor, positive: torch.Tensor) -> torch.Tensor:
         """
         Compute MNR loss using in-batch negatives.
 
@@ -234,10 +232,7 @@ class CosineEmbeddingLoss(nn.Module):
         logger.info(f"CosineEmbeddingLoss initialized: margin={margin}")
 
     def forward(
-        self,
-        embedding1: torch.Tensor,
-        embedding2: torch.Tensor,
-        label: torch.Tensor
+        self, embedding1: torch.Tensor, embedding2: torch.Tensor, label: torch.Tensor
     ) -> torch.Tensor:
         """
         Compute cosine embedding loss.
@@ -265,7 +260,7 @@ class HardTripletLoss(nn.Module):
         self,
         margin: float = 1.0,
         distance_metric: str = "cosine",
-        hard_mining: str = "hardest"
+        hard_mining: str = "hardest",
     ):
         """
         Args:
@@ -294,16 +289,16 @@ class HardTripletLoss(nn.Module):
             # Euclidean distance
             dot_product = torch.matmul(embeddings, embeddings.T)
             squared_norm = torch.diag(dot_product)
-            distances = squared_norm.unsqueeze(0) - 2.0 * dot_product + squared_norm.unsqueeze(1)
+            distances = (
+                squared_norm.unsqueeze(0)
+                - 2.0 * dot_product
+                + squared_norm.unsqueeze(1)
+            )
             distances = torch.clamp(distances, min=0.0).sqrt()
 
         return distances
 
-    def forward(
-        self,
-        embeddings: torch.Tensor,
-        labels: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, embeddings: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """
         Compute hard triplet mining loss.
 
@@ -335,13 +330,12 @@ class HardTripletLoss(nn.Module):
             # Hardest positive: maximum distance among positives
             max_positive_dist = torch.max(
                 pairwise_dist * positive_mask.float() - (~positive_mask).float() * 1e9,
-                dim=1
+                dim=1,
             )[0]
 
             # Hardest negative: minimum distance among negatives
             min_negative_dist = torch.min(
-                pairwise_dist + (~negative_mask).float() * 1e9,
-                dim=1
+                pairwise_dist + (~negative_mask).float() * 1e9, dim=1
             )[0]
 
             # Triplet loss
@@ -377,10 +371,7 @@ class HardTripletLoss(nn.Module):
         return losses.mean()
 
 
-def get_loss_function(
-    loss_type: str,
-    **kwargs
-) -> nn.Module:
+def get_loss_function(loss_type: str, **kwargs) -> nn.Module:
     """
     Factory function to get loss function by name.
 

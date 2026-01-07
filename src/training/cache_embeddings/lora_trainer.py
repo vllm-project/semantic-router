@@ -53,12 +53,12 @@ logger = logging.getLogger(__name__)
 try:
     from transformers import AutoModel, AutoTokenizer
     from peft import LoraConfig, get_peft_model, TaskType
+
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     logger.warning(
-        "transformers and peft not available. "
-        "Install: pip install transformers peft"
+        "transformers and peft not available. " "Install: pip install transformers peft"
     )
 
 
@@ -177,9 +177,9 @@ class CacheEmbeddingModel(nn.Module):
 
         # Mean pooling
         token_embeddings = outputs.last_hidden_state
-        attention_mask_expanded = attention_mask.unsqueeze(-1).expand(
-            token_embeddings.size()
-        ).float()
+        attention_mask_expanded = (
+            attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        )
 
         sum_embeddings = torch.sum(token_embeddings * attention_mask_expanded, dim=1)
         sum_mask = torch.clamp(attention_mask_expanded.sum(dim=1), min=1e-9)
@@ -333,12 +333,8 @@ def main():
     )
 
     # Data arguments
-    parser.add_argument(
-        "--train-data", required=True, help="Training data JSONL file"
-    )
-    parser.add_argument(
-        "--val-data", help="Validation data JSONL file (optional)"
-    )
+    parser.add_argument("--train-data", required=True, help="Training data JSONL file")
+    parser.add_argument("--val-data", help="Validation data JSONL file (optional)")
 
     # Model arguments
     parser.add_argument(
@@ -353,11 +349,17 @@ def main():
     )
 
     # Training arguments
-    parser.add_argument("--epochs", type=int, default=1, help="Number of epochs (paper uses 1)")
+    parser.add_argument(
+        "--epochs", type=int, default=1, help="Number of epochs (paper uses 1)"
+    )
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--lr", type=float, default=2e-5, help="Learning rate")
-    parser.add_argument("--max-length", type=int, default=128, help="Max sequence length")
-    parser.add_argument("--temperature", type=float, default=0.05, help="MNR loss temperature")
+    parser.add_argument(
+        "--max-length", type=int, default=128, help="Max sequence length"
+    )
+    parser.add_argument(
+        "--temperature", type=float, default=0.05, help="MNR loss temperature"
+    )
 
     # Output arguments
     parser.add_argument("--output", required=True, help="Output directory for model")
@@ -409,9 +411,9 @@ def main():
     loss_fn = MultipleNegativesRankingLoss(temperature=args.temperature)
 
     # Training loop
-    logger.info("="*80)
+    logger.info("=" * 80)
     logger.info("Starting Training")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     training_history = []
 
@@ -432,9 +434,9 @@ def main():
         training_history.append({"epoch": epoch, **train_metrics})
 
     # Save model
-    logger.info("="*80)
+    logger.info("=" * 80)
     logger.info("Training Complete!")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     save_model(model, args.output, tokenizer)
 
@@ -446,9 +448,9 @@ def main():
     logger.info(f"Training history saved to {history_file}")
 
     # Print summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("✅ Training Complete!")
-    print("="*80)
+    print("=" * 80)
     print(f"Model saved to: {args.output}")
     print(f"Base model: {args.base_model}")
     print(f"Training samples: {len(train_dataset)}")
@@ -456,7 +458,7 @@ def main():
     print(f"Final train loss: {training_history[-1]['train_loss']:.4f}")
     if val_loader:
         print(f"Final val loss: {training_history[-1]['val_loss']:.4f}")
-    print("="*80)
+    print("=" * 80)
 
     return 0
 
