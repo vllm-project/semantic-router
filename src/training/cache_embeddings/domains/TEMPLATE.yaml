@@ -1,0 +1,33 @@
+# Domain configuration template
+#
+# Copy this file to <domain>.yaml and fill in the details
+# Example: cp TEMPLATE.yaml legal.yaml
+
+domain: "<domain-name>"
+description: "<Brief description of the domain>"
+
+# Data source - path relative to repository root
+data_file: "data/cache_embeddings/<domain>/unlabeled_queries.jsonl"
+queries_count: <number>
+
+# Output paths - where to save trained model
+output_dir: "models/<domain>-cache-lora"
+
+# HuggingFace repository (optional - leave empty if not pushing)
+# Format: "your-org/semantic-router-<domain>-cache"
+hf_repo: ""
+
+# Training parameters (use defaults unless you have a reason to change)
+vllm_model: "Qwen/Qwen2.5-1.5B-Instruct"
+base_model: "sentence-transformers/all-MiniLM-L12-v2"
+paraphrases: 3
+negatives: 2
+batch_size: 32
+learning_rate: 2e-5
+temperature: 0.05
+epochs: 1
+
+# AWS configuration
+aws_instance_type: "g5.12xlarge"
+aws_gpus: 4
+estimated_time_hours: 2

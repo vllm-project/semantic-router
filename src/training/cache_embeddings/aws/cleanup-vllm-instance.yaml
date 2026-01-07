@@ -1,0 +1,128 @@
+---
+- name: Cleanup AWS vLLM training instances
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    aws_region: us-east-2
+
+  tasks:
+    - name: Ensure boto3 and botocore are installed
+      pip:
+        name:
+          - boto3
+          - botocore
+        state: present
+      delegate_to: localhost
+
+    - name: Find inventory files
+      find:
+        paths: "{{ playbook_dir }}"
+        patterns: "vllm-inventory-*.ini"
+      register: inventory_files
+
+    - name: Extract instance IDs from inventory files
+      shell: |
+        instance_ids=()
+        for file in {{ playbook_dir }}/vllm-inventory-*.ini; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file" .ini)
+            filename_id=$(echo "$filename" | grep -o 'i-[a-z0-9]\+' || true)
+            if [ -n "$filename_id" ]; then
+              echo "$filename_id"
+            fi
+          fi
+        done | sort | uniq
+      register: extracted_instance_ids
+      when: inventory_files.files | length > 0
+
+    - name: Set instance IDs variable
+      set_fact:
+        instance_ids: "{{ extracted_instance_ids.stdout_lines }}"
+      when: inventory_files.files | length > 0 and extracted_instance_ids.stdout_lines | length > 0
+
+    - name: Display found instance IDs
+      debug:
+        msg: "Found instance IDs from inventory files: {{ instance_ids }}"
+      when: instance_ids is defined and instance_ids | length > 0
+
+    - name: Get instance information
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        instance_ids: "{{ instance_ids }}"
+      register: instances_info
+      when: instance_ids is defined and instance_ids | length > 0
+
+    - name: Set instances to delete
+      set_fact:
+        instances_to_delete: "{{ instances_info.instances }}"
+      when: instances_info is defined and instances_info.instances is defined
+
+    - name: Display instances that will be deleted
+      debug:
+        msg: |
+          The following vLLM training instances will be DELETED:
+          {% for instance in instances_to_delete %}
+          - Instance ID: {{ instance.instance_id }}
+            Name: {{ instance.tags.Name | default('N/A') }}
+            Type: {{ instance.instance_type }}
+            State: {{ instance.state.name }}
+            Public IP: {{ instance.public_ip_address | default('N/A') }}
+            Launch Time: {{ instance.launch_time }}
+          {% endfor %}
+      when: instances_to_delete is defined and instances_to_delete | length > 0
+
+    - name: Confirm no instances found
+      debug:
+        msg: "No vLLM inventory files found. Nothing to cleanup."
+      when: inventory_files.files | length == 0
+
+    - name: Terminate instances
+      amazon.aws.ec2_instance:
+        region: "{{ aws_region }}"
+        instance_ids:
+          - "{{ item.instance_id }}"
+        state: terminated
+        wait: true
+        wait_timeout: 60
+      loop: "{{ instances_to_delete }}"
+      register: termination_results
+      when: instances_to_delete is defined and instances_to_delete | length > 0
+
+    - name: Display termination results
+      debug:
+        msg: |
+          Instance {{ item.item.instance_id }} ({{ item.item.tags.Name | default('N/A') }})
+          termination status: {{ item.changed | ternary('terminated', 'unchanged') }}
+      loop: "{{ termination_results.results }}"
+      when: termination_results is defined and termination_results.results is defined
+
+    - name: Clean up inventory files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ inventory_files.files }}"
+      when: instances_to_delete is defined and instances_to_delete | length > 0
+
+    - name: Clean up instance details files
+      file:
+        path: "{{ playbook_dir }}/vllm-instance-{{ item.instance_id }}.txt"
+        state: absent
+      loop: "{{ instances_to_delete }}"
+      when: instances_to_delete is defined and instances_to_delete | length > 0
+      ignore_errors: yes
+
+    - name: Final cleanup summary
+      debug:
+        msg: |
+          Cleanup completed!
+          {% if instances_to_delete is defined and instances_to_delete | length > 0 %}
+          Terminated {{ instances_to_delete | length }} vLLM instance(s):
+          {% for instance in instances_to_delete %}
+          - {{ instance.instance_id }} ({{ instance.tags.Name | default('N/A') }})
+          {% endfor %}
+
+          Cleaned up {{ inventory_files.files | length }} inventory file(s) and related files.
+          {% else %}
+          No instances were found to cleanup.
+          {% endif %}
