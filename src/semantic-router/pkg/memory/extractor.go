@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -23,22 +24,54 @@ import (
 // It analyzes conversation messages and identifies important information
 // to store in long-term memory (facts, preferences, procedural knowledge).
 //
+// It supports two modes:
+//  1. Extraction only: Use ExtractFacts() to extract facts without storing them
+//  2. Extraction + Storage with deduplication: Use ProcessResponse() to extract and store with deduplication
+//
 // Usage:
 //
+//	// Extraction only:
 //	extractor := NewMemoryExtractor(cfg)
 //	facts, err := extractor.ExtractFacts(ctx, messages)
+//
+//	// Extraction + Storage with deduplication:
+//	extractorWithStore := NewMemoryExtractorWithStore(cfg, store)
+//	err := extractorWithStore.ProcessResponse(ctx, sessionID, userID, history)
 type MemoryExtractor struct {
-	config *config.ExtractionConfig
-	client *http.Client // Reused for connection pooling
+	config      *config.ExtractionConfig
+	client      *http.Client // Reused for connection pooling
+	store       Store        // Optional: for ProcessResponse with deduplication
+	turnCounts  map[string]int
+	mu          sync.Mutex
+	dedupConfig DeduplicationConfig
 }
 
 // NewMemoryExtractor creates a new MemoryExtractor with the given configuration.
 // The http.Client is reused across requests for connection pooling.
 func NewMemoryExtractor(cfg *config.ExtractionConfig) *MemoryExtractor {
 	return &MemoryExtractor{
-		config: cfg,
-		client: &http.Client{Timeout: 30 * time.Second},
+		config:      cfg,
+		client:      &http.Client{Timeout: 30 * time.Second},
+		turnCounts:  make(map[string]int),
+		dedupConfig: DefaultDeduplicationConfig(),
 	}
+}
+
+// NewMemoryExtractorWithStore creates a new MemoryExtractor with both config and store.
+// This enables ProcessResponse which handles extraction + storage with deduplication.
+func NewMemoryExtractorWithStore(cfg *config.ExtractionConfig, store Store) *MemoryExtractor {
+	return &MemoryExtractor{
+		config:      cfg,
+		client:      &http.Client{Timeout: 30 * time.Second},
+		store:       store,
+		turnCounts:  make(map[string]int),
+		dedupConfig: DefaultDeduplicationConfig(),
+	}
+}
+
+// SetDeduplicationConfig sets the deduplication configuration.
+func (e *MemoryExtractor) SetDeduplicationConfig(config DeduplicationConfig) {
+	e.dedupConfig = config
 }
 
 // =============================================================================
@@ -68,6 +101,8 @@ TYPES:
 Return JSON array. Empty array [] if nothing worth remembering.`
 
 // ExtractFacts extracts memorable facts from a conversation using an LLM.
+// This is a pure extraction function - it does NOT store the facts.
+// Use ProcessResponse if you want extraction + storage with deduplication.
 //
 // Error handling:
 //   - Returns empty slice on any error (graceful degradation)
@@ -181,6 +216,145 @@ func (e *MemoryExtractor) callLLMForExtraction(ctx context.Context, userPrompt s
 	// Parse extracted facts from LLM response
 	content := llmResp.Choices[0].Message.Content
 	return parseExtractedFacts(content)
+}
+
+// =============================================================================
+// Extraction + Storage with Deduplication
+// =============================================================================
+
+// ProcessResponse extracts and stores memories from conversation history.
+// It runs extraction every N turns (batchSize) to avoid excessive LLM calls.
+// This method combines extraction (using ExtractFacts) + storage with deduplication.
+func (e *MemoryExtractor) ProcessResponse(
+	ctx context.Context,
+	sessionID string,
+	userID string,
+	history []Message,
+) error {
+	if e.store == nil || !e.store.IsEnabled() {
+		return nil // Store not enabled, skip extraction
+	}
+
+	if e.config == nil || !e.config.Enabled || e.config.Endpoint == "" {
+		return nil // Extraction not enabled
+	}
+
+	// Track turn count for this session
+	e.mu.Lock()
+	e.turnCounts[sessionID]++
+	turnCount := e.turnCounts[sessionID]
+	e.mu.Unlock()
+
+	// Get batch size from config
+	batchSize := e.config.BatchSize
+	if batchSize <= 0 {
+		batchSize = 10 // Default: extract every 10 turns
+	}
+
+	// Only extract every N turns
+	if turnCount%batchSize != 0 {
+		return nil
+	}
+
+	// Get recent batch (last N+5 messages for context)
+	batchStart := 0
+	if len(history) > batchSize+5 {
+		batchStart = len(history) - batchSize - 5
+	}
+	batch := history[batchStart:]
+
+	// Use ExtractFacts for extraction
+	extracted, err := e.ExtractFacts(ctx, batch)
+	if err != nil {
+		logging.Warnf("Memory extraction failed: %v", err)
+		return err // Return error but don't block response
+	}
+
+	if len(extracted) == 0 {
+		logging.Debugf("Memory extraction: no facts extracted from batch")
+		return nil
+	}
+
+	// Store with deduplication
+	for _, fact := range extracted {
+		if err := e.storeWithDeduplication(ctx, userID, fact); err != nil {
+			logging.Warnf("Failed to store memory with deduplication: %v", err)
+			// Continue with other facts even if one fails
+		}
+	}
+
+	return nil
+}
+
+// storeWithDeduplication stores a fact with deduplication logic.
+// It checks for similar existing memories and either updates or creates new ones.
+func (e *MemoryExtractor) storeWithDeduplication(
+	ctx context.Context,
+	userID string,
+	fact ExtractedFact,
+) error {
+	// Check for similar memories using deduplication logic
+	result := CheckDeduplication(ctx, e.store, userID, fact.Content, fact.Type, e.dedupConfig)
+
+	switch result.Action {
+	case "update":
+		// Very similar → UPDATE existing memory
+		if result.ExistingMemory == nil {
+			// Should not happen, but handle gracefully
+			logging.Warnf("Memory deduplication: update action but no existing memory")
+			return e.createNewMemory(ctx, userID, fact)
+		}
+
+		// Update existing memory with new content
+		result.ExistingMemory.Content = fact.Content // Use newer content
+		result.ExistingMemory.UpdatedAt = time.Now()
+
+		if err := e.store.Update(ctx, result.ExistingMemory.ID, result.ExistingMemory); err != nil {
+			return fmt.Errorf("failed to update memory: %w", err)
+		}
+
+		logging.Infof("Memory deduplication: UPDATED memory id=%s (similarity=%.3f)",
+			result.ExistingMemory.ID, result.Similarity)
+		return nil
+
+	case "create":
+		// Create new memory (either no similar found, or in gray zone)
+		return e.createNewMemory(ctx, userID, fact)
+
+	default:
+		// Unknown action - default to create
+		logging.Warnf("Memory deduplication: unknown action '%s', defaulting to create", result.Action)
+		return e.createNewMemory(ctx, userID, fact)
+	}
+}
+
+// createNewMemory creates a new memory from an extracted fact.
+func (e *MemoryExtractor) createNewMemory(
+	ctx context.Context,
+	userID string,
+	fact ExtractedFact,
+) error {
+	mem := &Memory{
+		ID:         generateMemoryID(),
+		Type:       fact.Type,
+		Content:    fact.Content,
+		UserID:     userID,
+		Source:     "conversation",
+		CreatedAt:  time.Now(),
+		Importance: 0.5, // Default importance
+	}
+
+	if err := e.store.Store(ctx, mem); err != nil {
+		return fmt.Errorf("failed to store memory: %w", err)
+	}
+
+	logging.Infof("Memory deduplication: CREATED new memory id=%s, type=%s", mem.ID, mem.Type)
+	return nil
+}
+
+// generateMemoryID generates a unique memory ID
+func generateMemoryID() string {
+	return fmt.Sprintf("mem_%d", time.Now().UnixNano())
 }
 
 // =============================================================================
