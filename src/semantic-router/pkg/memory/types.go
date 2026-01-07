@@ -1,6 +1,10 @@
 package memory
 
-import "time"
+import (
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // MemoryType represents the category of a memory in the agentic memory system.
 type MemoryType string
@@ -82,6 +86,21 @@ type RetrieveResult struct {
 	Score float32 `json:"score"`
 }
 
+// MemoryHit represents a single memory retrieval result in flat structure
+//
+// ID is the unique identifier of the memory entry
+// Content is the content of the memory entry
+// Type is the type of memory
+// Similarity is the similarity score (0.0 to 1.0)
+// Metadata contains additional metadata
+type MemoryHit struct {
+	ID         string
+	Content    string
+	Type       MemoryType
+	Similarity float32
+	Metadata   map[string]interface{}
+}
+
 // RetrieveOptions configures memory retrieval
 type RetrieveOptions struct {
 	// Query is the search query (will be embedded for vector search)
@@ -96,11 +115,24 @@ type RetrieveOptions struct {
 	// Types optionally filters to specific memory types
 	Types []MemoryType
 
-	// Limit is the maximum number of results to return
+	// Limit is the maximum number of results to return (default: 5)
 	Limit int
 
-	// Threshold is the minimum similarity score (0.0 to 1.0)
+	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.6)
 	Threshold float32
+}
+
+// DefaultMemoryConfig returns a default memory configuration
+// This is a helper function that returns config.MemoryConfig with defaults
+func DefaultMemoryConfig() config.MemoryConfig {
+	return config.MemoryConfig{
+		Embedding: config.MemoryEmbeddingConfig{
+			Model:     "all-MiniLM-L6-v2",
+			Dimension: 384,
+		},
+		DefaultRetrievalLimit:      5,
+		DefaultSimilarityThreshold: 0.6,
+	}
 }
 
 // MemoryScope defines the scope for bulk operations (e.g., ForgetByScope)
