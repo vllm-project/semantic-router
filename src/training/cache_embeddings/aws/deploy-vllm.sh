@@ -6,6 +6,7 @@ set -e
 cd "$(dirname "$0")"
 
 # Function to display usage
+# shellcheck disable=SC2120
 usage() {
     echo "Usage: $0 [deploy|cleanup|help]"
     echo ""
@@ -57,7 +58,7 @@ deploy_instance() {
     echo ""
 
     # Find the most recent instance details file
-    DETAILS_FILE=$(ls -rt vllm-instance-*.txt 2>/dev/null | tail -1)
+    DETAILS_FILE=$(find . -maxdepth 1 -name "vllm-instance-*.txt" -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
 
     if [ -n "$DETAILS_FILE" ]; then
         echo "Instance details saved to: $DETAILS_FILE"
@@ -123,6 +124,7 @@ case "${1:-}" in
         cleanup_instances
         ;;
     help|-h|--help)
+        # shellcheck disable=SC2119
         usage
         ;;
     "")
@@ -131,6 +133,7 @@ case "${1:-}" in
         ;;
     *)
         echo "Unknown command: $1"
+        # shellcheck disable=SC2119
         usage
         ;;
 esac

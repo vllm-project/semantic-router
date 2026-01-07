@@ -89,7 +89,7 @@ if [ ! -f "$DOMAIN_CONFIG" ]; then
     echo -e "${RED}Error: Domain config not found: $DOMAIN_CONFIG${NC}"
     echo ""
     echo "Available domains:"
-    ls -1 "$SCRIPT_DIR/domains"/*.yaml 2>/dev/null | xargs -n1 basename | sed 's/.yaml$//' | sed 's/^/  - /'
+    find "$SCRIPT_DIR/domains" -maxdepth 1 -name "*.yaml" -type f -print0 2>/dev/null | xargs -0 -n1 basename | sed 's/.yaml$//' | sed 's/^/  - /'
     exit 1
 fi
 
@@ -126,7 +126,7 @@ if [ "$SKIP_AWS" = false ]; then
     ./deploy-vllm.sh deploy
 
     # Get instance IP
-    INSTANCE_FILE=$(ls -rt vllm-instance-*.txt 2>/dev/null | tail -1)
+    INSTANCE_FILE=$(find . -maxdepth 1 -name "vllm-instance-*.txt" -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
     if [ -z "$INSTANCE_FILE" ]; then
         echo -e "${RED}Error: Could not find instance details${NC}"
         exit 1
@@ -144,7 +144,7 @@ if [ "$SKIP_AWS" = false ]; then
 else
     echo -e "${YELLOW}[1/6] Skipping AWS provisioning${NC}"
     # Load existing instance info
-    INSTANCE_FILE=$(ls -rt "$AWS_DIR"/vllm-instance-*.txt 2>/dev/null | tail -1)
+    INSTANCE_FILE=$(find "$AWS_DIR" -maxdepth 1 -name "vllm-instance-*.txt" -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
     INSTANCE_IP=$(grep "Public IP:" "$INSTANCE_FILE" | awk '{print $3}')
     SSH_KEY=$(grep "ssh -i" "$INSTANCE_FILE" | sed 's/.*-i //' | awk '{print $1}')
 fi
@@ -216,6 +216,7 @@ else
     echo -e "${GREEN}[3/6] Running vLLM data generation (this takes ~1.5-2 hours)...${NC}"
     echo -e "${BLUE}Progress will update every few minutes. Please be patient...${NC}"
     echo ""
+    # shellcheck disable=SC2087
     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "ubuntu@$INSTANCE_IP" bash << EOFREMOTE
 cd ~/semantic-router
 export VLLM_DISABLE_PROGRESS_BAR=1
@@ -247,6 +248,7 @@ if [ "$TEST_MODE" = true ]; then
     echo ""
 else
     echo -e "${GREEN}[4/6] Running LoRA training (this takes ~5 minutes)...${NC}"
+    # shellcheck disable=SC2087
     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "ubuntu@$INSTANCE_IP" << EOF
 cd ~/semantic-router
 python3 src/training/cache_embeddings/lora_trainer.py \
@@ -303,7 +305,7 @@ if [ "$SKIP_CLEANUP" = false ] || [ "$TEST_MODE" = true ]; then
 
     # Only prompt if running interactively
     if [ -t 0 ]; then
-        read -p "Enter choice [1-3]: " choice
+        read -r -p "Enter choice [1-3]: " choice
         echo ""
 
         case $choice in
