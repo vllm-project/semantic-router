@@ -289,6 +289,9 @@ type MemoryConfig struct {
 
   // Default similarity threshold for memory retrieval (0.0-1.0 - default: 0.6)
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+
+	// Fact extraction configuration
+	Extraction ExtractionConfig `yaml:"extraction"`
 }
 
 // MemoryEmbeddingConfig contains configuration for embedding generation in memory operations
@@ -298,9 +301,6 @@ type MemoryEmbeddingConfig struct {
 
 	// Dimension is the embedding dimension (default: 384 for all-MiniLM-L6-v2)
 	Dimension int `yaml:"dimension,omitempty"`
-  
-	// Fact extraction configuration
-	Extraction ExtractionConfig `yaml:"extraction"`
 }
 
 // QueryRewriteConfig holds configuration for LLM-based query rewriting
