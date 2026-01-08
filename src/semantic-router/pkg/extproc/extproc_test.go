@@ -4520,11 +4520,6 @@ var _ = Describe("Response API Translation", func() {
 		var cfg *config.RouterConfig
 
 		var _ = Describe("ExtProc Model-Specific Reasoning", func() {
-			var (
-				router *OpenAIRouter
-				cfg    *config.RouterConfig
-			)
-
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
 				var err error
@@ -4747,10 +4742,6 @@ var _ = Describe("Response API Translation", func() {
 		})
 
 		var _ = Describe("ExtProc Configuration Validation", func() {
-			var (
-				cfg *config.RouterConfig
-			)
-
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
 			})
@@ -4876,14 +4867,10 @@ var _ = Describe("Response API Translation", func() {
 		})
 
 		var _ = Describe("ExtProc Integration Tests", func() {
-			var (
-				router *OpenAIRouter
-			)
-
 			BeforeEach(func() {
-				cfg := CreateTestConfig()
+				testCfg := CreateTestConfig()
 				var err error
-				router, err = CreateTestRouter(cfg)
+				router, err = CreateTestRouter(testCfg)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
