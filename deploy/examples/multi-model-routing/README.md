@@ -2,7 +2,7 @@
 
 Intelligent query routing between **NVIDIA Nemotron Nano 9B** (Math/Physics/Chemistry/CS) and **Qwen 2.5-3B** (History/Literature/Business/General) using [vLLM Semantic Router](https://vllm-semantic-router.com).
 
-**Note:** This demo routes technical and analytical queries (math, physics, chemistry, computer science) to Nemotron and open-ended conversational queries (history, literature, business, general knowledge) to Qwen. This routing logic is fully configurable in `config.yaml`.
+**Note:** This demo routes technical and analytical queries (math, physics, chemistry, computer science) to Nemotron and open-ended conversational queries to Qwen. This routing logic is fully configurable in `config.yaml`.
 
 ## Prerequisites
 
