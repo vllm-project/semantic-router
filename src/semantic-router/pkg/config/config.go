@@ -804,6 +804,7 @@ type DecisionPlugin struct {
 type SemanticCachePluginConfig struct {
 	Enabled             bool     `json:"enabled" yaml:"enabled"`
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"` // Per-entry TTL (0 = do not cache, nil = use global default)
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
