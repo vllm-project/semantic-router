@@ -186,7 +186,12 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 
 // AddPendingRequest stores a request that is awaiting its response
 func (c *InMemoryCache) AddPendingRequest(
-	requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
+	requestID string,
+	model string,
+	query string,
+	requestBody []byte,
+	ttlSeconds int,
+) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -322,8 +327,13 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 
 // AddEntry stores a complete request-response pair in the cache
 func (c *InMemoryCache) AddEntry(
-	requestID string, model string, query string,
-	requestBody, responseBody []byte, ttlSeconds int) error {
+	requestID string,
+	model string,
+	query string,
+	requestBody []byte,
+	responseBody []byte,
+	ttlSeconds int,
+) error {
 	start := time.Now()
 
 	if !c.enabled {
