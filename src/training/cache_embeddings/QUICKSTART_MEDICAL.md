@@ -83,23 +83,37 @@ python3 src/training/cache_embeddings/test_medical_model.py
 
 ## Use in Production
 
+The LoRA adapter is a small file (~582 KB) that gets applied to the base model (384 MB).
+
+**Terminology:**
+- **Base model**: `all-MiniLM-L12-v2` (384 MB) - the generic embedding model
+- **LoRA adapter**: `medical-cache-lora` (582 KB) - domain-specific patch with 147K trainable parameters
+- **Final model**: Base model + LoRA adapter = domain-optimized embedding model
+
 ```python
 from sentence_transformers import SentenceTransformer
 from peft import PeftModel
 
-# Load base model
+# Load base model (384 MB)
 base_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 
-# Apply LoRA adapter
+# Apply LoRA adapter (582 KB) - this patches the base model for medical domain
 base_model[0].auto_model = PeftModel.from_pretrained(
     base_model[0].auto_model,
-    "models/medical-cache-lora"
+    "models/medical-cache-lora"  # or "vllm-project/medical-cache-lora" from HF
 )
 
-# Use for caching
+# Now use for medical query caching
 query = "What are the symptoms of diabetes?"
-embedding = base_model.encode(query)
+embedding = base_model.encode(query)  # Uses base + LoRA
 ```
+
+**Storage breakdown:**
+- Base model: 384 MB (downloaded once, shared across all domains)
+- Medical LoRA adapter: 582 KB
+- Programming LoRA adapter: 582 KB
+- Legal LoRA adapter: 582 KB
+- Total for 3 domains: 384 MB + (3 × 0.6 MB) = ~386 MB
 
 ## One-Command Training (AWS)
 
