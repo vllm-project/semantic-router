@@ -63,7 +63,7 @@ func (lg *LoadGenerator) GenerateLoad(ctx context.Context, reqFunc RequestFunc) 
 	var tickerChan <-chan time.Time
 	if lg.rateLimit > 0 {
 		interval := time.Second / time.Duration(lg.rateLimit)
-		ticker = time.Ticker(interval)
+		ticker = time.NewTicker(interval)
 		tickerChan = ticker.C
 		defer ticker.Stop()
 	}

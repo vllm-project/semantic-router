@@ -36,8 +36,8 @@ services:
       test: ["CMD", "curl", "-f", "localhost:8080/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 60
+      start_period: 600s
 
   # Envoy Proxy Service
   envoy:
@@ -82,8 +82,8 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 30
+      start_period: 120s
 
 networks:
   semantic-network:

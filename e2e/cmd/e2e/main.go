@@ -16,6 +16,7 @@ import (
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 
 	// Import profiles to register test cases
@@ -25,6 +26,7 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 )
 
@@ -121,6 +123,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return llmd.NewProfile(), nil
 	case "production-stack":
 		return productionstack.NewProfile(), nil
+	case "response-api":
+		return responseapi.NewProfile(), nil
 	case "routing-strategies":
 		return routingstrategies.NewProfile(), nil
 	default:

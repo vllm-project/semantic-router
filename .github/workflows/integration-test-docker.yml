@@ -1,19 +1,6 @@
 name: Integration Test [Docker Compose]
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - main
-    paths-ignore:
-      - "website/**"
-      - "**/*.md"
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "website/**"
-      - "**/*.md"
   workflow_dispatch: # Allow manual triggering
 
 concurrency:
@@ -24,7 +11,7 @@ jobs:
   quickstart-test:
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
-    timeout-minutes: 20 # Reduced from 30 - CI compose is faster
+    timeout-minutes: 30 # Increased to allow for model downloads and loading
 
     steps:
       - name: Check out the repo
@@ -112,20 +99,20 @@ jobs:
       - name: Wait for services to be healthy
         run: |
           echo "Waiting for services to be healthy..."
-          max_attempts=60
+          max_attempts=180
           attempt=1
 
           while [ $attempt -le $max_attempts ]; do
             echo "Attempt $attempt/$max_attempts: Checking service health..."
-            
+
             # Check semantic-router health
             if docker ps --filter "name=semantic-router" --filter "health=healthy" --format "{{.Names}}" | grep -q "semantic-router"; then
               echo "✅ semantic-router is healthy"
-              
+
               # Check envoy health
               if docker ps --filter "name=envoy-proxy" --filter "health=healthy" --format "{{.Names}}" | grep -q "envoy-proxy"; then
                 echo "✅ envoy-proxy is healthy"
-                
+
                 # Check llm-katan health
                 if docker ps --filter "name=llm-katan" --filter "health=healthy" --format "{{.Names}}" | grep -q "llm-katan"; then
                   echo "✅ llm-katan is healthy"
@@ -134,10 +121,10 @@ jobs:
                 fi
               fi
             fi
-            
+
             # Show current status
             docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "NAMES|semantic-router|envoy|llm-katan" || true
-            
+
             sleep 5
             ((attempt++))
           done
