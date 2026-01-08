@@ -1,9 +1,6 @@
 //go:build windows || !cgo
-// +build windows !cgo
 
 package cache
-
-
 
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {

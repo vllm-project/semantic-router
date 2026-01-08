@@ -1,5 +1,4 @@
 //go:build windows || !cgo
-// +build windows !cgo
 
 package cache
 
@@ -14,13 +13,13 @@ type HybridCache struct {
 
 // HybridCacheOptions contains configuration for the hybrid cache
 type HybridCacheOptions struct {
-	Enabled             bool
-	SimilarityThreshold float32
-	TTLSeconds          int
-	MaxMemoryEntries    int
-	HNSWM               int
-	HNSWEfConstruction  int
-	MilvusConfigPath    string
+	Enabled                 bool
+	SimilarityThreshold     float32
+	TTLSeconds              int
+	MaxMemoryEntries        int
+	HNSWM                   int
+	HNSWEfConstruction      int
+	MilvusConfigPath        string
 	DisableRebuildOnStartup bool
 }
 

@@ -4039,10 +4039,8 @@ var _ = Describe("Response API Translation", func() {
 	// More comprehensive testing for ExtProc components
 	// ========================================
 
-	var _ = Describe("ExtProc Request/Response Handling", func() {
-		var (
-			router *OpenAIRouter
-		)
+	_ = Describe("ExtProc Request/Response Handling", func() {
+		var router *OpenAIRouter
 
 		BeforeEach(func() {
 			cfg := CreateTestConfig()
@@ -4401,7 +4399,7 @@ var _ = Describe("Response API Translation", func() {
 		})
 	})
 
-	var _ = Describe("Response API Header Rewriting", func() {
+	_ = Describe("Response API Header Rewriting", func() {
 		var router *OpenAIRouter
 
 		BeforeEach(func() {
@@ -4515,11 +4513,11 @@ var _ = Describe("Response API Translation", func() {
 		})
 	})
 
-	var _ = Describe("Response API Content-Length Recalculation", func() {
+	_ = Describe("Response API Content-Length Recalculation", func() {
 		var router *OpenAIRouter
 		var cfg *config.RouterConfig
 
-		var _ = Describe("ExtProc Model-Specific Reasoning", func() {
+		_ = Describe("ExtProc Model-Specific Reasoning", func() {
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
 				var err error
@@ -4741,7 +4739,7 @@ var _ = Describe("Response API Translation", func() {
 			})
 		})
 
-		var _ = Describe("ExtProc Configuration Validation", func() {
+		_ = Describe("ExtProc Configuration Validation", func() {
 			BeforeEach(func() {
 				cfg = CreateTestConfig()
 			})
@@ -4866,7 +4864,7 @@ var _ = Describe("Response API Translation", func() {
 			})
 		})
 
-		var _ = Describe("ExtProc Integration Tests", func() {
+		_ = Describe("ExtProc Integration Tests", func() {
 			BeforeEach(func() {
 				testCfg := CreateTestConfig()
 				var err error
@@ -5158,7 +5156,6 @@ var _ = Describe("Response API Translation", func() {
 			})
 		})
 	})
-
 })
 
 type MockResponseStore struct {
