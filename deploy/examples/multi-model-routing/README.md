@@ -35,10 +35,12 @@ docker compose -f docker-compose-models.yml down
 **Note:** Configured for DGX Spark. Adjust GPU settings in `docker-compose-models.yml` for other hardware if needed.
 
 Edit `config.yaml` to:
+
 - Add/remove models
 - Change routing rules
 - Adjust cache thresholds
 
 Edit `docker-compose-models.yml` to:
+
 - Change GPU memory allocation
 - Add new vLLM servers

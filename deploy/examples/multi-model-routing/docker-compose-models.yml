@@ -7,7 +7,7 @@
 ################################################################################
 
 services:
-  # Model 1: Qwen2.5-3B 
+  # Model 1: Qwen2.5-3B
   llm-qwen:
     image: vllm/vllm-openai:v0.12.0
     container_name: llm-qwen
@@ -35,7 +35,7 @@ services:
               capabilities: [gpu]
     shm_size: '2gb'
 
-  # Model 2: Nemotron 9B 
+  # Model 2: Nemotron 9B
   llm-nemotron:
     image: vllm/vllm-openai:v0.12.0
     container_name: llm-nemotron
