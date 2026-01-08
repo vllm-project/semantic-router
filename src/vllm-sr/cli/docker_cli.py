@@ -3,6 +3,8 @@
 import subprocess
 import os
 import sys
+import shutil
+import socket
 from cli.utils import getLogger
 from cli.consts import (
     VLLM_SR_DOCKER_NAME,
@@ -16,6 +18,59 @@ from cli.consts import (
 )
 
 log = getLogger(__name__)
+
+# Global variable to cache the detected container runtime
+_container_runtime = None
+
+
+def get_container_runtime():
+    """
+    Detect and return the available container runtime (docker or podman).
+
+    Returns:
+        str: 'docker' or 'podman'
+
+    Raises:
+        SystemExit: If neither docker nor podman is available
+    """
+    global _container_runtime
+
+    # Return cached value if already detected
+    if _container_runtime is not None:
+        return _container_runtime
+
+    # Check for explicit environment variable
+    env_runtime = os.getenv("CONTAINER_RUNTIME")
+    if env_runtime:
+        if env_runtime.lower() in ["docker", "podman"]:
+            if shutil.which(env_runtime.lower()):
+                _container_runtime = env_runtime.lower()
+                log.info(
+                    f"Using container runtime from CONTAINER_RUNTIME: {_container_runtime}"
+                )
+                return _container_runtime
+            else:
+                log.warning(
+                    f"CONTAINER_RUNTIME set to {env_runtime} but not found in PATH"
+                )
+
+    # Auto-detect: prefer docker, fallback to podman
+    if shutil.which("docker"):
+        _container_runtime = "docker"
+        log.info("Detected container runtime: docker")
+    elif shutil.which("podman"):
+        _container_runtime = "podman"
+        log.info("Detected container runtime: podman")
+    else:
+        log.error("Neither docker nor podman found in PATH")
+        log.error("Please install Docker or Podman to use this tool")
+        log.error("")
+        log.error("Installation instructions:")
+        log.error("  Docker: https://docs.docker.com/get-docker/")
+        log.error("  Podman: https://podman.io/getting-started/installation")
+        sys.exit(1)
+
+    return _container_runtime
 
 
 def get_docker_image(image=None, pull_policy=None):
@@ -94,8 +149,9 @@ def get_docker_image(image=None, pull_policy=None):
 
 def _show_image_not_found_error(image_name):
     """Show helpful error message when image is not found."""
+    runtime = get_container_runtime()
     log.error("=" * 70)
-    log.error("Docker image not found!")
+    log.error("Container image not found!")
     log.error("=" * 70)
     log.error("")
     log.error(f"Image: {image_name}")
@@ -103,7 +159,7 @@ def _show_image_not_found_error(image_name):
     log.error("Options:")
     log.error("")
     log.error("  1. Pull the image:")
-    log.error(f"     docker pull {image_name}")
+    log.error(f"     {runtime} pull {image_name}")
     log.error("")
     log.error("  2. Use custom image:")
     log.error("     vllm-sr serve config.yaml --image your-image:tag")
@@ -115,23 +171,24 @@ def _show_image_not_found_error(image_name):
 
 
 def docker_image_exists(image_name):
-    """Check if a Docker image exists locally."""
+    """Check if a container image exists locally."""
+    runtime = get_container_runtime()
     try:
         result = subprocess.run(
-            ["docker", "images", "-q", image_name],
+            [runtime, "images", "-q", image_name],
             capture_output=True,
             text=True,
             check=False,
         )
         return bool(result.stdout.strip())
     except Exception as e:
-        log.warning(f"Failed to check Docker image: {e}")
+        log.warning(f"Failed to check container image: {e}")
         return False
 
 
 def docker_pull_image(image_name):
     """
-    Pull a Docker image.
+    Pull a container image.
 
     Args:
         image_name: Name of the image to pull
@@ -139,12 +196,13 @@ def docker_pull_image(image_name):
     Returns:
         True if successful, False otherwise
     """
+    runtime = get_container_runtime()
     try:
-        log.info(f"Pulling Docker image: {image_name}")
+        log.info(f"Pulling container image: {image_name}")
         log.info("This may take a few minutes...")
 
-        result = subprocess.run(
-            ["docker", "pull", image_name],
+        subprocess.run(
+            [runtime, "pull", image_name],
             capture_output=False,  # Show pull progress
             text=True,
             check=True,
@@ -163,15 +221,16 @@ def docker_pull_image(image_name):
 
 def docker_container_status(container_name):
     """
-    Get the status of a Docker container.
+    Get the status of a container.
 
     Returns:
         'running', 'exited', 'paused', or 'not found'
     """
+    runtime = get_container_runtime()
     try:
         result = subprocess.run(
             [
-                "docker",
+                runtime,
                 "ps",
                 "-a",
                 "--filter",
@@ -199,11 +258,12 @@ def docker_container_status(container_name):
 
 
 def docker_stop_container(container_name):
-    """Stop a Docker container."""
+    """Stop a container."""
+    runtime = get_container_runtime()
     try:
         log.info(f"Stopping container: {container_name}")
         subprocess.run(
-            ["docker", "stop", container_name], check=True, capture_output=True
+            [runtime, "stop", container_name], check=True, capture_output=True
         )
         log.info(f"✓ Container stopped: {container_name}")
         return True
@@ -213,12 +273,11 @@ def docker_stop_container(container_name):
 
 
 def docker_remove_container(container_name):
-    """Remove a Docker container."""
+    """Remove a container."""
+    runtime = get_container_runtime()
     try:
         log.info(f"Removing container: {container_name}")
-        subprocess.run(
-            ["docker", "rm", container_name], check=True, capture_output=True
-        )
+        subprocess.run([runtime, "rm", container_name], check=True, capture_output=True)
         log.info(f"✓ Container removed: {container_name}")
         return True
     except subprocess.CalledProcessError as e:
@@ -230,30 +289,55 @@ def docker_start_vllm_sr(
     config_file, env_vars, listeners, image=None, pull_policy=None
 ):
     """
-    Start vLLM Semantic Router Docker container.
+    Start vLLM Semantic Router container.
 
     Args:
         config_file: Path to config.yaml
         env_vars: Environment variables dict
         listeners: List of listener configurations from config.yaml
-        image: Docker image to use (optional)
+        image: Container image to use (optional)
         pull_policy: Image pull policy (optional)
 
     Returns:
         (return_code, stdout, stderr)
     """
+    runtime = get_container_runtime()
+
     # Get and validate image
     image = get_docker_image(image=image, pull_policy=pull_policy)
 
-    # Build docker run command
+    # Build container run command
     cmd = [
-        "docker",
+        runtime,
         "run",
         "-d",  # Detached mode
         "--name",
         VLLM_SR_DOCKER_NAME,
-        "--add-host=host.docker.internal:host-gateway",
     ]
+
+    # Add host gateway (syntax differs between docker and podman)
+    if runtime == "docker":
+        cmd.append("--add-host=host.docker.internal:host-gateway")
+    else:  # podman
+        # Podman: Use host network mode or detect host IP
+        # For Podman, we have several options:
+        # 1. Use --network=host (simplest but exposes all ports)
+        # 2. Use host.containers.internal (available by default in Podman)
+        # 3. Manually detect and add host IP
+
+        # Option: Try to get the host IP for podman
+        try:
+            # Get host IP by connecting to a public DNS
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            host_ip = s.getsockname()[0]
+            s.close()
+            cmd.append(f"--add-host=host.docker.internal:{host_ip}")
+            log.info(f"Using host IP for Podman: {host_ip}")
+        except Exception as e:
+            log.warning(f"Could not detect host IP for Podman: {e}")
+            log.info("Podman will use host.containers.internal by default")
+            # Podman provides host.containers.internal by default, so we don't need to add anything
 
     # Add port mappings for each listener
     for listener in listeners:
@@ -262,18 +346,10 @@ def docker_start_vllm_sr(
             cmd.extend(["-p", f"{port}:{port}"])  # Map host:container port
 
     # Add internal service ports
-    cmd.extend(
-        [
-            "-p",
-            "50051:50051",  # Router gRPC port (internal)
-            "-p",
-            "9190:9190",  # Metrics port
-            "-p",
-            "8700:8700",  # Dashboard UI
-            # Note: 8080 (Router API) is not exposed by default
-            # Health checks are done inside the container via docker exec
-        ]
-    )
+    cmd.extend(["-p", "50051:50051"])  # Router gRPC port (internal)
+    cmd.extend(["-p", "9190:9190"])  # Metrics port
+    cmd.extend(["-p", "8700:8700"])  # Dashboard UI
+    cmd.extend(["-p", "8080:8080"])  # Router API port
 
     # Mount config file (read-write to allow dashboard edits)
     # Use :z for SELinux compatibility on Fedora/RHEL systems
@@ -315,8 +391,8 @@ def docker_start_vllm_sr(
     # Add image name
     cmd.append(image)
 
-    log.info(f"Starting vLLM Semantic Router container...")
-    log.debug(f"Docker command: {' '.join(cmd)}")
+    log.info(f"Starting vLLM Semantic Router container with {runtime}...")
+    log.debug(f"Container command: {' '.join(cmd)}")
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -327,14 +403,15 @@ def docker_start_vllm_sr(
 
 def docker_logs(container_name, follow=False, tail=None):
     """
-    Stream logs from a Docker container.
+    Stream logs from a container.
 
     Args:
         container_name: Name of the container
         follow: Whether to follow logs (tail -f behavior)
         tail: Number of lines to show from the end (e.g., "100", "all")
     """
-    cmd = ["docker", "logs"]
+    runtime = get_container_runtime()
+    cmd = [runtime, "logs"]
     if follow:
         cmd.append("-f")
     if tail:
@@ -351,7 +428,7 @@ def docker_logs(container_name, follow=False, tail=None):
 
 def docker_logs_since(container_name, since_timestamp):
     """
-    Get logs from a Docker container since a specific timestamp.
+    Get logs from a container since a specific timestamp.
 
     Args:
         container_name: Name of the container
@@ -360,7 +437,8 @@ def docker_logs_since(container_name, since_timestamp):
     Returns:
         (return_code, stdout, stderr)
     """
-    cmd = ["docker", "logs", "--since", str(since_timestamp), container_name]
+    runtime = get_container_runtime()
+    cmd = [runtime, "logs", "--since", str(since_timestamp), container_name]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -380,7 +458,8 @@ def docker_exec(container_name, command):
     Returns:
         (return_code, stdout, stderr)
     """
-    cmd = ["docker", "exec", container_name] + command
+    runtime = get_container_runtime()
+    cmd = [runtime, "exec", container_name] + command
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
