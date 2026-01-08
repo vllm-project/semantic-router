@@ -15,6 +15,8 @@ from cli.consts import (
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
     DEFAULT_IMAGE_PULL_POLICY,
+    DEFAULT_NOFILE_LIMIT,
+    MIN_NOFILE_LIMIT,
 )
 
 log = getLogger(__name__)
@@ -306,6 +308,20 @@ def docker_start_vllm_sr(
     # Get and validate image
     image = get_docker_image(image=image, pull_policy=pull_policy)
 
+    # File descriptor limit
+    nofile_limit = int(os.getenv("VLLM_SR_NOFILE_LIMIT", DEFAULT_NOFILE_LIMIT))
+
+    # Validate limit
+    if nofile_limit < MIN_NOFILE_LIMIT:
+        log.warning(
+            f"File descriptor limit {nofile_limit} is below minimum {MIN_NOFILE_LIMIT}. "
+            f"Using minimum value."
+        )
+        nofile_limit = MIN_NOFILE_LIMIT
+
+    if nofile_limit != DEFAULT_NOFILE_LIMIT:
+        log.info(f"Using custom file descriptor limit: {nofile_limit}")
+
     # Build container run command
     cmd = [
         runtime,
@@ -313,6 +329,10 @@ def docker_start_vllm_sr(
         "-d",  # Detached mode
         "--name",
         VLLM_SR_DOCKER_NAME,
+        # Set ulimits for file descriptors to handle Envoy's high connection count
+        # Default 1024 is too low and causes "Too many open files" errors
+        "--ulimit",
+        f"nofile={nofile_limit}:{nofile_limit}",
     ]
 
     # Add host gateway (syntax differs between docker and podman)

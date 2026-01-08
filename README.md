@@ -110,6 +110,17 @@ export HF_HOME=/path/to/cache  # Optional: custom cache directory
 vllm-sr serve
 ```
 
+### Configuration
+
+**File Descriptor Limits**: The CLI automatically sets file descriptor limits to 65,536 for Envoy proxy. For custom limits:
+
+```bash
+export VLLM_SR_NOFILE_LIMIT=100000  # Optional: custom limit (min: 8192)
+vllm-sr serve
+```
+
+See the [vllm-sr README](src/vllm-sr/README.md#configuration) for detailed configuration options and troubleshooting.
+
 ## Documentation 📖
 
 For comprehensive documentation including detailed setup instructions, architecture guides, and API references, visit:

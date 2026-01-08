@@ -61,6 +61,17 @@ After running `vllm-sr serve`, the following endpoints are available:
 
 *Default port, configurable via `listeners` in config.yaml
 
+## Configuration
+
+### File Descriptor Limits
+
+The CLI automatically sets file descriptor limits to 65,536 for Envoy proxy. To customize:
+
+```bash
+export VLLM_SR_NOFILE_LIMIT=100000  # Optional (min: 8192)
+vllm-sr serve
+```
+
 ## License
 
 Apache 2.0
