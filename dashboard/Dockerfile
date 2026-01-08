@@ -3,7 +3,9 @@ FROM node:18-alpine AS frontend-builder
 ARG BASE_DIR=dashboard
 WORKDIR /app/frontend
 COPY ${BASE_DIR}/frontend/package*.json ./
-RUN npm ci --include=dev   # Ensure devDependencies are installed regardless of NODE_ENV
+# Use official npm registry to avoid mirror timeouts
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --include=dev   # Ensure devDependencies are installed regardless of NODE_ENV
 COPY ${BASE_DIR}/frontend/ ./
 RUN npm run build
 

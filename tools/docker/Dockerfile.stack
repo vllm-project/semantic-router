@@ -110,7 +110,9 @@ COPY dashboard/frontend/src ./src
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
 
-RUN npm install --include=dev
+# Use official npm registry to avoid mirror timeouts
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm install --include=dev
 
 RUN npm run build
 
