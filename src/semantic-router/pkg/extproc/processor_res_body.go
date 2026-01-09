@@ -141,8 +141,11 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 
 	// Update the cache
 	if ctx.RequestID != "" && responseBody != nil {
-		// Get decision-specific TTL
-		ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		// Get decision-specific TTL; handle nil router config gracefully
+		ttlSeconds := -1 // use cache default when Config is not available
+		if r != nil && r.Config != nil {
+			ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		}
 		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds)
 		if err != nil {
 			logging.Errorf("Error updating cache: %v", err)
