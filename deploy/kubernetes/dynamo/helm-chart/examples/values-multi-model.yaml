@@ -1,0 +1,167 @@
+# Example: Multiple Models Deployment
+# Each worker runs exactly ONE model
+# To deploy multiple models, define multiple workers
+#
+# Usage:
+#   helm install dynamo-vllm ./dynamo-vllm -f examples/values-multi-model.yaml -n dynamo-system
+
+global:
+  namespace: dynamo-system
+  backendFramework: vllm
+  logLevel: info
+
+# Frontend configuration
+frontend:
+  enabled: true
+  replicas: 1
+  routerMode: kv
+  gpuDevice: 0
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      gpu: "1"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+      gpu: "1"
+
+# Each worker = one model
+# Define separate workers for each model you want to deploy
+workers:
+  # ============================================
+  # Model 1: TinyLlama (lightweight, fast)
+  # ============================================
+  - name: tinyllama-prefill
+    workerType: prefill
+    replicas: 1
+    gpuDevice: 1
+    connector: "null"
+    model:
+      path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      tensorParallelSize: 1
+      enforceEager: true
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        gpu: "1"
+
+  - name: tinyllama-decode
+    workerType: decode
+    replicas: 1
+    gpuDevice: 2
+    connector: "null"
+    model:
+      path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      tensorParallelSize: 1
+      enforceEager: true
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        gpu: "1"
+
+  # ============================================
+  # Model 2: Llama-7B (general purpose)
+  # ============================================
+  - name: llama7b-prefill
+    workerType: prefill
+    replicas: 1
+    gpuDevice: 3
+    connector: "null"
+    model:
+      path: "meta-llama/Llama-2-7b-chat-hf"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 4096
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"
+
+  - name: llama7b-decode
+    workerType: decode
+    replicas: 1
+    gpuDevice: 4
+    connector: "null"
+    model:
+      path: "meta-llama/Llama-2-7b-chat-hf"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 4096
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"
+
+  # ============================================
+  # Model 3: Mistral (high quality)
+  # ============================================
+  - name: mistral-prefill
+    workerType: prefill
+    replicas: 1
+    gpuDevice: 5
+    connector: "null"
+    model:
+      path: "mistralai/Mistral-7B-Instruct-v0.2"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 8192
+      gpuMemoryUtilization: 0.9
+      extraArgs:
+        - "--enable-prefix-caching"
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"
+
+  - name: mistral-decode
+    workerType: decode
+    replicas: 1
+    gpuDevice: 6
+    connector: "null"
+    model:
+      path: "mistralai/Mistral-7B-Instruct-v0.2"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 8192
+      gpuMemoryUtilization: 0.9
+      extraArgs:
+        - "--enable-prefix-caching"
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"

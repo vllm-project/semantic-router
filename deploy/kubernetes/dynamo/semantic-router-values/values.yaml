@@ -401,8 +401,9 @@ config:
       use_cpu: true
       category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
     pii_model:
-      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-      use_modernbert: true
+      # Use registered model path for auto-download support
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false  # mom-pii-classifier uses BERT with LoRA, not ModernBERT
       threshold: 0.7
       use_cpu: true
       pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
@@ -443,9 +444,12 @@ config:
     low_latency_threshold_ms: 2000
 
   # Embedding models
+  # NOTE: mom-embedding-flash (google/embeddinggemma-300m) is gated and requires HF token
+  # Using mom-embedding-pro for qwen3 path (public, high quality)
+  # Using mom-embedding-light for gemma path (public fallback)
   embedding_models:
     qwen3_model_path: "models/mom-embedding-pro"
-    gemma_model_path: "models/mom-embedding-flash"
+    gemma_model_path: "models/mom-embedding-light"
     use_cpu: true
 
   # API Configuration
