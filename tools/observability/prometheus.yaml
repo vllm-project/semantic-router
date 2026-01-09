@@ -22,9 +22,8 @@ scrape_configs:
           service: semantic-router
           environment: docker
 
-# Optional: Envoy proxy metrics
-# Uncomment if Envoy is running
-# - job_name: envoy
+  # Optional: Envoy proxy metrics (uncomment if Envoy is running)
+  # - job_name: envoy
   #   metrics_path: /stats/prometheus
   #   static_configs:
   #     - targets: ["${ENVOY_TARGET:-envoy-proxy:19000}"]

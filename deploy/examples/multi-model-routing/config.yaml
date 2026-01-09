@@ -1,0 +1,245 @@
+# vLLM Semantic Router - Multi-Model Routing Demo
+
+# This config demonstrates intelligent routing between two models:
+#   - Qwen 2.5-3B: Conversational/creative queries
+#   - Nemotron 9B: Math/physics/chemistry/computer science
+
+version: v0.1
+
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 86400
+  max_responses: 1000
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.85
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  use_hnsw: true
+  hnsw_m: 16
+  hnsw_ef_construction: 200
+  embedding_model: "bert"
+
+prompt_guard:
+  enabled: true
+  model_id: "models/mom-jailbreak-classifier"
+  threshold: 0.7
+  use_cpu: true
+
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    threshold: 0.6
+    use_cpu: true
+  pii_model:
+    model_id: "models/mom-pii-classifier"
+    threshold: 0.9
+    use_cpu: true
+
+hallucination_mitigation:
+  enabled: false
+  fact_check_model:
+    model_id: "models/mom-halugate-sentinel"
+    threshold: 0.6
+    use_cpu: true
+  hallucination_model:
+    model_id: "models/mom-halugate-detector"
+    threshold: 0.8
+    use_cpu: true
+  nli_model:
+    model_id: "models/mom-halugate-explainer"
+    threshold: 0.9
+    use_cpu: true
+
+signals:
+  domains:
+    - name: "math"
+      description: "Mathematics and quantitative reasoning"
+      mmlu_categories: ["math"]
+    - name: "physics"
+      description: "Physics and physical sciences"
+      mmlu_categories: ["physics"]
+    - name: "chemistry"
+      description: "Chemistry and chemical sciences questions"
+      mmlu_categories: ["chemistry"]
+    - name: "computer_science"
+      description: "Computer science and programming"
+      mmlu_categories: ["computer_science"]
+    - name: "history"
+      description: "Historical questions and cultural topics"
+      mmlu_categories: ["history"]
+    - name: "literature"
+      description: "Literature and writing topics"
+      mmlu_categories: ["other"]
+    - name: "business"
+      description: "Business and management related queries"
+      mmlu_categories: ["business"]
+    - name: "other"
+      description: "General knowledge and miscellaneous topics"
+      mmlu_categories: ["other"]
+
+decisions:
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "nemotron-9b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a mathematics expert. Provide step-by-step solutions with clear reasoning."
+
+  - name: "physics_decision"
+    description: "Physics and physical sciences"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: "nemotron-9b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a physics expert with deep understanding of physical laws."
+
+  - name: "chemistry_decision"
+    description: "Chemistry and chemical sciences"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: "nemotron-9b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a chemistry expert specializing in chemical reactions."
+
+  - name: "computer_science_decision"
+    description: "Computer science and programming"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "nemotron-9b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a computer science expert. Provide clean, well-commented code."
+
+  - name: "history_decision"
+    description: "Historical questions and cultural topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: "qwen-3b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a friendly historian. Share interesting stories about historical events."
+
+  - name: "literature_decision"
+    description: "Literature and writing topics"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "literature"
+    modelRefs:
+      - model: "qwen-3b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a literature enthusiast. Discuss themes and writing style."
+
+  - name: "business_decision"
+    description: "Business and management queries"
+    priority: 70
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: "qwen-3b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful business advisor. Give practical advice."
+
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "qwen-3b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a warm, conversational assistant."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95
+
+providers:
+  models:
+    - name: "qwen-3b"
+      reasoning_family: "qwen2.5"
+      endpoints:
+        - name: "qwen_vllm"
+          weight: 1
+          endpoint: "172.17.0.1:8000"
+          protocol: "http"
+    - name: "nemotron-9b"
+      reasoning_family: "none"
+      endpoints:
+        - name: "nemotron_vllm"
+          weight: 1
+          endpoint: "172.17.0.1:8002"
+          protocol: "http"
+  default_model: "qwen-3b"
+  reasoning_families:
+    qwen2.5:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+  default_reasoning_effort: "high"
