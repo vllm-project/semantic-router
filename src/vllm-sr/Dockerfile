@@ -14,7 +14,9 @@ RUN cargo build --release --no-default-features && \
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
-RUN npm ci --include=dev
+# Use official npm registry to avoid mirror timeouts
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --include=dev
 COPY dashboard/frontend/ ./
 RUN npm run build
 

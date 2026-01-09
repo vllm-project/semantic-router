@@ -1,0 +1,193 @@
+# Example: Multi-Node Deployment with Node Affinity
+# Each worker runs exactly ONE model on ONE node
+# Different models on different GPU nodes
+#
+# Usage:
+#   helm install dynamo-vllm ./dynamo-vllm -f examples/values-multi-node.yaml -n dynamo-system
+#
+# Prerequisites:
+#   - 3 GPU nodes labeled: gpu-node-1, gpu-node-2, gpu-node-3
+#   - Each node should have at least 2 GPUs
+
+global:
+  namespace: dynamo-system
+  backendFramework: vllm
+  logLevel: info
+
+# Frontend on dedicated node
+frontend:
+  enabled: true
+  replicas: 1
+  routerMode: kv
+  gpuDevice: 0
+  nodeSelector:
+    kubernetes.io/hostname: gpu-node-1
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+      gpu: "1"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+      gpu: "1"
+
+# Standard tolerations for GPU nodes
+# Reuse across workers with YAML anchors
+x-gpu-tolerations: &gpu-tolerations
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Each worker = one model, pinned to specific node
+workers:
+  # ============================================
+  # Node 1: TinyLlama (lightweight, fast)
+  # ============================================
+  - name: tinyllama-prefill
+    workerType: prefill
+    replicas: 1
+    gpuDevice: 1
+    connector: "null"
+    nodeSelector:
+      kubernetes.io/hostname: gpu-node-1
+    tolerations: *gpu-tolerations
+    model:
+      path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      tensorParallelSize: 1
+      enforceEager: true
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        gpu: "1"
+
+  - name: tinyllama-decode
+    workerType: decode
+    replicas: 1
+    gpuDevice: 2
+    connector: "null"
+    nodeSelector:
+      kubernetes.io/hostname: gpu-node-1
+    tolerations: *gpu-tolerations
+    model:
+      path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      tensorParallelSize: 1
+      enforceEager: true
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        gpu: "1"
+
+  # ============================================
+  # Node 2: Llama-7B (general purpose)
+  # ============================================
+  - name: llama7b-prefill
+    workerType: prefill
+    replicas: 1
+    gpuDevice: 0
+    connector: "null"
+    nodeSelector:
+      kubernetes.io/hostname: gpu-node-2
+    tolerations: *gpu-tolerations
+    model:
+      path: "meta-llama/Llama-2-7b-chat-hf"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 4096
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"
+
+  - name: llama7b-decode
+    workerType: decode
+    replicas: 1
+    gpuDevice: 1
+    connector: "null"
+    nodeSelector:
+      kubernetes.io/hostname: gpu-node-2
+    tolerations: *gpu-tolerations
+    model:
+      path: "meta-llama/Llama-2-7b-chat-hf"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 4096
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"
+
+  # ============================================
+  # Node 3: CodeLlama (code-specific)
+  # ============================================
+  - name: codellama-prefill
+    workerType: prefill
+    replicas: 1
+    gpuDevice: 0
+    connector: "null"
+    nodeSelector:
+      kubernetes.io/hostname: gpu-node-3
+    tolerations: *gpu-tolerations
+    model:
+      path: "codellama/CodeLlama-7b-Instruct-hf"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 4096
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"
+
+  - name: codellama-decode
+    workerType: decode
+    replicas: 1
+    gpuDevice: 1
+    connector: "null"
+    nodeSelector:
+      kubernetes.io/hostname: gpu-node-3
+    tolerations: *gpu-tolerations
+    model:
+      path: "codellama/CodeLlama-7b-Instruct-hf"
+      tensorParallelSize: 1
+      enforceEager: false
+      maxModelLen: 4096
+      gpuMemoryUtilization: 0.9
+    resources:
+      requests:
+        cpu: "4"
+        memory: "32Gi"
+        gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "64Gi"
+        gpu: "1"

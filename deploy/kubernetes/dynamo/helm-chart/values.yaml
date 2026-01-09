@@ -1,0 +1,254 @@
+# Dynamo vLLM Helm Chart Configuration
+# Each worker runs exactly ONE model on ONE GPU
+# To deploy multiple models, define multiple workers
+
+# -----------------------------------------------------------------------------
+# Global Settings
+# -----------------------------------------------------------------------------
+global:
+  # -- Namespace for Dynamo resources
+  namespace: dynamo-system
+  # -- Backend framework (vllm or other supported frameworks)
+  backendFramework: vllm
+  # -- Log level for all components
+  logLevel: info
+
+# -----------------------------------------------------------------------------
+# HuggingFace Configuration (OPTIONAL)
+# -----------------------------------------------------------------------------
+# Only needed for gated models like Llama-2, Llama-3, Mistral, etc.
+# For open models like TinyLlama, no token is required - leave these empty.
+huggingface:
+  # -- HuggingFace token for downloading gated models (optional)
+  # Leave empty for open models. Get token from: https://huggingface.co/settings/tokens
+  token: ""
+  # -- Use existing Kubernetes secret for the token (optional, recommended for production)
+  # If set, 'token' field is ignored and the secret is used instead
+  existingSecret: ""
+  # -- Key in the existing secret that contains the token
+  existingSecretKey: "HF_TOKEN"
+
+# -----------------------------------------------------------------------------
+# Image Configuration
+# -----------------------------------------------------------------------------
+image:
+  # -- Container image repository
+  repository: nvcr.io/nvidia/ai-dynamo/vllm-runtime
+  # -- Image tag
+  tag: "0.6.1.post1"
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -----------------------------------------------------------------------------
+# Platform Services (ETCD, NATS)
+# -----------------------------------------------------------------------------
+platform:
+  etcd:
+    # -- ETCD endpoints for service discovery
+    endpoints: "dynamo-platform-etcd.dynamo-system.svc.cluster.local:2379"
+  nats:
+    # -- NATS URL for message queuing
+    url: "nats://dynamo-platform-nats.dynamo-system.svc.cluster.local:4222"
+    # -- NATS server address
+    server: "nats://dynamo-platform-nats.dynamo-system:4222"
+
+# -----------------------------------------------------------------------------
+# Frontend Configuration
+# -----------------------------------------------------------------------------
+frontend:
+  # -- Enable frontend deployment
+  enabled: true
+  # -- Number of frontend replicas
+  replicas: 1
+  # -- Dynamo namespace for service discovery
+  dynamoNamespace: dynamo-vllm
+  # -- Router mode (kv, round-robin, random)
+  routerMode: kv
+  # -- HTTP port for API
+  httpPort: 8000
+  # -- GPU device ID to use
+  gpuDevice: 0
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "4Gi"
+      gpu: "1"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+      gpu: "1"
+
+  # -- Node selector for frontend pods
+  nodeSelector: {}
+  # -- Tolerations for frontend pods
+  tolerations: []
+  # -- Affinity rules for frontend pods
+  affinity: {}
+
+  # -- Additional environment variables
+  extraEnv: []
+
+  probes:
+    liveness:
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      failureThreshold: 5
+    readiness:
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      failureThreshold: 10
+    startup:
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      failureThreshold: 30
+
+# -----------------------------------------------------------------------------
+# Workers Configuration
+# -----------------------------------------------------------------------------
+# IMPORTANT: Each worker runs exactly ONE model
+# The model configuration is defined directly in each worker
+# To deploy multiple models, create multiple workers
+workers:
+  # Prefill worker - handles prompt processing
+  - name: prefill-worker-0
+    # -- Worker type: "prefill", "decode", or "both"
+    workerType: prefill
+    # -- Number of replicas (each replica runs the same model)
+    replicas: 1
+    # -- GPU device ID to use
+    gpuDevice: 1
+    # -- Connector type (null for disaggregated mode)
+    connector: "null"
+
+    # Model configuration for THIS worker (one model per worker)
+    model:
+      # -- HuggingFace model ID or local path
+      path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      # -- Tensor parallel size
+      tensorParallelSize: 1
+      # -- Enable eager mode (disable CUDA graphs)
+      enforceEager: true
+      # -- Maximum model length (optional)
+      maxModelLen: null
+      # -- GPU memory utilization (0.0-1.0)
+      gpuMemoryUtilization: 0.9
+      # -- Additional vLLM arguments
+      extraArgs: []
+
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        gpu: "1"
+
+    # -- Node selector to place worker on specific node
+    nodeSelector: {}
+    # -- Tolerations for worker pods
+    tolerations: []
+    # -- Affinity rules for worker pods
+    affinity: {}
+    # -- Additional environment variables for this worker
+    extraEnv: []
+
+  # Decode worker - handles token generation
+  - name: decode-worker-1
+    workerType: decode
+    replicas: 1
+    gpuDevice: 2
+    connector: "null"
+
+    # Same model as prefill worker (required for disaggregated mode)
+    model:
+      path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      tensorParallelSize: 1
+      enforceEager: true
+      maxModelLen: null
+      gpuMemoryUtilization: 0.9
+      extraArgs: []
+
+    resources:
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        gpu: "1"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        gpu: "1"
+
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    extraEnv: []
+
+# -----------------------------------------------------------------------------
+# Dynamo Configuration (ConfigMap)
+# -----------------------------------------------------------------------------
+# NOTE: Dynamo vLLM pods communicate via ETCD/NATS, not Kubernetes API.
+#       RBAC is NOT required. Semantic Router RBAC is in dynamo-resources/rbac.yaml
+dynamoConfig:
+  # KV Cache settings
+  kvCache:
+    # -- Enable KV cache
+    enabled: true
+    # -- Maximum cache size in GB
+    maxSizeGb: 4
+    # -- Cache eviction policy
+    evictionPolicy: "lru"
+
+  # Routing configuration
+  routing:
+    # -- Routing algorithm (kv-aware, round-robin, least-loaded)
+    algorithm: "kv-aware"
+    # -- Load balancing weight for KV cache hits
+    kvWeight: 0.7
+    # -- Load balancing weight for GPU utilization
+    loadWeight: 0.3
+
+  # Worker pool settings
+  workerPool:
+    # -- Health check interval in seconds
+    healthCheckInterval: 10
+    # -- Timeout for worker health checks
+    healthCheckTimeout: 5
+    # -- Maximum retries for failed requests
+    maxRetries: 3
+
+# -----------------------------------------------------------------------------
+# Volumes Configuration
+# -----------------------------------------------------------------------------
+volumes:
+  nvidiaDriverLibs:
+    # -- Path to NVIDIA driver libraries on host
+    hostPath: /nvidia-driver-libs
+  dev:
+    # -- Path to /dev on host (for GPU access)
+    hostPath: /dev
+
+# -----------------------------------------------------------------------------
+# Security Configuration
+# -----------------------------------------------------------------------------
+security:
+  # -- Run containers in privileged mode (required for GPU access)
+  privileged: true
+
+# -----------------------------------------------------------------------------
+# Service Configuration
+# -----------------------------------------------------------------------------
+service:
+  # -- Create a service for the frontend
+  enabled: true
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 8000
+  # -- Target port
+  targetPort: 8000
