@@ -1,0 +1,78 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          DYNAMO vLLM DEPLOYMENT                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Thank you for installing {{ .Chart.Name }}!
+
+Your release name is: {{ .Release.Name }}
+Namespace: {{ include "dynamo-vllm.namespace" . }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 DEPLOYED COMPONENTS (Each Worker = One Model)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{- if .Values.frontend.enabled }}
+✅ Frontend: {{ .Values.frontend.replicas }} replica(s)
+   - Router Mode: {{ .Values.frontend.routerMode }}
+   - HTTP Port: {{ .Values.frontend.httpPort }}
+   - GPU Device: {{ .Values.frontend.gpuDevice }}
+{{- end }}
+
+👷 Workers (each runs exactly ONE model):
+{{- range $index, $worker := .Values.workers }}
+{{- $workerType := $worker.workerType | default "both" }}
+{{- $defaultName := "" }}
+{{- if or (eq $workerType "prefill") (eq $workerType "decode") }}
+{{- $defaultName = printf "%sworker%d" $workerType $index }}
+{{- else }}
+{{- $defaultName = printf "worker%d" $index }}
+{{- end }}
+{{- $defaultGpu := add $index 1 }}
+   - {{ $worker.name | default $defaultName }}
+     ├─ Model: {{ $worker.model.path }}
+     ├─ Type: {{ $workerType }}
+     ├─ GPU: {{ $worker.gpuDevice | default $defaultGpu }}
+     └─ Replicas: {{ $worker.replicas | default 1 }}
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔗 ACCESSING THE SERVICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{- if .Values.service.enabled }}
+Service URL: {{ include "dynamo-vllm.fullname" . }}-frontend.{{ include "dynamo-vllm.namespace" . }}.svc.cluster.local:{{ .Values.service.port }}
+
+Port-forward:
+  kubectl port-forward svc/{{ include "dynamo-vllm.fullname" . }}-frontend -n {{ include "dynamo-vllm.namespace" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+
+API: http://localhost:{{ .Values.service.port }}
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 USEFUL COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Check status:
+  kubectl get dynamographdeployment {{ include "dynamo-vllm.fullname" . }} -n {{ include "dynamo-vllm.namespace" . }}
+
+View all pods:
+  kubectl get pods -n {{ include "dynamo-vllm.namespace" . }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+View worker logs:
+  kubectl logs -n {{ include "dynamo-vllm.namespace" . }} -l app.kubernetes.io/component=worker -f
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 ADDING NEW MODELS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Each worker runs ONE model. To add a new model, add new workers:
+
+  helm upgrade {{ .Release.Name }} ./dynamo-vllm \
+    -f my-new-workers.yaml \
+    -n {{ include "dynamo-vllm.namespace" . }}
+
+See README.md for examples.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Happy inferencing! 🚀

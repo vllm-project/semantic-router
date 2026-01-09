@@ -1,0 +1,33 @@
+apiVersion: v2
+name: dynamo-vllm
+description: A Helm chart for deploying NVIDIA Dynamo with vLLM - supporting multi-model, multi-worker GPU deployments
+
+type: application
+version: 0.1.0
+appVersion: "0.6.1.post1"
+
+keywords:
+  - dynamo
+  - vllm
+  - nvidia
+  - gpu
+  - llm
+  - inference
+  - multi-model
+  - disaggregated
+
+home: https://github.com/vllm-project/semantic-router
+sources:
+  - https://github.com/vllm-project/semantic-router
+  - https://github.com/NVIDIA/dynamo
+
+maintainers:
+  - name: Semantic Router Team
+    url: https://github.com/vllm-project/semantic-router
+
+dependencies: []
+
+annotations:
+  nvidia.com/dynamo: "true"
+  category: "AI/ML Inference"
+

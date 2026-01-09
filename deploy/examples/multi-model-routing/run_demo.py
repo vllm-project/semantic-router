@@ -51,31 +51,35 @@ def send_query(query: str) -> Dict:
         "model": "MoM",
         "messages": [{"role": "user", "content": query}],
         "temperature": 0.7,
-        "max_tokens": 150
+        "max_tokens": 150,
     }
-    
+
     start = time.time()
-    resp = requests.post(ROUTER_API_URL, headers={"Content-Type": "application/json"}, 
-                        json=payload, timeout=60)
+    resp = requests.post(
+        ROUTER_API_URL,
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=60,
+    )
     elapsed = time.time() - start
-    
+
     resp.raise_for_status()
     data = resp.json()
-    
+
     return {
         "answer": data["choices"][0]["message"]["content"].strip(),
         "model": data.get("model", "unknown"),
         "latency": elapsed,
-        "cached": resp.headers.get("x-vsr-cache-hit") == "true"
+        "cached": resp.headers.get("x-vsr-cache-hit") == "true",
     }
 
 
 def main():
     print("Semantic Router Demo - Multi-Model Routing")
-    
+
     total = sum(len(queries) for queries in DEMO_QUERIES.values())
     count = 0
-    
+
     # Test category-based routing
     for category, queries in DEMO_QUERIES.items():
         print(f"\n{category}:")
@@ -84,14 +88,16 @@ def main():
             try:
                 info = send_query(query)
                 cache = "[CACHED] " if info["cached"] else ""
-                print(f"\n[{count}/{total}] {cache}Model: {info['model']} ({info['latency']:.1f}s)")
+                print(
+                    f"\n[{count}/{total}] {cache}Model: {info['model']} ({info['latency']:.1f}s)"
+                )
                 print(f"Q: {query}")
                 # Only showing the first 200 chars of answer
-                answer = info['answer'][:200]
+                answer = info["answer"][:200]
                 print(f"A: {answer}\n")
             except Exception as e:
                 print(f"\n[{count}/{total}] Error: {e}")
-    
+
     # Semantic caching
     print("Testing Semantic Cache")
     test_query = "What is 5 + 10?"
@@ -99,13 +105,13 @@ def main():
     print("\n  First request...")
     info1 = send_query(test_query)
     print(f"{info1['model']} - {info1['latency']:.2f}s")
-    
+
     time.sleep(1)
-    
+
     print("\n  Second request (same query)...")
     info2 = send_query(test_query)
     print(f"{info2['model']} - {info2['latency']:.2f}s")
-    
+
     if info2["cached"]:
         speedup = info1["latency"] / info2["latency"]
         print(f"Cache hit! {speedup:.1f}x faster")

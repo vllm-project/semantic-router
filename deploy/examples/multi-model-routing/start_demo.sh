@@ -19,7 +19,7 @@ download_model() {
     local repo="$1"
     local local_dir="$2"
     [ -d "$local_dir" ] && return
-    echo "  Downloading $(basename $local_dir)..."
+    echo "  Downloading $(basename "$local_dir")..."
     python3 -c "from huggingface_hub import snapshot_download; snapshot_download('$repo', local_dir='$local_dir', local_dir_use_symlinks=False)"
 }
 

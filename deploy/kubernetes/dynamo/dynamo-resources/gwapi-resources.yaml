@@ -75,9 +75,9 @@ spec:
 # Routing Flow:
 # Client → Envoy Gateway → Semantic Router (ExtProc) → Dynamo Frontend → Workers
 #
-# The Dynamo operator creates a service named: <deployment-name>-frontend
-# Based on DynamoGraphDeployment metadata.name: vllm
-# Expected service name: vllm-frontend
+# Service naming:
+# - Helm chart: dynamo-vllm-frontend (based on release name)
+# - Operator: vllm-frontend (based on DynamoGraphDeployment name)
 #
 # Reference: https://github.com/ai-dynamo/dynamo
 apiVersion: gateway.networking.k8s.io/v1
@@ -96,9 +96,9 @@ spec:
         type: PathPrefix
         value: /
     backendRefs:
-    # Route to Dynamo Frontend (created by DynamoGraphDeployment CRD)
+    # Route to Dynamo Frontend (created by Helm chart)
     # Frontend coordinates with workers via etcd/NATS for intelligent routing
-    - name: vllm-frontend
+    - name: dynamo-vllm-frontend
       namespace: dynamo-system
       port: 8000
       weight: 100
