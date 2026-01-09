@@ -87,10 +87,16 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 
 // Classify performs keyword-based classification on the given text.
 func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
+	category, _, err := c.ClassifyWithKeywords(text)
+	return category, 1.0, err
+}
+
+// ClassifyWithKeywords performs keyword-based classification and returns the matched keywords.
+func (c *KeywordClassifier) ClassifyWithKeywords(text string) (string, []string, error) {
 	for _, rule := range c.rules {
 		matched, keywords, err := c.matches(text, rule) // Error handled
 		if err != nil {
-			return "", 0.0, err // Propagate error
+			return "", nil, err // Propagate error
 		}
 		if matched {
 			if len(keywords) > 0 {
@@ -98,10 +104,10 @@ func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
 			} else {
 				logging.Infof("Keyword-based classification matched rule %q with a NOR rule.", rule.Name)
 			}
-			return rule.Name, 1.0, nil
+			return rule.Name, keywords, nil
 		}
 	}
-	return "", 0.0, nil
+	return "", nil, nil
 }
 
 // matches checks if the text matches the given keyword rule.

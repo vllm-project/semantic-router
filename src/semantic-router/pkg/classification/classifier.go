@@ -650,6 +650,17 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 	return usedSignals
 }
 
+// SignalResults contains all evaluated signal results
+type SignalResults struct {
+	MatchedKeywordRules      []string
+	MatchedKeywords          []string // The actual keywords that matched (not rule names)
+	MatchedEmbeddingRules    []string
+	MatchedDomainRules       []string
+	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedPreferenceRules   []string // Route preference names matched via external LLM
+}
+
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
 func (c *Classifier) analyzeRuleCombination(rules config.RuleCombination, usedSignals map[string]bool) {
 	for _, condition := range rules.Conditions {
@@ -670,16 +681,6 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 	return false
 }
 
-// SignalResults contains all evaluated signal results
-type SignalResults struct {
-	MatchedKeywordRules      []string
-	MatchedEmbeddingRules    []string
-	MatchedDomainRules       []string
-	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
-	MatchedPreferenceRules   []string // Route preference names matched via external LLM
-}
-
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
@@ -696,7 +697,7 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			category, _, err := c.keywordClassifier.Classify(text)
+			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
 			elapsed := time.Since(start)
 			logging.Infof("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
 			if err != nil {
@@ -704,6 +705,7 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			} else if category != "" {
 				mu.Lock()
 				results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
+				results.MatchedKeywords = append(results.MatchedKeywords, keywords...)
 				mu.Unlock()
 			}
 		}()
@@ -898,8 +900,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, nil
 	}
 
-	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v",
-		result.Decision.Name, result.Confidence, result.MatchedRules)
+	// Populate matched keywords from signal evaluation
+	result.MatchedKeywords = signals.MatchedKeywords
+
+	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
+		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil
 }

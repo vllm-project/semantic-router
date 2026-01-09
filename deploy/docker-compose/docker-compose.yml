@@ -36,6 +36,11 @@ services:
     container_name: envoy-proxy
     security_opt:
       - label=disable
+    # File descriptor limits for handling many connections
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "8801:8801"  # Main proxy port
       - "19000:19000"  # Admin interface
