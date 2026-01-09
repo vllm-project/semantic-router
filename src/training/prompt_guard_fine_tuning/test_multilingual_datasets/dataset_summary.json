@@ -1,0 +1,14 @@
+{
+  "total_languages": 3,
+  "languages": [
+    "fr",
+    "es",
+    "de"
+  ],
+  "samples_per_language": {
+    "fr": 20,
+    "es": 20,
+    "de": 20
+  },
+  "total_samples": 60
+}
