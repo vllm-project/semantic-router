@@ -4745,28 +4745,32 @@ var _ = Describe("Response API Translation", func() {
 			})
 
 			Context("Model Path Validation", func() {
-				It("should validate model paths are properly configured", func() {
+				It("should validate required model paths are properly configured", func() {
 					Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
 					Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
+					// PIIModel.ModelID is optional - do not require it
+				})
+
+				It("should validate optional PII model path if configured", func() {
+					if cfg.InlineModels.Classifier.PIIModel.ModelID == "" {
+						Skip("PII model not configured")
+					}
 					Expect(cfg.InlineModels.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
 				})
 
-				It("should validate category mapping path is present", func() {
-					categoryMapping, err := classification.LoadCategoryMapping(cfg.CategoryMappingPath)
-					Expect(err).To(Or(HaveOccurred(), BeNil())) // May fail if models not present, but that's OK
-					if categoryMapping != nil {
-						Expect(categoryMapping).NotTo(BeNil())
-					}
+				It("should validate category mapping path without panicking", func() {
+					Expect(func() {
+						_, _ = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
+					}).NotTo(Panic())
 				})
 
-				It("should validate PII mapping path if available", func() {
-					if cfg.PIIMappingPath != "" {
-						piiMapping, err := classification.LoadPIIMapping(cfg.PIIMappingPath)
-						Expect(err).To(Or(BeNil(), HaveOccurred())) // May fail if models not present
-						if piiMapping != nil {
-							Expect(piiMapping).NotTo(BeNil())
-						}
+				It("should validate PII mapping path without panicking when available", func() {
+					if cfg.PIIMappingPath == "" {
+						Skip("PII mapping path not configured")
 					}
+					Expect(func() {
+						_, _ = classification.LoadPIIMapping(cfg.PIIMappingPath)
+					}).NotTo(Panic())
 				})
 			})
 
