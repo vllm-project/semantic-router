@@ -53,10 +53,15 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 
-	// Perform decision evaluation using DecisionEngine
+	// Log signal evaluation results
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v",
+		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules)
+
+	// Perform decision evaluation using pre-computed signals
 	// This is ALWAYS done when decisions are configured, regardless of model type,
 	// because plugins (e.g., hallucination detection) depend on the matched decision
-	result, err := r.Classifier.EvaluateDecisionWithEngine(evaluationText)
+	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
 	if err != nil {
 		logging.Errorf("Decision evaluation error: %v", err)
 		if r.Config.IsAutoModelName(originalModel) {

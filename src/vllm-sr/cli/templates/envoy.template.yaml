@@ -38,13 +38,15 @@ static_resources:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('300s') }}
                   idleTimeout: 300s
+                  # Rewrite Host header to match upstream server
+                  host_rewrite_literal: "{{ model.endpoints[0].address }}"
                   {% if model.path_prefix %}
-                  # Prepend path prefix to all requests (e.g., /openapi + /v1/chat/completions = /openapi/v1/chat/completions)
+                  # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^/"
-                    substitution: "{{ model.path_prefix }}/"
+                      regex: "^(.*)$"
+                    substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
               # Default route (no x-selected-model header)
@@ -58,6 +60,18 @@ static_resources:
                   cluster: vllm_static_cluster
                   {% endif %}
                   timeout: {{ listener.timeout | default('300s') }}
+                  {% if models %}
+                  # Rewrite Host header to match upstream server
+                  host_rewrite_literal: "{{ models[0].endpoints[0].address }}"
+                  {% endif %}
+                  {% if models and models[0].path_prefix %}
+                  # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
+                  regex_rewrite:
+                    pattern:
+                      google_re2: {}
+                      regex: "^(.*)$"
+                    substitution: "{{ models[0].path_prefix }}\\1"
+                  {% endif %}
           http_filters:
           - name: envoy.filters.http.ext_proc
             typed_config:
