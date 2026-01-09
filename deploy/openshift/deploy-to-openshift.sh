@@ -13,6 +13,7 @@ NC='\033[0m'
 NAMESPACE="vllm-semantic-router-system"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_OBSERVABILITY=true
+USE_SIMULATOR=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -21,14 +22,20 @@ while [[ $# -gt 0 ]]; do
             DEPLOY_OBSERVABILITY=false
             shift
             ;;
+        --simulator)
+            USE_SIMULATOR=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
+            echo "  --simulator           Use mock-vllm simulator instead of llm-katan (no GPU required)"
             echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
             echo "  --help, -h            Show this help message"
             echo ""
-            echo "By default, deploys the full stack including observability components."
+            echo "By default, deploys the full stack with llm-katan (requires GPU)."
+            echo "Use --simulator for CPU-only clusters without GPUs."
             exit 0
             ;;
         *)
@@ -69,34 +76,70 @@ log "Creating namespace: $NAMESPACE"
 oc create namespace "$NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 success "Namespace ready"
 
-# Build llm-katan image if needed
-log "Checking for llm-katan image..."
-if ! oc get imagestream llm-katan -n "$NAMESPACE" &> /dev/null; then
-    log "Building llm-katan image..."
+# Build model backend image based on mode
+if [[ "$USE_SIMULATOR" == "true" ]]; then
+    # Use mock-vllm simulator (no GPU required)
+    log "Simulator mode: Building mock-vllm image..."
+    BACKEND_IMAGE_NAME="mock-vllm"
+    MOCK_VLLM_DIR="$SCRIPT_DIR/../../tools/mock-vllm"
 
-    if [[ -f "$SCRIPT_DIR/Dockerfile.llm-katan" ]]; then
-        oc new-build --dockerfile - --name llm-katan -n "$NAMESPACE" < "$SCRIPT_DIR/Dockerfile.llm-katan"
+    if ! oc get imagestream mock-vllm -n "$NAMESPACE" &> /dev/null; then
+        if [[ -f "$MOCK_VLLM_DIR/Dockerfile" ]]; then
+            oc new-build --name mock-vllm --binary --strategy=docker -n "$NAMESPACE"
+            log "Uploading mock-vllm source and building..."
+            oc start-build mock-vllm --from-dir="$MOCK_VLLM_DIR" --follow -n "$NAMESPACE" || true
+
+            log "Waiting for build to complete..."
+            # Get the latest build to handle reruns (mock-vllm-1, mock-vllm-2, etc.)
+            LATEST_BUILD=$(oc get builds -l buildconfig=mock-vllm -n "$NAMESPACE" -o name --sort-by=.metadata.creationTimestamp | tail -1)
+            if [[ -n "$LATEST_BUILD" ]]; then
+                if ! oc wait --for=condition=Complete "$LATEST_BUILD" -n "$NAMESPACE" --timeout=60s 2>/dev/null; then
+                    warn "Build may still be in progress. Checking status..."
+                    oc get builds -n "$NAMESPACE"
+                fi
+            else
+                warn "No mock-vllm build found to wait for"
+            fi
+            success "mock-vllm image built"
+        else
+            error "mock-vllm Dockerfile not found at: $MOCK_VLLM_DIR/Dockerfile"
+            exit 1
+        fi
     else
-        error "Dockerfile.llm-katan not found at: $SCRIPT_DIR/Dockerfile.llm-katan"
-        exit 1
+        log "mock-vllm image already exists"
     fi
-
-    log "Waiting for build to start..."
-    sleep 5
-
-    log "Starting build..."
-    oc start-build llm-katan -n "$NAMESPACE" --follow || true
-
-    log "Waiting for build to complete..."
-    if ! oc wait --for=condition=Complete build/llm-katan-1 -n "$NAMESPACE" --timeout=600s 2>/dev/null; then
-        warn "Build may still be in progress. Checking status..."
-        oc get builds -n "$NAMESPACE"
-        oc logs build/llm-katan-1 -n "$NAMESPACE" --tail=50 || true
-    fi
-
-    success "llm-katan image built"
 else
-    log "llm-katan image already exists"
+    # Use llm-katan (requires GPU)
+    log "Standard mode: Checking for llm-katan image..."
+    BACKEND_IMAGE_NAME="llm-katan"
+
+    if ! oc get imagestream llm-katan -n "$NAMESPACE" &> /dev/null; then
+        log "Building llm-katan image..."
+
+        if [[ -f "$SCRIPT_DIR/Dockerfile.llm-katan" ]]; then
+            oc new-build --dockerfile - --name llm-katan -n "$NAMESPACE" < "$SCRIPT_DIR/Dockerfile.llm-katan"
+        else
+            error "Dockerfile.llm-katan not found at: $SCRIPT_DIR/Dockerfile.llm-katan"
+            exit 1
+        fi
+
+        log "Waiting for build to start..."
+        sleep 5
+
+        log "Starting build..."
+        oc start-build llm-katan -n "$NAMESPACE" --follow || true
+
+        log "Waiting for build to complete..."
+        if ! oc wait --for=condition=Complete build/llm-katan-1 -n "$NAMESPACE" --timeout=600s 2>/dev/null; then
+            warn "Build may still be in progress. Checking status..."
+            oc get builds -n "$NAMESPACE"
+            oc logs build/llm-katan-1 -n "$NAMESPACE" --tail=50 || true
+        fi
+
+        success "llm-katan image built"
+    else
+        log "llm-katan image already exists"
+    fi
 fi
 
 # Create PVCs
@@ -164,7 +207,13 @@ success "PVCs created"
 
 # Deploy vLLM models FIRST to get their ClusterIPs
 log "Deploying vLLM model services and deployments..."
-oc apply -f "$SCRIPT_DIR/deployment.yaml" -n "$NAMESPACE"
+
+if [[ "$USE_SIMULATOR" == "true" ]]; then
+    log "Simulator mode: Using deployment-simulator.yaml (mock-vllm, no GPU required)..."
+    oc apply -f "$SCRIPT_DIR/deployment-simulator.yaml" -n "$NAMESPACE"
+else
+    oc apply -f "$SCRIPT_DIR/deployment.yaml" -n "$NAMESPACE"
+fi
 
 # Wait for services to be created and get ClusterIPs
 log "Waiting for vLLM services to get ClusterIPs..."

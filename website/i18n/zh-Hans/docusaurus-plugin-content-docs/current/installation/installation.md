@@ -19,8 +19,43 @@ sidebar_position: 2
 **要求：**
 
 - **Python**: 3.10 或更高版本
-- **Docker**: 运行 Router 容器所需
+- **容器运行时**: Docker 或 Podman（运行 Router 容器所需）
 - **可选**: HuggingFace token（仅针对 gated models）
+
+:::tip[容器运行时支持]
+vLLM Semantic Router 同时支持 **Docker** 和 **Podman** 作为容器运行时。CLI 会自动检测系统中可用的运行时。如果两者都已安装，默认优先使用 Docker。您可以通过设置 `CONTAINER_RUNTIME` 环境变量来显式选择运行时：
+
+```bash
+export CONTAINER_RUNTIME=podman  # 使用 Podman
+export CONTAINER_RUNTIME=docker  # 使用 Docker
+```
+
+:::
+
+:::warning[Podman 内存要求]
+如果您使用 Podman，请确保 Podman 机器至少分配了 **8GB 内存**。默认的 2GB 内存不足以加载所需的模型。
+
+配置 Podman 机器内存：
+
+```bash
+# 停止并删除现有机器（如果有）
+podman machine stop
+podman machine rm
+
+# 创建新机器并分配 8GB 内存
+podman machine init --memory 8192 --cpus 4 --disk-size 100
+
+# 启动机器
+podman machine start
+```
+
+您可以通过以下命令验证内存分配：
+
+```bash
+podman machine inspect | grep Memory
+```
+
+:::
 
 ## 快速开始
 

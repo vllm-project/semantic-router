@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { FieldConfig } from '../components/EditModal'
+import {
+  ConfigFormat,
+  detectConfigFormat,
+} from '../types/config'
 
 interface VLLMEndpoint {
   name: string
@@ -44,7 +48,9 @@ interface ModelScore {
 interface Category {
   name: string
   system_prompt?: string
-  model_scores: ModelScore[]
+  description?: string
+  // model_scores can be array (Python CLI) or object (Legacy: {"gpt-4": 0.9})
+  model_scores?: ModelScore[] | Record<string, number>
 }
 
 interface ToolFunction {
@@ -126,6 +132,65 @@ interface APIConfig {
 }
 
 interface ConfigData {
+  // === Python CLI Format (new) ===
+  version?: string
+  listeners?: Array<{
+    name: string
+    address: string
+    port: number
+    timeout?: string
+  }>
+  signals?: {
+    keywords?: Array<{
+      name: string
+      operator: 'AND' | 'OR'
+      keywords: string[]
+      case_sensitive: boolean
+    }>
+    embeddings?: Array<{
+      name: string
+      threshold: number
+      candidates: string[]
+      aggregation_method: string
+    }>
+    domains?: Array<{
+      name: string
+      description: string
+      mmlu_categories?: string[]
+    }>
+    fact_check?: Array<{ name: string; description: string }>
+    user_feedbacks?: Array<{ name: string; description: string }>
+    preferences?: Array<{ name: string; description: string }>
+  }
+  decisions?: Array<{
+    name: string
+    description: string
+    priority: number
+    rules: {
+      operator: 'AND' | 'OR'
+      conditions: Array<{ type: string; name: string }>
+    }
+    modelRefs: Array<{ model: string; use_reasoning: boolean }>
+    plugins?: Array<{ type: string; configuration: Record<string, any> }>
+  }>
+  providers?: {
+    models: Array<{
+      name: string
+      reasoning_family?: string
+      endpoints: Array<{
+        name: string
+        weight: number
+        endpoint: string
+        protocol: 'http' | 'https'
+      }>
+      access_key?: string
+    }>
+    default_model: string
+    reasoning_families?: Record<string, ReasoningFamily>
+    default_reasoning_effort?: string
+  }
+
+  // === Legacy Format (Go router) ===
   bert_model?: ModelConfig
   semantic_cache?: {
     enabled: boolean
@@ -134,6 +199,7 @@ interface ConfigData {
     max_entries: number
     ttl_seconds: number
     eviction_policy?: string
+    embedding_model?: string
   }
   tools?: {
     enabled: boolean
@@ -157,6 +223,7 @@ interface ConfigData {
   api?: APIConfig
   observability?: {
     tracing?: TracingConfig
+    metrics?: { enabled: boolean }
   }
   [key: string]: unknown
 }
@@ -187,6 +254,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedView, setSelectedView] = useState<'structured' | 'raw'>('structured')
+  const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
 
   // Tools database state
   const [toolsData, setToolsData] = useState<Tool[]>([])
@@ -225,6 +293,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       }
       const data = await response.json()
       setConfig(data)
+      // Detect config format
+      const format = detectConfigFormat(data)
+      setConfigFormat(format)
+      if (format === 'legacy') {
+        console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
       setConfig(null)
@@ -317,33 +391,273 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   // ============================================================================
+  // HELPER FUNCTIONS - Normalize data access across config formats
+  // ============================================================================
+
+  // Helper: Check if using Python CLI format
+  const isPythonCLI = configFormat === 'python-cli'
+
+  // Get models - from providers.models (Python CLI) or model_config (legacy)
+  interface NormalizedModel {
+    name: string
+    reasoning_family?: string
+    endpoints: Array<{ name: string; weight: number; endpoint: string; protocol: string }>
+    access_key?: string
+    pricing?: {
+      currency?: string
+      prompt_per_1m?: number
+      completion_per_1m?: number
+    }
+    pii_policy?: {
+      allow_by_default?: boolean
+      pii_types_allowed?: string[]
+    }
+  }
+
+  const getModels = (): NormalizedModel[] => {
+    if (isPythonCLI && config?.providers?.models) {
+      return config.providers.models.map((m: NonNullable<ConfigData['providers']>['models'][number]) => ({
+        name: m.name,
+        reasoning_family: m.reasoning_family,
+        endpoints: m.endpoints || [],
+        access_key: m.access_key,
+      }))
+    }
+    // Legacy format - convert model_config to array
+    if (config?.model_config) {
+      return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(([name, cfg]) => ({
+        name,
+        reasoning_family: cfg.reasoning_family,
+        endpoints: cfg.preferred_endpoints?.map((ep: string) => {
+          const endpoint = config.vllm_endpoints?.find((e: VLLMEndpoint) => e.name === ep)
+          return endpoint ? {
+            name: ep,
+            weight: endpoint.weight || 1,
+            endpoint: `${endpoint.address}:${endpoint.port}`,
+            protocol: 'http',
+          } : null
+        }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
+        access_key: undefined,
+        pricing: cfg.pricing,
+        pii_policy: cfg.pii_policy,
+      }))
+    }
+    return []
+  }
+
+  // Get endpoints - from providers.models[].endpoints (Python CLI) or vllm_endpoints (legacy)
+  interface NormalizedEndpoint {
+    name: string
+    endpoint?: string
+    address?: string
+    port?: number
+    protocol?: string
+    weight: number
+    usedByModels?: string[]
+  }
+
+  const getEndpoints = (): NormalizedEndpoint[] => {
+    if (isPythonCLI && config?.providers?.models) {
+      // Flatten all endpoints from all models
+      const endpointMap = new Map<string, NormalizedEndpoint>()
+      config.providers.models.forEach((model: NonNullable<ConfigData['providers']>['models'][number]) => {
+        model.endpoints?.forEach((ep: NonNullable<ConfigData['providers']>['models'][number]['endpoints'][number]) => {
+          if (!endpointMap.has(ep.name)) {
+            endpointMap.set(ep.name, {
+              name: ep.name,
+              endpoint: ep.endpoint,
+              protocol: ep.protocol,
+              weight: ep.weight,
+              usedByModels: [model.name],
+            })
+          } else {
+            const existing = endpointMap.get(ep.name)!
+            existing.usedByModels = [...(existing.usedByModels || []), model.name]
+          }
+        })
+      })
+      return Array.from(endpointMap.values())
+    }
+    // Legacy format
+    return (config?.vllm_endpoints || []).map((ep: VLLMEndpoint) => ({
+      name: ep.name,
+      address: ep.address,
+      port: ep.port,
+      weight: ep.weight,
+    }))
+  }
+
+  // Get domains/categories - from signals.domains (Python CLI) or categories (legacy)
+  const getDomains = (): Array<{ name: string; description: string; mmlu_categories?: string[] }> => {
+    if (isPythonCLI && config?.signals?.domains) {
+      return config.signals.domains
+    }
+    return config?.categories?.map((c: Category) => ({
+      name: c.name,
+      description: c.system_prompt || '',
+      mmlu_categories: [] as string[],
+    })) || []
+  }
+
+  // Get decisions/routes - from decisions (Python CLI) or categories with model_scores (legacy)
+  const getDecisions = () => {
+    if (isPythonCLI && config?.decisions) {
+      return config.decisions
+    }
+    // Legacy format doesn't have decisions in the same way
+    return []
+  }
+
+  // Get default model
+  const getDefaultModel = (): string => {
+    if (isPythonCLI) {
+      return config?.providers?.default_model || ''
+    }
+    return config?.default_model || ''
+  }
+
+  // Get reasoning families
+  const getReasoningFamilies = (): Record<string, ReasoningFamily> => {
+    if (isPythonCLI) {
+      return config?.providers?.reasoning_families || {}
+    }
+    return config?.reasoning_families || {}
+  }
+
+  // Helper: Normalize model_scores from object to array (Legacy format uses object)
+  // Legacy: { "gpt-4": 0.9, "llama": 0.7 } → [{ model: "gpt-4", score: 0.9 }, ...]
+  const normalizeModelScores = (modelScores: ModelScore[] | Record<string, number> | undefined): ModelScore[] => {
+    if (!modelScores) return []
+    // Already an array
+    if (Array.isArray(modelScores)) return modelScores
+    // Object format (Legacy) - convert to array
+    return Object.entries(modelScores).map(([model, score]) => ({
+      model,
+      score: typeof score === 'number' ? score : 0,
+      use_reasoning: false,
+    }))
+  }
+
+  // ============================================================================
   // 1. MODELS SECTION
   // ============================================================================
 
-  const renderUserDefinedEndpoints = () => (
+  // Helper: Add endpoint (handles both formats)
+  const handleAddEndpoint = (data: { name: string; endpoint: string; weight: number; protocol: string }) => {
+    const newConfig = { ...config }
+    if (isPythonCLI) {
+      // Python CLI format: Add endpoint to the first model (or create default model)
+      if (!newConfig.providers) {
+        newConfig.providers = { models: [], default_model: '' }
+      }
+      if (!newConfig.providers.models || newConfig.providers.models.length === 0) {
+        // Create a default model to hold this endpoint
+        newConfig.providers.models = [{
+          name: 'default-model',
+          endpoints: [],
+        }]
+        newConfig.providers.default_model = 'default-model'
+      }
+      // Add to first model's endpoints
+      const firstModel = newConfig.providers.models[0]
+      firstModel.endpoints = [...(firstModel.endpoints || []), {
+        name: data.name,
+        endpoint: data.endpoint,
+        weight: data.weight || 1,
+        protocol: (data.protocol || 'http') as 'http' | 'https',
+      }]
+    } else {
+      // Legacy format
+      const [address, portStr] = (data.endpoint || '').split(':')
+      newConfig.vllm_endpoints = [...(newConfig.vllm_endpoints || []), {
+        name: data.name,
+        address: address || '',
+        port: parseInt(portStr) || 8000,
+        weight: data.weight || 1,
+        health_check_path: '/health',
+      }]
+    }
+    return saveConfig(newConfig)
+  }
+
+  // Helper: Edit endpoint (handles both formats)
+  const handleEditEndpoint = (oldName: string, data: { name: string; endpoint?: string; address?: string; port?: number; weight: number; protocol?: string }) => {
+    const newConfig = { ...config }
+    if (isPythonCLI && newConfig.providers?.models) {
+      // Python CLI format: Find and update endpoint across all models
+      newConfig.providers = { ...newConfig.providers }
+      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+      type EndpointType = ModelType['endpoints'][number]
+      newConfig.providers.models = newConfig.providers.models.map((model: ModelType) => ({
+        ...model,
+        endpoints: model.endpoints?.map((ep: EndpointType) =>
+          ep.name === oldName ? {
+            name: data.name,
+            endpoint: data.endpoint || ep.endpoint,
+            weight: data.weight,
+            protocol: (data.protocol || ep.protocol || 'http') as 'http' | 'https',
+          } : ep
+        ) || [],
+      }))
+    } else if (newConfig.vllm_endpoints) {
+      // Legacy format
+      newConfig.vllm_endpoints = newConfig.vllm_endpoints.map((ep: VLLMEndpoint) =>
+        ep.name === oldName ? {
+          ...ep,
+          name: data.name,
+          address: data.address || ep.address,
+          port: data.port || ep.port,
+          weight: data.weight,
+        } : ep
+      )
+    }
+    return saveConfig(newConfig)
+  }
+
+  // Helper: Delete endpoint (handles both formats)
+  const handleDeleteEndpoint = (endpointName: string) => {
+    const newConfig = { ...config }
+    if (isPythonCLI && newConfig.providers?.models) {
+      // Python CLI format: Remove endpoint from all models
+      newConfig.providers = { ...newConfig.providers }
+      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+      type EndpointType = ModelType['endpoints'][number]
+      newConfig.providers.models = newConfig.providers.models.map((model: ModelType) => ({
+        ...model,
+        endpoints: model.endpoints?.filter((ep: EndpointType) => ep.name !== endpointName) || [],
+      }))
+    } else if (newConfig.vllm_endpoints) {
+      // Legacy format
+      newConfig.vllm_endpoints = newConfig.vllm_endpoints.filter((ep: VLLMEndpoint) => ep.name !== endpointName)
+    }
+    return saveConfig(newConfig)
+  }
+
+  const renderUserDefinedEndpoints = () => {
+    const endpoints = getEndpoints()
+    const endpointCount = endpoints.length
+
+    return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🔌</span>
         <h3 className={styles.sectionTitle}>User Defined Endpoints</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={styles.badge}>{config?.vllm_endpoints?.length || 0} endpoints</span>
+          <span className={styles.badge}>{endpointCount} endpoints</span>
           <button
             className={styles.addButton}
             onClick={() => {
               openEditModal(
                 'Add New Endpoint',
-                { name: '', address: '', port: 8000, weight: 1 },
+                { name: '', endpoint: 'localhost:8000', weight: 1, protocol: 'http' },
                 [
                   { name: 'name', label: 'Endpoint Name', type: 'text', required: true, placeholder: 'e.g., vllm-endpoint-1' },
-                  { name: 'address', label: 'Address', type: 'text', required: true, placeholder: 'e.g., localhost' },
-                  { name: 'port', label: 'Port', type: 'number', required: true, placeholder: '8000' },
+                  { name: 'endpoint', label: 'Endpoint Address', type: 'text', required: true, placeholder: 'e.g., localhost:8000 or api.example.com' },
+                  { name: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
                   { name: 'weight', label: 'Weight', type: 'number', placeholder: '1', description: 'Load balancing weight for this endpoint' }
                 ],
                 async (data) => {
-                  const newConfig = { ...config }
-                  // Create a new array to avoid mutating the original state
-                  newConfig.vllm_endpoints = [...(newConfig.vllm_endpoints || []), data]
-                  await saveConfig(newConfig)
+                  await handleAddEndpoint(data)
                 },
                 'add'
               )
@@ -354,8 +668,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         </div>
       </div>
       <div className={styles.sectionContent}>
-        {config?.vllm_endpoints && config.vllm_endpoints.length > 0 ? (
-          config.vllm_endpoints.map((endpoint, index) => (
+        {endpoints.length > 0 ? (
+          endpoints.map((endpoint, index) => (
             <div key={index} className={styles.endpointCard}>
               <div className={styles.endpointHeader}>
                 <span className={styles.endpointName}>{endpoint.name}</span>
@@ -363,23 +677,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   <button
                     className={styles.editButton}
                     onClick={() => {
+                      const endpointValue = endpoint.endpoint || (endpoint.address && endpoint.port ? `${endpoint.address}:${endpoint.port}` : '')
                       openEditModal(
                         `Edit Endpoint: ${endpoint.name}`,
-                        { ...endpoint },
+                        { ...endpoint, endpoint: endpointValue },
                         [
                           { name: 'name', label: 'Endpoint Name', type: 'text', required: true },
-                          { name: 'address', label: 'Address', type: 'text', required: true },
-                          { name: 'port', label: 'Port', type: 'number', required: true },
+                          { name: 'endpoint', label: 'Endpoint Address', type: 'text', required: true },
+                          { name: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
                           { name: 'weight', label: 'Weight', type: 'number', description: 'Load balancing weight for this endpoint' }
                         ],
                         async (data) => {
-                          const newConfig = { ...config }
-                          if (newConfig.vllm_endpoints) {
-                            // Create a new array to avoid mutating the original state
-                            newConfig.vllm_endpoints = [...newConfig.vllm_endpoints]
-                            newConfig.vllm_endpoints[index] = data
-                          }
-                          await saveConfig(newConfig)
+                          await handleEditEndpoint(endpoint.name, data)
                         },
                         'edit'
                       )
@@ -390,49 +699,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   <button
                     className={styles.deleteButton}
                     onClick={() => {
-                      // Check if endpoint is referenced in model_config
-                      const referencedIn: string[] = []
-                      if (config?.model_config) {
-                        Object.entries(config.model_config).forEach(([modelName, modelConfig]) => {
-                          if (modelConfig.preferred_endpoints?.includes(endpoint.name)) {
-                            referencedIn.push(modelName)
-                          }
-                        })
-                      }
+                      // Check which models use this endpoint
+                      const usedByModels = endpoint.usedByModels || []
 
                       let confirmMessage = `Delete endpoint "${endpoint.name}"?`
-                      if (referencedIn.length > 0) {
-                        const modelList = referencedIn.length === 1 
-                          ? `model "${referencedIn[0]}"` 
-                          : `${referencedIn.length} models (${referencedIn.join(', ')})`
-                        confirmMessage += `\n\n⚠️ This endpoint is currently used in ${modelList}.\nIt will be automatically removed from their preferred endpoints.`
+                      if (usedByModels.length > 0) {
+                        const modelList = usedByModels.length === 1 
+                          ? `model "${usedByModels[0]}"` 
+                          : `${usedByModels.length} models (${usedByModels.join(', ')})`
+                        confirmMessage += `\n\n⚠️ This endpoint is currently used by ${modelList}.\nIt will be removed from all models.`
                       }
 
                       if (confirm(confirmMessage)) {
-                        const newConfig = { ...config }
-                        if (newConfig.vllm_endpoints) {
-                          // Create a new array to avoid mutating the original state
-                          newConfig.vllm_endpoints = newConfig.vllm_endpoints.filter((_, i) => i !== index)
-                        }
-
-                        // Remove endpoint from all model_config preferred_endpoints
-                        if (newConfig.model_config) {
-                          Object.keys(newConfig.model_config).forEach((modelName) => {
-                            const modelConfig = newConfig.model_config![modelName]
-                            if (modelConfig.preferred_endpoints) {
-                              // Filter out the deleted endpoint
-                              modelConfig.preferred_endpoints = modelConfig.preferred_endpoints.filter(
-                                (ep) => ep !== endpoint.name
-                              )
-                              // Remove preferred_endpoints if array becomes empty
-                              if (modelConfig.preferred_endpoints.length === 0) {
-                                delete modelConfig.preferred_endpoints
-                              }
-                            }
-                          })
-                        }
-
-                        saveConfig(newConfig)
+                        handleDeleteEndpoint(endpoint.name)
                       }
                     }}
                   >
@@ -445,7 +724,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   <span className={styles.configLabel}>🌐 Address</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span className={styles.configValue}>
-                      {visibleAddresses.has(index) ? endpoint.address : maskAddress(endpoint.address)}
+                      {(() => {
+                        const addr = endpoint.endpoint || (endpoint.address && endpoint.port ? `${endpoint.address}:${endpoint.port}` : '')
+                        return visibleAddresses.has(index) ? addr : maskAddress(addr)
+                      })()}
                     </span>
                     <button
                       className={styles.toggleVisibilityButton}
@@ -464,14 +746,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                     </button>
                   </div>
                 </div>
+                {endpoint.protocol && (
                 <div className={styles.configRow}>
-                  <span className={styles.configLabel}>🔌 Port</span>
-                  <span className={styles.configValue}>{endpoint.port}</span>
+                    <span className={styles.configLabel}>🔒 Protocol</span>
+                    <span className={styles.configValue}>{endpoint.protocol.toUpperCase()}</span>
                 </div>
+                )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>⚖️ Weight</span>
                   <span className={styles.configValue}>{endpoint.weight}</span>
                 </div>
+                {endpoint.usedByModels && endpoint.usedByModels.length > 0 && (
+                  <div className={styles.configRow}>
+                    <span className={styles.configLabel}>🔗 Used By</span>
+                    <span className={styles.configValue}>{endpoint.usedByModels.join(', ')}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -480,27 +770,93 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         )}
       </div>
     </div>
-  )
+  )}
 
-  const renderUserDefinedModels = () => (
+  // Helper: Add model (handles both formats)
+  const handleAddModel = async (data: {
+    model_name: string
+    reasoning_family?: string
+    access_key?: string
+    preferred_endpoints?: string[]
+  }) => {
+    const newConfig = { ...config }
+    if (isPythonCLI) {
+      // Python CLI format: Add to providers.models
+      if (!newConfig.providers) {
+        newConfig.providers = { models: [], default_model: '' }
+      }
+      const existingEndpoints = getEndpoints()
+      const modelEndpoints = (data.preferred_endpoints || []).map(epName => {
+        const existing = existingEndpoints.find(e => e.name === epName)
+        return {
+          name: epName,
+          endpoint: existing?.endpoint || 'localhost:8000',
+          weight: existing?.weight || 1,
+          protocol: (existing?.protocol || 'http') as 'http' | 'https',
+        }
+      })
+      newConfig.providers.models = [...(newConfig.providers.models || []), {
+        name: data.model_name,
+        reasoning_family: data.reasoning_family,
+        endpoints: modelEndpoints,
+        access_key: data.access_key,
+      }]
+      // Set as default if first model
+      if (!newConfig.providers.default_model) {
+        newConfig.providers.default_model = data.model_name
+      }
+    } else {
+      // Legacy format
+      if (!newConfig.model_config) {
+        newConfig.model_config = {}
+      }
+      newConfig.model_config[data.model_name] = {
+        reasoning_family: data.reasoning_family,
+        preferred_endpoints: data.preferred_endpoints,
+      }
+    }
+    await saveConfig(newConfig)
+  }
+
+  // Helper: Delete model (handles both formats)
+  const handleDeleteModel = async (modelName: string) => {
+    const newConfig = { ...config }
+    if (isPythonCLI && newConfig.providers?.models) {
+      newConfig.providers = { ...newConfig.providers }
+      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+      newConfig.providers.models = newConfig.providers.models.filter((m: ModelType) => m.name !== modelName)
+      // Update default model if deleted
+      if (newConfig.providers.default_model === modelName) {
+        newConfig.providers.default_model = newConfig.providers.models[0]?.name || ''
+      }
+    } else if (newConfig.model_config) {
+      delete newConfig.model_config[modelName]
+    }
+    await saveConfig(newConfig)
+  }
+
+  const renderUserDefinedModels = () => {
+    const models = getModels()
+    const modelCount = models.length
+    const availableEndpoints = getEndpoints()
+    const reasoningFamiliesObj = getReasoningFamilies()
+    const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
+
+    return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🤖</span>
         <h3 className={styles.sectionTitle}>User Defined Models</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={styles.badge}>{config?.model_config ? Object.keys(config.model_config).length : 0} models</span>
+          <span className={styles.badge}>{modelCount} models</span>
           <button
             className={styles.addButton}
             onClick={() => {
               // Get available reasoning families
-              const reasoningFamilies = config?.reasoning_families
-                ? Object.keys(config.reasoning_families)
-                : []
+              const reasoningFamilies = reasoningFamilyNames
 
               // Get available endpoints
-              const endpoints = config?.vllm_endpoints
-                ? config.vllm_endpoints.map(ep => ep.name)
-                : []
+              const endpoints = availableEndpoints.map(ep => ep.name)
 
               // PII types
               const piiTypes = [
@@ -581,31 +937,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   }
                 ],
                 async (data) => {
-                  const newConfig = { ...config }
-                  if (!newConfig.model_config) newConfig.model_config = {}
-                  const { model_name, currency, prompt_per_1m, completion_per_1m, pii_allow_by_default, pii_types_allowed, ...otherData } = data
-
-                  // Build model data
-                  const modelData: any = { ...otherData }
-
-                  // Add pricing if any value is set
-                  if (currency || prompt_per_1m || completion_per_1m) {
-                    modelData.pricing = {
-                      currency: currency || 'USD',
-                      prompt_per_1m: prompt_per_1m || 0,
-                      completion_per_1m: completion_per_1m || 0
-                    }
-                  }
-
-                  // Add PII policy
-                  modelData.pii_policy = {
-                    allow_by_default: pii_allow_by_default,
-                    pii_types_allowed: pii_types_allowed || []
-                  }
-
-                  newConfig.model_config[model_name] = modelData
-                  newConfig.model_config[model_name] = modelData
-                  await saveConfig(newConfig)
+                  await handleAddModel({
+                    model_name: data.model_name,
+                    reasoning_family: data.reasoning_family,
+                    preferred_endpoints: data.preferred_endpoints,
+                    access_key: data.access_key,
+                  })
                 },
                 'add'
               )
@@ -616,123 +953,79 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         </div>
       </div>
       <div className={styles.sectionContent}>
-        {config?.model_config && Object.keys(config.model_config).length > 0 ? (
+        {models.length > 0 ? (
           <div className={styles.modelConfigGrid}>
-            {Object.entries(config.model_config).map(([modelName, modelConfig]) => (
-              <div key={modelName} className={styles.modelConfigCard}>
+            {models.map((model) => (
+              <div key={model.name} className={styles.modelConfigCard}>
                 <div className={styles.modelConfigHeader}>
-                  <span className={styles.modelConfigName}>{modelName}</span>
+                  <span className={styles.modelConfigName}>{model.name}</span>
+                  {model.name === getDefaultModel() && (
+                    <span className={styles.defaultBadge}>Default</span>
+                  )}
                   <div className={styles.cardActions}>
                     <button
                       className={styles.editButton}
                       onClick={() => {
-                        // Get available reasoning families
-                        const reasoningFamilies = config?.reasoning_families
-                          ? Object.keys(config.reasoning_families)
-                          : []
-
-                        // Get available endpoints
-                        const endpoints = config?.vllm_endpoints
-                          ? config.vllm_endpoints.map(ep => ep.name)
-                          : []
-
-                        // PII types
-                        const piiTypes = [
-                          'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
-                          'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
-                          'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
-                          'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
-                          'US_SSN', 'ZIP_CODE'
-                        ]
-
-                        // Flatten model config for editing
-                        const editData = {
-                          reasoning_family: modelConfig.reasoning_family || '',
-                          preferred_endpoints: modelConfig.preferred_endpoints || [],
-                          currency: modelConfig.pricing?.currency || 'USD',
-                          prompt_per_1m: modelConfig.pricing?.prompt_per_1m || 0,
-                          completion_per_1m: modelConfig.pricing?.completion_per_1m || 0,
-                          pii_allow_by_default: modelConfig.pii_policy?.allow_by_default ?? true,
-                          pii_types_allowed: modelConfig.pii_policy?.pii_types_allowed || []
-                        }
-
                         openEditModal(
-                          `Edit Model: ${modelName}`,
-                          editData,
+                          `Edit Model: ${model.name}`,
+                          {
+                            reasoning_family: model.reasoning_family || '',
+                            preferred_endpoints: model.endpoints?.map(e => e.name) || [],
+                            access_key: model.access_key || '',
+                          },
                           [
                             {
                               name: 'reasoning_family',
                               label: 'Reasoning Family',
                               type: 'select',
-                              options: reasoningFamilies,
+                              options: reasoningFamilyNames,
                               description: 'Select from configured reasoning families'
                             },
                             {
                               name: 'preferred_endpoints',
-                              label: 'Preferred Endpoints',
+                              label: 'Endpoints',
                               type: 'multiselect',
-                              options: endpoints,
-                              description: 'Select one or more endpoints for this model'
+                              options: availableEndpoints.map(e => e.name),
+                              description: 'Select endpoints for this model'
                             },
                             {
-                              name: 'currency',
-                              label: 'Pricing Currency',
+                              name: 'access_key',
+                              label: 'Access Key',
                               type: 'text',
-                              placeholder: 'USD',
-                              description: 'ISO currency code (e.g., USD, EUR, CNY)'
-                            },
-                            {
-                              name: 'prompt_per_1m',
-                              label: 'Prompt Price per 1M Tokens',
-                              type: 'number',
-                              placeholder: '0.50',
-                              description: 'Cost per 1 million prompt tokens'
-                            },
-                            {
-                              name: 'completion_per_1m',
-                              label: 'Completion Price per 1M Tokens',
-                              type: 'number',
-                              placeholder: '1.50',
-                              description: 'Cost per 1 million completion tokens'
-                            },
-                            {
-                              name: 'pii_allow_by_default',
-                              label: 'PII Policy: Allow by Default',
-                              type: 'boolean',
-                              description: 'If enabled, all PII types are allowed unless specified below'
-                            },
-                            {
-                              name: 'pii_types_allowed',
-                              label: 'PII Types Allowed/Blocked',
-                              type: 'multiselect',
-                              options: piiTypes,
-                              description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
+                              placeholder: 'API key for this model',
+                              description: 'Optional: API key for authentication'
                             }
                           ],
                           async (data) => {
                             const newConfig = { ...config }
-                            if (newConfig.model_config) {
-                              const { currency, prompt_per_1m, completion_per_1m, pii_allow_by_default, pii_types_allowed, ...otherData } = data
-
-                              // Build model data
-                              const modelData: any = { ...otherData }
-
-                              // Add pricing if any value is set
-                              if (currency || prompt_per_1m || completion_per_1m) {
-                                modelData.pricing = {
-                                  currency: currency || 'USD',
-                                  prompt_per_1m: prompt_per_1m || 0,
-                                  completion_per_1m: completion_per_1m || 0
+                            if (isPythonCLI && newConfig.providers?.models) {
+                              // Python CLI format: Update model in providers.models
+                              newConfig.providers = { ...newConfig.providers }
+                              const existingEps = getEndpoints()
+                              type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+                              newConfig.providers.models = newConfig.providers.models.map((m: ModelType) => 
+                                m.name === model.name ? {
+                                  ...m,
+                                  reasoning_family: data.reasoning_family,
+                                  access_key: data.access_key,
+                                  endpoints: (data.preferred_endpoints || []).map((epName: string) => {
+                                    const existing = existingEps.find(e => e.name === epName)
+                                    return {
+                                      name: epName,
+                                      endpoint: existing?.endpoint || 'localhost:8000',
+                                      weight: existing?.weight || 1,
+                                      protocol: (existing?.protocol || 'http') as 'http' | 'https',
                                 }
+                                  }),
+                                } : m
+                              )
+                            } else if (newConfig.model_config) {
+                              // Legacy format
+                              newConfig.model_config[model.name] = {
+                                ...newConfig.model_config[model.name],
+                                reasoning_family: data.reasoning_family,
+                                preferred_endpoints: data.preferred_endpoints,
                               }
-
-                              // Add PII policy
-                              modelData.pii_policy = {
-                                allow_by_default: pii_allow_by_default,
-                                pii_types_allowed: pii_types_allowed || []
-                              }
-
-                              newConfig.model_config[modelName] = modelData
                             }
                             await saveConfig(newConfig)
                           },
@@ -745,12 +1038,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                     <button
                       className={styles.deleteButton}
                       onClick={() => {
-                        if (confirm(`Are you sure you want to delete model "${modelName}"?`)) {
-                          const newConfig = { ...config }
-                          if (newConfig.model_config) {
-                            delete newConfig.model_config[modelName]
-                          }
-                          saveConfig(newConfig)
+                        if (confirm(`Are you sure you want to delete model "${model.name}"?`)) {
+                          handleDeleteModel(model.name)
                         }
                       }}
                     >
@@ -759,60 +1048,66 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   </div>
                 </div>
                 <div className={styles.modelConfigBody}>
-                  {modelConfig.reasoning_family && (
+                  {model.reasoning_family && (
                     <div className={styles.configRow}>
                       <span className={styles.configLabel}>🧠 Reasoning Family</span>
                       <span className={`${styles.badge} ${styles.badgeInfo}`}>
-                        {modelConfig.reasoning_family}
+                        {model.reasoning_family}
                       </span>
                     </div>
                   )}
-                  {modelConfig.preferred_endpoints && modelConfig.preferred_endpoints.length > 0 && (
+                  {model.endpoints && model.endpoints.length > 0 && (
                     <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🔌 Preferred Endpoints</span>
+                      <span className={styles.configLabel}>🔌 Endpoints</span>
                       <div className={styles.endpointTags}>
-                        {modelConfig.preferred_endpoints.map((endpoint, idx) => (
-                          <span key={idx} className={styles.endpointTag}>{endpoint}</span>
+                        {model.endpoints.map((endpoint, idx) => (
+                          <span key={idx} className={styles.endpointTag}>{endpoint.name}</span>
                         ))}
                       </div>
                     </div>
                   )}
-                  {modelConfig.pricing && (
+                  {model.access_key && (
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>🔑 Access Key</span>
+                      <span className={styles.configValue}>••••••••</span>
+                    </div>
+                  )}
+                  {model.pricing && (
                     <div className={styles.configRow}>
                       <span className={styles.configLabel}>💰 Pricing</span>
                       <div className={styles.pricingContainer}>
                         <div className={styles.pricingItem}>
                           <span className={styles.pricingLabel}>Prompt</span>
                           <span className={styles.pricingValue}>
-                            {modelConfig.pricing.prompt_per_1m?.toFixed(2) || '0.00'}
+                            {model.pricing.prompt_per_1m?.toFixed(2) || '0.00'}
                           </span>
                           <span className={styles.pricingUnit}>
-                            {modelConfig.pricing.currency || 'USD'}/1M
+                            {model.pricing.currency || 'USD'}/1M
                           </span>
                         </div>
                         <div className={styles.pricingDivider}>|</div>
                         <div className={styles.pricingItem}>
                           <span className={styles.pricingLabel}>Completion</span>
                           <span className={styles.pricingValue}>
-                            {modelConfig.pricing.completion_per_1m?.toFixed(2) || '0.00'}
+                            {model.pricing.completion_per_1m?.toFixed(2) || '0.00'}
                           </span>
                           <span className={styles.pricingUnit}>
-                            {modelConfig.pricing.currency || 'USD'}/1M
+                            {model.pricing.currency || 'USD'}/1M
                           </span>
                         </div>
                       </div>
                     </div>
                   )}
-                  {modelConfig.pii_policy && (
+                  {model.pii_policy && (
                     <div className={styles.configRow}>
                       <span className={styles.configLabel}>🔒 PII Policy</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <span className={`${styles.statusBadge} ${modelConfig.pii_policy.allow_by_default ? styles.statusActive : styles.statusInactive}`}>
-                          {modelConfig.pii_policy.allow_by_default ? 'Allow by default' : 'Block by default'}
+                        <span className={`${styles.statusBadge} ${model.pii_policy.allow_by_default ? styles.statusActive : styles.statusInactive}`}>
+                          {model.pii_policy.allow_by_default ? 'Allow by default' : 'Block by default'}
                         </span>
-                        {modelConfig.pii_policy.pii_types_allowed && modelConfig.pii_policy.pii_types_allowed.length > 0 && (
+                        {model.pii_policy.pii_types_allowed && model.pii_policy.pii_types_allowed.length > 0 && (
                           <div className={styles.piiTypesTags}>
-                            {modelConfig.pii_policy.pii_types_allowed.map((type, idx) => (
+                            {model.pii_policy.pii_types_allowed.map((type: string, idx: number) => (
                               <span key={idx} className={styles.piiTypeTag}>{type}</span>
                             ))}
                           </div>
@@ -829,7 +1124,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         )}
       </div>
     </div>
-  )
+  )}
 
   // ============================================================================
   // 2. PROMPT GUARD SECTION
@@ -1484,33 +1779,144 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     )
   }
 
-  const renderCategories = () => (
+  const renderCategories = () => {
+    // Get domains/categories from both formats
+    const domains = getDomains()
+    const decisions = getDecisions()
+    const defaultModel = getDefaultModel()
+
+    return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>📊</span>
-        <h3 className={styles.sectionTitle}>Categories Configuration</h3>
-        <span className={styles.badge}>{config?.categories?.length || 0} categories</span>
+        <h3 className={styles.sectionTitle}>{isPythonCLI ? 'Domains & Decisions' : 'Categories Configuration'}</h3>
+        <span className={styles.badge}>{domains.length} {isPythonCLI ? 'domains' : 'categories'}</span>
       </div>
       <div className={styles.sectionContent}>
         {/* Core Settings at the top */}
         <div className={styles.coreSettingsInline}>
           <div className={styles.inlineConfigRow}>
             <span className={styles.inlineConfigLabel}>🎯 Default Model:</span>
-            <span className={styles.inlineConfigValue}>{config?.default_model || 'N/A'}</span>
+            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
           </div>
+          {!isPythonCLI && (
           <div className={styles.inlineConfigRow}>
             <span className={styles.inlineConfigLabel}>⚡ Default Reasoning Effort:</span>
             <span className={`${styles.badge} ${styles[`badge${config?.default_reasoning_effort || 'medium'}`]}`}>
               {config?.default_reasoning_effort || 'medium'}
             </span>
           </div>
+          )}
         </div>
 
-        {config?.categories && config.categories.length > 0 ? (
+        {/* Python CLI format - show domains and decisions separately */}
+        {isPythonCLI ? (
+          <>
+            {/* Domains Section */}
+            <h4 className={styles.subsectionTitle}>📁 Domains</h4>
+            {domains.length > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {domains.map((domain, index) => (
+                  <div key={index} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{domain.name}</span>
+                      <button
+                        className={styles.editButton}
+                        onClick={() => {
+                          openEditModal(
+                            `Edit Domain: ${domain.name}`,
+                            { description: domain.description || '' },
+                            [
+                              {
+                                name: 'description',
+                                label: 'Description',
+                                type: 'textarea',
+                                placeholder: 'Describe this domain...',
+                                description: 'What types of queries belong to this domain'
+                              }
+                            ],
+                            async (data) => {
+                              const newConfig = { ...config }
+                              if (newConfig.signals?.domains) {
+                                newConfig.signals.domains[index] = {
+                                  ...domain,
+                                  description: data.description,
+                                }
+                              }
+                              await saveConfig(newConfig)
+                            }
+                          )
+                        }}
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                    {domain.description && (
+                      <p className={styles.categoryDescription}>{domain.description}</p>
+                    )}
+                    {domain.mmlu_categories && domain.mmlu_categories.length > 0 && (
+                      <div className={styles.tagsContainer}>
+                        {domain.mmlu_categories.map((cat: string, idx: number) => (
+                          <span key={idx} className={styles.tag}>{cat}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No domains configured</div>
+            )}
+
+            {/* Decisions Section */}
+            <h4 className={styles.subsectionTitle}>🔀 Decisions (Routing Rules)</h4>
+            {decisions.length > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {decisions.map((decision, index) => (
+                  <div key={index} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{decision.name}</span>
+                      <span className={`${styles.badge} ${styles.badgeInfo}`}>Priority: {decision.priority}</span>
+                    </div>
+                    {decision.description && (
+                      <p className={styles.categoryDescription}>{decision.description}</p>
+                    )}
+                    {decision.rules && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Rules</span>
+                        <span className={styles.configValue}>
+                          {decision.rules.conditions?.length || 0} conditions ({decision.rules.operator})
+                        </span>
+                      </div>
+                    )}
+                    {decision.modelRefs && decision.modelRefs.length > 0 && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Models</span>
+                        <div className={styles.endpointTags}>
+                          {decision.modelRefs.map((ref: { model: string; use_reasoning?: boolean }, idx: number) => (
+                            <span key={idx} className={styles.endpointTag}>
+                              {ref.model} {ref.use_reasoning && '⚡'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No decisions configured</div>
+            )}
+          </>
+        ) : (
+          /* Legacy format - categories with model scores */
+          config?.categories && config.categories.length > 0 ? (
           <div className={styles.categoryGridTwoColumn}>
             {config.categories.map((category, index) => {
+              // Normalize model_scores (handles both object and array formats)
+              const normalizedScores = normalizeModelScores(category.model_scores)
               // Get reasoning info from best model (first model score)
-              const bestModel = category.model_scores?.[0]
+              const bestModel = normalizedScores[0]
               const useReasoning = bestModel?.use_reasoning || false
               const reasoningEffort = bestModel?.reasoning_effort || 'medium'
               const reasoningDescription = bestModel?.reasoning_description || ''
@@ -1618,10 +2024,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                             const newConfig = { ...config }
                             if (newConfig.categories) {
                               const updatedCategory = { ...category }
-                              if (!updatedCategory.model_scores) {
-                                updatedCategory.model_scores = []
-                              }
-                              updatedCategory.model_scores.push(data)
+                              // Convert to array format if needed (Legacy uses object)
+                              const scores = normalizeModelScores(updatedCategory.model_scores)
+                              scores.push(data)
+                              updatedCategory.model_scores = scores
                               newConfig.categories[index] = updatedCategory
                             }
                             await saveConfig(newConfig)
@@ -1633,8 +2039,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                       ➕
                     </button>
                   </div>
-                  {category.model_scores && category.model_scores.length > 0 ? (
-                    category.model_scores.map((modelScore, modelIdx) => (
+                  {normalizedScores.length > 0 ? (
+                    normalizedScores.map((modelScore, modelIdx) => (
                       <div key={modelIdx} className={styles.modelScoreRow}>
                         <span className={styles.modelScoreName}>
                           {modelScore.model}
@@ -1643,9 +2049,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                         <div className={styles.scoreBar}>
                           <div
                             className={styles.scoreBarFill}
-                            style={{ width: `${modelScore.score * 100}%` }}
+                            style={{ width: `${(modelScore.score ?? 0) * 100}%` }}
                           ></div>
-                          <span className={styles.scoreText}>{(modelScore.score * 100).toFixed(0)}%</span>
+                          <span className={styles.scoreText}>{((modelScore.score ?? 0) * 100).toFixed(0)}%</span>
                         </div>
                         <div className={styles.modelScoreActions}>
                           <button
@@ -1684,10 +2090,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                                   }
                                 ],
                                 async (data) => {
+                                  // For legacy object format, we need to convert back
                                   const newConfig = { ...config }
                                   if (newConfig.categories) {
                                     const updatedCategory = { ...category }
-                                    updatedCategory.model_scores[modelIdx] = data
+                                    // Convert to array format for consistency
+                                    const scores = normalizeModelScores(updatedCategory.model_scores)
+                                    scores[modelIdx] = data
+                                    updatedCategory.model_scores = scores
                                     newConfig.categories[index] = updatedCategory
                                   }
                                   await saveConfig(newConfig)
@@ -1704,7 +2114,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                                 const newConfig = { ...config }
                                 if (newConfig.categories) {
                                   const updatedCategory = { ...category }
-                                  updatedCategory.model_scores.splice(modelIdx, 1)
+                                  // Convert to array format for consistency
+                                  const scores = normalizeModelScores(updatedCategory.model_scores)
+                                  scores.splice(modelIdx, 1)
+                                  updatedCategory.model_scores = scores
                                   newConfig.categories[index] = updatedCategory
                                 }
                                 saveConfig(newConfig)
@@ -1725,10 +2138,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           </div>
         ) : (
           <div className={styles.emptyState}>No categories configured</div>
+          )
         )}
       </div>
     </div>
-  )
+  )}
 
   const renderReasoningFamilies = () => (
     <div className={styles.section}>

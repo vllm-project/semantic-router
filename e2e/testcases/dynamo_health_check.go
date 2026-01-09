@@ -116,20 +116,41 @@ func testDynamoHealthCheck(ctx context.Context, client *kubernetes.Clientset, op
 	}
 
 	// Check Frontend deployment
-	frontendDeployment, err := client.AppsV1().Deployments(namespace).Get(ctx, "vllm-frontend", metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get frontend deployment: %w", err)
+	// The deployment name depends on how it was deployed:
+	// - Helm chart: "dynamo-vllm-frontend" or "dynamo-vllm"
+	// - Dynamo operator: "vllm-frontend"
+	frontendNames := []string{
+		"dynamo-vllm-frontend", // Helm chart generated
+		"vllm-frontend",        // Operator generated
+		"dynamo-vllm",          // Helm release name fallback
 	}
-	if frontendDeployment.Status.ReadyReplicas == 0 {
-		return fmt.Errorf("frontend has 0 ready replicas")
+	frontendFound := false
+	for _, name := range frontendNames {
+		frontendDeployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err == nil && frontendDeployment.Status.ReadyReplicas > 0 {
+			if opts.Verbose {
+				fmt.Printf("[Test] ✅ Frontend %s: %d/%d replicas ready\n",
+					name, frontendDeployment.Status.ReadyReplicas, frontendDeployment.Status.Replicas)
+			}
+			frontendFound = true
+			break
+		}
 	}
-	if opts.Verbose {
-		fmt.Printf("[Test] ✅ Frontend: %d/%d replicas ready\n",
-			frontendDeployment.Status.ReadyReplicas, frontendDeployment.Status.Replicas)
+	if !frontendFound {
+		return fmt.Errorf("frontend deployment not found or not ready")
 	}
 
 	// Check for Prefill Worker (disaggregated deployment)
-	prefillWorkerNames := []string{"vllm-vllmprefillworker", "vllm-prefillworker"}
+	// Names depend on deployment method:
+	// - Helm chart: "dynamo-vllm-prefillworker0" (worker at index 0)
+	// - Dynamo operator: "vllm-vllmprefillworker"
+	prefillWorkerNames := []string{
+		"dynamo-vllm-prefillworker0", // Helm chart generated (index 0)
+		"dynamo-vllm-prefillworker1", // Legacy name
+		"vllm-vllmprefillworker",     // Operator generated
+		"vllm-prefillworker",
+		"prefill-worker-0",
+	}
 	prefillFound := false
 	for _, name := range prefillWorkerNames {
 		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -147,7 +168,15 @@ func testDynamoHealthCheck(ctx context.Context, client *kubernetes.Clientset, op
 	}
 
 	// Check for Decode Worker
-	decodeWorkerNames := []string{"vllm-vllmdecodeworker", "vllm-decodeworker"}
+	// Names depend on deployment method:
+	// - Helm chart: "dynamo-vllm-decodeworker1" (CamelCase from worker name)
+	// - Dynamo operator: "vllm-vllmdecodeworker"
+	decodeWorkerNames := []string{
+		"dynamo-vllm-decodeworker1", // Helm chart generated (CamelCase)
+		"vllm-vllmdecodeworker",     // Operator generated
+		"vllm-decodeworker",
+		"decode-worker-1",
+	}
 	decodeFound := false
 	for _, name := range decodeWorkerNames {
 		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})

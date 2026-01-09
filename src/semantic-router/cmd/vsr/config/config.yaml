@@ -22,7 +22,7 @@ model_config:
       prompt_per_1m: 0.50
       completion_per_1m: 1.50
 
-# Categories (Metadata)
+  # Categories (Metadata)
   categories:
     - name: math
       description: "Mathematics related queries"
@@ -80,13 +80,13 @@ model_config:
         - model: "your-model"
           score: 0.80
 
-# Routing Rules
+  # Routing Rules
   keyword_rules:
     - name: math_keywords
       operator: "OR"
       keywords: ["math", "calculus", "algebra"]
 
-# Routing Decisions
+  # Routing Decisions
   decisions:
     - name: math_decision
       description: "Route math queries to model"
@@ -102,7 +102,7 @@ model_config:
 
   default_model: your-model
 
-# Classification models
+  # Classification models
   classifier:
     category_model:
       use_modernbert: true

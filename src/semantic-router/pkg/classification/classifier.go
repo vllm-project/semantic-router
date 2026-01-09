@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -659,109 +660,150 @@ func (c *Classifier) EvaluateAllRules(text string) ([]string, []string, []string
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 	results := &SignalResults{}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 
-	// Evaluate keyword rules - check each rule individually
+	// Evaluate keyword rules in parallel
 	if c.keywordClassifier != nil {
-		category, _, err := c.keywordClassifier.Classify(text)
-		if err != nil {
-			logging.Errorf("keyword rule evaluation failed: %v", err)
-		} else if category != "" {
-			results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			category, _, err := c.keywordClassifier.Classify(text)
+			if err != nil {
+				logging.Errorf("keyword rule evaluation failed: %v", err)
+			} else if category != "" {
+				mu.Lock()
+				results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
+				mu.Unlock()
+			}
+		}()
 	}
 
-	// Evaluate embedding rules - check each rule individually
+	// Evaluate embedding rules in parallel
 	if c.keywordEmbeddingClassifier != nil {
-		category, _, err := c.keywordEmbeddingClassifier.Classify(text)
-		if err != nil {
-			logging.Errorf("embedding rule evaluation failed: %v", err)
-		} else if category != "" {
-			results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			category, _, err := c.keywordEmbeddingClassifier.Classify(text)
+			if err != nil {
+				logging.Errorf("embedding rule evaluation failed: %v", err)
+			} else if category != "" {
+				mu.Lock()
+				results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
+				mu.Unlock()
+			}
+		}()
 	}
 
-	// Evaluate domain rules (category classification)
+	// Evaluate domain rules (category classification) in parallel
 	if c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil {
-		result, err := c.categoryInference.Classify(text)
-		if err != nil {
-			logging.Errorf("domain rule evaluation failed: %v", err)
-		} else {
-			// Map class index to category name
-			if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
-				if categoryName != "" {
-					results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			result, err := c.categoryInference.Classify(text)
+			if err != nil {
+				logging.Errorf("domain rule evaluation failed: %v", err)
+			} else {
+				// Map class index to category name
+				if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
+					if categoryName != "" {
+						mu.Lock()
+						results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+						mu.Unlock()
+					}
 				}
 			}
-		}
+		}()
 	}
 
-	// Evaluate fact-check rules
+	// Evaluate fact-check rules in parallel
 	// Only evaluate if fact_check_rules are configured and fact-check classifier is enabled
 	if len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled() {
-		factCheckResult, err := c.ClassifyFactCheck(text)
-		if err != nil {
-			logging.Errorf("fact-check rule evaluation failed: %v", err)
-		} else if factCheckResult != nil {
-			// Determine which signal to output based on classification result
-			// Threshold is already applied in ClassifyFactCheck using fact_check_model.threshold
-			signalName := "no_fact_check_needed"
-			if factCheckResult.NeedsFactCheck {
-				signalName = "needs_fact_check"
-			}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			factCheckResult, err := c.ClassifyFactCheck(text)
+			if err != nil {
+				logging.Errorf("fact-check rule evaluation failed: %v", err)
+			} else if factCheckResult != nil {
+				// Determine which signal to output based on classification result
+				// Threshold is already applied in ClassifyFactCheck using fact_check_model.threshold
+				signalName := "no_fact_check_needed"
+				if factCheckResult.NeedsFactCheck {
+					signalName = "needs_fact_check"
+				}
 
-			// Check if this signal is defined in fact_check_rules
-			for _, rule := range c.Config.FactCheckRules {
-				if rule.Name == signalName {
-					results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
-					break
+				// Check if this signal is defined in fact_check_rules
+				for _, rule := range c.Config.FactCheckRules {
+					if rule.Name == signalName {
+						mu.Lock()
+						results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
+						mu.Unlock()
+						break
+					}
 				}
 			}
-		}
+		}()
 	}
 
-	// Evaluate user feedback rules
+	// Evaluate user feedback rules in parallel
 	// Only evaluate if user_feedback_rules are configured and feedback detector is enabled
 	if len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled() {
-		feedbackResult, err := c.ClassifyFeedback(text)
-		if err != nil {
-			logging.Errorf("user feedback rule evaluation failed: %v", err)
-		} else if feedbackResult != nil {
-			// Use the feedback type directly as the signal name
-			signalName := feedbackResult.FeedbackType
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			feedbackResult, err := c.ClassifyFeedback(text)
+			if err != nil {
+				logging.Errorf("user feedback rule evaluation failed: %v", err)
+			} else if feedbackResult != nil {
+				// Use the feedback type directly as the signal name
+				signalName := feedbackResult.FeedbackType
 
-			// Check if this signal is defined in user_feedback_rules
-			for _, rule := range c.Config.UserFeedbackRules {
-				if rule.Name == signalName {
-					results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
-					break
+				// Check if this signal is defined in user_feedback_rules
+				for _, rule := range c.Config.UserFeedbackRules {
+					if rule.Name == signalName {
+						mu.Lock()
+						results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
+						mu.Unlock()
+						break
+					}
 				}
 			}
-		}
+		}()
 	}
 
-	// Evaluate preference rules
+	// Evaluate preference rules in parallel
 	// Only evaluate if preference_rules are configured and preference classifier is enabled
 	if len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled() {
-		// Build conversation JSON from text (simple single-turn format)
-		conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Build conversation JSON from text (simple single-turn format)
+			conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
 
-		preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
-		if err != nil {
-			logging.Errorf("preference rule evaluation failed: %v", err)
-		} else if preferenceResult != nil {
-			// Use the preference name directly as the signal name
-			preferenceName := preferenceResult.Preference
+			preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
+			if err != nil {
+				logging.Errorf("preference rule evaluation failed: %v", err)
+			} else if preferenceResult != nil {
+				// Use the preference name directly as the signal name
+				preferenceName := preferenceResult.Preference
 
-			// Check if this preference is defined in preference_rules
-			for _, rule := range c.Config.PreferenceRules {
-				if rule.Name == preferenceName {
-					results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
-					logging.Infof("Preference rule matched: %s", rule.Name)
-					break
+				// Check if this preference is defined in preference_rules
+				for _, rule := range c.Config.PreferenceRules {
+					if rule.Name == preferenceName {
+						mu.Lock()
+						results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
+						mu.Unlock()
+						logging.Infof("Preference rule matched: %s", rule.Name)
+						break
+					}
 				}
 			}
-		}
+		}()
 	}
+
+	// Wait for all signal evaluations to complete
+	wg.Wait()
 
 	return results
 }

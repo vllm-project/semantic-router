@@ -1,0 +1,67 @@
+################################################################################
+# Multi-Model vLLM Setup for Semantic Router Demo
+################################################################################
+# Runs two GPU-accelerated vLLM model servers:
+#   - llm-qwen:     Qwen 2.5-3B on port 8000
+#   - llm-nemotron: Nemotron 9B on port 8002
+################################################################################
+
+services:
+  # Model 1: Qwen2.5-3B
+  llm-qwen:
+    image: vllm/vllm-openai:v0.12.0
+    container_name: llm-qwen
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+      - /usr/local/cuda-13.0:/usr/local/cuda-13.0:ro
+    environment:
+      - TRITON_PTXAS_PATH=/usr/local/cuda-13.0/bin/ptxas
+      - CUDA_HOME=/usr/local/cuda-13.0
+      - PATH=/usr/local/cuda-13.0/bin:$PATH
+    command: >-
+      --model /models/Qwen/Qwen2.5-3B-Instruct
+      --served-model-name qwen-3b
+      --host 0.0.0.0
+      --port 8000
+      --gpu-memory-utilization 0.30
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    shm_size: '2gb'
+
+  # Model 2: Nemotron 9B
+  llm-nemotron:
+    image: vllm/vllm-openai:v0.12.0
+    container_name: llm-nemotron
+    ports:
+      - "8002:8002"
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+      - /usr/local/cuda-13.0:/usr/local/cuda-13.0:ro
+    environment:
+      - TRITON_PTXAS_PATH=/usr/local/cuda-13.0/bin/ptxas
+      - CUDA_HOME=/usr/local/cuda-13.0
+      - PATH=/usr/local/cuda-13.0/bin:$PATH
+    command: >-
+      --model /models/NVIDIA-Nemotron-Nano-9B-v2
+      --served-model-name nemotron-9b
+      --host 0.0.0.0
+      --port 8002
+      --gpu-memory-utilization 0.40
+      --trust-remote-code
+      --mamba_ssm_cache_dtype float32
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    shm_size: '4gb'
+
