@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/scoring"
 )
 
 // handleResponseHeaders processes the response headers
@@ -32,8 +33,11 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		if statusCode != 0 {
 			if statusCode >= 500 {
 				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_5xx")
+				// Record error for dynamic scoring (upstream 5xx errors affect model accuracy)
+				scoring.RecordModelRequest(getModelFromCtx(ctx), 0, 0, 0, true, 0)
 			} else if statusCode >= 400 {
 				metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_4xx")
+				// 4xx errors are client errors, not model errors - don't penalize model score
 			}
 		}
 	}
