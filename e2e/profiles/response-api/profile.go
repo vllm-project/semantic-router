@@ -3,6 +3,8 @@ package responseapi
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -46,19 +48,31 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
 	// Step 1: Deploy Semantic Router with Response API enabled
-	p.log("Step 1/3: Deploying Semantic Router with Response API")
+	p.log("Step 1/5: Deploying Semantic Router with Response API")
 	if err := p.deploySemanticRouter(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy semantic router: %w", err)
 	}
 
 	// Step 2: Deploy Envoy Gateway
-	p.log("Step 2/3: Deploying Envoy Gateway")
+	p.log("Step 2/5: Deploying Envoy Gateway")
 	if err := p.deployEnvoyGateway(ctx, deployer); err != nil {
 		return fmt.Errorf("failed to deploy envoy gateway: %w", err)
 	}
 
-	// Step 3: Verify all components are ready
-	p.log("Step 3/3: Verifying all components are ready")
+	// Step 3: Deploy mock vLLM backend
+	p.log("Step 3/5: Deploying mock vLLM backend")
+	if err := p.deployMockVLLM(ctx, deployer, opts); err != nil {
+		return fmt.Errorf("failed to deploy mock vLLM: %w", err)
+	}
+
+	// Step 4: Deploy Gateway API resources (Gateway/Route/ExtProc patch policy)
+	p.log("Step 4/5: Deploying Gateway API resources")
+	if err := p.deployGatewayResources(ctx, opts); err != nil {
+		return fmt.Errorf("failed to deploy gateway resources: %w", err)
+	}
+
+	// Step 5: Verify all components are ready
+	p.log("Step 5/5: Verifying all components are ready")
 	if err := p.verifyEnvironment(ctx, opts); err != nil {
 		return fmt.Errorf("failed to verify environment: %w", err)
 	}
@@ -73,6 +87,12 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	p.log("Tearing down Response API test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+
+	p.log("Cleaning up Gateway API resources")
+	p.cleanupGatewayResources(ctx, opts)
+
+	p.log("Uninstalling mock vLLM backend")
+	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/mock-vllm.yaml")
 
 	p.log("Uninstalling Envoy Gateway")
 	_ = deployer.Uninstall(ctx, "eg", "envoy-gateway-system")
@@ -92,6 +112,9 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-get",
 		"response-api-delete",
 		"response-api-input-items",
+
+		// Response API conversation chaining
+		"response-api-conversation-chaining",
 	}
 }
 
@@ -129,6 +152,7 @@ func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deploye
 		ReleaseName: "eg",
 		Chart:       "oci://docker.io/envoyproxy/gateway-helm",
 		Namespace:   "envoy-gateway-system",
+		Version:     "v1.6.0",
 		Wait:        true,
 		Timeout:     "300s",
 	})
@@ -149,6 +173,47 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 	p.log("Waiting for Semantic Router deployment...")
 	if err := p.waitForDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router"); err != nil {
 		return fmt.Errorf("semantic router deployment not ready: %w", err)
+	}
+
+	// Wait for Envoy Gateway deployment
+	p.log("Waiting for Envoy Gateway deployment...")
+	if err := p.waitForDeployment(ctx, client, "envoy-gateway-system", "envoy-gateway"); err != nil {
+		return fmt.Errorf("envoy gateway deployment not ready: %w", err)
+	}
+
+	// Wait for mock vLLM deployment
+	p.log("Waiting for mock vLLM deployment...")
+	if err := p.waitForDeployment(ctx, client, "default", "mock-vllm"); err != nil {
+		return fmt.Errorf("mock vLLM deployment not ready: %w", err)
+	}
+
+	// Wait for Envoy service to show up and be ready
+	p.log("Waiting for Envoy Gateway service to be ready...")
+	labelSelector := "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router"
+	retryTimeout := 10 * time.Minute
+	retryInterval := 5 * time.Second
+	startTime := time.Now()
+
+	for {
+		envoyService, svcErr := helpers.GetEnvoyServiceName(ctx, client, labelSelector, p.verbose)
+		if svcErr == nil {
+			if podErr := helpers.VerifyServicePodsRunning(ctx, client, "envoy-gateway-system", envoyService, p.verbose); podErr == nil {
+				break
+			}
+		}
+
+		if time.Since(startTime) >= retryTimeout {
+			if svcErr != nil {
+				return fmt.Errorf("envoy gateway service not ready after %v: %w", retryTimeout, svcErr)
+			}
+			return fmt.Errorf("envoy gateway service pods not ready after %v", retryTimeout)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
 	}
 
 	p.log("All components are ready")
@@ -174,4 +239,38 @@ func (p *Profile) log(msg string) {
 	if p.verbose {
 		fmt.Printf("[response-api] %s\n", msg)
 	}
+}
+
+func (p *Profile) deployMockVLLM(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
+	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/mock-vllm.yaml"); err != nil {
+		return err
+	}
+	return deployer.WaitForDeployment(ctx, "default", "mock-vllm", 5*time.Minute)
+}
+
+func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {
+	return p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/gwapi-resources.yaml")
+}
+
+func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
+	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/gwapi-resources.yaml")
+	return nil
+}
+
+func (p *Profile) kubectlApply(ctx context.Context, kubeConfig, manifest string) error {
+	return p.runKubectl(ctx, kubeConfig, "apply", "-f", manifest)
+}
+
+func (p *Profile) kubectlDelete(ctx context.Context, kubeConfig, manifest string) error {
+	return p.runKubectl(ctx, kubeConfig, "delete", "--ignore-not-found", "-f", manifest)
+}
+
+func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {
+	args = append(args, "--kubeconfig", kubeConfig)
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
+	if p.verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	return cmd.Run()
 }

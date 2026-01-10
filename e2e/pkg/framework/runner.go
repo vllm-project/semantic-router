@@ -247,7 +247,22 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		BuildContext: ".",
 	}
 
-	return r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts)
+	if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
+		return err
+	}
+
+	// Profiles may require additional local images beyond extproc.
+	switch r.profile.Name() {
+	case "response-api":
+		mockOpts := docker.BuildOptions{
+			Dockerfile:   "tools/mock-vllm/Dockerfile",
+			Tag:          "ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
+			BuildContext: "tools/mock-vllm",
+		}
+		return r.builder.BuildAndLoad(ctx, r.opts.ClusterName, mockOpts)
+	default:
+		return nil
+	}
 }
 
 func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset) ([]TestResult, error) {

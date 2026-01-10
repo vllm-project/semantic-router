@@ -178,9 +178,7 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 
 // toStoredResponse converts request and response to a StoredResponse for storage.
 func (f *ResponseAPIFilter) toStoredResponse(req *responseapi.ResponseAPIRequest, resp *responseapi.ResponseAPIResponse) *responseapi.StoredResponse {
-	// Parse input items
-	var inputItems []responseapi.InputItem
-	_ = json.Unmarshal(req.Input, &inputItems)
+	inputItems := parseResponseAPIInputItems(req.Input)
 
 	return &responseapi.StoredResponse{
 		ID:                 resp.ID,
@@ -197,6 +195,40 @@ func (f *ResponseAPIFilter) toStoredResponse(req *responseapi.ResponseAPIRequest
 		Instructions:       resp.Instructions,
 		Metadata:           resp.Metadata,
 	}
+}
+
+func parseResponseAPIInputItems(input json.RawMessage) []responseapi.InputItem {
+	if len(input) == 0 {
+		return nil
+	}
+
+	// Try parsing as array of input items first.
+	var items []responseapi.InputItem
+	if err := json.Unmarshal(input, &items); err == nil {
+		for i := range items {
+			if items[i].ID == "" {
+				items[i].ID = responseapi.GenerateItemID()
+			}
+			if items[i].Status == "" {
+				items[i].Status = responseapi.StatusCompleted
+			}
+		}
+		return items
+	}
+
+	// Fallback: input can also be a string; store as a user message item.
+	var inputStr string
+	if err := json.Unmarshal(input, &inputStr); err == nil {
+		return []responseapi.InputItem{{
+			ID:      responseapi.GenerateItemID(),
+			Type:    responseapi.ItemTypeMessage,
+			Role:    responseapi.RoleUser,
+			Content: input,
+			Status:  responseapi.StatusCompleted,
+		}}
+	}
+
+	return nil
 }
 
 // HandleGetResponse handles GET /v1/responses/{id} requests.
