@@ -25,6 +25,16 @@ const (
 	ModelRolePreference     = "preference" // For route preference matching via external LLM
 )
 
+// Signal type constants for rule conditions
+const (
+	SignalTypeKeyword      = "keyword"
+	SignalTypeEmbedding    = "embedding"
+	SignalTypeDomain       = "domain"
+	SignalTypeFactCheck    = "fact_check"
+	SignalTypeUserFeedback = "user_feedback"
+	SignalTypePreference   = "preference"
+)
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
 	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)

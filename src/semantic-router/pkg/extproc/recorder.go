@@ -27,7 +27,6 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 		"decision":           decisionName,
 		"reasoning_enabled":  reasoningEnabled,
 		"reasoning_effort":   effortForMetrics,
-		"selected_endpoint":  endpoint,
 		"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
 	})
 	metrics.RecordRoutingReasonCode(reasonCode, selectedModel)

@@ -29,3 +29,7 @@ HEALTH_CHECK_INTERVAL = 2
 LOG_PREFIX_ROUTER = "[router]"
 LOG_PREFIX_ENVOY = "[envoy]"
 LOG_PREFIX_ACCESS = "[access_logs]"
+
+# File descriptor limits
+DEFAULT_NOFILE_LIMIT = 65536
+MIN_NOFILE_LIMIT = 8192

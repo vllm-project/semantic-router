@@ -255,8 +255,15 @@ func main() {
 func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 	logging.Infof("Installing required models...")
 
+	// Calculate unique models based on RepoID
+	uniqueModels := make(map[string]bool)
+	for _, repoID := range cfg.MoMRegistry {
+		uniqueModels[repoID] = true
+	}
+
 	// Print model registry configuration
-	logging.Infof("MoM Families (%d models)", len(cfg.MoMRegistry))
+	logging.Infof("MoM Families: %d unique models (total %d registry aliases)", len(uniqueModels), len(cfg.MoMRegistry))
+	logging.Debugf("Registry Details:")
 	for localPath, repoID := range cfg.MoMRegistry {
 		logging.Debugf("  %s -> %s", localPath, repoID)
 	}
