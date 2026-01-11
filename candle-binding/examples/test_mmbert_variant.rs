@@ -93,7 +93,9 @@ fn main() -> anyhow::Result<()> {
     println!("✓ Variant detection works correctly");
     println!("✓ Variant properties are correct for mmBERT");
     println!("✓ Loading methods correctly identify model as multilingual");
-    println!("\nNote: Full classification requires a fine-tuned mmBERT model with a classifier head.");
+    println!(
+        "\nNote: Full classification requires a fine-tuned mmBERT model with a classifier head."
+    );
 
     Ok(())
 }
