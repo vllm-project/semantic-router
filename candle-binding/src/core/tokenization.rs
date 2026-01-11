@@ -198,7 +198,9 @@ impl UnifiedTokenizer {
         let config = TokenizationConfig {
             tokenization_strategy,
             token_data_type: match tokenization_strategy {
-                TokenizationStrategy::ModernBERT | TokenizationStrategy::MmBERT => TokenDataType::U32,
+                TokenizationStrategy::ModernBERT | TokenizationStrategy::MmBERT => {
+                    TokenDataType::U32
+                }
                 _ => TokenDataType::I32,
             },
             // mmBERT supports 8192 max length, ModernBERT uses 512
@@ -646,8 +648,8 @@ pub fn create_mmbert_compatibility_tokenizer(
     let config = TokenizationConfig {
         tokenization_strategy: TokenizationStrategy::MmBERT,
         token_data_type: TokenDataType::U32,
-        max_length: 8192, // mmBERT supports 8k context
-        pad_token_id: 0,  // mmBERT pad_token_id from config
+        max_length: 8192,               // mmBERT supports 8k context
+        pad_token_id: 0,                // mmBERT pad_token_id from config
         pad_token: "<pad>".to_string(), // mmBERT uses <pad> token
         ..Default::default()
     };

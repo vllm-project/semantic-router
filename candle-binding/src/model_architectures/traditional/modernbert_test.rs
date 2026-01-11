@@ -353,7 +353,10 @@ fn test_mmbert_config_detection() {
 
     // Also test the tokenization detection
     let is_mmbert = detect_mmbert_from_config(config_path.to_str().unwrap());
-    assert!(is_mmbert.unwrap_or(false), "Should detect mmBERT config correctly");
+    assert!(
+        is_mmbert.unwrap_or(false),
+        "Should detect mmBERT config correctly"
+    );
 
     println!("mmBERT config detection test passed");
 }
@@ -386,7 +389,10 @@ fn test_modernbert_not_detected_as_mmbert() {
 
     // Test tokenization detection - should NOT be mmBERT
     let is_mmbert = detect_mmbert_from_config(config_path.to_str().unwrap());
-    assert!(!is_mmbert.unwrap_or(true), "Regular ModernBERT should not be detected as mmBERT");
+    assert!(
+        !is_mmbert.unwrap_or(true),
+        "Regular ModernBERT should not be detected as mmBERT"
+    );
 
     println!("ModernBERT not detected as mmBERT test passed");
 }
@@ -464,7 +470,10 @@ fn test_mmbert_multilingual_samples() {
         ("Hindi", "नमस्ते, आज आप कैसे हैं?"),
     ];
 
-    println!("mmBERT supports {} languages. Sample texts:", multilingual_samples.len());
+    println!(
+        "mmBERT supports {} languages. Sample texts:",
+        multilingual_samples.len()
+    );
     for (lang, text) in &multilingual_samples {
         println!("  {}: {}", lang, text);
     }
@@ -522,11 +531,14 @@ fn test_mmbert_integration_with_model() {
     // This test requires actual mmBERT model files to be present
     // Default path assumes model is downloaded to ../models/mmbert-base
 
-    let model_path = std::env::var("MMBERT_MODEL_PATH")
-        .unwrap_or_else(|_| "../models/mmbert-base".to_string());
+    let model_path =
+        std::env::var("MMBERT_MODEL_PATH").unwrap_or_else(|_| "../models/mmbert-base".to_string());
 
     if !std::path::Path::new(&model_path).exists() {
-        println!("Skipping integration test - model path not found: {}", model_path);
+        println!(
+            "Skipping integration test - model path not found: {}",
+            model_path
+        );
         return;
     }
 

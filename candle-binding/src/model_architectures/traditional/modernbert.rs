@@ -49,8 +49,12 @@ impl ModernBertVariant {
     /// Get the tokenization strategy for this variant
     pub fn tokenization_strategy(&self) -> crate::core::tokenization::TokenizationStrategy {
         match self {
-            ModernBertVariant::Standard => crate::core::tokenization::TokenizationStrategy::ModernBERT,
-            ModernBertVariant::Multilingual => crate::core::tokenization::TokenizationStrategy::MmBERT,
+            ModernBertVariant::Standard => {
+                crate::core::tokenization::TokenizationStrategy::ModernBERT
+            }
+            ModernBertVariant::Multilingual => {
+                crate::core::tokenization::TokenizationStrategy::MmBERT
+            }
         }
     }
 
@@ -94,7 +98,7 @@ impl ModernBertVariant {
 }
 
 /// Traditional ModernBERT sequence classifier
-/// 
+///
 /// Supports both standard ModernBERT and mmBERT (multilingual) variants.
 /// The variant is auto-detected from config.json or can be explicitly specified.
 pub struct TraditionalModernBertClassifier {
@@ -110,7 +114,7 @@ pub struct TraditionalModernBertClassifier {
 }
 
 /// Traditional ModernBERT token classifier
-/// 
+///
 /// Supports both standard ModernBERT and mmBERT (multilingual) variants.
 pub struct TraditionalModernBertTokenClassifier {
     model: ModernBert,
@@ -707,7 +711,11 @@ impl TraditionalModernBertTokenClassifier {
     }
 
     /// Create a new token classifier with explicit variant specification
-    pub fn new_with_variant(model_id: &str, use_cpu: bool, variant: ModernBertVariant) -> Result<Self> {
+    pub fn new_with_variant(
+        model_id: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
+    ) -> Result<Self> {
         let device = if use_cpu {
             Device::Cpu
         } else {

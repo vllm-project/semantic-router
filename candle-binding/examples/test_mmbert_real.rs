@@ -61,7 +61,10 @@ fn main() -> anyhow::Result<()> {
     println!("   position_embedding_type: {}", position_type);
 
     // Verify this is mmBERT
-    assert!(vocab_size >= 200000, "Expected vocab_size >= 200000 for mmBERT");
+    assert!(
+        vocab_size >= 200000,
+        "Expected vocab_size >= 200000 for mmBERT"
+    );
     assert_eq!(position_type, "sans_pos", "Expected sans_pos for mmBERT");
     println!("   ✓ Confirmed as mmBERT (multilingual)\n");
 
@@ -87,7 +90,8 @@ fn main() -> anyhow::Result<()> {
     ];
 
     for (lang, text) in &test_texts {
-        let encoding = tokenizer.encode(*text, true)
+        let encoding = tokenizer
+            .encode(*text, true)
             .map_err(|e| anyhow!("Failed to encode {}: {}", lang, e))?;
         let tokens = encoding.get_tokens();
         let ids = encoding.get_ids();
@@ -118,7 +122,8 @@ fn main() -> anyhow::Result<()> {
     println!("7. Testing forward pass with multilingual inputs...");
     for (lang, text) in &test_texts[..3] {
         // Just test first 3 for speed
-        let encoding = tokenizer.encode(*text, true)
+        let encoding = tokenizer
+            .encode(*text, true)
             .map_err(|e| anyhow!("Failed to encode {}: {}", lang, e))?;
         let ids: Vec<u32> = encoding.get_ids().to_vec();
         let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
@@ -140,7 +145,10 @@ fn main() -> anyhow::Result<()> {
         assert_eq!(output_shape.len(), 3, "Expected 3D output");
         assert_eq!(output_shape[0], 1, "Expected batch size 1");
         assert_eq!(output_shape[1], ids.len(), "Expected seq_len match");
-        assert_eq!(output_shape[2], hidden_size as usize, "Expected hidden_size match");
+        assert_eq!(
+            output_shape[2], hidden_size as usize,
+            "Expected hidden_size match"
+        );
     }
     println!("   ✓ Forward pass works for all languages\n");
 

@@ -428,8 +428,12 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
 // ============================================================================
 
 // Global static for mmBERT classifier
-pub static MMBERT_CLASSIFIER: OnceLock<Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>> = OnceLock::new();
-pub static MMBERT_TOKEN_CLASSIFIER: OnceLock<Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>> = OnceLock::new();
+pub static MMBERT_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static MMBERT_TOKEN_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
+> = OnceLock::new();
 
 /// Initialize mmBERT classifier (multilingual ModernBERT)
 ///
@@ -457,7 +461,10 @@ pub extern "C" fn init_mmbert_classifier(model_id: *const c_char, use_cpu: bool)
         }
     };
 
-    eprintln!("🌐 Initializing mmBERT (multilingual) classifier from: {}", model_id);
+    eprintln!(
+        "🌐 Initializing mmBERT (multilingual) classifier from: {}",
+        model_id
+    );
 
     // Explicitly load as Multilingual variant
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
@@ -536,7 +543,10 @@ pub extern "C" fn init_mmbert_token_classifier(model_id: *const c_char, use_cpu:
         }
     };
 
-    eprintln!("🌐 Initializing mmBERT (multilingual) token classifier from: {}", model_id);
+    eprintln!(
+        "🌐 Initializing mmBERT (multilingual) token classifier from: {}",
+        model_id
+    );
 
     // Explicitly load as Multilingual variant
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant(

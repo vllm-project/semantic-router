@@ -24,8 +24,8 @@ pub use deberta_v3::DebertaV3Classifier;
 
 // Re-export ModernBERT and mmBERT (mmBERT is a type alias for ModernBERT with Multilingual variant)
 pub use modernbert::{
-    MmBertClassifier, MmBertTokenClassifier, ModernBertVariant,
-    TraditionalModernBertClassifier, TraditionalModernBertTokenClassifier,
+    MmBertClassifier, MmBertTokenClassifier, ModernBertVariant, TraditionalModernBertClassifier,
+    TraditionalModernBertTokenClassifier,
 };
 
 // Re-export traditional models
