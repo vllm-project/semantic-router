@@ -1,24 +1,51 @@
 :root {
-  /* Apple-style monochrome colors */
-  --color-primary: #000000;
-  --color-primary-dark: #000000;
-  --color-secondary: #000000;
-  --color-success: #000000;
-  --color-warning: #000000;
-  --color-danger: #000000;
+  /* NVIDIA Brev Console - Dark Theme as default */
+  /* Primary brand colors - NVIDIA Green */
+  --color-primary: #76b900;
+  --color-primary-dark: #5a8f00;
+  --color-primary-light: #8fd400;
 
-  /* Light theme - Apple style */
-  --color-bg: #ffffff;
-  --color-bg-secondary: #f5f5f7;
-  --color-bg-tertiary: #e8e8ed;
-  --color-text: #1d1d1f;
-  --color-text-secondary: #86868b;
-  --color-border: #d2d2d7;
-  --color-shadow: rgba(0, 0, 0, 0.08);
+  /* Accent colors - Cyber/Neon palette */
+  --color-accent-cyan: #00d4ff;
+  --color-accent-purple: #9333ea;
+  --color-accent-blue: #3b82f6;
+  --color-accent-pink: #ec4899;
 
-  /* Typography - Apple system fonts */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  /* Semantic colors */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #00d4ff;
+
+  /* Dark theme - NVIDIA Brev style (default) */
+  /* Header is pure black, content area is dark gray */
+  --color-bg: #1a1a1a;
+  --color-bg-header: #000000;
+  --color-bg-secondary: #141414;
+  --color-bg-tertiary: #1f1f1f;
+  --color-bg-elevated: #252525;
+  --color-text: #e8e8e8;
+  --color-text-secondary: #999999;
+  --color-text-muted: #666666;
+  --color-border: #333333;
+  --color-border-hover: #444444;
+  --color-shadow: rgba(0, 0, 0, 0.5);
+
+  /* Glow effects */
+  --glow-primary: 0 0 20px rgba(118, 185, 0, 0.3);
+  --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.3);
+  --glow-purple: 0 0 20px rgba(147, 51, 234, 0.3);
+
+  /* Typography - NVIDIA uses clean sans-serif */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+
+  /* Font sizes - Readable, clean */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
 
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -26,33 +53,47 @@
   --spacing-md: 1rem;
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
 
-  /* Border radius - Apple style */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  /* Border radius - Subtle */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
 
-  /* Transitions - Apple style */
-  --transition-fast: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Transitions - Smooth */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 350ms ease;
 }
 
-[data-theme='dark'] {
-  --color-bg: #000000;
-  --color-bg-secondary: #1c1c1e;
-  --color-bg-tertiary: #2c2c2e;
-  --color-text: #f5f5f7;
-  --color-text-secondary: #86868b;
-  --color-border: #38383a;
-  --color-shadow: rgba(0, 0, 0, 0.5);
+[data-theme='light'] {
+  --color-bg: #f8f9fa;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #e9ecef;
+  --color-bg-elevated: #ffffff;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #666666;
+  --color-text-muted: #999999;
+  --color-border: #dee2e6;
+  --color-border-hover: #ced4da;
+  --color-shadow: rgba(0, 0, 0, 0.1);
+
+  --glow-primary: 0 0 20px rgba(118, 185, 0, 0.2);
+  --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.2);
+  --glow-purple: 0 0 20px rgba(147, 51, 234, 0.2);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html {
+  /* Default to dark theme */
+  color-scheme: dark;
 }
 
 body {
@@ -82,7 +123,8 @@ a {
 }
 
 a:hover {
-  color: var(--color-primary-dark);
+  color: var(--color-primary-light);
+  text-shadow: var(--glow-primary);
 }
 
 button {
@@ -100,15 +142,28 @@ textarea {
   font-size: inherit;
   line-height: inherit;
   outline: none;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -117,20 +172,112 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-secondary);
+  background: var(--color-primary);
 }
 
-/* Fullscreen mode - hide Layout sidebar and header */
-body.playground-fullscreen aside {
-  display: none !important;
-}
-
+/* Fullscreen mode - hide Layout header */
 body.playground-fullscreen header {
   display: none !important;
 }
 
+body.playground-fullscreen nav {
+  display: none !important;
+}
+
 body.playground-fullscreen main {
-  margin-left: 0 !important;
+  margin-top: 0 !important;
   width: 100% !important;
   padding: 0 !important;
+}
+
+/* NVIDIA Brev Button Styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #000000;
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-light);
+  box-shadow: var(--glow-primary);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+/* Card styles */
+.card {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  transition: all var(--transition-fast);
+}
+
+.card:hover {
+  border-color: var(--color-border-hover);
+}
+
+/* Badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}
+
+.badge-primary {
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary);
 }

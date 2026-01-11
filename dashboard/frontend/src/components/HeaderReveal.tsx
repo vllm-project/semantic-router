@@ -88,7 +88,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
   return (
     <div className={`${styles.overlay} ${!isVisible ? styles.fadeOut : ''}`}>
       <div className={styles.container}>
-        <div className={styles.title}>Routing Analysis Complete</div>
+        <div className={styles.title}>Signal Driven Decision</div>
         <div className={styles.headerGrid}>
           {displayHeaders.map(([key, value]) => {
             const info = HEADER_INFO[key]

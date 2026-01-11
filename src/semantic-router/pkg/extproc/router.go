@@ -145,7 +145,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Note: Tools will be loaded later via LoadToolsDatabase() after embedding models init
 	if toolsDatabase.IsEnabled() {
-		logging.Infof("Tools database enabled with threshold: %.4f, top-k: %d (will load after embedding models init)",
+		logging.Infof("Tools database enabled with threshold: %.4f, top-k: %d",
 			toolsThreshold, cfg.Tools.TopK)
 	} else {
 		logging.Infof("Tools database is disabled")

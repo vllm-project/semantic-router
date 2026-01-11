@@ -87,7 +87,7 @@ const LogsPage: React.FC = () => {
         <div className={styles.headerLeft}>
           <h1 className={styles.title}>
             <span className={styles.titleIcon}>📜</span>
-            Service Logs
+            System Logs
           </h1>
           <p className={styles.subtitle}>
             View logs from vLLM Semantic Router services
