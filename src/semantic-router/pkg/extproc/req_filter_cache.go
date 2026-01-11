@@ -92,7 +92,9 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	}
 
 	// Cache miss, store the request for later
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
+	// Get decision-specific TTL
+	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
 	if err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 		// Continue without caching

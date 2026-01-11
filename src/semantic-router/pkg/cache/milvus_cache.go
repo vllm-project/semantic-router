@@ -374,6 +374,14 @@ func (c *MilvusCache) createCollection() error {
 				Name:     "timestamp",
 				DataType: entity.FieldTypeInt64,
 			},
+			{
+				Name:     "ttl_seconds",
+				DataType: entity.FieldTypeInt64,
+			},
+			{
+				Name:     "expires_at",
+				DataType: entity.FieldTypeInt64,
+			},
 		},
 	}
 
@@ -428,15 +436,21 @@ func (c *MilvusCache) CheckConnection() error {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *MilvusCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("MilvusCache.AddPendingRequest: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil)
+	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -448,15 +462,15 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	logging.Debugf("MilvusCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d)",
-		requestID, len(responseBody))
+	logging.Debugf("MilvusCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d, ttl_seconds=%d)",
+		requestID, len(responseBody), ttlSeconds)
 
 	// Find the pending entry and complete it with the response
 	// Query for the incomplete entry to retrieve its metadata
@@ -534,8 +548,8 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 
 	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
 
-	// Create the complete entry with response data
-	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody)
+	// Create the complete entry with response data and TTL
+	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to add complete entry: %w", err)
@@ -548,14 +562,20 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte) 
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *MilvusCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody)
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("MilvusCache.AddEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_entry", "error", time.Since(start).Seconds())
@@ -663,7 +683,13 @@ func (c *MilvusCache) Flush() error {
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
-func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+	// Determine effective TTL: use provided value or fall back to cache default
+	effectiveTTL := ttlSeconds
+	if ttlSeconds == -1 {
+		effectiveTTL = c.ttlSeconds
+	}
+
 	// Generate semantic embedding for the query
 	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
 	if err != nil {
@@ -677,6 +703,14 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 
 	ctx := context.Background()
 
+	now := time.Now()
+	var expiresAt int64
+	if effectiveTTL > 0 {
+		expiresAt = now.Add(time.Duration(effectiveTTL) * time.Second).Unix()
+	} else {
+		expiresAt = 0 // No expiration
+	}
+
 	// Prepare data for upsert
 	ids := []string{id}
 	requestIDs := []string{requestID}
@@ -685,7 +719,9 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	requestBodies := []string{string(requestBody)}
 	responseBodies := []string{string(responseBody)}
 	embeddings := [][]float32{embedding}
-	timestamps := []int64{time.Now().Unix()}
+	timestamps := []int64{now.Unix()}
+	ttlSecondsSlice := []int64{int64(effectiveTTL)}
+	expiresAtSlice := []int64{expiresAt}
 
 	// Create columns
 	idColumn := entity.NewColumnVarChar("id", ids)
@@ -696,11 +732,13 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	responseColumn := entity.NewColumnVarChar("response_body", responseBodies)
 	embeddingColumn := entity.NewColumnFloatVector(c.config.Collection.VectorField.Name, len(embedding), embeddings)
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
+	ttlSecondsColumn := entity.NewColumnInt64("ttl_seconds", ttlSecondsSlice)
+	expiresAtColumn := entity.NewColumnInt64("expires_at", expiresAtSlice)
 
 	// Upsert the entry into the collection
-	logging.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d)",
-		c.collectionName, len(embedding), len(requestBody), len(responseBody))
-	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
+	logging.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",
+		c.collectionName, len(embedding), len(requestBody), len(responseBody), effectiveTTL)
+	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn, ttlSecondsColumn, expiresAtColumn)
 	if err != nil {
 		logging.Debugf("MilvusCache.addEntry: upsert failed: %v", err)
 		return fmt.Errorf("failed to upsert cache entry: %w", err)
@@ -719,6 +757,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 		"query":               query,
 		"model":               model,
 		"embedding_dimension": len(embedding),
+		"ttl_seconds":         effectiveTTL,
 	})
 	return nil
 }
@@ -759,11 +798,15 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	// Use Milvus Search for efficient similarity search
+	// Filter by model, has response, and not expired
+	now := time.Now().Unix()
+	filterExpr := fmt.Sprintf("model == \"%s\" && response_body != \"\" && (expires_at == 0 || expires_at > %d)", model, now)
+
 	searchResult, err := c.client.Search(
 		ctx,
 		c.collectionName,
 		[]string{},
-		fmt.Sprintf("model == \"%s\" && response_body != \"\"", model),
+		filterExpr,
 		[]string{"response_body"},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
 		c.config.Collection.VectorField.Name,

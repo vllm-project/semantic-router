@@ -383,6 +383,21 @@ func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName strin
 	return c.GetCacheSimilarityThreshold()
 }
 
+// GetCacheTTLSecondsForDecision returns the effective TTL for a decision
+// Returns 0 if caching should be skipped for this decision
+// Returns -1 to use the global default TTL when not specified at decision level
+func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetSemanticCacheConfig()
+		if config != nil && config.TTLSeconds != nil {
+			return *config.TTLSeconds
+		}
+	}
+	// Return -1 to indicate "use global default"
+	return -1
+}
+
 // IsJailbreakEnabledForDecision returns whether jailbreak detection is enabled for a specific decision
 func (c *RouterConfig) IsJailbreakEnabledForDecision(decisionName string) bool {
 	decision := c.GetDecisionByName(decisionName)
