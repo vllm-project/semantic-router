@@ -83,6 +83,15 @@ func (m *MemoryStore) StoreResponse(ctx context.Context, response *responseapi.S
 	}
 	stored := *response
 	m.responses[response.ID] = &stored
+
+	// Add to conversation index if ConversationID is set
+	if response.ConversationID != "" {
+		if conv, exists := m.conversations[response.ConversationID]; exists {
+			conv.ResponseIDs = append(conv.ResponseIDs, response.ID)
+			conv.UpdatedAt = time.Now().Unix()
+		}
+	}
+
 	return nil
 }
 
@@ -187,7 +196,7 @@ func (m *MemoryStore) ListResponsesByConversation(ctx context.Context, conversat
 			}
 		}
 	}
-	responses = m.applyListOptions(responses, opts)
+	responses = ApplyListOptions(responses, opts)
 	return responses, nil
 }
 
@@ -292,7 +301,7 @@ func (m *MemoryStore) ListConversations(ctx context.Context, opts ListOptions) (
 		}
 		return convs[i].CreatedAt > convs[j].CreatedAt
 	})
-	convs = m.applyConvListOptions(convs, opts)
+	convs = ApplyConvListOptions(convs, opts)
 	return convs, nil
 }
 
@@ -362,32 +371,4 @@ func (m *MemoryStore) evictOldestConversation() {
 	if oldestID != "" {
 		delete(m.conversations, oldestID)
 	}
-}
-
-func (m *MemoryStore) applyListOptions(responses []*responseapi.StoredResponse, opts ListOptions) []*responseapi.StoredResponse {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = DefaultListLimit
-	}
-	if limit > MaxListLimit {
-		limit = MaxListLimit
-	}
-	if len(responses) > limit {
-		responses = responses[:limit]
-	}
-	return responses
-}
-
-func (m *MemoryStore) applyConvListOptions(convs []*responseapi.StoredConversation, opts ListOptions) []*responseapi.StoredConversation {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = DefaultListLimit
-	}
-	if limit > MaxListLimit {
-		limit = MaxListLimit
-	}
-	if len(convs) > limit {
-		convs = convs[:limit]
-	}
-	return convs
 }

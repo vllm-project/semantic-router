@@ -17,7 +17,7 @@ func NewStore(config StoreConfig) (CombinedStore, error) {
 	case MilvusStoreType:
 		return NewMilvusStore(config)
 	case RedisStoreType:
-		return nil, fmt.Errorf("redis store not yet implemented")
+		return NewRedisStore(config)
 	default:
 		return nil, fmt.Errorf("unknown store backend type: %s", config.BackendType)
 	}
