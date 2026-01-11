@@ -74,7 +74,9 @@ tools/bin/
 # Allow README files in model directories
 !*/trained_model/README.md
 !*/models/README.md
-models/
+# Ignore models directory except for small LoRA cache adapters
+models/*
+!models/*-cache-lora/
 
 # Training data
 wikipedia_data/
@@ -167,5 +169,7 @@ FactCHD_dataset/
 **/lora_*_model/
 **/lora_*_model_rust/
 *.safetensors
+# EXCEPT allow small LoRA cache adapters
+!models/*-cache-lora/*.safetensors
 
 .vllm-sr/

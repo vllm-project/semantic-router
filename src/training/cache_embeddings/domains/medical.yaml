@@ -1,0 +1,32 @@
+# Medical domain cache embedding configuration
+#
+# This config defines how to train a medical-domain LoRA adapter
+# for semantic caching.
+
+domain: medical
+description: "Medical and healthcare queries"
+
+# Data source
+data_file: "data/cache_embeddings/medical/unlabeled_queries.jsonl"
+queries_count: 44603
+
+# Output paths
+output_dir: "models/medical-cache-lora"
+
+# HuggingFace repository (optional - for automatic upload)
+hf_repo: "your-org/semantic-router-medical-cache"
+
+# Training parameters (defaults - can override)
+vllm_model: "Qwen/Qwen2.5-1.5B-Instruct"
+base_model: "sentence-transformers/all-MiniLM-L12-v2"
+paraphrases: 3
+negatives: 2
+batch_size: 32
+learning_rate: 2e-5
+temperature: 0.05
+epochs: 1
+
+# AWS configuration
+aws_instance_type: "g5.12xlarge"
+aws_gpus: 4
+estimated_time_hours: 2
