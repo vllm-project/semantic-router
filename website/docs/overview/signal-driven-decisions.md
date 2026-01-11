@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 6 Signal Types
+## The 8 Signal Types
 
 ### 1. Keyword Signals
 
@@ -125,6 +125,48 @@ signals:
 ```
 
 **Example**: "Write a story about dragons" → Creative route preferred
+
+### 7. Complexity Signals
+
+**What**: Language-agnostic query complexity classification
+**Latency**: 1-5ms (with BERT tokenization) or <1ms (estimation fallback)
+**Use Case**: Route simple queries to fast models, complex queries to reasoning models
+
+```yaml
+signals:
+  complexity:
+    - name: "simple"
+      description: "Simple queries that can be handled by smaller, faster models"
+    - name: "medium"
+      description: "Medium complexity queries requiring moderate reasoning"
+    - name: "complex"
+      description: "Complex queries requiring advanced reasoning and larger models"
+```
+
+**Example**: "What is 2+2?" → Simple complexity → Fast model
+**Example**: "Explain quantum mechanics and general relativity..." → Complex → Reasoning model
+
+### 8. Language Signals
+
+**What**: Multi-language detection (100+ languages)
+**Latency**: Less than 1ms
+**Use Case**: Route queries to language-specific models or apply language-specific policies
+
+```yaml
+signals:
+  language:
+    - name: "en"
+      description: "English language queries"
+    - name: "es"
+      description: "Spanish language queries"
+    - name: "zh"
+      description: "Chinese language queries"
+    - name: "ru"
+      description: "Russian language queries"
+```
+
+**Example**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
+**Example**: "你好，世界" → Chinese (zh) → Chinese model
 
 ## How Signals Combine
 

@@ -93,6 +93,32 @@ signals:
     - name: "other"
       description: "Irrelevant queries or already fulfilled requests"
 
+  # complexity - Query complexity signals (language-agnostic)
+  complexity:
+    - name: "simple"
+      description: "Simple queries that can be handled by smaller, faster models"
+    - name: "medium"
+      description: "Medium complexity queries requiring moderate reasoning"
+    - name: "complex"
+      description: "Complex queries requiring advanced reasoning and larger models"
+
+  # language - Multi-language detection signals
+  language:
+    - name: "en"
+      description: "English language queries"
+    - name: "es"
+      description: "Spanish language queries"
+    - name: "ru"
+      description: "Russian language queries"
+    - name: "zh"
+      description: "Chinese language queries"
+    - name: "fr"
+      description: "French language queries"
+    - name: "de"
+      description: "German language queries"
+    - name: "ja"
+      description: "Japanese language queries"
+
 # Decisions - Routing logic
 decisions:
   # Highest priority: Preference-based routing via external LLM
@@ -144,6 +170,56 @@ decisions:
       - type: "system_prompt"
         configuration:
           system_prompt: "The user has indicated that the previous answer was incorrect. Please carefully reconsider the question, identify what might have been wrong in the previous response, and provide a corrected and accurate answer. Think step-by-step and verify your reasoning before responding."
+
+  # Complexity-based routing
+  - name: "simple_route"
+    description: "Route simple queries to fast, cost-effective models"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "simple"
+    modelRefs:
+      - model: "fast-model"
+        use_reasoning: false
+
+  - name: "complex_route"
+    description: "Route complex queries to powerful models with reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "complex"
+    modelRefs:
+      - model: "powerful-model"
+        use_reasoning: true
+
+  # Language-based routing
+  - name: "russian_route"
+    description: "Route Russian queries to Russian-optimized model"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "language"
+          name: "ru"
+    modelRefs:
+      - model: "russian-model"
+        use_reasoning: false
+
+  - name: "chinese_route"
+    description: "Route Chinese queries to Chinese-optimized model"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "language"
+          name: "zh"
+    modelRefs:
+      - model: "chinese-model"
+        use_reasoning: false
 
   - name: "math_route"
     description: "Route mathematical queries with reasoning enabled"

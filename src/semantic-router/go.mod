@@ -12,6 +12,7 @@ replace (
 )
 
 require (
+	github.com/abadojack/whatlanggo v1.0.1
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/mark3labs/mcp-go v0.42.0-beta.1

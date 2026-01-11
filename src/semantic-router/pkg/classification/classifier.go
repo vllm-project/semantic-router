@@ -266,6 +266,10 @@ type Classifier struct {
 	// Preference classifier for route matching via external LLM
 	preferenceClassifier *PreferenceClassifier
 
+	// Complexity and Language classifiers
+	complexityClassifier *ComplexityClassifier
+	languageClassifier   *LanguageClassifier
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -374,6 +378,22 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializePreferenceClassifier(); err != nil {
 			logging.Warnf("Failed to initialize preference classifier: %v", err)
 			// Non-fatal - continue without preference classification
+		}
+	}
+
+	// Initialize complexity classifier
+	if len(classifier.Config.ComplexityRules) > 0 {
+		if err := classifier.initializeComplexityClassifier(); err != nil {
+			logging.Warnf("Failed to initialize complexity classifier: %v", err)
+			// Non-fatal - continue without complexity classification
+		}
+	}
+
+	// Initialize language classifier
+	if len(classifier.Config.LanguageRules) > 0 {
+		if err := classifier.initializeLanguageClassifier(); err != nil {
+			logging.Warnf("Failed to initialize language classifier: %v", err)
+			// Non-fatal - continue without language classification
 		}
 	}
 
@@ -661,6 +681,8 @@ type SignalResults struct {
 	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
+	MatchedComplexityRules   []string // "simple", "medium", "complex"
+	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -863,6 +885,68 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		logging.Infof("[Signal Computation] Preference signal not used in any decision, skipping evaluation")
 	}
 
+	// Evaluate complexity rules in parallel (only if used in decisions)
+	// Only evaluate if complexity_rules are configured and complexity classifier is enabled
+	if isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) && len(c.Config.ComplexityRules) > 0 && c.IsComplexityEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			complexityResult, err := c.complexityClassifier.Classify(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("complexity rule evaluation failed: %v", err)
+			} else if complexityResult != nil {
+				// Use the complexity type directly as the signal name
+				complexityType := complexityResult.ComplexityType
+
+				// Check if this complexity type is defined in complexity_rules
+				for _, rule := range c.Config.ComplexityRules {
+					if rule.Name == complexityType {
+						mu.Lock()
+						results.MatchedComplexityRules = append(results.MatchedComplexityRules, rule.Name)
+						mu.Unlock()
+						break
+					}
+				}
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) {
+		logging.Infof("[Signal Computation] Complexity signal not used in any decision, skipping evaluation")
+	}
+
+	// Evaluate language rules in parallel (only if used in decisions)
+	// Only evaluate if language_rules are configured and language classifier is enabled
+	if isSignalTypeUsed(usedSignals, config.SignalTypeLanguage) && len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			languageResult, err := c.languageClassifier.Classify(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Language signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("language rule evaluation failed: %v", err)
+			} else if languageResult != nil {
+				// Use the language code directly as the signal name
+				languageCode := languageResult.LanguageCode
+
+				// Check if this language code is defined in language_rules
+				for _, rule := range c.Config.LanguageRules {
+					if rule.Name == languageCode {
+						mu.Lock()
+						results.MatchedLanguageRules = append(results.MatchedLanguageRules, rule.Name)
+						mu.Unlock()
+						break
+					}
+				}
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeLanguage) {
+		logging.Infof("[Signal Computation] Language signal not used in any decision, skipping evaluation")
+	}
+
 	// Wait for all signal evaluations to complete
 	wg.Wait()
 
@@ -877,6 +961,10 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, complexity=%v, language=%v",
+		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
+		signals.MatchedComplexityRules, signals.MatchedLanguageRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -894,6 +982,8 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		FactCheckRules:    signals.MatchedFactCheckRules,
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
 		PreferenceRules:   signals.MatchedPreferenceRules,
+		ComplexityRules:   signals.MatchedComplexityRules,
+		LanguageRules:     signals.MatchedLanguageRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -1604,6 +1694,16 @@ func (c *Classifier) initializeFeedbackDetector() error {
 	return nil
 }
 
+// IsComplexityEnabled checks if complexity classification is enabled
+func (c *Classifier) IsComplexityEnabled() bool {
+	return len(c.Config.ComplexityRules) > 0 && c.complexityClassifier != nil
+}
+
+// IsLanguageEnabled checks if language classification is enabled
+func (c *Classifier) IsLanguageEnabled() bool {
+	return len(c.Config.LanguageRules) > 0 && c.languageClassifier != nil
+}
+
 // IsPreferenceClassifierEnabled checks if preference classification is enabled and properly configured
 func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 	// Need preference rules configured and external model with role="preference"
@@ -1635,6 +1735,38 @@ func (c *Classifier) initializePreferenceClassifier() error {
 
 	c.preferenceClassifier = classifier
 	logging.Infof("Preference classifier initialized successfully with %d routes", len(c.Config.PreferenceRules))
+	return nil
+}
+
+// initializeComplexityClassifier initializes the complexity classifier
+func (c *Classifier) initializeComplexityClassifier() error {
+	if len(c.Config.ComplexityRules) == 0 {
+		return nil
+	}
+
+	classifier, err := NewComplexityClassifier(c.Config.ComplexityRules)
+	if err != nil {
+		return fmt.Errorf("failed to create complexity classifier: %w", err)
+	}
+
+	c.complexityClassifier = classifier
+	logging.Infof("Complexity classifier initialized")
+	return nil
+}
+
+// initializeLanguageClassifier initializes the language classifier
+func (c *Classifier) initializeLanguageClassifier() error {
+	if len(c.Config.LanguageRules) == 0 {
+		return nil
+	}
+
+	classifier, err := NewLanguageClassifier(c.Config.LanguageRules)
+	if err != nil {
+		return fmt.Errorf("failed to create language classifier: %w", err)
+	}
+
+	c.languageClassifier = classifier
+	logging.Infof("Language classifier initialized")
 	return nil
 }
 
@@ -1764,4 +1896,14 @@ func (c *Classifier) GetHallucinationDetector() *HallucinationDetector {
 // GetFeedbackDetector returns the feedback detector instance
 func (c *Classifier) GetFeedbackDetector() *FeedbackDetector {
 	return c.feedbackDetector
+}
+
+// GetComplexityClassifier returns the complexity classifier instance
+func (c *Classifier) GetComplexityClassifier() *ComplexityClassifier {
+	return c.complexityClassifier
+}
+
+// GetLanguageClassifier returns the language classifier instance
+func (c *Classifier) GetLanguageClassifier() *LanguageClassifier {
+	return c.languageClassifier
 }

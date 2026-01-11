@@ -10,7 +10,7 @@ This guide covers the configuration options for the Semantic Router. The system 
 
 The configuration defines three main layers:
 
-1. **Signal Extraction Layer**: Define 6 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference)
+1. **Signal Extraction Layer**: Define 8 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, complexity, language)
 2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
 3. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
@@ -291,7 +291,7 @@ Quick usage:
 
 ## Signals Configuration
 
-Signals are the foundation of intelligent routing. The system supports 6 types of signals that can be combined to make routing decisions.
+Signals are the foundation of intelligent routing. The system supports 8 types of signals that can be combined to make routing decisions.
 
 ### 1. Keyword Signals - Fast Pattern Matching
 
@@ -395,6 +395,58 @@ signals:
 - Complex intent analysis via external LLM
 - Nuanced routing decisions
 - When other signals are insufficient
+
+### 7. Complexity Signals - Query Complexity Classification
+
+**Latency**: 1-5ms (with BERT tokenization) or <1ms (estimation fallback)
+
+```yaml
+signals:
+  complexity:
+    - name: "simple"
+      description: "Simple queries that can be handled by smaller, faster models"
+    - name: "medium"
+      description: "Medium complexity queries requiring moderate reasoning"
+    - name: "complex"
+      description: "Complex queries requiring advanced reasoning and larger models"
+    # Optional: Calibrate thresholds using production data
+    - name: "simple"
+      simple_threshold: 0.35  # Default, can be set to P40 percentile
+      complex_threshold: 0.65  # Default, can be set to P75 percentile
+```
+
+**Use Cases:**
+
+- Route simple queries to fast, cost-effective models
+- Route complex queries to reasoning-capable models
+- Optimize cost and latency based on query complexity
+- Language-agnostic (works with any language)
+
+**Note**: If `bert_model.model_id` is configured, uses real tokenization (more accurate). Otherwise uses estimation (faster, still accurate).
+
+### 8. Language Signals - Multi-language Detection
+
+```yaml
+signals:
+  language:
+    - name: "en"
+      description: "English language queries"
+    - name: "es"
+      description: "Spanish language queries"
+    - name: "zh"
+      description: "Chinese language queries"
+    - name: "ru"
+      description: "Russian language queries"
+    - name: "fr"
+      description: "French language queries"
+```
+
+**Use Cases:**
+
+- Route queries to language-specific models
+- Apply language-specific policies
+- Support multilingual applications
+- Supports 100+ languages via whatlanggo library
 
 ## Decision Rules - Signal Fusion
 

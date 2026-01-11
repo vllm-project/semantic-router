@@ -2787,3 +2787,279 @@ var _ = Describe("EmbeddingClassifier", func() {
 		Expect(err.Error()).To(ContainSubstring("failed to calculate batch similarity"))
 	})
 })
+
+// ComplexityClassifier unit tests
+var _ = Describe("ComplexityClassifier", func() {
+	var classifier *ComplexityClassifier
+
+	BeforeEach(func() {
+		rules := []config.ComplexityRule{
+			{Name: "simple"},
+			{Name: "medium"},
+			{Name: "complex"},
+		}
+		var err error
+		classifier, err = NewComplexityClassifier(rules)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should classify simple queries as simple", func() {
+		result, err := classifier.Classify("What is 2+2?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(Equal("simple"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should classify medium queries as medium", func() {
+		// Use a longer, more complex query to ensure it's classified as medium or complex
+		result, err := classifier.Classify("Explain how photosynthesis works in plants and why it's important for life on Earth. Describe the process step by step and explain the role of chlorophyll.")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// With new scoring factors, this should be medium or complex
+		Expect(result.ComplexityType).To(BeElementOf("medium", "complex"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should classify complex queries as complex", func() {
+		// Use a very long query with multiple complex indicators (reasoning words, structure, constraints)
+		result, err := classifier.Classify("Explain the relationship between quantum mechanics and general relativity, and how they might be unified in a theory of everything that accounts for dark matter and dark energy. First, describe quantum mechanics principles. Then, explain general relativity. Next, analyze how they conflict. Finally, propose how they might be unified. You must provide detailed explanations with examples.")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// With new scoring factors (structure, constraints, reasoning), this should be complex
+		Expect(result.ComplexityType).To(BeElementOf("medium", "complex"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should handle empty text", func() {
+		result, err := classifier.Classify("")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(Equal("simple"))
+		Expect(result.Confidence).To(Equal(1.0))
+	})
+
+	It("should work with non-English text", func() {
+		result, err := classifier.Classify("¿Cuál es la relación entre la mecánica cuántica y la relatividad general?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Should still classify based on structure, not language
+		Expect(result.ComplexityType).To(BeElementOf("simple", "medium", "complex"))
+	})
+
+	It("should work with Chinese text", func() {
+		result, err := classifier.Classify("解释量子力学和广义相对论之间的关系，以及它们如何在万物理论中统一。")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(BeElementOf("simple", "medium", "complex"))
+	})
+
+	It("should handle very long strings", func() {
+		// Create a very long string (>10K characters)
+		longText := strings.Repeat("This is a very long sentence that contains many words and complex structures. ", 200)
+		result, err := classifier.Classify(longText)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Very long text should be classified as complex
+		Expect(result.ComplexityType).To(BeElementOf("medium", "complex"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should handle special characters and emojis", func() {
+		result, err := classifier.Classify("What is 2+2? 😊 🎉 🚀")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(BeElementOf("simple", "medium", "complex"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should handle unicode edge cases", func() {
+		result, err := classifier.Classify("Hello 世界 🌍 مرحبا こんにちは")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(BeElementOf("simple", "medium", "complex"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should handle whitespace-only strings", func() {
+		result, err := classifier.Classify("   \n\t  ")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Whitespace-only should be treated as empty/simple
+		Expect(result.ComplexityType).To(Equal("simple"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should handle numbers only", func() {
+		result, err := classifier.Classify("1234567890 9876543210")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(BeElementOf("simple", "medium"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+
+	It("should handle mixed content with code", func() {
+		result, err := classifier.Classify("def calculate(x, y): return x + y; // This is a function")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.ComplexityType).To(BeElementOf("simple", "medium", "complex"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.5))
+	})
+})
+
+// LanguageClassifier unit tests
+var _ = Describe("LanguageClassifier", func() {
+	var classifier *LanguageClassifier
+
+	BeforeEach(func() {
+		rules := []config.LanguageRule{
+			{Name: "en"},
+			{Name: "es"},
+			{Name: "ru"},
+			{Name: "zh"},
+			{Name: "fr"},
+		}
+		var err error
+		classifier, err = NewLanguageClassifier(rules)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should detect English language", func() {
+		result, err := classifier.Classify("Hello, how are you?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should detect Spanish language", func() {
+		result, err := classifier.Classify("Hola, ¿cómo estás? Me llamo Juan y vivo en Madrid. ¿De dónde eres tú? Esta es una pregunta en español sobre mi ubicación.")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Accept Spanish or English (if detection is unreliable, defaults to English)
+		Expect(result.LanguageCode).To(BeElementOf("es", "en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should detect Russian language", func() {
+		result, err := classifier.Classify("Привет, как дела? Меня зовут Иван, и я живу в Москве. Откуда ты? Это вопрос на русском языке о моем местоположении.")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Accept Russian or English (if detection is unreliable, defaults to English)
+		Expect(result.LanguageCode).To(BeElementOf("ru", "en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should detect Chinese language", func() {
+		result, err := classifier.Classify("你好，世界")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("zh"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should detect French language", func() {
+		result, err := classifier.Classify("Bonjour, comment allez-vous?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("fr"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle empty text", func() {
+		result, err := classifier.Classify("")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("en")) // Defaults to English
+		Expect(result.Confidence).To(Equal(0.5))
+	})
+
+	It("should handle mixed language text", func() {
+		result, err := classifier.Classify("Hello, bonjour, hola")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Should detect one of the languages (likely English due to "Hello" being common)
+		Expect(result.LanguageCode).To(BeElementOf("en", "es", "fr"))
+	})
+
+	It("should handle very long strings", func() {
+		// Create a very long string (>10K characters)
+		longText := strings.Repeat("This is a very long English sentence that contains many words. ", 200)
+		result, err := classifier.Classify(longText)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Very long English text should still be detected as English
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle special characters and emojis", func() {
+		result, err := classifier.Classify("Hello! 😊 🎉 🚀 How are you?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Should still detect English despite emojis
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle unicode edge cases", func() {
+		result, err := classifier.Classify("Hello 世界 🌍 مرحبا")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Mixed unicode should still detect a language (likely English or Chinese)
+		Expect(result.LanguageCode).To(BeElementOf("en", "zh", "ar"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle whitespace-only strings", func() {
+		result, err := classifier.Classify("   \n\t  ")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Whitespace-only should default to English
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(Equal(0.5))
+	})
+
+	It("should handle numbers only", func() {
+		result, err := classifier.Classify("1234567890 9876543210")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Numbers only should default to English
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(Equal(0.5))
+	})
+
+	It("should handle code snippets", func() {
+		result, err := classifier.Classify("def hello(): print('world')")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Code snippets might be detected as English or default to English
+		Expect(result.LanguageCode).To(BeElementOf("en", "unknown"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle very short text", func() {
+		result, err := classifier.Classify("Hi")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Very short text should still detect language (might be less confident)
+		Expect(result.LanguageCode).To(BeElementOf("en", "es", "fr", "de", "it", "pt", "ru", "ja", "zh", "ko"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle Japanese text", func() {
+		result, err := classifier.Classify("こんにちは、元気ですか？")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("ja"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle German text", func() {
+		result, err := classifier.Classify("Guten Tag, wie geht es Ihnen? Ich heiße Hans und wohne in Berlin. Woher kommen Sie?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("de"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+})

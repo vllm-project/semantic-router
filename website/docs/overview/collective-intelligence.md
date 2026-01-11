@@ -28,7 +28,7 @@ User Query → Single LLM → Response
 ```
 User Query → Signal Extraction → Decision Engine → Best Model → Response
               ↓                    ↓                  ↓
-           6 Signal Types      AND/OR Rules      Specialized Models
+           8 Signal Types      AND/OR Rules      Specialized Models
               ↓                    ↓                  ↓
          Context Analysis    Smart Selection    Plugin Chain
 ```
@@ -54,6 +54,8 @@ Different signals capture different aspects of intelligence:
 | **fact_check** | Truth verification needs |
 | **user_feedback** | User satisfaction |
 | **preference** | Intent matching |
+| **complexity** | Query complexity assessment |
+| **language** | Multi-language detection |
 
 **Collective benefit**: The combination of signals provides a richer understanding than any single signal.
 
