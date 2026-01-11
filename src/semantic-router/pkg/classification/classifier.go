@@ -433,7 +433,9 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add keyword embedding classifier if configured
 	if len(cfg.EmbeddingRules) > 0 {
-		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules)
+		// Get optimization config from embedding models configuration
+		optConfig := cfg.HNSWConfig
+		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, optConfig)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
 			return nil, err
@@ -461,7 +463,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 // IsCategoryEnabled checks if category classification is properly configured
 func (c *Classifier) IsCategoryEnabled() bool {
-	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryModel.CategoryMappingPath != "" && c.CategoryMapping != nil
+	return c.Config.CategoryModel.ModelID != "" && c.Config.CategoryMappingPath != "" && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model
@@ -643,7 +645,7 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 	usedSignals := make(map[string]bool)
 
 	// Analyze all decisions to find which signals are referenced
-	for _, decision := range c.Config.IntelligentRouting.Decisions {
+	for _, decision := range c.Config.Decisions {
 		c.analyzeRuleCombination(decision.Rules, usedSignals)
 	}
 
@@ -1095,7 +1097,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	// Check confidence threshold for category determination
 	if result.Confidence < c.Config.CategoryModel.Threshold {
 		// Determine fallback category (default to "other" if not configured)
-		fallbackCategory := c.Config.CategoryModel.FallbackCategory
+		fallbackCategory := c.Config.FallbackCategory
 		if fallbackCategory == "" {
 			fallbackCategory = "other"
 		}
@@ -1114,7 +1116,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class)
 	if !ok {
 		// Determine fallback category (default to "other" if not configured)
-		fallbackCategory := c.Config.CategoryModel.FallbackCategory
+		fallbackCategory := c.Config.FallbackCategory
 		if fallbackCategory == "" {
 			fallbackCategory = "other"
 		}
@@ -1588,7 +1590,7 @@ func (c *Classifier) initializeFeedbackDetector() error {
 		return nil
 	}
 
-	detector, err := NewFeedbackDetector(&c.Config.InlineModels.FeedbackDetector)
+	detector, err := NewFeedbackDetector(&c.Config.FeedbackDetector)
 	if err != nil {
 		return fmt.Errorf("failed to create feedback detector: %w", err)
 	}

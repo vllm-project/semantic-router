@@ -236,6 +236,67 @@ type EmbeddingModels struct {
 	GemmaModelPath string `yaml:"gemma_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
+
+	// HNSW configuration for embedding-based classification
+	// These settings control the preloading and HNSW indexing for embedding-based classification
+	HNSWConfig HNSWConfig `yaml:"hnsw_config,omitempty"`
+}
+
+// HNSWConfig contains settings for optimizing the embedding classifier
+// by preloading candidate embeddings at startup and using HNSW for fast similarity search
+type HNSWConfig struct {
+	// PreloadEmbeddings enables precomputing candidate embeddings at startup (default: true)
+	// When enabled, candidate embeddings are computed once during initialization
+	// rather than on every request, significantly improving runtime performance
+	PreloadEmbeddings bool `yaml:"preload_embeddings"`
+
+	// UseHNSW enables HNSW index for O(log n) similarity search (default: true)
+	// Only applies when PreloadEmbeddings is true
+	UseHNSW bool `yaml:"use_hnsw"`
+
+	// HNSWM is the number of bi-directional links per node (default: 16)
+	// Higher values improve recall but increase memory usage
+	HNSWM int `yaml:"hnsw_m,omitempty"`
+
+	// HNSWEfConstruction is the size of dynamic candidate list during index construction (default: 200)
+	// Higher values improve index quality but increase build time
+	HNSWEfConstruction int `yaml:"hnsw_ef_construction,omitempty"`
+
+	// HNSWEfSearch is the size of dynamic candidate list during search (default: 50)
+	// Higher values improve search accuracy but increase latency
+	HNSWEfSearch int `yaml:"hnsw_ef_search,omitempty"`
+
+	// HNSWThreshold is the minimum number of candidates to use HNSW (default: 20)
+	// Below this threshold, brute-force search is used as it's faster for small sets
+	HNSWThreshold int `yaml:"hnsw_threshold,omitempty"`
+
+	// TargetDimension is the embedding dimension to use (default: 768)
+	// Supports Matryoshka dimensions: 768, 512, 256, 128
+	TargetDimension int `yaml:"target_dimension,omitempty"`
+}
+
+// WithDefaults returns a copy of the config with default values applied
+func (c HNSWConfig) WithDefaults() HNSWConfig {
+	result := c
+	// PreloadEmbeddings defaults to true for better performance
+	// Note: bool zero value is false, so we need explicit check
+	// Users must explicitly set preload_embeddings: true in config
+	if result.HNSWM <= 0 {
+		result.HNSWM = 16
+	}
+	if result.HNSWEfConstruction <= 0 {
+		result.HNSWEfConstruction = 200
+	}
+	if result.HNSWEfSearch <= 0 {
+		result.HNSWEfSearch = 50
+	}
+	if result.HNSWThreshold <= 0 {
+		result.HNSWThreshold = 20
+	}
+	if result.TargetDimension <= 0 {
+		result.TargetDimension = 768
+	}
+	return result
 }
 
 type MCPCategoryModel struct {
