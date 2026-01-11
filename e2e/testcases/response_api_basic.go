@@ -39,11 +39,12 @@ func init() {
 
 // ResponseAPIRequest represents a Response API request
 type ResponseAPIRequest struct {
-	Model        string            `json:"model"`
-	Input        interface{}       `json:"input"`
-	Instructions string            `json:"instructions,omitempty"`
-	Store        *bool             `json:"store,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Model              string            `json:"model"`
+	Input              interface{}       `json:"input"`
+	PreviousResponseID string            `json:"previous_response_id,omitempty"`
+	Instructions       string            `json:"instructions,omitempty"`
+	Store              *bool             `json:"store,omitempty"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
 }
 
 // ResponseAPIResponse represents a Response API response
@@ -92,7 +93,7 @@ func testResponseAPICreate(ctx context.Context, client *kubernetes.Clientset, op
 	// Create a Response API request
 	storeTrue := true
 	reqBody := ResponseAPIRequest{
-		Model:        "MoM",
+		Model:        "openai/gpt-oss-20b",
 		Input:        "What is 2 + 2?",
 		Instructions: "You are a helpful math assistant.",
 		Store:        &storeTrue,
@@ -422,7 +423,7 @@ func testResponseAPIInputItems(ctx context.Context, client *kubernetes.Clientset
 func createTestResponse(ctx context.Context, localPort string, verbose bool) (string, error) {
 	storeTrue := true
 	reqBody := ResponseAPIRequest{
-		Model: "MoM",
+		Model: "openai/gpt-oss-20b",
 		Input: "Hello, how are you?",
 		Store: &storeTrue,
 	}
@@ -464,7 +465,7 @@ func createTestResponse(ctx context.Context, localPort string, verbose bool) (st
 func createTestResponseWithInstructions(ctx context.Context, localPort string, verbose bool) (string, error) {
 	storeTrue := true
 	reqBody := ResponseAPIRequest{
-		Model:        "MoM",
+		Model:        "openai/gpt-oss-20b",
 		Input:        "What is the capital of France?",
 		Instructions: "You are a geography expert. Answer concisely.",
 		Store:        &storeTrue,

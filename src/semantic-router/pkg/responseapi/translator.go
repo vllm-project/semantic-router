@@ -94,11 +94,20 @@ func (t *Translator) TranslateToCompletionRequest(
 ) (*ChatCompletionRequest, error) {
 	messages := []ChatMessage{}
 
-	// Add system instructions if provided
-	if req.Instructions != "" {
+	// Add system instructions if provided, otherwise inherit from the conversation chain.
+	instructions := req.Instructions
+	if instructions == "" {
+		for _, resp := range history {
+			if resp != nil && resp.Instructions != "" {
+				instructions = resp.Instructions
+				break
+			}
+		}
+	}
+	if instructions != "" {
 		messages = append(messages, ChatMessage{
 			Role:    RoleSystem,
-			Content: req.Instructions,
+			Content: instructions,
 		})
 	}
 

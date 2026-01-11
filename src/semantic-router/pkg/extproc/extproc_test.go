@@ -3749,6 +3749,14 @@ var _ = Describe("Response API Translation", func() {
 	})
 
 	Describe("Request Body Translation", func() {
+		It("should store string input as a user message input item", func() {
+			items := parseResponseAPIInputItems(json.RawMessage(`"Hello"`))
+			Expect(items).To(HaveLen(1))
+			Expect(items[0].Type).To(Equal(responseapi.ItemTypeMessage))
+			Expect(items[0].Role).To(Equal(responseapi.RoleUser))
+			Expect(string(items[0].Content)).To(Equal(`"Hello"`))
+		})
+
 		It("should translate Response API request to Chat Completions format", func() {
 			// Response API request format
 			responseAPIReq := `{
@@ -3804,6 +3812,53 @@ var _ = Describe("Response API Translation", func() {
 			Expect(ok).To(BeTrue())
 			Expect(firstMsg["role"]).To(Equal("system"))
 			Expect(firstMsg["content"]).To(Equal("You are a math assistant. Always show your work."))
+		})
+
+		It("should inherit system instructions from conversation history when not provided", func() {
+			previousResp := &responseapi.StoredResponse{
+				ID:           "resp_previous_with_instructions",
+				CreatedAt:    1234567890,
+				Model:        "gpt-4",
+				Status:       "completed",
+				Instructions: "Remember my name is Alice.",
+				Input: []responseapi.InputItem{
+					{
+						Type:    "message",
+						Role:    "user",
+						Content: json.RawMessage(`"Hello"`),
+					},
+				},
+				Output: []responseapi.OutputItem{
+					{
+						Type:    "message",
+						Role:    "assistant",
+						Content: []responseapi.ContentPart{{Type: "output_text", Text: "Hi there!"}},
+					},
+				},
+			}
+			mockStore.responses[previousResp.ID] = previousResp
+
+			responseAPIReq := `{
+				"model": "gpt-4",
+				"input": "What is my name?",
+				"previous_response_id": "resp_previous_with_instructions"
+			}`
+
+			_, translatedBody, err := filter.TranslateRequest(context.Background(), []byte(responseAPIReq))
+			Expect(err).NotTo(HaveOccurred())
+
+			var chatReq map[string]interface{}
+			err = json.Unmarshal(translatedBody, &chatReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			messages, ok := chatReq["messages"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(messages).To(HaveLen(4)) // system + (history user+assistant) + current user
+
+			firstMsg, ok := messages[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(firstMsg["role"]).To(Equal("system"))
+			Expect(firstMsg["content"]).To(Equal("Remember my name is Alice."))
 		})
 
 		It("should include conversation history from previous responses", func() {

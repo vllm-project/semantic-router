@@ -1,78 +1,75 @@
 # Response API E2E Test Profile Values
-# This configuration enables Response API for testing
-
 replicaCount: 1
 
 image:
   repository: ghcr.io/vllm-project/semantic-router/extproc
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Never
 
-# Response API Configuration
-responseApi:
-  enabled: true
-  storeBackend: "memory"
-  ttlSeconds: 86400
-  maxResponses: 1000
-
-# Semantic Cache (required for some tests)
-semanticCache:
-  enabled: true
-  backendType: "memory"
-  similarityThreshold: 0.8
-  maxEntries: 1000
-  ttlSeconds: 3600
-
-# vLLM Endpoints - use mock backend for testing
-vllmEndpoints:
-  - name: "test-endpoint"
-    address: "mock-vllm"
-    port: 8000
-    weight: 1
-
-# Model configuration
-modelConfig:
-  "MoM":
-    useReasoning: false
-    preferredEndpoints: ["test-endpoint"]
-
-# Minimal classifier configuration
-classifier:
-  categoryModel:
-    modelId: "models/mom-embedding-light"
+config:
+  # Disable unrelated features for deterministic Response API tests.
+  bert_model:
+    model_id: ""
     threshold: 0.6
-    useCpu: true
+    use_cpu: true
 
-# Categories
-categories:
-  - name: other
-    description: "General knowledge and miscellaneous topics"
+  semantic_cache:
+    enabled: false
+    backend_type: "memory"
+    similarity_threshold: 0.8
+    max_entries: 1000
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
 
-# Strategy
-strategy: "priority"
+  tools:
+    enabled: false
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
 
-# Decisions
-decisions:
-  - name: "default_decision"
-    description: "Default catch-all decision"
-    priority: 1
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "other"
-    modelRefs:
-      - model: "MoM"
-        useReasoning: false
+  prompt_guard:
+    enabled: false
+    use_modernbert: false
+    model_id: ""
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: ""
 
-defaultModel: "MoM"
+  classifier:
+    category_model:
+      model_id: ""
+      use_modernbert: false
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: ""
+    pii_model:
+      model_id: ""
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: ""
 
-# Service configuration
-service:
-  type: ClusterIP
-  port: 8080
+  response_api:
+    enabled: true
+    store_backend: "memory"
+    ttl_seconds: 86400
+    max_responses: 1000
 
-# Resources
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: false
+        high_resolution_timing: false
+        sample_rate: 1.0
+
+  observability:
+    tracing:
+      enabled: false
+
 resources:
   limits:
     cpu: 500m
