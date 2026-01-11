@@ -76,7 +76,17 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/"
+          element={
+            <Layout
+              configSection={configSection}
+              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+            >
+              <LandingPage />
+            </Layout>
+          }
+        />
         <Route
           path="/monitoring"
           element={

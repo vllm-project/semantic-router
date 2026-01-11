@@ -255,7 +255,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedView, setSelectedView] = useState<'structured' | 'raw'>('structured')
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
 
   // Router defaults state (from .vllm-sr/router-defaults.yaml)
@@ -415,9 +414,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     setEditModalCallback(null)
   }
 
-  const handleRefresh = () => {
-    fetchConfig()
-    fetchRouterDefaults()
+  // Get effective config value - check router defaults first, then main config
+  // @ts-ignore - Utility for merging config sources, will be used in render functions
+  const getEffectiveConfig = (key: string) => {
+    // For router defaults sections, prefer routerDefaults
+    if (routerDefaults && routerDefaults[key] !== undefined) {
+      return routerDefaults[key]
+    }
+    return config?.[key]
   }
 
   // ============================================================================
@@ -3094,28 +3098,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <h2 className={styles.title}>⚙️ Configuration</h2>
-          <div className={styles.viewToggle}>
-            <button
-              className={`${styles.toggleButton} ${selectedView === 'structured' ? styles.active : ''}`}
-              onClick={() => setSelectedView('structured')}
-            >
-              📋 Structured
-            </button>
-            <button
-              className={`${styles.toggleButton} ${selectedView === 'raw' ? styles.active : ''}`}
-              onClick={() => setSelectedView('raw')}
-            >
-              💻 Raw YAML
-            </button>
-          </div>
-        </div>
-        <button onClick={handleRefresh} className={styles.button} disabled={loading}>
-          🔄 Refresh
-        </button>
-      </div>
 
       <div className={styles.content}>
         {loading && (
@@ -3136,17 +3118,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
 
         {config && !loading && !error && (
-          <>
-            {selectedView === 'structured' ? (
-              <div className={styles.contentArea}>
-                {renderActiveSection()}
-              </div>
-            ) : (
-              <pre className={styles.codeBlock}>
-                <code>{JSON.stringify(config, null, 2)}</code>
-              </pre>
-            )}
-          </>
+          <div className={styles.contentArea}>
+            {renderActiveSection()}
+          </div>
         )}
       </div>
 

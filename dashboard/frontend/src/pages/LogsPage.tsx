@@ -15,10 +15,10 @@ interface LogsResponse {
   message?: string
 }
 
-type ComponentType = 'router' | 'envoy' | 'all'
+type ComponentType = 'router' | 'envoy' | 'dashboard' | 'all'
 
 const LogsPage: React.FC = () => {
-  const [selectedComponent, setSelectedComponent] = useState<ComponentType>('router')
+  const [selectedComponent, setSelectedComponent] = useState<ComponentType>('all')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [deploymentType, setDeploymentType] = useState<string>('detecting...')
   const [loading, setLoading] = useState(true)
@@ -113,6 +113,12 @@ const LogsPage: React.FC = () => {
             onClick={() => setSelectedComponent('envoy')}
           >
             🔀 Envoy
+          </button>
+          <button
+            className={`${styles.serviceButton} ${selectedComponent === 'dashboard' ? styles.active : ''}`}
+            onClick={() => setSelectedComponent('dashboard')}
+          >
+            📊 Dashboard
           </button>
           <button
             className={`${styles.serviceButton} ${selectedComponent === 'all' ? styles.active : ''}`}

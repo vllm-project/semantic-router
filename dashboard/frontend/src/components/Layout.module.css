@@ -133,8 +133,8 @@ button.navLink {
   align-items: center;
 }
 
-/* Observability Dropdown */
-.observabilityDropdown {
+/* System Dropdown */
+.systemDropdown {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -219,6 +219,12 @@ button.navLink {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
+.dropdownDivider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 0.25rem 0;
+}
+
 /* Right Actions - positioned right within centered container */
 .headerRight {
   position: absolute;
@@ -296,6 +302,23 @@ button.navLink {
 .mobileNavLink:hover,
 .mobileNavLink.active {
   color: var(--color-text);
+}
+
+.mobileNavSection {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.mobileNavSectionTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.75rem 0.25rem;
 }
 
 /* Main Content Area */

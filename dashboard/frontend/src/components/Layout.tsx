@@ -10,11 +10,11 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [configDropdownOpen, setConfigDropdownOpen] = useState(false)
-  const [observabilityDropdownOpen, setObservabilityDropdownOpen] = useState(false)
+  const [systemDropdownOpen, setSystemDropdownOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const isConfigPage = location.pathname === '/config'
+  const isSystemPage = isConfigPage && configSection === 'router-config'
   const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
 
   useEffect(() => {
@@ -22,30 +22,17 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
     document.documentElement.setAttribute('data-theme', 'dark')
   }, [])
 
-  // Close dropdowns when clicking outside
+  // Close system dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest(`.${styles.configDropdown}`)) {
-        setConfigDropdownOpen(false)
-      }
-      if (!target.closest(`.${styles.observabilityDropdown}`)) {
-        setObservabilityDropdownOpen(false)
+      if (!target.closest(`.${styles.systemDropdown}`)) {
+        setSystemDropdownOpen(false)
       }
     }
     document.addEventListener('click', handleClickOutside)
     return () => document.removeEventListener('click', handleClickOutside)
   }, [])
-
-  // Config sections for dropdown - no emojis, clean text like NVIDIA Brev
-  // Navigation aligned with Python CLI config structure
-  const configSections = [
-    { id: 'signals', title: 'Signals' },
-    { id: 'decisions', title: 'Decisions' },
-    { id: 'models', title: 'Models' },
-    { id: 'router-config', title: 'Router Config' },
-    { id: 'topology', title: 'Topology' }
-  ]
 
   return (
     <div className={styles.container}>
@@ -58,7 +45,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <span className={styles.brandText}>vLLM Semantic Router</span>
           </NavLink>
 
-          {/* Center: Navigation - Clean text like NVIDIA Brev */}
+          {/* Center: Navigation - Flat structure */}
           <nav className={styles.nav}>
             <NavLink
               to="/playground"
@@ -69,60 +56,46 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Playground
             </NavLink>
 
-            {/* Config Dropdown */}
-            <div className={styles.configDropdown}>
+            <button
+              className={`${styles.navLink} ${isConfigPage && configSection === 'models' ? styles.navLinkActive : ''}`}
+              onClick={() => {
+                onConfigSectionChange?.('models')
+                navigate('/config')
+              }}
+            >
+              Models
+            </button>
+
+            <button
+              className={`${styles.navLink} ${isConfigPage && configSection === 'signals' ? styles.navLinkActive : ''}`}
+              onClick={() => {
+                onConfigSectionChange?.('signals')
+                navigate('/config')
+              }}
+            >
+              Signals
+            </button>
+
+            <button
+              className={`${styles.navLink} ${isConfigPage && configSection === 'decisions' ? styles.navLinkActive : ''}`}
+              onClick={() => {
+                onConfigSectionChange?.('decisions')
+                navigate('/config')
+              }}
+            >
+              Decisions
+            </button>
+
+            {/* System Dropdown (includes router-config and observability) */}
+            <div className={styles.systemDropdown}>
               <button
-                className={`${styles.navLink} ${isConfigPage || location.pathname === '/topology' ? styles.navLinkActive : ''}`}
+                className={`${styles.navLink} ${styles.dropdownTrigger} ${(isSystemPage || isObservabilityPage) ? styles.navLinkActive : ''}`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setConfigDropdownOpen(!configDropdownOpen)
+                  setSystemDropdownOpen(!systemDropdownOpen)
                 }}
               >
-                Config
-                <svg className={`${styles.dropdownArrow} ${configDropdownOpen ? styles.dropdownArrowOpen : ''}`} width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
-
-              {configDropdownOpen && (
-                <div className={styles.dropdownMenu}>
-                  {configSections.map((section) => (
-                    <button
-                      key={section.id}
-                      className={`${styles.dropdownItem} ${
-                        (section.id === 'topology' && location.pathname === '/topology') ||
-                        (isConfigPage && configSection === section.id)
-                          ? styles.dropdownItemActive
-                          : ''
-                      }`}
-                      onClick={() => {
-                        if (section.id === 'topology') {
-                          navigate('/topology')
-                        } else {
-                          onConfigSectionChange?.(section.id)
-                          navigate('/config')
-                        }
-                        setConfigDropdownOpen(false)
-                      }}
-                    >
-                      {section.title}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Observability Dropdown */}
-            <div className={styles.observabilityDropdown}>
-              <button
-                className={`${styles.navLink} ${styles.dropdownTrigger} ${isObservabilityPage ? styles.navLinkActive : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setObservabilityDropdownOpen(!observabilityDropdownOpen)
-                  setConfigDropdownOpen(false)
-                }}
-              >
-                Observability
+                System
                 <svg
                   width="12"
                   height="12"
@@ -130,38 +103,49 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.5"
-                  className={`${styles.dropdownArrow} ${observabilityDropdownOpen ? styles.dropdownArrowOpen : ''}`}
+                  className={`${styles.dropdownArrow} ${systemDropdownOpen ? styles.dropdownArrowOpen : ''}`}
                 >
                   <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              {observabilityDropdownOpen && (
+              {systemDropdownOpen && (
                 <div className={styles.dropdownMenu}>
+                  <button
+                    className={`${styles.dropdownItem} ${isSystemPage ? styles.dropdownItemActive : ''}`}
+                    onClick={() => {
+                      onConfigSectionChange?.('router-config')
+                      navigate('/config')
+                      setSystemDropdownOpen(false)
+                    }}
+                  >
+                    Router Config
+                  </button>
+                  <div className={styles.dropdownDivider}></div>
                   <NavLink
                     to="/status"
                     className={`${styles.dropdownItem} ${location.pathname === '/status' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setObservabilityDropdownOpen(false)}
+                    onClick={() => setSystemDropdownOpen(false)}
                   >
                     Status
                   </NavLink>
                   <NavLink
                     to="/logs"
                     className={`${styles.dropdownItem} ${location.pathname === '/logs' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setObservabilityDropdownOpen(false)}
+                    onClick={() => setSystemDropdownOpen(false)}
                   >
                     Logs
                   </NavLink>
                   <NavLink
                     to="/monitoring"
                     className={`${styles.dropdownItem} ${location.pathname === '/monitoring' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setObservabilityDropdownOpen(false)}
+                    onClick={() => setSystemDropdownOpen(false)}
                   >
                     Grafana
                   </NavLink>
                   <NavLink
                     to="/tracing"
                     className={`${styles.dropdownItem} ${location.pathname === '/tracing' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setObservabilityDropdownOpen(false)}
+                    onClick={() => setSystemDropdownOpen(false)}
                   >
                     Tracing
                   </NavLink>
@@ -228,21 +212,61 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <NavLink to="/playground" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Playground
             </NavLink>
-            <NavLink to="/config" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Config
-            </NavLink>
-            <NavLink to="/monitoring" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Monitoring
-            </NavLink>
-            <NavLink to="/tracing" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Tracing
-            </NavLink>
-            <NavLink to="/status" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Status
-            </NavLink>
-            <NavLink to="/logs" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Logs
-            </NavLink>
+            <button
+              className={styles.mobileNavLink}
+              onClick={() => {
+                onConfigSectionChange?.('models')
+                navigate('/config')
+                setMobileMenuOpen(false)
+              }}
+            >
+              Models
+            </button>
+            <button
+              className={styles.mobileNavLink}
+              onClick={() => {
+                onConfigSectionChange?.('signals')
+                navigate('/config')
+                setMobileMenuOpen(false)
+              }}
+            >
+              Signals
+            </button>
+            <button
+              className={styles.mobileNavLink}
+              onClick={() => {
+                onConfigSectionChange?.('decisions')
+                navigate('/config')
+                setMobileMenuOpen(false)
+              }}
+            >
+              Decisions
+            </button>
+            <div className={styles.mobileNavSection}>
+              <div className={styles.mobileNavSectionTitle}>System</div>
+              <button
+                className={styles.mobileNavLink}
+                onClick={() => {
+                  onConfigSectionChange?.('router-config')
+                  navigate('/config')
+                  setMobileMenuOpen(false)
+                }}
+              >
+                Router Config
+              </button>
+              <NavLink to="/status" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Status
+              </NavLink>
+              <NavLink to="/logs" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Logs
+              </NavLink>
+              <NavLink to="/monitoring" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Grafana
+              </NavLink>
+              <NavLink to="/tracing" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Tracing
+              </NavLink>
+            </div>
           </div>
         )}
       </header>
