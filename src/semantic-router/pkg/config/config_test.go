@@ -169,6 +169,7 @@ tools:
 				Expect(cfg.Tools.Enabled).To(BeTrue())
 				Expect(cfg.Tools.TopK).To(Equal(5))
 				Expect(*cfg.Tools.SimilarityThreshold).To(Equal(float32(0.8)))
+				Expect(cfg.Tools.AdvancedFiltering).To(BeNil())
 
 				// Verify vLLM endpoints config
 				Expect(cfg.VLLMEndpoints).To(HaveLen(2))
@@ -194,6 +195,118 @@ tools:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg1).To(BeIdenticalTo(cfg2))
+			})
+		})
+
+		Context("with advanced tool filtering configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+bert_model:
+  model_id: "test-bert-model"
+  threshold: 0.8
+  use_cpu: true
+
+decisions:
+  - name: "general"
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: general_keywords
+    modelRefs:
+      - model: "model-a"
+        use_reasoning: true
+
+default_model: "model-b"
+
+tools:
+  enabled: true
+  top_k: 5
+  similarity_threshold: 0.8
+  tools_db_path: "/path/to/tools.json"
+  fallback_to_empty: true
+  advanced_filtering:
+    enabled: true
+    candidate_pool_size: 20
+    min_lexical_overlap: 1
+    min_combined_score: 0.35
+    weights:
+      embed: 0.7
+      lexical: 0.2
+      tag: 0.05
+      name: 0.05
+      category: 0.1
+    use_category_filter: true
+    category_confidence_threshold: 0.6
+    allow_tools: ["get_weather"]
+    block_tools: ["send_email"]
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse advanced tool filtering settings", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg).NotTo(BeNil())
+
+				Expect(cfg.Tools.AdvancedFiltering).NotTo(BeNil())
+				advanced := cfg.Tools.AdvancedFiltering
+				Expect(advanced.Enabled).To(BeTrue())
+				Expect(*advanced.CandidatePoolSize).To(Equal(20))
+				Expect(*advanced.MinLexicalOverlap).To(Equal(1))
+				Expect(*advanced.MinCombinedScore).To(BeNumerically("~", 0.35, 0.0001))
+				Expect(advanced.UseCategoryFilter).NotTo(BeNil())
+				Expect(*advanced.UseCategoryFilter).To(BeTrue())
+				Expect(*advanced.CategoryConfidenceThreshold).To(BeNumerically("~", 0.6, 0.0001))
+
+				Expect(advanced.Weights.Embed).NotTo(BeNil())
+				Expect(*advanced.Weights.Embed).To(BeNumerically("~", 0.7, 0.0001))
+				Expect(*advanced.Weights.Lexical).To(BeNumerically("~", 0.2, 0.0001))
+				Expect(*advanced.Weights.Tag).To(BeNumerically("~", 0.05, 0.0001))
+				Expect(*advanced.Weights.Name).To(BeNumerically("~", 0.05, 0.0001))
+				Expect(*advanced.Weights.Category).To(BeNumerically("~", 0.1, 0.0001))
+
+				Expect(advanced.AllowTools).To(ContainElement("get_weather"))
+				Expect(advanced.BlockTools).To(ContainElement("send_email"))
+			})
+		})
+
+		Context("with invalid advanced tool filtering configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+decisions:
+  - name: "general"
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+        - type: keyword
+          name: general_keywords
+    modelRefs:
+      - model: "model-a"
+        use_reasoning: true
+
+default_model: "model-b"
+
+tools:
+  enabled: true
+  top_k: 5
+  tools_db_path: "/path/to/tools.json"
+  fallback_to_empty: true
+  advanced_filtering:
+    enabled: true
+    min_combined_score: 1.5
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reject out-of-range values", func() {
+				_, err := Load(configFile)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("min_combined_score must be between 0.0 and 1.0"))
 			})
 		})
 

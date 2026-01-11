@@ -12,6 +12,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+)
+
+const (
+	candidatePoolMultiplier = 5
+	candidatePoolMinSize    = 20
 )
 
 // handleToolSelectionForRequest handles tool selection for the request
@@ -58,7 +64,38 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 	}
 
 	// Find similar tools based on the query
-	selectedTools, err := r.ToolsDatabase.FindSimilarTools(classificationText, topK)
+	var selectedTools []openai.ChatCompletionToolParam
+	var err error
+
+	advanced := r.Config.Tools.AdvancedFiltering
+	if advanced != nil && advanced.Enabled {
+		candidatePoolSize := topK
+		if advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0 {
+			candidatePoolSize = *advanced.CandidatePoolSize
+		} else if advanced.CandidatePoolSize == nil {
+			candidatePoolSize = max(topK*candidatePoolMultiplier, candidatePoolMinSize)
+		}
+		if candidatePoolSize < topK {
+			candidatePoolSize = topK
+		}
+
+		candidates, findErr := r.ToolsDatabase.FindSimilarToolsWithScores(classificationText, candidatePoolSize)
+		if findErr != nil {
+			err = findErr
+		} else {
+			selectedCategory := ctx.VSRSelectedCategory
+			if advanced.UseCategoryFilter != nil && *advanced.UseCategoryFilter && selectedCategory != "" {
+				if advanced.CategoryConfidenceThreshold != nil &&
+					ctx.VSRSelectedDecisionConfidence < float64(*advanced.CategoryConfidenceThreshold) {
+					selectedCategory = ""
+				}
+			}
+			selectedTools = tools.FilterAndRankTools(classificationText, candidates, topK, advanced, selectedCategory)
+		}
+	} else {
+		selectedTools, err = r.ToolsDatabase.FindSimilarTools(classificationText, topK)
+	}
+
 	if err != nil {
 		if r.Config.Tools.FallbackToEmpty {
 			logging.Warnf("Tool selection failed, falling back to no tools: %v", err)

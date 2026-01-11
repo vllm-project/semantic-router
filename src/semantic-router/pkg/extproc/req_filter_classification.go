@@ -93,6 +93,7 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	}
 	// Store category in context for response headers
 	ctx.VSRSelectedCategory = categoryName
+	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 
 	// Store matched keywords in context for response headers
 	ctx.VSRMatchedKeywords = result.MatchedKeywords

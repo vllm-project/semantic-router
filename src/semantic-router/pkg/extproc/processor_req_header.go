@@ -59,13 +59,14 @@ type RequestContext struct {
 	TTFTSeconds  float64
 
 	// VSR decision tracking
-	VSRSelectedCategory     string           // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName string           // The decision name from DecisionEngine evaluation
-	VSRReasoningMode        string           // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel        string           // The model selected by VSR
-	VSRCacheHit             bool             // Whether this request hit the cache
-	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
-	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory           string           // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName       string           // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence float64          // Confidence score from DecisionEngine evaluation
+	VSRReasoningMode              string           // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel              string           // The model selected by VSR
+	VSRCacheHit                   bool             // Whether this request hit the cache
+	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
+	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords     []string // Matched keyword rule names

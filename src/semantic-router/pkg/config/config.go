@@ -554,6 +554,44 @@ type ExternalModelConfig struct {
 	AccessKey string `yaml:"access_key,omitempty"`
 }
 
+// ToolFilteringWeights defines per-signal weights for advanced tool filtering.
+// All fields are optional and only used when advanced filtering is enabled.
+type ToolFilteringWeights struct {
+	Embed    *float32 `yaml:"embed,omitempty"`
+	Lexical  *float32 `yaml:"lexical,omitempty"`
+	Tag      *float32 `yaml:"tag,omitempty"`
+	Name     *float32 `yaml:"name,omitempty"`
+	Category *float32 `yaml:"category,omitempty"`
+}
+
+// AdvancedToolFilteringConfig represents opt-in advanced tool filtering settings.
+type AdvancedToolFilteringConfig struct {
+	// Enable advanced tool filtering.
+	Enabled bool `yaml:"enabled"`
+
+	// Candidate pool size before secondary filtering.
+	CandidatePoolSize *int `yaml:"candidate_pool_size,omitempty"`
+
+	// Minimum lexical overlap for keyword filtering.
+	MinLexicalOverlap *int `yaml:"min_lexical_overlap,omitempty"`
+
+	// Minimum combined score threshold (0.0-1.0).
+	MinCombinedScore *float32 `yaml:"min_combined_score,omitempty"`
+
+	// Weights for combined scoring.
+	Weights ToolFilteringWeights `yaml:"weights,omitempty"`
+
+	// Enable category-based filtering.
+	UseCategoryFilter *bool `yaml:"use_category_filter,omitempty"`
+
+	// Minimum confidence required for category filtering (0.0-1.0).
+	CategoryConfidenceThreshold *float32 `yaml:"category_confidence_threshold,omitempty"`
+
+	// Explicit allow/block lists for tool names.
+	AllowTools []string `yaml:"allow_tools,omitempty"`
+	BlockTools []string `yaml:"block_tools,omitempty"`
+}
+
 // ToolsConfig represents configuration for automatic tool selection
 type ToolsConfig struct {
 	// Enable automatic tool selection
@@ -571,6 +609,9 @@ type ToolsConfig struct {
 
 	// Fallback behavior: if true, return empty tools on failure; if false, return error
 	FallbackToEmpty bool `yaml:"fallback_to_empty"`
+
+	// Advanced tool filtering (opt-in).
+	AdvancedFiltering *AdvancedToolFilteringConfig `yaml:"advanced_filtering,omitempty"`
 }
 
 // HallucinationMitigationConfig represents configuration for hallucination mitigation
