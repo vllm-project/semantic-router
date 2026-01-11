@@ -235,11 +235,13 @@ func StartPortForward(ctx context.Context, client *kubernetes.Clientset, restCon
 	}
 
 	// Start port forwarding in background
+	errChan := make(chan error, 1)
 	go func() {
 		if err := forwarder.ForwardPorts(); err != nil {
 			if verbose {
 				fmt.Printf("[Helper] Port forwarding error: %v\n", err)
 			}
+			errChan <- err
 		}
 	}()
 
@@ -257,7 +259,10 @@ func StartPortForward(ctx context.Context, client *kubernetes.Clientset, restCon
 			close(stopChan)
 		}
 		return stopFunc, nil
-	case <-time.After(30 * time.Second):
+	case err := <-errChan:
+		close(stopChan)
+		return nil, fmt.Errorf("port forwarding failed: %w", err)
+	case <-time.After(60 * time.Second):
 		close(stopChan)
 		return nil, fmt.Errorf("timeout waiting for port forward to be ready")
 	case <-ctx.Done():

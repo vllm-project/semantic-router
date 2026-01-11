@@ -15,8 +15,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-// Init starts the API server
+// Init starts the API server (legacy version without router)
 func Init(configPath string, port int, enableSystemPromptAPI bool) error {
+	return InitWithRouter(configPath, port, enableSystemPromptAPI, nil)
+}
+
+// InitWithRouter starts the API server with optional OpenAIRouter for full vSR capabilities
+// When router is provided, nginx proxy mode will use the full vSR pipeline
+// (classification, decision engine, caching, system prompts, etc.)
+func InitWithRouter(configPath string, port int, enableSystemPromptAPI bool, router RouterInterface) error {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
 	cfg := config.Get()
@@ -58,6 +65,14 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		classificationSvc:     classificationSvc,
 		config:                cfg,
 		enableSystemPromptAPI: enableSystemPromptAPI,
+		router:                router, // May be nil for legacy mode
+	}
+
+	// Log router status
+	if router != nil {
+		logging.Infof("API server initialized with full vSR router (nginx proxy mode enabled with full pipeline)")
+	} else {
+		logging.Infof("API server initialized without router (nginx proxy mode uses simplified classification)")
 	}
 
 	// Create HTTP server with routes
@@ -140,6 +155,16 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	} else {
 		logging.Infof("System prompt configuration endpoints disabled for security")
 	}
+
+	// nginx ingress integration - Proxy Mode
+	// See: https://github.com/vllm-project/semantic-router/issues/557
+	//
+	// vSR receives full request, classifies content, blocks threats or forwards to LLM
+	// This provides full classification and blocking capabilities with nginx (no Envoy needed!)
+	mux.HandleFunc("POST /v1/chat/completions", s.handleProxyChatCompletions)
+	mux.HandleFunc("POST /v1/completions", s.handleProxyCompletions)
+	mux.HandleFunc("GET /v1/health", s.handleProxyHealth)
+	logging.Infof("nginx proxy mode enabled at /v1/chat/completions (LLM backend: %s)", s.getProxyConfig().LLMBackendURL)
 
 	return mux
 }
