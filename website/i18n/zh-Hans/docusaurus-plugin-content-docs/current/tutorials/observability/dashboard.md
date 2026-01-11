@@ -2,7 +2,7 @@
 translation:
   source_commit: "bac2743"
   source_file: "docs/tutorials/observability/dashboard.md"
-  outdated: false
+  outdated: true
 ---
 
 # Semantic Router 仪表板 (Semantic Router Dashboard)
