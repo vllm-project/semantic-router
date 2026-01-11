@@ -16,7 +16,7 @@ interface EditModalProps {
 export interface FieldConfig {
   name: string
   label: string
-  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json' | 'percentage'
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json' | 'percentage' | 'custom'
   required?: boolean
   options?: string[]
   placeholder?: string
@@ -24,6 +24,8 @@ export interface FieldConfig {
   min?: number
   max?: number
   step?: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customRender?: (value: any, onChange: (value: any) => void) => React.ReactNode
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -248,6 +250,12 @@ const EditModal: React.FC<EditModalProps> = ({
                     required={field.required}
                     rows={6}
                   />
+                )}
+
+                {field.type === 'custom' && field.customRender && (
+                  <div>
+                    {field.customRender(formData[field.name], (value) => handleChange(field.name, value))}
+                  </div>
                 )}
               </div>
             ))}

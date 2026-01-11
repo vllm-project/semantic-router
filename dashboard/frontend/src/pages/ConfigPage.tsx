@@ -5,6 +5,7 @@ import EditModal, { FieldConfig } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
+import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
 import {
   ConfigFormat,
   detectConfigFormat,
@@ -2725,65 +2726,48 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             {
               label: 'Configured Endpoints',
               value: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {model.endpoints.map((ep, i) => {
                     const isHttps = ep.protocol === 'https'
                     return (
                       <div key={i} style={{
-                        padding: '1rem',
-                        background: 'rgba(0, 212, 255, 0.08)',
-                        border: '1px solid rgba(0, 212, 255, 0.2)',
-                        borderRadius: '6px',
+                        padding: '0.75rem',
+                        background: 'rgba(0, 212, 255, 0.05)',
+                        border: '1px solid rgba(0, 212, 255, 0.15)',
+                        borderRadius: '4px',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
-                        transition: 'all 0.2s'
+                        alignItems: 'center'
                       }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{
-                            fontWeight: 600,
-                            marginBottom: '0.5rem',
-                            fontSize: '0.95rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                          }}>
-                            <span>🔗</span>
-                            <span>{ep.name}</span>
+                          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
+                            {ep.name}
                           </div>
                           <div style={{
                             fontSize: '0.875rem',
                             fontFamily: 'var(--font-mono)',
-                            color: 'var(--color-text-secondary)',
-                            background: 'rgba(0, 0, 0, 0.2)',
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '4px',
-                            display: 'inline-block'
+                            color: 'var(--color-text-secondary)'
                           }}>
                             {ep.endpoint}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           <span style={{
                             fontSize: '0.75rem',
                             textTransform: 'uppercase',
                             fontWeight: 600,
                             padding: '0.25rem 0.5rem',
-                            borderRadius: '4px',
+                            borderRadius: '3px',
                             background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
                             color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
                           }}>
-                            {isHttps ? '🔒 HTTPS' : 'HTTP'}
+                            {isHttps ? 'HTTPS' : 'HTTP'}
                           </span>
                           <span style={{
                             fontSize: '0.875rem',
-                            fontWeight: 600,
-                            color: 'var(--color-accent-cyan)',
-                            background: 'rgba(0, 212, 255, 0.15)',
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '4px'
+                            color: 'var(--color-text-secondary)'
                           }}>
-                            ⚖️ {ep.weight}
+                            Weight: {ep.weight}
                           </span>
                         </div>
                       </div>
@@ -2872,7 +2856,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           model_name: '',
           reasoning_family: reasoningFamilyNames[0] || '',
           access_key: '',
-          endpoints_json: '[\n  {\n    "name": "endpoint-1",\n    "endpoint": "localhost:8000",\n    "protocol": "http",\n    "weight": 1\n  }\n]',
+          endpoints: [{
+            name: 'endpoint-1',
+            endpoint: 'localhost:8000',
+            protocol: 'http' as const,
+            weight: 1
+          }],
           currency: 'USD',
           prompt_per_1m: 0,
           completion_per_1m: 0,
@@ -2896,11 +2885,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             description: 'Select from configured reasoning families'
           },
           {
-            name: 'endpoints_json',
-            label: 'Endpoints Configuration',
-            type: 'textarea',
-            placeholder: '[\n  {\n    "name": "endpoint-1",\n    "endpoint": "localhost:8000",\n    "protocol": "http",\n    "weight": 1\n  },\n  {\n    "name": "endpoint-2",\n    "endpoint": "api.example.com",\n    "protocol": "https",\n    "weight": 2\n  }\n]',
-            description: '📝 JSON array of endpoints. Each endpoint requires:\n• name: Unique identifier\n• endpoint: Server address (host:port or domain)\n• protocol: "http" or "https"\n• weight: Load balancing weight (higher = more traffic)'
+            name: 'endpoints',
+            label: 'Endpoints',
+            type: 'custom',
+            description: 'Configure endpoints for this model',
+            customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
+              <EndpointsEditor endpoints={value || []} onChange={onChange} />
+            )
           },
           {
             name: 'access_key',
@@ -2945,30 +2936,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           }
         ],
         async (data) => {
-          // Parse and validate endpoints JSON
-          let endpoints = []
-          try {
-            endpoints = JSON.parse(data.endpoints_json)
-            if (!Array.isArray(endpoints)) {
-              alert('❌ Endpoints must be a JSON array\n\nExample:\n[\n  {\n    "name": "endpoint-1",\n    "endpoint": "localhost:8000",\n    "protocol": "http",\n    "weight": 1\n  }\n]')
-              return
-            }
-            // Validate each endpoint
-            for (let i = 0; i < endpoints.length; i++) {
-              const ep = endpoints[i]
-              if (!ep.name || !ep.endpoint) {
-                alert(`❌ Endpoint ${i + 1} is missing required fields\n\nRequired: name, endpoint\nOptional: protocol (default: "http"), weight (default: 1)`)
-                return
-              }
-              if (ep.protocol && !['http', 'https'].includes(ep.protocol)) {
-                alert(`❌ Endpoint "${ep.name}" has invalid protocol\n\nMust be "http" or "https"`)
-                return
-              }
-            }
-          } catch (e) {
-            alert(`❌ Invalid JSON format for endpoints\n\nError: ${e instanceof Error ? e.message : 'Unknown error'}\n\nPlease check your JSON syntax.`)
-            return
-          }
+          // Endpoints are already validated by EndpointsEditor
+          const endpoints = data.endpoints || []
 
           const newConfig = { ...config }
 
@@ -3039,8 +3008,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         {
           reasoning_family: model.reasoning_family || '',
           access_key: model.access_key || '',
-          // Endpoints as JSON string for editing
-          endpoints_json: JSON.stringify(model.endpoints || [], null, 2),
+          // Endpoints
+          endpoints: model.endpoints || [],
           // Pricing
           currency: model.pricing?.currency || 'USD',
           prompt_per_1m: model.pricing?.prompt_per_1m || 0,
@@ -3058,11 +3027,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             description: 'Select from configured reasoning families'
           },
           {
-            name: 'endpoints_json',
-            label: 'Endpoints Configuration',
-            type: 'textarea',
-            placeholder: '[\n  {\n    "name": "endpoint-1",\n    "endpoint": "localhost:8000",\n    "protocol": "http",\n    "weight": 1\n  },\n  {\n    "name": "endpoint-2",\n    "endpoint": "api.example.com",\n    "protocol": "https",\n    "weight": 2\n  }\n]',
-            description: '📝 JSON array of endpoints. Each endpoint requires:\n• name: Unique identifier\n• endpoint: Server address (host:port or domain)\n• protocol: "http" or "https"\n• weight: Load balancing weight (higher = more traffic)'
+            name: 'endpoints',
+            label: 'Endpoints',
+            type: 'custom',
+            description: 'Configure endpoints for this model',
+            customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
+              <EndpointsEditor endpoints={value || []} onChange={onChange} />
+            )
           },
           {
             name: 'access_key',
@@ -3109,30 +3080,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         async (data) => {
           const newConfig = { ...config }
 
-          // Parse and validate endpoints JSON
-          let endpoints = []
-          try {
-            endpoints = JSON.parse(data.endpoints_json)
-            if (!Array.isArray(endpoints)) {
-              alert('❌ Endpoints must be a JSON array\n\nExample:\n[\n  {\n    "name": "endpoint-1",\n    "endpoint": "localhost:8000",\n    "protocol": "http",\n    "weight": 1\n  }\n]')
-              return
-            }
-            // Validate each endpoint
-            for (let i = 0; i < endpoints.length; i++) {
-              const ep = endpoints[i]
-              if (!ep.name || !ep.endpoint) {
-                alert(`❌ Endpoint ${i + 1} is missing required fields\n\nRequired: name, endpoint\nOptional: protocol (default: "http"), weight (default: 1)`)
-                return
-              }
-              if (ep.protocol && !['http', 'https'].includes(ep.protocol)) {
-                alert(`❌ Endpoint "${ep.name}" has invalid protocol\n\nMust be "http" or "https"`)
-                return
-              }
-            }
-          } catch (e) {
-            alert(`❌ Invalid JSON format for endpoints\n\nError: ${e instanceof Error ? e.message : 'Unknown error'}\n\nPlease check your JSON syntax.`)
-            return
-          }
+          // Endpoints are already validated by EndpointsEditor
+          const endpoints = data.endpoints || []
 
           if (isPythonCLI && newConfig.providers?.models) {
             newConfig.providers = { ...newConfig.providers }
