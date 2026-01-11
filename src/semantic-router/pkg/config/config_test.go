@@ -130,8 +130,8 @@ tools:
 				Expect(cfg.BertModel.UseCPU).To(BeTrue())
 
 				// Verify classifier config
-				Expect(cfg.Classifier.CategoryModel.ModelID).To(Equal("test-category-model"))
-				Expect(cfg.Classifier.CategoryModel.UseModernBERT).To(BeTrue())
+				Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).To(Equal("test-category-model"))
+				Expect(cfg.InlineModels.Classifier.CategoryModel.UseModernBERT).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))
@@ -1976,21 +1976,21 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when configuring stdio transport", func() {
 			It("should accept valid stdio configuration", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-				cfg.Classifier.MCPCategoryModel.Command = "python"
-				cfg.Classifier.MCPCategoryModel.Args = []string{"server_keyword.py"}
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
-				cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 30
+				cfg.InlineModels.Classifier.MCPCategoryModel.Enabled = true
+				cfg.InlineModels.Classifier.MCPCategoryModel.TransportType = "stdio"
+				cfg.InlineModels.Classifier.MCPCategoryModel.Command = "python"
+				cfg.InlineModels.Classifier.MCPCategoryModel.Args = []string{"server_keyword.py"}
+				cfg.InlineModels.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.InlineModels.Classifier.MCPCategoryModel.Threshold = 0.5
+				cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds = 30
 
-				Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
-				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
-				Expect(cfg.Classifier.MCPCategoryModel.Command).To(Equal("python"))
-				Expect(cfg.Classifier.MCPCategoryModel.Args).To(HaveLen(1))
-				Expect(cfg.Classifier.MCPCategoryModel.ToolName).To(Equal("classify_text"))
-				Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.5))
-				Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(30))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Command).To(Equal("python"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Args).To(HaveLen(1))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.ToolName).To(Equal("classify_text"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.5))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(30))
 			})
 
 			It("should accept environment variables", func() {
@@ -1999,9 +1999,9 @@ var _ = Describe("MCP Configuration Validation", func() {
 					"LOG_LEVEL":  "debug",
 				}
 
-				Expect(cfg.Classifier.MCPCategoryModel.Env).To(HaveLen(2))
-				Expect(cfg.Classifier.MCPCategoryModel.Env["PYTHONPATH"]).To(Equal("/app/lib"))
-				Expect(cfg.Classifier.MCPCategoryModel.Env["LOG_LEVEL"]).To(Equal("debug"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Env).To(HaveLen(2))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Env["PYTHONPATH"]).To(Equal("/app/lib"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Env["LOG_LEVEL"]).To(Equal("debug"))
 			})
 		})
 
@@ -2012,8 +2012,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.URL = "http://localhost:8080/mcp"
 				cfg.ToolName = "classify_text"
 
-				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
-				Expect(cfg.Classifier.MCPCategoryModel.URL).To(Equal("http://localhost:8080/mcp"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.URL).To(Equal("http://localhost:8080/mcp"))
 			})
 		})
 
@@ -2022,7 +2022,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.Enabled = true
 				cfg.ToolName = "classify_text"
 
-				Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
 			})
 		})
 
@@ -2032,7 +2032,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 				for _, threshold := range testCases {
 					cfg.MCPCategoryModel.Threshold = threshold
-					Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", threshold))
+					Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", threshold))
 				}
 			})
 		})
@@ -2042,7 +2042,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.Enabled = true
 				cfg.ToolName = "classify_text"
 
-				Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
 			})
 		})
 	})
@@ -2057,18 +2057,18 @@ var _ = Describe("MCP Configuration Validation", func() {
 		Context("when both in-tree and MCP are configured", func() {
 			It("should have both configurations available", func() {
 				// Configure in-tree classifier
-				cfg.Classifier.CategoryModel.ModelID = "/path/to/model"
-				cfg.Classifier.CategoryModel.CategoryMappingPath = "/path/to/mapping.json"
-				cfg.Classifier.CategoryModel.Threshold = 0.7
+				cfg.InlineModels.Classifier.CategoryModel.ModelID = "/path/to/model"
+				cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath = "/path/to/mapping.json"
+				cfg.InlineModels.Classifier.CategoryModel.Threshold = 0.7
 
 				// Configure MCP classifier
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
+				cfg.InlineModels.Classifier.MCPCategoryModel.Enabled = true
+				cfg.InlineModels.Classifier.MCPCategoryModel.ToolName = "classify_text"
+				cfg.InlineModels.Classifier.MCPCategoryModel.Threshold = 0.5
 
 				// Both should be configured
-				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
-				Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
+				Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
+				Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
 			})
 		})
 
@@ -2077,7 +2077,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.CategoryModel.ModelID = "/path/to/model"
 				cfg.CategoryMappingPath = "/path/to/mapping.json"
 
-				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
+				Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
 		})
@@ -2088,13 +2088,13 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.ToolName = "classify_text"
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeTrue())
-				Expect(cfg.Classifier.CategoryModel.ModelID).To(BeEmpty())
+				Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).To(BeEmpty())
 			})
 		})
 
 		Context("when neither is configured", func() {
 			It("should have neither enabled", func() {
-				Expect(cfg.Classifier.CategoryModel.ModelID).To(BeEmpty())
+				Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).To(BeEmpty())
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
 		})
@@ -2108,39 +2108,39 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should support all required fields for stdio transport", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-			cfg.Classifier.MCPCategoryModel.Command = "python3"
-			cfg.Classifier.MCPCategoryModel.Args = []string{"-m", "server"}
-			cfg.Classifier.MCPCategoryModel.Env = map[string]string{"DEBUG": "1"}
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
-			cfg.Classifier.MCPCategoryModel.Threshold = 0.6
-			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 60
+			cfg.InlineModels.Classifier.MCPCategoryModel.Enabled = true
+			cfg.InlineModels.Classifier.MCPCategoryModel.TransportType = "stdio"
+			cfg.InlineModels.Classifier.MCPCategoryModel.Command = "python3"
+			cfg.InlineModels.Classifier.MCPCategoryModel.Args = []string{"-m", "server"}
+			cfg.InlineModels.Classifier.MCPCategoryModel.Env = map[string]string{"DEBUG": "1"}
+			cfg.InlineModels.Classifier.MCPCategoryModel.ToolName = "classify"
+			cfg.InlineModels.Classifier.MCPCategoryModel.Threshold = 0.6
+			cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds = 60
 
-			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
-			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
-			Expect(cfg.Classifier.MCPCategoryModel.Command).To(Equal("python3"))
-			Expect(cfg.Classifier.MCPCategoryModel.Args).To(Equal([]string{"-m", "server"}))
-			Expect(cfg.Classifier.MCPCategoryModel.Env).To(HaveKeyWithValue("DEBUG", "1"))
-			Expect(cfg.Classifier.MCPCategoryModel.ToolName).To(Equal("classify"))
-			Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.6, 0.01))
-			Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(60))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Command).To(Equal("python3"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Args).To(Equal([]string{"-m", "server"}))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Env).To(HaveKeyWithValue("DEBUG", "1"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.ToolName).To(Equal("classify"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.6, 0.01))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(60))
 		})
 
 		It("should support all required fields for HTTP transport", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "http"
-			cfg.Classifier.MCPCategoryModel.URL = "https://mcp-server:443/api"
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
-			cfg.Classifier.MCPCategoryModel.Threshold = 0.8
-			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 120
+			cfg.InlineModels.Classifier.MCPCategoryModel.Enabled = true
+			cfg.InlineModels.Classifier.MCPCategoryModel.TransportType = "http"
+			cfg.InlineModels.Classifier.MCPCategoryModel.URL = "https://mcp-server:443/api"
+			cfg.InlineModels.Classifier.MCPCategoryModel.ToolName = "classify"
+			cfg.InlineModels.Classifier.MCPCategoryModel.Threshold = 0.8
+			cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds = 120
 
-			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
-			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
-			Expect(cfg.Classifier.MCPCategoryModel.URL).To(Equal("https://mcp-server:443/api"))
-			Expect(cfg.Classifier.MCPCategoryModel.ToolName).To(Equal("classify"))
-			Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.8, 0.01))
-			Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(120))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.URL).To(Equal("https://mcp-server:443/api"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.ToolName).To(Equal("classify"))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.8, 0.01))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(120))
 		})
 
 		It("should allow optional fields to be omitted", func() {
@@ -2150,11 +2150,11 @@ var _ = Describe("MCP Configuration Validation", func() {
 			cfg.ToolName = "classify"
 
 			// Optional fields should have zero values
-			Expect(cfg.Classifier.MCPCategoryModel.Args).To(BeNil())
-			Expect(cfg.Classifier.MCPCategoryModel.Env).To(BeNil())
-			Expect(cfg.Classifier.MCPCategoryModel.URL).To(BeEmpty())
-			Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
-			Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Args).To(BeNil())
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Env).To(BeNil())
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.URL).To(BeEmpty())
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
+			Expect(cfg.InlineModels.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
 		})
 	})
 })
