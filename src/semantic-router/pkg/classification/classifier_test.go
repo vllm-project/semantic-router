@@ -2716,7 +2716,7 @@ var _ = Describe("EmbeddingClassifier", func() {
 			SimilarityThreshold:       0.8,
 		}}
 
-		clf, err := NewEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifierLegacy(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		cat, score, err := clf.Classify("some text")
@@ -2737,7 +2737,7 @@ var _ = Describe("EmbeddingClassifier", func() {
 			SimilarityThreshold:       0.5,
 		}}
 
-		clf, err := NewEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifierLegacy(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		cat, score, err := clf.Classify("other text")
@@ -2758,7 +2758,7 @@ var _ = Describe("EmbeddingClassifier", func() {
 			SimilarityThreshold:       0.7,
 		}}
 
-		clf, err := NewEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifierLegacy(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		cat, score, err := clf.Classify("third text")
@@ -2779,7 +2779,7 @@ var _ = Describe("EmbeddingClassifier", func() {
 			SimilarityThreshold:       0.1,
 		}}
 
-		clf, err := NewEmbeddingClassifier(rules)
+		clf, err := NewEmbeddingClassifierLegacy(rules)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, _, err = clf.Classify("will error")
