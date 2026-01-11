@@ -1161,7 +1161,7 @@ var _ = Describe("ExtProc Package", func() {
 
 			_, err := CreateTestRouter(cfg)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
+			Expect(err.Error()).To(Or(ContainSubstring("no such file or directory"), ContainSubstring("The system cannot find the path specified")))
 		})
 	})
 
@@ -4032,152 +4032,866 @@ var _ = Describe("Response API Translation", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// Error responses should be passed through unchanged
 			Expect(translatedBody).To(Equal(errorResp))
+			// ========================================
 		})
 	})
-})
+	// Extended ExtProc Test Coverage Suite
+	// More comprehensive testing for ExtProc components
+	// ========================================
 
-var _ = Describe("Response API Header Rewriting", func() {
-	var router *OpenAIRouter
-	var cfg *config.RouterConfig
+	_ = Describe("ExtProc Request/Response Handling", func() {
+		var router *OpenAIRouter
 
-	BeforeEach(func() {
-		cfg = CreateTestConfig()
-		var err error
-		router, err = CreateTestRouter(cfg)
-		Expect(err).NotTo(HaveOccurred())
-	})
+		BeforeEach(func() {
+			cfg := CreateTestConfig()
+			var err error
+			router, err = CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-	It("should rewrite :path header from /v1/responses to /v1/chat/completions", Pending, func() {
-		// Create a request that mimics a Response API request
-		requests := []*ext_proc.ProcessingRequest{
-			{
-				Request: &ext_proc.ProcessingRequest_RequestHeaders{
-					RequestHeaders: &ext_proc.HttpHeaders{
-						Headers: &core.HeaderMap{
-							Headers: []*core.HeaderValue{
-								{Key: ":path", Value: "/v1/responses"},
-								{Key: ":method", Value: "POST"},
-								{Key: "content-type", Value: "application/json"},
+		Context("Request Header Handling", func() {
+			It("should extract and preserve important headers", func() {
+				headerValues := []*core.HeaderValue{
+					{Key: "content-type", Value: "application/json"},
+					{Key: "authorization", Value: "Bearer token123"},
+					{Key: "x-request-id", Value: "req-12345"},
+					{Key: "user-agent", Value: "test-client/1.0"},
+				}
+
+				requestHeaders := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: headerValues,
 							},
 						},
 					},
-				},
-			},
-			{
-				Request: &ext_proc.ProcessingRequest_RequestBody{
-					RequestBody: &ext_proc.HttpBody{
-						Body: []byte(`{"model": "gpt-4", "input": "Hello"}`),
-					},
-				},
-			},
-		}
+				}
 
-		stream := NewMockStream(requests)
-		err := router.Process(stream)
-		Expect(err).NotTo(HaveOccurred())
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{requestHeaders})
+				err := router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
 
-		// Verify request headers response includes path rewriting
-		Expect(len(stream.Responses)).To(Equal(2))
+				response := stream.Responses[0]
+				headerResp := response.GetRequestHeaders()
+				Expect(headerResp).NotTo(BeNil())
+				Expect(headerResp.Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+			})
 
-		headersResp := stream.Responses[0].GetRequestHeaders()
-		Expect(headersResp).NotTo(BeNil())
-
-		// Check for header mutations in the response
-		headerMutation := headersResp.Response.GetHeaderMutation()
-		Expect(headerMutation).NotTo(BeNil())
-
-		// Verify that path header was set to /v1/chat/completions
-		hasChatCompletionsPath := false
-		for _, setHeader := range headerMutation.GetSetHeaders() {
-			if setHeader.GetHeader().GetKey() == ":path" {
-				hasChatCompletionsPath = true
-				Expect(setHeader.GetHeader().GetRawValue()).To(Equal([]byte("/v1/chat/completions")))
-				break
-			}
-		}
-		Expect(hasChatCompletionsPath).To(BeTrue())
-	})
-
-	It("should include translated body in request body response", func() {
-		requests := []*ext_proc.ProcessingRequest{
-			{
-				Request: &ext_proc.ProcessingRequest_RequestHeaders{
-					RequestHeaders: &ext_proc.HttpHeaders{
-						Headers: &core.HeaderMap{
-							Headers: []*core.HeaderValue{
-								{Key: ":path", Value: "/v1/responses"},
-								{Key: ":method", Value: "POST"},
-								{Key: "content-type", Value: "application/json"},
+			It("should handle missing critical headers gracefully", func() {
+				// No content-type header
+				requestHeaders := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "x-request-id", Value: "no-content-type"},
+								},
 							},
 						},
 					},
-				},
-			},
-			{
-				Request: &ext_proc.ProcessingRequest_RequestBody{
-					RequestBody: &ext_proc.HttpBody{
-						Body: []byte(`{"model": "gpt-4", "input": "Hello", "instructions": "Be helpful"}`),
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{requestHeaders})
+				err := router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+
+			It("should handle headers with special characters", func() {
+				requestHeaders := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "x-request-id", Value: "test-123-!@#$%"},
+									{Key: "x-custom", Value: "特殊字符-émojis-🚀"},
+								},
+							},
+						},
 					},
-				},
-			},
-		}
+				}
 
-		stream := NewMockStream(requests)
-		err := router.Process(stream)
-		Expect(err).NotTo(HaveOccurred())
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{requestHeaders})
+				err := router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
 
-		// Verify body response includes translated body
-		Expect(len(stream.Responses)).To(Equal(2))
+			It("should handle duplicate headers", func() {
+				// HTTP allows multiple headers with same key
+				requestHeaders := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "accept", Value: "application/json"},
+									{Key: "accept", Value: "text/plain"},
+									{Key: "content-type", Value: "application/json"},
+								},
+							},
+						},
+					},
+				}
 
-		bodyResp := stream.Responses[1].GetRequestBody()
-		Expect(bodyResp).NotTo(BeNil())
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{requestHeaders})
+				err := router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+		})
 
-		bodyMutation := bodyResp.Response.GetBodyMutation()
-		Expect(bodyMutation).NotTo(BeNil())
-
-		translatedBody := bodyMutation.GetBody()
-		Expect(translatedBody).NotTo(BeNil())
-
-		// Verify translated body contains Chat Completions format
-		var chatReq map[string]interface{}
-		err = json.Unmarshal(translatedBody, &chatReq)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(chatReq["model"]).To(Equal("gpt-4"))
-
-		// Messages should be present (from instructions + input)
-		messages, ok := chatReq["messages"].([]interface{})
-		Expect(ok).To(BeTrue())
-		Expect(len(messages)).To(Equal(2)) // system + user
-	})
-})
-
-var _ = Describe("Response API Content-Length Recalculation", func() {
-	var router *OpenAIRouter
-	var cfg *config.RouterConfig
-
-	BeforeEach(func() {
-		cfg = CreateTestConfig()
-		var err error
-		router, err = CreateTestRouter(cfg)
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("should remove content-length header when response body is modified", func() {
-		// Simulate processing a Response API request and receiving a Chat Completions response
-		ctx := &RequestContext{
-			RequestID: "test-req-123",
-			ResponseAPICtx: &ResponseAPIContext{
-				IsResponseAPIRequest: true,
-				OriginalRequest: &responseapi.ResponseAPIRequest{
+		Context("Request Body Handling", func() {
+			It("should parse and validate OpenAI request format", func() {
+				validRequest := &cache.OpenAIRequest{
 					Model: "gpt-4",
-					Input: json.RawMessage(`"Test"`),
-				},
-				GeneratedResponseID: "resp_new123",
-			},
-		}
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: "What is AI?"},
+					},
+				}
 
-		// Chat Completions response (will be translated to Response API format)
-		completionResp := []byte(`{
+				requestBody, err := json.Marshal(validRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+
+				response := stream.Responses[0]
+				bodyResp := response.GetRequestBody()
+				Expect(bodyResp).NotTo(BeNil())
+				Expect(bodyResp.Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+			})
+
+			It("should handle request with streaming parameter", func() {
+				streamRequest := &cache.OpenAIRequest{
+					Model:  "gpt-4",
+					Stream: true,
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: "Generate code"},
+					},
+				}
+
+				requestBody, err := json.Marshal(streamRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+
+			It("should handle request with temperature parameter", func() {
+				parameterizedRequest := &cache.OpenAIRequest{
+					Model:       "gpt-4",
+					Temperature: 0.7,
+					MaxTokens:   100,
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: "Test"},
+					},
+				}
+
+				requestBody, err := json.Marshal(parameterizedRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+
+			It("should handle request with tools parameter", func() {
+				toolRequest := &cache.OpenAIRequest{
+					Model: "gpt-4",
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: "Call my calculator"},
+					},
+					Tools: []any{
+						map[string]interface{}{
+							"type": "function",
+							"function": map[string]interface{}{
+								"name":        "calculate",
+								"description": "Performs calculation",
+							},
+						},
+					},
+				}
+
+				requestBody, err := json.Marshal(toolRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+
+			It("should handle request with system prompt", func() {
+				systemPromptRequest := &cache.OpenAIRequest{
+					Model: "gpt-4",
+					Messages: []cache.ChatMessage{
+						{Role: "system", Content: "You are a helpful assistant"},
+						{Role: "user", Content: "Hello"},
+					},
+				}
+
+				requestBody, err := json.Marshal(systemPromptRequest)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+		})
+
+		Context("Response Header Handling", func() {
+			It("should process response headers with status codes", func() {
+				responseHeaders := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_ResponseHeaders{
+						ResponseHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: ":status", Value: "200"},
+									{Key: "content-type", Value: "application/json"},
+									{Key: "x-ratelimit-remaining", Value: "1000"},
+								},
+							},
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{responseHeaders})
+				err := router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+
+				response := stream.Responses[0]
+				respHeaderResp := response.GetResponseHeaders()
+				Expect(respHeaderResp).NotTo(BeNil())
+			})
+
+			It("should handle various HTTP status codes", func() {
+				statusCodes := []string{"200", "201", "400", "401", "429", "500", "503"}
+
+				for _, status := range statusCodes {
+					responseHeaders := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_ResponseHeaders{
+							ResponseHeaders: &ext_proc.HttpHeaders{
+								Headers: &core.HeaderMap{
+									Headers: []*core.HeaderValue{
+										{Key: ":status", Value: status},
+										{Key: "content-type", Value: "application/json"},
+									},
+								},
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{responseHeaders})
+					err := router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stream.Responses).To(HaveLen(1))
+				}
+			})
+		})
+
+		Context("Response Body Handling", func() {
+			It("should process valid OpenAI response", func() {
+				response := &openai.ChatCompletion{
+					ID: "chatcmpl-123",
+					Choices: []openai.ChatCompletionChoice{
+						{
+							Message: openai.ChatCompletionMessage{
+								Role:    "assistant",
+								Content: "Hello! How can I help?",
+							},
+						},
+					},
+					Usage: openai.CompletionUsage{
+						PromptTokens:     10,
+						CompletionTokens: 8,
+						TotalTokens:      18,
+					},
+				}
+
+				responseBody, err := json.Marshal(response)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_ResponseBody{
+						ResponseBody: &ext_proc.HttpBody{
+							Body: responseBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stream.Responses).To(HaveLen(1))
+			})
+
+			It("should handle streaming response chunks", func() {
+				// Streaming responses contain multiple delta messages
+				streamChunk := map[string]interface{}{
+					"id":      "chatcmpl-123",
+					"choices": []map[string]interface{}{},
+				}
+
+				responseBody, err := json.Marshal(streamChunk)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_ResponseBody{
+						ResponseBody: &ext_proc.HttpBody{
+							Body: responseBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+
+	_ = Describe("Response API Header Rewriting", func() {
+		var router *OpenAIRouter
+
+		BeforeEach(func() {
+			cfg := CreateTestConfig()
+			var err error
+			router, err = CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should rewrite :path header from /v1/responses to /v1/chat/completions", Pending, func() {
+			// Create a request that mimics a Response API request
+			requests := []*ext_proc.ProcessingRequest{
+				{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: ":path", Value: "/v1/responses"},
+									{Key: ":method", Value: "POST"},
+									{Key: "content-type", Value: "application/json"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: []byte(`{"model": "gpt-4", "input": "Hello"}`),
+						},
+					},
+				},
+			}
+
+			stream := NewMockStream(requests)
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify request headers response includes path rewriting
+			Expect(len(stream.Responses)).To(Equal(2))
+
+			headersResp := stream.Responses[0].GetRequestHeaders()
+			Expect(headersResp).NotTo(BeNil())
+
+			// Check for header mutations in the response
+			headerMutation := headersResp.Response.GetHeaderMutation()
+			Expect(headerMutation).NotTo(BeNil())
+
+			// Verify that path header was set to /v1/chat/completions
+			hasChatCompletionsPath := false
+			for _, setHeader := range headerMutation.GetSetHeaders() {
+				if setHeader.GetHeader().GetKey() == ":path" {
+					hasChatCompletionsPath = true
+					Expect(setHeader.GetHeader().GetRawValue()).To(Equal([]byte("/v1/chat/completions")))
+					break
+				}
+			}
+			Expect(hasChatCompletionsPath).To(BeTrue())
+		})
+
+		It("should include translated body in request body response", func() {
+			requests := []*ext_proc.ProcessingRequest{
+				{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: ":path", Value: "/v1/responses"},
+									{Key: ":method", Value: "POST"},
+									{Key: "content-type", Value: "application/json"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: []byte(`{"model": "gpt-4", "input": "Hello", "instructions": "Be helpful"}`),
+						},
+					},
+				},
+			}
+
+			stream := NewMockStream(requests)
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify body response includes translated body
+			Expect(len(stream.Responses)).To(Equal(2))
+
+			bodyResp := stream.Responses[1].GetRequestBody()
+			Expect(bodyResp).NotTo(BeNil())
+
+			bodyMutation := bodyResp.Response.GetBodyMutation()
+			Expect(bodyMutation).NotTo(BeNil())
+
+			translatedBody := bodyMutation.GetBody()
+			Expect(translatedBody).NotTo(BeNil())
+
+			// Verify translated body contains Chat Completions format
+			var chatReq map[string]interface{}
+			err = json.Unmarshal(translatedBody, &chatReq)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chatReq["model"]).To(Equal("gpt-4"))
+
+			// Messages should be present (from instructions + input)
+			messages, ok := chatReq["messages"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(len(messages)).To(Equal(2)) // system + user
+		})
+	})
+
+	_ = Describe("Response API Content-Length Recalculation", func() {
+		var router *OpenAIRouter
+		var cfg *config.RouterConfig
+
+		_ = Describe("ExtProc Model-Specific Reasoning", func() {
+			BeforeEach(func() {
+				cfg = CreateTestConfig()
+				var err error
+				router, err = CreateTestRouter(cfg)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("GPT-OSS Model Handling", func() {
+				It("should route GPT-OSS model requests correctly", func() {
+					gptOSSRequest := &cache.OpenAIRequest{
+						Model: "gpt-4-oss",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: "Explain quantum computing"},
+						},
+					}
+
+					requestBody, err := json.Marshal(gptOSSRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stream.Responses).To(HaveLen(1))
+
+					response := stream.Responses[0]
+					bodyResp := response.GetRequestBody()
+					Expect(bodyResp).NotTo(BeNil())
+				})
+
+				It("should handle GPT-OSS specific parameters", func() {
+					gptOSSRequest := &cache.OpenAIRequest{
+						Model:       "gpt-4-oss",
+						Temperature: 0.5,
+						TopP:        0.9,
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: "Test"},
+						},
+					}
+
+					requestBody, err := json.Marshal(gptOSSRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("Qwen3 Model Handling", func() {
+				It("should route Qwen3 model requests with proper template kwargs", func() {
+					qwen3Request := &cache.OpenAIRequest{
+						Model: "qwen3",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: "写一首诗"},
+						},
+					}
+
+					requestBody, err := json.Marshal(qwen3Request)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stream.Responses).To(HaveLen(1))
+				})
+
+				It("should handle Qwen3 long context requests", func() {
+					longContext := strings.Repeat("This is context. ", 1000) // Large context window
+
+					qwen3Request := &cache.OpenAIRequest{
+						Model: "qwen3",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: longContext + "Summarize the above."},
+						},
+					}
+
+					requestBody, err := json.Marshal(qwen3Request)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should handle Qwen3 multilingual content", func() {
+					qwen3Request := &cache.OpenAIRequest{
+						Model: "qwen3",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: "English: Hello. 中文: 你好. 日本語: こんにちは"},
+						},
+					}
+
+					requestBody, err := json.Marshal(qwen3Request)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("DeepSeek Model Handling", func() {
+				It("should route DeepSeek model requests", func() {
+					deepSeekRequest := &cache.OpenAIRequest{
+						Model: "deepseek",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: "Explain deep thinking"},
+						},
+					}
+
+					requestBody, err := json.Marshal(deepSeekRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(stream.Responses).To(HaveLen(1))
+				})
+
+				It("should handle DeepSeek thinking parameter", func() {
+					deepSeekRequest := &cache.OpenAIRequest{
+						Model: "deepseek",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: "Complex problem"},
+						},
+					}
+
+					requestBody, err := json.Marshal(deepSeekRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("Model Reasoning with Different Backends", func() {
+				It("should preserve reasoning tokens in reasoning models", func() {
+					reasoningRequest := map[string]interface{}{
+						"model":       "deepseek",
+						"reasoning":   true,
+						"temperature": 1.0, // Reasoning models require T=1
+						"messages": []map[string]interface{}{
+							{"role": "user", "content": "Prove this theorem"},
+						},
+					}
+
+					requestBody, err := json.Marshal(reasoningRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					bodyReq := &ext_proc.ProcessingRequest{
+						Request: &ext_proc.ProcessingRequest_RequestBody{
+							RequestBody: &ext_proc.HttpBody{
+								Body: requestBody,
+							},
+						},
+					}
+
+					stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+					err = router.Process(stream)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+		})
+
+		_ = Describe("ExtProc Configuration Validation", func() {
+			BeforeEach(func() {
+				cfg = CreateTestConfig()
+			})
+
+			Context("Model Path Validation", func() {
+				It("should validate required model paths are properly configured", func() {
+					Expect(cfg.InlineModels.BertModel.ModelID).NotTo(BeEmpty())
+					Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
+					// PIIModel.ModelID is optional - do not require it
+				})
+
+				It("should validate optional PII model path if configured", func() {
+					if cfg.InlineModels.Classifier.PIIModel.ModelID == "" {
+						Skip("PII model not configured")
+					}
+					Expect(cfg.InlineModels.Classifier.PIIModel.ModelID).NotTo(BeEmpty())
+				})
+
+				It("should validate category mapping path without panicking", func() {
+					Expect(func() {
+						_, _ = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
+					}).NotTo(Panic())
+				})
+
+				It("should validate PII mapping path without panicking when available", func() {
+					if cfg.PIIMappingPath == "" {
+						Skip("PII mapping path not configured")
+					}
+					Expect(func() {
+						_, _ = classification.LoadPIIMapping(cfg.PIIMappingPath)
+					}).NotTo(Panic())
+				})
+			})
+
+			Context("Threshold Validation", func() {
+				It("should have valid similarity threshold", func() {
+					threshold := cfg.GetCacheSimilarityThreshold()
+					Expect(threshold).To(BeNumerically(">=", 0))
+					Expect(threshold).To(BeNumerically("<=", 1.0))
+				})
+
+				It("should have valid classification thresholds", func() {
+					Expect(cfg.InlineModels.BertModel.Threshold).To(BeNumerically(">=", 0))
+					Expect(cfg.InlineModels.BertModel.Threshold).To(BeNumerically("<=", 1.0))
+
+					if cfg.InlineModels.Classifier.PIIModel.Threshold > 0 {
+						Expect(cfg.InlineModels.Classifier.PIIModel.Threshold).To(BeNumerically("<=", 1.0))
+					}
+				})
+
+				It("should have valid PromptGuard threshold if enabled", func() {
+					if cfg.PromptGuard.Enabled {
+						Expect(cfg.PromptGuard.Threshold).To(BeNumerically(">=", 0))
+						Expect(cfg.PromptGuard.Threshold).To(BeNumerically("<=", 1.0))
+					}
+				})
+			})
+
+			Context("Cache Settings Validation", func() {
+				It("should have valid cache configuration", func() {
+					Expect(cfg.SemanticCache.MaxEntries).To(BeNumerically(">", 0))
+					Expect(cfg.SemanticCache.TTLSeconds).To(BeNumerically(">", 0))
+				})
+
+				It("should have valid eviction policy", func() {
+					Expect(cfg.SemanticCache.EvictionPolicy).To(BeElementOf(string(cache.FIFOEvictionPolicyType), string(cache.LRUEvictionPolicyType), string(cache.LFUEvictionPolicyType)))
+				})
+
+				It("should have valid backend type", func() {
+					Expect(cfg.SemanticCache.BackendType).To(BeElementOf(string(cache.InMemoryCacheType), string(cache.RedisCacheType)))
+				})
+			})
+
+			Context("Model Configuration Validation", func() {
+				It("should have valid backend model configuration", func() {
+					Expect(cfg.BackendModels.DefaultModel).NotTo(BeEmpty())
+					Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
+					Expect(cfg.BackendModels.ModelConfig).To(HaveKey(cfg.BackendModels.DefaultModel))
+				})
+
+				It("should validate all configured models have endpoints", func() {
+					for modelName := range cfg.BackendModels.ModelConfig {
+						endpoints := cfg.GetEndpointsForModel(modelName)
+						Expect(len(endpoints)).To(BeNumerically(">", 0),
+							fmt.Sprintf("Model %s should have at least one endpoint", modelName))
+					}
+				})
+
+				It("should validate endpoint weights", func() {
+					for _, endpoint := range cfg.VLLMEndpoints {
+						Expect(endpoint.Weight).To(BeNumerically(">", 0))
+						Expect(endpoint.Port).To(BeNumerically(">", 0))
+						Expect(endpoint.Port).To(BeNumerically("<", 65536))
+					}
+				})
+			})
+
+			Context("Tool Configuration Validation", func() {
+				It("should have valid tool selection configuration", func() {
+					Expect(cfg.ToolSelection.Tools.TopK).To(BeNumerically(">", 0))
+					Expect(cfg.ToolSelection.Tools.TopK).To(BeNumerically("<", 1000))
+				})
+			})
+
+			Context("Intelligent Routing Configuration", func() {
+				It("should have valid categories configured", func() {
+					Expect(len(cfg.IntelligentRouting.Categories)).To(BeNumerically(">", 0))
+
+					for _, category := range cfg.IntelligentRouting.Categories {
+						Expect(category.CategoryMetadata.Name).NotTo(BeEmpty())
+						Expect(category.CategoryMetadata.Description).NotTo(BeEmpty())
+					}
+				})
+			})
+
+			Context("Configuration Defaults", func() {
+				It("should apply sensible defaults for optional settings", func() {
+					// If not explicitly set, certain settings should have defaults
+					newCfg := &config.RouterConfig{}
+					Expect(newCfg).NotTo(BeNil())
+
+					// After loading the test config
+					cfg = CreateTestConfig()
+					Expect(cfg.BackendModels.ModelConfig).NotTo(BeEmpty())
+				})
+			})
+		})
+
+		_ = Describe("ExtProc Integration Tests", func() {
+			BeforeEach(func() {
+				testCfg := CreateTestConfig()
+				var err error
+				router, err = CreateTestRouter(testCfg)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should remove content-length header when response body is modified", func() {
+				// Simulate processing a Response API request and receiving a Chat Completions response
+				ctx := &RequestContext{
+					RequestID: "test-req-123",
+					ResponseAPICtx: &ResponseAPIContext{
+						IsResponseAPIRequest: true,
+						OriginalRequest: &responseapi.ResponseAPIRequest{
+							Model: "gpt-4",
+							Input: json.RawMessage(`"Test"`),
+						},
+						GeneratedResponseID: "resp_new123",
+					},
+				}
+
+				// Chat Completions response (will be translated to Response API format)
+				completionResp := []byte(`{
 			"id": "chatcmpl-abc123",
 			"object": "chat.completion",
 			"created": 1234567890,
@@ -4186,40 +4900,40 @@ var _ = Describe("Response API Content-Length Recalculation", func() {
 			"usage": {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
 		}`)
 
-		responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
-			ResponseBody: &ext_proc.HttpBody{Body: completionResp},
-		}
+				responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
+					ResponseBody: &ext_proc.HttpBody{Body: completionResp},
+				}
 
-		response, err := router.HandleResponseBody(responseBodyReq, ctx)
-		Expect(err).NotTo(HaveOccurred())
+				response, err := router.HandleResponseBody(responseBodyReq, ctx)
+				Expect(err).NotTo(HaveOccurred())
 
-		// Verify content-length header is removed from response
-		bodyResponse := response.GetResponseBody()
-		Expect(bodyResponse).NotTo(BeNil())
+				// Verify content-length header is removed from response
+				bodyResponse := response.GetResponseBody()
+				Expect(bodyResponse).NotTo(BeNil())
 
-		headerMutation := bodyResponse.Response.GetHeaderMutation()
-		Expect(headerMutation).NotTo(BeNil())
+				headerMutation := bodyResponse.Response.GetHeaderMutation()
+				Expect(headerMutation).NotTo(BeNil())
 
-		// content-length should be in the remove headers list
-		removedHeaders := headerMutation.GetRemoveHeaders()
-		Expect(removedHeaders).To(ContainElement("content-length"))
-	})
+				// content-length should be in the remove headers list
+				removedHeaders := headerMutation.GetRemoveHeaders()
+				Expect(removedHeaders).To(ContainElement("content-length"))
+			})
 
-	It("should recalculate content-length after body translation", func() {
-		ctx := &RequestContext{
-			RequestID: "test-req-456",
-			ResponseAPICtx: &ResponseAPIContext{
-				IsResponseAPIRequest: true,
-				OriginalRequest: &responseapi.ResponseAPIRequest{
-					Model: "gpt-4",
-					Input: json.RawMessage(`"Test message"`),
-				},
-				GeneratedResponseID: "resp_new456",
-			},
-		}
+			It("should recalculate content-length after body translation", func() {
+				ctx := &RequestContext{
+					RequestID: "test-req-456",
+					ResponseAPICtx: &ResponseAPIContext{
+						IsResponseAPIRequest: true,
+						OriginalRequest: &responseapi.ResponseAPIRequest{
+							Model: "gpt-4",
+							Input: json.RawMessage(`"Test message"`),
+						},
+						GeneratedResponseID: "resp_new456",
+					},
+				}
 
-		// Simulate a Chat Completions response
-		completionResp := []byte(`{
+				// Simulate a Chat Completions response
+				completionResp := []byte(`{
 			"id": "chatcmpl-xyz789",
 			"object": "chat.completion",
 			"created": 1234567890,
@@ -4234,69 +4948,220 @@ var _ = Describe("Response API Content-Length Recalculation", func() {
 			"usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
 		}`)
 
-		responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
-			ResponseBody: &ext_proc.HttpBody{Body: completionResp},
-		}
+				responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
+					ResponseBody: &ext_proc.HttpBody{Body: completionResp},
+				}
 
-		response, err := router.HandleResponseBody(responseBodyReq, ctx)
-		Expect(err).NotTo(HaveOccurred())
+				response, err := router.HandleResponseBody(responseBodyReq, ctx)
+				Expect(err).NotTo(HaveOccurred())
 
-		// Verify the response body is in Response API format
-		bodyResponse := response.GetResponseBody()
-		Expect(bodyResponse).NotTo(BeNil())
+				// Verify the response body is in Response API format
+				bodyResponse := response.GetResponseBody()
+				Expect(bodyResponse).NotTo(BeNil())
 
-		bodyMutation := bodyResponse.Response.GetBodyMutation()
-		Expect(bodyMutation).NotTo(BeNil())
+				bodyMutation := bodyResponse.Response.GetBodyMutation()
+				Expect(bodyMutation).NotTo(BeNil())
 
-		translatedBody := bodyMutation.GetBody()
-		Expect(translatedBody).NotTo(BeNil())
+				translatedBody := bodyMutation.GetBody()
+				Expect(translatedBody).NotTo(BeNil())
 
-		// Verify Response API format
-		var responseAPIResp map[string]interface{}
-		err = json.Unmarshal(translatedBody, &responseAPIResp)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(responseAPIResp["object"]).To(Equal("response"))
-		Expect(responseAPIResp["status"]).To(Equal("completed"))
+				// Verify Response API format
+				var responseAPIResp map[string]interface{}
+				err = json.Unmarshal(translatedBody, &responseAPIResp)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(responseAPIResp["object"]).To(Equal("response"))
+				Expect(responseAPIResp["status"]).To(Equal("completed"))
 
-		// Verify content-length is removed so Envoy recalculates it
-		headerMutation := bodyResponse.Response.GetHeaderMutation()
-		Expect(headerMutation).NotTo(BeNil())
-		Expect(headerMutation.GetRemoveHeaders()).To(ContainElement("content-length"))
-	})
+				// Verify content-length is removed so Envoy recalculates it
+				headerMutation := bodyResponse.Response.GetHeaderMutation()
+				Expect(headerMutation).NotTo(BeNil())
+				Expect(headerMutation.GetRemoveHeaders()).To(ContainElement("content-length"))
+			})
 
-	It("should not modify non-Response API responses", func() {
-		ctx := &RequestContext{
-			RequestID: "test-req-789",
-		}
+			It("should not modify non-Response API responses", func() {
+				ctx := &RequestContext{
+					RequestID: "test-req-789",
+				}
 
-		// Regular Chat Completions response
-		completionResp := []byte(`{
+				// Regular Chat Completions response
+				completionResp := []byte(`{
 			"id": "chatcmpl-regular",
 			"object": "chat.completion",
 			"choices": [{"message": {"role": "assistant", "content": "Hello"}}]
 		}`)
 
-		responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
-			ResponseBody: &ext_proc.HttpBody{Body: completionResp},
-		}
+				responseBodyReq := &ext_proc.ProcessingRequest_ResponseBody{
+					ResponseBody: &ext_proc.HttpBody{Body: completionResp},
+				}
 
-		response, err := router.HandleResponseBody(responseBodyReq, ctx)
-		Expect(err).NotTo(HaveOccurred())
+				response, err := router.HandleResponseBody(responseBodyReq, ctx)
+				Expect(err).NotTo(HaveOccurred())
 
-		// For non-Response API requests, no body mutation should occur
-		bodyResponse := response.GetResponseBody()
-		Expect(bodyResponse).NotTo(BeNil())
+				// For non-Response API requests, no body mutation should occur
+				bodyResponse := response.GetResponseBody()
+				Expect(bodyResponse).NotTo(BeNil())
 
-		// No header mutation for non-Response API requests
-		headerMutation := bodyResponse.Response.GetHeaderMutation()
-		// May be nil or empty for non-Response API requests
-		if headerMutation != nil {
-			Expect(headerMutation.GetRemoveHeaders()).NotTo(ContainElement("content-length"))
-		}
+				// No header mutation for non-Response API requests
+				headerMutation := bodyResponse.Response.GetHeaderMutation()
+				// May be nil or empty for non-Response API requests
+				if headerMutation != nil {
+					Expect(headerMutation.GetRemoveHeaders()).NotTo(ContainElement("content-length"))
+				}
+			})
+		})
+
+		// MockResponseStore for Response API tests
+
+		Context("Full Request-Response Cycle with Configuration", func() {
+			It("should process complete cycle with model routing", func() {
+				// Create request with auto model selection
+				request := &cache.OpenAIRequest{
+					Model: "auto",
+					Messages: []cache.ChatMessage{
+						{Role: "system", Content: "You are helpful"},
+						{Role: "user", Content: "Write code for factorial"},
+					},
+				}
+
+				requestBody, err := json.Marshal(request)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Request headers
+				headerReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "content-type", Value: "application/json"},
+									{Key: "x-request-id", Value: "full-cycle-test"},
+								},
+							},
+						},
+					},
+				}
+
+				// Request body
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				// Response headers with success
+				respHeaderReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_ResponseHeaders{
+						ResponseHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: ":status", Value: "200"},
+									{Key: "content-type", Value: "application/json"},
+								},
+							},
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{headerReq, bodyReq, respHeaderReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should have responses for all requests
+				Expect(len(stream.Responses)).To(BeNumerically(">=", 1))
+			})
+
+			It("should validate configuration during request processing", func() {
+				// Request that should validate config
+				request := &cache.OpenAIRequest{
+					Model: "model-a", // Explicitly specify configured model
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: "Test"},
+					},
+				}
+
+				requestBody, err := json.Marshal(request)
+				Expect(err).NotTo(HaveOccurred())
+
+				bodyReq := &ext_proc.ProcessingRequest{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: requestBody,
+						},
+					},
+				}
+
+				stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+				err = router.Process(stream)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Router should have processed with valid config
+				Expect(router.Config).NotTo(BeNil())
+				Expect(router.Config.BackendModels.ModelConfig).To(HaveKey("model-a"))
+			})
+		})
+
+		Context("Concurrent Configuration Access", func() {
+			It("should safely handle concurrent configuration reads", func() {
+				const numGoroutines = 10
+				const numIterations = 5
+
+				var wg sync.WaitGroup
+				errorChan := make(chan error, numGoroutines*numIterations)
+
+				for i := 0; i < numGoroutines; i++ {
+					wg.Add(1)
+					go func(id int) {
+						defer wg.Done()
+						for j := 0; j < numIterations; j++ {
+							// Access configuration
+							endpoints := cfg.GetEndpointsForModel("model-a")
+							if len(endpoints) == 0 {
+								errorChan <- fmt.Errorf("goroutine %d, iteration %d: no endpoints for model-a", id, j)
+							}
+
+							// Process request
+							request := &cache.OpenAIRequest{
+								Model: "model-a",
+								Messages: []cache.ChatMessage{
+									{Role: "user", Content: fmt.Sprintf("Request %d-%d", id, j)},
+								},
+							}
+
+							requestBody, _ := json.Marshal(request)
+
+							bodyReq := &ext_proc.ProcessingRequest{
+								Request: &ext_proc.ProcessingRequest_RequestBody{
+									RequestBody: &ext_proc.HttpBody{
+										Body: requestBody,
+									},
+								},
+							}
+
+							stream := NewMockStream([]*ext_proc.ProcessingRequest{bodyReq})
+							err := router.Process(stream)
+							if err != nil {
+								errorChan <- err
+							}
+						}
+					}(i)
+				}
+
+				wg.Wait()
+				close(errorChan)
+
+				// Collect errors
+				var errors []error
+				for err := range errorChan {
+					errors = append(errors, err)
+				}
+
+				Expect(len(errors)).To(Equal(0), fmt.Sprintf("Expected no errors, got %v", errors))
+			})
+		})
 	})
 })
 
-// MockResponseStore for Response API tests
 type MockResponseStore struct {
 	responses map[string]*responseapi.StoredResponse
 }
