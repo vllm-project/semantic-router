@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { FieldConfig } from '../components/EditModal'
+import ViewModal, { ViewSection } from '../components/ViewModal'
+import { DataTable, Column } from '../components/DataTable'
+import TableHeader from '../components/TableHeader'
+import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
 import {
   ConfigFormat,
   detectConfigFormat,
@@ -239,17 +243,7 @@ const formatThreshold = (value: number): string => {
   return `${Math.round(value * 100)}%`
 }
 
-// Helper function to mask address for security
-const maskAddress = (address: string): string => {
-  if (address.length <= 8) {
-    return '•'.repeat(address.length)
-  }
-  // Show first 3 and last 3 characters, mask the middle
-  const start = address.substring(0, 3)
-  const end = address.substring(address.length - 3)
-  const middleLength = address.length - 6
-  return `${start}${'•'.repeat(middleLength)}${end}`
-}
+// Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
   const [config, setConfig] = useState<ConfigData | null>(null)
@@ -266,8 +260,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [toolsLoading, setToolsLoading] = useState(false)
   const [toolsError, setToolsError] = useState<string | null>(null)
 
-  // Endpoint address visibility state (for security masking)
-  const [visibleAddresses, setVisibleAddresses] = useState<Set<number>>(new Set())
+  // Removed visibleAddresses state - no longer needed
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -278,6 +271,21 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editModalCallback, setEditModalCallback] = useState<((data: any) => Promise<void>) | null>(null)
+
+  // View modal state
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [viewModalTitle, setViewModalTitle] = useState('')
+  const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
+
+  // Search state
+  const [decisionsSearch, setDecisionsSearch] = useState('')
+  const [signalsSearch, setSignalsSearch] = useState('')
+  const [modelsSearch, setModelsSearch] = useState('')
+
+  // Expandable rows state for models
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchConfig()
@@ -494,48 +502,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return []
   }
 
-  // Get endpoints - from providers.models[].endpoints (Python CLI) or vllm_endpoints (legacy)
-  interface NormalizedEndpoint {
-    name: string
-    endpoint?: string
-    address?: string
-    port?: number
-    protocol?: string
-    weight: number
-    usedByModels?: string[]
-  }
-
-  const getEndpoints = (): NormalizedEndpoint[] => {
-    if (isPythonCLI && config?.providers?.models) {
-      // Flatten all endpoints from all models
-      const endpointMap = new Map<string, NormalizedEndpoint>()
-      config.providers.models.forEach((model: NonNullable<ConfigData['providers']>['models'][number]) => {
-        model.endpoints?.forEach((ep: NonNullable<ConfigData['providers']>['models'][number]['endpoints'][number]) => {
-          if (!endpointMap.has(ep.name)) {
-            endpointMap.set(ep.name, {
-              name: ep.name,
-              endpoint: ep.endpoint,
-              protocol: ep.protocol,
-              weight: ep.weight,
-              usedByModels: [model.name],
-            })
-          } else {
-            const existing = endpointMap.get(ep.name)!
-            existing.usedByModels = [...(existing.usedByModels || []), model.name]
-          }
-        })
-      })
-      return Array.from(endpointMap.values())
-    }
-    // Legacy format
-    return (config?.vllm_endpoints || []).map((ep: VLLMEndpoint) => ({
-      name: ep.name,
-      address: ep.address,
-      port: ep.port,
-      weight: ep.weight,
-    }))
-  }
-
   // Get domains/categories - from signals.domains (Python CLI) or categories (legacy)
   const getDomains = (): Array<{ name: string; description: string; mmlu_categories?: string[] }> => {
     if (isPythonCLI && config?.signals?.domains) {
@@ -587,593 +553,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }))
   }
 
-  // ============================================================================
-  // 1. MODELS SECTION
-  // ============================================================================
-
-  // Helper: Add endpoint (handles both formats)
-  const handleAddEndpoint = (data: { name: string; endpoint: string; weight: number; protocol: string }) => {
-    const newConfig = { ...config }
-    if (isPythonCLI) {
-      // Python CLI format: Add endpoint to the first model (or create default model)
-      if (!newConfig.providers) {
-        newConfig.providers = { models: [], default_model: '' }
-      }
-      if (!newConfig.providers.models || newConfig.providers.models.length === 0) {
-        // Create a default model to hold this endpoint
-        newConfig.providers.models = [{
-          name: 'default-model',
-          endpoints: [],
-        }]
-        newConfig.providers.default_model = 'default-model'
-      }
-      // Add to first model's endpoints
-      const firstModel = newConfig.providers.models[0]
-      firstModel.endpoints = [...(firstModel.endpoints || []), {
-        name: data.name,
-        endpoint: data.endpoint,
-        weight: data.weight || 1,
-        protocol: (data.protocol || 'http') as 'http' | 'https',
-      }]
-    } else {
-      // Legacy format
-      const [address, portStr] = (data.endpoint || '').split(':')
-      newConfig.vllm_endpoints = [...(newConfig.vllm_endpoints || []), {
-        name: data.name,
-        address: address || '',
-        port: parseInt(portStr) || 8000,
-        weight: data.weight || 1,
-        health_check_path: '/health',
-      }]
-    }
-    return saveConfig(newConfig)
-  }
-
-  // Helper: Edit endpoint (handles both formats)
-  const handleEditEndpoint = (oldName: string, data: { name: string; endpoint?: string; address?: string; port?: number; weight: number; protocol?: string }) => {
-    const newConfig = { ...config }
-    if (isPythonCLI && newConfig.providers?.models) {
-      // Python CLI format: Find and update endpoint across all models
-      newConfig.providers = { ...newConfig.providers }
-      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-      type EndpointType = ModelType['endpoints'][number]
-      newConfig.providers.models = newConfig.providers.models.map((model: ModelType) => ({
-        ...model,
-        endpoints: model.endpoints?.map((ep: EndpointType) =>
-          ep.name === oldName ? {
-            name: data.name,
-            endpoint: data.endpoint || ep.endpoint,
-            weight: data.weight,
-            protocol: (data.protocol || ep.protocol || 'http') as 'http' | 'https',
-          } : ep
-        ) || [],
-      }))
-    } else if (newConfig.vllm_endpoints) {
-      // Legacy format
-      newConfig.vllm_endpoints = newConfig.vllm_endpoints.map((ep: VLLMEndpoint) =>
-        ep.name === oldName ? {
-          ...ep,
-          name: data.name,
-          address: data.address || ep.address,
-          port: data.port || ep.port,
-          weight: data.weight,
-        } : ep
-      )
-    }
-    return saveConfig(newConfig)
-  }
-
-  // Helper: Delete endpoint (handles both formats)
-  const handleDeleteEndpoint = (endpointName: string) => {
-    const newConfig = { ...config }
-    if (isPythonCLI && newConfig.providers?.models) {
-      // Python CLI format: Remove endpoint from all models
-      newConfig.providers = { ...newConfig.providers }
-      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-      type EndpointType = ModelType['endpoints'][number]
-      newConfig.providers.models = newConfig.providers.models.map((model: ModelType) => ({
-        ...model,
-        endpoints: model.endpoints?.filter((ep: EndpointType) => ep.name !== endpointName) || [],
-      }))
-    } else if (newConfig.vllm_endpoints) {
-      // Legacy format
-      newConfig.vllm_endpoints = newConfig.vllm_endpoints.filter((ep: VLLMEndpoint) => ep.name !== endpointName)
-    }
-    return saveConfig(newConfig)
-  }
-
-  const renderUserDefinedEndpoints = () => {
-    const endpoints = getEndpoints()
-    const endpointCount = endpoints.length
-
-    return (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔌</span>
-        <h3 className={styles.sectionTitle}>User Defined Endpoints</h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={styles.badge}>{endpointCount} endpoints</span>
-          <button
-            className={styles.addButton}
-            onClick={() => {
-              openEditModal(
-                'Add New Endpoint',
-                { name: '', endpoint: 'localhost:8000', weight: 1, protocol: 'http' },
-                [
-                  { name: 'name', label: 'Endpoint Name', type: 'text', required: true, placeholder: 'e.g., vllm-endpoint-1' },
-                  { name: 'endpoint', label: 'Endpoint Address', type: 'text', required: true, placeholder: 'e.g., localhost:8000 or api.example.com' },
-                  { name: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
-                  { name: 'weight', label: 'Weight', type: 'number', placeholder: '1', description: 'Load balancing weight for this endpoint' }
-                ],
-                async (data) => {
-                  await handleAddEndpoint(data)
-                },
-                'add'
-              )
-            }}
-          >
-            ➕ Add Endpoint
-          </button>
-        </div>
-      </div>
-      <div className={styles.sectionContent}>
-        {endpoints.length > 0 ? (
-          endpoints.map((endpoint, index) => (
-            <div key={index} className={styles.endpointCard}>
-              <div className={styles.endpointHeader}>
-                <span className={styles.endpointName}>{endpoint.name}</span>
-                <div className={styles.cardActions}>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => {
-                      const endpointValue = endpoint.endpoint || (endpoint.address && endpoint.port ? `${endpoint.address}:${endpoint.port}` : '')
-                      openEditModal(
-                        `Edit Endpoint: ${endpoint.name}`,
-                        { ...endpoint, endpoint: endpointValue },
-                        [
-                          { name: 'name', label: 'Endpoint Name', type: 'text', required: true },
-                          { name: 'endpoint', label: 'Endpoint Address', type: 'text', required: true },
-                          { name: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
-                          { name: 'weight', label: 'Weight', type: 'number', description: 'Load balancing weight for this endpoint' }
-                        ],
-                        async (data) => {
-                          await handleEditEndpoint(endpoint.name, data)
-                        },
-                        'edit'
-                      )
-                    }}
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    className={styles.deleteButton}
-                    onClick={() => {
-                      // Check which models use this endpoint
-                      const usedByModels = endpoint.usedByModels || []
-
-                      let confirmMessage = `Delete endpoint "${endpoint.name}"?`
-                      if (usedByModels.length > 0) {
-                        const modelList = usedByModels.length === 1 
-                          ? `model "${usedByModels[0]}"` 
-                          : `${usedByModels.length} models (${usedByModels.join(', ')})`
-                        confirmMessage += `\n\n⚠️ This endpoint is currently used by ${modelList}.\nIt will be removed from all models.`
-                      }
-
-                      if (confirm(confirmMessage)) {
-                        handleDeleteEndpoint(endpoint.name)
-                      }
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-              <div className={styles.endpointDetails}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>🌐 Address</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className={styles.configValue}>
-                      {(() => {
-                        const addr = endpoint.endpoint || (endpoint.address && endpoint.port ? `${endpoint.address}:${endpoint.port}` : '')
-                        return visibleAddresses.has(index) ? addr : maskAddress(addr)
-                      })()}
-                    </span>
-                    <button
-                      className={styles.toggleVisibilityButton}
-                      onClick={() => {
-                        const newVisible = new Set(visibleAddresses)
-                        if (newVisible.has(index)) {
-                          newVisible.delete(index)
-                        } else {
-                          newVisible.add(index)
-                        }
-                        setVisibleAddresses(newVisible)
-                      }}
-                      title={visibleAddresses.has(index) ? 'Hide address' : 'Show address'}
-                    >
-                      {visibleAddresses.has(index) ? '👁️' : '👁️‍🗨️'}
-                    </button>
-                  </div>
-                </div>
-                {endpoint.protocol && (
-                <div className={styles.configRow}>
-                    <span className={styles.configLabel}>🔒 Protocol</span>
-                    <span className={styles.configValue}>{endpoint.protocol.toUpperCase()}</span>
-                </div>
-                )}
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>⚖️ Weight</span>
-                  <span className={styles.configValue}>{endpoint.weight}</span>
-                </div>
-                {endpoint.usedByModels && endpoint.usedByModels.length > 0 && (
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>🔗 Used By</span>
-                    <span className={styles.configValue}>{endpoint.usedByModels.join(', ')}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className={styles.emptyState}>No endpoints configured</div>
-        )}
-      </div>
-    </div>
-  )}
-
-  // Helper: Add model (handles both formats)
-  const handleAddModel = async (data: {
-    model_name: string
-    reasoning_family?: string
-    access_key?: string
-    preferred_endpoints?: string[]
-  }) => {
-    const newConfig = { ...config }
-    if (isPythonCLI) {
-      // Python CLI format: Add to providers.models
-      if (!newConfig.providers) {
-        newConfig.providers = { models: [], default_model: '' }
-      }
-      const existingEndpoints = getEndpoints()
-      const modelEndpoints = (data.preferred_endpoints || []).map(epName => {
-        const existing = existingEndpoints.find(e => e.name === epName)
-        return {
-          name: epName,
-          endpoint: existing?.endpoint || 'localhost:8000',
-          weight: existing?.weight || 1,
-          protocol: (existing?.protocol || 'http') as 'http' | 'https',
-        }
-      })
-      newConfig.providers.models = [...(newConfig.providers.models || []), {
-        name: data.model_name,
-        reasoning_family: data.reasoning_family,
-        endpoints: modelEndpoints,
-        access_key: data.access_key,
-      }]
-      // Set as default if first model
-      if (!newConfig.providers.default_model) {
-        newConfig.providers.default_model = data.model_name
-      }
-    } else {
-      // Legacy format
-      if (!newConfig.model_config) {
-        newConfig.model_config = {}
-      }
-      newConfig.model_config[data.model_name] = {
-        reasoning_family: data.reasoning_family,
-        preferred_endpoints: data.preferred_endpoints,
-      }
-    }
-    await saveConfig(newConfig)
-  }
-
-  // Helper: Delete model (handles both formats)
-  const handleDeleteModel = async (modelName: string) => {
-    const newConfig = { ...config }
-    if (isPythonCLI && newConfig.providers?.models) {
-      newConfig.providers = { ...newConfig.providers }
-      type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-      newConfig.providers.models = newConfig.providers.models.filter((m: ModelType) => m.name !== modelName)
-      // Update default model if deleted
-      if (newConfig.providers.default_model === modelName) {
-        newConfig.providers.default_model = newConfig.providers.models[0]?.name || ''
-      }
-    } else if (newConfig.model_config) {
-      delete newConfig.model_config[modelName]
-    }
-    await saveConfig(newConfig)
-  }
-
-  const renderUserDefinedModels = () => {
-    const models = getModels()
-    const modelCount = models.length
-    const availableEndpoints = getEndpoints()
-    const reasoningFamiliesObj = getReasoningFamilies()
-    const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
-
-    return (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🤖</span>
-        <h3 className={styles.sectionTitle}>User Defined Models</h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={styles.badge}>{modelCount} models</span>
-          <button
-            className={styles.addButton}
-            onClick={() => {
-              // Get available reasoning families
-              const reasoningFamilies = reasoningFamilyNames
-
-              // Get available endpoints
-              const endpoints = availableEndpoints.map(ep => ep.name)
-
-              // PII types
-              const piiTypes = [
-                'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
-                'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
-                'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
-                'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
-                'US_SSN', 'ZIP_CODE'
-              ]
-
-              openEditModal(
-                'Add New Model',
-                {
-                  reasoning_family: reasoningFamilies[0] || '',
-                  preferred_endpoints: [],
-                  currency: 'USD',
-                  prompt_per_1m: 0,
-                  completion_per_1m: 0,
-                  pii_allow_by_default: true,
-                  pii_types_allowed: []
-                },
-                [
-                  {
-                    name: 'model_name',
-                    label: 'Model Name',
-                    type: 'text',
-                    required: true,
-                    placeholder: 'e.g., openai/gpt-oss-20b',
-                    description: 'Unique identifier for the model'
-                  },
-                  {
-                    name: 'reasoning_family',
-                    label: 'Reasoning Family',
-                    type: 'select',
-                    options: reasoningFamilies,
-                    description: 'Select from configured reasoning families'
-                  },
-                  {
-                    name: 'preferred_endpoints',
-                    label: 'Preferred Endpoints',
-                    type: 'multiselect',
-                    options: endpoints,
-                    description: 'Select one or more endpoints for this model'
-                  },
-                  {
-                    name: 'currency',
-                    label: 'Pricing Currency',
-                    type: 'text',
-                    placeholder: 'USD',
-                    description: 'ISO currency code (e.g., USD, EUR, CNY)'
-                  },
-                  {
-                    name: 'prompt_per_1m',
-                    label: 'Prompt Price per 1M Tokens',
-                    type: 'number',
-                    placeholder: '0.50',
-                    description: 'Cost per 1 million prompt tokens'
-                  },
-                  {
-                    name: 'completion_per_1m',
-                    label: 'Completion Price per 1M Tokens',
-                    type: 'number',
-                    placeholder: '1.50',
-                    description: 'Cost per 1 million completion tokens'
-                  },
-                  {
-                    name: 'pii_allow_by_default',
-                    label: 'PII Policy: Allow by Default',
-                    type: 'boolean',
-                    description: 'If enabled, all PII types are allowed unless specified below'
-                  },
-                  {
-                    name: 'pii_types_allowed',
-                    label: 'PII Types Allowed/Blocked',
-                    type: 'multiselect',
-                    options: piiTypes,
-                    description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
-                  }
-                ],
-                async (data) => {
-                  await handleAddModel({
-                    model_name: data.model_name,
-                    reasoning_family: data.reasoning_family,
-                    preferred_endpoints: data.preferred_endpoints,
-                    access_key: data.access_key,
-                  })
-                },
-                'add'
-              )
-            }}
-          >
-            ➕ Add Model
-          </button>
-        </div>
-      </div>
-      <div className={styles.sectionContent}>
-        {models.length > 0 ? (
-          <div className={styles.modelConfigGrid}>
-            {models.map((model) => (
-              <div key={model.name} className={styles.modelConfigCard}>
-                <div className={styles.modelConfigHeader}>
-                  <span className={styles.modelConfigName}>{model.name}</span>
-                  {model.name === getDefaultModel() && (
-                    <span className={styles.defaultBadge}>Default</span>
-                  )}
-                  <div className={styles.cardActions}>
-                    <button
-                      className={styles.editButton}
-                      onClick={() => {
-                        openEditModal(
-                          `Edit Model: ${model.name}`,
-                          {
-                            reasoning_family: model.reasoning_family || '',
-                            preferred_endpoints: model.endpoints?.map(e => e.name) || [],
-                            access_key: model.access_key || '',
-                          },
-                          [
-                            {
-                              name: 'reasoning_family',
-                              label: 'Reasoning Family',
-                              type: 'select',
-                              options: reasoningFamilyNames,
-                              description: 'Select from configured reasoning families'
-                            },
-                            {
-                              name: 'preferred_endpoints',
-                              label: 'Endpoints',
-                              type: 'multiselect',
-                              options: availableEndpoints.map(e => e.name),
-                              description: 'Select endpoints for this model'
-                            },
-                            {
-                              name: 'access_key',
-                              label: 'Access Key',
-                              type: 'text',
-                              placeholder: 'API key for this model',
-                              description: 'Optional: API key for authentication'
-                            }
-                          ],
-                          async (data) => {
-                            const newConfig = { ...config }
-                            if (isPythonCLI && newConfig.providers?.models) {
-                              // Python CLI format: Update model in providers.models
-                              newConfig.providers = { ...newConfig.providers }
-                              const existingEps = getEndpoints()
-                              type ModelType = NonNullable<ConfigData['providers']>['models'][number]
-                              newConfig.providers.models = newConfig.providers.models.map((m: ModelType) => 
-                                m.name === model.name ? {
-                                  ...m,
-                                  reasoning_family: data.reasoning_family,
-                                  access_key: data.access_key,
-                                  endpoints: (data.preferred_endpoints || []).map((epName: string) => {
-                                    const existing = existingEps.find(e => e.name === epName)
-                                    return {
-                                      name: epName,
-                                      endpoint: existing?.endpoint || 'localhost:8000',
-                                      weight: existing?.weight || 1,
-                                      protocol: (existing?.protocol || 'http') as 'http' | 'https',
-                                }
-                                  }),
-                                } : m
-                              )
-                            } else if (newConfig.model_config) {
-                              // Legacy format
-                              newConfig.model_config[model.name] = {
-                                ...newConfig.model_config[model.name],
-                                reasoning_family: data.reasoning_family,
-                                preferred_endpoints: data.preferred_endpoints,
-                              }
-                            }
-                            await saveConfig(newConfig)
-                          },
-                          'edit'
-                        )
-                      }}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className={styles.deleteButton}
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete model "${model.name}"?`)) {
-                          handleDeleteModel(model.name)
-                        }
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-                <div className={styles.modelConfigBody}>
-                  {model.reasoning_family && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🧠 Reasoning Family</span>
-                      <span className={`${styles.badge} ${styles.badgeInfo}`}>
-                        {model.reasoning_family}
-                      </span>
-                    </div>
-                  )}
-                  {model.endpoints && model.endpoints.length > 0 && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🔌 Endpoints</span>
-                      <div className={styles.endpointTags}>
-                        {model.endpoints.map((endpoint, idx) => (
-                          <span key={idx} className={styles.endpointTag}>{endpoint.name}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {model.access_key && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🔑 Access Key</span>
-                      <span className={styles.configValue}>••••••••</span>
-                    </div>
-                  )}
-                  {model.pricing && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>💰 Pricing</span>
-                      <div className={styles.pricingContainer}>
-                        <div className={styles.pricingItem}>
-                          <span className={styles.pricingLabel}>Prompt</span>
-                          <span className={styles.pricingValue}>
-                            {model.pricing.prompt_per_1m?.toFixed(2) || '0.00'}
-                          </span>
-                          <span className={styles.pricingUnit}>
-                            {model.pricing.currency || 'USD'}/1M
-                          </span>
-                        </div>
-                        <div className={styles.pricingDivider}>|</div>
-                        <div className={styles.pricingItem}>
-                          <span className={styles.pricingLabel}>Completion</span>
-                          <span className={styles.pricingValue}>
-                            {model.pricing.completion_per_1m?.toFixed(2) || '0.00'}
-                          </span>
-                          <span className={styles.pricingUnit}>
-                            {model.pricing.currency || 'USD'}/1M
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {model.pii_policy && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🔒 PII Policy</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <span className={`${styles.statusBadge} ${model.pii_policy.allow_by_default ? styles.statusActive : styles.statusInactive}`}>
-                          {model.pii_policy.allow_by_default ? 'Allow by default' : 'Block by default'}
-                        </span>
-                        {model.pii_policy.pii_types_allowed && model.pii_policy.pii_types_allowed.length > 0 && (
-                          <div className={styles.piiTypesTags}>
-                            {model.pii_policy.pii_types_allowed.map((type: string, idx: number) => (
-                              <span key={idx} className={styles.piiTypeTag}>{type}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>No model configurations defined</div>
-        )}
-      </div>
-    </div>
-  )}
 
   // ============================================================================
   // 2. PROMPT GUARD SECTION
@@ -2712,223 +2091,286 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Signals Section - Keywords, Embeddings, Domains, Preferences (config.yaml)
   const renderSignalsSection = () => {
     const signals = config?.signals
-    const keywordsCount = signals?.keywords?.length || 0
-    const embeddingsCount = signals?.embeddings?.length || 0
-    const domainsCount = signals?.domains?.length || 0
-    const preferencesCount = signals?.preferences?.length || 0
-    const factCheckCount = signals?.fact_check?.length || 0
-    const feedbacksCount = signals?.user_feedbacks?.length || 0
+
+    // Unified signal type
+    type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback'
+
+    interface UnifiedSignal {
+      name: string
+      type: SignalType
+      summary: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rawData: any
+    }
+
+    // Flatten all signals into a unified array
+    const allSignals: UnifiedSignal[] = []
+
+    // Keywords
+    signals?.keywords?.forEach(kw => {
+      allSignals.push({
+        name: kw.name,
+        type: 'Keywords',
+        summary: `${kw.operator}, ${kw.keywords.length} keywords${kw.case_sensitive ? ', case-sensitive' : ''}`,
+        rawData: kw
+      })
+    })
+
+    // Embeddings
+    signals?.embeddings?.forEach(emb => {
+      allSignals.push({
+        name: emb.name,
+        type: 'Embeddings',
+        summary: `Threshold: ${Math.round(emb.threshold * 100)}%, ${emb.candidates.length} items, ${emb.aggregation_method}`,
+        rawData: emb
+      })
+    })
+
+    // Domains
+    signals?.domains?.forEach(domain => {
+      const categoryCount = domain.mmlu_categories?.length || 0
+      allSignals.push({
+        name: domain.name,
+        type: 'Domain',
+        summary: categoryCount > 0 ? `${categoryCount} MMLU categories` : (domain.description || 'No description'),
+        rawData: domain
+      })
+    })
+
+    // Preferences
+    signals?.preferences?.forEach(pref => {
+      allSignals.push({
+        name: pref.name,
+        type: 'Preference',
+        summary: pref.description || 'No description',
+        rawData: pref
+      })
+    })
+
+    // Fact Check
+    signals?.fact_check?.forEach(fc => {
+      allSignals.push({
+        name: fc.name,
+        type: 'Fact Check',
+        summary: fc.description || 'No description',
+        rawData: fc
+      })
+    })
+
+    // User Feedbacks
+    signals?.user_feedbacks?.forEach(uf => {
+      allSignals.push({
+        name: uf.name,
+        type: 'User Feedback',
+        summary: uf.description || 'No description',
+        rawData: uf
+      })
+    })
+
+    // Filter signals based on search
+    const filteredSignals = allSignals.filter(signal =>
+      signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
+      signal.type.toLowerCase().includes(signalsSearch.toLowerCase()) ||
+      signal.summary.toLowerCase().includes(signalsSearch.toLowerCase())
+    )
+
+    // Define table columns
+    const signalsColumns: Column<UnifiedSignal>[] = [
+      {
+        key: 'name',
+        header: 'Name',
+        sortable: true,
+        render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        width: '140px',
+        sortable: true,
+        render: (row) => {
+          const typeColors: Record<SignalType, string> = {
+            'Keywords': 'rgba(118, 185, 0, 0.15)',
+            'Embeddings': 'rgba(0, 212, 255, 0.15)',
+            'Domain': 'rgba(147, 51, 234, 0.15)',
+            'Preference': 'rgba(234, 179, 8, 0.15)',
+            'Fact Check': 'rgba(34, 197, 94, 0.15)',
+            'User Feedback': 'rgba(236, 72, 153, 0.15)'
+          }
+          return (
+            <span className={styles.badge} style={{ background: typeColors[row.type] }}>
+              {row.type}
+            </span>
+          )
+        }
+      },
+      {
+        key: 'summary',
+        header: 'Summary',
+        render: (row) => (
+          <span style={{
+            fontSize: '0.875rem',
+            color: 'var(--color-text-secondary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            display: 'block'
+          }}>
+            {row.summary}
+          </span>
+        )
+      }
+    ]
+
+    // Handle view signal
+    const handleViewSignal = (signal: UnifiedSignal) => {
+      const sections: ViewSection[] = []
+
+      // Basic info section
+      sections.push({
+        title: 'Basic Information',
+        fields: [
+          { label: 'Name', value: signal.name },
+          { label: 'Type', value: signal.type },
+          { label: 'Summary', value: signal.summary, fullWidth: true }
+        ]
+      })
+
+      // Type-specific details
+      if (signal.type === 'Keywords') {
+        sections.push({
+          title: 'Keywords Configuration',
+          fields: [
+            { label: 'Operator', value: signal.rawData.operator },
+            { label: 'Case Sensitive', value: signal.rawData.case_sensitive ? 'Yes' : 'No' },
+            {
+              label: 'Keywords',
+              value: (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {signal.rawData.keywords.map((kw: string, i: number) => (
+                    <span key={i} style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(118, 185, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      } else if (signal.type === 'Embeddings') {
+        sections.push({
+          title: 'Embeddings Configuration',
+          fields: [
+            { label: 'Threshold', value: `${Math.round(signal.rawData.threshold * 100)}%` },
+            { label: 'Aggregation Method', value: signal.rawData.aggregation_method },
+            {
+              label: 'Candidates',
+              value: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {signal.rawData.candidates.map((c: string, i: number) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(0, 212, 255, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem'
+                    }}>
+                      {c}
+                    </div>
+                  ))}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      } else if (signal.type === 'Domain') {
+        sections.push({
+          title: 'Domain Configuration',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+            {
+              label: 'MMLU Categories',
+              value: signal.rawData.mmlu_categories?.length ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {signal.rawData.mmlu_categories.map((cat: string, i: number) => (
+                    <span key={i} style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem'
+                    }}>
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+              ) : 'No categories',
+              fullWidth: true
+            }
+          ]
+        })
+      } else {
+        // Preference, Fact Check, User Feedback
+        sections.push({
+          title: 'Details',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
+      }
+
+      setViewModalTitle(`Signal: ${signal.name}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditSignal(signal))
+      setViewModalOpen(true)
+    }
+
+    // Handle edit signal (placeholder)
+    const handleEditSignal = (signal: UnifiedSignal) => {
+      setViewModalOpen(false)
+      // TODO: Implement edit functionality
+      console.log('Edit signal:', signal)
+    }
+
+    // Handle delete signal (placeholder)
+    const handleDeleteSignal = (signal: UnifiedSignal) => {
+      if (confirm(`Are you sure you want to delete signal "${signal.name}"?`)) {
+        // TODO: Implement delete functionality
+        console.log('Delete signal:', signal)
+      }
+    }
 
     return (
       <div className={styles.sectionPanel}>
-        {/* Keywords */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionIcon}>🔑</span>
-            <h3 className={styles.sectionTitle}>Keywords</h3>
-            <span className={styles.badge}>{keywordsCount} signals</span>
-          </div>
-          <div className={styles.sectionContent}>
-            {keywordsCount > 0 ? (
-              <div className={styles.categoryGridTwoColumn}>
-                {signals?.keywords?.map((kw, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{kw.name}</span>
-                      <span className={`${styles.badge} ${styles.badgeInfo}`}>{kw.operator}</span>
-                    </div>
-                    <div className={styles.tagsContainer}>
-                      {kw.keywords.map((word, i) => (
-                        <span key={i} className={styles.tag}>{word}</span>
-                      ))}
-                    </div>
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>Case Sensitive</span>
-                      <span className={styles.configValue}>{kw.case_sensitive ? 'Yes' : 'No'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>No keyword signals configured</div>
-            )}
-          </div>
-        </div>
+        <TableHeader
+          title="Signals"
+          count={allSignals.length}
+          searchPlaceholder="Search signals..."
+          searchValue={signalsSearch}
+          onSearchChange={setSignalsSearch}
+          onAdd={() => console.log('Add signal')}
+          addButtonText="Add Signal"
+        />
 
-        {/* Embeddings */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionIcon}>🧬</span>
-            <h3 className={styles.sectionTitle}>Embeddings</h3>
-            <span className={styles.badge}>{embeddingsCount} signals</span>
-          </div>
-          <div className={styles.sectionContent}>
-            {embeddingsCount > 0 ? (
-              <div className={styles.categoryGridTwoColumn}>
-                {signals?.embeddings?.map((emb, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{emb.name}</span>
-                      <span className={`${styles.badge} ${styles.badgeSuccess}`}>θ≥{emb.threshold}</span>
-                    </div>
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>Aggregation</span>
-                      <span className={styles.configValue}>{emb.aggregation_method}</span>
-                    </div>
-                    <div className={styles.tagsContainer}>
-                      {emb.candidates.map((c, i) => (
-                        <span key={i} className={styles.tag} title={c}>{c.substring(0, 30)}...</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>No embedding signals configured</div>
-            )}
-          </div>
-        </div>
-
-        {/* Domains */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionIcon}>📁</span>
-            <h3 className={styles.sectionTitle}>Domains</h3>
-            <span className={styles.badge}>{domainsCount} domains</span>
-          </div>
-          <div className={styles.sectionContent}>
-            {domainsCount > 0 ? (
-              <div className={styles.categoryGridTwoColumn}>
-                {signals?.domains?.map((domain, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{domain.name}</span>
-                      <button
-                        className={styles.editButton}
-                        onClick={() => {
-                          openEditModal(
-                            `Edit Domain: ${domain.name}`,
-                            { description: domain.description || '' },
-                            [
-                              {
-                                name: 'description',
-                                label: 'Description',
-                                type: 'textarea',
-                                placeholder: 'Describe this domain...',
-                              }
-                            ],
-                            async (data) => {
-                              const newConfig = { ...config }
-                              if (newConfig.signals?.domains) {
-                                newConfig.signals.domains[idx] = { ...domain, description: data.description }
-                              }
-                              await saveConfig(newConfig)
-                            }
-                          )
-                        }}
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                    {domain.description && (
-                      <p className={styles.categoryDescription}>{domain.description}</p>
-                    )}
-                    {domain.mmlu_categories && domain.mmlu_categories.length > 0 && (
-                      <div className={styles.tagsContainer}>
-                        {domain.mmlu_categories.map((cat: string, i: number) => (
-                          <span key={i} className={styles.tag}>{cat}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>No domains configured</div>
-            )}
-          </div>
-        </div>
-
-        {/* Preferences */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionIcon}>⚙️</span>
-            <h3 className={styles.sectionTitle}>Preferences</h3>
-            <span className={styles.badge}>{preferencesCount} preferences</span>
-          </div>
-          <div className={styles.sectionContent}>
-            {preferencesCount > 0 ? (
-              <div className={styles.categoryGridTwoColumn}>
-                {signals?.preferences?.map((pref, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{pref.name}</span>
-                    </div>
-                    {pref.description && (
-                      <p className={styles.categoryDescription}>{pref.description}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>No preferences configured</div>
-            )}
-          </div>
-        </div>
-
-        {/* Fact Check */}
-        {factCheckCount > 0 && (
-          <div className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionIcon}>✓</span>
-              <h3 className={styles.sectionTitle}>Fact Check Signals</h3>
-              <span className={styles.badge}>{factCheckCount} signals</span>
-            </div>
-            <div className={styles.sectionContent}>
-              <div className={styles.categoryGridTwoColumn}>
-                {signals?.fact_check?.map((fc, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{fc.name}</span>
-                    </div>
-                    <p className={styles.categoryDescription}>{fc.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* User Feedbacks */}
-        {feedbacksCount > 0 && (
-          <div className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionIcon}>💬</span>
-              <h3 className={styles.sectionTitle}>User Feedback Signals</h3>
-              <span className={styles.badge}>{feedbacksCount} signals</span>
-            </div>
-            <div className={styles.sectionContent}>
-              <div className={styles.categoryGridTwoColumn}>
-                {signals?.user_feedbacks?.map((uf, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{uf.name}</span>
-                    </div>
-                    <p className={styles.categoryDescription}>{uf.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Legacy format notice */}
-        {!isPythonCLI && (
-          <div className={styles.section}>
-            <div className={styles.emptyState}>
-              ⚠️ Signals are only available in Python CLI config format. 
-              Current config uses legacy format - use "Intelligent Routing" features instead.
-            </div>
+        {isPythonCLI ? (
+          <DataTable
+            columns={signalsColumns}
+            data={filteredSignals}
+            keyExtractor={(row) => `${row.type}-${row.name}`}
+            onView={handleViewSignal}
+            onEdit={handleEditSignal}
+            onDelete={handleDeleteSignal}
+            emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
+          />
+        ) : (
+          <div className={styles.emptyState}>
+            Signals are only available in Python CLI config format.
+            Current config uses legacy format - use "Intelligent Routing" features instead.
           </div>
         )}
       </div>
@@ -2940,91 +2382,206 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     const decisions = config?.decisions || []
     const defaultModel = getDefaultModel()
 
+    // Filter decisions based on search
+    const filteredDecisions = decisions.filter(decision =>
+      decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
+      decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase())
+    )
+
+    // Define table columns
+    type DecisionRow = NonNullable<ConfigData['decisions']>[number]
+    const decisionsColumns: Column<DecisionRow>[] = [
+      {
+        key: 'name',
+        header: 'Name',
+        sortable: true,
+        render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>
+      },
+      {
+        key: 'priority',
+        header: 'Priority',
+        width: '100px',
+        align: 'center',
+        sortable: true,
+        render: (row) => (
+          <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
+            P{row.priority}
+          </span>
+        )
+      },
+      {
+        key: 'conditions',
+        header: 'Conditions',
+        width: '150px',
+        render: (row) => {
+          const count = row.rules?.conditions?.length || 0
+          return <span>{count} {count === 1 ? 'condition' : 'conditions'}</span>
+        }
+      },
+      {
+        key: 'models',
+        header: 'Models',
+        width: '150px',
+        render: (row) => {
+          const count = row.modelRefs?.length || 0
+          return <span>{count} {count === 1 ? 'model' : 'models'}</span>
+        }
+      }
+    ]
+
+    // Handle view decision
+    const handleViewDecision = (decision: DecisionRow) => {
+      const sections: ViewSection[] = [
+        {
+          title: 'Basic Information',
+          fields: [
+            { label: 'Name', value: decision.name },
+            { label: 'Priority', value: `P${decision.priority}` },
+            { label: 'Description', value: decision.description || 'N/A', fullWidth: true }
+          ]
+        },
+        {
+          title: 'Rules',
+          fields: [
+            { label: 'Operator', value: decision.rules?.operator || 'N/A' },
+            {
+              label: 'Conditions',
+              value: decision.rules?.conditions?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {decision.rules.conditions.map((cond, i) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(118, 185, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem'
+                    }}>
+                      {cond.type}: {cond.name}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No conditions',
+              fullWidth: true
+            }
+          ]
+        },
+        {
+          title: 'Models',
+          fields: [
+            {
+              label: 'Model References',
+              value: decision.modelRefs?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {decision.modelRefs.map((ref, i) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(0, 212, 255, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem'
+                    }}>
+                      {ref.model} {ref.use_reasoning && '(with reasoning)'}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No models',
+              fullWidth: true
+            }
+          ]
+        }
+      ]
+
+      if (decision.plugins && decision.plugins.length > 0) {
+        sections.push({
+          title: 'Plugins',
+          fields: [
+            {
+              label: 'Configured Plugins',
+              value: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {decision.plugins.map((plugin, i) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem'
+                    }}>
+                      {plugin.type}
+                    </div>
+                  ))}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      }
+
+      setViewModalTitle(`Decision: ${decision.name}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditDecision(decision))
+      setViewModalOpen(true)
+    }
+
+    // Handle edit decision (placeholder for now)
+    const handleEditDecision = (decision: DecisionRow) => {
+      setViewModalOpen(false)
+      // TODO: Implement edit functionality
+      console.log('Edit decision:', decision)
+    }
+
+    // Handle delete decision (placeholder for now)
+    const handleDeleteDecision = (decision: DecisionRow) => {
+      if (confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
+        // TODO: Implement delete functionality
+        console.log('Delete decision:', decision)
+      }
+    }
+
     return (
       <div className={styles.sectionPanel}>
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionIcon}>🔀</span>
-            <h3 className={styles.sectionTitle}>Routing Decisions</h3>
-            <span className={styles.badge}>{decisions.length} rules</span>
+        {/* Default Model Info */}
+        <div className={styles.coreSettingsInline}>
+          <div className={styles.inlineConfigRow}>
+            <span className={styles.inlineConfigLabel}>Default Model:</span>
+            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
           </div>
-          <div className={styles.sectionContent}>
-            {/* Default Model Info */}
-            <div className={styles.coreSettingsInline}>
-              <div className={styles.inlineConfigRow}>
-                <span className={styles.inlineConfigLabel}>🎯 Default Model:</span>
-                <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
-              </div>
-              <div className={styles.inlineConfigRow}>
-                <span className={styles.inlineConfigLabel}>⚡ Default Reasoning:</span>
-                <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
-                  {config?.providers?.default_reasoning_effort || 'medium'}
-                </span>
-              </div>
-            </div>
-
-            {isPythonCLI && decisions.length > 0 ? (
-              <div className={styles.categoryGridTwoColumn}>
-                {decisions.map((decision, idx) => (
-                  <div key={idx} className={styles.categoryCard}>
-                    <div className={styles.categoryHeader}>
-                      <span className={styles.categoryName}>{decision.name}</span>
-                      <span className={`${styles.badge} ${styles.badgeInfo}`}>P{decision.priority}</span>
-                    </div>
-                    {decision.description && (
-                      <p className={styles.categoryDescription}>{decision.description}</p>
-                    )}
-                    
-                    {/* Rules */}
-                    {decision.rules && (
-                      <div className={styles.configRow}>
-                        <span className={styles.configLabel}>Rules ({decision.rules.operator})</span>
-                        <div className={styles.tagsContainer}>
-                          {decision.rules.conditions?.map((cond, i) => (
-                            <span key={i} className={styles.tag}>{cond.type}: {cond.name}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Model References */}
-                    {decision.modelRefs && decision.modelRefs.length > 0 && (
-                      <div className={styles.configRow}>
-                        <span className={styles.configLabel}>Models</span>
-                        <div className={styles.endpointTags}>
-                          {decision.modelRefs.map((ref, i) => (
-                            <span key={i} className={styles.endpointTag}>
-                              {ref.model.split('/').pop()} {ref.use_reasoning && '⚡'}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Plugins */}
-                    {decision.plugins && decision.plugins.length > 0 && (
-                      <div className={styles.configRow}>
-                        <span className={styles.configLabel}>Plugins</span>
-                        <div className={styles.tagsContainer}>
-                          {decision.plugins.map((plugin, i) => (
-                            <span key={i} className={styles.tag}>🔌 {plugin.type}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : !isPythonCLI ? (
-              <div className={styles.emptyState}>
-                ⚠️ Decisions are only available in Python CLI config format.
-                Current config uses legacy format - see "Categories" in legacy mode.
-              </div>
-            ) : (
-              <div className={styles.emptyState}>No routing decisions configured</div>
-            )}
+          <div className={styles.inlineConfigRow}>
+            <span className={styles.inlineConfigLabel}>Default Reasoning:</span>
+            <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
+              {config?.providers?.default_reasoning_effort || 'medium'}
+            </span>
           </div>
         </div>
+
+        {/* Decisions Table */}
+        <TableHeader
+          title="Routing Decisions"
+          count={decisions.length}
+          searchPlaceholder="Search decisions..."
+          searchValue={decisionsSearch}
+          onSearchChange={setDecisionsSearch}
+          onAdd={() => console.log('Add decision')}
+          addButtonText="Add Decision"
+        />
+
+        {isPythonCLI ? (
+          <DataTable
+            columns={decisionsColumns}
+            data={filteredDecisions}
+            keyExtractor={(row) => row.name}
+            onView={handleViewDecision}
+            onEdit={handleEditDecision}
+            onDelete={handleDeleteDecision}
+            emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+          />
+        ) : (
+          <div className={styles.emptyState}>
+            Decisions are only available in Python CLI config format.
+            Current config uses legacy format - see "Categories" in legacy mode.
+          </div>
+        )}
 
         {/* Reasoning Families */}
         {renderReasoningFamilies()}
@@ -3033,12 +2590,620 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   }
 
   // Models Section - Provider models and endpoints (config.yaml)
-  const renderModelsSection = () => (
-    <div className={styles.sectionPanel}>
-      {renderUserDefinedModels()}
-      {renderUserDefinedEndpoints()}
-    </div>
-  )
+  const renderModelsSection = () => {
+    const models = getModels()
+
+    // Filter models based on search
+    const filteredModels = models.filter(model =>
+      model.name.toLowerCase().includes(modelsSearch.toLowerCase()) ||
+      model.reasoning_family?.toLowerCase().includes(modelsSearch.toLowerCase())
+    )
+
+    // Define model columns
+    type ModelRow = NormalizedModel
+    const modelColumns: Column<ModelRow>[] = [
+      {
+        key: 'name',
+        header: 'Model Name',
+        sortable: true,
+        render: (row) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontWeight: 600 }}>{row.name}</span>
+            {row.name === getDefaultModel() && (
+              <span className={styles.badge} style={{ background: 'rgba(118, 185, 0, 0.15)', color: 'var(--color-primary)' }}>
+                Default
+              </span>
+            )}
+          </div>
+        )
+      },
+      {
+        key: 'reasoning_family',
+        header: 'Reasoning Family',
+        width: '180px',
+        sortable: true,
+        render: (row) => row.reasoning_family ? (
+          <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
+            {row.reasoning_family}
+          </span>
+        ) : <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+      },
+      {
+        key: 'endpoints',
+        header: 'Endpoints',
+        width: '120px',
+        align: 'center',
+        render: (row) => {
+          const count = row.endpoints?.length || 0
+          return (
+            <span style={{ color: count > 0 ? 'var(--color-text)' : 'var(--color-text-secondary)' }}>
+              {count} {count === 1 ? 'endpoint' : 'endpoints'}
+            </span>
+          )
+        }
+      },
+      {
+        key: 'pricing',
+        header: 'Pricing',
+        width: '150px',
+        render: (row) => {
+          if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+          const currency = row.pricing.currency || 'USD'
+          const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
+          return (
+            <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+              {prompt} {currency}/1M
+            </span>
+          )
+        }
+      }
+    ]
+
+    // Render expanded row (endpoints table)
+    const renderModelEndpoints = (model: ModelRow) => {
+      if (!model.endpoints || model.endpoints.length === 0) {
+        return (
+          <div style={{ padding: '1rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+            No endpoints configured for this model
+          </div>
+        )
+      }
+
+      return (
+        <div style={{ padding: '1rem', background: 'rgba(0, 0, 0, 0.3)' }}>
+          <h4 style={{
+            margin: '0 0 1rem 0',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em'
+          }}>
+            Endpoints for {model.name}
+          </h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Name</th>
+                <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Address</th>
+                <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)', width: '100px' }}>Protocol</th>
+                <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)', width: '100px' }}>Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {model.endpoints.map((ep, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
+                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
+                    {ep.endpoint || 'N/A'}
+                  </td>
+                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                    <span style={{
+                      padding: '0.25rem 0.5rem',
+                      background: ep.protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase'
+                    }}>
+                      {ep.protocol || 'http'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+                    {ep.weight}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+
+    // Handle view model
+    const handleViewModel = (model: ModelRow) => {
+      const sections: ViewSection[] = [
+        {
+          title: 'Basic Information',
+          fields: [
+            { label: 'Model Name', value: model.name },
+            { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
+            { label: 'Is Default', value: model.name === getDefaultModel() ? 'Yes' : 'No' }
+          ]
+        }
+      ]
+
+      if (model.endpoints && model.endpoints.length > 0) {
+        sections.push({
+          title: `Endpoints (${model.endpoints.length})`,
+          fields: [
+            {
+              label: 'Configured Endpoints',
+              value: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {model.endpoints.map((ep, i) => {
+                    const isHttps = ep.protocol === 'https'
+                    return (
+                      <div key={i} style={{
+                        padding: '0.75rem',
+                        background: 'rgba(0, 212, 255, 0.05)',
+                        border: '1px solid rgba(0, 212, 255, 0.15)',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
+                            {ep.name}
+                          </div>
+                          <div style={{
+                            fontSize: '0.875rem',
+                            fontFamily: 'var(--font-mono)',
+                            color: 'var(--color-text-secondary)'
+                          }}>
+                            {ep.endpoint}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <span style={{
+                            fontSize: '0.75rem',
+                            textTransform: 'uppercase',
+                            fontWeight: 600,
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '3px',
+                            background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                            color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
+                          }}>
+                            {isHttps ? 'HTTPS' : 'HTTP'}
+                          </span>
+                          <span style={{
+                            fontSize: '0.875rem',
+                            color: 'var(--color-text-secondary)'
+                          }}>
+                            Weight: {ep.weight}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      }
+
+      if (model.pricing) {
+        sections.push({
+          title: 'Pricing',
+          fields: [
+            { label: 'Currency', value: model.pricing.currency || 'USD' },
+            { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
+            { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
+          ]
+        })
+      }
+
+      if (model.pii_policy) {
+        sections.push({
+          title: 'PII Policy',
+          fields: [
+            { label: 'Allow by Default', value: model.pii_policy.allow_by_default ? 'Yes' : 'No' },
+            {
+              label: model.pii_policy.allow_by_default ? 'Blocked Types' : 'Allowed Types',
+              value: model.pii_policy.pii_types_allowed?.length ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {model.pii_policy.pii_types_allowed.map((type, i) => (
+                    <span key={i} style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(236, 72, 153, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {type}
+                    </span>
+                  ))}
+                </div>
+              ) : 'None',
+              fullWidth: true
+            }
+          ]
+        })
+      }
+
+      if (model.access_key) {
+        sections.push({
+          title: 'Authentication',
+          fields: [
+            { label: 'Access Key', value: '••••••••' }
+          ]
+        })
+      }
+
+      setViewModalTitle(`Model: ${model.name}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditModel(model))
+      setViewModalOpen(true)
+    }
+
+    // Handle add model
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleAddModel = () => {
+      const reasoningFamiliesObj = getReasoningFamilies()
+      const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
+
+      // PII types
+      const piiTypes = [
+        'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
+        'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
+        'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
+        'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
+        'US_SSN', 'ZIP_CODE'
+      ]
+
+      openEditModal(
+        'Add New Model',
+        {
+          model_name: '',
+          reasoning_family: reasoningFamilyNames[0] || '',
+          access_key: '',
+          endpoints: [{
+            name: 'endpoint-1',
+            endpoint: 'localhost:8000',
+            protocol: 'http' as const,
+            weight: 1
+          }],
+          currency: 'USD',
+          prompt_per_1m: 0,
+          completion_per_1m: 0,
+          pii_allow_by_default: true,
+          pii_types_allowed: []
+        },
+        [
+          {
+            name: 'model_name',
+            label: 'Model Name',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., openai/gpt-4',
+            description: 'Unique identifier for the model'
+          },
+          {
+            name: 'reasoning_family',
+            label: 'Reasoning Family',
+            type: 'select',
+            options: reasoningFamilyNames,
+            description: 'Select from configured reasoning families'
+          },
+          {
+            name: 'endpoints',
+            label: 'Endpoints',
+            type: 'custom',
+            description: 'Configure endpoints for this model',
+            customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
+              <EndpointsEditor endpoints={value || []} onChange={onChange} />
+            )
+          },
+          {
+            name: 'access_key',
+            label: 'Access Key',
+            type: 'text',
+            placeholder: 'API key for this model',
+            description: 'Optional: API key for authentication'
+          },
+          {
+            name: 'currency',
+            label: 'Pricing Currency',
+            type: 'text',
+            placeholder: 'USD',
+            description: 'ISO currency code (e.g., USD, EUR, CNY)'
+          },
+          {
+            name: 'prompt_per_1m',
+            label: 'Prompt Price per 1M Tokens',
+            type: 'number',
+            placeholder: '0.50',
+            description: 'Cost per 1 million prompt tokens'
+          },
+          {
+            name: 'completion_per_1m',
+            label: 'Completion Price per 1M Tokens',
+            type: 'number',
+            placeholder: '1.50',
+            description: 'Cost per 1 million completion tokens'
+          },
+          {
+            name: 'pii_allow_by_default',
+            label: 'PII Policy: Allow by Default',
+            type: 'boolean',
+            description: 'If enabled, all PII types are allowed unless specified below'
+          },
+          {
+            name: 'pii_types_allowed',
+            label: 'PII Types Allowed/Blocked',
+            type: 'multiselect',
+            options: piiTypes,
+            description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
+          }
+        ],
+        async (data) => {
+          // Endpoints are already validated by EndpointsEditor
+          const endpoints = data.endpoints || []
+
+          const newConfig = { ...config }
+
+          if (isPythonCLI && newConfig.providers) {
+            newConfig.providers = { ...newConfig.providers }
+            if (!newConfig.providers.models) {
+              newConfig.providers.models = []
+            }
+            const newModel: any = {
+              name: data.model_name,
+              reasoning_family: data.reasoning_family,
+              access_key: data.access_key,
+              endpoints: endpoints,
+              pricing: {
+                currency: data.currency,
+                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+              },
+              pii_policy: {
+                allow_by_default: data.pii_allow_by_default,
+                pii_types_allowed: data.pii_types_allowed
+              }
+            }
+            newConfig.providers.models.push(newModel)
+          } else {
+            // Legacy format
+            if (!newConfig.model_config) {
+              newConfig.model_config = {}
+            }
+            newConfig.model_config[data.model_name] = {
+              reasoning_family: data.reasoning_family,
+              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              pricing: {
+                currency: data.currency,
+                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+              },
+              pii_policy: {
+                allow_by_default: data.pii_allow_by_default,
+                pii_types_allowed: data.pii_types_allowed
+              }
+            }
+          }
+          await saveConfig(newConfig)
+        },
+        'add'
+      )
+    }
+
+    // Handle edit model
+    const handleEditModel = (model: ModelRow) => {
+      setViewModalOpen(false)
+
+      const reasoningFamiliesObj = getReasoningFamilies()
+      const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
+
+      // PII types
+      const piiTypes = [
+        'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
+        'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
+        'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
+        'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
+        'US_SSN', 'ZIP_CODE'
+      ]
+
+      openEditModal(
+        `Edit Model: ${model.name}`,
+        {
+          reasoning_family: model.reasoning_family || '',
+          access_key: model.access_key || '',
+          // Endpoints
+          endpoints: model.endpoints || [],
+          // Pricing
+          currency: model.pricing?.currency || 'USD',
+          prompt_per_1m: model.pricing?.prompt_per_1m || 0,
+          completion_per_1m: model.pricing?.completion_per_1m || 0,
+          // PII Policy
+          pii_allow_by_default: model.pii_policy?.allow_by_default ?? true,
+          pii_types_allowed: model.pii_policy?.pii_types_allowed || []
+        },
+        [
+          {
+            name: 'reasoning_family',
+            label: 'Reasoning Family',
+            type: 'select',
+            options: reasoningFamilyNames,
+            description: 'Select from configured reasoning families'
+          },
+          {
+            name: 'endpoints',
+            label: 'Endpoints',
+            type: 'custom',
+            description: 'Configure endpoints for this model',
+            customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
+              <EndpointsEditor endpoints={value || []} onChange={onChange} />
+            )
+          },
+          {
+            name: 'access_key',
+            label: 'Access Key',
+            type: 'text',
+            placeholder: 'API key for this model',
+            description: 'Optional: API key for authentication'
+          },
+          {
+            name: 'currency',
+            label: 'Pricing Currency',
+            type: 'text',
+            placeholder: 'USD',
+            description: 'ISO currency code (e.g., USD, EUR, CNY)'
+          },
+          {
+            name: 'prompt_per_1m',
+            label: 'Prompt Price per 1M Tokens',
+            type: 'number',
+            placeholder: '0.50',
+            description: 'Cost per 1 million prompt tokens'
+          },
+          {
+            name: 'completion_per_1m',
+            label: 'Completion Price per 1M Tokens',
+            type: 'number',
+            placeholder: '1.50',
+            description: 'Cost per 1 million completion tokens'
+          },
+          {
+            name: 'pii_allow_by_default',
+            label: 'PII Policy: Allow by Default',
+            type: 'boolean',
+            description: 'If enabled, all PII types are allowed unless specified below'
+          },
+          {
+            name: 'pii_types_allowed',
+            label: 'PII Types Allowed/Blocked',
+            type: 'multiselect',
+            options: piiTypes,
+            description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
+          }
+        ],
+        async (data) => {
+          const newConfig = { ...config }
+
+          // Endpoints are already validated by EndpointsEditor
+          const endpoints = data.endpoints || []
+
+          if (isPythonCLI && newConfig.providers?.models) {
+            newConfig.providers = { ...newConfig.providers }
+            type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+            newConfig.providers.models = newConfig.providers.models.map((m: ModelType) =>
+              m.name === model.name ? {
+                ...m,
+                reasoning_family: data.reasoning_family,
+                access_key: data.access_key,
+                endpoints: endpoints,
+                pricing: {
+                  currency: data.currency,
+                  prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                  completion_per_1m: parseFloat(data.completion_per_1m) || 0
+                },
+                pii_policy: {
+                  allow_by_default: data.pii_allow_by_default,
+                  pii_types_allowed: data.pii_types_allowed
+                }
+              } : m
+            )
+          } else if (newConfig.model_config) {
+            // Legacy format
+            newConfig.model_config[model.name] = {
+              ...newConfig.model_config[model.name],
+              reasoning_family: data.reasoning_family,
+              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              pricing: {
+                currency: data.currency,
+                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+              },
+              pii_policy: {
+                allow_by_default: data.pii_allow_by_default,
+                pii_types_allowed: data.pii_types_allowed
+              }
+            }
+          }
+          await saveConfig(newConfig)
+        },
+        'edit'
+      )
+    }
+
+    // Handle delete model
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleDeleteModel = (model: ModelRow) => {
+      if (confirm(`Are you sure you want to delete model "${model.name}"?`)) {
+        handleDeleteModelAction(model.name)
+      }
+    }
+
+    const handleDeleteModelAction = async (modelName: string) => {
+      const newConfig = { ...config }
+      if (isPythonCLI && newConfig.providers?.models) {
+        newConfig.providers = { ...newConfig.providers }
+        type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+        newConfig.providers.models = newConfig.providers.models.filter((m: ModelType) => m.name !== modelName)
+        // Update default model if deleted
+        if (newConfig.providers.default_model === modelName) {
+          newConfig.providers.default_model = newConfig.providers.models[0]?.name || ''
+        }
+      } else if (newConfig.model_config) {
+        delete newConfig.model_config[modelName]
+      }
+      await saveConfig(newConfig)
+    }
+
+    // Toggle expand
+    const handleToggleExpand = (model: ModelRow) => {
+      const newExpanded = new Set(expandedModels)
+      if (newExpanded.has(model.name)) {
+        newExpanded.delete(model.name)
+      } else {
+        newExpanded.add(model.name)
+      }
+      setExpandedModels(newExpanded)
+    }
+
+    return (
+      <div className={styles.sectionPanel}>
+        {/* Models Table */}
+        <TableHeader
+          title="Models"
+          count={models.length}
+          searchPlaceholder="Search models..."
+          searchValue={modelsSearch}
+          onSearchChange={setModelsSearch}
+          onAdd={handleAddModel}
+          addButtonText="Add Model"
+        />
+
+        <DataTable
+          columns={modelColumns}
+          data={filteredModels}
+          keyExtractor={(row) => row.name}
+          onView={handleViewModel}
+          onEdit={handleEditModel}
+          onDelete={handleDeleteModel}
+          expandable={true}
+          renderExpandedRow={renderModelEndpoints}
+          isRowExpanded={(row) => expandedModels.has(row.name)}
+          onToggleExpand={handleToggleExpand}
+          emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
+        />
+      </div>
+    )
+  }
 
   // Router Configuration Section - System defaults from router-defaults.yaml
   const renderRouterConfigSection = () => (
@@ -3149,6 +3314,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         data={editModalData}
         fields={editModalFields}
         mode={editModalMode}
+      />
+
+      {/* View Modal */}
+      <ViewModal
+        isOpen={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        onEdit={viewModalEditCallback || undefined}
+        title={viewModalTitle}
+        sections={viewModalSections}
       />
     </div>
   )
