@@ -25,6 +25,11 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath))
 	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/update")
 
+	// Router defaults endpoints (for .vllm-sr/router-defaults.yaml)
+	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir))
+	log.Printf("Router defaults API endpoints registered: /api/router/config/defaults, /api/router/config/defaults/update")
+
 	// Tools DB endpoint
 	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")

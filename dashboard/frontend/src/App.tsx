@@ -14,7 +14,7 @@ import { ConfigSection } from './components/ConfigNav'
 
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
-  const [configSection, setConfigSection] = useState<ConfigSection>('models')
+  const [configSection, setConfigSection] = useState<ConfigSection>('signals')
 
   useEffect(() => {
     // Detect if we're running inside an iframe (potential loop)

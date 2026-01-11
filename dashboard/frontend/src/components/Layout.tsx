@@ -38,15 +38,13 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   }, [])
 
   // Config sections for dropdown - no emojis, clean text like NVIDIA Brev
+  // Navigation aligned with Python CLI config structure
   const configSections = [
+    { id: 'signals', title: 'Signals' },
+    { id: 'decisions', title: 'Decisions' },
     { id: 'models', title: 'Models' },
-    { id: 'prompt-guard', title: 'Prompt Guard' },
-    { id: 'similarity-cache', title: 'Similarity Cache' },
-    { id: 'intelligent-routing', title: 'Intelligent Routing' },
-    { id: 'topology', title: 'Topology' },
-    { id: 'tools-selection', title: 'Tools Selection' },
-    { id: 'observability', title: 'Observability' },
-    { id: 'classification-api', title: 'Classification API' }
+    { id: 'router-config', title: 'Router Config' },
+    { id: 'topology', title: 'Topology' }
   ]
 
   return (

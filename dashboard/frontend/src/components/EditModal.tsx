@@ -4,8 +4,10 @@ import styles from './EditModal.module.css'
 interface EditModalProps {
   isOpen: boolean
   onClose: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSave: (data: any) => Promise<void>
   title: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any
   fields: FieldConfig[]
   mode?: 'edit' | 'add'
@@ -33,6 +35,7 @@ const EditModal: React.FC<EditModalProps> = ({
   fields,
   mode = 'edit'
 }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState<any>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +54,9 @@ const EditModal: React.FC<EditModalProps> = ({
     }
   }, [isOpen, data, fields])
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChange = (fieldName: string, value: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setFormData((prev: any) => ({
       ...prev,
       [fieldName]: value

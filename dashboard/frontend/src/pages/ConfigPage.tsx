@@ -58,6 +58,7 @@ interface ToolFunction {
   description: string
   parameters: {
     type: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     properties: Record<string, any>
     required?: string[]
   }
@@ -171,6 +172,7 @@ interface ConfigData {
       conditions: Array<{ type: string; name: string }>
     }
     modelRefs: Array<{ model: string; use_reasoning: boolean }>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     plugins?: Array<{ type: string; configuration: Record<string, any> }>
   }>
   providers?: {
@@ -249,12 +251,16 @@ const maskAddress = (address: string): string => {
   return `${start}${'•'.repeat(middleLength)}${end}`
 }
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedView, setSelectedView] = useState<'structured' | 'raw'>('structured')
   const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
+
+  // Router defaults state (from .vllm-sr/router-defaults.yaml)
+  const [routerDefaults, setRouterDefaults] = useState<ConfigData | null>(null)
+  const [routerDefaultsLoading, setRouterDefaultsLoading] = useState(false)
 
   // Tools database state
   const [toolsData, setToolsData] = useState<Tool[]>([])
@@ -267,21 +273,24 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editModalTitle, setEditModalTitle] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editModalData, setEditModalData] = useState<any>(null)
   const [editModalFields, setEditModalFields] = useState<FieldConfig[]>([])
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editModalCallback, setEditModalCallback] = useState<((data: any) => Promise<void>) | null>(null)
 
   useEffect(() => {
     fetchConfig()
+    fetchRouterDefaults()
   }, [])
 
   // Fetch tools database when config is loaded
   useEffect(() => {
-    if (config?.tools?.tools_db_path) {
+    if (config?.tools?.tools_db_path || routerDefaults?.tools?.tools_db_path) {
       fetchToolsDB()
     }
-  }, [config?.tools?.tools_db_path])
+  }, [config?.tools?.tools_db_path, routerDefaults?.tools?.tools_db_path])
 
   const fetchConfig = async () => {
     setLoading(true)
@@ -307,6 +316,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
   }
 
+  const fetchRouterDefaults = async () => {
+    setRouterDefaultsLoading(true)
+    try {
+      const response = await fetch('/api/router/config/defaults')
+      if (!response.ok) {
+        console.warn('Router defaults not available:', response.statusText)
+        setRouterDefaults(null)
+        return
+      }
+      const data = await response.json()
+      setRouterDefaults(data)
+    } catch (err) {
+      console.warn('Failed to fetch router defaults:', err)
+      setRouterDefaults(null)
+    } finally {
+      setRouterDefaultsLoading(false)
+    }
+  }
+
   const fetchToolsDB = async () => {
     setToolsLoading(true)
     setToolsError(null)
@@ -325,7 +353,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
   }
 
-  // @ts-ignore - Will be used when edit buttons are added
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveConfig = async (updatedConfig: any) => {
     try {
       const response = await fetch('/api/router/config/update', {
@@ -363,11 +391,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
   }
 
-  // @ts-ignore - Will be used when edit buttons are added
   const openEditModal = (
     title: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any,
     fields: FieldConfig[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callback: (data: any) => Promise<void>,
     mode: 'edit' | 'add' = 'edit'
   ) => {
@@ -388,6 +417,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
   const handleRefresh = () => {
     fetchConfig()
+    fetchRouterDefaults()
   }
 
   // ============================================================================
@@ -2656,9 +2686,333 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   )
 
   // ============================================================================
-  // SECTION PANEL RENDERS
+  // SECTION PANEL RENDERS - Aligned with Python CLI config structure
   // ============================================================================
 
+  // Signals Section - Keywords, Embeddings, Domains, Preferences (config.yaml)
+  const renderSignalsSection = () => {
+    const signals = config?.signals
+    const keywordsCount = signals?.keywords?.length || 0
+    const embeddingsCount = signals?.embeddings?.length || 0
+    const domainsCount = signals?.domains?.length || 0
+    const preferencesCount = signals?.preferences?.length || 0
+    const factCheckCount = signals?.fact_check?.length || 0
+    const feedbacksCount = signals?.user_feedbacks?.length || 0
+
+    return (
+      <div className={styles.sectionPanel}>
+        {/* Keywords */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionIcon}>🔑</span>
+            <h3 className={styles.sectionTitle}>Keywords</h3>
+            <span className={styles.badge}>{keywordsCount} signals</span>
+          </div>
+          <div className={styles.sectionContent}>
+            {keywordsCount > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {signals?.keywords?.map((kw, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{kw.name}</span>
+                      <span className={`${styles.badge} ${styles.badgeInfo}`}>{kw.operator}</span>
+                    </div>
+                    <div className={styles.tagsContainer}>
+                      {kw.keywords.map((word, i) => (
+                        <span key={i} className={styles.tag}>{word}</span>
+                      ))}
+                    </div>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Case Sensitive</span>
+                      <span className={styles.configValue}>{kw.case_sensitive ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No keyword signals configured</div>
+            )}
+          </div>
+        </div>
+
+        {/* Embeddings */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionIcon}>🧬</span>
+            <h3 className={styles.sectionTitle}>Embeddings</h3>
+            <span className={styles.badge}>{embeddingsCount} signals</span>
+          </div>
+          <div className={styles.sectionContent}>
+            {embeddingsCount > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {signals?.embeddings?.map((emb, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{emb.name}</span>
+                      <span className={`${styles.badge} ${styles.badgeSuccess}`}>θ≥{emb.threshold}</span>
+                    </div>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Aggregation</span>
+                      <span className={styles.configValue}>{emb.aggregation_method}</span>
+                    </div>
+                    <div className={styles.tagsContainer}>
+                      {emb.candidates.map((c, i) => (
+                        <span key={i} className={styles.tag} title={c}>{c.substring(0, 30)}...</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No embedding signals configured</div>
+            )}
+          </div>
+        </div>
+
+        {/* Domains */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionIcon}>📁</span>
+            <h3 className={styles.sectionTitle}>Domains</h3>
+            <span className={styles.badge}>{domainsCount} domains</span>
+          </div>
+          <div className={styles.sectionContent}>
+            {domainsCount > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {signals?.domains?.map((domain, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{domain.name}</span>
+                      <button
+                        className={styles.editButton}
+                        onClick={() => {
+                          openEditModal(
+                            `Edit Domain: ${domain.name}`,
+                            { description: domain.description || '' },
+                            [
+                              {
+                                name: 'description',
+                                label: 'Description',
+                                type: 'textarea',
+                                placeholder: 'Describe this domain...',
+                              }
+                            ],
+                            async (data) => {
+                              const newConfig = { ...config }
+                              if (newConfig.signals?.domains) {
+                                newConfig.signals.domains[idx] = { ...domain, description: data.description }
+                              }
+                              await saveConfig(newConfig)
+                            }
+                          )
+                        }}
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                    {domain.description && (
+                      <p className={styles.categoryDescription}>{domain.description}</p>
+                    )}
+                    {domain.mmlu_categories && domain.mmlu_categories.length > 0 && (
+                      <div className={styles.tagsContainer}>
+                        {domain.mmlu_categories.map((cat: string, i: number) => (
+                          <span key={i} className={styles.tag}>{cat}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No domains configured</div>
+            )}
+          </div>
+        </div>
+
+        {/* Preferences */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionIcon}>⚙️</span>
+            <h3 className={styles.sectionTitle}>Preferences</h3>
+            <span className={styles.badge}>{preferencesCount} preferences</span>
+          </div>
+          <div className={styles.sectionContent}>
+            {preferencesCount > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {signals?.preferences?.map((pref, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{pref.name}</span>
+                    </div>
+                    {pref.description && (
+                      <p className={styles.categoryDescription}>{pref.description}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No preferences configured</div>
+            )}
+          </div>
+        </div>
+
+        {/* Fact Check */}
+        {factCheckCount > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <span className={styles.sectionIcon}>✓</span>
+              <h3 className={styles.sectionTitle}>Fact Check Signals</h3>
+              <span className={styles.badge}>{factCheckCount} signals</span>
+            </div>
+            <div className={styles.sectionContent}>
+              <div className={styles.categoryGridTwoColumn}>
+                {signals?.fact_check?.map((fc, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{fc.name}</span>
+                    </div>
+                    <p className={styles.categoryDescription}>{fc.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* User Feedbacks */}
+        {feedbacksCount > 0 && (
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <span className={styles.sectionIcon}>💬</span>
+              <h3 className={styles.sectionTitle}>User Feedback Signals</h3>
+              <span className={styles.badge}>{feedbacksCount} signals</span>
+            </div>
+            <div className={styles.sectionContent}>
+              <div className={styles.categoryGridTwoColumn}>
+                {signals?.user_feedbacks?.map((uf, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{uf.name}</span>
+                    </div>
+                    <p className={styles.categoryDescription}>{uf.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Legacy format notice */}
+        {!isPythonCLI && (
+          <div className={styles.section}>
+            <div className={styles.emptyState}>
+              ⚠️ Signals are only available in Python CLI config format. 
+              Current config uses legacy format - use "Intelligent Routing" features instead.
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Decisions Section - Routing rules with priorities (config.yaml)
+  const renderDecisionsSection = () => {
+    const decisions = config?.decisions || []
+    const defaultModel = getDefaultModel()
+
+    return (
+      <div className={styles.sectionPanel}>
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionIcon}>🔀</span>
+            <h3 className={styles.sectionTitle}>Routing Decisions</h3>
+            <span className={styles.badge}>{decisions.length} rules</span>
+          </div>
+          <div className={styles.sectionContent}>
+            {/* Default Model Info */}
+            <div className={styles.coreSettingsInline}>
+              <div className={styles.inlineConfigRow}>
+                <span className={styles.inlineConfigLabel}>🎯 Default Model:</span>
+                <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
+              </div>
+              <div className={styles.inlineConfigRow}>
+                <span className={styles.inlineConfigLabel}>⚡ Default Reasoning:</span>
+                <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
+                  {config?.providers?.default_reasoning_effort || 'medium'}
+                </span>
+              </div>
+            </div>
+
+            {isPythonCLI && decisions.length > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {decisions.map((decision, idx) => (
+                  <div key={idx} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{decision.name}</span>
+                      <span className={`${styles.badge} ${styles.badgeInfo}`}>P{decision.priority}</span>
+                    </div>
+                    {decision.description && (
+                      <p className={styles.categoryDescription}>{decision.description}</p>
+                    )}
+                    
+                    {/* Rules */}
+                    {decision.rules && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Rules ({decision.rules.operator})</span>
+                        <div className={styles.tagsContainer}>
+                          {decision.rules.conditions?.map((cond, i) => (
+                            <span key={i} className={styles.tag}>{cond.type}: {cond.name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Model References */}
+                    {decision.modelRefs && decision.modelRefs.length > 0 && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Models</span>
+                        <div className={styles.endpointTags}>
+                          {decision.modelRefs.map((ref, i) => (
+                            <span key={i} className={styles.endpointTag}>
+                              {ref.model.split('/').pop()} {ref.use_reasoning && '⚡'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Plugins */}
+                    {decision.plugins && decision.plugins.length > 0 && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Plugins</span>
+                        <div className={styles.tagsContainer}>
+                          {decision.plugins.map((plugin, i) => (
+                            <span key={i} className={styles.tag}>🔌 {plugin.type}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : !isPythonCLI ? (
+              <div className={styles.emptyState}>
+                ⚠️ Decisions are only available in Python CLI config format.
+                Current config uses legacy format - see "Categories" in legacy mode.
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No routing decisions configured</div>
+            )}
+          </div>
+        </div>
+
+        {/* Reasoning Families */}
+        {renderReasoningFamilies()}
+      </div>
+    )
+  }
+
+  // Models Section - Provider models and endpoints (config.yaml)
   const renderModelsSection = () => (
     <div className={styles.sectionPanel}>
       {renderUserDefinedModels()}
@@ -2666,64 +3020,75 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     </div>
   )
 
-  const renderPromptGuardSection = () => (
+  // Router Configuration Section - System defaults from router-defaults.yaml
+  const renderRouterConfigSection = () => (
     <div className={styles.sectionPanel}>
+      {/* Source indicator */}
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span className={styles.sectionIcon}>📄</span>
+          <h3 className={styles.sectionTitle}>Configuration Source</h3>
+          {routerDefaultsLoading && <span className={styles.badge}>Loading...</span>}
+        </div>
+        <div className={styles.sectionContent}>
+          <div className={styles.coreSettingsInline}>
+            <div className={styles.inlineConfigRow}>
+              <span className={styles.inlineConfigLabel}>📁 Source File:</span>
+              <span className={styles.inlineConfigValue}>
+                {routerDefaults && Object.keys(routerDefaults).length > 0 
+                  ? '.vllm-sr/router-defaults.yaml' 
+                  : 'config.yaml (fallback)'}
+              </span>
+            </div>
+            {routerDefaults && Object.keys(routerDefaults).length > 0 && (
+              <div className={styles.inlineConfigRow}>
+                <span className={styles.inlineConfigLabel}>ℹ️ Note:</span>
+                <span className={styles.configValue} style={{ fontSize: '0.85em', opacity: 0.8 }}>
+                  Router defaults are system settings that apply across all configurations
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Semantic Cache */}
+      {renderSimilarityBERT()}
+      
+      {/* Prompt Guard */}
       {renderPIIModernBERT()}
       {renderJailbreakModernBERT()}
-    </div>
-  )
-
-  const renderSimilarityCacheSection = () => (
-    <div className={styles.sectionPanel}>
-      {renderSimilarityBERT()}
-    </div>
-  )
-
-  const renderIntelligentRoutingSection = () => (
-    <div className={styles.sectionPanel}>
+      
+      {/* Classifier */}
       {renderClassifyBERT()}
-      {renderCategories()}
-      {renderReasoningFamilies()}
-    </div>
-  )
-
-  const renderToolsSelectionSection = () => (
-    <div className={styles.sectionPanel}>
+      
+      {/* Tools */}
       {renderToolsConfiguration()}
       {renderToolsDB()}
-    </div>
-  )
-
-  const renderObservabilitySection = () => (
-    <div className={styles.sectionPanel}>
+      
+      {/* Observability */}
       {renderObservabilityTracing()}
-    </div>
-  )
-
-  const renderClassificationAPISection = () => (
-    <div className={styles.sectionPanel}>
+      
+      {/* Classification API */}
       {renderClassificationAPI()}
+      
+      {/* Legacy Categories (for backward compatibility) */}
+      {!isPythonCLI && renderCategories()}
     </div>
   )
 
   const renderActiveSection = () => {
     switch (activeSection) {
+      case 'signals':
+        return renderSignalsSection()
+      case 'decisions':
+        return renderDecisionsSection()
       case 'models':
         return renderModelsSection()
-      case 'prompt-guard':
-        return renderPromptGuardSection()
-      case 'similarity-cache':
-        return renderSimilarityCacheSection()
-      case 'intelligent-routing':
-        return renderIntelligentRoutingSection()
-      case 'tools-selection':
-        return renderToolsSelectionSection()
-      case 'observability':
-        return renderObservabilitySection()
-      case 'classification-api':
-        return renderClassificationAPISection()
+      case 'router-config':
+        return renderRouterConfigSection()
       default:
-        return renderModelsSection()
+        return renderSignalsSection()
     }
   }
 
