@@ -21,6 +21,15 @@ export interface ProviderModel {
   reasoning_family?: string
   endpoints: ProviderEndpoint[]
   access_key?: string
+  pricing?: {
+    currency?: string
+    prompt_per_1m?: number
+    completion_per_1m?: number
+  }
+  pii_policy?: {
+    allow_by_default: boolean
+    pii_types_allowed?: string[]
+  }
 }
 
 export interface ReasoningFamily {
