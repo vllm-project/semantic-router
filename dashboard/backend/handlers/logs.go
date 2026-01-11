@@ -163,9 +163,9 @@ func fetchLogsFromSupervisor(component string, lines int) ([]string, error) {
 
 	for _, logFile := range files {
 		// Use tail command to get last N lines from log file
+		// #nosec G204 - logFile is validated and lines is converted from int
 		cmd := exec.Command("tail", "-n", strconv.Itoa(lines), logFile)
 		output, err := cmd.CombinedOutput()
-
 		if err != nil {
 			// File might not exist yet, skip
 			continue
@@ -173,9 +173,7 @@ func fetchLogsFromSupervisor(component string, lines int) ([]string, error) {
 
 		// Parse output and add to result
 		logLines := splitLogLines(string(output))
-		for _, line := range logLines {
-			result = append(result, line)
-		}
+		result = append(result, logLines...)
 	}
 
 	// Return last N lines (in case we read from multiple files)

@@ -245,7 +245,6 @@ func checkServiceFromContainerLogs(service string) (bool, string) {
 	// Use supervisorctl to check service status
 	cmd := exec.Command("supervisorctl", "status", service)
 	output, err := cmd.CombinedOutput()
-
 	if err != nil {
 		// If supervisorctl fails, service might not be configured
 		return false, "Status unknown"
