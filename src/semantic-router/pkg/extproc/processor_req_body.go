@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -126,6 +128,15 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
 		// If RAG fails with on_failure=block, return error response
 		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", err)), nil
+	}
+
+	// Handle memory retrieval (if enabled)
+	// Memory retrieval happens after cache check to avoid unnecessary work on cache hits
+	// and before model routing to inject memories into LLM context
+	requestBody, err = r.handleMemoryRetrieval(ctx, userContent, requestBody, openAIRequest)
+	if err != nil {
+		logging.Warnf("Memory retrieval failed: %v, continuing without memory", err)
+		// Graceful degradation: continue without memory if retrieval fails
 	}
 
 	// Handle model selection and routing with pre-computed classification results and selected model
@@ -630,4 +641,142 @@ func (r *OpenAIRouter) getModelParams() map[string]config.ModelParams {
 		return nil
 	}
 	return r.Config.ModelConfig
+}
+
+// handleMemoryRetrieval retrieves relevant memories and injects them into the request.
+// This function is called after cache check and before model routing.
+//
+// Flow:
+//  1. Check if memory is enabled
+//  2. Use ShouldSearchMemory to decide if query should trigger memory search
+//  3. Extract conversation history from request messages
+//  4. Build search query (with context/rewriting if needed)
+//  5. Search Milvus for relevant memories
+//  6. Inject memories into request body as system message
+//
+// Returns the modified request body (or original if no memories found/injected).
+// Errors are logged but don't block request processing (graceful degradation).
+func (r *OpenAIRouter) handleMemoryRetrieval(
+	ctx *RequestContext,
+	userContent string,
+	requestBody []byte,
+	openAIRequest *openai.ChatCompletionNewParams,
+) ([]byte, error) {
+	// Check if memory is enabled
+	if !r.Config.Memory.Enabled {
+		logging.Debugf("Memory: Disabled in config, skipping retrieval")
+		return requestBody, nil
+	}
+
+	// Get memory store from router
+	store := r.getMemoryStore()
+	if store == nil || !store.IsEnabled() {
+		logging.Debugf("Memory: Store not available or disabled, skipping retrieval")
+		return requestBody, nil
+	}
+
+	// Step 1: Memory decision - should we search?
+	if !ShouldSearchMemory(ctx, userContent) {
+		logging.Debugf("Memory: Query does not require memory search, skipping")
+		return requestBody, nil
+	}
+
+	// Step 2: Extract conversation history from request body
+	// Use the existing ExtractConversationHistory function which works with raw JSON
+	var messagesJSON []byte
+	if openAIRequest.Messages != nil {
+		messagesJSON, _ = json.Marshal(openAIRequest.Messages)
+	}
+
+	history, err := ExtractConversationHistory(messagesJSON)
+	if err != nil {
+		logging.Warnf("Memory: Failed to extract conversation history: %v", err)
+		// Continue with empty history
+		history = []ConversationMessage{}
+	}
+
+	// Step 3: Build search query (with context/rewriting)
+	searchQuery, err := BuildSearchQuery(
+		ctx.TraceContext,
+		history,
+		userContent,
+		&r.Config.Memory.QueryRewrite,
+	)
+	if err != nil {
+		logging.Warnf("Memory: Query rewriting failed, using original query: %v", err)
+		searchQuery = userContent
+	}
+
+	// Step 4: Get user ID from Response API context or request
+	userID := r.getUserIDFromContext(ctx)
+	if userID == "" {
+		logging.Debugf("Memory: No user ID available, skipping retrieval")
+		return requestBody, nil
+	}
+
+	// Step 5: Search Milvus for relevant memories
+	retrieveOpts := memory.RetrieveOptions{
+		Query:     searchQuery,
+		UserID:    userID,
+		Limit:     r.Config.Memory.DefaultRetrievalLimit,
+		Threshold: r.Config.Memory.DefaultSimilarityThreshold,
+	}
+
+	// Apply defaults if not configured
+	if retrieveOpts.Limit <= 0 {
+		retrieveOpts.Limit = 5
+	}
+	if retrieveOpts.Threshold <= 0 {
+		retrieveOpts.Threshold = 0.6
+	}
+
+	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
+	if err != nil {
+		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
+	}
+
+	if len(memories) == 0 {
+		logging.Debugf("Memory: No relevant memories found for query: %s", searchQuery)
+		return requestBody, nil
+	}
+
+	logging.Infof("Memory: Retrieved %d memories for query: %s", len(memories), searchQuery)
+
+	// Step 6: Inject memories into request body
+	// Convert []RetrieveResult to []*RetrieveResult
+	memoryPtrs := make([]*memory.RetrieveResult, len(memories))
+	for i := range memories {
+		memoryPtrs[i] = &memories[i]
+	}
+
+	modifiedBody, err := InjectMemories(requestBody, memoryPtrs)
+	if err != nil {
+		return requestBody, fmt.Errorf("memory injection failed: %w", err)
+	}
+
+	return modifiedBody, nil
+}
+
+// getMemoryStore returns the memory store instance.
+func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
+	// Return the actual memory store from router
+	return r.MemoryStore
+}
+
+// getUserIDFromContext extracts user ID from Response API context or request.
+func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
+	// Check Response API context first
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
+		// TODO: Extract from MemoryContext when it's added to ResponseAPIRequest
+		// For now, try to extract from metadata or other fields
+		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
+			if userID, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok {
+				return userID
+			}
+		}
+	}
+
+	// TODO: Extract from request body if available
+	// For now, return empty string if not in Response API context
+	return ""
 }

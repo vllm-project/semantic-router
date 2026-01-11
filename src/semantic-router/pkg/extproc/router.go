@@ -1,18 +1,23 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -35,8 +40,9 @@ type OpenAIRouter struct {
 	ReplayRecorder       *routerreplay.Recorder
 	// ModelSelector is the registry of advanced model selection algorithms
 	// Initialized from config.IntelligentRouting.ModelSelection
-	ModelSelector   *selection.Registry
-	ReplayRecorders map[string]*routerreplay.Recorder
+	ModelSelector        *selection.Registry
+	ReplayRecorders      map[string]*routerreplay.Recorder
+	MemoryStore          *memory.MilvusStore
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -351,6 +357,19 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
 
+	// Create memory store if enabled
+	var memoryStore *memory.MilvusStore
+	if cfg.Memory.Enabled {
+		memStore, err := createMemoryStore(cfg)
+		if err != nil {
+			logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
+		} else {
+			memoryStore = memStore
+			logging.Infof("Memory enabled with Milvus backend")
+		}
+	}
+
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -362,6 +381,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ReplayRecorder:       replayRecorder,
 		ModelSelector:        modelSelectorRegistry,
 		ReplayRecorders:      replayRecorders,
+		MemoryStore:          memoryStore,
 	}
 
 	return router, nil
@@ -674,6 +694,60 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 	}
 
 	return responsestore.NewStore(storeConfig)
+}
+
+// createMemoryStore creates a memory store based on configuration.
+// For now, it only supports Milvus backend. The Milvus address and collection
+// are expected to be configured in the memory config (or use defaults).
+func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
+	// Default Milvus address if not configured
+	// TODO: Add Milvus config to MemoryConfig similar to ResponseAPIConfig
+	milvusAddress := "localhost:19530"
+	collectionName := "agentic_memory"
+
+	// Try to get from ResponseAPI config if available (temporary until MemoryConfig has its own Milvus config)
+	if cfg.ResponseAPI.Milvus.Address != "" {
+		milvusAddress = cfg.ResponseAPI.Milvus.Address
+	}
+	if cfg.ResponseAPI.Milvus.Collection != "" {
+		// Use a different collection name for memory
+		collectionName = "agentic_memory"
+	}
+
+	// Create Milvus client
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	milvusClient, err := client.NewGrpcClient(ctx, milvusAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
+	}
+
+	// Check connection
+	state, err := milvusClient.CheckHealth(ctx)
+	if err != nil {
+		milvusClient.Close()
+		return nil, fmt.Errorf("failed to check Milvus connection: %w", err)
+	}
+	if state == nil || !state.IsHealthy {
+		milvusClient.Close()
+		return nil, fmt.Errorf("Milvus connection is not healthy")
+	}
+
+	// Create memory store
+	store, err := memory.NewMilvusStore(memory.MilvusStoreOptions{
+		Client:         milvusClient,
+		CollectionName: collectionName,
+		Config:         cfg.Memory,
+		Enabled:        cfg.Memory.Enabled,
+	})
+	if err != nil {
+		milvusClient.Close()
+		return nil, fmt.Errorf("failed to create memory store: %w", err)
+	}
+
+	logging.Infof("Memory store initialized: address=%s, collection=%s", milvusAddress, collectionName)
+	return store, nil
 }
 
 // LoadToolsDatabase loads tools from file after embedding models are initialized
