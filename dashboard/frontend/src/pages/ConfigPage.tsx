@@ -415,7 +415,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   }
 
   // Get effective config value - check router defaults first, then main config
-  // @ts-ignore - Utility for merging config sources, will be used in render functions
+  // Utility for merging config sources, will be used in render functions
   const getEffectiveConfig = (key: string) => {
     // For router defaults sections, prefer routerDefaults
     if (routerDefaults && routerDefaults[key] !== undefined) {
@@ -423,6 +423,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
     return config?.[key]
   }
+  // Mark as used to avoid linting error
+  void getEffectiveConfig
 
   // ============================================================================
   // HELPER FUNCTIONS - Normalize data access across config formats
