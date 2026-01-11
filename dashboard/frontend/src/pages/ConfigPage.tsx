@@ -433,6 +433,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Helper: Check if using Python CLI format
   const isPythonCLI = configFormat === 'python-cli'
 
+  // Effective router config - merges routerDefaults (system settings) with config (fallback)
+  // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
+  // For Legacy: these settings are in config.yaml directly
+  const routerConfig = {
+    bert_model: routerDefaults?.bert_model ?? config?.bert_model,
+    semantic_cache: routerDefaults?.semantic_cache ?? config?.semantic_cache,
+    tools: routerDefaults?.tools ?? config?.tools,
+    prompt_guard: routerDefaults?.prompt_guard ?? config?.prompt_guard,
+    classifier: routerDefaults?.classifier ?? config?.classifier,
+    observability: routerDefaults?.observability ?? config?.observability,
+    api: routerDefaults?.api ?? config?.api,
+  }
+
   // Get models - from providers.models (Python CLI) or model_config (legacy)
   interface NormalizedModel {
     name: string
@@ -1171,13 +1184,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🔒</span>
         <h3 className={styles.sectionTitle}>PII Detection (ModernBERT)</h3>
-        {config?.classifier?.pii_model && (
+        {routerConfig.classifier?.pii_model && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit PII Detection Configuration',
-                config?.classifier?.pii_model || {},
+                routerConfig.classifier?.pii_model || {},
                 [
                   {
                     name: 'model_id',
@@ -1230,33 +1243,33 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.classifier?.pii_model ? (
+        {routerConfig.classifier?.pii_model ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>PII Classifier Model</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {config.classifier.pii_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                {routerConfig.classifier.pii_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{config.classifier.pii_model.model_id}</span>
+                <span className={styles.configValue}>{routerConfig.classifier.pii_model.model_id}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(config.classifier.pii_model.threshold)}</span>
+                <span className={styles.configValue}>{formatThreshold(routerConfig.classifier.pii_model.threshold)}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>ModernBERT</span>
-                <span className={`${styles.statusBadge} ${config.classifier.pii_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                  {config.classifier.pii_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+                <span className={`${styles.statusBadge} ${routerConfig.classifier.pii_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+                  {routerConfig.classifier.pii_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
                 </span>
               </div>
-              {config.classifier.pii_model.pii_mapping_path && (
+              {routerConfig.classifier.pii_model.pii_mapping_path && (
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Mapping Path</span>
-                  <span className={styles.configValue}>{config.classifier.pii_model.pii_mapping_path}</span>
+                  <span className={styles.configValue}>{routerConfig.classifier.pii_model.pii_mapping_path}</span>
                 </div>
               )}
             </div>
@@ -1273,13 +1286,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🛡️</span>
         <h3 className={styles.sectionTitle}>Jailbreak Detection (ModernBERT)</h3>
-        {config?.prompt_guard && (
+        {routerConfig.prompt_guard && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Jailbreak Detection Configuration',
-                config?.prompt_guard || {},
+                routerConfig.prompt_guard || {},
                 [
                   {
                     name: 'enabled',
@@ -1337,40 +1350,40 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.prompt_guard ? (
+        {routerConfig.prompt_guard ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>Jailbreak Protection</span>
-              <span className={`${styles.statusBadge} ${config.prompt_guard.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {config.prompt_guard.enabled ? '✓ Enabled' : '✗ Disabled'}
+              <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.enabled ? styles.statusActive : styles.statusInactive}`}>
+                {routerConfig.prompt_guard.enabled ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
-            {config.prompt_guard.enabled && (
+            {routerConfig.prompt_guard.enabled && (
               <div className={styles.modelCardBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{config.prompt_guard.model_id}</span>
+                  <span className={styles.configValue}>{routerConfig.prompt_guard.model_id}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.prompt_guard.threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.prompt_guard.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Use CPU</span>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {config.prompt_guard.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                    {routerConfig.prompt_guard.use_cpu ? '💻 CPU' : '🎮 GPU'}
                   </span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${config.prompt_guard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {config.prompt_guard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+                  <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+                    {routerConfig.prompt_guard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
                   </span>
                 </div>
-                {config.prompt_guard.jailbreak_mapping_path && (
+                {routerConfig.prompt_guard.jailbreak_mapping_path && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{config.prompt_guard.jailbreak_mapping_path}</span>
+                    <span className={styles.configValue}>{routerConfig.prompt_guard.jailbreak_mapping_path}</span>
                   </div>
                 )}
               </div>
@@ -1387,18 +1400,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // 3. SIMILARITY CACHE SECTION
   // ============================================================================
 
-  const renderSimilarityBERT = () => (
+  const renderSimilarityBERT = () => {
+    return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>⚡</span>
         <h3 className={styles.sectionTitle}>Similarity BERT Configuration</h3>
-        {config?.bert_model && (
+        {routerConfig.bert_model && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Similarity BERT Configuration',
-                config?.bert_model || {},
+                routerConfig.bert_model || {},
                 [
                   {
                     name: 'model_id',
@@ -1437,22 +1451,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.bert_model ? (
+        {routerConfig.bert_model ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>BERT Model (Semantic Similarity)</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {config.bert_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                {routerConfig.bert_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{config.bert_model.model_id}</span>
+                <span className={styles.configValue}>{routerConfig.bert_model.model_id}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(config.bert_model.threshold)}</span>
+                <span className={styles.configValue}>{formatThreshold(routerConfig.bert_model.threshold)}</span>
               </div>
             </div>
           </div>
@@ -1460,13 +1474,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           <div className={styles.emptyState}>BERT model not configured</div>
         )}
 
-        {config?.semantic_cache && (
+        {routerConfig.semantic_cache && (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Semantic Cache</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span className={`${styles.statusBadge} ${config.semantic_cache.enabled ? styles.statusActive : styles.statusInactive}`}>
-                  {config.semantic_cache.enabled ? '✓ Enabled' : '✗ Disabled'}
+                <span className={`${styles.statusBadge} ${routerConfig.semantic_cache?.enabled ? styles.statusActive : styles.statusInactive}`}>
+                  {routerConfig.semantic_cache?.enabled ? '✓ Enabled' : '✗ Disabled'}
                 </span>
                 <button
                   className={styles.sectionEditButton}
@@ -1531,28 +1545,28 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 </button>
               </div>
             </div>
-            {config.semantic_cache.enabled && (
+            {routerConfig.semantic_cache?.enabled && (
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Backend Type</span>
-                  <span className={styles.configValue}>{config.semantic_cache.backend_type || 'memory'}</span>
+                  <span className={styles.configValue}>{routerConfig.semantic_cache?.backend_type || 'memory'}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.semantic_cache.similarity_threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.semantic_cache?.similarity_threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Entries</span>
-                  <span className={styles.configValue}>{config.semantic_cache.max_entries}</span>
+                  <span className={styles.configValue}>{routerConfig.semantic_cache?.max_entries}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>TTL</span>
-                  <span className={styles.configValue}>{config.semantic_cache.ttl_seconds}s</span>
+                  <span className={styles.configValue}>{routerConfig.semantic_cache?.ttl_seconds}s</span>
                 </div>
-                {config.semantic_cache.eviction_policy && (
+                {routerConfig.semantic_cache?.eviction_policy && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Eviction Policy</span>
-                    <span className={styles.configValue}>{config.semantic_cache.eviction_policy}</span>
+                    <span className={styles.configValue}>{routerConfig.semantic_cache.eviction_policy}</span>
                   </div>
                 )}
               </div>
@@ -1561,15 +1575,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
     </div>
-  )
+  )}
 
   // ============================================================================
   // 4. INTELLIGENT ROUTING SECTION
   // ============================================================================
 
   const renderClassifyBERT = () => {
-    const hasInTree = config?.classifier?.category_model
-    const hasOutTree = config?.classifier?.mcp_category_model?.enabled
+    const hasInTree = routerConfig.classifier?.category_model
+    const hasOutTree = routerConfig.classifier?.mcp_category_model?.enabled
 
     return (
       <div className={styles.section}>
@@ -1579,20 +1593,20 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         </div>
         <div className={styles.sectionContent}>
           {/* In-tree Classifier */}
-          {hasInTree && config?.classifier?.category_model && (
+          {hasInTree && routerConfig.classifier?.category_model && (
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
                 <span className={styles.modelCardTitle}>In-tree Category Classifier</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {config.classifier.category_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                    {routerConfig.classifier.category_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
                   </span>
                   <button
                     className={styles.editButton}
                     onClick={() => {
                       openEditModal(
                         'Edit In-tree Category Classifier',
-                        config?.classifier?.category_model || {},
+                        routerConfig.classifier?.category_model || {},
                         [
                           {
                             name: 'model_id',
@@ -1651,22 +1665,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{config.classifier.category_model.model_id}</span>
+                  <span className={styles.configValue}>{routerConfig.classifier?.category_model?.model_id}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.classifier.category_model.threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.classifier?.category_model?.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${config.classifier.category_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {config.classifier.category_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+                  <span className={`${styles.statusBadge} ${routerConfig.classifier?.category_model?.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+                    {routerConfig.classifier?.category_model?.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
                   </span>
                 </div>
-                {config.classifier.category_model.category_mapping_path && (
+                {routerConfig.classifier?.category_model?.category_mapping_path && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{config.classifier.category_model.category_mapping_path}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.category_model.category_mapping_path}</span>
                   </div>
                 )}
               </div>
@@ -1674,7 +1688,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           )}
 
           {/* Out-tree Classifier (MCP) */}
-          {hasOutTree && config?.classifier?.mcp_category_model && (
+          {hasOutTree && routerConfig.classifier?.mcp_category_model && (
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
                 <span className={styles.modelCardTitle}>Out-tree Category Classifier (MCP)</span>
@@ -1685,7 +1699,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     onClick={() => {
                       openEditModal(
                         'Edit Out-tree MCP Category Classifier',
-                        config?.classifier?.mcp_category_model || {},
+                        routerConfig.classifier?.mcp_category_model || {},
                         [
                           {
                             name: 'enabled',
@@ -1773,34 +1787,34 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Transport Type</span>
-                  <span className={styles.configValue}>{config.classifier.mcp_category_model.transport_type}</span>
+                  <span className={styles.configValue}>{routerConfig.classifier?.mcp_category_model?.transport_type}</span>
                 </div>
-                {config.classifier.mcp_category_model.command && (
+                {routerConfig.classifier?.mcp_category_model?.command && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Command</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.command}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.command}</span>
                   </div>
                 )}
-                {config.classifier.mcp_category_model.url && (
+                {routerConfig.classifier?.mcp_category_model?.url && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>URL</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.url}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier?.mcp_category_model?.url}</span>
                   </div>
                 )}
-                {config.classifier.mcp_category_model.tool_name && (
+                {routerConfig.classifier?.mcp_category_model?.tool_name && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Tool Name</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.tool_name}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.tool_name}</span>
                   </div>
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.classifier.mcp_category_model.threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.classifier?.mcp_category_model?.threshold)}</span>
                 </div>
-                {config.classifier.mcp_category_model.timeout_seconds && (
+                {routerConfig.classifier?.mcp_category_model?.timeout_seconds && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Timeout</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.timeout_seconds}s</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.timeout_seconds}s</span>
                   </div>
                 )}
               </div>
@@ -2260,13 +2274,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🔧</span>
         <h3 className={styles.sectionTitle}>Tools Configuration</h3>
-        {config?.tools && (
+        {routerConfig.tools && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Tools Configuration',
-                config?.tools || {},
+                routerConfig.tools || {},
                 [
                   {
                     name: 'enabled',
@@ -2316,27 +2330,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.tools ? (
+        {routerConfig.tools ? (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Tool Auto-Selection</span>
-              <span className={`${styles.statusBadge} ${config.tools.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {config.tools.enabled ? '✓ Enabled' : '✗ Disabled'}
+              <span className={`${styles.statusBadge} ${routerConfig.tools.enabled ? styles.statusActive : styles.statusInactive}`}>
+                {routerConfig.tools.enabled ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
-            {config.tools.enabled && (
+            {routerConfig.tools.enabled && (
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Top K</span>
-                  <span className={styles.configValue}>{config.tools.top_k}</span>
+                  <span className={styles.configValue}>{routerConfig.tools.top_k}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.tools.similarity_threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.tools.similarity_threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Fallback to Empty</span>
-                  <span className={styles.configValue}>{config.tools.fallback_to_empty ? 'Yes' : 'No'}</span>
+                  <span className={styles.configValue}>{routerConfig.tools.fallback_to_empty ? 'Yes' : 'No'}</span>
                 </div>
               </div>
             )}
@@ -2449,13 +2463,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🔍</span>
         <h3 className={styles.sectionTitle}>Distributed Tracing</h3>
-        {config?.observability?.tracing && (
+        {routerConfig.observability?.tracing && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Distributed Tracing Configuration',
-                config?.observability?.tracing || {},
+                routerConfig.observability?.tracing || {},
                 [
                   {
                     name: 'enabled',
@@ -2506,52 +2520,52 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.observability?.tracing ? (
+        {routerConfig.observability?.tracing ? (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Tracing Status</span>
-              <span className={`${styles.statusBadge} ${config.observability.tracing.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {config.observability.tracing.enabled ? '✓ Enabled' : '✗ Disabled'}
+              <span className={`${styles.statusBadge} ${routerConfig.observability.tracing.enabled ? styles.statusActive : styles.statusInactive}`}>
+                {routerConfig.observability.tracing.enabled ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
-            {config.observability.tracing.enabled && (
+            {routerConfig.observability.tracing.enabled && (
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Provider</span>
-                  <span className={styles.configValue}>{config.observability.tracing.provider}</span>
+                  <span className={styles.configValue}>{routerConfig.observability.tracing.provider}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Exporter Type</span>
-                  <span className={styles.configValue}>{config.observability.tracing.exporter.type}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.exporter?.type}</span>
                 </div>
-                {config.observability.tracing.exporter.endpoint && (
+                {routerConfig.observability?.tracing?.exporter?.endpoint && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Endpoint</span>
-                    <span className={styles.configValue}>{config.observability.tracing.exporter.endpoint}</span>
+                    <span className={styles.configValue}>{routerConfig.observability.tracing.exporter.endpoint}</span>
                   </div>
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Sampling Type</span>
-                  <span className={styles.configValue}>{config.observability.tracing.sampling.type}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.sampling?.type}</span>
                 </div>
-                {config.observability.tracing.sampling.rate !== undefined && (
+                {routerConfig.observability?.tracing?.sampling?.rate !== undefined && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Sampling Rate</span>
-                    <span className={styles.configValue}>{(config.observability.tracing.sampling.rate * 100).toFixed(0)}%</span>
+                    <span className={styles.configValue}>{((routerConfig.observability?.tracing?.sampling?.rate ?? 0) * 100).toFixed(0)}%</span>
                   </div>
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Service Name</span>
-                  <span className={styles.configValue}>{config.observability.tracing.resource.service_name}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.resource?.service_name}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Service Version</span>
-                  <span className={styles.configValue}>{config.observability.tracing.resource.service_version}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.resource?.service_version}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Environment</span>
-                  <span className={`${styles.badge} ${styles[`badge${config.observability.tracing.resource.deployment_environment}`]}`}>
-                    {config.observability.tracing.resource.deployment_environment}
+                  <span className={`${styles.badge} ${styles[`badge${routerConfig.observability?.tracing?.resource?.deployment_environment ?? ''}`]}`}>
+                    {routerConfig.observability?.tracing?.resource?.deployment_environment}
                   </span>
                 </div>
               </div>
@@ -2573,13 +2587,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <div className={styles.sectionHeader}>
         <span className={styles.sectionIcon}>🔌</span>
         <h3 className={styles.sectionTitle}>Batch Classification API</h3>
-        {config?.api?.batch_classification && (
+        {routerConfig.api?.batch_classification && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Batch Classification API Configuration',
-                config?.api?.batch_classification || {},
+                routerConfig.api?.batch_classification || {},
                 [
                   {
                     name: 'max_batch_size',
@@ -2625,7 +2639,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.api?.batch_classification ? (
+        {routerConfig.api?.batch_classification ? (
           <>
             <div className={styles.featureCard}>
               <div className={styles.featureHeader}>
@@ -2634,49 +2648,49 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Batch Size</span>
-                  <span className={styles.configValue}>{config.api.batch_classification.max_batch_size}</span>
+                  <span className={styles.configValue}>{routerConfig.api.batch_classification.max_batch_size}</span>
                 </div>
-                {config.api.batch_classification.concurrency_threshold !== undefined && (
+                {routerConfig.api.batch_classification.concurrency_threshold !== undefined && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Concurrency Threshold</span>
-                    <span className={styles.configValue}>{config.api.batch_classification.concurrency_threshold}</span>
+                    <span className={styles.configValue}>{routerConfig.api.batch_classification.concurrency_threshold}</span>
                   </div>
                 )}
-                {config.api.batch_classification.max_concurrency !== undefined && (
+                {routerConfig.api.batch_classification.max_concurrency !== undefined && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Max Concurrency</span>
-                    <span className={styles.configValue}>{config.api.batch_classification.max_concurrency}</span>
+                    <span className={styles.configValue}>{routerConfig.api.batch_classification.max_concurrency}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {config.api.batch_classification.metrics && (
+            {routerConfig.api?.batch_classification?.metrics && (
               <div className={styles.featureCard}>
                 <div className={styles.featureHeader}>
                   <span className={styles.featureTitle}>Metrics Collection</span>
-                  <span className={`${styles.statusBadge} ${config.api.batch_classification.metrics.enabled ? styles.statusActive : styles.statusInactive}`}>
-                    {config.api.batch_classification.metrics.enabled ? '✓ Enabled' : '✗ Disabled'}
+                  <span className={`${styles.statusBadge} ${routerConfig.api.batch_classification.metrics.enabled ? styles.statusActive : styles.statusInactive}`}>
+                    {routerConfig.api.batch_classification.metrics.enabled ? '✓ Enabled' : '✗ Disabled'}
                   </span>
                 </div>
-                {config.api.batch_classification.metrics.enabled && (
+                {routerConfig.api.batch_classification.metrics.enabled && (
                   <div className={styles.featureBody}>
-                    {config.api.batch_classification.metrics.sample_rate !== undefined && (
+                    {routerConfig.api.batch_classification.metrics.sample_rate !== undefined && (
                       <div className={styles.configRow}>
                         <span className={styles.configLabel}>Sample Rate</span>
-                        <span className={styles.configValue}>{(config.api.batch_classification.metrics.sample_rate * 100).toFixed(0)}%</span>
+                        <span className={styles.configValue}>{((routerConfig.api.batch_classification.metrics.sample_rate ?? 0) * 100).toFixed(0)}%</span>
                       </div>
                     )}
-                    {config.api.batch_classification.metrics.detailed_goroutine_tracking !== undefined && (
+                    {routerConfig.api.batch_classification.metrics.detailed_goroutine_tracking !== undefined && (
                       <div className={styles.configRow}>
                         <span className={styles.configLabel}>Goroutine Tracking</span>
-                        <span className={styles.configValue}>{config.api.batch_classification.metrics.detailed_goroutine_tracking ? 'Yes' : 'No'}</span>
+                        <span className={styles.configValue}>{routerConfig.api.batch_classification.metrics.detailed_goroutine_tracking ? 'Yes' : 'No'}</span>
                       </div>
                     )}
-                    {config.api.batch_classification.metrics.high_resolution_timing !== undefined && (
+                    {routerConfig.api.batch_classification.metrics.high_resolution_timing !== undefined && (
                       <div className={styles.configRow}>
                         <span className={styles.configLabel}>High Resolution Timing</span>
-                        <span className={styles.configValue}>{config.api.batch_classification.metrics.high_resolution_timing ? 'Yes' : 'No'}</span>
+                        <span className={styles.configValue}>{routerConfig.api.batch_classification.metrics.high_resolution_timing ? 'Yes' : 'No'}</span>
                       </div>
                     )}
                   </div>
