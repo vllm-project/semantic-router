@@ -45,6 +45,12 @@ extern bool init_feedback_detector(const char* model_id, bool use_cpu);
 
 extern bool init_modernbert_pii_token_classifier(const char* model_id, bool use_cpu);
 
+// mmBERT (multilingual ModernBERT) initialization functions
+extern bool init_mmbert_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_classifier_auto(const char* model_id, bool use_cpu);
+extern bool init_mmbert_token_classifier(const char* model_id, bool use_cpu);
+extern bool is_mmbert_model(const char* config_path);
+
 // Token classification structures
 typedef struct {
     char* entity_type;
@@ -1649,6 +1655,97 @@ func InitModernBertPIITokenClassifier(modelPath string, useCPU bool) error {
 		}
 	})
 	return err
+}
+
+// ============================================================================
+// mmBERT (Multilingual ModernBERT) Functions
+// ============================================================================
+
+var (
+	mmBertClassifierInitOnce      sync.Once
+	mmBertTokenClassifierInitOnce sync.Once
+)
+
+// InitMmBertClassifier initializes the mmBERT (multilingual ModernBERT) classifier
+// mmBERT supports 1800+ languages with 256k vocabulary and 8192 max sequence length.
+// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
+func InitMmBertClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBertClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "jhu-clsp/mmBERT-base"
+		}
+
+		log.Printf("🌐 Initializing mmBERT (multilingual) classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT classifier model")
+		} else {
+			log.Printf("   ✓ mmBERT classifier initialized successfully")
+		}
+	})
+	return err
+}
+
+// InitMmBertClassifierAuto initializes a ModernBERT classifier with auto-detection
+// This function auto-detects whether a model is mmBERT (multilingual) or standard ModernBERT
+// based on the model's config.json (vocab_size >= 200000 and position_embedding_type == "sans_pos")
+func InitMmBertClassifierAuto(modelPath string, useCPU bool) error {
+	var err error
+	mmBertClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "jhu-clsp/mmBERT-base"
+		}
+
+		log.Printf("🔍 Auto-detecting ModernBERT variant: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_classifier_auto(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize classifier model with auto-detection")
+		} else {
+			log.Printf("   ✓ Classifier initialized successfully (variant auto-detected)")
+		}
+	})
+	return err
+}
+
+// InitMmBertTokenClassifier initializes the mmBERT token classifier for multilingual NER
+func InitMmBertTokenClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBertTokenClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "jhu-clsp/mmBERT-base"
+		}
+
+		log.Printf("🌐 Initializing mmBERT (multilingual) token classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_token_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT token classifier model")
+		} else {
+			log.Printf("   ✓ mmBERT token classifier initialized successfully")
+		}
+	})
+	return err
+}
+
+// IsMmBertModel checks if a model is mmBERT (multilingual) based on its config.json
+// Returns true if the model has vocab_size >= 200000 and uses sans_pos position embeddings.
+func IsMmBertModel(configPath string) bool {
+	cConfigPath := C.CString(configPath)
+	defer C.free(unsafe.Pointer(cConfigPath))
+
+	return bool(C.is_mmbert_model(cConfigPath))
 }
 
 // InitFactCheckClassifier initializes the halugate-sentinel fact-check classifier
