@@ -4,27 +4,30 @@
 //! Supports both BERT and ModernBERT/mmBERT models
 
 use crate::core::{processing_errors, ModelErrorType, UnifiedError};
-use crate::model_architectures::lora::bert_lora::{
-    HighPerformanceBertClassifier, HighPerformanceModernBertClassifier, 
-    is_mmbert_model, TextClassifier,
-};
+use crate::model_architectures::lora::bert_lora::HighPerformanceBertClassifier;
+use crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier;
 use crate::model_error;
 use candle_core::Result;
+use std::path::Path;
 use std::time::Instant;
+
+/// Classifier backend enum to avoid Box<dyn Trait>
+enum ClassifierBackend {
+    Bert(HighPerformanceBertClassifier),
+    ModernBert(TraditionalModernBertClassifier),
+}
 
 /// Intent classifier with real model inference (merged LoRA models)
 /// Supports both BERT and ModernBERT/mmBERT architectures
 pub struct IntentLoRAClassifier {
-    /// High-performance classifier (either BERT or ModernBERT/mmBERT)
-    classifier: Box<dyn TextClassifier>,
+    /// Classifier backend (either BERT or ModernBERT/mmBERT)
+    backend: ClassifierBackend,
     /// Confidence threshold for predictions
     confidence_threshold: f32,
     /// Intent labels mapping
     intent_labels: Vec<String>,
     /// Model path for reference
     model_path: String,
-    /// Whether this is an mmBERT (multilingual) model
-    is_multilingual: bool,
 }
 
 /// Intent classification result
@@ -43,11 +46,10 @@ impl IntentLoRAClassifier {
         let intent_labels = Self::load_labels_from_config(model_path)?;
         let num_classes = intent_labels.len();
 
-        // Detect model type and create appropriate classifier
-        let is_multilingual = is_mmbert_model(model_path);
-        let classifier: Box<dyn TextClassifier> = if is_multilingual || Self::is_modernbert(model_path) {
-            // Use ModernBERT/mmBERT classifier
-            Box::new(HighPerformanceModernBertClassifier::new(model_path, num_classes, use_cpu)
+        // Detect model type and create appropriate backend
+        let backend = if Self::is_modernbert(model_path) {
+            // Use existing TraditionalModernBertClassifier (supports both ModernBERT and mmBERT)
+            let classifier = TraditionalModernBertClassifier::load_from_directory(model_path, use_cpu)
                 .map_err(|e| {
                     let unified_err = model_error!(
                         ModelErrorType::LoRA,
@@ -56,10 +58,11 @@ impl IntentLoRAClassifier {
                         model_path
                     );
                     candle_core::Error::from(unified_err)
-                })?)
+                })?;
+            ClassifierBackend::ModernBert(classifier)
         } else {
             // Use standard BERT classifier
-            Box::new(HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)
+            let classifier = HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)
                 .map_err(|e| {
                     let unified_err = model_error!(
                         ModelErrorType::LoRA,
@@ -68,27 +71,26 @@ impl IntentLoRAClassifier {
                         model_path
                     );
                     candle_core::Error::from(unified_err)
-                })?)
+                })?;
+            ClassifierBackend::Bert(classifier)
         };
 
-        // Load threshold from global config instead of hardcoding
+        // Load threshold from global config
         let confidence_threshold = {
             use crate::core::config_loader::GlobalConfigLoader;
             GlobalConfigLoader::load_intent_threshold().unwrap_or(0.6)
         };
 
         Ok(Self {
-            classifier,
+            backend,
             confidence_threshold,
             intent_labels,
             model_path: model_path.to_string(),
-            is_multilingual,
         })
     }
 
-    /// Check if model is ModernBERT architecture
+    /// Check if model is ModernBERT/mmBERT architecture
     fn is_modernbert(model_path: &str) -> bool {
-        use std::path::Path;
         let config_path = Path::new(model_path).join("config.json");
         if let Ok(config_str) = std::fs::read_to_string(&config_path) {
             if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_str) {
@@ -103,7 +105,17 @@ impl IntentLoRAClassifier {
 
     /// Check if this classifier is using an mmBERT (multilingual) model
     pub fn is_multilingual(&self) -> bool {
-        self.is_multilingual
+        matches!(&self.backend, ClassifierBackend::ModernBert(c) if c.is_multilingual())
+    }
+    
+    /// Classify using the appropriate backend
+    fn classify_with_backend(&self, text: &str) -> Result<(usize, f32)> {
+        match &self.backend {
+            ClassifierBackend::Bert(c) => c.classify_text(text).map_err(|e| {
+                candle_core::Error::Msg(format!("BERT classification failed: {}", e))
+            }),
+            ClassifierBackend::ModernBert(c) => c.classify_text(text),
+        }
     }
 
     /// Load intent labels from model config.json using unified config loader
@@ -120,9 +132,9 @@ impl IntentLoRAClassifier {
     pub fn classify_intent(&self, text: &str) -> Result<IntentResult> {
         let start_time = Instant::now();
 
-        // Use appropriate model (BERT or ModernBERT/mmBERT) for classification
+        // Use appropriate backend (BERT or ModernBERT/mmBERT) for classification
         let (predicted_class, confidence) =
-            self.classifier.classify_text(text).map_err(|e| {
+            self.classify_with_backend(text).map_err(|e| {
                 let unified_err = model_error!(
                     ModelErrorType::LoRA,
                     "intent classification",
@@ -160,9 +172,9 @@ impl IntentLoRAClassifier {
 
     /// Classify intent and return (class_index, confidence, intent_label) for FFI
     pub fn classify_with_index(&self, text: &str) -> Result<(usize, f32, String)> {
-        // Use real BERT model for classification
+        // Use appropriate backend (BERT or ModernBERT/mmBERT) for classification
         let (predicted_class, confidence) =
-            self.classifier.classify_text(text).map_err(|e| {
+            self.classify_with_backend(text).map_err(|e| {
                 let unified_err = model_error!(
                     ModelErrorType::LoRA,
                     "intent classification",
@@ -212,11 +224,15 @@ impl IntentLoRAClassifier {
     pub fn batch_classify(&self, texts: &[&str]) -> Result<Vec<IntentResult>> {
         let start_time = Instant::now();
 
-        // Use BERT's batch processing capability
-        let batch_results = self.classifier.classify_batch(texts).map_err(|e| {
-            let unified_err = processing_errors::batch_processing(texts.len(), &e.to_string());
-            candle_core::Error::from(unified_err)
-        })?;
+        // For batch, use parallel classify (TraditionalModernBertClassifier doesn't expose batch)
+        let batch_results: Vec<(usize, f32)> = texts
+            .iter()
+            .map(|text| self.classify_with_backend(text))
+            .collect::<Result<Vec<_>>>()
+            .map_err(|e: candle_core::Error| {
+                let unified_err = processing_errors::batch_processing(texts.len(), &e.to_string());
+                candle_core::Error::from(unified_err)
+            })?;
 
         let processing_time = start_time.elapsed().as_millis() as u64;
 
