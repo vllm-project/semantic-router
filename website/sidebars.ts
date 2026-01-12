@@ -33,7 +33,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         {
           type: 'category',
-          label: 'Intall with Gateways',
+          label: 'Install with Gateways',
           items: [
             'installation/k8s/ai-gateway',
             'installation/k8s/istio',
@@ -42,11 +42,12 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Intall with Frameworks',
+          label: 'Install with Frameworks',
           items: [
             'installation/k8s/production-stack',
             'installation/k8s/aibrix',
             'installation/k8s/llm-d',
+            'installation/k8s/dynamo',
           ],
         },
       ],

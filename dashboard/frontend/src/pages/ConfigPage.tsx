@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { FieldConfig } from '../components/EditModal'
+import ViewModal, { ViewSection } from '../components/ViewModal'
+import { DataTable, Column } from '../components/DataTable'
+import TableHeader from '../components/TableHeader'
+import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
+import {
+  ConfigFormat,
+  detectConfigFormat,
+} from '../types/config'
 
 interface VLLMEndpoint {
   name: string
@@ -44,7 +52,9 @@ interface ModelScore {
 interface Category {
   name: string
   system_prompt?: string
-  model_scores: ModelScore[]
+  description?: string
+  // model_scores can be array (Python CLI) or object (Legacy: {"gpt-4": 0.9})
+  model_scores?: ModelScore[] | Record<string, number>
 }
 
 interface ToolFunction {
@@ -52,6 +62,7 @@ interface ToolFunction {
   description: string
   parameters: {
     type: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     properties: Record<string, any>
     required?: string[]
   }
@@ -78,16 +89,10 @@ interface ModelPricing {
   completion_per_1m?: number
 }
 
-interface PIIPolicy {
-  allow_by_default: boolean
-  pii_types_allowed?: string[]
-}
-
 interface ModelConfigEntry {
   reasoning_family?: string
   preferred_endpoints?: string[]
   pricing?: ModelPricing
-  pii_policy?: PIIPolicy
 }
 
 interface TracingConfig {
@@ -126,6 +131,66 @@ interface APIConfig {
 }
 
 interface ConfigData {
+  // === Python CLI Format (new) ===
+  version?: string
+  listeners?: Array<{
+    name: string
+    address: string
+    port: number
+    timeout?: string
+  }>
+  signals?: {
+    keywords?: Array<{
+      name: string
+      operator: 'AND' | 'OR'
+      keywords: string[]
+      case_sensitive: boolean
+    }>
+    embeddings?: Array<{
+      name: string
+      threshold: number
+      candidates: string[]
+      aggregation_method: string
+    }>
+    domains?: Array<{
+      name: string
+      description: string
+      mmlu_categories?: string[]
+    }>
+    fact_check?: Array<{ name: string; description: string }>
+    user_feedbacks?: Array<{ name: string; description: string }>
+    preferences?: Array<{ name: string; description: string }>
+  }
+  decisions?: Array<{
+    name: string
+    description: string
+    priority: number
+    rules: {
+      operator: 'AND' | 'OR'
+      conditions: Array<{ type: string; name: string }>
+    }
+    modelRefs: Array<{ model: string; use_reasoning: boolean }>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    plugins?: Array<{ type: string; configuration: Record<string, any> }>
+  }>
+  providers?: {
+    models: Array<{
+      name: string
+      reasoning_family?: string
+      endpoints: Array<{
+        name: string
+        weight: number
+        endpoint: string
+        protocol: 'http' | 'https'
+      }>
+      access_key?: string
+    }>
+    default_model: string
+    reasoning_families?: Record<string, ReasoningFamily>
+    default_reasoning_effort?: string
+  }
+
+  // === Legacy Format (Go router) ===
   bert_model?: ModelConfig
   semantic_cache?: {
     enabled: boolean
@@ -134,6 +199,7 @@ interface ConfigData {
     max_entries: number
     ttl_seconds: number
     eviction_policy?: string
+    embedding_model?: string
   }
   tools?: {
     enabled: boolean
@@ -157,6 +223,7 @@ interface ConfigData {
   api?: APIConfig
   observability?: {
     tracing?: TracingConfig
+    metrics?: { enabled: boolean }
   }
   [key: string]: unknown
 }
@@ -170,50 +237,60 @@ const formatThreshold = (value: number): string => {
   return `${Math.round(value * 100)}%`
 }
 
-// Helper function to mask address for security
-const maskAddress = (address: string): string => {
-  if (address.length <= 8) {
-    return '•'.repeat(address.length)
-  }
-  // Show first 3 and last 3 characters, mask the middle
-  const start = address.substring(0, 3)
-  const end = address.substring(address.length - 3)
-  const middleLength = address.length - 6
-  return `${start}${'•'.repeat(middleLength)}${end}`
-}
+// Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedView, setSelectedView] = useState<'structured' | 'raw'>('structured')
+  const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
+
+  // Router defaults state (from .vllm-sr/router-defaults.yaml)
+  const [routerDefaults, setRouterDefaults] = useState<ConfigData | null>(null)
 
   // Tools database state
   const [toolsData, setToolsData] = useState<Tool[]>([])
   const [toolsLoading, setToolsLoading] = useState(false)
   const [toolsError, setToolsError] = useState<string | null>(null)
 
-  // Endpoint address visibility state (for security masking)
-  const [visibleAddresses, setVisibleAddresses] = useState<Set<number>>(new Set())
+  // Removed visibleAddresses state - no longer needed
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editModalTitle, setEditModalTitle] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editModalData, setEditModalData] = useState<any>(null)
   const [editModalFields, setEditModalFields] = useState<FieldConfig[]>([])
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editModalCallback, setEditModalCallback] = useState<((data: any) => Promise<void>) | null>(null)
+
+  // View modal state
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [viewModalTitle, setViewModalTitle] = useState('')
+  const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
+
+  // Search state
+  const [decisionsSearch, setDecisionsSearch] = useState('')
+  const [signalsSearch, setSignalsSearch] = useState('')
+  const [modelsSearch, setModelsSearch] = useState('')
+
+  // Expandable rows state for models
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchConfig()
+    fetchRouterDefaults()
   }, [])
 
   // Fetch tools database when config is loaded
   useEffect(() => {
-    if (config?.tools?.tools_db_path) {
+    if (config?.tools?.tools_db_path || routerDefaults?.tools?.tools_db_path) {
       fetchToolsDB()
     }
-  }, [config?.tools?.tools_db_path])
+  }, [config?.tools?.tools_db_path, routerDefaults?.tools?.tools_db_path])
 
   const fetchConfig = async () => {
     setLoading(true)
@@ -225,11 +302,33 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
       }
       const data = await response.json()
       setConfig(data)
+      // Detect config format
+      const format = detectConfigFormat(data)
+      setConfigFormat(format)
+      if (format === 'legacy') {
+        console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
       setConfig(null)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchRouterDefaults = async () => {
+    try {
+      const response = await fetch('/api/router/config/defaults')
+      if (!response.ok) {
+        console.warn('Router defaults not available:', response.statusText)
+        setRouterDefaults(null)
+        return
+      }
+      const data = await response.json()
+      setRouterDefaults(data)
+    } catch (err) {
+      console.warn('Failed to fetch router defaults:', err)
+      setRouterDefaults(null)
     }
   }
 
@@ -251,7 +350,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
   }
 
-  // @ts-ignore - Will be used when edit buttons are added
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveConfig = async (updatedConfig: any) => {
     try {
       const response = await fetch('/api/router/config/update', {
@@ -289,11 +388,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     }
   }
 
-  // @ts-ignore - Will be used when edit buttons are added
   const openEditModal = (
     title: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any,
     fields: FieldConfig[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callback: (data: any) => Promise<void>,
     mode: 'edit' | 'add' = 'edit'
   ) => {
@@ -312,524 +412,137 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     setEditModalCallback(null)
   }
 
-  const handleRefresh = () => {
-    fetchConfig()
+  // Get effective config value - check router defaults first, then main config
+  // Utility for merging config sources, will be used in render functions
+  const getEffectiveConfig = (key: string) => {
+    // For router defaults sections, prefer routerDefaults
+    if (routerDefaults && routerDefaults[key] !== undefined) {
+      return routerDefaults[key]
+    }
+    return config?.[key]
+  }
+  // Mark as used to avoid linting error
+  void getEffectiveConfig
+
+  // ============================================================================
+  // HELPER FUNCTIONS - Normalize data access across config formats
+  // ============================================================================
+
+  // Helper: Check if using Python CLI format
+  const isPythonCLI = configFormat === 'python-cli'
+
+  // Effective router config - merges routerDefaults (system settings) with config (fallback)
+  // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
+  // For Legacy: these settings are in config.yaml directly
+  const routerConfig = {
+    bert_model: routerDefaults?.bert_model ?? config?.bert_model,
+    semantic_cache: routerDefaults?.semantic_cache ?? config?.semantic_cache,
+    tools: routerDefaults?.tools ?? config?.tools,
+    prompt_guard: routerDefaults?.prompt_guard ?? config?.prompt_guard,
+    classifier: routerDefaults?.classifier ?? config?.classifier,
+    observability: routerDefaults?.observability ?? config?.observability,
+    api: routerDefaults?.api ?? config?.api,
   }
 
-  // ============================================================================
-  // 1. MODELS SECTION
-  // ============================================================================
+  // Get models - from providers.models (Python CLI) or model_config (legacy)
+  interface NormalizedModel {
+    name: string
+    reasoning_family?: string
+    endpoints: Array<{ name: string; weight: number; endpoint: string; protocol: string }>
+    access_key?: string
+    pricing?: {
+      currency?: string
+      prompt_per_1m?: number
+      completion_per_1m?: number
+    }
+  }
 
-  const renderUserDefinedEndpoints = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔌</span>
-        <h3 className={styles.sectionTitle}>User Defined Endpoints</h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={styles.badge}>{config?.vllm_endpoints?.length || 0} endpoints</span>
-          <button
-            className={styles.addButton}
-            onClick={() => {
-              openEditModal(
-                'Add New Endpoint',
-                { name: '', address: '', port: 8000, weight: 1 },
-                [
-                  { name: 'name', label: 'Endpoint Name', type: 'text', required: true, placeholder: 'e.g., vllm-endpoint-1' },
-                  { name: 'address', label: 'Address', type: 'text', required: true, placeholder: 'e.g., localhost' },
-                  { name: 'port', label: 'Port', type: 'number', required: true, placeholder: '8000' },
-                  { name: 'weight', label: 'Weight', type: 'number', placeholder: '1', description: 'Load balancing weight for this endpoint' }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  // Create a new array to avoid mutating the original state
-                  newConfig.vllm_endpoints = [...(newConfig.vllm_endpoints || []), data]
-                  await saveConfig(newConfig)
-                },
-                'add'
-              )
-            }}
-          >
-            ➕ Add Endpoint
-          </button>
-        </div>
-      </div>
-      <div className={styles.sectionContent}>
-        {config?.vllm_endpoints && config.vllm_endpoints.length > 0 ? (
-          config.vllm_endpoints.map((endpoint, index) => (
-            <div key={index} className={styles.endpointCard}>
-              <div className={styles.endpointHeader}>
-                <span className={styles.endpointName}>{endpoint.name}</span>
-                <div className={styles.cardActions}>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => {
-                      openEditModal(
-                        `Edit Endpoint: ${endpoint.name}`,
-                        { ...endpoint },
-                        [
-                          { name: 'name', label: 'Endpoint Name', type: 'text', required: true },
-                          { name: 'address', label: 'Address', type: 'text', required: true },
-                          { name: 'port', label: 'Port', type: 'number', required: true },
-                          { name: 'weight', label: 'Weight', type: 'number', description: 'Load balancing weight for this endpoint' }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (newConfig.vllm_endpoints) {
-                            // Create a new array to avoid mutating the original state
-                            newConfig.vllm_endpoints = [...newConfig.vllm_endpoints]
-                            newConfig.vllm_endpoints[index] = data
-                          }
-                          await saveConfig(newConfig)
-                        },
-                        'edit'
-                      )
-                    }}
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    className={styles.deleteButton}
-                    onClick={() => {
-                      // Check if endpoint is referenced in model_config
-                      const referencedIn: string[] = []
-                      if (config?.model_config) {
-                        Object.entries(config.model_config).forEach(([modelName, modelConfig]) => {
-                          if (modelConfig.preferred_endpoints?.includes(endpoint.name)) {
-                            referencedIn.push(modelName)
-                          }
-                        })
-                      }
+  const getModels = (): NormalizedModel[] => {
+    if (isPythonCLI && config?.providers?.models) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return config.providers.models.map((m: any): NormalizedModel => {
+        const model: NormalizedModel = {
+          name: m.name,
+          reasoning_family: m.reasoning_family,
+          endpoints: m.endpoints || [],
+          access_key: m.access_key,
+          pricing: m.pricing,
+        }
+        return model
+      })
+    }
+    // Legacy format - convert model_config to array
+    if (config?.model_config) {
+      return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(([name, cfg]) => ({
+        name,
+        reasoning_family: cfg.reasoning_family,
+        endpoints: cfg.preferred_endpoints?.map((ep: string) => {
+          const endpoint = config.vllm_endpoints?.find((e: VLLMEndpoint) => e.name === ep)
+          return endpoint ? {
+            name: ep,
+            weight: endpoint.weight || 1,
+            endpoint: `${endpoint.address}:${endpoint.port}`,
+            protocol: 'http',
+          } : null
+        }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
+        access_key: undefined,
+        pricing: cfg.pricing
+      }))
+    }
+    return []
+  }
 
-                      let confirmMessage = `Delete endpoint "${endpoint.name}"?`
-                      if (referencedIn.length > 0) {
-                        const modelList = referencedIn.length === 1 
-                          ? `model "${referencedIn[0]}"` 
-                          : `${referencedIn.length} models (${referencedIn.join(', ')})`
-                        confirmMessage += `\n\n⚠️ This endpoint is currently used in ${modelList}.\nIt will be automatically removed from their preferred endpoints.`
-                      }
+  // Get domains/categories - from signals.domains (Python CLI) or categories (legacy)
+  const getDomains = (): Array<{ name: string; description: string; mmlu_categories?: string[] }> => {
+    if (isPythonCLI && config?.signals?.domains) {
+      return config.signals.domains
+    }
+    return config?.categories?.map((c: Category) => ({
+      name: c.name,
+      description: c.system_prompt || '',
+      mmlu_categories: [] as string[],
+    })) || []
+  }
 
-                      if (confirm(confirmMessage)) {
-                        const newConfig = { ...config }
-                        if (newConfig.vllm_endpoints) {
-                          // Create a new array to avoid mutating the original state
-                          newConfig.vllm_endpoints = newConfig.vllm_endpoints.filter((_, i) => i !== index)
-                        }
+  // Get decisions/routes - from decisions (Python CLI) or categories with model_scores (legacy)
+  const getDecisions = () => {
+    if (isPythonCLI && config?.decisions) {
+      return config.decisions
+    }
+    // Legacy format doesn't have decisions in the same way
+    return []
+  }
 
-                        // Remove endpoint from all model_config preferred_endpoints
-                        if (newConfig.model_config) {
-                          Object.keys(newConfig.model_config).forEach((modelName) => {
-                            const modelConfig = newConfig.model_config![modelName]
-                            if (modelConfig.preferred_endpoints) {
-                              // Filter out the deleted endpoint
-                              modelConfig.preferred_endpoints = modelConfig.preferred_endpoints.filter(
-                                (ep) => ep !== endpoint.name
-                              )
-                              // Remove preferred_endpoints if array becomes empty
-                              if (modelConfig.preferred_endpoints.length === 0) {
-                                delete modelConfig.preferred_endpoints
-                              }
-                            }
-                          })
-                        }
+  // Get default model
+  const getDefaultModel = (): string => {
+    if (isPythonCLI) {
+      return config?.providers?.default_model || ''
+    }
+    return config?.default_model || ''
+  }
 
-                        saveConfig(newConfig)
-                      }
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-              <div className={styles.endpointDetails}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>🌐 Address</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className={styles.configValue}>
-                      {visibleAddresses.has(index) ? endpoint.address : maskAddress(endpoint.address)}
-                    </span>
-                    <button
-                      className={styles.toggleVisibilityButton}
-                      onClick={() => {
-                        const newVisible = new Set(visibleAddresses)
-                        if (newVisible.has(index)) {
-                          newVisible.delete(index)
-                        } else {
-                          newVisible.add(index)
-                        }
-                        setVisibleAddresses(newVisible)
-                      }}
-                      title={visibleAddresses.has(index) ? 'Hide address' : 'Show address'}
-                    >
-                      {visibleAddresses.has(index) ? '👁️' : '👁️‍🗨️'}
-                    </button>
-                  </div>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>🔌 Port</span>
-                  <span className={styles.configValue}>{endpoint.port}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>⚖️ Weight</span>
-                  <span className={styles.configValue}>{endpoint.weight}</span>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className={styles.emptyState}>No endpoints configured</div>
-        )}
-      </div>
-    </div>
-  )
+  // Get reasoning families
+  const getReasoningFamilies = (): Record<string, ReasoningFamily> => {
+    if (isPythonCLI) {
+      return config?.providers?.reasoning_families || {}
+    }
+    return config?.reasoning_families || {}
+  }
 
-  const renderUserDefinedModels = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🤖</span>
-        <h3 className={styles.sectionTitle}>User Defined Models</h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={styles.badge}>{config?.model_config ? Object.keys(config.model_config).length : 0} models</span>
-          <button
-            className={styles.addButton}
-            onClick={() => {
-              // Get available reasoning families
-              const reasoningFamilies = config?.reasoning_families
-                ? Object.keys(config.reasoning_families)
-                : []
+  // Helper: Normalize model_scores from object to array (Legacy format uses object)
+  // Legacy: { "gpt-4": 0.9, "llama": 0.7 } → [{ model: "gpt-4", score: 0.9 }, ...]
+  const normalizeModelScores = (modelScores: ModelScore[] | Record<string, number> | undefined): ModelScore[] => {
+    if (!modelScores) return []
+    // Already an array
+    if (Array.isArray(modelScores)) return modelScores
+    // Object format (Legacy) - convert to array
+    return Object.entries(modelScores).map(([model, score]) => ({
+      model,
+      score: typeof score === 'number' ? score : 0,
+      use_reasoning: false,
+    }))
+  }
 
-              // Get available endpoints
-              const endpoints = config?.vllm_endpoints
-                ? config.vllm_endpoints.map(ep => ep.name)
-                : []
-
-              // PII types
-              const piiTypes = [
-                'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
-                'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
-                'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
-                'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
-                'US_SSN', 'ZIP_CODE'
-              ]
-
-              openEditModal(
-                'Add New Model',
-                {
-                  reasoning_family: reasoningFamilies[0] || '',
-                  preferred_endpoints: [],
-                  currency: 'USD',
-                  prompt_per_1m: 0,
-                  completion_per_1m: 0,
-                  pii_allow_by_default: true,
-                  pii_types_allowed: []
-                },
-                [
-                  {
-                    name: 'model_name',
-                    label: 'Model Name',
-                    type: 'text',
-                    required: true,
-                    placeholder: 'e.g., openai/gpt-oss-20b',
-                    description: 'Unique identifier for the model'
-                  },
-                  {
-                    name: 'reasoning_family',
-                    label: 'Reasoning Family',
-                    type: 'select',
-                    options: reasoningFamilies,
-                    description: 'Select from configured reasoning families'
-                  },
-                  {
-                    name: 'preferred_endpoints',
-                    label: 'Preferred Endpoints',
-                    type: 'multiselect',
-                    options: endpoints,
-                    description: 'Select one or more endpoints for this model'
-                  },
-                  {
-                    name: 'currency',
-                    label: 'Pricing Currency',
-                    type: 'text',
-                    placeholder: 'USD',
-                    description: 'ISO currency code (e.g., USD, EUR, CNY)'
-                  },
-                  {
-                    name: 'prompt_per_1m',
-                    label: 'Prompt Price per 1M Tokens',
-                    type: 'number',
-                    placeholder: '0.50',
-                    description: 'Cost per 1 million prompt tokens'
-                  },
-                  {
-                    name: 'completion_per_1m',
-                    label: 'Completion Price per 1M Tokens',
-                    type: 'number',
-                    placeholder: '1.50',
-                    description: 'Cost per 1 million completion tokens'
-                  },
-                  {
-                    name: 'pii_allow_by_default',
-                    label: 'PII Policy: Allow by Default',
-                    type: 'boolean',
-                    description: 'If enabled, all PII types are allowed unless specified below'
-                  },
-                  {
-                    name: 'pii_types_allowed',
-                    label: 'PII Types Allowed/Blocked',
-                    type: 'multiselect',
-                    options: piiTypes,
-                    description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
-                  }
-                ],
-                async (data) => {
-                  const newConfig = { ...config }
-                  if (!newConfig.model_config) newConfig.model_config = {}
-                  const { model_name, currency, prompt_per_1m, completion_per_1m, pii_allow_by_default, pii_types_allowed, ...otherData } = data
-
-                  // Build model data
-                  const modelData: any = { ...otherData }
-
-                  // Add pricing if any value is set
-                  if (currency || prompt_per_1m || completion_per_1m) {
-                    modelData.pricing = {
-                      currency: currency || 'USD',
-                      prompt_per_1m: prompt_per_1m || 0,
-                      completion_per_1m: completion_per_1m || 0
-                    }
-                  }
-
-                  // Add PII policy
-                  modelData.pii_policy = {
-                    allow_by_default: pii_allow_by_default,
-                    pii_types_allowed: pii_types_allowed || []
-                  }
-
-                  newConfig.model_config[model_name] = modelData
-                  newConfig.model_config[model_name] = modelData
-                  await saveConfig(newConfig)
-                },
-                'add'
-              )
-            }}
-          >
-            ➕ Add Model
-          </button>
-        </div>
-      </div>
-      <div className={styles.sectionContent}>
-        {config?.model_config && Object.keys(config.model_config).length > 0 ? (
-          <div className={styles.modelConfigGrid}>
-            {Object.entries(config.model_config).map(([modelName, modelConfig]) => (
-              <div key={modelName} className={styles.modelConfigCard}>
-                <div className={styles.modelConfigHeader}>
-                  <span className={styles.modelConfigName}>{modelName}</span>
-                  <div className={styles.cardActions}>
-                    <button
-                      className={styles.editButton}
-                      onClick={() => {
-                        // Get available reasoning families
-                        const reasoningFamilies = config?.reasoning_families
-                          ? Object.keys(config.reasoning_families)
-                          : []
-
-                        // Get available endpoints
-                        const endpoints = config?.vllm_endpoints
-                          ? config.vllm_endpoints.map(ep => ep.name)
-                          : []
-
-                        // PII types
-                        const piiTypes = [
-                          'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
-                          'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
-                          'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
-                          'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
-                          'US_SSN', 'ZIP_CODE'
-                        ]
-
-                        // Flatten model config for editing
-                        const editData = {
-                          reasoning_family: modelConfig.reasoning_family || '',
-                          preferred_endpoints: modelConfig.preferred_endpoints || [],
-                          currency: modelConfig.pricing?.currency || 'USD',
-                          prompt_per_1m: modelConfig.pricing?.prompt_per_1m || 0,
-                          completion_per_1m: modelConfig.pricing?.completion_per_1m || 0,
-                          pii_allow_by_default: modelConfig.pii_policy?.allow_by_default ?? true,
-                          pii_types_allowed: modelConfig.pii_policy?.pii_types_allowed || []
-                        }
-
-                        openEditModal(
-                          `Edit Model: ${modelName}`,
-                          editData,
-                          [
-                            {
-                              name: 'reasoning_family',
-                              label: 'Reasoning Family',
-                              type: 'select',
-                              options: reasoningFamilies,
-                              description: 'Select from configured reasoning families'
-                            },
-                            {
-                              name: 'preferred_endpoints',
-                              label: 'Preferred Endpoints',
-                              type: 'multiselect',
-                              options: endpoints,
-                              description: 'Select one or more endpoints for this model'
-                            },
-                            {
-                              name: 'currency',
-                              label: 'Pricing Currency',
-                              type: 'text',
-                              placeholder: 'USD',
-                              description: 'ISO currency code (e.g., USD, EUR, CNY)'
-                            },
-                            {
-                              name: 'prompt_per_1m',
-                              label: 'Prompt Price per 1M Tokens',
-                              type: 'number',
-                              placeholder: '0.50',
-                              description: 'Cost per 1 million prompt tokens'
-                            },
-                            {
-                              name: 'completion_per_1m',
-                              label: 'Completion Price per 1M Tokens',
-                              type: 'number',
-                              placeholder: '1.50',
-                              description: 'Cost per 1 million completion tokens'
-                            },
-                            {
-                              name: 'pii_allow_by_default',
-                              label: 'PII Policy: Allow by Default',
-                              type: 'boolean',
-                              description: 'If enabled, all PII types are allowed unless specified below'
-                            },
-                            {
-                              name: 'pii_types_allowed',
-                              label: 'PII Types Allowed/Blocked',
-                              type: 'multiselect',
-                              options: piiTypes,
-                              description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
-                            }
-                          ],
-                          async (data) => {
-                            const newConfig = { ...config }
-                            if (newConfig.model_config) {
-                              const { currency, prompt_per_1m, completion_per_1m, pii_allow_by_default, pii_types_allowed, ...otherData } = data
-
-                              // Build model data
-                              const modelData: any = { ...otherData }
-
-                              // Add pricing if any value is set
-                              if (currency || prompt_per_1m || completion_per_1m) {
-                                modelData.pricing = {
-                                  currency: currency || 'USD',
-                                  prompt_per_1m: prompt_per_1m || 0,
-                                  completion_per_1m: completion_per_1m || 0
-                                }
-                              }
-
-                              // Add PII policy
-                              modelData.pii_policy = {
-                                allow_by_default: pii_allow_by_default,
-                                pii_types_allowed: pii_types_allowed || []
-                              }
-
-                              newConfig.model_config[modelName] = modelData
-                            }
-                            await saveConfig(newConfig)
-                          },
-                          'edit'
-                        )
-                      }}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className={styles.deleteButton}
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete model "${modelName}"?`)) {
-                          const newConfig = { ...config }
-                          if (newConfig.model_config) {
-                            delete newConfig.model_config[modelName]
-                          }
-                          saveConfig(newConfig)
-                        }
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-                <div className={styles.modelConfigBody}>
-                  {modelConfig.reasoning_family && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🧠 Reasoning Family</span>
-                      <span className={`${styles.badge} ${styles.badgeInfo}`}>
-                        {modelConfig.reasoning_family}
-                      </span>
-                    </div>
-                  )}
-                  {modelConfig.preferred_endpoints && modelConfig.preferred_endpoints.length > 0 && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🔌 Preferred Endpoints</span>
-                      <div className={styles.endpointTags}>
-                        {modelConfig.preferred_endpoints.map((endpoint, idx) => (
-                          <span key={idx} className={styles.endpointTag}>{endpoint}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {modelConfig.pricing && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>💰 Pricing</span>
-                      <div className={styles.pricingContainer}>
-                        <div className={styles.pricingItem}>
-                          <span className={styles.pricingLabel}>Prompt</span>
-                          <span className={styles.pricingValue}>
-                            {modelConfig.pricing.prompt_per_1m?.toFixed(2) || '0.00'}
-                          </span>
-                          <span className={styles.pricingUnit}>
-                            {modelConfig.pricing.currency || 'USD'}/1M
-                          </span>
-                        </div>
-                        <div className={styles.pricingDivider}>|</div>
-                        <div className={styles.pricingItem}>
-                          <span className={styles.pricingLabel}>Completion</span>
-                          <span className={styles.pricingValue}>
-                            {modelConfig.pricing.completion_per_1m?.toFixed(2) || '0.00'}
-                          </span>
-                          <span className={styles.pricingUnit}>
-                            {modelConfig.pricing.currency || 'USD'}/1M
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {modelConfig.pii_policy && (
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>🔒 PII Policy</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <span className={`${styles.statusBadge} ${modelConfig.pii_policy.allow_by_default ? styles.statusActive : styles.statusInactive}`}>
-                          {modelConfig.pii_policy.allow_by_default ? 'Allow by default' : 'Block by default'}
-                        </span>
-                        {modelConfig.pii_policy.pii_types_allowed && modelConfig.pii_policy.pii_types_allowed.length > 0 && (
-                          <div className={styles.piiTypesTags}>
-                            {modelConfig.pii_policy.pii_types_allowed.map((type, idx) => (
-                              <span key={idx} className={styles.piiTypeTag}>{type}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>No model configurations defined</div>
-        )}
-      </div>
-    </div>
-  )
 
   // ============================================================================
   // 2. PROMPT GUARD SECTION
@@ -838,15 +551,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const renderPIIModernBERT = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔒</span>
         <h3 className={styles.sectionTitle}>PII Detection (ModernBERT)</h3>
-        {config?.classifier?.pii_model && (
+        {routerConfig.classifier?.pii_model && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit PII Detection Configuration',
-                config?.classifier?.pii_model || {},
+                routerConfig.classifier?.pii_model || {},
                 [
                   {
                     name: 'model_id',
@@ -894,38 +606,38 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.classifier?.pii_model ? (
+        {routerConfig.classifier?.pii_model ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>PII Classifier Model</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {config.classifier.pii_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                {routerConfig.classifier.pii_model.use_cpu ? 'CPU' : 'GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{config.classifier.pii_model.model_id}</span>
+                <span className={styles.configValue}>{routerConfig.classifier.pii_model.model_id}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(config.classifier.pii_model.threshold)}</span>
+                <span className={styles.configValue}>{formatThreshold(routerConfig.classifier.pii_model.threshold)}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>ModernBERT</span>
-                <span className={`${styles.statusBadge} ${config.classifier.pii_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                  {config.classifier.pii_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+                <span className={`${styles.statusBadge} ${routerConfig.classifier.pii_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+                  {routerConfig.classifier.pii_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
                 </span>
               </div>
-              {config.classifier.pii_model.pii_mapping_path && (
+              {routerConfig.classifier.pii_model.pii_mapping_path && (
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Mapping Path</span>
-                  <span className={styles.configValue}>{config.classifier.pii_model.pii_mapping_path}</span>
+                  <span className={styles.configValue}>{routerConfig.classifier.pii_model.pii_mapping_path}</span>
                 </div>
               )}
             </div>
@@ -940,15 +652,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const renderJailbreakModernBERT = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🛡️</span>
         <h3 className={styles.sectionTitle}>Jailbreak Detection (ModernBERT)</h3>
-        {config?.prompt_guard && (
+        {routerConfig.prompt_guard && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Jailbreak Detection Configuration',
-                config?.prompt_guard || {},
+                routerConfig.prompt_guard || {},
                 [
                   {
                     name: 'enabled',
@@ -1001,45 +712,45 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.prompt_guard ? (
+        {routerConfig.prompt_guard ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>Jailbreak Protection</span>
-              <span className={`${styles.statusBadge} ${config.prompt_guard.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {config.prompt_guard.enabled ? '✓ Enabled' : '✗ Disabled'}
+              <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.enabled ? styles.statusActive : styles.statusInactive}`}>
+                {routerConfig.prompt_guard.enabled ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
-            {config.prompt_guard.enabled && (
+            {routerConfig.prompt_guard.enabled && (
               <div className={styles.modelCardBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{config.prompt_guard.model_id}</span>
+                  <span className={styles.configValue}>{routerConfig.prompt_guard.model_id}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.prompt_guard.threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.prompt_guard.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Use CPU</span>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {config.prompt_guard.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                    {routerConfig.prompt_guard.use_cpu ? 'CPU' : 'GPU'}
                   </span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${config.prompt_guard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {config.prompt_guard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+                  <span className={`${styles.statusBadge} ${routerConfig.prompt_guard.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+                    {routerConfig.prompt_guard.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
                   </span>
                 </div>
-                {config.prompt_guard.jailbreak_mapping_path && (
+                {routerConfig.prompt_guard.jailbreak_mapping_path && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{config.prompt_guard.jailbreak_mapping_path}</span>
+                    <span className={styles.configValue}>{routerConfig.prompt_guard.jailbreak_mapping_path}</span>
                   </div>
                 )}
               </div>
@@ -1056,18 +767,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   // 3. SIMILARITY CACHE SECTION
   // ============================================================================
 
-  const renderSimilarityBERT = () => (
+  const renderSimilarityBERT = () => {
+    return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>⚡</span>
         <h3 className={styles.sectionTitle}>Similarity BERT Configuration</h3>
-        {config?.bert_model && (
+        {routerConfig.bert_model && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Similarity BERT Configuration',
-                config?.bert_model || {},
+                routerConfig.bert_model || {},
                 [
                   {
                     name: 'model_id',
@@ -1101,27 +812,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.bert_model ? (
+        {routerConfig.bert_model ? (
           <div className={styles.modelCard}>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>BERT Model (Semantic Similarity)</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {config.bert_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                {routerConfig.bert_model.use_cpu ? 'CPU' : 'GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Model ID</span>
-                <span className={styles.configValue}>{config.bert_model.model_id}</span>
+                <span className={styles.configValue}>{routerConfig.bert_model.model_id}</span>
               </div>
               <div className={styles.configRow}>
                 <span className={styles.configLabel}>Threshold</span>
-                <span className={styles.configValue}>{formatThreshold(config.bert_model.threshold)}</span>
+                <span className={styles.configValue}>{formatThreshold(routerConfig.bert_model.threshold)}</span>
               </div>
             </div>
           </div>
@@ -1129,13 +840,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           <div className={styles.emptyState}>BERT model not configured</div>
         )}
 
-        {config?.semantic_cache && (
+        {routerConfig.semantic_cache && (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Semantic Cache</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span className={`${styles.statusBadge} ${config.semantic_cache.enabled ? styles.statusActive : styles.statusInactive}`}>
-                  {config.semantic_cache.enabled ? '✓ Enabled' : '✗ Disabled'}
+                <span className={`${styles.statusBadge} ${routerConfig.semantic_cache?.enabled ? styles.statusActive : styles.statusInactive}`}>
+                  {routerConfig.semantic_cache?.enabled ? '✓ Enabled' : '✗ Disabled'}
                 </span>
                 <button
                   className={styles.sectionEditButton}
@@ -1196,32 +907,32 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                     )
                   }}
                 >
-                  ✏️ Edit
+                  Edit
                 </button>
               </div>
             </div>
-            {config.semantic_cache.enabled && (
+            {routerConfig.semantic_cache?.enabled && (
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Backend Type</span>
-                  <span className={styles.configValue}>{config.semantic_cache.backend_type || 'memory'}</span>
+                  <span className={styles.configValue}>{routerConfig.semantic_cache?.backend_type || 'memory'}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.semantic_cache.similarity_threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.semantic_cache?.similarity_threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Entries</span>
-                  <span className={styles.configValue}>{config.semantic_cache.max_entries}</span>
+                  <span className={styles.configValue}>{routerConfig.semantic_cache?.max_entries}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>TTL</span>
-                  <span className={styles.configValue}>{config.semantic_cache.ttl_seconds}s</span>
+                  <span className={styles.configValue}>{routerConfig.semantic_cache?.ttl_seconds}s</span>
                 </div>
-                {config.semantic_cache.eviction_policy && (
+                {routerConfig.semantic_cache?.eviction_policy && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Eviction Policy</span>
-                    <span className={styles.configValue}>{config.semantic_cache.eviction_policy}</span>
+                    <span className={styles.configValue}>{routerConfig.semantic_cache.eviction_policy}</span>
                   </div>
                 )}
               </div>
@@ -1230,38 +941,37 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         )}
       </div>
     </div>
-  )
+  )}
 
   // ============================================================================
   // 4. INTELLIGENT ROUTING SECTION
   // ============================================================================
 
   const renderClassifyBERT = () => {
-    const hasInTree = config?.classifier?.category_model
-    const hasOutTree = config?.classifier?.mcp_category_model?.enabled
+    const hasInTree = routerConfig.classifier?.category_model
+    const hasOutTree = routerConfig.classifier?.mcp_category_model?.enabled
 
     return (
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionIcon}>🎯</span>
           <h3 className={styles.sectionTitle}>Classify BERT Model</h3>
         </div>
         <div className={styles.sectionContent}>
           {/* In-tree Classifier */}
-          {hasInTree && config?.classifier?.category_model && (
+          {hasInTree && routerConfig.classifier?.category_model && (
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
                 <span className={styles.modelCardTitle}>In-tree Category Classifier</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {config.classifier.category_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                    {routerConfig.classifier.category_model.use_cpu ? 'CPU' : 'GPU'}
                   </span>
                   <button
                     className={styles.editButton}
                     onClick={() => {
                       openEditModal(
                         'Edit In-tree Category Classifier',
-                        config?.classifier?.category_model || {},
+                        routerConfig.classifier?.category_model || {},
                         [
                           {
                             name: 'model_id',
@@ -1309,7 +1019,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                       )
                     }}
                   >
-                    ✏️
+                    
                   </button>
                 </div>
               </div>
@@ -1320,22 +1030,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{config.classifier.category_model.model_id}</span>
+                  <span className={styles.configValue}>{routerConfig.classifier?.category_model?.model_id}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.classifier.category_model.threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.classifier?.category_model?.threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>ModernBERT</span>
-                  <span className={`${styles.statusBadge} ${config.classifier.category_model.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
-                    {config.classifier.category_model.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
+                  <span className={`${styles.statusBadge} ${routerConfig.classifier?.category_model?.use_modernbert ? styles.statusActive : styles.statusInactive}`}>
+                    {routerConfig.classifier?.category_model?.use_modernbert ? '✓ Enabled' : '✗ Disabled'}
                   </span>
                 </div>
-                {config.classifier.category_model.category_mapping_path && (
+                {routerConfig.classifier?.category_model?.category_mapping_path && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Mapping Path</span>
-                    <span className={styles.configValue}>{config.classifier.category_model.category_mapping_path}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.category_model.category_mapping_path}</span>
                   </div>
                 )}
               </div>
@@ -1343,7 +1053,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           )}
 
           {/* Out-tree Classifier (MCP) */}
-          {hasOutTree && config?.classifier?.mcp_category_model && (
+          {hasOutTree && routerConfig.classifier?.mcp_category_model && (
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
                 <span className={styles.modelCardTitle}>Out-tree Category Classifier (MCP)</span>
@@ -1354,7 +1064,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                     onClick={() => {
                       openEditModal(
                         'Edit Out-tree MCP Category Classifier',
-                        config?.classifier?.mcp_category_model || {},
+                        routerConfig.classifier?.mcp_category_model || {},
                         [
                           {
                             name: 'enabled',
@@ -1431,7 +1141,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                       )
                     }}
                   >
-                    ✏️
+                    
                   </button>
                 </div>
               </div>
@@ -1442,34 +1152,34 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Transport Type</span>
-                  <span className={styles.configValue}>{config.classifier.mcp_category_model.transport_type}</span>
+                  <span className={styles.configValue}>{routerConfig.classifier?.mcp_category_model?.transport_type}</span>
                 </div>
-                {config.classifier.mcp_category_model.command && (
+                {routerConfig.classifier?.mcp_category_model?.command && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Command</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.command}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.command}</span>
                   </div>
                 )}
-                {config.classifier.mcp_category_model.url && (
+                {routerConfig.classifier?.mcp_category_model?.url && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>URL</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.url}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier?.mcp_category_model?.url}</span>
                   </div>
                 )}
-                {config.classifier.mcp_category_model.tool_name && (
+                {routerConfig.classifier?.mcp_category_model?.tool_name && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Tool Name</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.tool_name}</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.tool_name}</span>
                   </div>
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.classifier.mcp_category_model.threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.classifier?.mcp_category_model?.threshold)}</span>
                 </div>
-                {config.classifier.mcp_category_model.timeout_seconds && (
+                {routerConfig.classifier?.mcp_category_model?.timeout_seconds && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Timeout</span>
-                    <span className={styles.configValue}>{config.classifier.mcp_category_model.timeout_seconds}s</span>
+                    <span className={styles.configValue}>{routerConfig.classifier.mcp_category_model.timeout_seconds}s</span>
                   </div>
                 )}
               </div>
@@ -1484,33 +1194,143 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
     )
   }
 
-  const renderCategories = () => (
+  const renderCategories = () => {
+    // Get domains/categories from both formats
+    const domains = getDomains()
+    const decisions = getDecisions()
+    const defaultModel = getDefaultModel()
+
+    return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>📊</span>
-        <h3 className={styles.sectionTitle}>Categories Configuration</h3>
-        <span className={styles.badge}>{config?.categories?.length || 0} categories</span>
+        <h3 className={styles.sectionTitle}>{isPythonCLI ? 'Domains & Decisions' : 'Categories Configuration'}</h3>
+        <span className={styles.badge}>{domains.length} {isPythonCLI ? 'domains' : 'categories'}</span>
       </div>
       <div className={styles.sectionContent}>
         {/* Core Settings at the top */}
         <div className={styles.coreSettingsInline}>
           <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>🎯 Default Model:</span>
-            <span className={styles.inlineConfigValue}>{config?.default_model || 'N/A'}</span>
+            <span className={styles.inlineConfigLabel}>Default Model:</span>
+            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
           </div>
+          {!isPythonCLI && (
           <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>⚡ Default Reasoning Effort:</span>
+            <span className={styles.inlineConfigLabel}>Default Reasoning Effort:</span>
             <span className={`${styles.badge} ${styles[`badge${config?.default_reasoning_effort || 'medium'}`]}`}>
               {config?.default_reasoning_effort || 'medium'}
             </span>
           </div>
+          )}
         </div>
 
-        {config?.categories && config.categories.length > 0 ? (
+        {/* Python CLI format - show domains and decisions separately */}
+        {isPythonCLI ? (
+          <>
+            {/* Domains Section */}
+            <h4 className={styles.subsectionTitle}>Domains</h4>
+            {domains.length > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {domains.map((domain, index) => (
+                  <div key={index} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{domain.name}</span>
+                      <button
+                        className={styles.editButton}
+                        onClick={() => {
+                          openEditModal(
+                            `Edit Domain: ${domain.name}`,
+                            { description: domain.description || '' },
+                            [
+                              {
+                                name: 'description',
+                                label: 'Description',
+                                type: 'textarea',
+                                placeholder: 'Describe this domain...',
+                                description: 'What types of queries belong to this domain'
+                              }
+                            ],
+                            async (data) => {
+                              const newConfig = { ...config }
+                              if (newConfig.signals?.domains) {
+                                newConfig.signals.domains[index] = {
+                                  ...domain,
+                                  description: data.description,
+                                }
+                              }
+                              await saveConfig(newConfig)
+                            }
+                          )
+                        }}
+                      >
+                        
+                      </button>
+                    </div>
+                    {domain.description && (
+                      <p className={styles.categoryDescription}>{domain.description}</p>
+                    )}
+                    {domain.mmlu_categories && domain.mmlu_categories.length > 0 && (
+                      <div className={styles.tagsContainer}>
+                        {domain.mmlu_categories.map((cat: string, idx: number) => (
+                          <span key={idx} className={styles.tag}>{cat}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No domains configured</div>
+            )}
+
+            {/* Decisions Section */}
+            <h4 className={styles.subsectionTitle}>Decisions (Routing Rules)</h4>
+            {decisions.length > 0 ? (
+              <div className={styles.categoryGridTwoColumn}>
+                {decisions.map((decision, index) => (
+                  <div key={index} className={styles.categoryCard}>
+                    <div className={styles.categoryHeader}>
+                      <span className={styles.categoryName}>{decision.name}</span>
+                      <span className={`${styles.badge} ${styles.badgeInfo}`}>Priority: {decision.priority}</span>
+                    </div>
+                    {decision.description && (
+                      <p className={styles.categoryDescription}>{decision.description}</p>
+                    )}
+                    {decision.rules && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Rules</span>
+                        <span className={styles.configValue}>
+                          {decision.rules.conditions?.length || 0} conditions ({decision.rules.operator})
+                        </span>
+                      </div>
+                    )}
+                    {decision.modelRefs && decision.modelRefs.length > 0 && (
+                      <div className={styles.configRow}>
+                        <span className={styles.configLabel}>Models</span>
+                        <div className={styles.endpointTags}>
+                          {decision.modelRefs.map((ref: { model: string; use_reasoning?: boolean }, idx: number) => (
+                            <span key={idx} className={styles.endpointTag}>
+                              {ref.model} {ref.use_reasoning && ''}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>No decisions configured</div>
+            )}
+          </>
+        ) : (
+          /* Legacy format - categories with model scores */
+          config?.categories && config.categories.length > 0 ? (
           <div className={styles.categoryGridTwoColumn}>
             {config.categories.map((category, index) => {
+              // Normalize model_scores (handles both object and array formats)
+              const normalizedScores = normalizeModelScores(category.model_scores)
               // Get reasoning info from best model (first model score)
-              const bestModel = category.model_scores?.[0]
+              const bestModel = normalizedScores[0]
               const useReasoning = bestModel?.use_reasoning || false
               const reasoningEffort = bestModel?.reasoning_effort || 'medium'
               const reasoningDescription = bestModel?.reasoning_description || ''
@@ -1522,7 +1342,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {useReasoning && (
                       <span className={`${styles.reasoningBadge} ${styles[`reasoning${reasoningEffort}`]}`}>
-                        ⚡ {reasoningEffort}
+                        {reasoningEffort}
                       </span>
                     )}
                     <button
@@ -1555,7 +1375,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                         )
                       }}
                     >
-                      ✏️
+                      
                     </button>
                   </div>
                 </div>
@@ -1563,7 +1383,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                 {/* System Prompt */}
                 {category.system_prompt && (
                   <div className={styles.systemPromptSection}>
-                    <div className={styles.systemPromptLabel}>💬 System Prompt</div>
+                    <div className={styles.systemPromptLabel}>System Prompt</div>
                     <div className={styles.systemPromptText}>{category.system_prompt}</div>
                   </div>
                 )}
@@ -1618,10 +1438,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                             const newConfig = { ...config }
                             if (newConfig.categories) {
                               const updatedCategory = { ...category }
-                              if (!updatedCategory.model_scores) {
-                                updatedCategory.model_scores = []
-                              }
-                              updatedCategory.model_scores.push(data)
+                              // Convert to array format if needed (Legacy uses object)
+                              const scores = normalizeModelScores(updatedCategory.model_scores)
+                              scores.push(data)
+                              updatedCategory.model_scores = scores
                               newConfig.categories[index] = updatedCategory
                             }
                             await saveConfig(newConfig)
@@ -1630,22 +1450,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                         )
                       }}
                     >
-                      ➕
+                      
                     </button>
                   </div>
-                  {category.model_scores && category.model_scores.length > 0 ? (
-                    category.model_scores.map((modelScore, modelIdx) => (
+                  {normalizedScores.length > 0 ? (
+                    normalizedScores.map((modelScore, modelIdx) => (
                       <div key={modelIdx} className={styles.modelScoreRow}>
                         <span className={styles.modelScoreName}>
                           {modelScore.model}
-                          {modelScore.use_reasoning && <span className={styles.reasoningIcon}>🧠</span>}
+                          {modelScore.use_reasoning && <span className={styles.reasoningIcon}></span>}
                         </span>
                         <div className={styles.scoreBar}>
                           <div
                             className={styles.scoreBarFill}
-                            style={{ width: `${modelScore.score * 100}%` }}
+                            style={{ width: `${(modelScore.score ?? 0) * 100}%` }}
                           ></div>
-                          <span className={styles.scoreText}>{(modelScore.score * 100).toFixed(0)}%</span>
+                          <span className={styles.scoreText}>{((modelScore.score ?? 0) * 100).toFixed(0)}%</span>
                         </div>
                         <div className={styles.modelScoreActions}>
                           <button
@@ -1684,10 +1504,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                                   }
                                 ],
                                 async (data) => {
+                                  // For legacy object format, we need to convert back
                                   const newConfig = { ...config }
                                   if (newConfig.categories) {
                                     const updatedCategory = { ...category }
-                                    updatedCategory.model_scores[modelIdx] = data
+                                    // Convert to array format for consistency
+                                    const scores = normalizeModelScores(updatedCategory.model_scores)
+                                    scores[modelIdx] = data
+                                    updatedCategory.model_scores = scores
                                     newConfig.categories[index] = updatedCategory
                                   }
                                   await saveConfig(newConfig)
@@ -1695,7 +1519,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                               )
                             }}
                           >
-                            ✏️
+                            
                           </button>
                           <button
                             className={styles.deleteButton}
@@ -1704,14 +1528,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                                 const newConfig = { ...config }
                                 if (newConfig.categories) {
                                   const updatedCategory = { ...category }
-                                  updatedCategory.model_scores.splice(modelIdx, 1)
+                                  // Convert to array format for consistency
+                                  const scores = normalizeModelScores(updatedCategory.model_scores)
+                                  scores.splice(modelIdx, 1)
+                                  updatedCategory.model_scores = scores
                                   newConfig.categories[index] = updatedCategory
                                 }
                                 saveConfig(newConfig)
                               }
                             }}
                           >
-                            🗑️
+                            
                           </button>
                         </div>
                       </div>
@@ -1725,81 +1552,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           </div>
         ) : (
           <div className={styles.emptyState}>No categories configured</div>
+          )
         )}
       </div>
     </div>
-  )
+  )}
 
-  const renderReasoningFamilies = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🧠</span>
-        <h3 className={styles.sectionTitle}>Reasoning Families</h3>
-        <span className={styles.badge}>{config?.reasoning_families ? Object.keys(config.reasoning_families).length : 0} families</span>
-      </div>
-      <div className={styles.sectionContent}>
-        {config?.reasoning_families && Object.keys(config.reasoning_families).length > 0 ? (
-          <div className={styles.reasoningFamiliesGrid}>
-            {Object.entries(config.reasoning_families).map(([familyName, familyConfig]) => (
-              <div key={familyName} className={styles.reasoningFamilyCard}>
-                <div className={styles.reasoningFamilyHeader}>
-                  <span className={styles.reasoningFamilyName}>{familyName}</span>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => {
-                      openEditModal(
-                        `Edit Reasoning Family: ${familyName}`,
-                        { ...familyConfig },
-                        [
-                          {
-                            name: 'type',
-                            label: 'Type',
-                            type: 'select',
-                            options: ['openai', 'anthropic', 'google', 'custom'],
-                            required: true,
-                            description: 'Type of reasoning family'
-                          },
-                          {
-                            name: 'parameter',
-                            label: 'Parameter',
-                            type: 'text',
-                            required: true,
-                            placeholder: 'e.g., reasoning_effort',
-                            description: 'Parameter name for reasoning control'
-                          }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (newConfig.reasoning_families) {
-                            newConfig.reasoning_families[familyName] = data
-                          }
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
-                    ✏️
-                  </button>
-                </div>
-                <div className={styles.reasoningFamilyBody}>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Type</span>
-                    <span className={styles.configValue}>{familyConfig.type}</span>
-                  </div>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Parameter</span>
-                    <span className={styles.configValue}><code>{familyConfig.parameter}</code></span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>No reasoning families configured</div>
-        )}
-      </div>
-    </div>
-  )
+
 
   // ============================================================================
   // 5. TOOLS SELECTION SECTION
@@ -1808,15 +1567,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const renderToolsConfiguration = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔧</span>
         <h3 className={styles.sectionTitle}>Tools Configuration</h3>
-        {config?.tools && (
+        {routerConfig.tools && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Tools Configuration',
-                config?.tools || {},
+                routerConfig.tools || {},
                 [
                   {
                     name: 'enabled',
@@ -1861,32 +1619,32 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.tools ? (
+        {routerConfig.tools ? (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Tool Auto-Selection</span>
-              <span className={`${styles.statusBadge} ${config.tools.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {config.tools.enabled ? '✓ Enabled' : '✗ Disabled'}
+              <span className={`${styles.statusBadge} ${routerConfig.tools.enabled ? styles.statusActive : styles.statusInactive}`}>
+                {routerConfig.tools.enabled ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
-            {config.tools.enabled && (
+            {routerConfig.tools.enabled && (
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Top K</span>
-                  <span className={styles.configValue}>{config.tools.top_k}</span>
+                  <span className={styles.configValue}>{routerConfig.tools.top_k}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Similarity Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(config.tools.similarity_threshold)}</span>
+                  <span className={styles.configValue}>{formatThreshold(routerConfig.tools.similarity_threshold)}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Fallback to Empty</span>
-                  <span className={styles.configValue}>{config.tools.fallback_to_empty ? 'Yes' : 'No'}</span>
+                  <span className={styles.configValue}>{routerConfig.tools.fallback_to_empty ? 'Yes' : 'No'}</span>
                 </div>
               </div>
             )}
@@ -1901,7 +1659,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const renderToolsDB = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🗄️</span>
         <h3 className={styles.sectionTitle}>Tools Database</h3>
         {toolsData.length > 0 && <span className={styles.badge}>{toolsData.length} tools</span>}
       </div>
@@ -1942,7 +1699,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                       {/* Similarity Description (used for matching) */}
                       {tool.description && tool.description !== tool.tool.function.description && (
                         <div className={styles.toolSimilarityDescription}>
-                          <div className={styles.similarityDescriptionLabel}>🔍 Similarity Keywords</div>
+                          <div className={styles.similarityDescriptionLabel}>Similarity Keywords</div>
                           <div className={styles.similarityDescriptionText}>{tool.description}</div>
                         </div>
                       )}
@@ -1997,15 +1754,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const renderObservabilityTracing = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔍</span>
         <h3 className={styles.sectionTitle}>Distributed Tracing</h3>
-        {config?.observability?.tracing && (
+        {routerConfig.observability?.tracing && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Distributed Tracing Configuration',
-                config?.observability?.tracing || {},
+                routerConfig.observability?.tracing || {},
                 [
                   {
                     name: 'enabled',
@@ -2051,57 +1807,57 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.observability?.tracing ? (
+        {routerConfig.observability?.tracing ? (
           <div className={styles.featureCard}>
             <div className={styles.featureHeader}>
               <span className={styles.featureTitle}>Tracing Status</span>
-              <span className={`${styles.statusBadge} ${config.observability.tracing.enabled ? styles.statusActive : styles.statusInactive}`}>
-                {config.observability.tracing.enabled ? '✓ Enabled' : '✗ Disabled'}
+              <span className={`${styles.statusBadge} ${routerConfig.observability.tracing.enabled ? styles.statusActive : styles.statusInactive}`}>
+                {routerConfig.observability.tracing.enabled ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
-            {config.observability.tracing.enabled && (
+            {routerConfig.observability.tracing.enabled && (
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Provider</span>
-                  <span className={styles.configValue}>{config.observability.tracing.provider}</span>
+                  <span className={styles.configValue}>{routerConfig.observability.tracing.provider}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Exporter Type</span>
-                  <span className={styles.configValue}>{config.observability.tracing.exporter.type}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.exporter?.type}</span>
                 </div>
-                {config.observability.tracing.exporter.endpoint && (
+                {routerConfig.observability?.tracing?.exporter?.endpoint && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Endpoint</span>
-                    <span className={styles.configValue}>{config.observability.tracing.exporter.endpoint}</span>
+                    <span className={styles.configValue}>{routerConfig.observability.tracing.exporter.endpoint}</span>
                   </div>
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Sampling Type</span>
-                  <span className={styles.configValue}>{config.observability.tracing.sampling.type}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.sampling?.type}</span>
                 </div>
-                {config.observability.tracing.sampling.rate !== undefined && (
+                {routerConfig.observability?.tracing?.sampling?.rate !== undefined && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Sampling Rate</span>
-                    <span className={styles.configValue}>{(config.observability.tracing.sampling.rate * 100).toFixed(0)}%</span>
+                    <span className={styles.configValue}>{((routerConfig.observability?.tracing?.sampling?.rate ?? 0) * 100).toFixed(0)}%</span>
                   </div>
                 )}
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Service Name</span>
-                  <span className={styles.configValue}>{config.observability.tracing.resource.service_name}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.resource?.service_name}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Service Version</span>
-                  <span className={styles.configValue}>{config.observability.tracing.resource.service_version}</span>
+                  <span className={styles.configValue}>{routerConfig.observability?.tracing?.resource?.service_version}</span>
                 </div>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Environment</span>
-                  <span className={`${styles.badge} ${styles[`badge${config.observability.tracing.resource.deployment_environment}`]}`}>
-                    {config.observability.tracing.resource.deployment_environment}
+                  <span className={`${styles.badge} ${styles[`badge${routerConfig.observability?.tracing?.resource?.deployment_environment ?? ''}`]}`}>
+                    {routerConfig.observability?.tracing?.resource?.deployment_environment}
                   </span>
                 </div>
               </div>
@@ -2121,15 +1877,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   const renderClassificationAPI = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔌</span>
         <h3 className={styles.sectionTitle}>Batch Classification API</h3>
-        {config?.api?.batch_classification && (
+        {routerConfig.api?.batch_classification && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 'Edit Batch Classification API Configuration',
-                config?.api?.batch_classification || {},
+                routerConfig.api?.batch_classification || {},
                 [
                   {
                     name: 'max_batch_size',
@@ -2170,12 +1925,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
       <div className={styles.sectionContent}>
-        {config?.api?.batch_classification ? (
+        {routerConfig.api?.batch_classification ? (
           <>
             <div className={styles.featureCard}>
               <div className={styles.featureHeader}>
@@ -2184,49 +1939,49 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               <div className={styles.featureBody}>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Max Batch Size</span>
-                  <span className={styles.configValue}>{config.api.batch_classification.max_batch_size}</span>
+                  <span className={styles.configValue}>{routerConfig.api.batch_classification.max_batch_size}</span>
                 </div>
-                {config.api.batch_classification.concurrency_threshold !== undefined && (
+                {routerConfig.api.batch_classification.concurrency_threshold !== undefined && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Concurrency Threshold</span>
-                    <span className={styles.configValue}>{config.api.batch_classification.concurrency_threshold}</span>
+                    <span className={styles.configValue}>{routerConfig.api.batch_classification.concurrency_threshold}</span>
                   </div>
                 )}
-                {config.api.batch_classification.max_concurrency !== undefined && (
+                {routerConfig.api.batch_classification.max_concurrency !== undefined && (
                   <div className={styles.configRow}>
                     <span className={styles.configLabel}>Max Concurrency</span>
-                    <span className={styles.configValue}>{config.api.batch_classification.max_concurrency}</span>
+                    <span className={styles.configValue}>{routerConfig.api.batch_classification.max_concurrency}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {config.api.batch_classification.metrics && (
+            {routerConfig.api?.batch_classification?.metrics && (
               <div className={styles.featureCard}>
                 <div className={styles.featureHeader}>
                   <span className={styles.featureTitle}>Metrics Collection</span>
-                  <span className={`${styles.statusBadge} ${config.api.batch_classification.metrics.enabled ? styles.statusActive : styles.statusInactive}`}>
-                    {config.api.batch_classification.metrics.enabled ? '✓ Enabled' : '✗ Disabled'}
+                  <span className={`${styles.statusBadge} ${routerConfig.api.batch_classification.metrics.enabled ? styles.statusActive : styles.statusInactive}`}>
+                    {routerConfig.api.batch_classification.metrics.enabled ? '✓ Enabled' : '✗ Disabled'}
                   </span>
                 </div>
-                {config.api.batch_classification.metrics.enabled && (
+                {routerConfig.api.batch_classification.metrics.enabled && (
                   <div className={styles.featureBody}>
-                    {config.api.batch_classification.metrics.sample_rate !== undefined && (
+                    {routerConfig.api.batch_classification.metrics.sample_rate !== undefined && (
                       <div className={styles.configRow}>
                         <span className={styles.configLabel}>Sample Rate</span>
-                        <span className={styles.configValue}>{(config.api.batch_classification.metrics.sample_rate * 100).toFixed(0)}%</span>
+                        <span className={styles.configValue}>{((routerConfig.api.batch_classification.metrics.sample_rate ?? 0) * 100).toFixed(0)}%</span>
                       </div>
                     )}
-                    {config.api.batch_classification.metrics.detailed_goroutine_tracking !== undefined && (
+                    {routerConfig.api.batch_classification.metrics.detailed_goroutine_tracking !== undefined && (
                       <div className={styles.configRow}>
                         <span className={styles.configLabel}>Goroutine Tracking</span>
-                        <span className={styles.configValue}>{config.api.batch_classification.metrics.detailed_goroutine_tracking ? 'Yes' : 'No'}</span>
+                        <span className={styles.configValue}>{routerConfig.api.batch_classification.metrics.detailed_goroutine_tracking ? 'Yes' : 'No'}</span>
                       </div>
                     )}
-                    {config.api.batch_classification.metrics.high_resolution_timing !== undefined && (
+                    {routerConfig.api.batch_classification.metrics.high_resolution_timing !== undefined && (
                       <div className={styles.configRow}>
                         <span className={styles.configLabel}>High Resolution Timing</span>
-                        <span className={styles.configValue}>{config.api.batch_classification.metrics.high_resolution_timing ? 'Yes' : 'No'}</span>
+                        <span className={styles.configValue}>{routerConfig.api.batch_classification.metrics.high_resolution_timing ? 'Yes' : 'No'}</span>
                       </div>
                     )}
                   </div>
@@ -2242,101 +1997,1272 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   )
 
   // ============================================================================
-  // SECTION PANEL RENDERS
+  // SECTION PANEL RENDERS - Aligned with Python CLI config structure
   // ============================================================================
 
-  const renderModelsSection = () => (
-    <div className={styles.sectionPanel}>
-      {renderUserDefinedModels()}
-      {renderUserDefinedEndpoints()}
-    </div>
-  )
+  // Signals Section - Keywords, Embeddings, Domains, Preferences (config.yaml)
+  const renderSignalsSection = () => {
+    const signals = config?.signals
 
-  const renderPromptGuardSection = () => (
+    // Unified signal type
+    type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback'
+
+    interface UnifiedSignal {
+      name: string
+      type: SignalType
+      summary: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rawData: any
+    }
+
+    // Flatten all signals into a unified array
+    const allSignals: UnifiedSignal[] = []
+
+    // Keywords
+    signals?.keywords?.forEach(kw => {
+      allSignals.push({
+        name: kw.name,
+        type: 'Keywords',
+        summary: `${kw.operator}, ${kw.keywords.length} keywords${kw.case_sensitive ? ', case-sensitive' : ''}`,
+        rawData: kw
+      })
+    })
+
+    // Embeddings
+    signals?.embeddings?.forEach(emb => {
+      allSignals.push({
+        name: emb.name,
+        type: 'Embeddings',
+        summary: `Threshold: ${Math.round(emb.threshold * 100)}%, ${emb.candidates.length} items, ${emb.aggregation_method}`,
+        rawData: emb
+      })
+    })
+
+    // Domains
+    signals?.domains?.forEach(domain => {
+      const categoryCount = domain.mmlu_categories?.length || 0
+      allSignals.push({
+        name: domain.name,
+        type: 'Domain',
+        summary: categoryCount > 0 ? `${categoryCount} MMLU categories` : (domain.description || 'No description'),
+        rawData: domain
+      })
+    })
+
+    // Preferences
+    signals?.preferences?.forEach(pref => {
+      allSignals.push({
+        name: pref.name,
+        type: 'Preference',
+        summary: pref.description || 'No description',
+        rawData: pref
+      })
+    })
+
+    // Fact Check
+    signals?.fact_check?.forEach(fc => {
+      allSignals.push({
+        name: fc.name,
+        type: 'Fact Check',
+        summary: fc.description || 'No description',
+        rawData: fc
+      })
+    })
+
+    // User Feedbacks
+    signals?.user_feedbacks?.forEach(uf => {
+      allSignals.push({
+        name: uf.name,
+        type: 'User Feedback',
+        summary: uf.description || 'No description',
+        rawData: uf
+      })
+    })
+
+    // Filter signals based on search
+    const filteredSignals = allSignals.filter(signal =>
+      signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
+      signal.type.toLowerCase().includes(signalsSearch.toLowerCase()) ||
+      signal.summary.toLowerCase().includes(signalsSearch.toLowerCase())
+    )
+
+    // Define table columns
+    const signalsColumns: Column<UnifiedSignal>[] = [
+      {
+        key: 'name',
+        header: 'Name',
+        sortable: true,
+        render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        width: '140px',
+        sortable: true,
+        render: (row) => {
+          const typeColors: Record<SignalType, string> = {
+            'Keywords': 'rgba(118, 185, 0, 0.15)',
+            'Embeddings': 'rgba(0, 212, 255, 0.15)',
+            'Domain': 'rgba(147, 51, 234, 0.15)',
+            'Preference': 'rgba(234, 179, 8, 0.15)',
+            'Fact Check': 'rgba(34, 197, 94, 0.15)',
+            'User Feedback': 'rgba(236, 72, 153, 0.15)'
+          }
+          return (
+            <span className={styles.badge} style={{ background: typeColors[row.type] }}>
+              {row.type}
+            </span>
+          )
+        }
+      },
+      {
+        key: 'summary',
+        header: 'Summary',
+        render: (row) => (
+          <span style={{
+            fontSize: '0.875rem',
+            color: 'var(--color-text-secondary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            display: 'block'
+          }}>
+            {row.summary}
+          </span>
+        )
+      }
+    ]
+
+    // Handle view signal
+    const handleViewSignal = (signal: UnifiedSignal) => {
+      const sections: ViewSection[] = []
+
+      // Basic info section
+      sections.push({
+        title: 'Basic Information',
+        fields: [
+          { label: 'Name', value: signal.name },
+          { label: 'Type', value: signal.type },
+          { label: 'Summary', value: signal.summary, fullWidth: true }
+        ]
+      })
+
+      // Type-specific details
+      if (signal.type === 'Keywords') {
+        sections.push({
+          title: 'Keywords Configuration',
+          fields: [
+            { label: 'Operator', value: signal.rawData.operator },
+            { label: 'Case Sensitive', value: signal.rawData.case_sensitive ? 'Yes' : 'No' },
+            {
+              label: 'Keywords',
+              value: (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {signal.rawData.keywords.map((kw: string, i: number) => (
+                    <span key={i} style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(118, 185, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      } else if (signal.type === 'Embeddings') {
+        sections.push({
+          title: 'Embeddings Configuration',
+          fields: [
+            { label: 'Threshold', value: `${Math.round(signal.rawData.threshold * 100)}%` },
+            { label: 'Aggregation Method', value: signal.rawData.aggregation_method },
+            {
+              label: 'Candidates',
+              value: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {signal.rawData.candidates.map((c: string, i: number) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(0, 212, 255, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem'
+                    }}>
+                      {c}
+                    </div>
+                  ))}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      } else if (signal.type === 'Domain') {
+        sections.push({
+          title: 'Domain Configuration',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+            {
+              label: 'MMLU Categories',
+              value: signal.rawData.mmlu_categories?.length ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {signal.rawData.mmlu_categories.map((cat: string, i: number) => (
+                    <span key={i} style={{
+                      padding: '0.25rem 0.75rem',
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem'
+                    }}>
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+              ) : 'No categories',
+              fullWidth: true
+            }
+          ]
+        })
+      } else {
+        // Preference, Fact Check, User Feedback
+        sections.push({
+          title: 'Details',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
+      }
+
+      setViewModalTitle(`Signal: ${signal.name}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditSignal(signal))
+      setViewModalOpen(true)
+    }
+
+    // Handle edit signal (placeholder)
+    const handleEditSignal = (signal: UnifiedSignal) => {
+      setViewModalOpen(false)
+      // TODO: Implement edit functionality
+      console.log('Edit signal:', signal)
+    }
+
+    // Handle delete signal (placeholder)
+    const handleDeleteSignal = (signal: UnifiedSignal) => {
+      if (confirm(`Are you sure you want to delete signal "${signal.name}"?`)) {
+        // TODO: Implement delete functionality
+        console.log('Delete signal:', signal)
+      }
+    }
+
+    return (
+      <div className={styles.sectionPanel}>
+        <TableHeader
+          title="Signals"
+          count={allSignals.length}
+          searchPlaceholder="Search signals..."
+          searchValue={signalsSearch}
+          onSearchChange={setSignalsSearch}
+          onAdd={() => console.log('Add signal')}
+          addButtonText="Add Signal"
+        />
+
+        {isPythonCLI ? (
+          <DataTable
+            columns={signalsColumns}
+            data={filteredSignals}
+            keyExtractor={(row) => `${row.type}-${row.name}`}
+            onView={handleViewSignal}
+            onEdit={handleEditSignal}
+            onDelete={handleDeleteSignal}
+            emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
+          />
+        ) : (
+          <div className={styles.emptyState}>
+            Signals are only available in Python CLI config format.
+            Current config uses legacy format - use "Intelligent Routing" features instead.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Decisions Section - Routing rules with priorities (config.yaml)
+  const renderDecisionsSection = () => {
+    const decisions = config?.decisions || []
+    const defaultModel = getDefaultModel()
+
+    // Filter decisions based on search
+    const filteredDecisions = decisions.filter(decision =>
+      decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
+      decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase())
+    )
+
+    // Define table columns
+    type DecisionRow = NonNullable<ConfigData['decisions']>[number]
+    const decisionsColumns: Column<DecisionRow>[] = [
+      {
+        key: 'name',
+        header: 'Name',
+        sortable: true,
+        render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>
+      },
+      {
+        key: 'priority',
+        header: 'Priority',
+        width: '100px',
+        align: 'center',
+        sortable: true,
+        render: (row) => (
+          <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
+            P{row.priority}
+          </span>
+        )
+      },
+      {
+        key: 'conditions',
+        header: 'Conditions',
+        width: '150px',
+        render: (row) => {
+          const count = row.rules?.conditions?.length || 0
+          return <span>{count} {count === 1 ? 'condition' : 'conditions'}</span>
+        }
+      },
+      {
+        key: 'models',
+        header: 'Models',
+        width: '150px',
+        render: (row) => {
+          const count = row.modelRefs?.length || 0
+          return <span>{count} {count === 1 ? 'model' : 'models'}</span>
+        }
+      }
+    ]
+
+    // Handle view decision
+    const handleViewDecision = (decision: DecisionRow) => {
+      const sections: ViewSection[] = [
+        {
+          title: 'Basic Information',
+          fields: [
+            { label: 'Name', value: decision.name },
+            { label: 'Priority', value: `P${decision.priority}` },
+            { label: 'Description', value: decision.description || 'N/A', fullWidth: true }
+          ]
+        },
+        {
+          title: 'Rules',
+          fields: [
+            { label: 'Operator', value: decision.rules?.operator || 'N/A' },
+            {
+              label: 'Conditions',
+              value: decision.rules?.conditions?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {decision.rules.conditions.map((cond, i) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(118, 185, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem'
+                    }}>
+                      {cond.type}: {cond.name}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No conditions',
+              fullWidth: true
+            }
+          ]
+        },
+        {
+          title: 'Models',
+          fields: [
+            {
+              label: 'Model References',
+              value: decision.modelRefs?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {decision.modelRefs.map((ref, i) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(0, 212, 255, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem'
+                    }}>
+                      {ref.model} {ref.use_reasoning && '(with reasoning)'}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No models',
+              fullWidth: true
+            }
+          ]
+        }
+      ]
+
+      if (decision.plugins && decision.plugins.length > 0) {
+        sections.push({
+          title: 'Plugins',
+          fields: [
+            {
+              label: 'Configured Plugins',
+              value: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {decision.plugins.map((plugin, i) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.875rem'
+                    }}>
+                      {plugin.type}
+                    </div>
+                  ))}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      }
+
+      setViewModalTitle(`Decision: ${decision.name}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditDecision(decision))
+      setViewModalOpen(true)
+    }
+
+    // Handle edit decision (placeholder for now)
+    const handleEditDecision = (decision: DecisionRow) => {
+      setViewModalOpen(false)
+      // TODO: Implement edit functionality
+      console.log('Edit decision:', decision)
+    }
+
+    // Handle delete decision (placeholder for now)
+    const handleDeleteDecision = (decision: DecisionRow) => {
+      if (confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
+        // TODO: Implement delete functionality
+        console.log('Delete decision:', decision)
+      }
+    }
+
+    return (
+      <div className={styles.sectionPanel}>
+        {/* Default Model Info */}
+        <div className={styles.coreSettingsInline}>
+          <div className={styles.inlineConfigRow}>
+            <span className={styles.inlineConfigLabel}>Default Model:</span>
+            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
+          </div>
+          <div className={styles.inlineConfigRow}>
+            <span className={styles.inlineConfigLabel}>Default Reasoning:</span>
+            <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
+              {config?.providers?.default_reasoning_effort || 'medium'}
+            </span>
+          </div>
+        </div>
+
+        {/* Decisions Table */}
+        <TableHeader
+          title="Routing Decisions"
+          count={decisions.length}
+          searchPlaceholder="Search decisions..."
+          searchValue={decisionsSearch}
+          onSearchChange={setDecisionsSearch}
+          onAdd={() => console.log('Add decision')}
+          addButtonText="Add Decision"
+        />
+
+        {isPythonCLI ? (
+          <DataTable
+            columns={decisionsColumns}
+            data={filteredDecisions}
+            keyExtractor={(row) => row.name}
+            onView={handleViewDecision}
+            onEdit={handleEditDecision}
+            onDelete={handleDeleteDecision}
+            emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+          />
+        ) : (
+          <div className={styles.emptyState}>
+            Decisions are only available in Python CLI config format.
+            Current config uses legacy format - see "Categories" in legacy mode.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Models Section - Provider models and endpoints (config.yaml)
+  const renderModelsSection = () => {
+    const models = getModels()
+    const reasoningFamilies = getReasoningFamilies()
+
+    // Filter models based on search
+    const filteredModels = models.filter(model =>
+      model.name.toLowerCase().includes(modelsSearch.toLowerCase()) ||
+      model.reasoning_family?.toLowerCase().includes(modelsSearch.toLowerCase())
+    )
+
+    // Define model columns
+    type ModelRow = NormalizedModel
+    const modelColumns: Column<ModelRow>[] = [
+      {
+        key: 'name',
+        header: 'Model Name',
+        sortable: true,
+        render: (row) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontWeight: 600 }}>{row.name}</span>
+            {row.name === getDefaultModel() && (
+              <span className={styles.badge} style={{ background: 'rgba(118, 185, 0, 0.15)', color: 'var(--color-primary)' }}>
+                Default
+              </span>
+            )}
+          </div>
+        )
+      },
+      {
+        key: 'reasoning_family',
+        header: 'Reasoning Family',
+        width: '180px',
+        sortable: true,
+        render: (row) => row.reasoning_family ? (
+          <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
+            {row.reasoning_family}
+          </span>
+        ) : <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+      },
+      {
+        key: 'endpoints',
+        header: 'Endpoints',
+        width: '120px',
+        align: 'center',
+        render: (row) => {
+          const count = row.endpoints?.length || 0
+          return (
+            <span style={{ color: count > 0 ? 'var(--color-text)' : 'var(--color-text-secondary)' }}>
+              {count} {count === 1 ? 'endpoint' : 'endpoints'}
+            </span>
+          )
+        }
+      },
+      {
+        key: 'pricing',
+        header: 'Pricing',
+        width: '150px',
+        render: (row) => {
+          if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+          const currency = row.pricing.currency || 'USD'
+          const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
+          return (
+            <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+              {prompt} {currency}/1M
+            </span>
+          )
+        }
+      }
+    ]
+
+    // Render expanded row (endpoints table)
+    const renderModelEndpoints = (model: ModelRow) => {
+      if (!model.endpoints || model.endpoints.length === 0) {
+        return (
+          <div style={{ padding: '1rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+            No endpoints configured for this model
+          </div>
+        )
+      }
+
+      return (
+        <div style={{ padding: '1rem', background: 'rgba(0, 0, 0, 0.3)' }}>
+          <h4 style={{
+            margin: '0 0 1rem 0',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em'
+          }}>
+            Endpoints for {model.name}
+          </h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Name</th>
+                <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Address</th>
+                <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)', width: '100px' }}>Protocol</th>
+                <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)', width: '100px' }}>Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {model.endpoints.map((ep, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
+                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
+                    {ep.endpoint || 'N/A'}
+                  </td>
+                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                    <span style={{
+                      padding: '0.25rem 0.5rem',
+                      background: ep.protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase'
+                    }}>
+                      {ep.protocol || 'http'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+                    {ep.weight}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+
+    // Handle view model
+    const handleViewModel = (model: ModelRow) => {
+      const sections: ViewSection[] = [
+        {
+          title: 'Basic Information',
+          fields: [
+            { label: 'Model Name', value: model.name },
+            { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
+            { label: 'Is Default', value: model.name === getDefaultModel() ? 'Yes' : 'No' }
+          ]
+        }
+      ]
+
+      if (model.endpoints && model.endpoints.length > 0) {
+        sections.push({
+          title: `Endpoints (${model.endpoints.length})`,
+          fields: [
+            {
+              label: 'Configured Endpoints',
+              value: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {model.endpoints.map((ep, i) => {
+                    const isHttps = ep.protocol === 'https'
+                    return (
+                      <div key={i} style={{
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '6px',
+                        padding: '0.75rem',
+                        background: 'rgba(0, 0, 0, 0.2)'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '0.5rem'
+                        }}>
+                          <span style={{
+                            fontWeight: 600,
+                            fontSize: '0.95rem'
+                          }}>
+                            {ep.name}
+                          </span>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          gap: '1rem',
+                          fontSize: '0.875rem',
+                          color: 'var(--color-text-secondary)'
+                        }}>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>
+                            {ep.endpoint}
+                          </span>
+                          <span>
+                            <span style={{
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '3px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                              background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                              color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
+                            }}>
+                              {ep.protocol.toUpperCase()}
+                            </span>
+                          </span>
+                          <span>Weight: {ep.weight}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ),
+              fullWidth: true
+            }
+          ]
+        })
+      }
+
+      if (model.pricing) {
+        sections.push({
+          title: 'Pricing',
+          fields: [
+            { label: 'Currency', value: model.pricing.currency || 'USD' },
+            { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
+            { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
+          ]
+        })
+      }
+
+      if (model.access_key) {
+        sections.push({
+          title: 'Authentication',
+          fields: [
+            { label: 'Access Key', value: '••••••••' }
+          ]
+        })
+      }
+
+      setViewModalTitle(`Model: ${model.name}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditModel(model))
+      setViewModalOpen(true)
+    }
+
+    // Handle add model
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleAddModel = () => {
+      const reasoningFamiliesObj = getReasoningFamilies()
+      const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
+
+      openEditModal(
+        'Add New Model',
+        {
+          model_name: '',
+          reasoning_family: reasoningFamilyNames[0] || '',
+          access_key: '',
+          endpoints: [{
+            name: 'endpoint-1',
+            endpoint: 'localhost:8000',
+            protocol: 'http' as const,
+            weight: 1
+          }],
+          currency: 'USD',
+          prompt_per_1m: 0,
+          completion_per_1m: 0
+        },
+        [
+          {
+            name: 'model_name',
+            label: 'Model Name',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., openai/gpt-4',
+            description: 'Unique identifier for the model'
+          },
+          {
+            name: 'reasoning_family',
+            label: 'Reasoning Family',
+            type: 'select',
+            options: reasoningFamilyNames,
+            description: 'Select from configured reasoning families'
+          },
+          {
+            name: 'endpoints',
+            label: 'Endpoints',
+            type: 'custom',
+            description: 'Configure endpoints for this model',
+            customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
+              <EndpointsEditor endpoints={value || []} onChange={onChange} />
+            )
+          },
+          {
+            name: 'access_key',
+            label: 'Access Key',
+            type: 'text',
+            placeholder: 'API key for this model',
+            description: 'Optional: API key for authentication'
+          },
+          {
+            name: 'currency',
+            label: 'Pricing Currency',
+            type: 'text',
+            placeholder: 'USD',
+            description: 'ISO currency code (e.g., USD, EUR, CNY)'
+          },
+          {
+            name: 'prompt_per_1m',
+            label: 'Prompt Price per 1M Tokens',
+            type: 'number',
+            placeholder: '0.50',
+            description: 'Cost per 1 million prompt tokens'
+          },
+          {
+            name: 'completion_per_1m',
+            label: 'Completion Price per 1M Tokens',
+            type: 'number',
+            placeholder: '1.50',
+            description: 'Cost per 1 million completion tokens'
+          }
+        ],
+        async (data) => {
+          // Endpoints are already validated by EndpointsEditor
+          const endpoints = data.endpoints || []
+
+          const newConfig = { ...config }
+
+          if (isPythonCLI && newConfig.providers) {
+            newConfig.providers = { ...newConfig.providers }
+            if (!newConfig.providers.models) {
+              newConfig.providers.models = []
+            }
+            const newModel: any = {
+              name: data.model_name,
+              reasoning_family: data.reasoning_family,
+              access_key: data.access_key,
+              endpoints: endpoints,
+              pricing: {
+                currency: data.currency,
+                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+              }
+            }
+            newConfig.providers.models.push(newModel)
+          } else {
+            // Legacy format
+            if (!newConfig.model_config) {
+              newConfig.model_config = {}
+            }
+            newConfig.model_config[data.model_name] = {
+              reasoning_family: data.reasoning_family,
+              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              pricing: {
+                currency: data.currency,
+                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+              }
+            }
+          }
+          await saveConfig(newConfig)
+        },
+        'add'
+      )
+    }
+
+    // Handle edit model
+    const handleEditModel = (model: ModelRow) => {
+      setViewModalOpen(false)
+
+      const reasoningFamiliesObj = getReasoningFamilies()
+      const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
+
+      openEditModal(
+        `Edit Model: ${model.name}`,
+        {
+          reasoning_family: model.reasoning_family || '',
+          access_key: model.access_key || '',
+          // Endpoints
+          endpoints: model.endpoints || [],
+          // Pricing
+          currency: model.pricing?.currency || 'USD',
+          prompt_per_1m: model.pricing?.prompt_per_1m || 0,
+          completion_per_1m: model.pricing?.completion_per_1m || 0
+        },
+        [
+          {
+            name: 'reasoning_family',
+            label: 'Reasoning Family',
+            type: 'select',
+            options: reasoningFamilyNames,
+            description: 'Select from configured reasoning families'
+          },
+          {
+            name: 'endpoints',
+            label: 'Endpoints',
+            type: 'custom',
+            description: 'Configure endpoints for this model',
+            customRender: (value: Endpoint[], onChange: (value: Endpoint[]) => void) => (
+              <EndpointsEditor endpoints={value || []} onChange={onChange} />
+            )
+          },
+          {
+            name: 'access_key',
+            label: 'Access Key',
+            type: 'text',
+            placeholder: 'API key for this model',
+            description: 'Optional: API key for authentication'
+          },
+          {
+            name: 'currency',
+            label: 'Pricing Currency',
+            type: 'text',
+            placeholder: 'USD',
+            description: 'ISO currency code (e.g., USD, EUR, CNY)'
+          },
+          {
+            name: 'prompt_per_1m',
+            label: 'Prompt Price per 1M Tokens',
+            type: 'number',
+            placeholder: '0.50',
+            description: 'Cost per 1 million prompt tokens'
+          },
+          {
+            name: 'completion_per_1m',
+            label: 'Completion Price per 1M Tokens',
+            type: 'number',
+            placeholder: '1.50',
+            description: 'Cost per 1 million completion tokens'
+          }
+        ],
+        async (data) => {
+          const newConfig = { ...config }
+
+          // Endpoints are already validated by EndpointsEditor
+          const endpoints = data.endpoints || []
+
+          if (isPythonCLI && newConfig.providers?.models) {
+            newConfig.providers = { ...newConfig.providers }
+            type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+            newConfig.providers.models = newConfig.providers.models.map((m: ModelType) =>
+              m.name === model.name ? {
+                ...m,
+                reasoning_family: data.reasoning_family,
+                access_key: data.access_key,
+                endpoints: endpoints,
+                pricing: {
+                  currency: data.currency,
+                  prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                  completion_per_1m: parseFloat(data.completion_per_1m) || 0
+                }
+              } : m
+            )
+          } else if (newConfig.model_config) {
+            // Legacy format
+            newConfig.model_config[model.name] = {
+              ...newConfig.model_config[model.name],
+              reasoning_family: data.reasoning_family,
+              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              pricing: {
+                currency: data.currency,
+                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
+                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+              }
+            }
+          }
+          await saveConfig(newConfig)
+        },
+        'edit'
+      )
+    }
+
+    // Handle delete model
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const handleDeleteModel = (model: ModelRow) => {
+      if (confirm(`Are you sure you want to delete model "${model.name}"?`)) {
+        handleDeleteModelAction(model.name)
+      }
+    }
+
+    const handleDeleteModelAction = async (modelName: string) => {
+      const newConfig = { ...config }
+      if (isPythonCLI && newConfig.providers?.models) {
+        newConfig.providers = { ...newConfig.providers }
+        type ModelType = NonNullable<ConfigData['providers']>['models'][number]
+        newConfig.providers.models = newConfig.providers.models.filter((m: ModelType) => m.name !== modelName)
+        // Update default model if deleted
+        if (newConfig.providers.default_model === modelName) {
+          newConfig.providers.default_model = newConfig.providers.models[0]?.name || ''
+        }
+      } else if (newConfig.model_config) {
+        delete newConfig.model_config[modelName]
+      }
+      await saveConfig(newConfig)
+    }
+
+    // Toggle expand
+    const handleToggleExpand = (model: ModelRow) => {
+      const newExpanded = new Set(expandedModels)
+      if (newExpanded.has(model.name)) {
+        newExpanded.delete(model.name)
+      } else {
+        newExpanded.add(model.name)
+      }
+      setExpandedModels(newExpanded)
+    }
+
+    // Reasoning Families handlers
+    const handleViewReasoningFamily = (familyName: string) => {
+      const familyConfig = reasoningFamilies[familyName]
+      if (!familyConfig) return
+
+      const sections: ViewSection[] = [
+        {
+          title: 'Configuration',
+          fields: [
+            { label: 'Family Name', value: familyName },
+            { label: 'Type', value: familyConfig.type },
+            { label: 'Parameter', value: familyConfig.parameter }
+          ]
+        }
+      ]
+
+      setViewModalTitle(`Reasoning Family: ${familyName}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditReasoningFamily(familyName))
+      setViewModalOpen(true)
+    }
+
+    const handleEditReasoningFamily = (familyName: string) => {
+      const familyConfig = reasoningFamilies[familyName]
+      if (!familyConfig) return
+
+      openEditModal(
+        `Edit Reasoning Family: ${familyName}`,
+        { ...familyConfig },
+        [
+          {
+            name: 'type',
+            label: 'Type',
+            type: 'select',
+            options: ['reasoning_effort', 'chat_template_kwargs'],
+            required: true,
+            description: 'Type of reasoning family'
+          },
+          {
+            name: 'parameter',
+            label: 'Parameter',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., reasoning_effort',
+            description: 'Parameter name for reasoning control'
+          }
+        ],
+        async (data) => {
+          const newConfig = { ...config }
+          if (isPythonCLI && newConfig.providers) {
+            newConfig.providers = { ...newConfig.providers }
+            if (!newConfig.providers.reasoning_families) {
+              newConfig.providers.reasoning_families = {}
+            }
+            newConfig.providers.reasoning_families[familyName] = data
+          } else if (newConfig.reasoning_families) {
+            newConfig.reasoning_families[familyName] = data
+          }
+          await saveConfig(newConfig)
+        }
+      )
+    }
+
+    const handleAddReasoningFamily = () => {
+      openEditModal(
+        'Add Reasoning Family',
+        { type: 'reasoning_effort', parameter: '' },
+        [
+          {
+            name: 'name',
+            label: 'Family Name',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., o1-reasoning',
+            description: 'Unique name for this reasoning family'
+          },
+          {
+            name: 'type',
+            label: 'Type',
+            type: 'select',
+            options: ['reasoning_effort', 'chat_template_kwargs'],
+            required: true,
+            description: 'Type of reasoning family'
+          },
+          {
+            name: 'parameter',
+            label: 'Parameter',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., reasoning_effort',
+            description: 'Parameter name for reasoning control'
+          }
+        ],
+        async (data) => {
+          const familyName = data.name
+          delete data.name
+
+          const newConfig = { ...config }
+          if (isPythonCLI && newConfig.providers) {
+            newConfig.providers = { ...newConfig.providers }
+            if (!newConfig.providers.reasoning_families) {
+              newConfig.providers.reasoning_families = {}
+            }
+            newConfig.providers.reasoning_families[familyName] = data
+          } else {
+            if (!newConfig.reasoning_families) {
+              newConfig.reasoning_families = {}
+            }
+            newConfig.reasoning_families[familyName] = data
+          }
+          await saveConfig(newConfig)
+        },
+        'add'
+      )
+    }
+
+    const handleDeleteReasoningFamily = async (familyName: string) => {
+      if (!confirm(`Are you sure you want to delete reasoning family "${familyName}"?`)) {
+        return
+      }
+
+      const newConfig = { ...config }
+      if (isPythonCLI && newConfig.providers?.reasoning_families) {
+        newConfig.providers = { ...newConfig.providers }
+        newConfig.providers.reasoning_families = { ...newConfig.providers.reasoning_families }
+        delete newConfig.providers.reasoning_families[familyName]
+      } else if (newConfig.reasoning_families) {
+        delete newConfig.reasoning_families[familyName]
+      }
+      await saveConfig(newConfig)
+    }
+
+    // Reasoning Families table
+    type ReasoningFamilyRow = { name: string; type: string; parameter: string }
+    const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(([name, config]) => ({
+      name,
+      type: config.type,
+      parameter: config.parameter
+    }))
+
+    const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
+      {
+        key: 'name',
+        header: 'Family Name',
+        sortable: true,
+        render: (row) => (
+          <span style={{ fontWeight: 600 }}>{row.name}</span>
+        )
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        width: '200px',
+        sortable: true,
+        render: (row) => (
+          <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
+            {row.type}
+          </span>
+        )
+      },
+      {
+        key: 'parameter',
+        header: 'Parameter',
+        sortable: true,
+        render: (row) => (
+          <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{row.parameter}</code>
+        )
+      }
+    ]
+
+    return (
+      <div className={styles.sectionPanel}>
+        {/* Reasoning Families Table */}
+        <TableHeader
+          title="Reasoning Families"
+          count={reasoningFamilyData.length}
+          searchPlaceholder=""
+          searchValue=""
+          onSearchChange={() => {}}
+          onAdd={handleAddReasoningFamily}
+          addButtonText="Add Family"
+        />
+
+        <DataTable
+          columns={reasoningFamilyColumns}
+          data={reasoningFamilyData}
+          keyExtractor={(row) => row.name}
+          onView={(row) => handleViewReasoningFamily(row.name)}
+          onEdit={(row) => handleEditReasoningFamily(row.name)}
+          onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+          emptyMessage="No reasoning families configured"
+        />
+
+        {/* Models Table */}
+        <div style={{ marginTop: '2rem' }}>
+          <TableHeader
+            title="Models"
+            count={models.length}
+            searchPlaceholder="Search models..."
+            searchValue={modelsSearch}
+            onSearchChange={setModelsSearch}
+            onAdd={handleAddModel}
+            addButtonText="Add Model"
+          />
+
+          <DataTable
+            columns={modelColumns}
+            data={filteredModels}
+            keyExtractor={(row) => row.name}
+            onView={handleViewModel}
+            onEdit={handleEditModel}
+            onDelete={handleDeleteModel}
+            expandable={true}
+            renderExpandedRow={renderModelEndpoints}
+            isRowExpanded={(row) => expandedModels.has(row.name)}
+            onToggleExpand={handleToggleExpand}
+            emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Router Configuration Section - System defaults from router-defaults.yaml
+  const renderRouterConfigSection = () => (
     <div className={styles.sectionPanel}>
+      {/* Semantic Cache */}
+      {renderSimilarityBERT()}
+
+      {/* Prompt Guard */}
       {renderPIIModernBERT()}
       {renderJailbreakModernBERT()}
-    </div>
-  )
 
-  const renderSimilarityCacheSection = () => (
-    <div className={styles.sectionPanel}>
-      {renderSimilarityBERT()}
-    </div>
-  )
-
-  const renderIntelligentRoutingSection = () => (
-    <div className={styles.sectionPanel}>
+      {/* Classifier */}
       {renderClassifyBERT()}
-      {renderCategories()}
-      {renderReasoningFamilies()}
-    </div>
-  )
 
-  const renderToolsSelectionSection = () => (
-    <div className={styles.sectionPanel}>
+      {/* Tools */}
       {renderToolsConfiguration()}
       {renderToolsDB()}
-    </div>
-  )
 
-  const renderObservabilitySection = () => (
-    <div className={styles.sectionPanel}>
+      {/* Observability */}
       {renderObservabilityTracing()}
-    </div>
-  )
 
-  const renderClassificationAPISection = () => (
-    <div className={styles.sectionPanel}>
+      {/* Classification API */}
       {renderClassificationAPI()}
+
+      {/* Legacy Categories (for backward compatibility) */}
+      {!isPythonCLI && renderCategories()}
     </div>
   )
 
   const renderActiveSection = () => {
     switch (activeSection) {
+      case 'signals':
+        return renderSignalsSection()
+      case 'decisions':
+        return renderDecisionsSection()
       case 'models':
         return renderModelsSection()
-      case 'prompt-guard':
-        return renderPromptGuardSection()
-      case 'similarity-cache':
-        return renderSimilarityCacheSection()
-      case 'intelligent-routing':
-        return renderIntelligentRoutingSection()
-      case 'tools-selection':
-        return renderToolsSelectionSection()
-      case 'observability':
-        return renderObservabilitySection()
-      case 'classification-api':
-        return renderClassificationAPISection()
+      case 'router-config':
+        return renderRouterConfigSection()
       default:
-        return renderModelsSection()
+        return renderSignalsSection()
     }
   }
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <h2 className={styles.title}>⚙️ Configuration</h2>
-          <div className={styles.viewToggle}>
-            <button
-              className={`${styles.toggleButton} ${selectedView === 'structured' ? styles.active : ''}`}
-              onClick={() => setSelectedView('structured')}
-            >
-              📋 Structured
-            </button>
-            <button
-              className={`${styles.toggleButton} ${selectedView === 'raw' ? styles.active : ''}`}
-              onClick={() => setSelectedView('raw')}
-            >
-              💻 Raw YAML
-            </button>
-          </div>
-        </div>
-        <button onClick={handleRefresh} className={styles.button} disabled={loading}>
-          🔄 Refresh
-        </button>
-      </div>
 
       <div className={styles.content}>
         {loading && (
@@ -2348,7 +3274,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
         {error && !loading && (
           <div className={styles.error}>
-            <span className={styles.errorIcon}>⚠️</span>
+            <span className={styles.errorIcon}></span>
             <div>
               <h3>Error Loading Config</h3>
               <p>{error}</p>
@@ -2357,17 +3283,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         )}
 
         {config && !loading && !error && (
-          <>
-            {selectedView === 'structured' ? (
-              <div className={styles.contentArea}>
-                {renderActiveSection()}
-              </div>
-            ) : (
-              <pre className={styles.codeBlock}>
-                <code>{JSON.stringify(config, null, 2)}</code>
-              </pre>
-            )}
-          </>
+          <div className={styles.contentArea}>
+            {renderActiveSection()}
+          </div>
         )}
       </div>
 
@@ -2380,6 +3298,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         data={editModalData}
         fields={editModalFields}
         mode={editModalMode}
+      />
+
+      {/* View Modal */}
+      <ViewModal
+        isOpen={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        onEdit={viewModalEditCallback || undefined}
+        title={viewModalTitle}
+        sections={viewModalSections}
       />
     </div>
   )

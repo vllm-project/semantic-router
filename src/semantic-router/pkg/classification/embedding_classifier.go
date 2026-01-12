@@ -26,7 +26,7 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 	if err != nil {
 		return err
 	}
-	logging.Infof("Initialized KeywordEmbedding classifier with qwen3 model path %q and gemma model path %s", qwen3ModelPath, gemmaModelPath)
+	logging.Infof("Initialized KeywordEmbedding classifier")
 	return nil
 }
 

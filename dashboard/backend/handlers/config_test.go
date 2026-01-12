@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // createValidTestConfig creates a minimal valid config file for testing
@@ -287,6 +290,158 @@ func TestUpdateConfigHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUpdateConfigHandler_FilePersistence verifies that config updates are actually written to disk
+func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	// Test 1: Add new top-level key
+	t.Run("Add new top-level key", func(t *testing.T) {
+		createValidTestConfig(t, tempDir) // Reset
+
+		updateBody := map[string]interface{}{
+			"test_new_key": "test_new_value",
+		}
+
+		bodyBytes, _ := json.Marshal(updateBody)
+		req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler := UpdateConfigHandler(configPath)
+		handler(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+		}
+
+		// Verify file was updated
+		updatedData, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("Failed to read updated config: %v", err)
+		}
+
+		// Parse updated config (YAML format)
+		var updatedConfig map[string]interface{}
+		if err := yaml.Unmarshal(updatedData, &updatedConfig); err != nil {
+			t.Fatalf("Failed to parse updated config: %v", err)
+		}
+
+		// Verify new key exists
+		if val, ok := updatedConfig["test_new_key"]; !ok {
+			t.Error("New key 'test_new_key' was not added to config file")
+		} else if val != "test_new_value" {
+			t.Errorf("Expected 'test_new_key' to be 'test_new_value', got '%v'", val)
+		}
+
+		// Verify original values are preserved
+		if val, ok := updatedConfig["default_model"]; !ok || val != "test-model" {
+			t.Errorf("Original 'default_model' was not preserved. Got: %v", val)
+		}
+	})
+
+	// Test 2: Update existing nested value
+	t.Run("Update existing nested value", func(t *testing.T) {
+		createValidTestConfig(t, tempDir) // Reset
+
+		updateBody := map[string]interface{}{
+			"vllm_endpoints": []map[string]interface{}{
+				{
+					"name":    "endpoint1",
+					"address": "192.168.1.100", // Changed from 127.0.0.1
+					"port":    8000,
+					"weight":  1,
+				},
+			},
+		}
+
+		bodyBytes, _ := json.Marshal(updateBody)
+		req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler := UpdateConfigHandler(configPath)
+		handler(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+		}
+
+		// Verify file was updated
+		updatedData, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("Failed to read updated config: %v", err)
+		}
+
+		// Parse updated config (YAML format)
+		var updatedConfig map[string]interface{}
+		if err := yaml.Unmarshal(updatedData, &updatedConfig); err != nil {
+			t.Fatalf("Failed to parse updated config: %v", err)
+		}
+
+		// Verify endpoint was updated
+		endpoints, ok := updatedConfig["vllm_endpoints"].([]interface{})
+		if !ok || len(endpoints) == 0 {
+			t.Fatal("vllm_endpoints not found or empty in updated config")
+		}
+
+		endpoint, ok := endpoints[0].(map[string]interface{})
+		if !ok {
+			t.Fatal("First endpoint is not a map")
+		}
+
+		if address, ok := endpoint["address"].(string); !ok || address != "192.168.1.100" {
+			t.Errorf("Expected address to be '192.168.1.100', got '%v'", address)
+		}
+
+		// Verify other values are preserved
+		if val, ok := updatedConfig["default_model"]; !ok || val != "test-model" {
+			t.Errorf("Original 'default_model' was not preserved. Got: %v", val)
+		}
+	})
+
+	// Test 3: Verify file modification timestamp changes
+	t.Run("File modification timestamp changes", func(t *testing.T) {
+		createValidTestConfig(t, tempDir) // Reset
+
+		// Get original file info
+		originalInfo, err := os.Stat(configPath)
+		if err != nil {
+			t.Fatalf("Failed to stat original config: %v", err)
+		}
+		originalModTime := originalInfo.ModTime()
+
+		// Wait a bit to ensure timestamp difference
+		time.Sleep(100 * time.Millisecond)
+
+		updateBody := map[string]interface{}{
+			"test_timestamp_key": "test_timestamp_value",
+		}
+
+		bodyBytes, _ := json.Marshal(updateBody)
+		req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		handler := UpdateConfigHandler(configPath)
+		handler(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+		}
+
+		// Verify file modification time changed
+		updatedInfo, err := os.Stat(configPath)
+		if err != nil {
+			t.Fatalf("Failed to stat updated config: %v", err)
+		}
+
+		if !updatedInfo.ModTime().After(originalModTime) {
+			t.Error("Config file modification time did not change after update")
+		}
+	})
 }
 
 func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {

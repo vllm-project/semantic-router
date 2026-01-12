@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -156,35 +157,55 @@ func main() {
 		logging.Infof("Metrics server disabled")
 	}
 
-	// Create and start the ExtProc server
-	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
-	if err != nil {
-		logging.Fatalf("Failed to create ExtProc server: %v", err)
-	}
-
-	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
-
-	// Initialize embedding models if configured (Long-context support)
+	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma models are ready when semantic cache is initialized
 	// Use the already loaded config instead of calling config.Load() again
 	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
-		if err := candle_binding.InitEmbeddingModels(
-			cfg.Qwen3ModelPath,
-			cfg.GemmaModelPath,
-			cfg.EmbeddingModels.UseCPU,
-		); err != nil {
-			logging.Errorf("Failed to initialize embedding models: %v", err)
+		var initErr error
+
+		// Check if semantic cache uses qwen3 and needs batched initialization
+		// The cache uses GetEmbeddingBatched() which requires InitEmbeddingModelsBatched()
+		useBatchedInit := cfg.SemanticCache.Enabled &&
+			strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel)) == "qwen3" &&
+			cfg.Qwen3ModelPath != ""
+
+		// If semantic cache uses qwen3, use batched initialization for better performance
+		if useBatchedInit {
+			logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
+			maxBatchSize := 64      // Batch up to 64 requests together
+			maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
+			initErr = candle_binding.InitEmbeddingModelsBatched(
+				cfg.Qwen3ModelPath,
+				maxBatchSize,
+				maxWaitMs,
+				cfg.EmbeddingModels.UseCPU,
+			)
+			if initErr == nil {
+				logging.Infof("Batched embedding model initialized successfully (qwen3 for semantic cache)")
+			}
+
+			// Also initialize standard ModelFactory for classification and other features
+			// Both need to be initialized when cache uses qwen3
+			if initErr == nil {
+				initErr = candle_binding.InitEmbeddingModels(
+					cfg.Qwen3ModelPath, // Initialize qwen3 in standard factory too (for classification)
+					cfg.GemmaModelPath, // Also initialize gemma if configured
+					cfg.EmbeddingModels.UseCPU,
+				)
+			}
+		} else {
+			// Use standard initialization for other use cases (both qwen3 and gemma)
+			initErr = candle_binding.InitEmbeddingModels(
+				cfg.Qwen3ModelPath,
+				cfg.GemmaModelPath,
+				cfg.EmbeddingModels.UseCPU,
+			)
+		}
+
+		if initErr != nil {
+			logging.Errorf("Failed to initialize embedding models: %v", initErr)
 			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
 		} else {
 			logging.Infof("Embedding models initialized successfully")
-
-			// Load tools database after embedding models are initialized
-			// This ensures ModelFactory is ready when generating tool embeddings
-			router := server.GetRouter()
-			if router != nil {
-				if err := router.LoadToolsDatabase(); err != nil {
-					logging.Warnf("Failed to load tools database: %v", err)
-				}
-			}
 		}
 	} else {
 		logging.Infof("No embedding models configured, skipping initialization")
@@ -193,6 +214,23 @@ func main() {
 		logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
 		logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
 		logging.Infof("    use_cpu: true")
+	}
+
+	// Create and start the ExtProc server
+	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
+	if err != nil {
+		logging.Fatalf("Failed to create ExtProc server: %v", err)
+	}
+
+	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
+
+	// Load tools database after server initialization
+	// Tools database can work with or without embedding models
+	router := server.GetRouter()
+	if router != nil {
+		if err := router.LoadToolsDatabase(); err != nil {
+			logging.Warnf("Failed to load tools database: %v", err)
+		}
 	}
 
 	// Start API server if enabled
@@ -222,8 +260,15 @@ func main() {
 func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 	logging.Infof("Installing required models...")
 
+	// Calculate unique models based on RepoID
+	uniqueModels := make(map[string]bool)
+	for _, repoID := range cfg.MoMRegistry {
+		uniqueModels[repoID] = true
+	}
+
 	// Print model registry configuration
-	logging.Infof("MoM Families (%d models)", len(cfg.MoMRegistry))
+	logging.Infof("MoM Families: %d unique models (total %d registry aliases)", len(uniqueModels), len(cfg.MoMRegistry))
+	logging.Debugf("Registry Details:")
 	for localPath, repoID := range cfg.MoMRegistry {
 		logging.Debugf("  %s -> %s", localPath, repoID)
 	}

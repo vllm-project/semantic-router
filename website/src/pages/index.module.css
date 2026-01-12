@@ -632,3 +632,122 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Where It Lives Section */
+.whereItLivesSection {
+  padding: 5rem 0;
+  background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 50%, #F0F3F6 100%);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .whereItLivesSection {
+  background: linear-gradient(135deg, #161B22 0%, #21262D 50%, #161B22 100%);
+}
+
+.whereItLivesSection::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+[data-theme='dark'] .whereItLivesSection::before {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(88, 166, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(253, 181, 22, 0.08) 0%, transparent 50%);
+}
+
+.whereItLivesTitle {
+  text-align: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  background: linear-gradient(45deg, #58A6FF, #FDB516, #A855F7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  z-index: 1;
+}
+
+.whereItLivesSubtitle {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #656D76;
+  margin-bottom: 3rem;
+  position: relative;
+  z-index: 1;
+  transition: color 0.3s ease;
+}
+
+[data-theme='dark'] .whereItLivesSubtitle {
+  color: #8B949E;
+}
+
+.whereItLivesImageWrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.whereItLivesImage {
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(9, 105, 218, 0.15);
+  transition: all 0.3s ease;
+}
+
+.whereItLivesImage:hover {
+  transform: scale(1.02);
+  box-shadow: 0 16px 50px rgba(9, 105, 218, 0.25);
+}
+
+[data-theme='dark'] .whereItLivesImage {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='dark'] .whereItLivesImage:hover {
+  box-shadow: 0 16px 50px rgba(88, 166, 255, 0.3);
+}
+
+/* Responsive Design for Where It Lives */
+@media screen and (max-width: 996px) {
+  .whereItLivesTitle {
+    font-size: 2rem;
+  }
+
+  .whereItLivesSubtitle {
+    font-size: 1.1rem;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .whereItLivesSection {
+    padding: 3rem 0;
+  }
+
+  .whereItLivesTitle {
+    font-size: 1.8rem;
+  }
+
+  .whereItLivesSubtitle {
+    font-size: 1rem;
+    padding: 0 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .whereItLivesImage {
+    border-radius: 12px;
+  }
+}

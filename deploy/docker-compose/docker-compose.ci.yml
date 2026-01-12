@@ -28,14 +28,16 @@ services:
       - CONFIG_FILE=${CONFIG_FILE:-/app/config/config.yaml}
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
+      - HF_TOKEN=${HF_TOKEN:-}  # Optional: Required for downloading gated models (e.g., embeddinggemma-300m)
+      - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}  # Alternative env var name used by huggingface-cli
     networks:
       - semantic-network
     healthcheck:
       test: ["CMD", "curl", "-f", "localhost:8080/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 60
+      start_period: 600s
 
   # Envoy Proxy Service
   envoy:
@@ -80,8 +82,8 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 30
+      start_period: 120s
 
 networks:
   semantic-network:

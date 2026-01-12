@@ -37,7 +37,7 @@ const ChatComponent = ({
   const [showThinking, setShowThinking] = useState(false)
   const [showHeaderReveal, setShowHeaderReveal] = useState(false)
   const [pendingHeaders, setPendingHeaders] = useState<Record<string, string> | null>(null)
-  const [isFullscreen, setIsFullscreen] = useState(isFullscreenMode)
+  const [isFullscreen] = useState(isFullscreenMode)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -251,10 +251,6 @@ const ChatComponent = ({
     setError(null)
   }
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
-  }
-
   return (
     <>
       {/* Thinking Animation */}
@@ -272,52 +268,20 @@ const ChatComponent = ({
       )}
 
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
-        <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-          <h2 className={styles.title}>vLLM SR Chat</h2>
-          <span className={styles.modelBadge}>{model}</span>
-        </div>
-        <div className={styles.headerActions}>
-          {!isFullscreenMode && (
-            <button
-              className={styles.iconButton}
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                {isFullscreen ? (
-                  <path d="M10 2h4v4M6 14H2v-4M14 6V2h-4M2 10v4h4" strokeLinecap="round" strokeLinejoin="round"/>
-                ) : (
-                  <path d="M2 6V2h4M14 10v4h-4M10 2h4v4M6 14H2v-4" strokeLinecap="round" strokeLinejoin="round"/>
-                )}
-              </svg>
-            </button>
-          )}
-          <button
-            className={styles.iconButton}
-            onClick={() => setShowSettings(!showSettings)}
-            title="Settings"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="8" cy="8" r="2.5"/>
-              <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <button
-            className={styles.iconButton}
-            onClick={handleClear}
-            title="Clear chat"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
       {showSettings && (
         <div className={styles.settings}>
+          <div className={styles.settingsHeader}>
+            <span className={styles.settingsTitle}>Settings</span>
+            <button
+              className={styles.iconButton}
+              onClick={() => setShowSettings(false)}
+              title="Close settings"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M1 1l12 12M13 1L1 13" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
           <div className={styles.settingRow}>
             <label className={styles.settingLabel}>Model:</label>
             <input
@@ -361,7 +325,7 @@ const ChatComponent = ({
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             <h3>Start a conversation</h3>
-            <p>Send a message to begin chatting with the model.</p>
+            <p>Send a message to begin chatting with the mixture of models.</p>
           </div>
         ) : (
           <div className={styles.messages}>
@@ -414,12 +378,33 @@ const ChatComponent = ({
       </div>
 
       <div className={styles.inputContainer}>
+        <div className={styles.inputActions}>
+          <button
+            className={styles.inputActionButton}
+            onClick={() => setShowSettings(!showSettings)}
+            title="Settings"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="8" cy="8" r="2.5"/>
+              <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <button
+            className={styles.inputActionButton}
+            onClick={handleClear}
+            title="Clear chat"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
         <textarea
           ref={inputRef}
           value={inputValue}
           onChange={e => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+          placeholder="Type a message... (Enter to send)"
           className={styles.input}
           rows={1}
           disabled={isLoading}

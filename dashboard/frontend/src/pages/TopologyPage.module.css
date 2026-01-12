@@ -1,7 +1,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100vh - 60px); /* Viewport height minus top navbar */
   width: 100%;
   background: var(--bg-primary);
   overflow: hidden;
@@ -52,7 +52,7 @@
 .flowContainer {
   flex: 1;
   width: 100%;
-  height: 100%;
+  min-height: 500px;
   position: relative;
   background: var(--bg-primary);
 }
@@ -60,6 +60,8 @@
 /* ReactFlow custom styling */
 .flowContainer :global(.react-flow) {
   background: var(--bg-primary);
+  width: 100%;
+  height: 100%; /* Ensure React Flow fills the container */
 }
 
 .flowContainer :global(.react-flow__node) {

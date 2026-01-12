@@ -19,6 +19,8 @@ services:
       - OTEL_SERVICE_NAME=vllm-semantic-router
       - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
       - HF_HUB_ENABLE_HF_TRANSFER=1
+      - HF_TOKEN=${HF_TOKEN:-}  # Optional: Required for downloading gated models (e.g., embeddinggemma-300m)
+      - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN:-}  # Alternative env var name used by huggingface-cli
     networks:
       - semantic-network
     healthcheck:
@@ -34,6 +36,11 @@ services:
     container_name: envoy-proxy
     security_opt:
       - label=disable
+    # File descriptor limits for handling many connections
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "8801:8801"  # Main proxy port
       - "19000:19000"  # Admin interface
@@ -151,7 +158,7 @@ services:
       context: ../../
       dockerfile: dashboard/backend/Dockerfile
     container_name: semantic-router-dashboard
-    command: ["/app/dashboard-backend", "-port=8700", "-static=/app/frontend", "-config=/app/config/config.yaml"]
+    # Note: Entrypoint script handles config file permissions and switches to nonroot user
     environment:
       - DASHBOARD_PORT=8700
       - TARGET_GRAFANA_URL=http://grafana:3000
@@ -159,6 +166,7 @@ services:
       - TARGET_JAEGER_URL=http://jaeger:16686
       - TARGET_ROUTER_API_URL=http://semantic-router:8080
       - TARGET_ROUTER_METRICS_URL=http://semantic-router:9190/metrics
+      - TARGET_ENVOY_URL=http://envoy:8801
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
     volumes:
       - ../../config:/app/config:rw,z
@@ -172,6 +180,8 @@ services:
       grafana:
         condition: service_started
       prometheus:
+        condition: service_started
+      envoy:
         condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8700/healthz"]

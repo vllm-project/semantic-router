@@ -1,4 +1,4 @@
-.PHONY: help build install test clean docker-build docker-run docker-stop dev-setup dev-serve dev-test
+.PHONY: help build install test clean docker-build docker-run docker-stop dev-setup dev-serve dev-test rebuild-and-test
 
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
@@ -13,9 +13,10 @@ help:
 	@echo "vLLM Semantic Router CLI - Development Commands"
 	@echo ""
 	@echo "Quick Start:"
-	@echo "  make dev-setup    - Complete setup (build + install)"
-	@echo "  make dev-serve    - Start service with config"
-	@echo "  make dev-test     - Test configuration generation"
+	@echo "  make dev-setup       - Complete setup (build + install)"
+	@echo "  make dev-serve       - Start service with config"
+	@echo "  make dev-test        - Test configuration generation"
+	@echo "  make rebuild-and-test - Full rebuild and test workflow"
 	@echo ""
 	@echo "Build & Install:"
 	@echo "  make build        - Build Docker image ($(FULL_IMAGE))"
@@ -37,10 +38,11 @@ help:
 	@echo "  make docker-shell       - Open shell in container"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev-serve    - Start service (builds image if needed)"
-	@echo "  make dev-test     - Test config generation"
-	@echo "  make test         - Run tests"
-	@echo "  make clean        - Clean up build artifacts"
+	@echo "  make dev-serve       - Start service (builds image if needed)"
+	@echo "  make dev-test        - Test config generation"
+	@echo "  make rebuild-and-test - Full rebuild and test workflow"
+	@echo "  make test            - Run tests"
+	@echo "  make clean           - Clean up build artifacts"
 	@echo ""
 	@echo "Variables:"
 	@echo "  IMAGE_NAME=$(IMAGE_NAME)"
@@ -203,4 +205,79 @@ check-image:
 		echo "  Run: make docker-build"; \
 		exit 1; \
 	fi
+
+# Rebuild and test - Full workflow from rebuild-and-test.sh
+rebuild-and-test: install
+	@echo "=========================================="
+	@echo "Rebuild and Test vLLM Semantic Router"
+	@echo "=========================================="
+	@echo ""
+	@echo "This will:"
+	@echo "  1. Clean up old containers"
+	@echo "  2. Rebuild Docker image with all dependencies"
+	@echo "  3. Start the service"
+	@echo "  4. Verify multi-listener support"
+	@echo ""
+	@echo "Dependencies included in the image:"
+	@echo "  ✓ pydantic>=2.0.0"
+	@echo "  ✓ huggingface_hub[cli]>=0.20.0"
+	@echo "  ✓ Multi-listener support"
+	@echo ""
+	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy
+	@echo ""
+	@echo "1. Cleaning up old containers..."
+	@docker rm -f vllm-sr-container 2>/dev/null || echo "  No container to remove"
+	@echo ""
+	@echo "2. Rebuilding Docker image..."
+	@echo "  Building from: $$(cd ../.. && pwd)"
+	@echo "  Note: Use 'make docker-buildx' for multi-platform builds"
+	@echo ""
+	@$(MAKE) docker-build
+	@echo ""
+	@echo "3. Verifying dependencies in image..."
+	@docker run --rm $(FULL_IMAGE) /bin/sh -c " \
+		echo '  Checking pydantic...'; \
+		python -c 'import pydantic; print(f\"    ✓ pydantic {pydantic.__version__}\")'; \
+		echo '  Checking huggingface_hub...'; \
+		python -c 'import huggingface_hub; print(f\"    ✓ huggingface_hub {huggingface_hub.__version__}\")'; \
+		echo '  Checking huggingface-cli...'; \
+		huggingface-cli --version | sed 's/^/    ✓ /'; \
+	"
+	@echo ""
+	@echo "4. Checking config.yaml listeners..."
+	@python -c " \
+import yaml; \
+with open('$(CONFIG_FILE)', 'r') as f: \
+    config = yaml.safe_load(f); \
+    listeners = config.get('listeners', []); \
+    print(f'  Found {len(listeners)} listener(s):'); \
+    [print(f\"    - {l.get('name', 'unknown')}: port {l.get('port', 'unknown')}\") for l in listeners]; \
+	"
+	@echo ""
+	@echo "5. Starting service with local image..."
+	@python -m cli.main serve $(CONFIG_FILE) --image $(FULL_IMAGE) --image-pull-policy never &
+	@echo ""
+	@echo "6. Waiting for services to start (30 seconds)..."
+	@sleep 30
+	@echo ""
+	@echo "7. Container status:"
+	@docker ps --filter name=vllm-sr-container --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+	@echo ""
+	@echo "8. Recent logs:"
+	@docker logs vllm-sr-container --tail 100
+	@echo ""
+	@echo "=========================================="
+	@echo "Next Steps"
+	@echo "=========================================="
+	@echo ""
+	@echo "Check health:"
+	@echo "  curl http://localhost:8000/healthz"
+	@echo "  curl http://localhost:8080/healthz"
+	@echo ""
+	@echo "View logs:"
+	@echo "  docker logs -f vllm-sr-container"
+	@echo ""
+	@echo "Stop service:"
+	@echo "  make docker-stop"
+	@echo ""
 

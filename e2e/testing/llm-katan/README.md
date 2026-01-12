@@ -325,6 +325,9 @@ pip install -e .
 
 # Run with development dependencies
 pip install -e ".[dev]"
+
+# Run with development dependencies for Intel XPU (optional)
+pip install -e ".[xpu,dev]" --extra-index-url https://download.pytorch.org/whl/xpu
 ```
 
 ## License

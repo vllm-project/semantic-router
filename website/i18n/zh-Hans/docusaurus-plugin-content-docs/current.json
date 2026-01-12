@@ -1,0 +1,62 @@
+{
+  "version.label": {
+    "message": "开发中 🚧",
+    "description": "The label for version next"
+  },
+  "sidebar.tutorialSidebar.category.Overview": {
+    "message": "概述",
+    "description": "The label for category Overview in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Installation": {
+    "message": "安装",
+    "description": "The label for category Installation in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Install with Gateways": {
+    "message": "网关集成",
+    "description": "The label for category Install with Gateways in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Install with Frameworks": {
+    "message": "框架集成",
+    "description": "The label for category Install with Frameworks in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Capacities": {
+    "message": "功能特性",
+    "description": "The label for category Capacities in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Intelligent Route": {
+    "message": "智能路由",
+    "description": "The label for category Intelligent Route in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Semantic Cache": {
+    "message": "语义缓存",
+    "description": "The label for category Semantic Cache in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Content Safety": {
+    "message": "内容安全",
+    "description": "The label for category Content Safety in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Observability": {
+    "message": "可观测性",
+    "description": "The label for category Observability in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Proposals": {
+    "message": "提案",
+    "description": "The label for category Proposals in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Model Training": {
+    "message": "模型训练",
+    "description": "The label for category Model Training in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Cookbook": {
+    "message": "实践指南",
+    "description": "The label for category Cookbook in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.API Reference": {
+    "message": "API 参考",
+    "description": "The label for category API Reference in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Troubleshooting": {
+    "message": "故障排查",
+    "description": "The label for category Troubleshooting in sidebar tutorialSidebar"
+  }
+}

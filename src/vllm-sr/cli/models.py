@@ -122,6 +122,14 @@ class Endpoint(BaseModel):
     protocol: str = "http"
 
 
+class ModelPricing(BaseModel):
+    """Model pricing configuration."""
+
+    currency: Optional[str] = "USD"
+    prompt_per_1m: Optional[float] = 0.0
+    completion_per_1m: Optional[float] = 0.0
+
+
 class Model(BaseModel):
     """Model configuration."""
 
@@ -129,6 +137,7 @@ class Model(BaseModel):
     endpoints: List[Endpoint]
     access_key: Optional[str] = None
     reasoning_family: Optional[str] = None
+    pricing: Optional[ModelPricing] = None
 
 
 class ReasoningFamily(BaseModel):

@@ -626,6 +626,7 @@ config:
   # - mom-embedding-flash: Up to 8K context, fast inference, Matryoshka support (EmbeddingGemma-300M)
   embedding_models:
     qwen3_model_path: "models/mom-embedding-pro"
+    gemma_model_path: "models/mom-embedding-flash"  # Gated model - will gracefully skip if HF_TOKEN not available
     use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
 
   # Observability Configuration

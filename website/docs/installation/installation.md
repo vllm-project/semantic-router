@@ -15,8 +15,43 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 **Requirements:**
 
 - **Python**: 3.10 or higher
-- **Docker**: Required for running the router container
+- **Container Runtime**: Docker or Podman (required for running the router container)
 - **Optional**: HuggingFace token (only for gated models)
+
+:::tip Container Runtime Support
+The vLLM Semantic Router supports both **Docker** and **Podman** as container runtimes. The CLI automatically detects which one is available on your system. If both are installed, Docker is preferred by default. You can explicitly choose a runtime by setting the `CONTAINER_RUNTIME` environment variable:
+
+```bash
+export CONTAINER_RUNTIME=podman  # Use Podman
+export CONTAINER_RUNTIME=docker  # Use Docker
+```
+
+:::
+
+:::warning Podman Memory Requirements
+If you're using Podman, ensure your Podman machine has **at least 8GB of memory** allocated. The default 2GB is insufficient for loading the required models.
+
+To configure Podman machine memory:
+
+```bash
+# Stop and remove existing machine (if any)
+podman machine stop
+podman machine rm
+
+# Create new machine with 8GB memory
+podman machine init --memory 8192 --cpus 4 --disk-size 100
+
+# Start the machine
+podman machine start
+```
+
+You can verify the memory allocation with:
+
+```bash
+podman machine inspect | grep Memory
+```
+
+:::
 
 ## Quick Start
 

@@ -21,7 +21,8 @@ precommit-check:
     ! -path "./.git/*" \
 		| tr '\n' ' '); \
 	if [ -n "$$FILES" ]; then \
-		echo "Running pre-commit on files: $$FILES"; \
+		FILE_COUNT=$$(echo $$FILES | wc -w | tr -d ' '); \
+		echo "Running pre-commit on $$FILE_COUNT files..."; \
 		pre-commit run --files $$FILES; \
 	else \
 		echo "No Go, Rust, JavaScript, Shell, Markdown, Yaml, or Python files found to check"; \

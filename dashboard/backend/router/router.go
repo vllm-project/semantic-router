@@ -25,9 +25,34 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath))
 	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/update")
 
+	// Router defaults endpoints (for .vllm-sr/router-defaults.yaml)
+	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir))
+	log.Printf("Router defaults API endpoints registered: /api/router/config/defaults, /api/router/config/defaults/update")
+
 	// Tools DB endpoint
 	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
+
+	// Status endpoint - shows service health status (aligns with vllm-sr status)
+	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
+	log.Printf("Status API endpoint registered: /api/status")
+
+	// Logs endpoint - shows service logs (aligns with vllm-sr logs)
+	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))
+	log.Printf("Logs API endpoint registered: /api/logs")
+
+	// Envoy proxy for chat completions (if configured)
+	// Chat completions must go through Envoy's ext_proc pipeline
+	var envoyProxy *httputil.ReverseProxy
+	if cfg.EnvoyURL != "" {
+		ep, err := proxy.NewReverseProxy(cfg.EnvoyURL, "", false)
+		if err != nil {
+			log.Fatalf("envoy proxy error: %v", err)
+		}
+		envoyProxy = ep
+		log.Printf("Envoy proxy configured: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
+	}
 
 	// Router API proxy (forward Authorization) - MUST be registered before Grafana
 	// Use HandleFunc to explicitly exclude config endpoints
@@ -39,10 +64,22 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		}
 		routerAPIProxy = rp
 		// Explicitly exclude config endpoints from proxy
+		// Route chat completions to Envoy if configured
 		mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
 				// Config endpoints are handled by specific handlers above
 				http.NotFound(w, r)
+				return
+			}
+			// Route chat completions to Envoy proxy
+			if envoyProxy != nil && strings.HasPrefix(r.URL.Path, "/api/router/v1/chat/completions") {
+				// Strip /api/router prefix and forward to Envoy
+				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
+				log.Printf("Proxying chat completions to Envoy: %s %s", r.Method, r.URL.Path)
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				envoyProxy.ServeHTTP(w, r)
 				return
 			}
 			rp.ServeHTTP(w, r)

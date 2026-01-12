@@ -122,7 +122,10 @@ Required env vars (with sensible defaults per environment):
 - `TARGET_PROMETHEUS_URL`
 - `TARGET_ROUTER_API_URL` (router `:8080`)
 - `TARGET_ROUTER_METRICS_URL` (router `:9190/metrics`)
-  Optional:
+- `TARGET_ENVOY_URL` — Envoy proxy URL for chat completions (e.g., `http://envoy:8801`). Required for Playground chat to work.
+
+Optional:
+
 - `ROUTER_CONFIG_PATH` (default: `../../config/config.yaml`) — path to the router config file used by the config APIs and Tools DB.
 - `DASHBOARD_STATIC_DIR` — override static assets directory (defaults to `../frontend`).
   Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.

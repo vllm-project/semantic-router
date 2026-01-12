@@ -25,7 +25,12 @@ func ToolsDBHandler(configDir string) http.HandlerFunc {
 		data, err := os.ReadFile(toolsDBPath)
 		if err != nil {
 			log.Printf("Error reading tools_db.json: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to read tools database: %v", err), http.StatusInternalServerError)
+			// Return 404 if file doesn't exist, 500 for other errors
+			if os.IsNotExist(err) {
+				http.Error(w, fmt.Sprintf("Tools database not found: %v", err), http.StatusNotFound)
+			} else {
+				http.Error(w, fmt.Sprintf("Failed to read tools database: %v", err), http.StatusInternalServerError)
+			}
 			return
 		}
 

@@ -22,16 +22,8 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 		return
 	}
 
-	// Use unified classifier if available, otherwise fall back to legacy
-	var response *services.IntentResponse
-	var err error
-
-	if s.classificationSvc.HasUnifiedClassifier() {
-		response, err = s.classificationSvc.ClassifyIntentUnified(req)
-	} else {
-		response, err = s.classificationSvc.ClassifyIntent(req)
-	}
-
+	// Use signal-driven classification (always uses signal-driven architecture)
+	response, err := s.classificationSvc.ClassifyIntent(req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
 		return

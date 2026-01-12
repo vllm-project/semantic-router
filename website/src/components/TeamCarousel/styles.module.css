@@ -1,0 +1,199 @@
+.teamCarousel {
+  padding: 4rem 0;
+  background: var(--ifm-background-surface-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.title {
+  text-align: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--ifm-color-primary);
+}
+
+.subtitle {
+  text-align: center;
+  font-size: 1.125rem;
+  color: var(--ifm-color-content-secondary);
+  margin-bottom: 3rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.carouselContainer {
+  position: relative;
+  overflow: hidden;
+  padding: 2rem 0;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 10%,
+    black 90%,
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 10%,
+    black 90%,
+    transparent
+  );
+}
+
+.carouselTrack {
+  display: flex;
+  gap: 2rem;
+  align-items: stretch;
+  will-change: transform;
+}
+
+.memberCard {
+  flex: 0 0 220px;
+  min-width: 220px;
+  background: var(--ifm-background-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.memberCard:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+}
+
+.avatarWrapper {
+  position: relative;
+  margin-bottom: 1rem;
+  display: inline-block;
+}
+
+.avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid var(--ifm-color-primary-light);
+  object-fit: cover;
+  display: block;
+}
+
+.badge {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  background: var(--ifm-color-primary);
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.memberName {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.25rem 0;
+  color: var(--ifm-color-primary);
+}
+
+.memberRole {
+  font-size: 0.875rem;
+  color: var(--ifm-color-content-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.company {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+.viewAllLink {
+  text-align: center;
+  margin-top: 3rem;
+}
+
+.viewAllButton {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  background: var(--ifm-color-primary);
+  color: #ffffff !important;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.viewAllButton:hover {
+  background: var(--ifm-color-primary-dark);
+  color: #ffffff !important;
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive design */
+@media (max-width: 996px) {
+  .memberCard {
+    flex: 0 0 200px;
+    min-width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .memberCard {
+    flex: 0 0 180px;
+    min-width: 180px;
+  }
+
+  .carouselTrack {
+    gap: 1.5rem;
+  }
+
+  .avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .title {
+    font-size: 2rem;
+  }
+
+  .memberName {
+    font-size: 1rem;
+  }
+
+  .memberRole {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .memberCard {
+    flex: 0 0 160px;
+    min-width: 160px;
+    padding: 1rem;
+  }
+
+  .carouselTrack {
+    gap: 1rem;
+  }
+
+  .avatar {
+    width: 50px;
+    height: 50px;
+  }
+}
+

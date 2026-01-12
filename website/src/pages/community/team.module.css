@@ -56,34 +56,17 @@
 
 .teamGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 2rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
   margin-top: 2rem;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.joinTeamGrid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 2rem;
-  margin-top: 2rem;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.joinTeamGrid .memberCard {
-  grid-column: 1 / -1;
 }
 
 .memberCard {
   background: var(--ifm-background-surface-color);
   border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 16px;
-  padding: 2rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
   height: 100%;
   display: flex;
@@ -91,45 +74,69 @@
 }
 
 .memberCard:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
-}
-
-.contributorCard {
-  border: 2px dashed var(--ifm-color-primary);
-  background: linear-gradient(135deg, var(--ifm-color-primary-lightest) 0%, var(--ifm-background-surface-color) 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
 }
 
 .memberHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .avatar {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 3px solid var(--ifm-color-primary-light);
+  border: 2px solid var(--ifm-color-primary-light);
   object-fit: cover;
+  flex-shrink: 0;
 }
 
 .memberInfo {
   flex: 1;
+  min-width: 0;
+}
+
+.nameWithBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  flex-wrap: wrap;
 }
 
 .memberName {
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   color: var(--ifm-color-primary);
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
+  line-height: 1.3;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.badge.maintainer,
+.badge.committer,
+.badge.contributor {
+  background: var(--ifm-color-primary);
+  color: white;
 }
 
 .memberRole {
   margin: 0;
   color: var(--ifm-color-content-secondary);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -137,96 +144,46 @@
 .company {
   color: var(--ifm-color-primary);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .memberBio {
-  color: var(--ifm-color-content);
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
+  color: var(--ifm-color-content-secondary);
+  line-height: 1.5;
+  margin-bottom: 1rem;
   flex-grow: 1;
-}
-
-.expertise {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.skillTag {
-  background: var(--ifm-color-primary-lightest);
-  color: var(--ifm-color-primary-dark);
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border: 1px solid var(--ifm-color-primary-light);
+  font-size: 0.875rem;
 }
 
 .memberActions {
   margin-top: auto;
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
 .actionLink {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: var(--ifm-color-emphasis-200);
+  gap: 0.4rem;
+  background: var(--ifm-color-emphasis-100);
   color: var(--ifm-color-primary);
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem;
   border-radius: 6px;
   text-decoration: none;
   font-weight: 500;
-  font-size: 0.875rem;
-  transition: all 0.3s ease;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
   flex: 1;
   justify-content: center;
-  min-width: 100px;
+  min-width: 80px;
 }
 
 .actionLink:hover {
   background: var(--ifm-color-primary);
   color: white;
   text-decoration: none;
-  transform: translateY(-2px);
-}
-
-.joinButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--ifm-color-primary);
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  width: 100%;
-  justify-content: center;
-}
-
-.joinButton:hover {
-  background: var(--ifm-color-primary-dark);
-  color: white;
-  text-decoration: none;
-  transform: translateY(-2px);
-}
-
-/* Dark mode enhancement for join button */
-[data-theme='dark'] .joinButton {
-  background: var(--ifm-color-primary-light);
-  color: var(--ifm-color-gray-100);
-  border: 2px solid var(--ifm-color-primary-lighter);
-}
-
-[data-theme='dark'] .joinButton:hover {
-  background: var(--ifm-color-primary-lighter);
-  color: white;
-  border-color: var(--ifm-color-primary-lightest);
+  transform: translateY(-1px);
 }
 
 .recognitionCard {
@@ -369,50 +326,69 @@
 }
 
 /* Responsive design */
+@media (max-width: 1200px) {
+  .teamGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 996px) {
+  .teamGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1rem;
   }
-  
+
   .header h1 {
     font-size: 2rem;
   }
-  
+
   .subtitle {
     font-size: 1.125rem;
   }
-  
+
   .teamGrid {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
-    max-width: none;
+    gap: 1rem;
   }
 
-  .joinTeamGrid {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-    max-width: none;
-  }
-  
   .memberHeader {
-    flex-direction: column;
-    text-align: center;
+    flex-direction: row;
+    align-items: flex-start;
   }
-  
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .memberName {
+    font-size: 1rem;
+  }
+
+  .badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.4rem;
+  }
+
   .steps {
     gap: 1rem;
   }
-  
+
   .step {
     flex-direction: column;
     text-align: center;
     padding: 1rem;
   }
-  
+
   .stepNumber {
     align-self: center;
   }
-  
+
   .involvementGrid {
     grid-template-columns: 1fr;
     gap: 1.5rem;
@@ -427,17 +403,6 @@
   border-color: var(--ifm-color-emphasis-300);
 }
 
-[data-theme='dark'] .contributorCard {
-  background: linear-gradient(135deg, var(--ifm-color-primary-darkest) 0%, var(--ifm-background-surface-color) 100%);
-  border-color: var(--ifm-color-primary);
-}
-
 [data-theme='dark'] .step {
   background: var(--ifm-color-emphasis-200);
-}
-
-[data-theme='dark'] .skillTag {
-  background: var(--ifm-color-primary-darkest);
-  color: var(--ifm-color-primary-lightest);
-  border-color: var(--ifm-color-primary-dark);
 }

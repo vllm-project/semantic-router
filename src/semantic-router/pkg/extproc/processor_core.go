@@ -25,6 +25,13 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	for {
 		req, err := stream.Recv()
 		if err != nil {
+			// Mark streaming as aborted if it was a streaming response
+			// This prevents caching incomplete responses
+			if ctx.IsStreamingResponse && !ctx.StreamingComplete {
+				ctx.StreamingAborted = true
+				logging.Infof("Streaming response aborted before completion, will not cache")
+			}
+
 			// Handle EOF - this indicates the client has closed the stream gracefully
 			if errors.Is(err, io.EOF) {
 				logging.Infof("Stream ended gracefully")

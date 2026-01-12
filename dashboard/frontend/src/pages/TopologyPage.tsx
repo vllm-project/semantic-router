@@ -7,6 +7,8 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   MarkerType,
   Position,
 } from 'reactflow'
@@ -41,27 +43,86 @@ interface ConfigData {
     backend_type?: string
     similarity_threshold?: number
   }
+  // Legacy format
   categories?: Array<{
     name: string
     system_prompt?: string
+    // model_scores can be array (Python CLI) or object (Legacy: {"gpt-4": 0.9})
     model_scores?: Array<{
       model: string
       score: number
-      use_reasoning: boolean
-    }>
+      use_reasoning?: boolean
+    }> | Record<string, number>
   }>
   model_config?: {
     [key: string]: {
       reasoning_family?: string
     }
   }
+  // Python CLI format
+  signals?: {
+    domains?: Array<{
+      name: string
+      description?: string
+    }>
+  }
+  decisions?: Array<{
+    name: string
+    description?: string
+    priority?: number
+    rules?: {
+      operator?: string
+      conditions?: Array<{
+        type: string
+        name: string
+      }>
+    }
+    modelRefs?: Array<{
+      model: string
+      use_reasoning?: boolean
+    }>
+    plugins?: Array<{
+      type: string
+      configuration?: Record<string, unknown>
+    }>
+  }>
+  providers?: {
+    models?: Array<{
+      name: string
+      reasoning_family?: string
+    }>
+    default_model?: string
+  }
 }
 
-const TopologyPage: React.FC = () => {
+// Helper: Normalize model_scores from object to array (Legacy format uses object)
+interface NormalizedModelScore {
+  model: string
+  score: number
+  use_reasoning?: boolean
+}
+
+const normalizeModelScores = (
+  modelScores: Array<{ model: string; score: number; use_reasoning?: boolean }> | Record<string, number> | undefined
+): NormalizedModelScore[] => {
+  if (!modelScores) return []
+  // Already an array
+  if (Array.isArray(modelScores)) return modelScores
+  // Object format (Legacy) - convert to array
+  return Object.entries(modelScores).map(([model, score]) => ({
+    model,
+    score: typeof score === 'number' ? score : 0,
+    use_reasoning: false,
+  }))
+}
+
+// Inner component that uses useReactFlow (must be inside ReactFlowProvider)
+const TopologyFlow: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const { fitView } = useReactFlow()
 
   useEffect(() => {
     fetchConfig()
@@ -320,129 +381,270 @@ const TopologyPage: React.FC = () => {
       markerEnd: { type: MarkerType.ArrowClosed, color: '#673AB7' },
     })
 
-    // 7. Categories and Models - vertical layout
+    // Detect if this is Python CLI format (has decisions) or Legacy format (has categories)
+    const isPythonCLI = !!(configData.decisions && configData.decisions.length > 0)
     const categories = configData.categories || []
+    const decisions = configData.decisions || []
+
     currentX += nodeWidth + horizontalSpacing
     const categoryX = currentX
     const modelX = categoryX + nodeWidth + horizontalSpacing
 
-    // Calculate total height for center alignment
-    const totalCategoriesHeight = categories.length * verticalSpacing
-    let categoryY = baseY - (totalCategoriesHeight / 2) + 50
+    if (isPythonCLI) {
+      // Python CLI format: Show decisions as routing rules
+      const totalDecisionsHeight = decisions.length * (verticalSpacing + 20)
+      let decisionY = baseY - (totalDecisionsHeight / 2) + 50
 
-    categories.forEach((category) => {
-      const categoryId = `category-${category.name}`
-      const hasSystemPrompt = category.system_prompt && category.system_prompt.length > 0
-
-      newNodes.push({
-        id: categoryId,
-        data: {
-          label: (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontWeight: 'bold', fontSize: '12px' }}>📁 {category.name}</div>
-              <div style={{ fontSize: '10px', marginTop: '3px', opacity: 0.9 }}>
-                {hasSystemPrompt ? '✓ System Prompt' : '✗ No Prompt'}
-              </div>
-            </div>
-          )
-        },
-        position: { x: categoryX, y: categoryY },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-        style: {
-          background: '#3F51B5',
-          color: 'white',
-          border: '2px solid #303F9F',
-          fontSize: '12px',
-          padding: '10px 16px',
-          borderRadius: '6px',
-          minWidth: '140px',
-          minHeight: '60px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-      })
-
-      newEdges.push({
-        id: `e-classification-${category.name}`,
-        source: 'classification',
-        target: categoryId,
-        style: { stroke: '#3F51B5', strokeWidth: 1.5 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#3F51B5' },
-      })
-
-      // 7. Models for each category
-      const modelScores = category.model_scores || []
-      modelScores.forEach((modelScore, modelIndex) => {
-        const modelId = `model-${category.name}-${modelScore.model.replace(/[^a-zA-Z0-9]/g, '-')}`
-        const modelYPos = categoryY + (modelIndex * 50) - ((modelScores.length - 1) * 25)
-
-        const reasoningFamily = configData.model_config?.[modelScore.model]?.reasoning_family
-        const hasReasoning = modelScore.use_reasoning && reasoningFamily
-        const modelName = modelScore.model.split('/').pop() || modelScore.model
+      decisions.forEach((decision) => {
+        const decisionId = `decision-${decision.name.replace(/[^a-zA-Z0-9]/g, '-')}`
+        const hasReasoning = decision.modelRefs?.some(m => m.use_reasoning) || false
+        const conditionCount = decision.rules?.conditions?.length || 0
+        const operator = decision.rules?.operator || 'AND'
 
         newNodes.push({
-          id: modelId,
-          type: 'output',
+          id: decisionId,
           data: {
             label: (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
-                  🤖 {modelName}
+                <div style={{ fontWeight: 'bold', fontSize: '11px', whiteSpace: 'nowrap' }}>🔀 {decision.name}</div>
+                <div style={{ fontSize: '9px', marginTop: '2px', opacity: 0.9 }}>
+                  Priority: {decision.priority || 0}
                 </div>
-                <div style={{ fontSize: '9px', marginTop: '2px' }}>
-                  Score: {modelScore.score.toFixed(2)}
+                <div style={{ fontSize: '9px', marginTop: '2px', opacity: 0.8 }}>
+                  {conditionCount} rules ({operator})
                 </div>
               </div>
-            ),
+            )
           },
-          position: { x: modelX, y: modelYPos },
+          position: { x: categoryX, y: decisionY },
+          sourcePosition: Position.Right,
           targetPosition: Position.Left,
           style: {
-            background: '#607D8B',
+            background: hasReasoning ? '#E91E63' : '#3F51B5',
             color: 'white',
-            border: '2px solid #455A64',
-            fontSize: '11px',
-            padding: '8px 12px',
+            border: `2px solid ${hasReasoning ? '#C2185B' : '#303F9F'}`,
+            fontSize: '12px',
+            padding: '10px 16px',
             borderRadius: '6px',
-            minWidth: '140px',
+            minWidth: '160px',
+            minHeight: '70px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           },
         })
 
-        // Use different line styles to indicate reasoning enabled
         newEdges.push({
-          id: `e-${categoryId}-${modelId}`,
-          source: categoryId,
-          target: modelId,
-          animated: !!hasReasoning,
-          style: {
-            stroke: hasReasoning ? '#E91E63' : '#607D8B',
-            strokeWidth: hasReasoning ? 3 : 2,
-            strokeDasharray: hasReasoning ? '0' : '5, 5',
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: hasReasoning ? '#E91E63' : '#607D8B',
-            width: hasReasoning ? 25 : 20,
-            height: hasReasoning ? 25 : 20,
-          },
-          label: `${(modelScore.score * 100).toFixed(0)}%${hasReasoning ? ' 🧠' : ''}`,
-          labelStyle: {
-            fontSize: '11px',
-            fill: hasReasoning ? '#E91E63' : '#666',
-            fontWeight: hasReasoning ? 'bold' : 'normal',
-          },
+          id: `e-classification-${decision.name}`,
+          source: 'classification',
+          target: decisionId,
+          style: { stroke: hasReasoning ? '#E91E63' : '#3F51B5', strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: hasReasoning ? '#E91E63' : '#3F51B5' },
+          label: `P${decision.priority || 0}`,
+          labelStyle: { fontSize: '10px', fill: '#666' },
           labelBgStyle: { fill: 'white', fillOpacity: 0.9 },
         })
-      })
 
-      categoryY += verticalSpacing
-    })
+        // Models for each decision
+        const modelRefs = decision.modelRefs || []
+        modelRefs.forEach((modelRef, modelIndex) => {
+          const modelId = `model-${decision.name}-${modelRef.model.replace(/[^a-zA-Z0-9]/g, '-')}`
+          const modelYPos = decisionY + (modelIndex * 50) - ((modelRefs.length - 1) * 25)
+          const hasReasoningModel = modelRef.use_reasoning || false
+          const modelName = modelRef.model.split('/').pop() || modelRef.model
+
+          // Find reasoning family from providers.models
+          const modelConfig = configData.providers?.models?.find(m => m.name === modelRef.model)
+          const reasoningFamily = modelConfig?.reasoning_family
+
+          newNodes.push({
+            id: modelId,
+            type: 'output',
+            data: {
+              label: (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                    🤖 {modelName}
+                  </div>
+                  <div style={{ fontSize: '9px', marginTop: '2px' }}>
+                    {hasReasoningModel ? '⚡ Reasoning' : '📝 Standard'}
+                  </div>
+                  {reasoningFamily && (
+                    <div style={{ fontSize: '8px', marginTop: '1px', opacity: 0.8 }}>
+                      {reasoningFamily}
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+            position: { x: modelX, y: modelYPos },
+            targetPosition: Position.Left,
+            style: {
+              background: hasReasoningModel ? '#E91E63' : '#607D8B',
+              color: 'white',
+              border: `2px solid ${hasReasoningModel ? '#C2185B' : '#455A64'}`,
+              fontSize: '11px',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              minWidth: '140px',
+            },
+          })
+
+          newEdges.push({
+            id: `e-${decisionId}-${modelId}`,
+            source: decisionId,
+            target: modelId,
+            animated: hasReasoningModel,
+            style: {
+              stroke: hasReasoningModel ? '#E91E63' : '#607D8B',
+              strokeWidth: hasReasoningModel ? 3 : 2,
+              strokeDasharray: hasReasoningModel ? '0' : '5, 5',
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: hasReasoningModel ? '#E91E63' : '#607D8B',
+              width: hasReasoningModel ? 25 : 20,
+              height: hasReasoningModel ? 25 : 20,
+            },
+            label: hasReasoningModel ? '🧠' : '',
+            labelStyle: { fontSize: '11px' },
+            labelBgStyle: { fill: 'white', fillOpacity: 0.9 },
+          })
+        })
+
+        decisionY += verticalSpacing + 20
+      })
+    } else {
+      // Legacy format: Show categories with model_scores
+      // Calculate total height for center alignment
+      const totalCategoriesHeight = categories.length * verticalSpacing
+      let categoryY = baseY - (totalCategoriesHeight / 2) + 50
+
+      categories.forEach((category) => {
+        const categoryId = `category-${category.name}`
+        const hasSystemPrompt = category.system_prompt && category.system_prompt.length > 0
+
+        newNodes.push({
+          id: categoryId,
+          data: {
+            label: (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '12px' }}>📁 {category.name}</div>
+                <div style={{ fontSize: '10px', marginTop: '3px', opacity: 0.9 }}>
+                  {hasSystemPrompt ? '✓ System Prompt' : '✗ No Prompt'}
+                </div>
+              </div>
+            )
+          },
+          position: { x: categoryX, y: categoryY },
+          sourcePosition: Position.Right,
+          targetPosition: Position.Left,
+          style: {
+            background: '#3F51B5',
+            color: 'white',
+            border: '2px solid #303F9F',
+            fontSize: '12px',
+            padding: '10px 16px',
+            borderRadius: '6px',
+            minWidth: '140px',
+            minHeight: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+        })
+
+        newEdges.push({
+          id: `e-classification-${category.name}`,
+          source: 'classification',
+          target: categoryId,
+          style: { stroke: '#3F51B5', strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#3F51B5' },
+        })
+
+        // Models for each category
+        const modelScores = normalizeModelScores(category.model_scores)
+        modelScores.forEach((modelScore, modelIndex) => {
+          const modelId = `model-${category.name}-${modelScore.model.replace(/[^a-zA-Z0-9]/g, '-')}`
+          const modelYPos = categoryY + (modelIndex * 50) - ((modelScores.length - 1) * 25)
+
+          const reasoningFamily = configData.model_config?.[modelScore.model]?.reasoning_family
+          const hasReasoning = modelScore.use_reasoning && reasoningFamily
+          const modelName = modelScore.model.split('/').pop() || modelScore.model
+
+          newNodes.push({
+            id: modelId,
+            type: 'output',
+            data: {
+              label: (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                    🤖 {modelName}
+                  </div>
+                  <div style={{ fontSize: '9px', marginTop: '2px' }}>
+                    Score: {modelScore.score.toFixed(2)}
+                  </div>
+                </div>
+              ),
+            },
+            position: { x: modelX, y: modelYPos },
+            targetPosition: Position.Left,
+            style: {
+              background: '#607D8B',
+              color: 'white',
+              border: '2px solid #455A64',
+              fontSize: '11px',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              minWidth: '140px',
+            },
+          })
+
+          // Use different line styles to indicate reasoning enabled
+          newEdges.push({
+            id: `e-${categoryId}-${modelId}`,
+            source: categoryId,
+            target: modelId,
+            animated: !!hasReasoning,
+            style: {
+              stroke: hasReasoning ? '#E91E63' : '#607D8B',
+              strokeWidth: hasReasoning ? 3 : 2,
+              strokeDasharray: hasReasoning ? '0' : '5, 5',
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: hasReasoning ? '#E91E63' : '#607D8B',
+              width: hasReasoning ? 25 : 20,
+              height: hasReasoning ? 25 : 20,
+            },
+            label: `${(modelScore.score * 100).toFixed(0)}%${hasReasoning ? ' 🧠' : ''}`,
+            labelStyle: {
+              fontSize: '11px',
+              fill: hasReasoning ? '#E91E63' : '#666',
+              fontWeight: hasReasoning ? 'bold' : 'normal',
+            },
+            labelBgStyle: { fill: 'white', fillOpacity: 0.9 },
+          })
+        })
+
+        categoryY += verticalSpacing
+      })
+    }
 
     setNodes(newNodes)
     setEdges(newEdges)
   }
+
+  // Call fitView after nodes are updated
+  useEffect(() => {
+    if (nodes.length > 0) {
+      // Small delay to ensure React Flow has rendered the nodes
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.2, duration: 300 })
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [nodes.length, fitView])
 
   if (loading) {
     return (
@@ -494,6 +696,7 @@ const TopologyPage: React.FC = () => {
           }}
           defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
           attributionPosition="bottom-left"
+          style={{ width: '100%', height: '100%' }}
         >
           <Background />
           <Controls />
@@ -527,7 +730,7 @@ const TopologyPage: React.FC = () => {
           </div>
           <div className={styles.legendItem}>
             <span className={styles.legendColor} style={{ background: '#3F51B5' }}></span>
-            <span>Category</span>
+            <span>Category/Decision</span>
           </div>
           <div className={styles.legendItem}>
             <span className={styles.legendColor} style={{ background: '#607D8B' }}></span>
@@ -557,6 +760,15 @@ const TopologyPage: React.FC = () => {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrapper component that provides ReactFlow context
+const TopologyPage: React.FC = () => {
+  return (
+    <ReactFlowProvider>
+      <TopologyFlow />
+    </ReactFlowProvider>
   )
 }
 

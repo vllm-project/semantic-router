@@ -20,7 +20,7 @@ class ServerConfig:
     backend: str = "transformers"  # "transformers" or "vllm"
     max_tokens: int = 512
     temperature: float = 0.7
-    device: str = "auto"  # "auto", "cpu", "cuda"
+    device: str = "auto"  # "auto", "cpu", "cuda", "xpu"
     quantize: bool = True  # Enable int8 quantization for CPU (default: enabled)
 
     def __post_init__(self):
@@ -51,6 +51,8 @@ class ServerConfig:
             try:
                 import torch
 
+                if torch.xpu.is_available():
+                    return "xpu"
                 return "cuda" if torch.cuda.is_available() else "cpu"
             except ImportError:
                 return "cpu"

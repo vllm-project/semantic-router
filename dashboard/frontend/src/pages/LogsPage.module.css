@@ -1,0 +1,395 @@
+.container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.headerLeft {
+  flex: 1;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.titleIcon {
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin: 0.5rem 0 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.deploymentBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  text-transform: capitalize;
+}
+
+.cliHint {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+}
+
+.cliHint code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: var(--color-primary);
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.serviceSelector {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.serviceButton {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: all 0.2s;
+}
+
+.serviceButton:hover {
+  border-color: var(--color-primary);
+}
+
+.serviceButton.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.controlsRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.linesSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.linesSelect {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.toggle input {
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.refreshButton {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.refreshButton:hover {
+  background: var(--color-primary-hover);
+}
+
+.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-danger);
+}
+
+.errorIcon {
+  font-size: 1.25rem;
+}
+
+.info {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: var(--color-primary);
+}
+
+.infoIcon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.logsSection {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  height: 600px;
+}
+
+.logsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.logsTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.logsCount {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.logsContainer {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 1rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  background: #0d1117;
+  color: #c9d1d9;
+  max-height: 100%;
+}
+
+.loadingLogs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.noLogs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem;
+  color: #8b949e;
+}
+
+.noLogsIcon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.noLogsHint {
+  font-size: 0.75rem;
+  color: #6e7681;
+}
+
+.noLogsHint code {
+  background: rgba(110, 118, 129, 0.2);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+
+.logsList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.logEntry {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 2px;
+  line-height: 1.4;
+  flex-wrap: wrap;
+}
+
+.logEntry:hover {
+  background: rgba(110, 118, 129, 0.1);
+}
+
+.logEntry.levelError {
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.logEntry.levelWarn {
+  background: rgba(210, 153, 34, 0.1);
+}
+
+.logTimestamp {
+  color: #6e7681;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.logLevel {
+  min-width: 50px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.logLevel.levelError {
+  color: #f85149;
+}
+
+.logLevel.levelWarn {
+  color: #d29922;
+}
+
+.logLevel.levelInfo {
+  color: #58a6ff;
+}
+
+.logLevel.levelDebug {
+  color: #8b949e;
+}
+
+.logMessage {
+  flex: 1;
+  word-break: break-word;
+  color: #c9d1d9;
+}
+
+.logLine {
+  word-break: break-word;
+  color: #c9d1d9;
+}
+
+.logCaller {
+  color: #6e7681;
+  font-size: 0.7rem;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .controlsRight {
+    justify-content: space-between;
+  }
+
+  .logsSection {
+    height: 500px;
+  }
+
+  .logsContainer {
+    font-size: 0.7rem;
+  }
+
+  .logEntry {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+

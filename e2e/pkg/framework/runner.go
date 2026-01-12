@@ -114,6 +114,18 @@ func (r *Runner) Run(ctx context.Context) error {
 	// Set Kubernetes client for report generator
 	r.reporter.SetKubeClient(kubeClient)
 
+	// Create HF_TOKEN secret if available (for gated model downloads)
+	if os.Getenv("HF_TOKEN") != "" {
+		if err := r.createHFTokenSecret(ctx, kubeClient); err != nil {
+			r.log("⚠️  Warning: Failed to create HF_TOKEN secret: %v", err)
+			r.log("   Model downloads may fail if gated models (e.g., embeddinggemma-300m) are required")
+		} else {
+			r.log("✅ Created HF_TOKEN secret for gated model downloads")
+		}
+	} else {
+		r.log("ℹ️  HF_TOKEN not set - gated models (e.g., embeddinggemma-300m) may not be downloadable")
+	}
+
 	// Step 4: Setup profile (deploy Helm charts, etc.)
 	if !r.opts.SkipSetup {
 		setupOpts := &SetupOptions{
@@ -489,6 +501,68 @@ func (r *Runner) collectSemanticRouterLogs(ctx context.Context, client *kubernet
 	}
 
 	r.log("✅ Semantic router logs saved to: %s", logFilename)
+	return nil
+}
+
+// createHFTokenSecret creates a Kubernetes secret for HF_TOKEN if it's available in the environment
+// This is required for semantic-router to auto-download gated models like google/embeddinggemma-300m
+// The secret must be in the same namespace as the semantic-router deployment (vllm-semantic-router-system)
+// because Kubernetes secrets are namespace-scoped
+func (r *Runner) createHFTokenSecret(ctx context.Context, kubeClient *kubernetes.Clientset) error {
+	hfToken := os.Getenv("HF_TOKEN")
+	if hfToken == "" {
+		return nil // No token to create
+	}
+
+	// All E2E profiles deploy semantic-router to this namespace
+	nsName := "vllm-semantic-router-system"
+
+	// First, ensure the namespace exists
+	_, err := kubeClient.CoreV1().Namespaces().Get(ctx, nsName, metav1.GetOptions{})
+	if err != nil {
+		// Namespace doesn't exist, create it
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName,
+			},
+		}
+		_, err = kubeClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+		if err != nil && !strings.Contains(err.Error(), "already exists") {
+			// If we can't create the namespace, that's okay - the profile will create it
+			r.log("⚠️  Could not create namespace %s (will be created by profile): %v", nsName, err)
+		}
+	}
+
+	// Create the secret in the namespace where semantic-router is deployed
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "hf-token-secret",
+			Namespace: nsName,
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			"token": hfToken,
+		},
+	}
+
+	_, err = kubeClient.CoreV1().Secrets(nsName).Create(ctx, secret, metav1.CreateOptions{})
+	if err != nil {
+		// If secret already exists, update it
+		if strings.Contains(err.Error(), "already exists") {
+			_, err = kubeClient.CoreV1().Secrets(nsName).Update(ctx, secret, metav1.UpdateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to update existing HF_TOKEN secret in %s: %w", nsName, err)
+			}
+			return nil
+		}
+		// If namespace still doesn't exist, that's okay - it will be created by Helm
+		if strings.Contains(err.Error(), "not found") {
+			r.log("⚠️  Namespace %s not found yet (will be created by profile)", nsName)
+			return nil
+		}
+		return fmt.Errorf("failed to create HF_TOKEN secret in %s: %w", nsName, err)
+	}
+
 	return nil
 }
 

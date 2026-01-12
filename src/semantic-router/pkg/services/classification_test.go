@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -182,46 +183,6 @@ func TestClassificationService_ClassifySecurityUnified_ErrorCases(t *testing.T) 
 	})
 }
 
-func TestClassificationService_ClassifyIntentUnified_ErrorCases(t *testing.T) {
-	t.Run("Unified_classifier_not_available_fallback", func(t *testing.T) {
-		// This should fallback to the legacy ClassifyIntent method
-		service := &ClassificationService{
-			unifiedClassifier: nil,
-			classifier:        nil, // This will return placeholder response, not error
-		}
-
-		req := IntentRequest{Text: "test"}
-		result, err := service.ClassifyIntentUnified(req)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if result == nil {
-			t.Error("Expected non-nil result")
-		}
-		// Should get placeholder response from legacy classifier
-		if result.Classification.Category != "general" {
-			t.Errorf("Expected placeholder category 'general', got '%s'", result.Classification.Category)
-		}
-		if result.RoutingDecision != "placeholder_response" {
-			t.Errorf("Expected placeholder routing decision, got '%s'", result.RoutingDecision)
-		}
-	})
-
-	t.Run("Classifier_not_initialized", func(t *testing.T) {
-		classifier := &classification.UnifiedClassifier{}
-		service := &ClassificationService{
-			unifiedClassifier: classifier,
-		}
-
-		req := IntentRequest{Text: "test"}
-		_, err := service.ClassifyIntentUnified(req)
-		if err == nil {
-			t.Error("Expected error for uninitialized classifier")
-		}
-		// The actual error will come from the unified classifier
-	})
-}
-
 // Test data structures and basic functionality
 func TestClassificationService_BasicFunctionality(t *testing.T) {
 	t.Run("Service_creation", func(t *testing.T) {
@@ -267,5 +228,193 @@ func BenchmarkClassificationService_GetUnifiedClassifierStats(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = service.GetUnifiedClassifierStats()
+	}
+}
+
+// TestGetRecommendedModel_WithConfig tests that getRecommendedModel returns
+// real model names from configuration instead of hardcoded invalid names.
+func TestGetRecommendedModel_WithConfig(t *testing.T) {
+	// Create a config with real decisions and model refs
+	testConfig := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "default-llm-model",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name: "math",
+					ModelRefs: []config.ModelRef{
+						{
+							Model: "phi4-math-expert",
+						},
+					},
+				},
+				{
+					Name: "science",
+					ModelRefs: []config.ModelRef{
+						{
+							Model:    "mistral-science-base",
+							LoRAName: "science-lora-adapter",
+						},
+					},
+				},
+				{
+					Name: "code",
+					ModelRefs: []config.ModelRef{
+						{
+							Model: "codellama-13b",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	service := &ClassificationService{
+		classifier: nil, // No classifier - will use config fallback
+		config:     testConfig,
+	}
+
+	tests := []struct {
+		name             string
+		category         string
+		expectedModel    string
+		shouldNotContain string // What should NOT be in the result
+	}{
+		{
+			name:             "Math category should return real model",
+			category:         "math",
+			expectedModel:    "phi4-math-expert",
+			shouldNotContain: "-specialized-model",
+		},
+		{
+			name:             "Science category with LoRA should return LoRA name",
+			category:         "science",
+			expectedModel:    "science-lora-adapter",
+			shouldNotContain: "-specialized-model",
+		},
+		{
+			name:             "Code category should return real model",
+			category:         "code",
+			expectedModel:    "codellama-13b",
+			shouldNotContain: "-specialized-model",
+		},
+		{
+			name:             "Unknown category should return default model",
+			category:         "unknown-category",
+			expectedModel:    "default-llm-model",
+			shouldNotContain: "-specialized-model",
+		},
+		{
+			name:             "Case insensitive category matching",
+			category:         "MATH", // Uppercase
+			expectedModel:    "phi4-math-expert",
+			shouldNotContain: "-specialized-model",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := service.getRecommendedModel(tt.category, 0.9)
+
+			// Verify it returns the expected model
+			if result != tt.expectedModel {
+				t.Errorf("getRecommendedModel(%q) = %q, want %q",
+					tt.category, result, tt.expectedModel)
+			}
+
+			// Verify it does NOT contain the old buggy pattern
+			if strings.Contains(result, tt.shouldNotContain) {
+				t.Errorf("getRecommendedModel(%q) = %q, should NOT contain %q (old bug pattern)",
+					tt.category, result, tt.shouldNotContain)
+			}
+		})
+	}
+}
+
+// TestGetRecommendedModel_NoConfig tests fallback behavior when config is nil
+func TestGetRecommendedModel_NoConfig(t *testing.T) {
+	service := &ClassificationService{
+		classifier: nil,
+		config:     nil,
+	}
+
+	result := service.getRecommendedModel("math", 0.9)
+	if result != "" {
+		t.Errorf("getRecommendedModel with nil config should return empty string, got %q", result)
+	}
+}
+
+// TestGetRecommendedModel_EmptyConfig tests fallback behavior with empty config
+func TestGetRecommendedModel_EmptyConfig(t *testing.T) {
+	service := &ClassificationService{
+		classifier: nil,
+		config:     &config.RouterConfig{},
+	}
+
+	result := service.getRecommendedModel("math", 0.9)
+	if result != "" {
+		t.Errorf("getRecommendedModel with empty config should return empty string, got %q", result)
+	}
+}
+
+// TestGetRecommendedModel_NoDecisionFound tests fallback to default model
+func TestGetRecommendedModel_NoDecisionFound(t *testing.T) {
+	testConfig := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "default-llm-model",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name: "math",
+					ModelRefs: []config.ModelRef{
+						{Model: "phi4-math-expert"},
+					},
+				},
+			},
+		},
+	}
+
+	service := &ClassificationService{
+		classifier: nil,
+		config:     testConfig,
+	}
+
+	// Test with category that doesn't exist in decisions
+	result := service.getRecommendedModel("nonexistent", 0.9)
+	expected := "default-llm-model"
+	if result != expected {
+		t.Errorf("getRecommendedModel(%q) = %q, want %q (should fallback to default)",
+			"nonexistent", result, expected)
+	}
+}
+
+// TestGetRecommendedModel_EmptyModelRefs tests behavior when decision exists but has no ModelRefs
+func TestGetRecommendedModel_EmptyModelRefs(t *testing.T) {
+	testConfig := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "default-llm-model",
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name:      "math",
+					ModelRefs: []config.ModelRef{}, // Empty ModelRefs
+				},
+			},
+		},
+	}
+
+	service := &ClassificationService{
+		classifier: nil,
+		config:     testConfig,
+	}
+
+	result := service.getRecommendedModel("math", 0.9)
+	expected := "default-llm-model"
+	if result != expected {
+		t.Errorf("getRecommendedModel(%q) with empty ModelRefs = %q, want %q (should fallback to default)",
+			"math", result, expected)
 	}
 }

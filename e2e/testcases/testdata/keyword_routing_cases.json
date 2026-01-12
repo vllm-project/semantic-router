@@ -41,17 +41,17 @@
   },
   {
     "name": "AND operator - partial match fails (only SSN)",
-    "description": "Test AND operator with only one keyword",
+    "description": "Test AND operator with only one keyword - should fall back to general decision",
     "query": "My SSN was stolen",
-    "expected_category": "",
+    "expected_category": "general",
     "expected_confidence": 0.0,
     "matched_keywords": []
   },
   {
     "name": "AND operator - partial match fails (only credit card)",
-    "description": "Test AND operator with only credit card keyword",
+    "description": "Test AND operator with only credit card keyword - should fall back to general decision",
     "query": "My credit card was stolen",
-    "expected_category": "",
+    "expected_category": "general",
     "expected_confidence": 0.0,
     "matched_keywords": []
   },

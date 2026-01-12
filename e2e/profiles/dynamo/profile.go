@@ -83,11 +83,8 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 // Teardown cleans up all deployed resources
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Tearing down Dynamo test environment")
-
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
-	// Clean up in reverse order
 	p.log("Cleaning up worker resources")
 	p.cleanupWorkerResources(ctx, opts)
 
@@ -249,16 +246,42 @@ func (p *Profile) deployDynamo(ctx context.Context, deployer *helm.Deployer, opt
 		time.Sleep(10 * time.Second)
 	}
 
-	// Step 4: Deploy DynamoGraphDeployment CRD
+	// Step 4: Deploy DynamoGraphDeployment via Helm chart
 	// This tests proper Dynamo integration (Frontend coordinates with workers via etcd/NATS)
-	p.log("  Step 4/5: Deploying DynamoGraphDeployment CRD")
-	dynamoManifestsPath := "deploy/kubernetes/dynamo/dynamo-resources"
+	// The Helm chart allows dynamic model configuration via values
+	p.log("  Step 4/5: Deploying DynamoGraphDeployment via Helm chart")
 
-	// Deploy DynamoGraphDeployment (Frontend + Workers) with backendFramework specified
-	crdPath := fmt.Sprintf("%s/dynamo-graph-deployment.yaml", dynamoManifestsPath)
+	// Use the local Helm chart for Dynamo vLLM deployment
+	dynamoVllmChartPath := "deploy/kubernetes/dynamo/helm-chart"
+
+	// Build Helm install options with model configuration
+	// Default uses TinyLlama for E2E testing (lightweight model)
+	dynamoVllmOpts := helm.InstallOptions{
+		ReleaseName: "dynamo-vllm",
+		Chart:       dynamoVllmChartPath,
+		Namespace:   namespace,
+		Set: map[string]string{
+			// Use default TinyLlama model from values.yaml
+			// Can be overridden via opts.DynamoModel if needed
+			"global.namespace": namespace,
+			"global.logLevel":  "info",
+		},
+		Wait:    true,
+		Timeout: "15m", // Model loading can take time
+	}
+
+	// Allow custom model configuration via environment or options
+	if modelPath := os.Getenv("DYNAMO_MODEL_PATH"); modelPath != "" {
+		p.log("Using custom model: %s", modelPath)
+		dynamoVllmOpts.Set["workers[0].model.path"] = modelPath
+		dynamoVllmOpts.Set["workers[0].workerType"] = "prefill"
+		dynamoVllmOpts.Set["workers[1].model.path"] = modelPath
+		dynamoVllmOpts.Set["workers[1].workerType"] = "decode"
+	}
+
 	p.log("Deploying DynamoGraphDeployment (Frontend + Prefill Worker + Decode Worker with GPU)...")
-	if err := p.kubectlApply(ctx, opts.KubeConfig, crdPath); err != nil {
-		return fmt.Errorf("failed to deploy DynamoGraphDeployment: %w", err)
+	if err := deployer.Install(ctx, dynamoVllmOpts); err != nil {
+		return fmt.Errorf("failed to deploy DynamoGraphDeployment via Helm: %w", err)
 	}
 
 	// Step 5: Wait for Dynamo operator to create resources
@@ -268,15 +291,31 @@ func (p *Profile) deployDynamo(ctx context.Context, deployer *helm.Deployer, opt
 	time.Sleep(15 * time.Second)
 
 	// Wait for Frontend to be ready
+	// Helm chart creates deployment with name pattern: <release>-frontend or vllm-frontend
 	p.log("Waiting for Frontend deployment...")
-	if err := deployer.WaitForDeployment(ctx, namespace, "vllm-frontend", 5*time.Minute); err != nil {
-		return fmt.Errorf("frontend deployment not ready: %w", err)
+	frontendNames := []string{"dynamo-vllm-frontend", "vllm-frontend", "dynamo-vllm"}
+	frontendFound := false
+	for _, name := range frontendNames {
+		if err := deployer.WaitForDeployment(ctx, namespace, name, 5*time.Minute); err == nil {
+			p.log("✅ Frontend is ready (found as deployment: %s)", name)
+			frontendFound = true
+			break
+		}
 	}
-	p.log("✅ Frontend is ready")
+	if !frontendFound {
+		return fmt.Errorf("frontend deployment not ready: no frontend deployment found")
+	}
 
 	// Wait for Prefill Worker (disaggregated deployment)
+	// Helm chart creates workers with names from values: prefill-worker-0, decode-worker-1
 	p.log("Waiting for Prefill Worker deployment...")
-	prefillNames := []string{"vllm-vllmprefillworker", "vllm-prefillworker"}
+	prefillNames := []string{
+		"dynamo-vllm-prefillworker0", // Helm chart generated name (index 0)
+		"dynamo-vllm-prefillworker1", // Legacy name (if values.yaml not updated)
+		"vllm-vllmprefillworker",     // Operator generated name
+		"vllm-prefillworker",
+		"prefill-worker-0",
+	}
 	prefillFound := false
 	for _, name := range prefillNames {
 		if err := deployer.WaitForDeployment(ctx, namespace, name, 10*time.Minute); err == nil {
@@ -291,7 +330,12 @@ func (p *Profile) deployDynamo(ctx context.Context, deployer *helm.Deployer, opt
 
 	// Wait for Decode Worker
 	p.log("Waiting for Decode Worker deployment...")
-	decodeNames := []string{"vllm-vllmdecodeworker", "vllm-decodeworker"}
+	decodeNames := []string{
+		"dynamo-vllm-decodeworker1", // Helm chart generated name (CamelCase)
+		"vllm-vllmdecodeworker",     // Operator generated name
+		"vllm-decodeworker",
+		"decode-worker-1",
+	}
 	decodeFound := false
 	for _, name := range decodeNames {
 		if err := deployer.WaitForDeployment(ctx, namespace, name, 10*time.Minute); err == nil {
@@ -304,8 +348,9 @@ func (p *Profile) deployDynamo(ctx context.Context, deployer *helm.Deployer, opt
 		return fmt.Errorf("decode worker deployment not ready: no decode worker deployment found")
 	}
 
-	p.log("✅ DynamoGraphDeployment created successfully!")
+	p.log("✅ DynamoGraphDeployment created successfully via Helm!")
 	p.log("   Disaggregated Deployment: Frontend + Prefill Worker + Decode Worker")
+	p.log("   Model configuration can be customized via Helm values")
 	p.log("   All components register with ETCD/NATS for KV-aware routing")
 
 	return nil
@@ -424,19 +469,18 @@ func (p *Profile) configureDynamoSettings(ctx context.Context, opts *framework.S
 }
 
 func (p *Profile) deployWorkerResources(ctx context.Context, opts *framework.SetupOptions) error {
-	// Deploy demo worker pools (vLLM workers) for testing
-	// These would be model-specific worker deployments (path relative to project root)
+	// Workers are now deployed via the Dynamo vLLM Helm chart in deployDynamo()
+	// This function is kept for backward compatibility or additional worker pools
+	//
+	// To deploy additional workers, you can:
+	// 1. Upgrade the Helm release with additional workers in values
+	// 2. Or apply additional DynamoGraphDeployment resources
+	//
+	// Example: helm upgrade dynamo-vllm ./deploy/kubernetes/dynamo/helm-chart \
+	//          -f custom-workers.yaml -n dynamo-system
 
-	workerResourcesPath := "deploy/kubernetes/dynamo/dynamo-resources/worker-pool.yaml"
-	if _, err := os.Stat(workerResourcesPath); err == nil {
-		p.log("Deploying worker resources from %s", workerResourcesPath)
-		if err := p.kubectlApply(ctx, opts.KubeConfig, workerResourcesPath); err != nil {
-			return fmt.Errorf("failed to apply worker resources: %w", err)
-		}
-	} else {
-		p.log("Worker resources not found at %s, skipping worker deployment", workerResourcesPath)
-		p.log("Note: Worker pools should be deployed separately for E2E testing")
-	}
+	p.log("Workers are managed via Dynamo vLLM Helm chart")
+	p.log("To add more workers, upgrade the Helm release with custom values")
 
 	return nil
 }
@@ -526,11 +570,16 @@ func (p *Profile) cleanupDynamo(ctx context.Context, deployer *helm.Deployer, op
 	// Clean up Dynamo resources
 	namespace := "dynamo-system"
 
-	// Step 1: Clean up DynamoGraphDeployment and resources
+	// Step 1: Uninstall Dynamo vLLM Helm chart (DynamoGraphDeployment)
+	p.log("Uninstalling Dynamo vLLM Helm release (DynamoGraphDeployment)")
+	if err := deployer.Uninstall(ctx, "dynamo-vllm", namespace); err != nil {
+		p.log("Warning: Failed to uninstall dynamo-vllm: %v", err)
+	}
+
+	// Step 2: Clean up any remaining static resources (RBAC, etc.)
 	dynamoManifestsPath := "deploy/kubernetes/dynamo/dynamo-resources"
 	cleanupFiles := []string{
-		"dynamo-graph-deployment.yaml", // DynamoGraphDeployment CRD
-		"rbac.yaml",                    // RBAC for Dynamo CRDs
+		"rbac.yaml", // RBAC for Dynamo CRDs (may still be applied separately)
 	}
 
 	for _, file := range cleanupFiles {
@@ -541,13 +590,13 @@ func (p *Profile) cleanupDynamo(ctx context.Context, deployer *helm.Deployer, op
 		}
 	}
 
-	// Step 2: Uninstall Dynamo Platform Helm release (includes etcd, NATS, operator)
+	// Step 3: Uninstall Dynamo Platform Helm release (includes etcd, NATS, operator)
 	p.log("Uninstalling Dynamo Platform Helm release")
 	if err := deployer.Uninstall(ctx, "dynamo-platform", namespace); err != nil {
 		p.log("Warning: Failed to uninstall dynamo-platform: %v", err)
 	}
 
-	// Step 3: Uninstall Dynamo CRDs Helm release (cluster-scoped)
+	// Step 4: Uninstall Dynamo CRDs Helm release (cluster-scoped)
 	p.log("Uninstalling Dynamo CRDs Helm release")
 	if err := deployer.Uninstall(ctx, "dynamo-crds", "default"); err != nil {
 		p.log("Warning: Failed to uninstall dynamo-crds: %v", err)
@@ -557,12 +606,12 @@ func (p *Profile) cleanupDynamo(ctx context.Context, deployer *helm.Deployer, op
 }
 
 func (p *Profile) cleanupWorkerResources(ctx context.Context, opts *framework.TeardownOptions) error {
-	// Clean up DynamoGraphDeployment and RBAC
+	// Clean up RBAC and Gateway API resources
+	// Note: DynamoGraphDeployment is now cleaned up via Helm uninstall in cleanupDynamo
 	dynamoManifestsPath := "deploy/kubernetes/dynamo/dynamo-resources"
 
 	cleanupFiles := []string{
-		"dynamo-graph-deployment.yaml", // DynamoGraphDeployment CRD
-		"rbac.yaml",                    // RBAC for Dynamo CRDs
+		"rbac.yaml", // RBAC for Dynamo CRDs
 	}
 
 	for _, file := range cleanupFiles {

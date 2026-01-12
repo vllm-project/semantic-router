@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -635,9 +636,24 @@ func (c *Classifier) initializePIIClassifier() error {
 	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
 }
 
+// getUsedSignals analyzes all decisions and returns which signals (type:name) are actually used
+// This allows us to skip evaluation of unused signals for performance optimization
+// Returns a map with keys in format "type:name" (e.g., "keyword:math_keywords")
+func (c *Classifier) getUsedSignals() map[string]bool {
+	usedSignals := make(map[string]bool)
+
+	// Analyze all decisions to find which signals are referenced
+	for _, decision := range c.Config.IntelligentRouting.Decisions {
+		c.analyzeRuleCombination(decision.Rules, usedSignals)
+	}
+
+	return usedSignals
+}
+
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
 	MatchedKeywordRules      []string
+	MatchedKeywords          []string // The actual keywords that matched (not rule names)
 	MatchedEmbeddingRules    []string
 	MatchedDomainRules       []string
 	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
@@ -645,141 +661,219 @@ type SignalResults struct {
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 }
 
-// EvaluateAllRules evaluates all rule types and returns matched rule names
-// Returns (matchedKeywordRules, matchedEmbeddingRules, matchedDomainRules)
-// matchedKeywordRules: list of matched keyword rule category names
-// matchedEmbeddingRules: list of matched embedding rule category names
-// matchedDomainRules: list of matched domain rule category names (from category classification)
-func (c *Classifier) EvaluateAllRules(text string) ([]string, []string, []string, error) {
-	results := c.EvaluateAllSignals(text)
-	return results.MatchedKeywordRules, results.MatchedEmbeddingRules, results.MatchedDomainRules, nil
+// analyzeRuleCombination recursively analyzes rule combinations to find used signals
+func (c *Classifier) analyzeRuleCombination(rules config.RuleCombination, usedSignals map[string]bool) {
+	for _, condition := range rules.Conditions {
+		// Create key in format "type:name"
+		signalKey := condition.Type + ":" + condition.Name
+		usedSignals[signalKey] = true
+	}
+}
+
+// isSignalTypeUsed checks if any signal of the given type is used in decisions
+func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
+	for key := range usedSignals {
+		// Check if the key starts with "signalType:"
+		if len(key) > len(signalType)+1 && key[:len(signalType)+1] == signalType+":" {
+			return true
+		}
+	}
+	return false
 }
 
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
+	// Determine which signals (type:name) are actually used in decisions
+	usedSignals := c.getUsedSignals()
+
 	results := &SignalResults{}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 
-	// Evaluate keyword rules - check each rule individually
-	if c.keywordClassifier != nil {
-		category, _, err := c.keywordClassifier.Classify(text)
-		if err != nil {
-			logging.Errorf("keyword rule evaluation failed: %v", err)
-		} else if category != "" {
-			results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
-		}
+	// Evaluate keyword rules in parallel (only if used in decisions)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeKeyword) && c.keywordClassifier != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("keyword rule evaluation failed: %v", err)
+			} else if category != "" {
+				mu.Lock()
+				results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
+				results.MatchedKeywords = append(results.MatchedKeywords, keywords...)
+				mu.Unlock()
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeKeyword) {
+		logging.Infof("[Signal Computation] Keyword signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate embedding rules - check each rule individually
-	if c.keywordEmbeddingClassifier != nil {
-		category, _, err := c.keywordEmbeddingClassifier.Classify(text)
-		if err != nil {
-			logging.Errorf("embedding rule evaluation failed: %v", err)
-		} else if category != "" {
-			results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
-		}
+	// Evaluate embedding rules in parallel (only if used in decisions)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeEmbedding) && c.keywordEmbeddingClassifier != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			category, _, err := c.keywordEmbeddingClassifier.Classify(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("embedding rule evaluation failed: %v", err)
+			} else if category != "" {
+				mu.Lock()
+				results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
+				mu.Unlock()
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeEmbedding) {
+		logging.Infof("[Signal Computation] Embedding signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate domain rules (category classification)
-	if c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil {
-		result, err := c.categoryInference.Classify(text)
-		if err != nil {
-			logging.Errorf("domain rule evaluation failed: %v", err)
-		} else {
-			// Map class index to category name
-			if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
-				if categoryName != "" {
-					results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+	// Evaluate domain rules (category classification) in parallel (only if used in decisions)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeDomain) && c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			result, err := c.categoryInference.Classify(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("domain rule evaluation failed: %v", err)
+			} else {
+				// Map class index to category name
+				if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
+					if categoryName != "" {
+						mu.Lock()
+						results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+						mu.Unlock()
+					}
 				}
 			}
-		}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeDomain) {
+		logging.Infof("[Signal Computation] Domain signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate fact-check rules
+	// Evaluate fact-check rules in parallel (only if used in decisions)
 	// Only evaluate if fact_check_rules are configured and fact-check classifier is enabled
-	if len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled() {
-		factCheckResult, err := c.ClassifyFactCheck(text)
-		if err != nil {
-			logging.Errorf("fact-check rule evaluation failed: %v", err)
-		} else if factCheckResult != nil {
-			// Determine which signal to output based on classification result
-			// Threshold is already applied in ClassifyFactCheck using fact_check_model.threshold
-			signalName := "no_fact_check_needed"
-			if factCheckResult.NeedsFactCheck {
-				signalName = "needs_fact_check"
-			}
+	if isSignalTypeUsed(usedSignals, config.SignalTypeFactCheck) && len(c.Config.FactCheckRules) > 0 && c.IsFactCheckEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			factCheckResult, err := c.ClassifyFactCheck(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("fact-check rule evaluation failed: %v", err)
+			} else if factCheckResult != nil {
+				// Determine which signal to output based on classification result
+				// Threshold is already applied in ClassifyFactCheck using fact_check_model.threshold
+				signalName := "no_fact_check_needed"
+				if factCheckResult.NeedsFactCheck {
+					signalName = "needs_fact_check"
+				}
 
-			// Check if this signal is defined in fact_check_rules
-			for _, rule := range c.Config.FactCheckRules {
-				if rule.Name == signalName {
-					results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
-					break
+				// Check if this signal is defined in fact_check_rules
+				for _, rule := range c.Config.FactCheckRules {
+					if rule.Name == signalName {
+						mu.Lock()
+						results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
+						mu.Unlock()
+						break
+					}
 				}
 			}
-		}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeFactCheck) {
+		logging.Infof("[Signal Computation] Fact-check signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate user feedback rules
+	// Evaluate user feedback rules in parallel (only if used in decisions)
 	// Only evaluate if user_feedback_rules are configured and feedback detector is enabled
-	if len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled() {
-		feedbackResult, err := c.ClassifyFeedback(text)
-		if err != nil {
-			logging.Errorf("user feedback rule evaluation failed: %v", err)
-		} else if feedbackResult != nil {
-			// Use the feedback type directly as the signal name
-			signalName := feedbackResult.FeedbackType
+	if isSignalTypeUsed(usedSignals, config.SignalTypeUserFeedback) && len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			feedbackResult, err := c.ClassifyFeedback(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("user feedback rule evaluation failed: %v", err)
+			} else if feedbackResult != nil {
+				// Use the feedback type directly as the signal name
+				signalName := feedbackResult.FeedbackType
 
-			// Check if this signal is defined in user_feedback_rules
-			for _, rule := range c.Config.UserFeedbackRules {
-				if rule.Name == signalName {
-					results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
-					break
+				// Check if this signal is defined in user_feedback_rules
+				for _, rule := range c.Config.UserFeedbackRules {
+					if rule.Name == signalName {
+						mu.Lock()
+						results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
+						mu.Unlock()
+						break
+					}
 				}
 			}
-		}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeUserFeedback) {
+		logging.Infof("[Signal Computation] User feedback signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate preference rules
+	// Evaluate preference rules in parallel (only if used in decisions)
 	// Only evaluate if preference_rules are configured and preference classifier is enabled
-	if len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled() {
-		// Build conversation JSON from text (simple single-turn format)
-		conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
+	if isSignalTypeUsed(usedSignals, config.SignalTypePreference) && len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			// Build conversation JSON from text (simple single-turn format)
+			conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
 
-		preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
-		if err != nil {
-			logging.Errorf("preference rule evaluation failed: %v", err)
-		} else if preferenceResult != nil {
-			// Use the preference name directly as the signal name
-			preferenceName := preferenceResult.Preference
+			preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Preference signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("preference rule evaluation failed: %v", err)
+			} else if preferenceResult != nil {
+				// Use the preference name directly as the signal name
+				preferenceName := preferenceResult.Preference
 
-			// Check if this preference is defined in preference_rules
-			for _, rule := range c.Config.PreferenceRules {
-				if rule.Name == preferenceName {
-					results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
-					logging.Infof("Preference rule matched: %s", rule.Name)
-					break
+				// Check if this preference is defined in preference_rules
+				for _, rule := range c.Config.PreferenceRules {
+					if rule.Name == preferenceName {
+						mu.Lock()
+						results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
+						mu.Unlock()
+						logging.Infof("Preference rule matched: %s", rule.Name)
+						break
+					}
 				}
 			}
-		}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypePreference) {
+		logging.Infof("[Signal Computation] Preference signal not used in any decision, skipping evaluation")
 	}
+
+	// Wait for all signal evaluations to complete
+	wg.Wait()
 
 	return results
 }
 
-// EvaluateDecisionWithEngine evaluates all decisions using the DecisionEngine
-// Returns the best matching decision based on the configured strategy
-func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.DecisionResult, error) {
+// EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals
+// Accepts SignalResults to avoid duplicate signal computation
+func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decision.DecisionResult, error) {
 	// Check if decisions are configured
 	if len(c.Config.Decisions) == 0 {
 		return nil, fmt.Errorf("no decisions configured")
 	}
-
-	// Evaluate all signals (includes fact_check, user_feedback, and preference)
-	signals := c.EvaluateAllSignals(text)
-
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v",
-		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules)
 
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
@@ -806,8 +900,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(text string) (*decision.Decision
 		return nil, nil
 	}
 
-	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v",
-		result.Decision.Name, result.Confidence, result.MatchedRules)
+	// Populate matched keywords from signal evaluation
+	result.MatchedKeywords = signals.MatchedKeywords
+
+	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
+		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil
 }
