@@ -865,3 +865,359 @@ impl HighPerformanceBertTokenClassifier {
         Ok(results)
     }
 }
+
+// ============================================================================
+// ModernBERT / mmBERT Support
+// ============================================================================
+
+use candle_transformers::models::modernbert::{
+    Config as ModernBertConfig, ModernBert,
+};
+
+/// Pooling strategy for ModernBERT classification
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModernBertPooling {
+    /// Use CLS token (first token) for classification
+    Cls,
+    /// Use mean of all non-padding tokens for classification
+    Mean,
+}
+
+/// High-performance ModernBERT/mmBERT classifier
+/// 
+/// This classifier supports both standard ModernBERT and mmBERT (multilingual ModernBERT).
+/// mmBERT uses RoPE embeddings (sans_pos) and has a 256k vocabulary for 1800+ languages.
+pub struct HighPerformanceModernBertClassifier {
+    model: ModernBert,
+    /// Head layer: dense -> gelu -> norm (for pooled output processing)
+    head_dense: Linear,
+    head_norm: candle_nn::LayerNorm,
+    classifier: Linear,
+    tokenizer: Tokenizer,
+    device: Device,
+    config: ModernBertConfig,
+    /// Pooling strategy (CLS or Mean)
+    pooling: ModernBertPooling,
+}
+
+impl HighPerformanceModernBertClassifier {
+    /// Create new high-performance ModernBERT/mmBERT classifier
+    pub fn new(model_path: &str, num_classes: usize, use_cpu: bool) -> Result<Self> {
+        let device = if use_cpu {
+            Device::Cpu
+        } else {
+            Device::cuda_if_available(0)?
+        };
+
+        // Load config
+        let config_path = Path::new(model_path).join("config.json");
+        let config_str = std::fs::read_to_string(&config_path)
+            .map_err(|e| E::msg(format!("Failed to read config.json: {}", e)))?;
+
+        // Parse as ModernBERT config (handles both ModernBERT and mmBERT)
+        let config: ModernBertConfig = serde_json::from_str(&config_str)
+            .map_err(|e| E::msg(format!("Failed to parse config.json as ModernBERT: {}", e)))?;
+
+        // Detect pooling strategy from config
+        let pooling = {
+            let config_json: serde_json::Value = serde_json::from_str(&config_str).unwrap_or_default();
+            let pooling_str = config_json.get("classifier_pooling")
+                .and_then(|v| v.as_str())
+                .unwrap_or("cls");
+            match pooling_str.to_lowercase().as_str() {
+                "mean" => ModernBertPooling::Mean,
+                _ => ModernBertPooling::Cls,
+            }
+        };
+
+        // Load tokenizer
+        let tokenizer_path = Path::new(model_path).join("tokenizer.json");
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
+
+        // Configure truncation based on model's max_position_embeddings
+        use tokenizers::TruncationParams;
+        let max_length = config.max_position_embeddings.min(8192); // Cap at 8192 for memory
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length,
+                ..Default::default()
+            }))
+            .map_err(E::msg)?;
+
+        // Load model weights
+        let weights_path = if Path::new(model_path).join("model.safetensors").exists() {
+            Path::new(model_path).join("model.safetensors")
+        } else if Path::new(model_path).join("pytorch_model.bin").exists() {
+            Path::new(model_path).join("pytorch_model.bin")
+        } else {
+            return Err(E::msg("No model weights found (model.safetensors or pytorch_model.bin)"));
+        };
+
+        let use_pth = weights_path.extension().and_then(|s| s.to_str()) == Some("bin");
+
+        // Create VarBuilder
+        let vb = if use_pth {
+            VarBuilder::from_pth(&weights_path, DType::F32, &device)?
+        } else {
+            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device)? }
+        };
+
+        // Load ModernBERT model
+        let model = ModernBert::load(vb.clone(), &config)?;
+
+        // Load head layers (dense -> gelu -> norm) for CLS token processing
+        let head_dense = candle_nn::linear_no_bias(
+            config.hidden_size,
+            config.hidden_size,
+            vb.pp("head").pp("dense"),
+        )?;
+        let head_norm = candle_nn::layer_norm_no_bias(
+            config.hidden_size,
+            config.layer_norm_eps,
+            vb.pp("head").pp("norm"),
+        )?;
+
+        // Create classifier head
+        let classifier = candle_nn::linear(config.hidden_size, num_classes, vb.pp("classifier"))?;
+
+        Ok(Self {
+            model,
+            head_dense,
+            head_norm,
+            classifier,
+            tokenizer,
+            device,
+            config,
+            pooling,
+        })
+    }
+
+    /// Check if this is an mmBERT (multilingual) model
+    pub fn is_multilingual(&self) -> bool {
+        // mmBERT has vocab_size >= 200000
+        self.config.vocab_size >= 200000
+    }
+
+    /// Get the model's max sequence length
+    pub fn max_length(&self) -> usize {
+        self.config.max_position_embeddings
+    }
+
+    /// Single text classification
+    pub fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
+        // Tokenize
+        let encoding = self.tokenizer.encode(text, true).map_err(E::msg)?;
+        let token_ids = encoding.get_ids();
+        let attention_mask: Vec<u32> = encoding
+            .get_attention_mask()
+            .iter()
+            .map(|&x| x as u32)
+            .collect();
+
+        // Create tensors
+        let token_ids = Tensor::new(&token_ids[..], &self.device)?.unsqueeze(0)?;
+        let attention_mask = Tensor::new(&attention_mask[..], &self.device)?.unsqueeze(0)?;
+
+        // Forward pass through ModernBERT
+        let sequence_output = self.model.forward(&token_ids, &attention_mask)?;
+
+        // Apply pooling strategy
+        let pooled_output = match self.pooling {
+            ModernBertPooling::Cls => {
+                // Use CLS token (first token)
+                sequence_output.i((.., 0))?
+            }
+            ModernBertPooling::Mean => {
+                // Mean pooling over non-padding tokens
+                let mask = attention_mask.unsqueeze(2)?; // (1, seq_len, 1)
+                let mask_f32 = mask.to_dtype(DType::F32)?;
+                let masked_output = sequence_output.broadcast_mul(&mask_f32)?;
+                let sum_output = masked_output.sum(1)?; // Sum over sequence
+                let count = mask_f32.sum(1)?; // Count non-padding tokens
+                sum_output.broadcast_div(&count)? // Mean
+            }
+        };
+
+        // Apply head layers: dense -> gelu -> norm
+        let head_output = self.head_dense.forward(&pooled_output)?;
+        let head_output = head_output.gelu_erf()?;
+        let head_output = self.head_norm.forward(&head_output)?;
+
+        // Apply classifier
+        let logits = self.classifier.forward(&head_output)?;
+
+        // Apply softmax
+        let probabilities = candle_nn::ops::softmax(&logits, 1)?;
+        let probabilities = probabilities.squeeze(0)?;
+
+        // Get predicted class and confidence
+        let probabilities_vec = probabilities.to_vec1::<f32>()?;
+        let (predicted_class, &confidence) = probabilities_vec
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .unwrap();
+
+        Ok((predicted_class, confidence))
+    }
+
+    /// Batch classification
+    pub fn classify_batch(&self, texts: &[&str]) -> Result<Vec<(usize, f32)>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Create batch tensors
+        let (token_ids, attention_mask) = self.create_batch_tensors(texts)?;
+
+        // Batch forward pass
+        let sequence_output = self.model.forward(&token_ids, &attention_mask)?;
+
+        // Apply pooling strategy
+        let pooled_output = match self.pooling {
+            ModernBertPooling::Cls => {
+                // Use CLS tokens for all samples
+                sequence_output.i((.., 0))?
+            }
+            ModernBertPooling::Mean => {
+                // Mean pooling over non-padding tokens for each sample
+                let mask = attention_mask.unsqueeze(2)?; // (batch, seq_len, 1)
+                let mask_f32 = mask.to_dtype(DType::F32)?;
+                let masked_output = sequence_output.broadcast_mul(&mask_f32)?;
+                let sum_output = masked_output.sum(1)?; // Sum over sequence
+                let count = mask_f32.sum(1)?; // Count non-padding tokens
+                sum_output.broadcast_div(&count)? // Mean
+            }
+        };
+
+        // Apply head layers: dense -> gelu -> norm
+        let head_output = self.head_dense.forward(&pooled_output)?;
+        let head_output = head_output.gelu_erf()?;
+        let head_output = self.head_norm.forward(&head_output)?;
+
+        // Apply classifier
+        let logits = self.classifier.forward(&head_output)?;
+
+        // Apply softmax
+        let probabilities = candle_nn::ops::softmax(&logits, 1)?;
+
+        // Extract results
+        let probs_data = probabilities.to_vec2::<f32>()?;
+        let mut results = Vec::with_capacity(texts.len());
+
+        for row in probs_data {
+            let (predicted_class, confidence) = row
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+                .map(|(idx, &conf)| (idx, conf))
+                .unwrap_or((0, 0.0));
+
+            results.push((predicted_class, confidence));
+        }
+
+        Ok(results)
+    }
+
+    /// Helper method for batch tensor creation
+    fn create_batch_tensors(&self, texts: &[&str]) -> Result<(Tensor, Tensor)> {
+        let encodings = self
+            .tokenizer
+            .encode_batch(texts.to_vec(), true)
+            .map_err(E::msg)?;
+
+        let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
+        let batch_size = texts.len();
+
+        let mut all_token_ids = Vec::with_capacity(batch_size * max_len);
+        let mut all_attention_masks = Vec::with_capacity(batch_size * max_len);
+
+        // Get pad token ID from config
+        let pad_token_id = self.config.pad_token_id;
+
+        for encoding in &encodings {
+            let token_ids = encoding.get_ids();
+            let attention_mask = encoding.get_attention_mask();
+
+            all_token_ids.extend_from_slice(token_ids);
+            all_attention_masks.extend(attention_mask.iter().map(|&x| x as u32));
+
+            let padding_needed = max_len - token_ids.len();
+            all_token_ids.extend(std::iter::repeat(pad_token_id).take(padding_needed));
+            all_attention_masks.extend(std::iter::repeat(0u32).take(padding_needed));
+        }
+
+        let token_ids = Tensor::new(all_token_ids.as_slice(), &self.device)?
+            .reshape(&[batch_size, max_len])?;
+        let attention_mask = Tensor::new(all_attention_masks.as_slice(), &self.device)?
+            .reshape(&[batch_size, max_len])?;
+
+        Ok((token_ids, attention_mask))
+    }
+}
+
+/// Detect if a model is mmBERT (multilingual ModernBERT) based on config
+pub fn is_mmbert_model(model_path: &str) -> bool {
+    let config_path = Path::new(model_path).join("config.json");
+    if let Ok(config_str) = std::fs::read_to_string(&config_path) {
+        if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_str) {
+            let vocab_size = config.get("vocab_size")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let position_type = config.get("position_embedding_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            // mmBERT has vocab_size >= 200000 and uses sans_pos (RoPE)
+            return vocab_size >= 200000 && position_type == "sans_pos";
+        }
+    }
+    false
+}
+
+/// Create the appropriate classifier based on model type (BERT vs ModernBERT/mmBERT)
+pub fn create_classifier(model_path: &str, num_classes: usize, use_cpu: bool) -> Result<Box<dyn TextClassifier>> {
+    if is_mmbert_model(model_path) || is_modernbert_model(model_path) {
+        Ok(Box::new(HighPerformanceModernBertClassifier::new(model_path, num_classes, use_cpu)?))
+    } else {
+        Ok(Box::new(HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)?))
+    }
+}
+
+/// Check if model uses ModernBERT architecture
+fn is_modernbert_model(model_path: &str) -> bool {
+    let config_path = Path::new(model_path).join("config.json");
+    if let Ok(config_str) = std::fs::read_to_string(&config_path) {
+        if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_str) {
+            let model_type = config.get("model_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            return model_type == "modernbert";
+        }
+    }
+    false
+}
+
+/// Trait for text classifiers (enables polymorphism between BERT and ModernBERT)
+pub trait TextClassifier: Send + Sync {
+    fn classify_text(&self, text: &str) -> Result<(usize, f32)>;
+    fn classify_batch(&self, texts: &[&str]) -> Result<Vec<(usize, f32)>>;
+}
+
+impl TextClassifier for HighPerformanceBertClassifier {
+    fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
+        self.classify_text(text)
+    }
+    fn classify_batch(&self, texts: &[&str]) -> Result<Vec<(usize, f32)>> {
+        self.classify_batch(texts)
+    }
+}
+
+impl TextClassifier for HighPerformanceModernBertClassifier {
+    fn classify_text(&self, text: &str) -> Result<(usize, f32)> {
+        self.classify_text(text)
+    }
+    fn classify_batch(&self, texts: &[&str]) -> Result<Vec<(usize, f32)>> {
+        self.classify_batch(texts)
+    }
+}
