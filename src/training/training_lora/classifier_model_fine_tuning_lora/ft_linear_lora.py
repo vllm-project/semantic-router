@@ -23,14 +23,10 @@ Usage:
     python ft_linear_lora.py --mode train --model bert-base-uncased --epochs 1 --max-samples 50
 
 Supported models:
+    - mmbert-base: mmBERT base model (149M parameters, 1800+ languages, RECOMMENDED)
     - bert-base-uncased: Standard BERT base model (110M parameters, most stable)
     - roberta-base: RoBERTa base model (125M parameters, better context understanding)
     - modernbert-base: ModernBERT base model (149M parameters, latest architecture)
-    - bert-large-uncased: Standard BERT large model (340M parameters, higher accuracy)
-    - roberta-large: RoBERTa large model (355M parameters, best performance)
-    - modernbert-large: ModernBERT large model (395M parameters, cutting-edge)
-    - deberta-v3-base: DeBERTa v3 base model (184M parameters, strong performance)
-    - deberta-v3-large: DeBERTa v3 large model (434M parameters, research-grade)
 
 Dataset:
     - TIGER-Lab/MMLU-Pro: Multi-domain academic question classification dataset
@@ -565,16 +561,10 @@ def main(
     logger.info(f"LoRA intent classification model saved to: {output_dir}")
     logger.info("Saved both label_mapping.json and category_mapping.json")
 
-    # Auto-merge LoRA adapter with base model for Rust compatibility
-    logger.info("Auto-merging LoRA adapter with base model for Rust inference...")
-    try:
-        merged_output_dir = f"{output_dir}_rust"
-        merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-        logger.info(f"Rust-compatible model saved to: {merged_output_dir}")
-        logger.info(f"This model can be used with Rust candle-binding!")
-    except Exception as e:
-        logger.warning(f"Auto-merge failed: {e}")
-        logger.info(f"You can manually merge using a merge script")
+    # NOTE: LoRA adapters are kept separate from base model
+    # To merge later, use: merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
+    logger.info(f"LoRA adapter saved to: {output_dir}")
+    logger.info(f"Base model: {model_path} (not merged - adapters kept separate)")
 
     # Final evaluation
     logger.info("Final evaluation on validation set...")
@@ -757,11 +747,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
+            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, recommended)
             "modernbert-base",  # ModernBERT base model - latest architecture
             "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
             "roberta-base",  # RoBERTa base model - best intent classification performance
         ],
-        default="bert-base-uncased",
+        default="mmbert-base",  # Default to mmBERT for multilingual support
     )
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)

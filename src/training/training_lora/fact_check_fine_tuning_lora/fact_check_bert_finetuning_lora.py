@@ -32,6 +32,7 @@ Usage:
     python fact_check_bert_finetuning_lora.py --mode train --model bert-base-uncased --epochs 1 --max-samples 100
 
 Supported models:
+    - mmbert-base: mmBERT base model (149M parameters, 1800+ languages, RECOMMENDED)
     - bert-base-uncased: Standard BERT base model (110M parameters, most stable)
     - roberta-base: RoBERTa base model (125M parameters, better context understanding)
     - modernbert-base: ModernBERT base model (149M parameters, latest architecture)
@@ -1335,15 +1336,10 @@ def main(
     logger.info(f"  Recall: {eval_results['eval_recall']:.4f}")
     logger.info(f"LoRA Fact-Check model saved to: {output_dir}")
 
-    # Auto-merge LoRA adapter with base model for Rust compatibility
-    logger.info("Auto-merging LoRA adapter with base model for Rust inference...")
-    try:
-        merged_output_dir = f"{output_dir}_rust"
-        merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-        logger.info(f"Rust-compatible model saved to: {merged_output_dir}")
-    except Exception as e:
-        logger.warning(f"Auto-merge failed: {e}")
-        logger.info("You can manually merge using a merge script")
+    # NOTE: LoRA adapters are kept separate from base model
+    # To merge later, use: merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
+    logger.info(f"LoRA adapter saved to: {output_dir}")
+    logger.info(f"Base model: {model_path} (not merged - adapters kept separate)")
 
 
 def merge_lora_adapter_to_full_model(
@@ -1512,11 +1508,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
+            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, recommended)
             "modernbert-base",
             "bert-base-uncased",
             "roberta-base",
         ],
-        default="bert-base-uncased",
+        default="mmbert-base",  # Default to mmBERT for multilingual support
         help="Model to use for fine-tuning",
     )
     parser.add_argument("--lora-rank", type=int, default=16)
