@@ -29,13 +29,8 @@ const ChatComponent = ({
   const [showThinking, setShowThinking] = useState(false)
   const [showHeaderReveal, setShowHeaderReveal] = useState(false)
   const [pendingHeaders, setPendingHeaders] = useState<Record<string, string> | null>(null)
-<<<<<<< HEAD
   const [isFullscreen] = useState(isFullscreenMode)
 
-=======
-  const [isFullscreen, setIsFullscreen] = useState(isFullscreenMode)
-
->>>>>>> c969c75 (initial commit)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
