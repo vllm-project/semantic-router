@@ -2,10 +2,10 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
-	"encoding/json"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -18,7 +18,7 @@ import (
 // DefaultMaxRetries is the default number of retry attempts for transient errors
 // DefaultRetryBaseDelay is the base delay for exponential backoff (in milliseconds)
 const (
-	DefaultMaxRetries = 3
+	DefaultMaxRetries     = 3
 	DefaultRetryBaseDelay = 100
 )
 
@@ -33,15 +33,16 @@ type MilvusStore struct {
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore
-// 	Client is the Milvus client instance
-// 	CollectionName is the name of the Milvus collection
-// 	Config is the memory configuration
-// 	Enabled controls whether the store is active
+//
+//	Client is the Milvus client instance
+//	CollectionName is the name of the Milvus collection
+//	Config is the memory configuration
+//	Enabled controls whether the store is active
 type MilvusStoreOptions struct {
-	Client client.Client
+	Client         client.Client
 	CollectionName string
-	Config config.MemoryConfig
-	Enabled bool
+	Config         config.MemoryConfig
+	Enabled        bool
 }
 
 // NewMilvusStore creates a new MilvusStore instance
@@ -83,7 +84,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 }
 
 // Retrieve searches for memories in Milvus with similarity threshold filtering
-func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]RetrieveResult, error) {
+func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
 	if !m.enabled {
 		return nil, fmt.Errorf("milvus store is not enabled")
 	}
@@ -174,7 +175,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 			filterExpr,
 			[]string{"id", "content", "memory_type", "metadata"},
 			[]entity.Vector{entity.FloatVector(embedding)},
-			"embedding", // Vector field name
+			"embedding",   // Vector field name
 			entity.COSINE, // Metric type
 			searchTopK,
 			searchParam,
@@ -187,11 +188,11 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		logging.Debugf("MilvusStore.Retrieve: no results found")
-		return []RetrieveResult{}, nil
+		return []*RetrieveResult{}, nil
 	}
 
 	// Extract results and filter by threshold
-	results := make([]RetrieveResult, 0, limit)
+	results := make([]*RetrieveResult, 0, limit)
 	scores := searchResult[0].Scores
 	fields := searchResult[0].Fields
 
@@ -200,10 +201,14 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 	for i, field := range fields {
 		fieldName := field.Name()
 		switch fieldName {
-		case "id": idIdx = i
-		case "content": contentIdx = i
-		case "memory_type": typeIdx = i
-		case "metadata": metadataIdx = i
+		case "id":
+			idIdx = i
+		case "content":
+			contentIdx = i
+		case "memory_type":
+			typeIdx = i
+		case "metadata":
+			metadataIdx = i
 		}
 		logging.Debugf("MilvusStore.Retrieve: field[%d] name='%s'", i, fieldName)
 	}
@@ -314,7 +319,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]Ret
 		}
 
 		// Create RetrieveResult with Memory and Score
-		result := RetrieveResult{
+		result := &RetrieveResult{
 			Memory: memory,
 			Score:  hit.Similarity,
 		}
@@ -360,6 +365,443 @@ func (m *MilvusStore) CheckConnection(ctx context.Context) error {
 func (m *MilvusStore) Close() error {
 	// Note: We don't close the client here as it might be shared
 	// The caller is responsible for managing the client lifecycle
+	return nil
+}
+
+// Store saves a new memory to Milvus.
+// Generates embedding for the content and inserts into the collection.
+func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
+	if !m.enabled {
+		return fmt.Errorf("milvus store is not enabled")
+	}
+
+	if memory.ID == "" {
+		return fmt.Errorf("memory ID is required")
+	}
+	if memory.Content == "" {
+		return fmt.Errorf("memory content is required")
+	}
+	if memory.UserID == "" {
+		return fmt.Errorf("user ID is required")
+	}
+
+	logging.Debugf("MilvusStore.Store: storing memory id=%s, user_id=%s, type=%s",
+		memory.ID, memory.UserID, memory.Type)
+
+	// Generate embedding for content if not already set
+	var embedding []float32
+	if len(memory.Embedding) > 0 {
+		embedding = memory.Embedding
+	} else {
+		var err error
+		embedding, err = candle_binding.GetEmbedding(memory.Content, 512)
+		if err != nil {
+			return fmt.Errorf("failed to generate embedding: %w", err)
+		}
+	}
+
+	// Validate embedding dimension
+	// NOTE: We log a warning but continue to allow resilience. In production,
+	// consider returning an error in strict mode if dimensions don't match.
+	expectedDim := m.config.Embedding.Dimension
+	if expectedDim == 0 {
+		expectedDim = 384
+	}
+	if len(embedding) != expectedDim {
+		logging.Warnf("MilvusStore.Store: embedding dimension mismatch - got %d, expected %d",
+			len(embedding), expectedDim)
+	}
+
+	// Set timestamps
+	now := time.Now()
+	if memory.CreatedAt.IsZero() {
+		memory.CreatedAt = now
+	}
+	memory.UpdatedAt = now
+
+	// Build metadata JSON
+	metadata := map[string]interface{}{
+		"user_id":      memory.UserID,
+		"project_id":   memory.ProjectID,
+		"source":       memory.Source,
+		"importance":   memory.Importance,
+		"access_count": memory.AccessCount,
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Create columns for insert
+	idCol := entity.NewColumnVarChar("id", []string{memory.ID})
+	contentCol := entity.NewColumnVarChar("content", []string{memory.Content})
+	userIDCol := entity.NewColumnVarChar("user_id", []string{memory.UserID})
+	memTypeCol := entity.NewColumnVarChar("memory_type", []string{string(memory.Type)})
+	metadataCol := entity.NewColumnVarChar("metadata", []string{string(metadataJSON)})
+	embeddingCol := entity.NewColumnFloatVector("embedding", expectedDim, [][]float32{embedding})
+	createdAtCol := entity.NewColumnInt64("created_at", []int64{memory.CreatedAt.Unix()})
+	updatedAtCol := entity.NewColumnInt64("updated_at", []int64{memory.UpdatedAt.Unix()})
+
+	// Insert with retry logic
+	err = m.retryWithBackoff(ctx, func() error {
+		_, insertErr := m.client.Insert(
+			ctx,
+			m.collectionName,
+			"", // Default partition
+			idCol,
+			contentCol,
+			userIDCol,
+			memTypeCol,
+			metadataCol,
+			embeddingCol,
+			createdAtCol,
+			updatedAtCol,
+		)
+		return insertErr
+	})
+	if err != nil {
+		return fmt.Errorf("milvus insert failed: %w", err)
+	}
+
+	logging.Debugf("MilvusStore.Store: successfully stored memory id=%s", memory.ID)
+	return nil
+}
+
+// Get retrieves a memory by ID from Milvus.
+func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
+	if !m.enabled {
+		return nil, fmt.Errorf("milvus store is not enabled")
+	}
+
+	if id == "" {
+		return nil, fmt.Errorf("memory ID is required")
+	}
+
+	logging.Debugf("MilvusStore.Get: retrieving memory id=%s", id)
+
+	// Query by ID
+	filterExpr := fmt.Sprintf("id == \"%s\"", id)
+	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at"}
+
+	var queryResult []entity.Column
+	err := m.retryWithBackoff(ctx, func() error {
+		var retryErr error
+		queryResult, retryErr = m.client.Query(
+			ctx,
+			m.collectionName,
+			[]string{}, // All partitions
+			filterExpr,
+			outputFields,
+		)
+		return retryErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("milvus query failed: %w", err)
+	}
+
+	if len(queryResult) == 0 {
+		return nil, fmt.Errorf("memory not found: %s", id)
+	}
+
+	// Check if any column has data
+	hasData := false
+	for _, col := range queryResult {
+		if col.Len() > 0 {
+			hasData = true
+			break
+		}
+	}
+	if !hasData {
+		return nil, fmt.Errorf("memory not found: %s", id)
+	}
+
+	memory := &Memory{}
+
+	// Extract fields from columns
+	for _, col := range queryResult {
+		switch col.Name() {
+		case "id":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.ID = val
+			}
+		case "content":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.Content = val
+			}
+		case "user_id":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.UserID = val
+			}
+		case "memory_type":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.Type = MemoryType(val)
+			}
+		case "metadata":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				if val != "" {
+					var metadata map[string]interface{}
+					if err := json.Unmarshal([]byte(val), &metadata); err == nil {
+						if projectID, ok := metadata["project_id"].(string); ok {
+							memory.ProjectID = projectID
+						}
+						if source, ok := metadata["source"].(string); ok {
+							memory.Source = source
+						}
+						if importance, ok := metadata["importance"].(float64); ok {
+							memory.Importance = float32(importance)
+						}
+						if accessCount, ok := metadata["access_count"].(float64); ok {
+							memory.AccessCount = int(accessCount)
+						}
+					}
+				}
+			}
+		case "created_at":
+			if c, ok := col.(*entity.ColumnInt64); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.CreatedAt = time.Unix(val, 0)
+			}
+		case "updated_at":
+			if c, ok := col.(*entity.ColumnInt64); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.UpdatedAt = time.Unix(val, 0)
+			}
+		}
+	}
+
+	if memory.ID == "" {
+		return nil, fmt.Errorf("memory not found: %s", id)
+	}
+
+	logging.Debugf("MilvusStore.Get: found memory id=%s, user_id=%s", memory.ID, memory.UserID)
+	return memory, nil
+}
+
+// Update modifies an existing memory in Milvus.
+// Uses delete + insert pattern (upsert) since Milvus doesn't support in-place updates.
+//
+// NOTE: This operation is NOT atomic. There is a brief window between delete and insert
+// where the memory doesn't exist. Acceptable for POC; consider transaction support for production.
+func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) error {
+	if !m.enabled {
+		return fmt.Errorf("milvus store is not enabled")
+	}
+
+	if id == "" {
+		return fmt.Errorf("memory ID is required")
+	}
+
+	logging.Debugf("MilvusStore.Update: updating memory id=%s", id)
+
+	// First, check if memory exists
+	existing, err := m.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("memory not found: %s", id)
+	}
+
+	// Delete existing memory
+	err = m.Forget(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing memory: %w", err)
+	}
+
+	// Preserve original creation time, update the UpdatedAt
+	memory.ID = id
+	memory.CreatedAt = existing.CreatedAt
+	memory.UpdatedAt = time.Now()
+
+	// Store the updated memory
+	err = m.Store(ctx, memory)
+	if err != nil {
+		return fmt.Errorf("failed to store updated memory: %w", err)
+	}
+
+	logging.Debugf("MilvusStore.Update: successfully updated memory id=%s", id)
+	return nil
+}
+
+// Forget deletes a memory by ID from Milvus.
+func (m *MilvusStore) Forget(ctx context.Context, id string) error {
+	if !m.enabled {
+		return fmt.Errorf("milvus store is not enabled")
+	}
+
+	if id == "" {
+		return fmt.Errorf("memory ID is required")
+	}
+
+	logging.Debugf("MilvusStore.Forget: deleting memory id=%s", id)
+
+	// Build delete expression
+	// NOTE: IDs are system-generated UUIDs, so injection risk is minimal.
+	// For production with user-controlled IDs, consider escaping quotes or using parameterized queries.
+	deleteExpr := fmt.Sprintf("id == \"%s\"", id)
+
+	err := m.retryWithBackoff(ctx, func() error {
+		return m.client.Delete(
+			ctx,
+			m.collectionName,
+			"", // Default partition
+			deleteExpr,
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("milvus delete failed: %w", err)
+	}
+
+	logging.Debugf("MilvusStore.Forget: successfully deleted memory id=%s", id)
+	return nil
+}
+
+// ForgetByScope deletes all memories matching the scope from Milvus.
+// Scope includes UserID (required), ProjectID (optional), Types (optional).
+func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
+	if !m.enabled {
+		return fmt.Errorf("milvus store is not enabled")
+	}
+
+	if scope.UserID == "" {
+		return fmt.Errorf("user ID is required for scope deletion")
+	}
+
+	logging.Debugf("MilvusStore.ForgetByScope: deleting memories for user_id=%s, project_id=%s, types=%v",
+		scope.UserID, scope.ProjectID, scope.Types)
+
+	// Build filter expression
+	filterExpr := fmt.Sprintf("user_id == \"%s\"", scope.UserID)
+
+	// Add project filter if specified
+	if scope.ProjectID != "" {
+		// Note: project_id is in metadata JSON, so we need to query first then delete by ID
+		// For simplicity, we'll query matching IDs first, then delete them
+		return m.forgetByScopeWithQuery(ctx, scope)
+	}
+
+	// Add type filter if specified
+	if len(scope.Types) > 0 {
+		typeFilter := "("
+		for i, memType := range scope.Types {
+			if i > 0 {
+				typeFilter += " || "
+			}
+			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
+		}
+		typeFilter += ")"
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	}
+
+	logging.Debugf("MilvusStore.ForgetByScope: delete expression: %s", filterExpr)
+
+	err := m.retryWithBackoff(ctx, func() error {
+		return m.client.Delete(
+			ctx,
+			m.collectionName,
+			"", // Default partition
+			filterExpr,
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("milvus delete by scope failed: %w", err)
+	}
+
+	logging.Debugf("MilvusStore.ForgetByScope: successfully deleted memories for user_id=%s", scope.UserID)
+	return nil
+}
+
+// forgetByScopeWithQuery handles complex scope deletion that requires querying first.
+// Used when project_id filter is specified (since it's in metadata JSON).
+func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemoryScope) error {
+	// Query all memories for the user
+	filterExpr := fmt.Sprintf("user_id == \"%s\"", scope.UserID)
+
+	// Add type filter if specified
+	if len(scope.Types) > 0 {
+		typeFilter := "("
+		for i, memType := range scope.Types {
+			if i > 0 {
+				typeFilter += " || "
+			}
+			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
+		}
+		typeFilter += ")"
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	}
+
+	outputFields := []string{"id", "metadata"}
+
+	var queryResult []entity.Column
+	err := m.retryWithBackoff(ctx, func() error {
+		var retryErr error
+		queryResult, retryErr = m.client.Query(
+			ctx,
+			m.collectionName,
+			[]string{},
+			filterExpr,
+			outputFields,
+		)
+		return retryErr
+	})
+	if err != nil {
+		return fmt.Errorf("milvus query failed: %w", err)
+	}
+
+	// Collect IDs to delete
+	var idsToDelete []string
+
+	// Find ID and metadata columns
+	var idCol, metadataCol *entity.ColumnVarChar
+	for _, col := range queryResult {
+		switch col.Name() {
+		case "id":
+			if c, ok := col.(*entity.ColumnVarChar); ok {
+				idCol = c
+			}
+		case "metadata":
+			if c, ok := col.(*entity.ColumnVarChar); ok {
+				metadataCol = c
+			}
+		}
+	}
+
+	if idCol == nil {
+		logging.Debugf("MilvusStore.ForgetByScope: no IDs found")
+		return nil
+	}
+
+	// Iterate through all IDs and check project_id in metadata if needed
+	for i := 0; i < idCol.Len(); i++ {
+		memID, _ := idCol.ValueByIdx(i)
+
+		if scope.ProjectID != "" && metadataCol != nil && metadataCol.Len() > i {
+			metadataStr, _ := metadataCol.ValueByIdx(i)
+			var metadata map[string]interface{}
+			if err := json.Unmarshal([]byte(metadataStr), &metadata); err == nil {
+				if projectID, ok := metadata["project_id"].(string); ok {
+					if projectID == scope.ProjectID {
+						idsToDelete = append(idsToDelete, memID)
+					}
+				}
+			}
+		} else if scope.ProjectID == "" {
+			idsToDelete = append(idsToDelete, memID)
+		}
+	}
+
+	// Delete each matching memory
+	// NOTE: Deletes one-by-one for simplicity. For production at scale,
+	// consider batch deletion using "id in [...]" expression for efficiency.
+	for _, memID := range idsToDelete {
+		if err := m.Forget(ctx, memID); err != nil {
+			logging.Warnf("MilvusStore.ForgetByScope: failed to delete memory id=%s: %v", memID, err)
+		}
+	}
+
+	logging.Debugf("MilvusStore.ForgetByScope: deleted %d memories", len(idsToDelete))
 	return nil
 }
 
@@ -436,4 +878,3 @@ func (m *MilvusStore) retryWithBackoff(ctx context.Context, operation func() err
 
 	return lastErr
 }
-

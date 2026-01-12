@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
-	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		os.Exit(1)
 	}
-	
+
 	// Run tests
 	code := m.Run()
 	os.Exit(code)
@@ -35,7 +35,13 @@ func TestMain(m *testing.M) {
 type MockMilvusClient struct {
 	SearchFunc        func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
 	HasCollectionFunc func(ctx context.Context, coll string) (bool, error)
+	InsertFunc        func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	DeleteFunc        func(ctx context.Context, coll string, part string, expr string) error
+	QueryFunc         func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
 	SearchCallCount   int
+	InsertCallCount   int
+	DeleteCallCount   int
+	QueryCallCount    int
 }
 
 func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
@@ -54,91 +60,227 @@ func (m *MockMilvusClient) HasCollection(ctx context.Context, coll string) (bool
 }
 
 // Stub out other required methods to satisfy client.Client interface
-func (m *MockMilvusClient) Close() error { return nil }
+func (m *MockMilvusClient) Close() error                                             { return nil }
 func (m *MockMilvusClient) CheckHealth(context.Context) (*entity.MilvusState, error) { return nil, nil }
-func (m *MockMilvusClient) UsingDatabase(context.Context, string) error { return nil }
+func (m *MockMilvusClient) UsingDatabase(context.Context, string) error              { return nil }
 func (m *MockMilvusClient) ListDatabases(context.Context) ([]entity.Database, error) { return nil, nil }
-func (m *MockMilvusClient) CreateDatabase(context.Context, string, ...client.CreateDatabaseOption) error { return nil }
-func (m *MockMilvusClient) DropDatabase(context.Context, string, ...client.DropDatabaseOption) error { return nil }
-func (m *MockMilvusClient) AlterDatabase(context.Context, string, ...entity.DatabaseAttribute) error { return nil }
-func (m *MockMilvusClient) DescribeDatabase(context.Context, string) (*entity.Database, error) { return nil, nil }
-func (m *MockMilvusClient) NewCollection(context.Context, string, int64, ...client.CreateCollectionOption) error { return nil }
-func (m *MockMilvusClient) ListCollections(context.Context, ...client.ListCollectionOption) ([]*entity.Collection, error) { return nil, nil }
-func (m *MockMilvusClient) CreateCollection(context.Context, *entity.Schema, int32, ...client.CreateCollectionOption) error { return nil }
-func (m *MockMilvusClient) DescribeCollection(context.Context, string) (*entity.Collection, error) { return nil, nil }
-func (m *MockMilvusClient) DropCollection(context.Context, string, ...client.DropCollectionOption) error { return nil }
-func (m *MockMilvusClient) GetCollectionStatistics(context.Context, string) (map[string]string, error) { return nil, nil }
-func (m *MockMilvusClient) LoadCollection(context.Context, string, bool, ...client.LoadCollectionOption) error { return nil }
-func (m *MockMilvusClient) ReleaseCollection(context.Context, string, ...client.ReleaseCollectionOption) error { return nil }
+func (m *MockMilvusClient) CreateDatabase(context.Context, string, ...client.CreateDatabaseOption) error {
+	return nil
+}
+func (m *MockMilvusClient) DropDatabase(context.Context, string, ...client.DropDatabaseOption) error {
+	return nil
+}
+func (m *MockMilvusClient) AlterDatabase(context.Context, string, ...entity.DatabaseAttribute) error {
+	return nil
+}
+func (m *MockMilvusClient) DescribeDatabase(context.Context, string) (*entity.Database, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) NewCollection(context.Context, string, int64, ...client.CreateCollectionOption) error {
+	return nil
+}
+func (m *MockMilvusClient) ListCollections(context.Context, ...client.ListCollectionOption) ([]*entity.Collection, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) CreateCollection(context.Context, *entity.Schema, int32, ...client.CreateCollectionOption) error {
+	return nil
+}
+func (m *MockMilvusClient) DescribeCollection(context.Context, string) (*entity.Collection, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) DropCollection(context.Context, string, ...client.DropCollectionOption) error {
+	return nil
+}
+func (m *MockMilvusClient) GetCollectionStatistics(context.Context, string) (map[string]string, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) LoadCollection(context.Context, string, bool, ...client.LoadCollectionOption) error {
+	return nil
+}
+func (m *MockMilvusClient) ReleaseCollection(context.Context, string, ...client.ReleaseCollectionOption) error {
+	return nil
+}
 func (m *MockMilvusClient) RenameCollection(context.Context, string, string) error { return nil }
-func (m *MockMilvusClient) AlterCollection(context.Context, string, ...entity.CollectionAttribute) error { return nil }
+func (m *MockMilvusClient) AlterCollection(context.Context, string, ...entity.CollectionAttribute) error {
+	return nil
+}
 func (m *MockMilvusClient) CreateAlias(context.Context, string, string) error { return nil }
-func (m *MockMilvusClient) DropAlias(context.Context, string) error { return nil }
-func (m *MockMilvusClient) AlterAlias(context.Context, string, string) error { return nil }
-func (m *MockMilvusClient) GetReplicas(context.Context, string) ([]*entity.ReplicaGroup, error) { return nil, nil }
-func (m *MockMilvusClient) BackupRBAC(context.Context) (*entity.RBACMeta, error) { return nil, nil }
-func (m *MockMilvusClient) RestoreRBAC(context.Context, *entity.RBACMeta) error { return nil }
+func (m *MockMilvusClient) DropAlias(context.Context, string) error           { return nil }
+func (m *MockMilvusClient) AlterAlias(context.Context, string, string) error  { return nil }
+func (m *MockMilvusClient) GetReplicas(context.Context, string) ([]*entity.ReplicaGroup, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) BackupRBAC(context.Context) (*entity.RBACMeta, error)   { return nil, nil }
+func (m *MockMilvusClient) RestoreRBAC(context.Context, *entity.RBACMeta) error    { return nil }
 func (m *MockMilvusClient) CreateCredential(context.Context, string, string) error { return nil }
-func (m *MockMilvusClient) UpdateCredential(context.Context, string, string, string) error { return nil }
-func (m *MockMilvusClient) DeleteCredential(context.Context, string) error { return nil }
-func (m *MockMilvusClient) ListCredUsers(context.Context) ([]string, error) { return nil, nil }
-func (m *MockMilvusClient) CreateRole(context.Context, string) error { return nil }
-func (m *MockMilvusClient) DropRole(context.Context, string) error { return nil }
-func (m *MockMilvusClient) AddUserRole(context.Context, string, string) error { return nil }
+func (m *MockMilvusClient) UpdateCredential(context.Context, string, string, string) error {
+	return nil
+}
+func (m *MockMilvusClient) DeleteCredential(context.Context, string) error       { return nil }
+func (m *MockMilvusClient) ListCredUsers(context.Context) ([]string, error)      { return nil, nil }
+func (m *MockMilvusClient) CreateRole(context.Context, string) error             { return nil }
+func (m *MockMilvusClient) DropRole(context.Context, string) error               { return nil }
+func (m *MockMilvusClient) AddUserRole(context.Context, string, string) error    { return nil }
 func (m *MockMilvusClient) RemoveUserRole(context.Context, string, string) error { return nil }
-func (m *MockMilvusClient) ListRoles(context.Context) ([]entity.Role, error) { return nil, nil }
-func (m *MockMilvusClient) ListUsers(context.Context) ([]entity.User, error) { return nil, nil }
-func (m *MockMilvusClient) Grant(context.Context, string, entity.PriviledgeObjectType, string, string, ...entity.OperatePrivilegeOption) error { return nil }
-func (m *MockMilvusClient) Revoke(context.Context, string, entity.PriviledgeObjectType, string, string, ...entity.OperatePrivilegeOption) error { return nil }
-func (m *MockMilvusClient) ListGrant(context.Context, string, string, string, string) ([]entity.RoleGrants, error) { return nil, nil }
-func (m *MockMilvusClient) ListGrants(context.Context, string, string) ([]entity.RoleGrants, error) { return nil, nil }
-func (m *MockMilvusClient) CreatePartition(context.Context, string, string, ...client.CreatePartitionOption) error { return nil }
-func (m *MockMilvusClient) DropPartition(context.Context, string, string, ...client.DropPartitionOption) error { return nil }
-func (m *MockMilvusClient) ShowPartitions(context.Context, string) ([]*entity.Partition, error) { return nil, nil }
-func (m *MockMilvusClient) HasPartition(context.Context, string, string) (bool, error) { return false, nil }
-func (m *MockMilvusClient) LoadPartitions(context.Context, string, []string, bool, ...client.LoadPartitionsOption) error { return nil }
-func (m *MockMilvusClient) ReleasePartitions(context.Context, string, []string, ...client.ReleasePartitionsOption) error { return nil }
-func (m *MockMilvusClient) GetPersistentSegmentInfo(context.Context, string) ([]*entity.Segment, error) { return nil, nil }
-func (m *MockMilvusClient) CreateIndex(context.Context, string, string, entity.Index, bool, ...client.IndexOption) error { return nil }
-func (m *MockMilvusClient) DescribeIndex(context.Context, string, string, ...client.IndexOption) ([]entity.Index, error) { return nil, nil }
-func (m *MockMilvusClient) DropIndex(context.Context, string, string, ...client.IndexOption) error { return nil }
-func (m *MockMilvusClient) GetIndexState(context.Context, string, string, ...client.IndexOption) (entity.IndexState, error) { return 0, nil }
-func (m *MockMilvusClient) AlterIndex(context.Context, string, string, ...client.IndexOption) error { return nil }
-func (m *MockMilvusClient) GetIndexBuildProgress(context.Context, string, string, ...client.IndexOption) (int64, int64, error) { return 0, 0, nil }
-func (m *MockMilvusClient) Insert(context.Context, string, string, ...entity.Column) (entity.Column, error) { return nil, nil }
-func (m *MockMilvusClient) Flush(context.Context, string, bool, ...client.FlushOption) error { return nil }
-func (m *MockMilvusClient) FlushV2(context.Context, string, bool, ...client.FlushOption) ([]int64, []int64, int64, map[string]msgpb.MsgPosition, error) { return nil, nil, 0, make(map[string]msgpb.MsgPosition), nil }
-func (m *MockMilvusClient) DeleteByPks(context.Context, string, string, entity.Column) error { return nil }
-func (m *MockMilvusClient) Delete(context.Context, string, string, string) error { return nil }
-func (m *MockMilvusClient) Upsert(context.Context, string, string, ...entity.Column) (entity.Column, error) { return nil, nil }
-func (m *MockMilvusClient) QueryByPks(context.Context, string, []string, entity.Column, []string, ...client.SearchQueryOptionFunc) (client.ResultSet, error) { return nil, nil }
-func (m *MockMilvusClient) Query(context.Context, string, []string, string, []string, ...client.SearchQueryOptionFunc) (client.ResultSet, error) { return nil, nil }
-func (m *MockMilvusClient) Get(context.Context, string, entity.Column, ...client.GetOption) (client.ResultSet, error) { return nil, nil }
-func (m *MockMilvusClient) QueryIterator(context.Context, *client.QueryIteratorOption) (*client.QueryIterator, error) { return nil, nil }
-func (m *MockMilvusClient) CalcDistance(context.Context, string, []string, entity.MetricType, entity.Column, entity.Column) (entity.Column, error) { return nil, nil }
-func (m *MockMilvusClient) CreateCollectionByRow(context.Context, entity.Row, int32) error { return nil }
-func (m *MockMilvusClient) InsertByRows(context.Context, string, string, []entity.Row) (entity.Column, error) { return nil, nil }
-func (m *MockMilvusClient) InsertRows(context.Context, string, string, []interface{}) (entity.Column, error) { return nil, nil }
-func (m *MockMilvusClient) ManualCompaction(context.Context, string, time.Duration) (int64, error) { return 0, nil }
-func (m *MockMilvusClient) GetCompactionState(context.Context, int64) (entity.CompactionState, error) { return 0, nil }
-func (m *MockMilvusClient) GetCompactionStateWithPlans(context.Context, int64) (entity.CompactionState, []entity.CompactionPlan, error) { return 0, nil, nil }
-func (m *MockMilvusClient) BulkInsert(context.Context, string, string, []string, ...client.BulkInsertOption) (int64, error) { return 0, nil }
-func (m *MockMilvusClient) GetBulkInsertState(context.Context, int64) (*entity.BulkInsertTaskState, error) { return nil, nil }
-func (m *MockMilvusClient) ListBulkInsertTasks(context.Context, string, int64) ([]*entity.BulkInsertTaskState, error) { return nil, nil }
-func (m *MockMilvusClient) CreateResourceGroup(context.Context, string, ...client.CreateResourceGroupOption) error { return nil }
-func (m *MockMilvusClient) UpdateResourceGroups(context.Context, ...client.UpdateResourceGroupsOption) error { return nil }
+func (m *MockMilvusClient) ListRoles(context.Context) ([]entity.Role, error)     { return nil, nil }
+func (m *MockMilvusClient) ListUsers(context.Context) ([]entity.User, error)     { return nil, nil }
+func (m *MockMilvusClient) Grant(context.Context, string, entity.PriviledgeObjectType, string, string, ...entity.OperatePrivilegeOption) error {
+	return nil
+}
+func (m *MockMilvusClient) Revoke(context.Context, string, entity.PriviledgeObjectType, string, string, ...entity.OperatePrivilegeOption) error {
+	return nil
+}
+func (m *MockMilvusClient) ListGrant(context.Context, string, string, string, string) ([]entity.RoleGrants, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) ListGrants(context.Context, string, string) ([]entity.RoleGrants, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) CreatePartition(context.Context, string, string, ...client.CreatePartitionOption) error {
+	return nil
+}
+func (m *MockMilvusClient) DropPartition(context.Context, string, string, ...client.DropPartitionOption) error {
+	return nil
+}
+func (m *MockMilvusClient) ShowPartitions(context.Context, string) ([]*entity.Partition, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) HasPartition(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+func (m *MockMilvusClient) LoadPartitions(context.Context, string, []string, bool, ...client.LoadPartitionsOption) error {
+	return nil
+}
+func (m *MockMilvusClient) ReleasePartitions(context.Context, string, []string, ...client.ReleasePartitionsOption) error {
+	return nil
+}
+func (m *MockMilvusClient) GetPersistentSegmentInfo(context.Context, string) ([]*entity.Segment, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) CreateIndex(context.Context, string, string, entity.Index, bool, ...client.IndexOption) error {
+	return nil
+}
+func (m *MockMilvusClient) DescribeIndex(context.Context, string, string, ...client.IndexOption) ([]entity.Index, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) DropIndex(context.Context, string, string, ...client.IndexOption) error {
+	return nil
+}
+func (m *MockMilvusClient) GetIndexState(context.Context, string, string, ...client.IndexOption) (entity.IndexState, error) {
+	return 0, nil
+}
+func (m *MockMilvusClient) AlterIndex(context.Context, string, string, ...client.IndexOption) error {
+	return nil
+}
+func (m *MockMilvusClient) GetIndexBuildProgress(context.Context, string, string, ...client.IndexOption) (int64, int64, error) {
+	return 0, 0, nil
+}
+func (m *MockMilvusClient) Insert(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
+	m.InsertCallCount++
+	if m.InsertFunc != nil {
+		return m.InsertFunc(ctx, coll, part, cols...)
+	}
+	return nil, nil
+}
+func (m *MockMilvusClient) Flush(context.Context, string, bool, ...client.FlushOption) error {
+	return nil
+}
+func (m *MockMilvusClient) FlushV2(context.Context, string, bool, ...client.FlushOption) ([]int64, []int64, int64, map[string]msgpb.MsgPosition, error) {
+	return nil, nil, 0, make(map[string]msgpb.MsgPosition), nil
+}
+func (m *MockMilvusClient) DeleteByPks(context.Context, string, string, entity.Column) error {
+	return nil
+}
+func (m *MockMilvusClient) Delete(ctx context.Context, coll string, part string, expr string) error {
+	m.DeleteCallCount++
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, coll, part, expr)
+	}
+	return nil
+}
+func (m *MockMilvusClient) Upsert(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) QueryByPks(context.Context, string, []string, entity.Column, []string, ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) Query(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+	m.QueryCallCount++
+	if m.QueryFunc != nil {
+		return m.QueryFunc(ctx, coll, parts, expr, out, opts...)
+	}
+	return nil, nil
+}
+func (m *MockMilvusClient) Get(context.Context, string, entity.Column, ...client.GetOption) (client.ResultSet, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) QueryIterator(context.Context, *client.QueryIteratorOption) (*client.QueryIterator, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) CalcDistance(context.Context, string, []string, entity.MetricType, entity.Column, entity.Column) (entity.Column, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) CreateCollectionByRow(context.Context, entity.Row, int32) error {
+	return nil
+}
+func (m *MockMilvusClient) InsertByRows(context.Context, string, string, []entity.Row) (entity.Column, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) InsertRows(context.Context, string, string, []interface{}) (entity.Column, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) ManualCompaction(context.Context, string, time.Duration) (int64, error) {
+	return 0, nil
+}
+func (m *MockMilvusClient) GetCompactionState(context.Context, int64) (entity.CompactionState, error) {
+	return 0, nil
+}
+func (m *MockMilvusClient) GetCompactionStateWithPlans(context.Context, int64) (entity.CompactionState, []entity.CompactionPlan, error) {
+	return 0, nil, nil
+}
+func (m *MockMilvusClient) BulkInsert(context.Context, string, string, []string, ...client.BulkInsertOption) (int64, error) {
+	return 0, nil
+}
+func (m *MockMilvusClient) GetBulkInsertState(context.Context, int64) (*entity.BulkInsertTaskState, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) ListBulkInsertTasks(context.Context, string, int64) ([]*entity.BulkInsertTaskState, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) CreateResourceGroup(context.Context, string, ...client.CreateResourceGroupOption) error {
+	return nil
+}
+func (m *MockMilvusClient) UpdateResourceGroups(context.Context, ...client.UpdateResourceGroupsOption) error {
+	return nil
+}
 func (m *MockMilvusClient) DropResourceGroup(context.Context, string) error { return nil }
-func (m *MockMilvusClient) DescribeResourceGroup(context.Context, string) (*entity.ResourceGroup, error) { return nil, nil }
-func (m *MockMilvusClient) ListResourceGroups(context.Context) ([]string, error) { return nil, nil }
+func (m *MockMilvusClient) DescribeResourceGroup(context.Context, string) (*entity.ResourceGroup, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) ListResourceGroups(context.Context) ([]string, error)      { return nil, nil }
 func (m *MockMilvusClient) TransferNode(context.Context, string, string, int32) error { return nil }
-func (m *MockMilvusClient) TransferReplica(context.Context, string, string, string, int64) error { return nil }
-func (m *MockMilvusClient) DescribeUser(context.Context, string) (entity.UserDescription, error) { return entity.UserDescription{}, nil }
-func (m *MockMilvusClient) DescribeUsers(context.Context) ([]entity.UserDescription, error) { return nil, nil }
-func (m *MockMilvusClient) GetLoadingProgress(context.Context, string, []string) (int64, error) { return 0, nil }
-func (m *MockMilvusClient) GetLoadState(context.Context, string, []string) (entity.LoadState, error) { return 0, nil }
+func (m *MockMilvusClient) TransferReplica(context.Context, string, string, string, int64) error {
+	return nil
+}
+func (m *MockMilvusClient) DescribeUser(context.Context, string) (entity.UserDescription, error) {
+	return entity.UserDescription{}, nil
+}
+func (m *MockMilvusClient) DescribeUsers(context.Context) ([]entity.UserDescription, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) GetLoadingProgress(context.Context, string, []string) (int64, error) {
+	return 0, nil
+}
+func (m *MockMilvusClient) GetLoadState(context.Context, string, []string) (entity.LoadState, error) {
+	return 0, nil
+}
 func (m *MockMilvusClient) GetVersion(context.Context) (string, error) { return "", nil }
-func (m *MockMilvusClient) HybridSearch(context.Context, string, []string, int, []string, client.Reranker, []*client.ANNSearchRequest, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) { return nil, nil }
-func (m *MockMilvusClient) ReplicateMessage(context.Context, string, uint64, uint64, [][]byte, []*msgpb.MsgPosition, []*msgpb.MsgPosition, ...client.ReplicateMessageOption) (*entity.MessageInfo, error) { return nil, nil }
+func (m *MockMilvusClient) HybridSearch(context.Context, string, []string, int, []string, client.Reranker, []*client.ANNSearchRequest, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+	return nil, nil
+}
+func (m *MockMilvusClient) ReplicateMessage(context.Context, string, uint64, uint64, [][]byte, []*msgpb.MsgPosition, []*msgpb.MsgPosition, ...client.ReplicateMessageOption) (*entity.MessageInfo, error) {
+	return nil, nil
+}
 
 func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
@@ -276,4 +418,253 @@ func TestIsTransientError(t *testing.T) {
 			assert.Equal(t, tt.transient, result)
 		})
 	}
+}
+
+// ============================================================================
+// Write Operations Tests
+// ============================================================================
+
+func TestMilvusStore_Store_Success(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	var capturedColumns []entity.Column
+	mockClient.InsertFunc = func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
+		capturedColumns = cols
+		return nil, nil
+	}
+
+	memory := &Memory{
+		ID:      "test-mem-1",
+		Content: "User's budget is $10,000",
+		UserID:  "user-123",
+		Type:    MemoryTypeSemantic,
+	}
+
+	err := store.Store(ctx, memory)
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockClient.InsertCallCount)
+
+	// Verify columns were created
+	assert.GreaterOrEqual(t, len(capturedColumns), 7, "Expected at least 7 columns for insert")
+}
+
+func TestMilvusStore_Store_MissingRequiredFields(t *testing.T) {
+	store, _ := setupTestStore()
+	ctx := context.Background()
+
+	tests := []struct {
+		name   string
+		memory *Memory
+		errMsg string
+	}{
+		{
+			name:   "missing ID",
+			memory: &Memory{Content: "test", UserID: "user-1"},
+			errMsg: "memory ID is required",
+		},
+		{
+			name:   "missing content",
+			memory: &Memory{ID: "id-1", UserID: "user-1"},
+			errMsg: "memory content is required",
+		},
+		{
+			name:   "missing user ID",
+			memory: &Memory{ID: "id-1", Content: "test"},
+			errMsg: "user ID is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := store.Store(ctx, tt.memory)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errMsg)
+		})
+	}
+}
+
+func TestMilvusStore_Store_DisabledStore(t *testing.T) {
+	options := MilvusStoreOptions{Enabled: false}
+	store, _ := NewMilvusStore(options)
+	ctx := context.Background()
+
+	err := store.Store(ctx, &Memory{ID: "1", Content: "test", UserID: "u1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not enabled")
+}
+
+func TestMilvusStore_Get_Success(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// Setup mock to return a memory
+	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+		// Verify the expression contains the ID filter
+		assert.Contains(t, expr, "id == \"mem-123\"")
+
+		return []entity.Column{
+			entity.NewColumnVarChar("id", []string{"mem-123"}),
+			entity.NewColumnVarChar("content", []string{"Test content"}),
+			entity.NewColumnVarChar("user_id", []string{"user-456"}),
+			entity.NewColumnVarChar("memory_type", []string{"semantic"}),
+			entity.NewColumnVarChar("metadata", []string{`{"project_id":"proj-1","source":"test"}`}),
+			entity.NewColumnInt64("created_at", []int64{1704067200}),
+			entity.NewColumnInt64("updated_at", []int64{1704067200}),
+		}, nil
+	}
+
+	memory, err := store.Get(ctx, "mem-123")
+	require.NoError(t, err)
+	require.NotNil(t, memory)
+	assert.Equal(t, "mem-123", memory.ID)
+	assert.Equal(t, "Test content", memory.Content)
+	assert.Equal(t, "user-456", memory.UserID)
+	assert.Equal(t, MemoryTypeSemantic, memory.Type)
+	assert.Equal(t, "proj-1", memory.ProjectID)
+	assert.Equal(t, "test", memory.Source)
+}
+
+func TestMilvusStore_Get_NotFound(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// Return empty result
+	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+		return []entity.Column{}, nil
+	}
+
+	memory, err := store.Get(ctx, "non-existent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "memory not found")
+	assert.Nil(t, memory)
+}
+
+func TestMilvusStore_Forget_Success(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	var capturedExpr string
+	mockClient.DeleteFunc = func(ctx context.Context, coll string, part string, expr string) error {
+		capturedExpr = expr
+		return nil
+	}
+
+	err := store.Forget(ctx, "mem-to-delete")
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockClient.DeleteCallCount)
+	assert.Contains(t, capturedExpr, "id == \"mem-to-delete\"")
+}
+
+func TestMilvusStore_Forget_MissingID(t *testing.T) {
+	store, _ := setupTestStore()
+	ctx := context.Background()
+
+	err := store.Forget(ctx, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "memory ID is required")
+}
+
+func TestMilvusStore_ForgetByScope_UserOnly(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	var capturedExpr string
+	mockClient.DeleteFunc = func(ctx context.Context, coll string, part string, expr string) error {
+		capturedExpr = expr
+		return nil
+	}
+
+	err := store.ForgetByScope(ctx, MemoryScope{UserID: "user-123"})
+	require.NoError(t, err)
+	assert.Contains(t, capturedExpr, "user_id == \"user-123\"")
+}
+
+func TestMilvusStore_ForgetByScope_WithTypes(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	var capturedExpr string
+	mockClient.DeleteFunc = func(ctx context.Context, coll string, part string, expr string) error {
+		capturedExpr = expr
+		return nil
+	}
+
+	err := store.ForgetByScope(ctx, MemoryScope{
+		UserID: "user-123",
+		Types:  []MemoryType{MemoryTypeSemantic, MemoryTypeProcedural},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, capturedExpr, "user_id == \"user-123\"")
+	assert.Contains(t, capturedExpr, "memory_type == \"semantic\"")
+	assert.Contains(t, capturedExpr, "memory_type == \"procedural\"")
+}
+
+func TestMilvusStore_ForgetByScope_MissingUserID(t *testing.T) {
+	store, _ := setupTestStore()
+	ctx := context.Background()
+
+	err := store.ForgetByScope(ctx, MemoryScope{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "user ID is required")
+}
+
+func TestMilvusStore_Update_Success(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// Setup mock for Get (Query) - returns existing memory
+	queryCount := 0
+	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+		queryCount++
+		return []entity.Column{
+			entity.NewColumnVarChar("id", []string{"mem-123"}),
+			entity.NewColumnVarChar("content", []string{"Old content"}),
+			entity.NewColumnVarChar("user_id", []string{"user-456"}),
+			entity.NewColumnVarChar("memory_type", []string{"semantic"}),
+			entity.NewColumnVarChar("metadata", []string{`{}`}),
+			entity.NewColumnInt64("created_at", []int64{1704067200}),
+			entity.NewColumnInt64("updated_at", []int64{1704067200}),
+		}, nil
+	}
+
+	// Setup mock for Delete
+	mockClient.DeleteFunc = func(ctx context.Context, coll string, part string, expr string) error {
+		return nil
+	}
+
+	// Setup mock for Insert
+	mockClient.InsertFunc = func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
+		return nil, nil
+	}
+
+	updatedMemory := &Memory{
+		ID:      "mem-123",
+		Content: "Updated content with new budget $15,000",
+		UserID:  "user-456",
+		Type:    MemoryTypeSemantic,
+	}
+
+	err := store.Update(ctx, "mem-123", updatedMemory)
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockClient.DeleteCallCount)
+	assert.Equal(t, 1, mockClient.InsertCallCount)
+}
+
+func TestMilvusStore_Update_NotFound(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// Return empty result for Get
+	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
+		return []entity.Column{}, nil
+	}
+
+	err := store.Update(ctx, "non-existent", &Memory{
+		ID:      "non-existent",
+		Content: "New content",
+		UserID:  "user-123",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "memory not found")
 }

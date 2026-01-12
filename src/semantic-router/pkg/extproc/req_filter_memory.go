@@ -27,8 +27,6 @@ import (
 // - Are general fact questions (answered by LLM's knowledge)
 // - Require tools (tool provides the answer)
 // - Are simple greetings (no context needed)
-//
-// See: https://github.com/yehudit1987/semantic-router/issues/2
 
 // personalPronounPattern matches personal pronouns that indicate user-specific context
 // These override the fact-check signal for personal questions like "What is my budget?"
@@ -397,8 +395,6 @@ func ExtractConversationHistory(messagesJSON []byte) ([]ConversationMessage, err
 // Graceful handling:
 //   - If no memories found → returns original request unchanged
 //   - If injection fails → logs warning and returns original request
-//
-// See: https://github.com/yehudit1987/semantic-router/issues/5
 func InjectMemories(requestBody []byte, memories []*memory.RetrieveResult) ([]byte, error) {
 	// No memories to inject
 	if len(memories) == 0 {
