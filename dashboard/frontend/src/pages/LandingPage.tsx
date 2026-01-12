@@ -1,34 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import styles from './LandingPage.module.css'
 
-interface Particle {
+interface Blob {
   x: number
   y: number
-  vx: number
-  vy: number
-  size: number
-  opacity: number
-  targetX?: number
-  targetY?: number
+  baseX: number
+  baseY: number
+  radius: number
+  color: { h: number; s: number; l: number }
+  offsetX: number
+  offsetY: number
+  speedX: number
+  speedY: number
 }
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number>()
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
 
-  // Handle mouse move for particle interaction
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY })
-    }
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [])
-
-  // Initialize particles for background animation with mouse interaction
+  // macOS Big Sur style fluid animation
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -44,72 +36,94 @@ const LandingPage: React.FC = () => {
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Create particles - more particles for denser effect
-    const particleCount = 80
-    const particles: Particle[] = []
+    // Create organic blobs with NVIDIA green palette
+    const blobs: Blob[] = []
+    const colors = [
+      { h: 84, s: 70, l: 50 },   // NVIDIA green
+      { h: 90, s: 65, l: 55 },   // Yellow-green
+      { h: 78, s: 75, l: 45 },   // Deep green
+      { h: 160, s: 60, l: 50 },  // Cyan accent
+      { h: 200, s: 55, l: 55 },  // Blue accent
+    ]
 
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        size: Math.random() * 2 + 1,
-        opacity: Math.random() * 0.6 + 0.2
+    // Create 5 large organic blobs - more spread out
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2
+      const distance = Math.min(canvas.width, canvas.height) * 0.35 // More spread out
+
+      blobs.push({
+        baseX: canvas.width / 2 + Math.cos(angle) * distance,
+        baseY: canvas.height / 2 + Math.sin(angle) * distance,
+        x: 0,
+        y: 0,
+        radius: 200 + Math.random() * 150,
+        color: colors[i],
+        offsetX: 0,
+        offsetY: 0,
+        speedX: 0.002 + Math.random() * 0.001, // Much faster
+        speedY: 0.002 + Math.random() * 0.001, // Much faster
       })
     }
 
+    let time = 0
+
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      time += 1
 
-      // Update and draw particles
-      particles.forEach((particle, index) => {
-        // Mouse interaction - particles move away from cursor
-        const dx = particle.x - mousePos.x
-        const dy = particle.y - mousePos.y
-        const distance = Math.sqrt(dx * dx + dy * dy)
-        const maxDistance = 150
+      // Dark gradient background
+      const bgGradient = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, 0,
+        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
+      )
+      bgGradient.addColorStop(0, '#0a0a0a')
+      bgGradient.addColorStop(1, '#000000')
+      ctx.fillStyle = bgGradient
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-        if (distance < maxDistance) {
-          const force = (maxDistance - distance) / maxDistance
-          particle.vx += (dx / distance) * force * 0.2
-          particle.vy += (dy / distance) * force * 0.2
-        }
+      // Update and draw blobs
+      blobs.forEach((blob, index) => {
+        // Organic movement using Perlin-like noise simulation - larger range
+        blob.offsetX = Math.sin(time * blob.speedX + index) * 250
+        blob.offsetY = Math.cos(time * blob.speedY + index * 1.3) * 250
 
-        // Apply velocity with damping
-        particle.x += particle.vx
-        particle.y += particle.vy
-        particle.vx *= 0.95
-        particle.vy *= 0.95
+        blob.x = blob.baseX + blob.offsetX
+        blob.y = blob.baseY + blob.offsetY
 
-        // Wrap around edges
-        if (particle.x < 0) particle.x = canvas.width
-        if (particle.x > canvas.width) particle.x = 0
-        if (particle.y < 0) particle.y = canvas.height
-        if (particle.y > canvas.height) particle.y = 0
+        // Pulsating radius
+        const pulseRadius = blob.radius + Math.sin(time * 0.001 + index * 0.7) * 30
 
-        // Draw particle - White for futuristic look
+        // Create multi-stop gradient for depth
+        const gradient = ctx.createRadialGradient(
+          blob.x, blob.y, 0,
+          blob.x, blob.y, pulseRadius
+        )
+
+        const { h, s, l } = blob.color
+
+        gradient.addColorStop(0, `hsla(${h}, ${s}%, ${l + 10}%, 0.8)`)
+        gradient.addColorStop(0.3, `hsla(${h}, ${s}%, ${l}%, 0.6)`)
+        gradient.addColorStop(0.6, `hsla(${h}, ${s - 10}%, ${l - 10}%, 0.3)`)
+        gradient.addColorStop(1, `hsla(${h}, ${s - 20}%, ${l - 20}%, 0)`)
+
+        // Draw blob with heavy blur for soft edges
+        ctx.save()
+        ctx.filter = 'blur(60px)'
+        ctx.fillStyle = gradient
         ctx.beginPath()
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(255, 255, 255, ${particle.opacity})`
+        ctx.arc(blob.x, blob.y, pulseRadius, 0, Math.PI * 2)
         ctx.fill()
-
-        // Draw connections
-        particles.slice(index + 1).forEach(otherParticle => {
-          const dx = particle.x - otherParticle.x
-          const dy = particle.y - otherParticle.y
-          const distance = Math.sqrt(dx * dx + dy * dy)
-
-          if (distance < 120) {
-            ctx.beginPath()
-            ctx.moveTo(particle.x, particle.y)
-            ctx.lineTo(otherParticle.x, otherParticle.y)
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.15 * (1 - distance / 120)})`
-            ctx.lineWidth = 1
-            ctx.stroke()
-          }
-        })
+        ctx.restore()
       })
+
+      // Add subtle noise overlay for texture
+      ctx.globalAlpha = 0.03
+      ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 0.5)`
+      for (let i = 0; i < 50; i++) {
+        const x = Math.random() * canvas.width
+        const y = Math.random() * canvas.height
+        ctx.fillRect(x, y, 1, 1)
+      }
+      ctx.globalAlpha = 1
 
       animationRef.current = requestAnimationFrame(animate)
     }
@@ -122,7 +136,7 @@ const LandingPage: React.FC = () => {
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [mousePos])
+  }, [])
 
   return (
     <div className={styles.container}>
@@ -143,7 +157,7 @@ const LandingPage: React.FC = () => {
           <p className={styles.subtitle}>
             System Level Intelligent Router for Mixture-of-Models
             <br />
-            at Cloud, Enterprise and Edge
+            at Cloud, Data Center and Edge
           </p>
 
           <button
