@@ -89,16 +89,10 @@ interface ModelPricing {
   completion_per_1m?: number
 }
 
-interface PIIPolicy {
-  allow_by_default: boolean
-  pii_types_allowed?: string[]
-}
-
 interface ModelConfigEntry {
   reasoning_family?: string
   preferred_endpoints?: string[]
   pricing?: ModelPricing
-  pii_policy?: PIIPolicy
 }
 
 interface TracingConfig {
@@ -253,7 +247,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // Router defaults state (from .vllm-sr/router-defaults.yaml)
   const [routerDefaults, setRouterDefaults] = useState<ConfigData | null>(null)
-  const [routerDefaultsLoading, setRouterDefaultsLoading] = useState(false)
 
   // Tools database state
   const [toolsData, setToolsData] = useState<Tool[]>([])
@@ -324,7 +317,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   }
 
   const fetchRouterDefaults = async () => {
-    setRouterDefaultsLoading(true)
     try {
       const response = await fetch('/api/router/config/defaults')
       if (!response.ok) {
@@ -337,8 +329,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     } catch (err) {
       console.warn('Failed to fetch router defaults:', err)
       setRouterDefaults(null)
-    } finally {
-      setRouterDefaultsLoading(false)
     }
   }
 
@@ -465,20 +455,21 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       prompt_per_1m?: number
       completion_per_1m?: number
     }
-    pii_policy?: {
-      allow_by_default?: boolean
-      pii_types_allowed?: string[]
-    }
   }
 
   const getModels = (): NormalizedModel[] => {
     if (isPythonCLI && config?.providers?.models) {
-      return config.providers.models.map((m: NonNullable<ConfigData['providers']>['models'][number]) => ({
-        name: m.name,
-        reasoning_family: m.reasoning_family,
-        endpoints: m.endpoints || [],
-        access_key: m.access_key,
-      }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return config.providers.models.map((m: any): NormalizedModel => {
+        const model: NormalizedModel = {
+          name: m.name,
+          reasoning_family: m.reasoning_family,
+          endpoints: m.endpoints || [],
+          access_key: m.access_key,
+          pricing: m.pricing,
+        }
+        return model
+      })
     }
     // Legacy format - convert model_config to array
     if (config?.model_config) {
@@ -495,8 +486,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           } : null
         }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
         access_key: undefined,
-        pricing: cfg.pricing,
-        pii_policy: cfg.pii_policy,
+        pricing: cfg.pricing
       }))
     }
     return []
@@ -561,7 +551,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderPIIModernBERT = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔒</span>
         <h3 className={styles.sectionTitle}>PII Detection (ModernBERT)</h3>
         {routerConfig.classifier?.pii_model && (
           <button
@@ -617,7 +606,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
@@ -627,7 +616,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>PII Classifier Model</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {routerConfig.classifier.pii_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                {routerConfig.classifier.pii_model.use_cpu ? 'CPU' : 'GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
@@ -663,7 +652,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderJailbreakModernBERT = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🛡️</span>
         <h3 className={styles.sectionTitle}>Jailbreak Detection (ModernBERT)</h3>
         {routerConfig.prompt_guard && (
           <button
@@ -724,7 +712,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
@@ -750,7 +738,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 <div className={styles.configRow}>
                   <span className={styles.configLabel}>Use CPU</span>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {routerConfig.prompt_guard.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                    {routerConfig.prompt_guard.use_cpu ? 'CPU' : 'GPU'}
                   </span>
                 </div>
                 <div className={styles.configRow}>
@@ -783,7 +771,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>⚡</span>
         <h3 className={styles.sectionTitle}>Similarity BERT Configuration</h3>
         {routerConfig.bert_model && (
           <button
@@ -825,7 +812,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
@@ -835,7 +822,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             <div className={styles.modelCardHeader}>
               <span className={styles.modelCardTitle}>BERT Model (Semantic Similarity)</span>
               <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                {routerConfig.bert_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                {routerConfig.bert_model.use_cpu ? 'CPU' : 'GPU'}
               </span>
             </div>
             <div className={styles.modelCardBody}>
@@ -920,7 +907,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     )
                   }}
                 >
-                  ✏️ Edit
+                  Edit
                 </button>
               </div>
             </div>
@@ -967,7 +954,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return (
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <span className={styles.sectionIcon}>🎯</span>
           <h3 className={styles.sectionTitle}>Classify BERT Model</h3>
         </div>
         <div className={styles.sectionContent}>
@@ -978,7 +964,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 <span className={styles.modelCardTitle}>In-tree Category Classifier</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                    {routerConfig.classifier.category_model.use_cpu ? '💻 CPU' : '🎮 GPU'}
+                    {routerConfig.classifier.category_model.use_cpu ? 'CPU' : 'GPU'}
                   </span>
                   <button
                     className={styles.editButton}
@@ -1033,7 +1019,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                       )
                     }}
                   >
-                    ✏️
+                    
                   </button>
                 </div>
               </div>
@@ -1155,7 +1141,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                       )
                     }}
                   >
-                    ✏️
+                    
                   </button>
                 </div>
               </div>
@@ -1217,7 +1203,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>📊</span>
         <h3 className={styles.sectionTitle}>{isPythonCLI ? 'Domains & Decisions' : 'Categories Configuration'}</h3>
         <span className={styles.badge}>{domains.length} {isPythonCLI ? 'domains' : 'categories'}</span>
       </div>
@@ -1225,12 +1210,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         {/* Core Settings at the top */}
         <div className={styles.coreSettingsInline}>
           <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>🎯 Default Model:</span>
+            <span className={styles.inlineConfigLabel}>Default Model:</span>
             <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
           </div>
           {!isPythonCLI && (
           <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>⚡ Default Reasoning Effort:</span>
+            <span className={styles.inlineConfigLabel}>Default Reasoning Effort:</span>
             <span className={`${styles.badge} ${styles[`badge${config?.default_reasoning_effort || 'medium'}`]}`}>
               {config?.default_reasoning_effort || 'medium'}
             </span>
@@ -1242,7 +1227,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         {isPythonCLI ? (
           <>
             {/* Domains Section */}
-            <h4 className={styles.subsectionTitle}>📁 Domains</h4>
+            <h4 className={styles.subsectionTitle}>Domains</h4>
             {domains.length > 0 ? (
               <div className={styles.categoryGridTwoColumn}>
                 {domains.map((domain, index) => (
@@ -1277,7 +1262,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           )
                         }}
                       >
-                        ✏️
+                        
                       </button>
                     </div>
                     {domain.description && (
@@ -1298,7 +1283,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             )}
 
             {/* Decisions Section */}
-            <h4 className={styles.subsectionTitle}>🔀 Decisions (Routing Rules)</h4>
+            <h4 className={styles.subsectionTitle}>Decisions (Routing Rules)</h4>
             {decisions.length > 0 ? (
               <div className={styles.categoryGridTwoColumn}>
                 {decisions.map((decision, index) => (
@@ -1324,7 +1309,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                         <div className={styles.endpointTags}>
                           {decision.modelRefs.map((ref: { model: string; use_reasoning?: boolean }, idx: number) => (
                             <span key={idx} className={styles.endpointTag}>
-                              {ref.model} {ref.use_reasoning && '⚡'}
+                              {ref.model} {ref.use_reasoning && ''}
                             </span>
                           ))}
                         </div>
@@ -1357,7 +1342,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {useReasoning && (
                       <span className={`${styles.reasoningBadge} ${styles[`reasoning${reasoningEffort}`]}`}>
-                        ⚡ {reasoningEffort}
+                        {reasoningEffort}
                       </span>
                     )}
                     <button
@@ -1390,7 +1375,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                         )
                       }}
                     >
-                      ✏️
+                      
                     </button>
                   </div>
                 </div>
@@ -1398,7 +1383,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 {/* System Prompt */}
                 {category.system_prompt && (
                   <div className={styles.systemPromptSection}>
-                    <div className={styles.systemPromptLabel}>💬 System Prompt</div>
+                    <div className={styles.systemPromptLabel}>System Prompt</div>
                     <div className={styles.systemPromptText}>{category.system_prompt}</div>
                   </div>
                 )}
@@ -1465,7 +1450,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                         )
                       }}
                     >
-                      ➕
+                      
                     </button>
                   </div>
                   {normalizedScores.length > 0 ? (
@@ -1473,7 +1458,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                       <div key={modelIdx} className={styles.modelScoreRow}>
                         <span className={styles.modelScoreName}>
                           {modelScore.model}
-                          {modelScore.use_reasoning && <span className={styles.reasoningIcon}>🧠</span>}
+                          {modelScore.use_reasoning && <span className={styles.reasoningIcon}></span>}
                         </span>
                         <div className={styles.scoreBar}>
                           <div
@@ -1534,7 +1519,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                               )
                             }}
                           >
-                            ✏️
+                            
                           </button>
                           <button
                             className={styles.deleteButton}
@@ -1553,7 +1538,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                               }
                             }}
                           >
-                            🗑️
+                            
                           </button>
                         </div>
                       </div>
@@ -1573,76 +1558,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     </div>
   )}
 
-  const renderReasoningFamilies = () => (
-    <div className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🧠</span>
-        <h3 className={styles.sectionTitle}>Reasoning Families</h3>
-        <span className={styles.badge}>{config?.reasoning_families ? Object.keys(config.reasoning_families).length : 0} families</span>
-      </div>
-      <div className={styles.sectionContent}>
-        {config?.reasoning_families && Object.keys(config.reasoning_families).length > 0 ? (
-          <div className={styles.reasoningFamiliesGrid}>
-            {Object.entries(config.reasoning_families).map(([familyName, familyConfig]) => (
-              <div key={familyName} className={styles.reasoningFamilyCard}>
-                <div className={styles.reasoningFamilyHeader}>
-                  <span className={styles.reasoningFamilyName}>{familyName}</span>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => {
-                      openEditModal(
-                        `Edit Reasoning Family: ${familyName}`,
-                        { ...familyConfig },
-                        [
-                          {
-                            name: 'type',
-                            label: 'Type',
-                            type: 'select',
-                            options: ['openai', 'anthropic', 'google', 'custom'],
-                            required: true,
-                            description: 'Type of reasoning family'
-                          },
-                          {
-                            name: 'parameter',
-                            label: 'Parameter',
-                            type: 'text',
-                            required: true,
-                            placeholder: 'e.g., reasoning_effort',
-                            description: 'Parameter name for reasoning control'
-                          }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (newConfig.reasoning_families) {
-                            newConfig.reasoning_families[familyName] = data
-                          }
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
-                    ✏️
-                  </button>
-                </div>
-                <div className={styles.reasoningFamilyBody}>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Type</span>
-                    <span className={styles.configValue}>{familyConfig.type}</span>
-                  </div>
-                  <div className={styles.configRow}>
-                    <span className={styles.configLabel}>Parameter</span>
-                    <span className={styles.configValue}><code>{familyConfig.parameter}</code></span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.emptyState}>No reasoning families configured</div>
-        )}
-      </div>
-    </div>
-  )
+
 
   // ============================================================================
   // 5. TOOLS SELECTION SECTION
@@ -1651,7 +1567,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderToolsConfiguration = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔧</span>
         <h3 className={styles.sectionTitle}>Tools Configuration</h3>
         {routerConfig.tools && (
           <button
@@ -1704,7 +1619,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
@@ -1744,7 +1659,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderToolsDB = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🗄️</span>
         <h3 className={styles.sectionTitle}>Tools Database</h3>
         {toolsData.length > 0 && <span className={styles.badge}>{toolsData.length} tools</span>}
       </div>
@@ -1785,7 +1699,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                       {/* Similarity Description (used for matching) */}
                       {tool.description && tool.description !== tool.tool.function.description && (
                         <div className={styles.toolSimilarityDescription}>
-                          <div className={styles.similarityDescriptionLabel}>🔍 Similarity Keywords</div>
+                          <div className={styles.similarityDescriptionLabel}>Similarity Keywords</div>
                           <div className={styles.similarityDescriptionText}>{tool.description}</div>
                         </div>
                       )}
@@ -1840,7 +1754,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderObservabilityTracing = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔍</span>
         <h3 className={styles.sectionTitle}>Distributed Tracing</h3>
         {routerConfig.observability?.tracing && (
           <button
@@ -1894,7 +1807,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
@@ -1964,7 +1877,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderClassificationAPI = () => (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <span className={styles.sectionIcon}>🔌</span>
         <h3 className={styles.sectionTitle}>Batch Classification API</h3>
         {routerConfig.api?.batch_classification && (
           <button
@@ -2013,7 +1925,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               )
             }}
           >
-            ✏️ Edit
+            Edit
           </button>
         )}
       </div>
@@ -2582,9 +2494,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             Current config uses legacy format - see "Categories" in legacy mode.
           </div>
         )}
-
-        {/* Reasoning Families */}
-        {renderReasoningFamilies()}
       </div>
     )
   }
@@ -2592,6 +2501,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Models Section - Provider models and endpoints (config.yaml)
   const renderModelsSection = () => {
     const models = getModels()
+    const reasoningFamilies = getReasoningFamilies()
 
     // Filter models based on search
     const filteredModels = models.filter(model =>
@@ -2740,49 +2650,52 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             {
               label: 'Configured Endpoints',
               value: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {model.endpoints.map((ep, i) => {
                     const isHttps = ep.protocol === 'https'
                     return (
                       <div key={i} style={{
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '6px',
                         padding: '0.75rem',
-                        background: 'rgba(0, 212, 255, 0.05)',
-                        border: '1px solid rgba(0, 212, 255, 0.15)',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
+                        background: 'rgba(0, 0, 0, 0.2)'
                       }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>
-                            {ep.name}
-                          </div>
-                          <div style={{
-                            fontSize: '0.875rem',
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--color-text-secondary)'
-                          }}>
-                            {ep.endpoint}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '0.5rem'
+                        }}>
                           <span style={{
-                            fontSize: '0.75rem',
-                            textTransform: 'uppercase',
                             fontWeight: 600,
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '3px',
-                            background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                            color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
+                            fontSize: '0.95rem'
                           }}>
-                            {isHttps ? 'HTTPS' : 'HTTP'}
+                            {ep.name}
                           </span>
-                          <span style={{
-                            fontSize: '0.875rem',
-                            color: 'var(--color-text-secondary)'
-                          }}>
-                            Weight: {ep.weight}
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          gap: '1rem',
+                          fontSize: '0.875rem',
+                          color: 'var(--color-text-secondary)'
+                        }}>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>
+                            {ep.endpoint}
                           </span>
+                          <span>
+                            <span style={{
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '3px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                              background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                              color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
+                            }}>
+                              {ep.protocol.toUpperCase()}
+                            </span>
+                          </span>
+                          <span>Weight: {ep.weight}</span>
                         </div>
                       </div>
                     )
@@ -2802,34 +2715,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             { label: 'Currency', value: model.pricing.currency || 'USD' },
             { label: 'Prompt (per 1M tokens)', value: model.pricing.prompt_per_1m?.toFixed(2) || '0.00' },
             { label: 'Completion (per 1M tokens)', value: model.pricing.completion_per_1m?.toFixed(2) || '0.00' }
-          ]
-        })
-      }
-
-      if (model.pii_policy) {
-        sections.push({
-          title: 'PII Policy',
-          fields: [
-            { label: 'Allow by Default', value: model.pii_policy.allow_by_default ? 'Yes' : 'No' },
-            {
-              label: model.pii_policy.allow_by_default ? 'Blocked Types' : 'Allowed Types',
-              value: model.pii_policy.pii_types_allowed?.length ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {model.pii_policy.pii_types_allowed.map((type, i) => (
-                    <span key={i} style={{
-                      padding: '0.25rem 0.75rem',
-                      background: 'rgba(236, 72, 153, 0.1)',
-                      borderRadius: '4px',
-                      fontSize: '0.875rem',
-                      fontFamily: 'var(--font-mono)'
-                    }}>
-                      {type}
-                    </span>
-                  ))}
-                </div>
-              ) : 'None',
-              fullWidth: true
-            }
           ]
         })
       }
@@ -2855,15 +2740,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       const reasoningFamiliesObj = getReasoningFamilies()
       const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
 
-      // PII types
-      const piiTypes = [
-        'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
-        'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
-        'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
-        'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
-        'US_SSN', 'ZIP_CODE'
-      ]
-
       openEditModal(
         'Add New Model',
         {
@@ -2878,9 +2754,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           }],
           currency: 'USD',
           prompt_per_1m: 0,
-          completion_per_1m: 0,
-          pii_allow_by_default: true,
-          pii_types_allowed: []
+          completion_per_1m: 0
         },
         [
           {
@@ -2934,19 +2808,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             type: 'number',
             placeholder: '1.50',
             description: 'Cost per 1 million completion tokens'
-          },
-          {
-            name: 'pii_allow_by_default',
-            label: 'PII Policy: Allow by Default',
-            type: 'boolean',
-            description: 'If enabled, all PII types are allowed unless specified below'
-          },
-          {
-            name: 'pii_types_allowed',
-            label: 'PII Types Allowed/Blocked',
-            type: 'multiselect',
-            options: piiTypes,
-            description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
           }
         ],
         async (data) => {
@@ -2969,10 +2830,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                 completion_per_1m: parseFloat(data.completion_per_1m) || 0
-              },
-              pii_policy: {
-                allow_by_default: data.pii_allow_by_default,
-                pii_types_allowed: data.pii_types_allowed
               }
             }
             newConfig.providers.models.push(newModel)
@@ -2988,10 +2845,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                 completion_per_1m: parseFloat(data.completion_per_1m) || 0
-              },
-              pii_policy: {
-                allow_by_default: data.pii_allow_by_default,
-                pii_types_allowed: data.pii_types_allowed
               }
             }
           }
@@ -3008,15 +2861,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       const reasoningFamiliesObj = getReasoningFamilies()
       const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
 
-      // PII types
-      const piiTypes = [
-        'AGE', 'CREDIT_CARD', 'DATE_TIME', 'DOMAIN_NAME',
-        'EMAIL_ADDRESS', 'GPE', 'IBAN_CODE', 'IP_ADDRESS',
-        'NO_PII', 'NRP', 'ORGANIZATION', 'PERSON',
-        'PHONE_NUMBER', 'STREET_ADDRESS', 'US_DRIVER_LICENSE',
-        'US_SSN', 'ZIP_CODE'
-      ]
-
       openEditModal(
         `Edit Model: ${model.name}`,
         {
@@ -3027,10 +2871,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           // Pricing
           currency: model.pricing?.currency || 'USD',
           prompt_per_1m: model.pricing?.prompt_per_1m || 0,
-          completion_per_1m: model.pricing?.completion_per_1m || 0,
-          // PII Policy
-          pii_allow_by_default: model.pii_policy?.allow_by_default ?? true,
-          pii_types_allowed: model.pii_policy?.pii_types_allowed || []
+          completion_per_1m: model.pricing?.completion_per_1m || 0
         },
         [
           {
@@ -3076,19 +2917,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             type: 'number',
             placeholder: '1.50',
             description: 'Cost per 1 million completion tokens'
-          },
-          {
-            name: 'pii_allow_by_default',
-            label: 'PII Policy: Allow by Default',
-            type: 'boolean',
-            description: 'If enabled, all PII types are allowed unless specified below'
-          },
-          {
-            name: 'pii_types_allowed',
-            label: 'PII Types Allowed/Blocked',
-            type: 'multiselect',
-            options: piiTypes,
-            description: 'If "Allow by Default" is ON: select types to BLOCK. If OFF: select types to ALLOW'
           }
         ],
         async (data) => {
@@ -3110,10 +2938,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   currency: data.currency,
                   prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                   completion_per_1m: parseFloat(data.completion_per_1m) || 0
-                },
-                pii_policy: {
-                  allow_by_default: data.pii_allow_by_default,
-                  pii_types_allowed: data.pii_types_allowed
                 }
               } : m
             )
@@ -3127,10 +2951,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                 completion_per_1m: parseFloat(data.completion_per_1m) || 0
-              },
-              pii_policy: {
-                allow_by_default: data.pii_allow_by_default,
-                pii_types_allowed: data.pii_types_allowed
               }
             }
           }
@@ -3175,32 +2995,225 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setExpandedModels(newExpanded)
     }
 
+    // Reasoning Families handlers
+    const handleViewReasoningFamily = (familyName: string) => {
+      const familyConfig = reasoningFamilies[familyName]
+      if (!familyConfig) return
+
+      const sections: ViewSection[] = [
+        {
+          title: 'Configuration',
+          fields: [
+            { label: 'Family Name', value: familyName },
+            { label: 'Type', value: familyConfig.type },
+            { label: 'Parameter', value: familyConfig.parameter }
+          ]
+        }
+      ]
+
+      setViewModalTitle(`Reasoning Family: ${familyName}`)
+      setViewModalSections(sections)
+      setViewModalEditCallback(() => () => handleEditReasoningFamily(familyName))
+      setViewModalOpen(true)
+    }
+
+    const handleEditReasoningFamily = (familyName: string) => {
+      const familyConfig = reasoningFamilies[familyName]
+      if (!familyConfig) return
+
+      openEditModal(
+        `Edit Reasoning Family: ${familyName}`,
+        { ...familyConfig },
+        [
+          {
+            name: 'type',
+            label: 'Type',
+            type: 'select',
+            options: ['reasoning_effort', 'chat_template_kwargs'],
+            required: true,
+            description: 'Type of reasoning family'
+          },
+          {
+            name: 'parameter',
+            label: 'Parameter',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., reasoning_effort',
+            description: 'Parameter name for reasoning control'
+          }
+        ],
+        async (data) => {
+          const newConfig = { ...config }
+          if (isPythonCLI && newConfig.providers) {
+            newConfig.providers = { ...newConfig.providers }
+            if (!newConfig.providers.reasoning_families) {
+              newConfig.providers.reasoning_families = {}
+            }
+            newConfig.providers.reasoning_families[familyName] = data
+          } else if (newConfig.reasoning_families) {
+            newConfig.reasoning_families[familyName] = data
+          }
+          await saveConfig(newConfig)
+        }
+      )
+    }
+
+    const handleAddReasoningFamily = () => {
+      openEditModal(
+        'Add Reasoning Family',
+        { type: 'reasoning_effort', parameter: '' },
+        [
+          {
+            name: 'name',
+            label: 'Family Name',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., o1-reasoning',
+            description: 'Unique name for this reasoning family'
+          },
+          {
+            name: 'type',
+            label: 'Type',
+            type: 'select',
+            options: ['reasoning_effort', 'chat_template_kwargs'],
+            required: true,
+            description: 'Type of reasoning family'
+          },
+          {
+            name: 'parameter',
+            label: 'Parameter',
+            type: 'text',
+            required: true,
+            placeholder: 'e.g., reasoning_effort',
+            description: 'Parameter name for reasoning control'
+          }
+        ],
+        async (data) => {
+          const familyName = data.name
+          delete data.name
+
+          const newConfig = { ...config }
+          if (isPythonCLI && newConfig.providers) {
+            newConfig.providers = { ...newConfig.providers }
+            if (!newConfig.providers.reasoning_families) {
+              newConfig.providers.reasoning_families = {}
+            }
+            newConfig.providers.reasoning_families[familyName] = data
+          } else {
+            if (!newConfig.reasoning_families) {
+              newConfig.reasoning_families = {}
+            }
+            newConfig.reasoning_families[familyName] = data
+          }
+          await saveConfig(newConfig)
+        },
+        'add'
+      )
+    }
+
+    const handleDeleteReasoningFamily = async (familyName: string) => {
+      if (!confirm(`Are you sure you want to delete reasoning family "${familyName}"?`)) {
+        return
+      }
+
+      const newConfig = { ...config }
+      if (isPythonCLI && newConfig.providers?.reasoning_families) {
+        newConfig.providers = { ...newConfig.providers }
+        newConfig.providers.reasoning_families = { ...newConfig.providers.reasoning_families }
+        delete newConfig.providers.reasoning_families[familyName]
+      } else if (newConfig.reasoning_families) {
+        delete newConfig.reasoning_families[familyName]
+      }
+      await saveConfig(newConfig)
+    }
+
+    // Reasoning Families table
+    type ReasoningFamilyRow = { name: string; type: string; parameter: string }
+    const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(([name, config]) => ({
+      name,
+      type: config.type,
+      parameter: config.parameter
+    }))
+
+    const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
+      {
+        key: 'name',
+        header: 'Family Name',
+        sortable: true,
+        render: (row) => (
+          <span style={{ fontWeight: 600 }}>{row.name}</span>
+        )
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        width: '200px',
+        sortable: true,
+        render: (row) => (
+          <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
+            {row.type}
+          </span>
+        )
+      },
+      {
+        key: 'parameter',
+        header: 'Parameter',
+        sortable: true,
+        render: (row) => (
+          <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{row.parameter}</code>
+        )
+      }
+    ]
+
     return (
       <div className={styles.sectionPanel}>
-        {/* Models Table */}
+        {/* Reasoning Families Table */}
         <TableHeader
-          title="Models"
-          count={models.length}
-          searchPlaceholder="Search models..."
-          searchValue={modelsSearch}
-          onSearchChange={setModelsSearch}
-          onAdd={handleAddModel}
-          addButtonText="Add Model"
+          title="Reasoning Families"
+          count={reasoningFamilyData.length}
+          searchPlaceholder=""
+          searchValue=""
+          onSearchChange={() => {}}
+          onAdd={handleAddReasoningFamily}
+          addButtonText="Add Family"
         />
 
         <DataTable
-          columns={modelColumns}
-          data={filteredModels}
+          columns={reasoningFamilyColumns}
+          data={reasoningFamilyData}
           keyExtractor={(row) => row.name}
-          onView={handleViewModel}
-          onEdit={handleEditModel}
-          onDelete={handleDeleteModel}
-          expandable={true}
-          renderExpandedRow={renderModelEndpoints}
-          isRowExpanded={(row) => expandedModels.has(row.name)}
-          onToggleExpand={handleToggleExpand}
-          emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
+          onView={(row) => handleViewReasoningFamily(row.name)}
+          onEdit={(row) => handleEditReasoningFamily(row.name)}
+          onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+          emptyMessage="No reasoning families configured"
         />
+
+        {/* Models Table */}
+        <div style={{ marginTop: '2rem' }}>
+          <TableHeader
+            title="Models"
+            count={models.length}
+            searchPlaceholder="Search models..."
+            searchValue={modelsSearch}
+            onSearchChange={setModelsSearch}
+            onAdd={handleAddModel}
+            addButtonText="Add Model"
+          />
+
+          <DataTable
+            columns={modelColumns}
+            data={filteredModels}
+            keyExtractor={(row) => row.name}
+            onView={handleViewModel}
+            onEdit={handleEditModel}
+            onDelete={handleDeleteModel}
+            expandable={true}
+            renderExpandedRow={renderModelEndpoints}
+            isRowExpanded={(row) => expandedModels.has(row.name)}
+            onToggleExpand={handleToggleExpand}
+            emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
+          />
+        </div>
       </div>
     )
   }
@@ -3208,55 +3221,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Router Configuration Section - System defaults from router-defaults.yaml
   const renderRouterConfigSection = () => (
     <div className={styles.sectionPanel}>
-      {/* Source indicator */}
-      <div className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <span className={styles.sectionIcon}>📄</span>
-          <h3 className={styles.sectionTitle}>Configuration Source</h3>
-          {routerDefaultsLoading && <span className={styles.badge}>Loading...</span>}
-        </div>
-        <div className={styles.sectionContent}>
-          <div className={styles.coreSettingsInline}>
-            <div className={styles.inlineConfigRow}>
-              <span className={styles.inlineConfigLabel}>📁 Source File:</span>
-              <span className={styles.inlineConfigValue}>
-                {routerDefaults && Object.keys(routerDefaults).length > 0 
-                  ? '.vllm-sr/router-defaults.yaml' 
-                  : 'config.yaml (fallback)'}
-              </span>
-            </div>
-            {routerDefaults && Object.keys(routerDefaults).length > 0 && (
-              <div className={styles.inlineConfigRow}>
-                <span className={styles.inlineConfigLabel}>ℹ️ Note:</span>
-                <span className={styles.configValue} style={{ fontSize: '0.85em', opacity: 0.8 }}>
-                  Router defaults are system settings that apply across all configurations
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      
       {/* Semantic Cache */}
       {renderSimilarityBERT()}
-      
+
       {/* Prompt Guard */}
       {renderPIIModernBERT()}
       {renderJailbreakModernBERT()}
-      
+
       {/* Classifier */}
       {renderClassifyBERT()}
-      
+
       {/* Tools */}
       {renderToolsConfiguration()}
       {renderToolsDB()}
-      
+
       {/* Observability */}
       {renderObservabilityTracing()}
-      
+
       {/* Classification API */}
       {renderClassificationAPI()}
-      
+
       {/* Legacy Categories (for backward compatibility) */}
       {!isPythonCLI && renderCategories()}
     </div>
@@ -3290,7 +3274,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
         {error && !loading && (
           <div className={styles.error}>
-            <span className={styles.errorIcon}>⚠️</span>
+            <span className={styles.errorIcon}></span>
             <div>
               <h3>Error Loading Config</h3>
               <p>{error}</p>
