@@ -145,10 +145,11 @@ def create_lora_token_model(model_name: str, num_labels: int, lora_config: dict)
         tokenizer.pad_token = tokenizer.eos_token
 
     # Load base model for token classification
+    # Always use float32 for stable LoRA training (FP16 causes gradient unscaling issues)
     base_model = AutoModelForTokenClassification.from_pretrained(
         model_name,
         num_labels=num_labels,
-        dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        torch_dtype=torch.float32,
     )
 
     # Create LoRA configuration for token classification
@@ -695,7 +696,7 @@ def main(
         dataloader_drop_last=False,
         eval_accumulation_steps=1,
         report_to=[],
-        fp16=torch.cuda.is_available(),
+        fp16=False,  # Disabled: FP16 causes gradient unscaling errors with LoRA
     )
 
     # Create trainer
@@ -760,7 +761,7 @@ def merge_lora_adapter_to_full_model(
 
     # Load base model with correct number of labels
     base_model = AutoModelForTokenClassification.from_pretrained(
-        base_model_path, num_labels=num_labels, dtype=torch.float32, device_map="cpu"
+        base_model_path, num_labels=num_labels, torch_dtype=torch.float32, device_map="cpu"
     )
 
     # Load tokenizer with model-specific configuration
