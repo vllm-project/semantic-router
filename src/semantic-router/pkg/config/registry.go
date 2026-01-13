@@ -70,11 +70,11 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"classification", "lora", "mmlu", "domain", "bert"},
 	},
 
-	// PII Detection
+	// PII Detection - BERT LoRA
 	{
 		LocalPath:        "models/mom-pii-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model",
-		Aliases:          []string{"pii-detector", "pii-classifier", "privacy-guard", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "lora_pii_detector_bert-base-uncased_model"},
+		Aliases:          []string{"pii-detector", "pii-classifier", "privacy-guard", "lora_pii_detector_bert-base-uncased_model"},
 		Purpose:          PurposePIIDetection,
 		Description:      "BERT-based PII detector with LoRA adapters for 35 PII types",
 		ParameterSize:    "110M + LoRA",
@@ -84,11 +84,25 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"pii", "privacy", "lora", "token-classification", "bert"},
 	},
 
+	// PII Detection - ModernBERT (Token-level)
+	{
+		LocalPath:        "models/mom-mmbert-pii-detector",
+		RepoID:           "llm-semantic-router/mmbert-pii-detector-merged",
+		Aliases:          []string{"mmbert-pii-detector", "mmbert-pii-detector-merged", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "pii_classifier_modernbert_model", "pii_classifier_modernbert_ai4privacy_token_model"},
+		Purpose:          PurposePIIDetection,
+		Description:      "ModernBERT-based merged PII detector for token-level classification",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       35, // PII types
+		MaxContextLength: 8192,
+		Tags:             []string{"pii", "privacy", "modernbert", "token-classification", "merged"},
+	},
+
 	// Jailbreak Detection
 	{
 		LocalPath:        "models/mom-jailbreak-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model",
-		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model"},
+		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model", "jailbreak_classifier_modernbert_model"},
 		Purpose:          PurposeJailbreakDetection,
 		Description:      "BERT-based jailbreak/prompt injection detector with LoRA adapters",
 		ParameterSize:    "110M + LoRA",
