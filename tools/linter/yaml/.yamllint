@@ -9,6 +9,7 @@ ignore: |
   .crd-ref-docs.yaml
   deploy/helm
   .venv
+  semcahce
   # Jinja2 template files (contain {% %} and {{ }} syntax)
   **/*.template.yaml
   **/.vllm-sr/*.yaml

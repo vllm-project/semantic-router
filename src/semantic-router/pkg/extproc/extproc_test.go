@@ -587,17 +587,22 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
-	// Create semantic cache
+	// Create semantic cache manager for testing
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.InMemoryCacheType,
-		Enabled:             cfg.Enabled,
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.MaxEntries,
-		TTLSeconds:          cfg.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),
-		EmbeddingModel:      cfg.EmbeddingModel,
+		MaxEntries:          cfg.SemanticCache.MaxEntries,
+		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
-	semanticCache, err := cache.NewCacheBackend(cacheConfig)
+
+	// Create cache manager with global config for testing
+	cacheManager, err := cache.NewCacheManager(&cache.CacheManagerConfig{
+		Domains:     make(map[string]cache.CacheConfig),
+		GlobalCache: &cacheConfig,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -642,7 +647,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		CategoryDescriptions: cfg.GetCategoryDescriptions(),
 		Classifier:           classifier,
 		PIIChecker:           piiChecker,
-		Cache:                semanticCache,
+		CacheManager:         cacheManager,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
 	}
@@ -2105,7 +2110,7 @@ var _ = Describe("Caching Functionality", func() {
 		router, err = CreateTestRouter(cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Override cache with enabled configuration
+		// Override cache with enabled configuration using CacheManager
 		cacheConfig := cache.CacheConfig{
 			BackendType:         cache.InMemoryCacheType,
 			Enabled:             true,
@@ -2114,9 +2119,11 @@ var _ = Describe("Caching Functionality", func() {
 			TTLSeconds:          3600,
 			EmbeddingModel:      "bert",
 		}
-		cacheBackend, err := cache.NewCacheBackend(cacheConfig)
+		cacheManager, err := cache.NewCacheManager(&cache.CacheManagerConfig{
+			GlobalCache: &cacheConfig,
+		})
 		Expect(err).NotTo(HaveOccurred())
-		router.Cache = cacheBackend
+		router.CacheManager = cacheManager
 	})
 
 	It("should handle cache miss scenario", func() {
@@ -2296,9 +2303,11 @@ var _ = Describe("Caching Functionality", func() {
 				TTLSeconds:          3600,
 				EmbeddingModel:      "bert",
 			}
-			cacheBackend, err := cache.NewCacheBackend(cacheConfig)
+			cacheManager, err := cache.NewCacheManager(&cache.CacheManagerConfig{
+				GlobalCache: &cacheConfig,
+			})
 			Expect(err).NotTo(HaveOccurred())
-			router.Cache = cacheBackend
+			router.CacheManager = cacheManager
 		})
 
 		It("should process requests normally without caching", func() {
@@ -3508,9 +3517,8 @@ var _ = Describe("Metrics recording", func() {
 
 	BeforeEach(func() {
 		// Use a minimal router that doesn't require external models
-		router = &OpenAIRouter{
-			Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false}),
-		}
+		// CacheManager is nil since cache is not needed for these tests
+		router = &OpenAIRouter{}
 	})
 
 	It("records TTFT on response headers", func() {

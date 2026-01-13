@@ -78,7 +78,7 @@ logging:
 # Development and debugging settings
 development:
   # Drop index on startup (WARNING: This will delete all cached data)
-  drop_index_on_startup: true  # Enable for development to test dynamic dimensions
+  drop_index_on_startup: false  # Set to true only for clean testing, false for normal operation
 
   # Create index if it doesn't exist
   auto_create_index: true

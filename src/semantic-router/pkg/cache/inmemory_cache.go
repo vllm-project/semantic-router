@@ -56,11 +56,12 @@ type InMemoryCache struct {
 	optimizedFIFO  *FIFOPolicy
 	expirationHeap *ExpirationHeap
 
-	hnswIndex        *HNSWIndex
-	useHNSW          bool
-	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
-	hnswEfSearch     int    // Search-time ef parameter
-	embeddingModel   string // "bert", "qwen3", or "gemma"
+	hnswIndex          *HNSWIndex
+	useHNSW            bool
+	hnswNeedsRebuild   bool   // true while the HNSW graph is stale relative to entries
+	hnswEfSearch       int    // Search-time ef parameter
+	embeddingModel     string // "bert", "qwen3", or "gemma" (ignored if embeddingModelPath is set)
+	embeddingModelPath string // Custom path to domain-specific embedding model (overrides embeddingModel)
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -74,7 +75,8 @@ type InMemoryCacheOptions struct {
 	HNSWM               int    // Number of bi-directional links (default: 16)
 	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
 	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
-	EmbeddingModel      string // "bert", "qwen3", or "gemma"
+	EmbeddingModel      string // "bert", "qwen3", or "gemma" (ignored if EmbeddingModelPath is set)
+	EmbeddingModelPath  string // Custom path to domain-specific embedding model (overrides EmbeddingModel)
 }
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
@@ -94,7 +96,12 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
 	}
 
-	logging.Debugf("Semantic cache embedding model: %s", embeddingModel)
+	embeddingModelPath := strings.TrimSpace(options.EmbeddingModelPath)
+	if embeddingModelPath != "" {
+		logging.Debugf("Semantic cache using custom embedding model path: %s", embeddingModelPath)
+	} else {
+		logging.Debugf("Semantic cache embedding model: %s", embeddingModel)
+	}
 
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
@@ -108,6 +115,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
+		embeddingModelPath:  embeddingModelPath,
 	}
 
 	// Initialize O(1) eviction policy
@@ -157,6 +165,19 @@ func (c *InMemoryCache) CheckConnection() error {
 
 // generateEmbedding generates an embedding using the configured model
 func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
+	// If custom model path is specified, use it as the model identifier
+	// This allows domain-specific models like "models/math-cache-model"
+	if c.embeddingModelPath != "" {
+		// Custom model path specified - use GetEmbeddingWithModelType
+		// The model must be pre-loaded using InitEmbeddingModels or similar
+		// User is responsible for initializing custom models before use
+		output, err := candle_binding.GetEmbeddingWithModelType(text, c.embeddingModelPath, 0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate embedding with custom model '%s': %w", c.embeddingModelPath, err)
+		}
+		return output.Embedding, nil
+	}
+
 	// Normalize to lowercase for case-insensitive comparison
 	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
 
@@ -185,7 +206,7 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *InMemoryCache) AddPendingRequest(requestID string, namespace string, model string, query string, requestBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -214,6 +235,7 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 	now := time.Now()
 	entry := CacheEntry{
 		RequestID:    requestID,
+		Namespace:    namespace,
 		RequestBody:  requestBody,
 		Model:        model,
 		Query:        query,
@@ -284,7 +306,7 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *InMemoryCache) AddEntry(requestID string, namespace string, model string, query string, requestBody, responseBody []byte) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -312,6 +334,7 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 	now := time.Now()
 	entry := CacheEntry{
 		RequestID:    requestID,
+		Namespace:    namespace,
 		RequestBody:  requestBody,
 		ResponseBody: responseBody,
 		Model:        model,
@@ -354,12 +377,14 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 }
 
 // FindSimilar searches for semantically similar cached requests using the default threshold
+// Uses default "general" namespace for backward compatibility
 func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
+	defaultNamespace := "general"
+	return c.FindSimilarWithThreshold(defaultNamespace, model, query, c.similarityThreshold)
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+func (c *InMemoryCache) FindSimilarWithThreshold(namespace string, model string, query string, threshold float32) ([]byte, bool, error) {
 	start := time.Now()
 
 	if !c.enabled {
@@ -370,8 +395,8 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	if len(query) > 50 {
 		queryPreview = query[:50] + "..."
 	}
-	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
-		model, queryPreview, len(query), threshold)
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: searching for namespace='%s', model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		namespace, model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding using the configured model
 	queryEmbedding, err := c.generateEmbedding(query)
@@ -409,7 +434,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		// Search using HNSW index with configured ef parameter
 		candidateIndices := c.hnswIndex.searchKNN(queryEmbedding, 10, c.hnswEfSearch, c.entries)
 
-		// Filter candidates by model and expiration, then find best match
+		// Filter candidates by namespace, model, and expiration, then find best match
 		for _, entryIndex := range candidateIndices {
 			if entryIndex < 0 || entryIndex >= len(c.entries) {
 				continue
@@ -419,6 +444,11 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 			// Skip incomplete entries
 			if entry.ResponseBody == nil {
+				continue
+			}
+
+			// Only consider entries in the same namespace (domain isolation)
+			if entry.Namespace != namespace {
 				continue
 			}
 
@@ -452,6 +482,11 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		for entryIndex, entry := range c.entries {
 			// Skip incomplete entries
 			if entry.ResponseBody == nil {
+				continue
+			}
+
+			// Only consider entries in the same namespace (domain isolation)
+			if entry.Namespace != namespace {
 				continue
 			}
 

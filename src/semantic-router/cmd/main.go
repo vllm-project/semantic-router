@@ -42,6 +42,7 @@ func main() {
 		kubeconfig            = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace             = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
 		downloadOnly          = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		skipModelValidation   = flag.Bool("skip-model-validation", false, "Skip model registry validation (for testing with local models)")
 	)
 	flag.Parse()
 
@@ -66,15 +67,19 @@ func main() {
 	// This is important for Kubernetes mode where the controller will update it
 	config.Replace(cfg)
 
-	// Ensure required models are downloaded
-	if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
-		logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
-	}
+	// Ensure required models are downloaded (unless skipped)
+	if *skipModelValidation {
+		logging.Infof("Skipping model validation (--skip-model-validation flag set)")
+	} else {
+		if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
+			logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
+		}
 
-	// If download-only mode, exit after downloading models
-	if *downloadOnly {
-		logging.Infof("Download-only mode: models downloaded successfully, exiting")
-		os.Exit(0)
+		// If download-only mode, exit after downloading models
+		if *downloadOnly {
+			logging.Infof("Download-only mode: models downloaded successfully, exiting")
+			os.Exit(0)
+		}
 	}
 
 	// Initialize distributed tracing if enabled
