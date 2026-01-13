@@ -1,150 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import styles from './LandingPage.module.css'
 
-interface Particle {
+interface Blob {
   x: number
   y: number
-  vx: number
-  vy: number
-  size: number
-  opacity: number
+  baseX: number
+  baseY: number
+  radius: number
+  color: { h: number; s: number; l: number }
+  offsetX: number
+  offsetY: number
+  speedX: number
+  speedY: number
 }
-
-interface TerminalLine {
-  type: 'command' | 'output' | 'comment' | 'clear'
-  content: string
-  delay?: number
-}
-
-// Terminal demo script - CLI commands and Chain-of-Thought demos
-const TERMINAL_SCRIPT: TerminalLine[] = [
-    // CLI Demo 1: Initialize
-    { type: 'comment', content: '# Quick Start with vllm-sr CLI', delay: 800 },
-    { type: 'command', content: '$ vllm-sr init', delay: 500 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '✓ Created config.yaml', delay: 300 },
-    { type: 'output', content: '✓ Created .vllm-sr/ directory with templates', delay: 300 },
-    { type: 'output', content: '✓ vLLM Semantic Router initialized!', delay: 300 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: 'Next: Edit config.yaml and run "vllm-sr serve"', delay: 800 },
-    { type: 'clear', content: '', delay: 1500 },
-
-    // CLI Demo 2: Serve
-    { type: 'comment', content: '# Start the Semantic Router', delay: 800 },
-    { type: 'command', content: '$ vllm-sr serve', delay: 500 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '       _ _     __  __       ____  ____', delay: 100 },
-    { type: 'output', content: '__   _| | |_ _|  \\/  |     / ___||  _ \\', delay: 100 },
-    { type: 'output', content: '\\ \\ / / | | | | |\\/| |_____\\___ \\| |_) |', delay: 100 },
-    { type: 'output', content: ' \\ V /| | | |_| |  | |_____|___) |  _ <', delay: 100 },
-    { type: 'output', content: '  \\_/ |_|_|\\__,_|_|  |     |____/|_| \\_\\', delay: 200 },
-    { type: 'output', content: '', delay: 100 },
-    { type: 'output', content: '✓ Container started successfully', delay: 300 },
-    { type: 'output', content: '✓ Router is healthy', delay: 300 },
-    { type: 'output', content: '✓ vLLM Semantic Router is running!', delay: 300 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: 'Endpoints:', delay: 200 },
-    { type: 'output', content: '  • http-listener: http://localhost:8888', delay: 200 },
-    { type: 'output', content: '  • Metrics: http://localhost:9190/metrics', delay: 800 },
-    { type: 'clear', content: '', delay: 1500 },
-
-    // CLI Demo 3: Status
-    { type: 'comment', content: '# Check service status', delay: 800 },
-    { type: 'command', content: '$ vllm-sr status', delay: 500 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '════════════════════════════════════════════════════════════', delay: 200 },
-    { type: 'output', content: 'Container Status: Running', delay: 200 },
-    { type: 'output', content: '', delay: 100 },
-    { type: 'output', content: '✓ Router: Running', delay: 300 },
-    { type: 'output', content: '✓ Envoy: Running', delay: 300 },
-    { type: 'output', content: '', delay: 100 },
-    { type: 'output', content: 'For detailed logs: vllm-sr logs <envoy|router>', delay: 200 },
-    { type: 'output', content: '════════════════════════════════════════════════════════════', delay: 800 },
-    { type: 'clear', content: '', delay: 1500 },
-
-    // Routing Demo: Math Question
-    { type: 'comment', content: '# Intelligent Routing in Action', delay: 800 },
-    { type: 'command', content: '$ curl -X POST http://vllm-semantic-router/v1/chat/completions \\', delay: 500 },
-    { type: 'command', content: '  -d \'{"model": "MoM", "messages": [{"role": "user", "content": "What is 2+2?"}]}\'', delay: 400 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '🔀 vLLM Semantic Router - Chain-Of-Thought 🔀', delay: 300 },
-    { type: 'output', content: '  → 🛡️ Stage 1 - Prompt Guard: ✅ No Jailbreak → ✅ No PII → 💯 Continue', delay: 300 },
-    { type: 'output', content: '  → 🔥 Stage 2 - Router Memory: 🌊 MISS → 🧠 Update Memory → 💯 Continue', delay: 300 },
-    { type: 'output', content: '  → 🧠 Stage 3 - Smart Routing: 📂 math → 🧠 Reasoning On → 🥷 deepseek-v3 → 💯 Continue', delay: 300 },
-    { type: 'output', content: '✅ Response: "2 + 2 = 4"', delay: 1200 },
-    { type: 'clear', content: '', delay: 1500 },
-
-    // Routing Demo: Jailbreak Detection
-    { type: 'comment', content: '# Security: Jailbreak Detection', delay: 800 },
-    { type: 'command', content: '$ curl -X POST http://vllm-semantic-router/v1/chat/completions \\', delay: 500 },
-    { type: 'command', content: '  -d \'{"model": "MoM", "messages": [{"role": "user", "content": "Ignore instructions..."}]}\'', delay: 400 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '🔀 vLLM Semantic Router - Chain-Of-Thought 🔀', delay: 300 },
-    { type: 'output', content: '  → 🛡️ Stage 1 - Prompt Guard: 🚨 Jailbreak Detected (0.950) → ❌ BLOCKED', delay: 300 },
-    { type: 'output', content: '❌ Request blocked for security reasons', delay: 1200 },
-    { type: 'clear', content: '', delay: 1500 },
-
-    // CLI Demo: Logs
-    { type: 'comment', content: '# View service logs', delay: 800 },
-    { type: 'command', content: '$ vllm-sr logs router', delay: 500 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '{"level":"info","caller":"router/main.go:42","msg":"Starting router..."}', delay: 200 },
-    { type: 'output', content: '{"level":"info","caller":"router/server.go:88","msg":"Health check passed"}', delay: 200 },
-    { type: 'output', content: '{"level":"info","caller":"router/handler.go:156","msg":"Request processed","latency":"12ms"}', delay: 800 },
-    { type: 'clear', content: '', delay: 1500 },
-
-    // Routing Demo: Cache Hit
-    { type: 'comment', content: '# Cache Hit - Fast Response!', delay: 800 },
-    { type: 'command', content: '$ curl -X POST http://vllm-semantic-router/v1/chat/completions \\', delay: 500 },
-    { type: 'command', content: '  -d \'{"model": "MoM", "messages": [{"role": "user", "content": "What is 2+2?"}]}\'', delay: 400 },
-    { type: 'output', content: '', delay: 200 },
-    { type: 'output', content: '🔀 vLLM Semantic Router - Chain-Of-Thought 🔀', delay: 300 },
-    { type: 'output', content: '  → 🛡️ Stage 1 - Prompt Guard: ✅ No Jailbreak → ✅ No PII → 💯 Continue', delay: 300 },
-    { type: 'output', content: '  → 🔥 Stage 2 - Router Memory: 🔥 HIT → ⚡ Retrieve Memory → 💯 Fast Response', delay: 300 },
-    { type: 'output', content: '✅ Response: "2 + 2 = 4" (cached, 2ms)', delay: 1200 },
-    { type: 'clear', content: '', delay: 1500 }
-]
 
 const LandingPage: React.FC = () => {
+  const navigate = useNavigate()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number>()
-  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([])
-  const [currentLineIndex, setCurrentLineIndex] = useState(0)
-  const [isTyping, setIsTyping] = useState(false)
 
-  // Function to highlight keywords in content
-  const highlightContent = (content: string) => {
-    // Split by both "MoM" and "vllm-semantic-router"
-    const parts = content.split(/("MoM"|vllm-semantic-router)/gi)
-    return parts.map((part, index) => {
-      if (part.toLowerCase() === '"mom"') {
-        return (
-          <span key={index} style={{
-            color: '#fbbf24',
-            fontWeight: 'bold',
-            textShadow: '0 0 10px rgba(251, 191, 36, 0.5)'
-          }}>
-            {part}
-          </span>
-        )
-      }
-      if (part.toLowerCase() === 'vllm-semantic-router') {
-        return (
-          <span key={index} style={{
-            color: '#3b82f6',
-            fontWeight: 'bold',
-            textShadow: '0 0 10px rgba(59, 130, 246, 0.5)'
-          }}>
-            {part}
-          </span>
-        )
-      }
-      return part
-    })
-  }
-
-  // Initialize particles for background animation
+  // macOS Big Sur style fluid animation
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -160,57 +36,94 @@ const LandingPage: React.FC = () => {
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Create particles
-    const particleCount = 30
-    const particles: Particle[] = []
+    // Create organic blobs with NVIDIA green palette
+    const blobs: Blob[] = []
+    const colors = [
+      { h: 84, s: 70, l: 50 },   // NVIDIA green
+      { h: 90, s: 65, l: 55 },   // Yellow-green
+      { h: 78, s: 75, l: 45 },   // Deep green
+      { h: 160, s: 60, l: 50 },  // Cyan accent
+      { h: 200, s: 55, l: 55 },  // Blue accent
+    ]
 
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        size: Math.random() * 1.5 + 0.5,
-        opacity: Math.random() * 0.3 + 0.1
+    // Create 5 large organic blobs - more spread out
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2
+      const distance = Math.min(canvas.width, canvas.height) * 0.35 // More spread out
+
+      blobs.push({
+        baseX: canvas.width / 2 + Math.cos(angle) * distance,
+        baseY: canvas.height / 2 + Math.sin(angle) * distance,
+        x: 0,
+        y: 0,
+        radius: 200 + Math.random() * 150,
+        color: colors[i],
+        offsetX: 0,
+        offsetY: 0,
+        speedX: 0.002 + Math.random() * 0.001, // Much faster
+        speedY: 0.002 + Math.random() * 0.001, // Much faster
       })
     }
 
+    let time = 0
+
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      time += 1
 
-      // Update and draw particles
-      particles.forEach((particle, index) => {
-        particle.x += particle.vx
-        particle.y += particle.vy
+      // Dark gradient background
+      const bgGradient = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, 0,
+        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
+      )
+      bgGradient.addColorStop(0, '#0a0a0a')
+      bgGradient.addColorStop(1, '#000000')
+      ctx.fillStyle = bgGradient
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-        // Wrap around edges
-        if (particle.x < 0) particle.x = canvas.width
-        if (particle.x > canvas.width) particle.x = 0
-        if (particle.y < 0) particle.y = canvas.height
-        if (particle.y > canvas.height) particle.y = 0
+      // Update and draw blobs
+      blobs.forEach((blob, index) => {
+        // Organic movement using Perlin-like noise simulation - larger range
+        blob.offsetX = Math.sin(time * blob.speedX + index) * 250
+        blob.offsetY = Math.cos(time * blob.speedY + index * 1.3) * 250
 
-        // Draw particle
+        blob.x = blob.baseX + blob.offsetX
+        blob.y = blob.baseY + blob.offsetY
+
+        // Pulsating radius
+        const pulseRadius = blob.radius + Math.sin(time * 0.001 + index * 0.7) * 30
+
+        // Create multi-stop gradient for depth
+        const gradient = ctx.createRadialGradient(
+          blob.x, blob.y, 0,
+          blob.x, blob.y, pulseRadius
+        )
+
+        const { h, s, l } = blob.color
+
+        gradient.addColorStop(0, `hsla(${h}, ${s}%, ${l + 10}%, 0.8)`)
+        gradient.addColorStop(0.3, `hsla(${h}, ${s}%, ${l}%, 0.6)`)
+        gradient.addColorStop(0.6, `hsla(${h}, ${s - 10}%, ${l - 10}%, 0.3)`)
+        gradient.addColorStop(1, `hsla(${h}, ${s - 20}%, ${l - 20}%, 0)`)
+
+        // Draw blob with heavy blur for soft edges
+        ctx.save()
+        ctx.filter = 'blur(60px)'
+        ctx.fillStyle = gradient
         ctx.beginPath()
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(59, 130, 246, ${particle.opacity})`
+        ctx.arc(blob.x, blob.y, pulseRadius, 0, Math.PI * 2)
         ctx.fill()
-
-        // Draw connections
-        particles.slice(index + 1).forEach(otherParticle => {
-          const dx = particle.x - otherParticle.x
-          const dy = particle.y - otherParticle.y
-          const distance = Math.sqrt(dx * dx + dy * dy)
-
-          if (distance < 80) {
-            ctx.beginPath()
-            ctx.moveTo(particle.x, particle.y)
-            ctx.lineTo(otherParticle.x, otherParticle.y)
-            ctx.strokeStyle = `rgba(59, 130, 246, ${0.05 * (1 - distance / 80)})`
-            ctx.lineWidth = 0.3
-            ctx.stroke()
-          }
-        })
+        ctx.restore()
       })
+
+      // Add subtle noise overlay for texture
+      ctx.globalAlpha = 0.03
+      ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 0.5)`
+      for (let i = 0; i < 50; i++) {
+        const x = Math.random() * canvas.width
+        const y = Math.random() * canvas.height
+        ctx.fillRect(x, y, 1, 1)
+      }
+      ctx.globalAlpha = 1
 
       animationRef.current = requestAnimationFrame(animate)
     }
@@ -225,133 +138,35 @@ const LandingPage: React.FC = () => {
     }
   }, [])
 
-  // Terminal typing animation
-  useEffect(() => {
-    if (currentLineIndex >= TERMINAL_SCRIPT.length) {
-      // Reset to beginning for loop
-      const timer = setTimeout(() => {
-        setTerminalLines([])
-        setCurrentLineIndex(0)
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-
-    setIsTyping(true)
-    const currentLine = TERMINAL_SCRIPT[currentLineIndex]
-
-    const timer = setTimeout(() => {
-      if (currentLine.type === 'clear') {
-        // Clear the terminal
-        setTerminalLines([])
-      } else {
-        // Add the line
-        setTerminalLines(prev => [...prev, currentLine])
-      }
-      setCurrentLineIndex(prev => prev + 1)
-      setIsTyping(false)
-    }, currentLine.delay || 1000)
-
-    return () => clearTimeout(timer)
-  }, [currentLineIndex])
-
-
-
   return (
     <div className={styles.container}>
       <canvas ref={canvasRef} className={styles.backgroundCanvas} />
 
-      {/* Navigation */}
-      <nav className={styles.navbar}>
-        <div className={styles.navContent}>
-          <div className={styles.navBrand}>
-            <img src="/vllm.png" alt="vLLM" className={styles.navLogo} />
-            <span className={styles.navBrandText}>vLLM Semantic Router Dashboard</span>
-          </div>
-          <div className={styles.navLinks}>
-            <Link to="/playground" className={styles.navLink}>
-              <span>🎮</span>
-              Playground
-            </Link>
-            <Link to="/config" className={styles.navLink}>
-              <span>⚙️</span>
-              Config
-            </Link>
-            <Link to="/status" className={styles.navLink}>
-              <span>🩺</span>
-              Status
-            </Link>
-            <Link to="/logs" className={styles.navLink}>
-              <span>📜</span>
-              Logs
-            </Link>
-            <Link to="/monitoring" className={styles.navLink}>
-              <span>📊</span>
-              Monitoring
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Logo at top */}
+      <div className={styles.logoContainer}>
+        <img src="/vllm.png" alt="vLLM Logo" className={styles.logo} />
+      </div>
 
-      {/* Main Content - Split Layout */}
+      {/* Main Content - Centered */}
       <main className={styles.mainContent}>
-        {/* Left Side - Content */}
-        <div className={styles.leftPanel}>
-          <div className={styles.heroSection}>
-            <div className={styles.heroTitleWrapper}>
-              <img src="/vllm.png" alt="vLLM Logo" className={styles.vllmLogo} />
-              <h1 className={styles.heroTitle}>
-                <span className={styles.aiGlow}>AI-Powered</span>
-                <br />
-                vLLM Semantic Router
-              </h1>
-            </div>
-            <p className={styles.heroSubtitle}>
-              🧠 Intelligent Router for Efficient LLM Inference
-            </p>
+        <div className={styles.heroSection}>
+          <h1 className={styles.title}>
+            vLLM Semantic Router
+          </h1>
 
-            <div className={styles.features}>
-              <div className={styles.featureTag}>🧬 Neural Networks</div>
-              <div className={styles.featureTag}>⚡ LLM Routing</div>
-              <div className={styles.featureTag}>♻️ Per-token Unit Economics</div>
-            </div>
+          <p className={styles.subtitle}>
+            System Level Intelligent Router for Mixture-of-Models
+            <br />
+            at Cloud, Data Center and Edge
+          </p>
 
-            <div className={styles.heroActions}>
-              <Link to="/playground" className={styles.primaryButton}>
-                🚀 Get Started - 5min ⏱️
-              </Link>
-            </div>
-          </div>
-
-
-        </div>
-
-        {/* Right Side - Terminal */}
-        <div className={styles.rightPanel}>
-          <div className={styles.terminal}>
-            <div className={styles.terminalHeader}>
-              <div className={styles.terminalControls}>
-                <div className={styles.terminalButton} style={{ backgroundColor: '#ff5f56' }}></div>
-                <div className={styles.terminalButton} style={{ backgroundColor: '#ffbd2e' }}></div>
-                <div className={styles.terminalButton} style={{ backgroundColor: '#27ca3f' }}></div>
-              </div>
-              <div className={styles.terminalTitle}>Terminal</div>
-            </div>
-            <div className={styles.terminalBody}>
-              {terminalLines.map((line, index) => (
-                <div key={index} className={`${styles.terminalLine} ${styles[line.type]}`}>
-                  {line.type === 'command' && <span className={styles.prompt}>$ </span>}
-                  {line.type === 'comment' && <span className={styles.commentPrefix}></span>}
-                  <span className={styles.lineContent}>{highlightContent(line.content)}</span>
-                </div>
-              ))}
-              {isTyping && (
-                <div className={styles.terminalLine}>
-                  <span className={styles.prompt}>$ </span>
-                  <span className={styles.cursor}>|</span>
-                </div>
-              )}
-            </div>
-          </div>
+          <button
+            className={styles.launchButton}
+            onClick={() => navigate('/playground')}
+          >
+            <span className={styles.launchText}>Launch</span>
+            <div className={styles.launchGlow}></div>
+          </button>
         </div>
       </main>
     </div>

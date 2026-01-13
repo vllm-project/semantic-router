@@ -7,6 +7,8 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   MarkerType,
   Position,
 } from 'reactflow'
@@ -114,11 +116,13 @@ const normalizeModelScores = (
   }))
 }
 
-const TopologyPage: React.FC = () => {
+// Inner component that uses useReactFlow (must be inside ReactFlowProvider)
+const TopologyFlow: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const { fitView } = useReactFlow()
 
   useEffect(() => {
     fetchConfig()
@@ -631,6 +635,17 @@ const TopologyPage: React.FC = () => {
     setEdges(newEdges)
   }
 
+  // Call fitView after nodes are updated
+  useEffect(() => {
+    if (nodes.length > 0) {
+      // Small delay to ensure React Flow has rendered the nodes
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.2, duration: 300 })
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [nodes.length, fitView])
+
   if (loading) {
     return (
       <div className={styles.container}>
@@ -681,6 +696,7 @@ const TopologyPage: React.FC = () => {
           }}
           defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
           attributionPosition="bottom-left"
+          style={{ width: '100%', height: '100%' }}
         >
           <Background />
           <Controls />
@@ -744,6 +760,15 @@ const TopologyPage: React.FC = () => {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrapper component that provides ReactFlow context
+const TopologyPage: React.FC = () => {
+  return (
+    <ReactFlowProvider>
+      <TopologyFlow />
+    </ReactFlowProvider>
   )
 }
 

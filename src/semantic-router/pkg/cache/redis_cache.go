@@ -367,15 +367,21 @@ func (c *RedisCache) CheckConnection() error {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *RedisCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *RedisCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("RedisCache.AddPendingRequest: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil)
+	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "add_pending", "error", time.Since(start).Seconds())
@@ -387,15 +393,15 @@ func (c *RedisCache) AddPendingRequest(requestID string, model string, query str
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	logging.Debugf("RedisCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d)",
-		requestID, len(responseBody))
+	logging.Debugf("RedisCache.UpdateWithResponse: updating pending entry (request_id: %s, response_size: %d, ttl_seconds=%d)",
+		requestID, len(responseBody), ttlSeconds)
 
 	// Find the pending entry by request_id
 	ctx := context.Background()
@@ -442,8 +448,8 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte) e
 
 	logging.Debugf("RedisCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", docID, model)
 
-	// Update the document with response body
-	err = c.addEntry(docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody)
+	// Update the document with response body and TTL
+	err = c.addEntry(docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
@@ -456,14 +462,20 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte) e
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *RedisCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *RedisCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody)
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("RedisCache.AddEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "add_entry", "error", time.Since(start).Seconds())
@@ -497,9 +509,15 @@ func escapeRedisTagValue(value string) string {
 }
 
 // addEntry handles the internal logic for storing entries in Redis
-func (c *RedisCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte) error {
-	logging.Infof("addEntry called: id='%s', requestID='%s', requestBody_len=%d, responseBody_len=%d",
-		id, requestID, len(requestBody), len(responseBody))
+func (c *RedisCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+	logging.Infof("addEntry called: id='%s', requestID='%s', requestBody_len=%d, responseBody_len=%d, ttl_seconds=%d",
+		id, requestID, len(requestBody), len(responseBody), ttlSeconds)
+
+	// Determine effective TTL: use provided value or fall back to cache default
+	effectiveTTL := ttlSeconds
+	if ttlSeconds == -1 {
+		effectiveTTL = c.ttlSeconds
+	}
 
 	// Generate semantic embedding for the query
 	embedding, err := candle_binding.GetEmbedding(query, 0)
@@ -530,31 +548,32 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 	responseBodyStr := string(responseBody)
 	logging.Infof("Setting response_body field: len=%d, isEmpty=%v", len(responseBodyStr), responseBodyStr == "")
 
+	// Prepare hash fields including ttl_seconds
+	hashFields := map[string]interface{}{
+		"request_id":                    requestID,
+		"model":                         model,
+		"query":                         query,
+		"request_body":                  string(requestBody),
+		"response_body":                 responseBodyStr,
+		c.config.Index.VectorField.Name: embeddingBytes,
+		"timestamp":                     time.Now().Unix(),
+		"ttl_seconds":                   effectiveTTL,
+	}
+
 	// Store as Redis hash
-	err = c.client.HSet(ctx,
-		docKey,
-		map[string]interface{}{
-			"request_id":                    requestID,
-			"model":                         model,
-			"query":                         query,
-			"request_body":                  string(requestBody),
-			"response_body":                 responseBodyStr,
-			c.config.Index.VectorField.Name: embeddingBytes,
-			"timestamp":                     time.Now().Unix(),
-		},
-	).Err()
+	err = c.client.HSet(ctx, docKey, hashFields).Err()
 	if err != nil {
 		logging.Debugf("RedisCache.addEntry: HSet failed: %v", err)
 		return fmt.Errorf("failed to store cache entry: %w", err)
 	}
 
-	// Set TTL if configured
-	if c.ttlSeconds > 0 {
-		c.client.Expire(ctx, docKey, time.Duration(c.ttlSeconds)*time.Second)
+	// Set TTL if configured (Redis native TTL)
+	if effectiveTTL > 0 {
+		c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second)
 	}
 
-	logging.Debugf("RedisCache.addEntry: successfully added entry to Redis (key: %s, embedding_dim: %d, request_size: %d, response_size: %d)",
-		docKey, len(embedding), len(requestBody), len(responseBody))
+	logging.Debugf("RedisCache.addEntry: successfully added entry to Redis (key: %s, embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",
+		docKey, len(embedding), len(requestBody), len(responseBody), effectiveTTL)
 	logging.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend":             "redis",
 		"index":               c.indexName,

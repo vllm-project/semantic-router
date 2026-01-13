@@ -197,7 +197,6 @@
 }
 
 .logsSection {
-  flex: 1;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -205,7 +204,7 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 1.5rem;
-  min-height: 400px;
+  height: 600px;
 }
 
 .logsHeader {
@@ -231,11 +230,13 @@
 .logsContainer {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   padding: 1rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.8rem;
   background: #0d1117;
   color: #c9d1d9;
+  max-height: 100%;
 }
 
 .loadingLogs {
@@ -376,6 +377,10 @@
 
   .controlsRight {
     justify-content: space-between;
+  }
+
+  .logsSection {
+    height: 500px;
   }
 
   .logsContainer {

@@ -21,6 +21,11 @@ export interface ProviderModel {
   reasoning_family?: string
   endpoints: ProviderEndpoint[]
   access_key?: string
+  pricing?: {
+    currency?: string
+    prompt_per_1m?: number
+    completion_per_1m?: number
+  }
 }
 
 export interface ReasoningFamily {

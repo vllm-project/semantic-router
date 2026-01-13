@@ -66,7 +66,7 @@ func (c *FactCheckClassifier) Initialize() error {
 		return fmt.Errorf("fact-check classifier requires ModelID to be configured")
 	}
 
-	logging.Infof("Initializing fact-check classifier ML model (halugate-sentinel) from: %s", c.config.ModelID)
+	logging.Infof("Initializing fact-check classifier ML model")
 
 	err := candle.InitFactCheckClassifier(c.config.ModelID, c.config.UseCPU)
 	if err != nil {

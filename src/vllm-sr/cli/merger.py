@@ -224,6 +224,14 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
             "access_key": model.access_key,
         }
 
+        # Add pricing if provided
+        if model.pricing:
+            model_config[model.name]["pricing"] = {
+                "currency": model.pricing.currency or "USD",
+                "prompt_per_1m": model.pricing.prompt_per_1m or 0.0,
+                "completion_per_1m": model.pricing.completion_per_1m or 0.0,
+            }
+
         # Add endpoints for this model
         for endpoint in model.endpoints:
             # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
@@ -261,11 +269,29 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
 
             vllm_endpoints.append(endpoint_config)
 
+    # Convert ReasoningFamily Pydantic models to dicts for YAML serialization
+    reasoning_families_dict = {}
+    if providers.reasoning_families:
+        for family_name, family_config in providers.reasoning_families.items():
+            # Convert Pydantic model to dict if needed
+            if hasattr(family_config, "model_dump"):
+                reasoning_families_dict[family_name] = family_config.model_dump()
+            elif hasattr(family_config, "dict"):
+                reasoning_families_dict[family_name] = family_config.dict()
+            elif isinstance(family_config, dict):
+                reasoning_families_dict[family_name] = family_config
+            else:
+                # Fallback: convert to dict manually
+                reasoning_families_dict[family_name] = {
+                    "type": family_config.type,
+                    "parameter": family_config.parameter,
+                }
+
     return {
         "vllm_endpoints": vllm_endpoints,
         "model_config": model_config,
         "default_model": providers.default_model,
-        "reasoning_families": providers.reasoning_families,
+        "reasoning_families": reasoning_families_dict,
         "default_reasoning_effort": providers.default_reasoning_effort,
     }
 

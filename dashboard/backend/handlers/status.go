@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -47,18 +48,20 @@ func StatusHandler(routerAPIURL string) http.HandlerFunc {
 			Version:        "v0.1.0",
 		}
 
-		// Check for vllm-sr Docker container (same as vllm-sr Python CLI)
-		containerStatus := getDockerContainerStatus(vllmSrContainerName)
+		// Check if we're running inside a container
+		runningInContainer := isRunningInContainer()
 
-		switch containerStatus {
-		case "running":
+		// If running in container, report container services directly
+		if runningInContainer {
 			status.DeploymentType = "docker"
 			status.Overall = "healthy"
 			status.Endpoints = []string{"http://localhost:8888"}
 
-			// Check individual services by examining container logs (same as Python CLI)
-			routerHealthy, routerMsg := checkServiceFromLogs("router")
-			envoyHealthy, envoyMsg := checkServiceFromLogs("envoy")
+			// Check services from logs within the same container
+			routerHealthy, routerMsg := checkServiceFromContainerLogs("router")
+			envoyHealthy, envoyMsg := checkServiceFromContainerLogs("envoy")
+			dashboardHealthy := true
+			dashboardMsg := "Running"
 
 			status.Services = append(status.Services, ServiceStatus{
 				Name:      "Router",
@@ -76,8 +79,65 @@ func StatusHandler(routerAPIURL string) http.HandlerFunc {
 				Component: "container",
 			})
 
+			status.Services = append(status.Services, ServiceStatus{
+				Name:      "Dashboard",
+				Status:    boolToStatus(dashboardHealthy),
+				Healthy:   dashboardHealthy,
+				Message:   dashboardMsg,
+				Component: "container",
+			})
+
 			// Update overall status based on services
-			if !routerHealthy || !envoyHealthy {
+			if !routerHealthy || !envoyHealthy || !dashboardHealthy {
+				status.Overall = "degraded"
+			}
+
+			if err := json.NewEncoder(w).Encode(status); err != nil {
+				http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)
+			}
+			return
+		}
+
+		// Check for vllm-sr Docker container (same as vllm-sr Python CLI)
+		containerStatus := getDockerContainerStatus(vllmSrContainerName)
+
+		switch containerStatus {
+		case "running":
+			status.DeploymentType = "docker"
+			status.Overall = "healthy"
+			status.Endpoints = []string{"http://localhost:8888"}
+
+			// Check individual services by examining container logs (same as Python CLI)
+			routerHealthy, routerMsg := checkServiceFromLogs("router")
+			envoyHealthy, envoyMsg := checkServiceFromLogs("envoy")
+			dashboardHealthy, dashboardMsg := checkServiceFromLogs("dashboard")
+
+			status.Services = append(status.Services, ServiceStatus{
+				Name:      "Router",
+				Status:    boolToStatus(routerHealthy),
+				Healthy:   routerHealthy,
+				Message:   routerMsg,
+				Component: "container",
+			})
+
+			status.Services = append(status.Services, ServiceStatus{
+				Name:      "Envoy",
+				Status:    boolToStatus(envoyHealthy),
+				Healthy:   envoyHealthy,
+				Message:   envoyMsg,
+				Component: "container",
+			})
+
+			status.Services = append(status.Services, ServiceStatus{
+				Name:      "Dashboard",
+				Status:    boolToStatus(dashboardHealthy),
+				Healthy:   dashboardHealthy,
+				Message:   dashboardMsg,
+				Component: "container",
+			})
+
+			// Update overall status based on services
+			if !routerHealthy || !envoyHealthy || !dashboardHealthy {
 				status.Overall = "degraded"
 			}
 
@@ -121,6 +181,15 @@ func StatusHandler(routerAPIURL string) http.HandlerFunc {
 							status.Overall = "degraded"
 						}
 					}
+
+					// Dashboard is always running in local mode (since we're serving this page)
+					status.Services = append(status.Services, ServiceStatus{
+						Name:      "Dashboard",
+						Status:    "running",
+						Healthy:   true,
+						Message:   "Running",
+						Component: "process",
+					})
 				}
 			}
 
@@ -152,27 +221,95 @@ func getDockerContainerStatus(containerName string) string {
 	return strings.TrimSpace(string(output))
 }
 
+// isRunningInContainer checks if the current process is running inside a Docker container
+func isRunningInContainer() bool {
+	// Check for /.dockerenv file (common indicator)
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+
+	// Check /proc/1/cgroup for docker/containerd
+	data, err := os.ReadFile("/proc/1/cgroup")
+	if err == nil {
+		content := string(data)
+		if strings.Contains(content, "docker") || strings.Contains(content, "containerd") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// checkServiceFromContainerLogs checks service status from supervisorctl within the same container
+func checkServiceFromContainerLogs(service string) (bool, string) {
+	// Use supervisorctl to check service status
+	cmd := exec.Command("supervisorctl", "status", service)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If supervisorctl fails, service might not be configured
+		return false, "Status unknown"
+	}
+
+	outputStr := string(output)
+
+	// Parse supervisorctl output
+	// Format: "service_name  RUNNING   pid 123, uptime 0:01:23"
+	// or:     "service_name  STOPPED   Not started"
+	// or:     "service_name  FATAL     Exited too quickly"
+
+	if strings.Contains(outputStr, "RUNNING") {
+		return true, "Running"
+	} else if strings.Contains(outputStr, "STOPPED") {
+		return false, "Stopped"
+	} else if strings.Contains(outputStr, "FATAL") || strings.Contains(outputStr, "EXITED") {
+		return false, "Failed"
+	} else if strings.Contains(outputStr, "STARTING") {
+		return false, "Starting"
+	}
+
+	return false, "Status unknown"
+}
+
 // checkServiceFromLogs checks if a service is running by examining container logs
 // This mirrors the vllm-sr Python CLI approach
 func checkServiceFromLogs(service string) (bool, string) {
 	// Get container logs directly without shell
 	// #nosec G204 -- vllmSrContainerName is a compile-time constant, not user input
-	cmd := exec.Command("docker", "logs", "--tail", "100", vllmSrContainerName)
+	cmd := exec.Command("docker", "logs", "--tail", "200", vllmSrContainerName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false, "Status unknown (check logs)"
 	}
 
-	logContent := strings.ToLower(string(output))
+	logContent := string(output)
+	logContentLower := strings.ToLower(logContent)
 
-	// Check for service-specific patterns
-	if service == "router" {
-		if strings.Contains(logContent, "starting") && strings.Contains(logContent, "router") ||
-			strings.Contains(logContent, "router entered running") {
+	// Check for service-specific patterns from supervisord
+	switch service {
+	case "router":
+		// Check for supervisord spawn message or router startup messages
+		if strings.Contains(logContent, "spawned: 'router'") ||
+			strings.Contains(logContentLower, "starting router") ||
+			strings.Contains(logContentLower, "router entered running") ||
+			strings.Contains(logContent, "Starting insecure LLM Router ExtProc server") ||
+			strings.Contains(logContent, `"caller"`) {
 			return true, "Running"
 		}
-	} else {
-		if strings.Contains(logContent, "envoy entered running") {
+	case "envoy":
+		// Check for supervisord spawn message or envoy startup messages
+		if strings.Contains(logContent, "spawned: 'envoy'") ||
+			strings.Contains(logContentLower, "envoy entered running") ||
+			strings.Contains(logContent, "[info] initializing epoch") ||
+			(strings.Contains(logContent, "[20") && strings.Contains(logContent, "[info]")) ||
+			(strings.Contains(logContent, "[20") && strings.Contains(logContent, "[debug]")) {
+			return true, "Running"
+		}
+	case "dashboard":
+		// Check for supervisord spawn message or dashboard startup messages
+		if strings.Contains(logContent, "spawned: 'dashboard'") ||
+			strings.Contains(logContentLower, "dashboard entered running") ||
+			strings.Contains(logContent, "Dashboard listening on") ||
+			strings.Contains(logContent, "Semantic Router Dashboard listening") {
 			return true, "Running"
 		}
 	}

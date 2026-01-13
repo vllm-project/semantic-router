@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: #1a1a1a;
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   z-index: 10001;
@@ -61,7 +61,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 1.5rem;
   font-weight: 590;
-  color: #1d1d1f;
+  color: #ffffff;
   letter-spacing: -0.02em;
   margin-bottom: 1rem;
 }
@@ -74,8 +74,8 @@
 }
 
 .headerItem {
-  background: rgba(0, 0, 0, 0.02);
-  border: 0.5px solid rgba(0, 0, 0, 0.08);
+  background: rgba(30, 30, 30, 0.8);
+  border: 1.5px solid #76b900;
   border-radius: 1rem;
   padding: 1rem 1.25rem;
   transition: all 0.2s ease;
@@ -101,16 +101,16 @@
 }
 
 .headerItem:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(40, 40, 40, 0.9);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(118, 185, 0, 0.3);
 }
 
 .headerLabel {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #666;
+  color: #999;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
@@ -120,21 +120,21 @@
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 1.125rem;
   font-weight: 600;
-  color: #000;
+  color: #ffffff;
   margin-bottom: 0.5rem;
 }
 
 .headerDescription {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.875rem;
-  color: #888;
+  color: #aaaaaa;
   line-height: 1.4;
 }
 
 .hint {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.9375rem;
-  color: #999;
+  color: #888;
   margin-top: 1rem;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -148,37 +148,5 @@
   }
 }
 
-/* Dark mode support */
-:global(.dark) .overlay {
-  background-color: rgba(0, 0, 0, 0.98);
-}
 
-:global(.dark) .title {
-  color: #fff;
-}
-
-:global(.dark) .headerItem {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-:global(.dark) .headerItem:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-:global(.dark) .headerLabel {
-  color: #999;
-}
-
-:global(.dark) .headerValue {
-  color: #fff;
-}
-
-:global(.dark) .headerDescription {
-  color: #666;
-}
-
-:global(.dark) .hint {
-  color: #666;
-}
 

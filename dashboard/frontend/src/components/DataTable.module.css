@@ -1,0 +1,195 @@
+/* NVIDIA Style Data Table */
+.tableContainer {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Table Header */
+.thead {
+  background: #252525;
+  border-bottom: 2px solid var(--color-primary);
+}
+
+.th {
+  padding: 0.875rem 1rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+.th.sortable:hover {
+  color: var(--color-primary);
+}
+
+.sortIcon {
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-primary);
+}
+
+/* Table Body */
+.tbody {
+  background: var(--color-bg-secondary);
+}
+
+.tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: all var(--transition-fast);
+}
+
+.tr:hover {
+  background: rgba(118, 185, 0, 0.05);
+  border-left: 3px solid var(--color-primary);
+}
+
+.tr:last-child {
+  border-bottom: none;
+}
+
+.td {
+  padding: 1rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+/* Expand Column */
+.expandColumn {
+  width: 40px;
+  padding: 0.875rem 0.5rem;
+}
+
+.expandCell {
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.expandButton {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.expandButton:hover {
+  color: var(--color-primary);
+}
+
+.expandIcon {
+  display: inline-block;
+  font-size: 0.75rem;
+  transition: transform var(--transition-fast);
+}
+
+.expandIcon.expanded {
+  transform: rotate(90deg);
+}
+
+/* Expanded Row */
+.expandedRow {
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.expandedRow td {
+  padding: 0;
+}
+
+/* Actions Column */
+.actionsColumn {
+  text-align: right;
+  width: 220px;
+}
+
+.actionsCell {
+  text-align: right;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.actionButton {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.viewButton:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--color-accent-cyan);
+  color: var(--color-accent-cyan);
+}
+
+.editButton:hover {
+  background: rgba(118, 185, 0, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.deleteButton:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* Empty State */
+.emptyState {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .th,
+  .td {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .actionButtons {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .actionButton {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+

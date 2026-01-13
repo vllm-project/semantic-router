@@ -1,9 +1,13 @@
+/* Console Style - Playground */
 .container {
   display: flex;
   flex-direction: column;
+  flex: 1;
   height: 100%;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
+  background-color: var(--color-bg);
 }
 
 .controls {
@@ -38,6 +42,7 @@
   width: 16px;
   height: 16px;
   cursor: pointer;
+  accent-color: var(--color-primary);
 }
 
 .input {
@@ -46,30 +51,32 @@
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  background-color: var(--color-bg-tertiary);
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: 0.875rem;
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .input:focus {
   border-color: var(--color-primary);
   outline: none;
+  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
 }
 
 .button {
   padding: 0.5rem 1rem;
   background-color: var(--color-primary);
-  color: white;
+  color: #000000;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
-  font-weight: 500;
-  transition: background-color var(--transition-fast);
+  font-weight: 600;
+  transition: all var(--transition-fast);
 }
 
 .button:hover {
-  background-color: var(--color-primary-dark);
+  background-color: var(--color-primary-light);
+  box-shadow: var(--glow-primary);
 }
 
 .hints {
@@ -107,7 +114,8 @@
 .placeholderIcon {
   font-size: 4rem;
   margin-bottom: 1rem;
-  opacity: 0.5;
+  opacity: 0.6;
+  filter: grayscale(0.3);
 }
 
 .placeholder h3 {
@@ -128,7 +136,7 @@
   font-style: italic;
   margin-top: 1rem !important;
   padding: 0.75rem 1rem;
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(118, 185, 0, 0.1);
   border-left: 3px solid var(--color-primary);
   border-radius: var(--radius-sm);
 }

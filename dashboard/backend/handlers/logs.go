@@ -57,11 +57,11 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 			Logs:           []LogEntry{},
 		}
 
-		// Check container status (same as vllm-sr Python CLI)
-		containerStatus := getDockerContainerStatus(vllmSrContainerName)
+		// Check if we're running inside a container
+		runningInContainer := isRunningInContainer()
 
-		switch containerStatus {
-		case "running", "exited":
+		if runningInContainer {
+			// Running inside container - use supervisorctl to get logs
 			response.DeploymentType = "docker"
 			logs, err := fetchContainerLogs(component, lines)
 			if err != nil {
@@ -76,20 +76,41 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 					}
 				}
 			}
+		} else {
+			// Running outside container - check Docker container status
+			containerStatus := getDockerContainerStatus(vllmSrContainerName)
 
-		case "not found":
-			// Check if router is running directly (not via Docker)
-			if routerAPIURL != "" && checkRouterHealth(routerAPIURL) {
-				response.DeploymentType = "local (direct)"
-				response.Message = "Logs are available for Docker deployments started with 'vllm-sr serve'. " +
-					"For the current deployment, logs are written to the process stdout/stderr."
-			} else {
-				response.Error = "No running deployment detected. Start with: vllm-sr serve"
+			switch containerStatus {
+			case "running", "exited":
+				response.DeploymentType = "docker"
+				logs, err := fetchContainerLogs(component, lines)
+				if err != nil {
+					response.Error = err.Error()
+				} else {
+					for _, line := range logs {
+						if line != "" {
+							response.Logs = append(response.Logs, LogEntry{
+								Line:    line,
+								Service: component,
+							})
+						}
+					}
+				}
+
+			case "not found":
+				// Check if router is running directly (not via Docker)
+				if routerAPIURL != "" && checkRouterHealth(routerAPIURL) {
+					response.DeploymentType = "local (direct)"
+					response.Message = "Logs are available for Docker deployments started with 'vllm-sr serve'. " +
+						"For the current deployment, logs are written to the process stdout/stderr."
+				} else {
+					response.Error = "No running deployment detected. Start with: vllm-sr serve"
+				}
+
+			default:
+				response.DeploymentType = "docker"
+				response.Error = "Container status: " + containerStatus
 			}
-
-		default:
-			response.DeploymentType = "docker"
-			response.Error = "Container status: " + containerStatus
 		}
 
 		response.Count = len(response.Logs)
@@ -101,9 +122,69 @@ func LogsHandler(routerAPIURL string) http.HandlerFunc {
 	}
 }
 
-// fetchContainerLogs gets logs from the vllm-sr container with filtering
-// Uses the same approach as the vllm-sr Python CLI
+// fetchContainerLogs gets logs from supervisor-managed services
+// When running inside the container, use supervisorctl to get logs
+// When running outside, use docker logs
 func fetchContainerLogs(component string, lines int) ([]string, error) {
+	// First, try to use supervisorctl (when running inside container)
+	logs, err := fetchLogsFromSupervisor(component, lines)
+	if err == nil && len(logs) > 0 {
+		return logs, nil
+	}
+
+	// Fallback: try docker logs (when running outside container)
+	return fetchLogsFromDocker(component, lines)
+}
+
+// fetchLogsFromSupervisor gets logs by reading supervisor log files directly
+// Reads both stdout and stderr logs for each component
+func fetchLogsFromSupervisor(component string, lines int) ([]string, error) {
+	var result []string
+
+	// Map component names to log file paths (both stdout and stderr)
+	logFiles := map[string][]string{
+		"router":    {"/var/log/supervisor/router.log", "/var/log/supervisor/router-error.log"},
+		"envoy":     {"/var/log/supervisor/envoy.log", "/var/log/supervisor/envoy-error.log"},
+		"dashboard": {"/var/log/supervisor/dashboard.log", "/var/log/supervisor/dashboard-error.log"},
+		"all": {
+			"/var/log/supervisor/router.log", "/var/log/supervisor/router-error.log",
+			"/var/log/supervisor/envoy.log", "/var/log/supervisor/envoy-error.log",
+			"/var/log/supervisor/dashboard.log", "/var/log/supervisor/dashboard-error.log",
+		},
+	}
+
+	files, ok := logFiles[component]
+	if !ok {
+		files = []string{
+			"/var/log/supervisor/" + component + ".log",
+			"/var/log/supervisor/" + component + "-error.log",
+		}
+	}
+
+	for _, logFile := range files {
+		// Use tail command to get last N lines from log file
+		// #nosec G204 - logFile is validated and lines is converted from int
+		cmd := exec.Command("tail", "-n", strconv.Itoa(lines), logFile)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			// File might not exist yet, skip
+			continue
+		}
+
+		// Parse output and add to result
+		logLines := splitLogLines(string(output))
+		result = append(result, logLines...)
+	}
+
+	// Return last N lines (in case we read from multiple files)
+	if len(result) > lines {
+		return result[len(result)-lines:], nil
+	}
+	return result, nil
+}
+
+// fetchLogsFromDocker gets logs from Docker container (fallback for external access)
+func fetchLogsFromDocker(component string, lines int) ([]string, error) {
 	// Get logs directly from Docker without shell interpolation
 	// #nosec G204 -- vllmSrContainerName is a compile-time constant, lines is validated integer
 	tailArg := strconv.Itoa(lines * 2) // Get more lines for filtering
@@ -133,19 +214,34 @@ func fetchContainerLogs(component string, lines int) ([]string, error) {
 		switch component {
 		case "router":
 			// Match router-specific logs: Go router logs contain "caller" field in JSON
-			// Also include supervisor messages about router
+			// Also include supervisor messages about router and router startup messages
 			if strings.Contains(line, `"caller"`) ||
-				strings.Contains(lineLower, "spawned: 'router'") ||
+				strings.Contains(line, "spawned: 'router'") ||
 				strings.Contains(lineLower, "success: router") ||
-				strings.Contains(lineLower, "router entered running") {
+				strings.Contains(lineLower, "router entered running") ||
+				strings.Contains(line, "Starting router") ||
+				strings.Contains(line, "Starting insecure LLM Router ExtProc server") {
 				filtered = append(filtered, line)
 			}
 		case "envoy":
 			// Match envoy-specific logs and supervisor messages
+			// Envoy logs have timestamp format [YYYY-MM-DD HH:MM:SS.mmm][level]
 			if (strings.Contains(line, "[20") && strings.Contains(line, "][")) ||
-				strings.Contains(lineLower, "spawned: 'envoy'") ||
+				strings.Contains(line, "spawned: 'envoy'") ||
 				strings.Contains(lineLower, "success: envoy") ||
-				strings.Contains(lineLower, "envoy entered running") {
+				strings.Contains(lineLower, "envoy entered running") ||
+				strings.Contains(line, "Generating Envoy config") {
+				filtered = append(filtered, line)
+			}
+		case "dashboard":
+			// Match dashboard-specific logs: Dashboard logs start with timestamp YYYY/MM/DD
+			// Also include supervisor messages about dashboard
+			if (strings.Contains(line, "2026/") || strings.Contains(line, "2025/") || strings.Contains(line, "2027/")) ||
+				strings.Contains(line, "spawned: 'dashboard'") ||
+				strings.Contains(lineLower, "success: dashboard") ||
+				strings.Contains(lineLower, "dashboard entered running") ||
+				strings.Contains(line, "Starting dashboard") ||
+				strings.Contains(line, "Dashboard listening") {
 				filtered = append(filtered, line)
 			}
 		}

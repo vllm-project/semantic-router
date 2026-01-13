@@ -1,0 +1,447 @@
+# Semantic Router Configuration for LLM-D Deployment
+config:
+  model_config:
+    "llama3-8b":
+      allow_by_default: true
+    "phi4-mini":
+      allow_by_default: true
+
+  default_model: "llama3-8b"
+
+  # Categories - now only contain metadata for domain classification
+  categories:
+    - name: business
+    - name: law
+    - name: psychology
+    - name: biology
+    - name: chemistry
+    - name: history
+    - name: other
+    - name: health
+    - name: economics
+    - name: math
+    - name: physics
+    - name: computer science
+    - name: philosophy
+    - name: engineering
+
+  # Decisions - define routing logic with rules, model selection, and plugins
+  decisions:
+    - name: business
+      description: "Route business and management queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+            mode: "replace"
+    - name: law
+      description: "Route legal queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "law"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+            mode: "replace"
+    - name: psychology
+      description: "Route psychology queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "psychology"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+            mode: "replace"
+        - type: "semantic-cache"
+          configuration:
+            enabled: false
+            similarity_threshold: 0.92
+    - name: biology
+      description: "Route biology queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "biology"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+            mode: "replace"
+    - name: chemistry
+      description: "Route chemistry queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: true
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+            mode: "replace"
+    - name: history
+      description: "Route history queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+            mode: "replace"
+    - name: other
+      description: "Route general queries"
+      priority: 5
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+            mode: "replace"
+        - type: "semantic-cache"
+          configuration:
+            enabled: false
+            similarity_threshold: 0.75
+    - name: health
+      description: "Route health and medical queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "health"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+            mode: "replace"
+        - type: "semantic-cache"
+          configuration:
+            enabled: false
+            similarity_threshold: 0.95
+    - name: economics
+      description: "Route economics queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "economics"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+            mode: "replace"
+    - name: math
+      description: "Route mathematics queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "math"
+      modelRefs:
+        - model: phi4-mini
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+            mode: "replace"
+    - name: physics
+      description: "Route physics queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "physics"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: true
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+            mode: "replace"
+    - name: computer_science
+      description: "Route computer science queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+            mode: "replace"
+    - name: philosophy
+      description: "Route philosophy queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "philosophy"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+            mode: "replace"
+    - name: engineering
+      description: "Route engineering queries"
+      priority: 10
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      modelRefs:
+        - model: llama3-8b
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            enabled: false
+            system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+            mode: "replace"
+
+  bert_model:
+    model_id: models/mom-embedding-light
+    threshold: 0.6
+    use_cpu: true
+
+  semantic_cache:
+    enabled: false
+    backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
+    similarity_threshold: 0.8
+    max_entries: 1000  # Only applies to memory backend
+    ttl_seconds: 3600
+    eviction_policy: "fifo"
+    # HNSW index configuration (for memory backend only)
+    use_hnsw: true  # Enable HNSW index for faster similarity search
+    hnsw_m: 16  # Number of bi-directional links (higher = better recall, more memory)
+    hnsw_ef_construction: 200  # Construction parameter (higher = better quality, slower build)
+
+    # Hybrid cache configuration (when backend_type: "hybrid")
+    # Combines in-memory HNSW for fast search with Milvus for scalable storage
+    # max_memory_entries: 100000 # Max entries in HNSW index (default: 100,000)
+    # backend_config_path: "config/milvus.yaml" # Path to Milvus config
+
+    # Embedding model for semantic similarity matching
+    # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+    # Default: "bert" (fastest, lowest memory)
+    embedding_model: "bert"
+
+  tools:
+    enabled: false
+    top_k: 3
+    similarity_threshold: 0.2
+    tools_db_path: "config/tools_db.json"
+    fallback_to_empty: true
+
+  prompt_guard:
+    enabled: false  # Global default - can be overridden per category with jailbreak_enabled
+    use_modernbert: true
+    model_id: "models/mom-jailbreak-classifier"
+    threshold: 0.7
+    use_cpu: true
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+
+  # Classifier configuration
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: true
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+      use_modernbert: true
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  # Router Configuration for Dual-Path Selection
+  router:
+    # High confidence threshold for automatic LoRA selection
+    high_confidence_threshold: 0.99
+    # Low latency threshold in milliseconds for LoRA path selection
+    low_latency_threshold_ms: 2000
+    # Baseline scores for path evaluation
+    lora_baseline_score: 0.8
+    traditional_baseline_score: 0.7
+    embedding_baseline_score: 0.75
+    # Success rate calculation threshold
+    success_confidence_threshold: 0.8
+    # Large batch size threshold for parallel processing
+    large_batch_threshold: 4
+    # Default performance metrics (milliseconds)
+    lora_default_execution_time_ms: 1345
+    traditional_default_execution_time_ms: 4567
+    # Default processing requirements
+    default_confidence_threshold: 0.95
+    default_max_latency_ms: 5000
+    default_batch_size: 4
+    default_avg_execution_time_ms: 3000
+    # Default confidence and success rates
+    lora_default_confidence: 0.99
+    traditional_default_confidence: 0.95
+    lora_default_success_rate: 0.98
+    traditional_default_success_rate: 0.95
+    # Scoring weights for intelligent path selection (balanced approach)
+    multi_task_lora_weight: 0.30  # LoRA advantage for multi-task processing
+    single_task_traditional_weight: 0.30  # Traditional advantage for single tasks
+    large_batch_lora_weight: 0.25  # LoRA advantage for large batches (>=4)
+    small_batch_traditional_weight: 0.25  # Traditional advantage for single items
+    medium_batch_weight: 0.10  # Neutral weight for medium batches (2-3)
+    high_confidence_lora_weight: 0.25  # LoRA advantage for high confidence (>=0.99)
+    low_confidence_traditional_weight: 0.25  # Traditional for lower confidence (<=0.9)
+    low_latency_lora_weight: 0.30  # LoRA advantage for low latency (<=2000ms)
+    high_latency_traditional_weight: 0.10  # Traditional acceptable for relaxed timing
+    performance_history_weight: 0.20  # Historical performance comparison factor
+    # Traditional model specific configurations
+    traditional_bert_confidence_threshold: 0.95  # Traditional BERT confidence threshold
+    traditional_modernbert_confidence_threshold: 0.8  # Traditional ModernBERT confidence threshold
+    traditional_pii_detection_threshold: 0.5  # Traditional PII detection confidence threshold
+    traditional_token_classification_threshold: 0.9  # Traditional token classification threshold
+    traditional_dropout_prob: 0.1  # Traditional model dropout probability
+    traditional_attention_dropout_prob: 0.1  # Traditional model attention dropout probability
+    tie_break_confidence: 0.5  # Confidence value for tie-breaking situations
+
+  # Reasoning family configurations
+  reasoning_families:
+    deepseek:
+      type: "chat_template_kwargs"
+      parameter: "thinking"
+
+    qwen3:
+      type: "chat_template_kwargs"
+      parameter: "enable_thinking"
+
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    gpt:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  # Gateway route cache clearing
+  clear_route_cache: true  # Enable for some gateways such as Istio
+
+  # Global default reasoning effort level
+  default_reasoning_effort: high
+
+  # API Configuration
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets:
+          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+  # Embedding Models Configuration
+  # These models provide intelligent embedding generation with automatic routing:
+  # - Qwen3-Embedding-0.6B: Up to 32K context, high quality,
+  # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+  embedding_models:
+    qwen3_model_path: "models/mom-embedding-pro"
+    # gemma_model_path: "models/mom-embedding-flash"
+    use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
+
+  # Observability Configuration
+  observability:
+    tracing:
+      enabled: false  # Enable distributed tracing for docker-compose stack
+      provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
+      exporter:
+        type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)
+        endpoint: "jaeger:4317"  # Jaeger collector inside compose network
+        insecure: true  # Use insecure connection (no TLS)
+      sampling:
+        type: "always_on"  # Sampling: always_on, always_off, probabilistic
+        rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
+      resource:
+        service_name: "vllm-semantic-router"
+        service_version: "v0.1.0"
+        deployment_environment: "development"

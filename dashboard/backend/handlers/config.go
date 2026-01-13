@@ -151,6 +151,116 @@ func UpdateConfigHandler(configPath string) http.HandlerFunc {
 	}
 }
 
+// RouterDefaultsHandler reads and serves the router-defaults.yaml file as JSON
+// This file is located in .vllm-sr/router-defaults.yaml relative to config directory
+func RouterDefaultsHandler(configDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// router-defaults.yaml is in .vllm-sr directory relative to config
+		routerDefaultsPath := filepath.Join(configDir, ".vllm-sr", "router-defaults.yaml")
+
+		data, err := os.ReadFile(routerDefaultsPath)
+		if err != nil {
+			// If file doesn't exist, return empty config
+			if os.IsNotExist(err) {
+				w.Header().Set("Content-Type", "application/json")
+				if encErr := json.NewEncoder(w).Encode(map[string]interface{}{}); encErr != nil {
+					log.Printf("Error encoding empty response: %v", encErr)
+				}
+				return
+			}
+			http.Error(w, fmt.Sprintf("Failed to read router-defaults: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		var config interface{}
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to parse router-defaults: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(config); err != nil {
+			log.Printf("Error encoding router-defaults to JSON: %v", err)
+		}
+	}
+}
+
+// UpdateRouterDefaultsHandler updates the router-defaults.yaml file
+func UpdateRouterDefaultsHandler(configDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost && r.Method != http.MethodPut {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var configData map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		routerDefaultsPath := filepath.Join(configDir, ".vllm-sr", "router-defaults.yaml")
+
+		// Read existing config and merge with updates
+		existingMap := make(map[string]interface{})
+		existingData, err := os.ReadFile(routerDefaultsPath)
+		if err == nil {
+			if unmarshalErr := yaml.Unmarshal(existingData, &existingMap); unmarshalErr != nil {
+				log.Printf("Warning: failed to parse existing router-defaults, starting fresh: %v", unmarshalErr)
+			}
+		}
+
+		// Merge updates into existing config (deep merge for nested maps)
+		for key, value := range configData {
+			if existingValue, exists := existingMap[key]; exists {
+				if existingMapValue, ok := existingValue.(map[string]interface{}); ok {
+					if newMapValue, ok := value.(map[string]interface{}); ok {
+						mergedMap := make(map[string]interface{})
+						for k, v := range existingMapValue {
+							mergedMap[k] = v
+						}
+						for k, v := range newMapValue {
+							mergedMap[k] = v
+						}
+						existingMap[key] = mergedMap
+						continue
+					}
+				}
+			}
+			existingMap[key] = value
+		}
+
+		// Convert to YAML
+		yamlData, err := yaml.Marshal(existingMap)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to convert to YAML: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// Ensure .vllm-sr directory exists
+		vllmSrDir := filepath.Join(configDir, ".vllm-sr")
+		if mkdirErr := os.MkdirAll(vllmSrDir, 0o755); mkdirErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to create .vllm-sr directory: %v", mkdirErr), http.StatusInternalServerError)
+			return
+		}
+
+		if err := os.WriteFile(routerDefaultsPath, yamlData, 0o644); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to write router-defaults: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
+			log.Printf("Error encoding response: %v", err)
+		}
+	}
+}
+
 // validateEndpointAddress validates that an endpoint address is in a valid format.
 // It allows:
 // - IPv4 addresses (e.g., "192.168.1.1", "127.0.0.1")

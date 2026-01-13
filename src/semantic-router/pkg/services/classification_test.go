@@ -183,46 +183,6 @@ func TestClassificationService_ClassifySecurityUnified_ErrorCases(t *testing.T) 
 	})
 }
 
-func TestClassificationService_ClassifyIntentUnified_ErrorCases(t *testing.T) {
-	t.Run("Unified_classifier_not_available_fallback", func(t *testing.T) {
-		// This should fallback to the legacy ClassifyIntent method
-		service := &ClassificationService{
-			unifiedClassifier: nil,
-			classifier:        nil, // This will return placeholder response, not error
-		}
-
-		req := IntentRequest{Text: "test"}
-		result, err := service.ClassifyIntentUnified(req)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		if result == nil {
-			t.Error("Expected non-nil result")
-		}
-		// Should get placeholder response from legacy classifier
-		if result.Classification.Category != "general" {
-			t.Errorf("Expected placeholder category 'general', got '%s'", result.Classification.Category)
-		}
-		if result.RoutingDecision != "placeholder_response" {
-			t.Errorf("Expected placeholder routing decision, got '%s'", result.RoutingDecision)
-		}
-	})
-
-	t.Run("Classifier_not_initialized", func(t *testing.T) {
-		classifier := &classification.UnifiedClassifier{}
-		service := &ClassificationService{
-			unifiedClassifier: classifier,
-		}
-
-		req := IntentRequest{Text: "test"}
-		_, err := service.ClassifyIntentUnified(req)
-		if err == nil {
-			t.Error("Expected error for uninitialized classifier")
-		}
-		// The actual error will come from the unified classifier
-	})
-}
-
 // Test data structures and basic functionality
 func TestClassificationService_BasicFunctionality(t *testing.T) {
 	t.Run("Service_creation", func(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -169,12 +170,33 @@ type IntentOptions struct {
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
 }
 
+// MatchedSignals represents all matched signals from signal evaluation
+type MatchedSignals struct {
+	Keywords     []string `json:"keywords,omitempty"`
+	Embeddings   []string `json:"embeddings,omitempty"`
+	Domains      []string `json:"domains,omitempty"`
+	FactCheck    []string `json:"fact_check,omitempty"`
+	UserFeedback []string `json:"user_feedback,omitempty"`
+	Preferences  []string `json:"preferences,omitempty"`
+}
+
+// DecisionResult represents the result of decision evaluation
+type DecisionResult struct {
+	DecisionName string   `json:"decision_name"`
+	Confidence   float64  `json:"confidence"`
+	MatchedRules []string `json:"matched_rules"`
+}
+
 // IntentResponse represents the response from intent classification
 type IntentResponse struct {
 	Classification   Classification     `json:"classification"`
 	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
 	RecommendedModel string             `json:"recommended_model,omitempty"`
 	RoutingDecision  string             `json:"routing_decision,omitempty"`
+
+	// Signal-driven fields
+	MatchedSignals *MatchedSignals `json:"matched_signals,omitempty"`
+	DecisionResult *DecisionResult `json:"decision_result,omitempty"`
 }
 
 // Classification represents basic classification result
@@ -184,7 +206,74 @@ type Classification struct {
 	ProcessingTimeMs int64   `json:"processing_time_ms"`
 }
 
-// ClassifyIntent performs intent classification
+// buildIntentResponseFromSignals builds an IntentResponse from signals and decision result
+func (s *ClassificationService) buildIntentResponseFromSignals(
+	signals *classification.SignalResults,
+	decisionResult *decision.DecisionResult,
+	category string,
+	confidence float64,
+	processingTime int64,
+	req IntentRequest,
+) *IntentResponse {
+	response := &IntentResponse{
+		Classification: Classification{
+			Category:         category,
+			Confidence:       confidence,
+			ProcessingTimeMs: processingTime,
+		},
+	}
+
+	// Add probabilities if requested
+	if req.Options != nil && req.Options.ReturnProbabilities {
+		response.Probabilities = map[string]float64{
+			category: confidence,
+		}
+	}
+
+	// Add recommended model based on category or decision
+	if decisionResult != nil && decisionResult.Decision != nil && len(decisionResult.Decision.ModelRefs) > 0 {
+		modelRef := decisionResult.Decision.ModelRefs[0]
+		if modelRef.LoRAName != "" {
+			response.RecommendedModel = modelRef.LoRAName
+		} else {
+			response.RecommendedModel = modelRef.Model
+		}
+	} else if model := s.getRecommendedModel(category, confidence); model != "" {
+		response.RecommendedModel = model
+	}
+
+	// Determine routing decision
+	if decisionResult != nil && decisionResult.Decision != nil {
+		response.RoutingDecision = decisionResult.Decision.Name
+	} else {
+		response.RoutingDecision = s.getRoutingDecision(confidence, req.Options)
+	}
+
+	// Add signal information
+	if signals != nil {
+		response.MatchedSignals = &MatchedSignals{
+			Keywords:     signals.MatchedKeywordRules,
+			Embeddings:   signals.MatchedEmbeddingRules,
+			Domains:      signals.MatchedDomainRules,
+			FactCheck:    signals.MatchedFactCheckRules,
+			UserFeedback: signals.MatchedUserFeedbackRules,
+			Preferences:  signals.MatchedPreferenceRules,
+		}
+	}
+
+	// Add decision result
+	if decisionResult != nil && decisionResult.Decision != nil {
+		response.DecisionResult = &DecisionResult{
+			DecisionName: decisionResult.Decision.Name,
+			Confidence:   decisionResult.Confidence,
+			MatchedRules: decisionResult.MatchedRules,
+		}
+	}
+
+	return response
+}
+
+// ClassifyIntent performs intent classification using signal-driven architecture
 func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentResponse, error) {
 	start := time.Now()
 
@@ -207,38 +296,43 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		}, nil
 	}
 
-	// Perform classification using the existing classifier
-	category, confidence, _, err := s.classifier.ClassifyCategoryWithEntropy(req.Text)
-	if err != nil {
-		return nil, fmt.Errorf("classification failed: %w", err)
+	// Use signal-driven architecture: evaluate all signals first
+	signals := s.classifier.EvaluateAllSignals(req.Text)
+
+	// Evaluate decision with engine (if decisions are configured)
+	// Pass pre-computed signals to avoid re-evaluation
+	var decisionResult *decision.DecisionResult
+	var err error
+	if s.config != nil && len(s.config.IntelligentRouting.Decisions) > 0 {
+		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
+		if err != nil {
+			// Log error but continue with classification
+			// Note: "no decisions configured" error is expected when decisions list is empty
+			if !strings.Contains(err.Error(), "no decisions configured") {
+				logging.Warnf("Decision evaluation failed, continuing with classification: %v", err)
+			}
+		}
+	}
+
+	// Get category classification (for backward compatibility and when no decision matches)
+	var category string
+	var confidence float64
+	if decisionResult != nil && decisionResult.Decision != nil {
+		// Use decision name as category
+		category = decisionResult.Decision.Name
+		confidence = decisionResult.Confidence
+	} else {
+		// Fallback to traditional classification
+		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(req.Text)
+		if err != nil {
+			return nil, fmt.Errorf("classification failed: %w", err)
+		}
 	}
 
 	processingTime := time.Since(start).Milliseconds()
 
-	// Build response
-	response := &IntentResponse{
-		Classification: Classification{
-			Category:         category,
-			Confidence:       confidence,
-			ProcessingTimeMs: processingTime,
-		},
-	}
-
-	// Add probabilities if requested
-	if req.Options != nil && req.Options.ReturnProbabilities {
-		// TODO: Implement probability extraction from classifier
-		response.Probabilities = map[string]float64{
-			category: confidence,
-		}
-	}
-
-	// Add recommended model based on category
-	if model := s.getRecommendedModel(category, confidence); model != "" {
-		response.RecommendedModel = model
-	}
-
-	// Determine routing decision
-	response.RoutingDecision = s.getRoutingDecision(confidence, req.Options)
+	// Build response from signals and decision
+	response := s.buildIntentResponseFromSignals(signals, decisionResult, category, confidence, processingTime, req)
 
 	return response, nil
 }
@@ -508,45 +602,8 @@ func (s *ClassificationService) ClassifyBatchUnifiedWithOptions(texts []string, 
 	return response, nil
 }
 
-// ClassifyIntent with unified classifier support (backward compatibility)
-func (s *ClassificationService) ClassifyIntentUnified(req IntentRequest) (*IntentResponse, error) {
-	if s.unifiedClassifier != nil {
-		// Use unified classifier for better performance
-		results, err := s.ClassifyBatchUnified([]string{req.Text})
-		if err != nil {
-			return nil, err
-		}
-
-		if len(results.IntentResults) == 0 {
-			return nil, fmt.Errorf("no classification results")
-		}
-
-		// Convert unified result to legacy format
-		intentResult := results.IntentResults[0]
-
-		// Build probabilities map if available
-		var probabilities map[string]float64
-		if len(intentResult.Probabilities) > 0 && req.Options != nil && req.Options.ReturnProbabilities {
-			probabilities = make(map[string]float64)
-			// For now, just include the main category probability
-			probabilities[intentResult.Category] = float64(intentResult.Confidence)
-		}
-
-		return &IntentResponse{
-			Classification: Classification{
-				Category:         intentResult.Category,
-				Confidence:       float64(intentResult.Confidence),
-				ProcessingTimeMs: results.ProcessingTimeMs,
-			},
-			Probabilities:    probabilities,
-			RecommendedModel: s.getRecommendedModel(intentResult.Category, float64(intentResult.Confidence)),
-			RoutingDecision:  s.getRoutingDecision(float64(intentResult.Confidence), req.Options),
-		}, nil
-	}
-
-	// Fallback to legacy classifier
-	return s.ClassifyIntent(req)
-}
+// NOTE: ClassifyIntentUnified removed - ClassifyIntent now always uses signal-driven architecture
+// For batch operations, use ClassifyBatchUnifiedWithOptions()
 
 // ClassifyPIIUnified performs PII detection using unified classifier
 func (s *ClassificationService) ClassifyPIIUnified(texts []string) ([]classification.PIIResult, error) {
@@ -592,6 +649,11 @@ func (s *ClassificationService) GetUnifiedClassifierStats() map[string]interface
 	stats := s.unifiedClassifier.GetStats()
 	stats["available"] = true
 	return stats
+}
+
+// GetClassifier returns the classifier instance (for signal-driven methods)
+func (s *ClassificationService) GetClassifier() *classification.Classifier {
+	return s.classifier
 }
 
 // GetConfig returns the current configuration

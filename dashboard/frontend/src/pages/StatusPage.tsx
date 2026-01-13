@@ -96,7 +96,7 @@ const StatusPage: React.FC = () => {
         <div className={styles.headerLeft}>
           <h1 className={styles.title}>
             <span className={styles.titleIcon}>🩺</span>
-            Service Status
+            System Status
           </h1>
           <p className={styles.subtitle}>
             Real-time health status of vLLM Semantic Router services
@@ -155,58 +155,68 @@ const StatusPage: React.FC = () => {
             </div>
           </div>
 
-          {status.services.length > 0 ? (
-            <div className={styles.servicesGrid}>
-              {status.services.map((service, index) => (
-                <div
-                  key={`${service.name}-${index}`}
-                  className={`${styles.serviceCard} ${getStatusClass(service.healthy)}`}
-                >
-                  <div className={styles.serviceHeader}>
+          <div className={styles.servicesSection}>
+            <div className={styles.servicesSectionHeader}>
+              <span className={styles.servicesSectionTitle}>Services</span>
+              <span className={styles.servicesCount}>
+                {status.services.length} {status.services.length === 1 ? 'service' : 'services'}
+              </span>
+            </div>
+            <div className={styles.servicesList}>
+              {status.services.length > 0 ? (
+                status.services.map((service, index) => (
+                  <div
+                    key={`${service.name}-${index}`}
+                    className={`${styles.serviceCard} ${getStatusClass(service.healthy)}`}
+                  >
                     <span className={styles.serviceIcon}>{getStatusIcon(service.healthy)}</span>
-                    <h3 className={styles.serviceName}>{service.name}</h3>
-                    {service.component && (
-                      <span className={styles.componentBadge}>{service.component}</span>
-                    )}
-                  </div>
-                  <div className={styles.serviceBody}>
-                    <div className={styles.statusRow}>
-                      <span className={styles.statusLabel}>Status:</span>
-                      <span className={`${styles.statusValue} ${getStatusClass(service.healthy)}`}>
-                        {service.status}
-                      </span>
-                    </div>
-                    {service.message && (
-                      <div className={styles.messageRow}>
-                        <span className={styles.messageLabel}>Details:</span>
-                        <span className={styles.messageValue}>{service.message}</span>
+                    <div className={styles.serviceInfo}>
+                      <div className={styles.serviceHeader}>
+                        <h3 className={styles.serviceName}>{service.name}</h3>
+                        {service.component && (
+                          <span className={styles.componentBadge}>{service.component}</span>
+                        )}
                       </div>
-                    )}
+                      <div className={styles.serviceBody}>
+                        <div className={styles.statusRow}>
+                          <span className={styles.statusLabel}>Status:</span>
+                          <span className={`${styles.statusValue} ${getStatusClass(service.healthy)}`}>
+                            {service.status}
+                          </span>
+                        </div>
+                        {service.message && (
+                          <div className={styles.messageRow}>
+                            <span className={styles.messageLabel}>Details:</span>
+                            <span className={styles.messageValue}>{service.message}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className={styles.noServices}>
+                  <span className={styles.noServicesIcon}>🔍</span>
+                  <h3>No Running Services Detected</h3>
+                  <p>Start the semantic router using one of these methods:</p>
+                  <div className={styles.startOptions}>
+                    <div className={styles.startOption}>
+                      <strong>Local:</strong>
+                      <code>vllm-sr serve</code>
+                    </div>
+                    <div className={styles.startOption}>
+                      <strong>Docker:</strong>
+                      <code>docker compose up</code>
+                    </div>
+                    <div className={styles.startOption}>
+                      <strong>Kubernetes:</strong>
+                      <code>kubectl apply -f deploy/kubernetes/</code>
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
-          ) : (
-            <div className={styles.noServices}>
-              <span className={styles.noServicesIcon}>🔍</span>
-              <h3>No Running Services Detected</h3>
-              <p>Start the semantic router using one of these methods:</p>
-              <div className={styles.startOptions}>
-                <div className={styles.startOption}>
-                  <strong>Local:</strong>
-                  <code>vllm-sr serve</code>
-                </div>
-                <div className={styles.startOption}>
-                  <strong>Docker:</strong>
-                  <code>docker compose up</code>
-                </div>
-                <div className={styles.startOption}>
-                  <strong>Kubernetes:</strong>
-                  <code>kubectl apply -f deploy/kubernetes/</code>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
 
           {lastUpdated && (
             <div className={styles.footer}>
