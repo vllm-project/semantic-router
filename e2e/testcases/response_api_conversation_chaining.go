@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("response-api-conversation-chaining", pkgtestcases.TestCase{
-		Description: "Conversation chaining with previous_response_id (2-turn + 3-turn chain)",
+		Description: "Conversation chaining with previous_response_id (3-turn conversation chain)",
 		Tags:        []string{"response-api", "functional"},
 		Fn:          testResponseAPIConversationChaining,
 	})
