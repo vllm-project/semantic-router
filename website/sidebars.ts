@@ -147,6 +147,16 @@ const sidebars: SidebarsConfig = {
         'troubleshooting/common-errors',
       ],
     },
+    {
+      type: 'category',
+      label: 'Contributing',
+      items: [
+        'community/overview',
+        'community/development',
+        'community/documentation',
+        'community/code-style',
+      ],
+    },
   ],
 }
 

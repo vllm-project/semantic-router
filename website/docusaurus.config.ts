@@ -35,7 +35,6 @@ const config: Config = {
 
   markdown: {
     mermaid: true,
-    // @ts-ignore
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },
@@ -248,12 +247,28 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
+              label: 'Quick Start',
+              to: '/docs/intro',
+            },
+            {
               label: 'Installation',
               to: '/docs/installation',
             },
             {
+              label: 'Tutorials',
+              to: '/docs/tutorials/intelligent-route/embedding-routing',
+            },
+            {
               label: 'API Reference',
               to: '/docs/api/router',
+            },
+            {
+              label: 'CRD Reference',
+              to: '/docs/api/crd-reference',
+            },
+            {
+              label: 'Troubleshooting',
+              to: '/docs/troubleshooting/common-errors',
             },
           ],
         },
@@ -268,18 +283,42 @@ const config: Config = {
               label: 'Hugging Face',
               href: 'https://huggingface.co/LLM-Semantic-Router',
             },
+            {
+              label: 'GitHub Discussions',
+              href: 'https://github.com/vllm-project/semantic-router/discussions',
+            },
+            {
+              label: 'Team',
+              to: '/community/team',
+            },
+            {
+              label: 'Contributing',
+              to: '/community/contributing',
+            },
           ],
         },
         {
           title: 'More',
           items: [
             {
-              label: 'License',
-              href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',
+              label: 'Blog',
+              to: '/blog',
             },
             {
-              label: 'Contributing',
-              href: 'https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md',
+              label: 'Publications',
+              to: '/publications',
+            },
+            {
+              label: 'News',
+              to: '/news',
+            },
+            {
+              label: 'Roadmap',
+              to: '/roadmap/v0.1',
+            },
+            {
+              label: 'License',
+              href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',
             },
           ],
         },

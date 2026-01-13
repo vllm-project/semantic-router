@@ -170,7 +170,7 @@ Step-by-step guides for implementing intelligent routing, semantic caching, cont
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](./community/overview) for details.
 
 ## License
 
