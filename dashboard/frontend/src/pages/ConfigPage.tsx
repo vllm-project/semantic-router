@@ -286,7 +286,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
-  const [viewModalMode, setViewModalMode] = useState<'view' | 'add-signal'>('view')
+  const [viewModalMode, setViewModalMode] = useState<'view' | 'add-signal' | 'edit-signal'>('view')
+
+  // the signal being edited when in edit-signal mode
+  const [editSignalContext, setEditSignalContext] = useState<{ originalName: string; originalType: SignalType } | null>(null)
 
   const [addSignalForm, setAddSignalForm] = useState<AddSignalFormState>(() => ({
     type: 'Keywords',
@@ -458,12 +461,41 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
     setAddSignalError(null)
     setAddSignalSaving(false)
+    setEditSignalContext(null)
   }
 
   const listInputToArray = (input: string) => input
     .split(/[\n,]/)
     .map(item => item.trim())
     .filter(Boolean)
+
+  const removeSignalByName = (cfg: ConfigData, type: SignalType, targetName: string) => {
+    // match by type and name to remove the signal from the config
+    if (!cfg.signals) cfg.signals = {}
+
+    switch (type) {
+      case 'Keywords':
+        cfg.signals.keywords = (cfg.signals.keywords || []).filter(s => s.name !== targetName)
+        break
+      case 'Embeddings':
+        cfg.signals.embeddings = (cfg.signals.embeddings || []).filter(s => s.name !== targetName)
+        break
+      case 'Domain':
+        cfg.signals.domains = (cfg.signals.domains || []).filter(s => s.name !== targetName)
+        break
+      case 'Preference':
+        cfg.signals.preferences = (cfg.signals.preferences || []).filter(s => s.name !== targetName)
+        break
+      case 'Fact Check':
+        cfg.signals.fact_check = (cfg.signals.fact_check || []).filter(s => s.name !== targetName)
+        break
+      case 'User Feedback':
+        cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
+        break
+      default:
+        break
+    }
+  }
 
   const updateAddSignalField = <K extends keyof AddSignalFormState>(field: K, value: AddSignalFormState[K]) => {
     setAddSignalForm(prev => ({
@@ -661,7 +693,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return sections
   }
 
-  const handleCreateSignal = async () => {
+  const handleSaveSignal = async () => {
+    // used for both adding a signal and editing an existing signal
     if (!config) {
       setAddSignalError('Configuration not loaded yet.')
       return
@@ -684,6 +717,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     try {
       const newConfig: ConfigData = { ...config }
       if (!newConfig.signals) newConfig.signals = {}
+
+      const isEdit = viewModalMode === 'edit-signal' && editSignalContext
+
+      if (isEdit) {
+        // editing existing signal - remove the old one first
+        removeSignalByName(newConfig, editSignalContext.originalType, editSignalContext.originalName)
+      }
 
       switch (addSignalForm.type) {
         case 'Keywords': {
@@ -772,7 +812,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalOpen(false)
       setViewModalMode('view')
     } catch (err) {
-      setAddSignalError(err instanceof Error ? err.message : 'Failed to add signal')
+      setAddSignalError(err instanceof Error ? err.message : 'Failed to save signal')
     } finally {
       setAddSignalSaving(false)
     }
@@ -804,6 +844,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     setViewModalMode('view')
     setAddSignalSaving(false)
     setAddSignalError(null)
+    setEditSignalContext(null)
   }
 
   // Get effective config value - check router defaults first, then main config
@@ -2637,18 +2678,64 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalOpen(true)
     }
 
-    // Handle edit signal (placeholder)
-    const handleEditSignal = (signal: UnifiedSignal) => {
-      setViewModalOpen(false)
-      // TODO: Implement edit functionality
-      console.log('Edit signal:', signal)
+    const populateFormFromSignal = (signal: UnifiedSignal) => {
+      const base: AddSignalFormState = {
+        type: signal.type,
+        name: signal.name,
+        description: signal.rawData.description || '',
+        operator: 'AND',
+        keywords: '',
+        case_sensitive: false,
+        threshold: 0.8,
+        candidates: '',
+        aggregation_method: 'mean',
+        mmlu_categories: ''
+      }
+
+      if (signal.type === 'Keywords') {
+        base.operator = signal.rawData.operator
+        base.case_sensitive = !!signal.rawData.case_sensitive
+        base.keywords = (signal.rawData.keywords || []).join('\n')
+      } else if (signal.type === 'Embeddings') {
+        base.threshold = signal.rawData.threshold ?? 0.8
+        base.aggregation_method = signal.rawData.aggregation_method || 'mean'
+        base.candidates = (signal.rawData.candidates || []).join('\n')
+      } else if (signal.type === 'Domain') {
+        base.description = signal.rawData.description || ''
+        base.mmlu_categories = (signal.rawData.mmlu_categories || []).join('\n')
+      }
+
+      setAddSignalForm(base)
     }
 
-    // Handle delete signal (placeholder)
-    const handleDeleteSignal = (signal: UnifiedSignal) => {
+    // Handle edit signal
+    const handleEditSignal = (signal: UnifiedSignal) => {
+      if (!isPythonCLI) {
+        alert('Editing signals is only supported for Python CLI configs.')
+        return
+      }
+
+      populateFormFromSignal(signal)
+      setEditSignalContext({ originalName: signal.name, originalType: signal.type })
+      setViewModalMode('edit-signal')
+      setViewModalTitle(`Edit Signal: ${signal.name}`)
+      setViewModalSections([])
+      setViewModalEditCallback(null)
+      setViewModalOpen(true)
+    }
+
+    // Handle delete signal
+    const handleDeleteSignal = async (signal: UnifiedSignal) => {
       if (confirm(`Are you sure you want to delete signal "${signal.name}"?`)) {
-        // TODO: Implement delete functionality
-        console.log('Delete signal:', signal)
+        if (!config || !isPythonCLI) {
+          alert('Deleting signals is only supported for Python CLI configs.')
+          return
+        }
+
+        const newConfig: ConfigData = { ...config }
+        removeSignalByName(newConfig, signal.type, signal.name)
+
+        await saveConfig(newConfig)
       }
     }
 
@@ -3661,11 +3748,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   const viewModalSectionsToRender = viewModalMode === 'add-signal'
     ? buildAddSignalSections()
-    : viewModalSections
+    : viewModalMode === 'edit-signal'
+      ? buildAddSignalSections()
+      : viewModalSections
 
   const viewModalTitleToRender = viewModalMode === 'add-signal'
     ? 'Add Signal'
-    : viewModalTitle
+    : viewModalMode === 'edit-signal'
+      ? 'Edit Signal'
+      : viewModalTitle
 
   return (
     <div className={styles.container}>
@@ -3713,10 +3804,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         onEdit={viewModalMode === 'view' ? viewModalEditCallback || undefined : undefined}
         title={viewModalTitleToRender}
         sections={viewModalSectionsToRender}
-        primaryActionLabel={viewModalMode === 'add-signal' ? (addSignalSaving ? 'Creating...' : 'Create Signal') : undefined}
-        primaryActionDisabled={viewModalMode === 'add-signal' && (addSignalSaving || !addSignalForm.name.trim())}
-        primaryActionLoading={viewModalMode === 'add-signal' && addSignalSaving}
-        onPrimaryAction={viewModalMode === 'add-signal' ? handleCreateSignal : undefined}
+        primaryActionLabel={viewModalMode === 'add-signal'
+          ? (addSignalSaving ? 'Creating...' : 'Create Signal')
+          : viewModalMode === 'edit-signal'
+            ? (addSignalSaving ? 'Saving...' : 'Save Changes')
+            : undefined}
+        primaryActionDisabled={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && (addSignalSaving || !addSignalForm.name.trim())}
+        primaryActionLoading={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && addSignalSaving}
+        onPrimaryAction={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') ? handleSaveSignal : undefined}
       />
     </div>
   )
