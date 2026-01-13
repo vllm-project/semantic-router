@@ -107,32 +107,32 @@ Session B (March 20) - NEW SESSION:
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │                         ExtProc Pipeline                                │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                                                                   │  │
-│  │  Request → Fact? → Tool? → Security → Cache → MEMORY → LLM      │  │
-│  │              │       │                          ↑↓               │  │
-│  │              └───────┴──── signals used ────────┘                │  │
-│  │                                                                   │  │
-│  │  Response ← [extract & store] ←─────────────────┘                │  │
-│  │                                                                   │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                                                                  │   │
+│  │  Request → Fact? → Tool? → Security → Cache → MEMORY → LLM       │   │
+│  │              │       │                          ↑↓               │   │
+│  │              └───────┴──── signals used ────────┘                │   │
+│  │                                                                  │   │
+│  │  Response ← [extract & store] ←─────────────────┘                │   │
+│  │                                                                  │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
 │                                          │                              │
-│                    ┌─────────────────────┴─────────────────────┐       │
-│                    │                                           │       │
-│          ┌─────────▼─────────┐                    ┌────────────▼───┐   │
-│          │ Memory Retrieval  │                    │ Memory Saving  │   │
-│          │  (request phase)  │                    │ (response phase)│   │
-│          ├───────────────────┤                    ├────────────────┤   │
-│          │ 1. Check signals  │                    │ 1. LLM extract │   │
-│          │    (Fact? Tool?)  │                    │ 2. Classify    │   │
-│          │ 2. Build context  │                    │ 3. Deduplicate │   │
-│          │ 3. Milvus search  │                    │ 4. Store       │   │
-│          │ 4. Inject to LLM  │                    │                │   │
-│          └─────────┬─────────┘                    └────────┬───────┘   │
-│                    │                                       │           │
-│                    │         ┌──────────────┐              │           │
-│                    └────────►│    Milvus    │◄─────────────┘           │
-│                              └──────────────┘                          │
+│                    ┌─────────────────────┴─────────────────────┐        │
+│                    │                                           │        │ 
+│          ┌─────────▼─────────┐                    ┌────────────▼───┐    │ 
+│          │ Memory Retrieval  │                    │ Memory Saving  │    │
+│          │  (request phase)  │                    │(response phase)│    │
+│          ├───────────────────┤                    ├────────────────┤    │
+│          │ 1. Check signals  │                    │ 1. LLM extract │    │
+│          │    (Fact? Tool?)  │                    │ 2. Classify    │    │
+│          │ 2. Build context  │                    │ 3. Deduplicate │    │
+│          │ 3. Milvus search  │                    │ 4. Store       │    │
+│          │ 4. Inject to LLM  │                    │                │    │
+│          └─────────┬─────────┘                    └────────┬───────┘    │
+│                    │                                       │            │
+│                    │         ┌──────────────┐              │            │
+│                    └────────►│    Milvus    │◄─────────────┘            │ 
+│                              └──────────────┘                           │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -156,34 +156,34 @@ Session B (March 20) - NEW SESSION:
 │                    STORAGE ARCHITECTURE (Phased)                        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  PHASE 1 (MVP)                                                   │   │
-│  │  ┌─────────────────────────────────────────────────────────┐    │   │
-│  │  │  Milvus (Vector Index)                                   │    │   │
-│  │  │  • Semantic search over memories                         │    │   │
-│  │  │  • Embedding storage                                     │    │   │
-│  │  │  • Content + metadata                                    │    │   │
-│  │  └─────────────────────────────────────────────────────────┘    │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │  PHASE 1 (MVP)                                                  │    │
+│  │  ┌─────────────────────────────────────────────────────────┐    │    │
+│  │  │  Milvus (Vector Index)                                  │    │    │
+│  │  │  • Semantic search over memories                        │    │    │
+│  │  │  • Embedding storage                                    │    │    │
+│  │  │  • Content + metadata                                   │    │    │
+│  │  └─────────────────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  PHASE 2 (Performance)                                          │   │
-│  │  ┌─────────────────────────────────────────────────────────┐    │   │
-│  │  │  Redis (Hot Cache)                                       │    │   │
-│  │  │  • Fast metadata lookup                                  │    │   │
-│  │  │  • Recently accessed memories                            │    │   │
-│  │  │  • TTL/expiration support                                │    │   │
-│  │  └─────────────────────────────────────────────────────────┘    │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │  PHASE 2 (Performance)                                          │    │
+│  │  ┌─────────────────────────────────────────────────────────┐    │    │
+│  │  │  Redis (Hot Cache)                                      │    │    │
+│  │  │  • Fast metadata lookup                                 │    │    │
+│  │  │  • Recently accessed memories                           │    │    │
+│  │  │  • TTL/expiration support                               │    │    │
+│  │  └─────────────────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  PHASE 3+ (If Needed)                                           │   │
-│  │  ┌───────────────────────┐  ┌───────────────────────┐          │   │
-│  │  │  Graph Store (Neo4j)  │  │  Time-Series Index    │          │   │
-│  │  │  • Memory links       │  │  • Temporal queries   │          │   │
-│  │  │  • Relationships      │  │  • Decay scoring      │          │   │
-│  │  └───────────────────────┘  └───────────────────────┘          │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │  PHASE 3+ (If Needed)                                           │    │
+│  │  ┌───────────────────────┐  ┌───────────────────────┐           │    │
+│  │  │  Graph Store (Neo4j)  │  │  Time-Series Index    │           │    │
+│  │  │  • Memory links       │  │  • Temporal queries   │           │    │
+│  │  │  • Relationships      │  │  • Decay scoring      │           │    │
+│  │  └───────────────────────┘  └───────────────────────┘           │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -218,8 +218,8 @@ Memories cluster by **content/topic**, not by type. Type is metadata:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                      MEMORY VECTOR SPACE                                │
-│                                                                         │
+│                      MEMORY VECTOR SPACE                               │
+│                                                                        │
 │     ┌─────────────────┐                    ┌─────────────────┐         │
 │     │  BUDGET/MONEY   │                    │   DEPLOYMENT    │         │
 │     │    CLUSTER      │                    │    CLUSTER      │         │
@@ -229,10 +229,10 @@ Memories cluster by **content/topic**, not by type. Type is metadata:
 │     │ ● cost=$5K      │                    │ ● docker push   │         │
 │     │   (semantic)    │                    │   (procedural)  │         │
 │     └─────────────────┘                    └─────────────────┘         │
-│                                                                         │
+│                                                                        │
 │  ● = memory with type as metadata                                      │
 │  Query matches content → type comes from matched memory                │
-│                                                                         │
+│                                                                        │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -245,26 +245,26 @@ Memories cluster by **content/topic**, not by type. Type is metadata:
 │           RESPONSE API vs. AGENTIC MEMORY: CONTEXT SOURCES              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  SAME SESSION (has previous_response_id):                              │
+│  SAME SESSION (has previous_response_id):                               │
 │  ─────────────────────────────────────────                              │
 │    Response API provides:                                               │
-│      └── Full conversation chain (all turns) → sent to LLM            │
+│      └── Full conversation chain (all turns) → sent to LLM              │
 │                                                                         │
 │    Agentic Memory:                                                      │
-│      └── STILL VALUABLE - current session may not have the answer     │
-│      └── Example: 100 turns planning vacation, but budget never said  │
-│      └── Days ago: "I have 10K spare, is that enough for a week in    │
-│          Thailand?" → LLM extracts: "User has $10K budget for trip"   │
-│      └── Now: "What's my budget?" → answer in memory, not this chain  │
+│      └── STILL VALUABLE - current session may not have the answer       │
+│      └── Example: 100 turns planning vacation, but budget never said    │
+│      └── Days ago: "I have 10K spare, is that enough for a week in      │
+│          Thailand?" → LLM extracts: "User has $10K budget for trip"     │
+│      └── Now: "What's my budget?" → answer in memory, not this chain    │
 │                                                                         │
-│  NEW SESSION (no previous_response_id):                                │
+│  NEW SESSION (no previous_response_id):                                 │
 │  ──────────────────────────────────────                                 │
 │    Response API provides:                                               │
-│      └── Nothing (no chain to follow)                                  │
+│      └── Nothing (no chain to follow)                                   │
 │                                                                         │
 │    Agentic Memory:                                                      │
-│      └── ADDS VALUE - retrieves cross-session context                  │
-│      └── "What was my Hawaii budget?" → finds fact from March session  │
+│      └── ADDS VALUE - retrieves cross-session context                   │
+│      └── "What was my Hawaii budget?" → finds fact from March session   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -337,43 +337,43 @@ RESPONSE PHASE:
 │                      MEMORY RETRIEVAL FLOW                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  1. MEMORY DECISION (reuse existing pipeline signals)                  │
+│  1. MEMORY DECISION (reuse existing pipeline signals)                   │
 │     ──────────────────────────────────────────────────                  │
 │                                                                         │
 │     Pipeline already classified:                                        │
-│     ├── ctx.IsFact       (Fact-Check classifier)                       │
-│     ├── ctx.RequiresTool (Tool Detection)                              │
-│     └── isGreeting(query) (simple pattern)                             │
+│     ├── ctx.IsFact       (Fact-Check classifier)                        │
+│     ├── ctx.RequiresTool (Tool Detection)                               │
+│     └── isGreeting(query) (simple pattern)                              │
 │                                                                         │
 │     Decision:                                                           │
-│     ├── Fact query?     → SKIP (general knowledge)                     │
-│     ├── Tool query?     → SKIP (tool provides answer)                  │
-│     ├── Greeting?       → SKIP (no context needed)                     │
-│     └── Otherwise       → SEARCH MEMORY                                │
+│     ├── Fact query?     → SKIP (general knowledge)                      │
+│     ├── Tool query?     → SKIP (tool provides answer)                   │
+│     ├── Greeting?       → SKIP (no context needed)                      │
+│     └── Otherwise       → SEARCH MEMORY                                 │
 │                                                                         │
 │  2. BUILD CONTEXT + REWRITE QUERY                                       │
 │     ─────────────────────────────                                       │
-│     History: ["Planning vacation", "Hawaii sounds nice"]               │
+│     History: ["Planning vacation", "Hawaii sounds nice"]                │
 │     Query: "How much?"                                                  │
 │                                                                         │
-│     Option A (MVP): Context prepend                                    │
-│     → "How much? Hawaii vacation planning"                             │
+│     Option A (MVP): Context prepend                                     │
+│     → "How much? Hawaii vacation planning"                              │
 │                                                                         │
-│     Option B (v1): LLM rewrite                                         │
-│     → "What is the budget for the Hawaii vacation?"                    │
+│     Option B (v1): LLM rewrite                                          │
+│     → "What is the budget for the Hawaii vacation?"                     │
 │                                                                         │
 │  3. MILVUS SEARCH                                                       │
 │     ─────────────                                                       │
-│     Embed context → Search with user_id filter → Top-k results         │
+│     Embed context → Search with user_id filter → Top-k results          │
 │                                                                         │
 │  4. THRESHOLD FILTER                                                    │
 │     ────────────────                                                    │
-│     Keep only results with similarity > 0.6                            │
-│     ⚠️ Threshold is configurable; 0.6 is starting value, tune via logs │
+│     Keep only results with similarity > 0.6                             │
+│     ⚠️ Threshold is configurable; 0.6 is starting value, tune via logs  │
 │                                                                         │
 │  5. INJECT INTO LLM CONTEXT                                             │
 │     ────────────────────────                                            │
-│     Add as system message: "User's relevant context: ..."              │
+│     Add as system message: "User's relevant context: ..."               │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -611,48 +611,50 @@ Memory extraction is triggered by three events:
 │                                                                         │
 │  TRIGGERS:                                                              │
 │  ─────────                                                              │
-│  ├── Every N turns (e.g., 10)      ← MVP                               │
-│  ├── End of session                ← Future (needs detection)          │
-│  └── Context drift detected        ← Future (needs detection)          │
+│  ├── Every N turns (e.g., 10)      ← MVP                                │
+│  ├── End of session                ← Future (needs detection)           │
+│  └── Context drift detected        ← Future (needs detection)           │
 │                                                                         │
-│  Runs: Async (background) - no user latency                            │
+│  Runs: Async (background) - no user latency                             │
 │                                                                         │
 │  1. GET BATCH                                                           │
 │     ─────────                                                           │
-│     Get last 10-15 turns from session                                  │
+│     Get last 10-15 turns from session                                   │
 │                                                                         │
 │  2. LLM EXTRACTION                                                      │
 │     ──────────────                                                      │
-│     Prompt: "Extract important facts. Include context.                 │
-│              Return JSON: [{type, content}, ...]"                      │
+│     Prompt: "Extract important facts. Include context.                  │
+│              Return JSON: [{type, content}, ...]"                       │
 │                                                                         │
 │     LLM returns:                                                        │
-│       [{"type": "semantic", "content": "budget for Hawaii is $10K"}]  │
+│       [{"type": "semantic", "content": "budget for Hawaii is $10K"}]    │
 │                                                                         │
 │  3. DEDUPLICATION                                                       │
 │     ─────────────                                                       │
 │     For each extracted fact:                                            │
 │     - Embed content                                                     │
-│     - Search existing memories (same user, same type)                  │
-│     - If similarity > 0.9: UPDATE existing (merge/replace)             │
-│     - If similarity 0.7-0.9: CREATE new (gray zone, conservative)      │
-│     - If similarity < 0.7: CREATE new                                  │
+│     - Search existing memories (same user, same type)                   │
+│     - If similarity > 0.9: UPDATE existing (merge/replace)              │
+│     - If similarity 0.7-0.9: CREATE new (gray zone, conservative)       │
+│     - If similarity < 0.7: CREATE new                                   │
 │                                                                         │
 │     Example:                                                            │
-│       Existing: "User's budget for Hawaii is $10,000"                  │
+│       Existing: "User's budget for Hawaii is $10,000"                   │
 │       New:      "User's budget is now $15,000"                          │
-│       → Similarity ~0.92 → UPDATE existing with new value              │
+│       → Similarity ~0.92 → UPDATE existing with new value               │
 │                                                                         │
 │  4. STORE IN MILVUS                                                     │
 │     ───────────────                                                     │
-│     Memory { id, type, content, embedding, user_id, created_at }       │
+│     Memory { id, type, content, embedding, user_id, created_at }        │
 │                                                                         │
-│  5. SESSION END (future): Create episodic summary                      │
+│  5. SESSION END (future): Create episodic summary                       │
 │     ─────────────────────────────────────────────                       │
-│     "On Dec 29, user planned Hawaii vacation with $10K budget"         │
+│     "On Dec 29, user planned Hawaii vacation with $10K budget"          │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Note on `user_id`:** When we refer to `user_id` for memory usage, we mean the **logged-in user** (the authenticated user identity), not the session user we currently have. This is something that will need to be configured in the semantic router agent itself.
 
 ### Implementation
 
@@ -1159,14 +1161,14 @@ if err != nil {
 │                    CONTEXT COMPRESSION FLOW                             │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  BACKGROUND (every 10 turns):                                          │
-│    1. Extract facts (reuse Section 6) → save to Milvus                 │
-│    2. Build current state (structured JSON) → save to Redis            │
+│  BACKGROUND (every 10 turns):                                           │
+│    1. Extract facts (reuse Section 6) → save to Milvus                  │
+│    2. Build current state (structured JSON) → save to Redis             │
 │                                                                         │
 │  ON REQUEST (turn N):                                                   │
-│    Context = [current state from Redis]   ← replaces old messages      │
-│            + [raw last 5 turns]           ← recent context             │
-│            + [relevant memories]          ← cross-session (Milvus)     │
+│    Context = [current state from Redis]   ← replaces old messages       │
+│            + [raw last 5 turns]           ← recent context              │
+│            + [relevant memories]          ← cross-session (Milvus)      │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```

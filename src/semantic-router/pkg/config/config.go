@@ -725,9 +725,6 @@ type MemoryConfig struct {
 	// Embedding configuration for memory retrieval
 	Embedding MemoryEmbeddingConfig `yaml:"embedding,omitempty"`
 
-	// Fact extraction configuration
-	Extraction ExtractionConfig `yaml:"extraction"`
-
 	// Default retrieval limit (max number of results to return)
 	// Default: 5
 	DefaultRetrievalLimit int `yaml:"default_retrieval_limit,omitempty"`
