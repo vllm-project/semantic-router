@@ -20,7 +20,7 @@ We are building the **System Level Intelligence** for Mixture-of-Models (MoM), b
 
 ### Signal-Driven Decision Engine
 
-Captures and combines **8 types of signals** to make intelligent routing decisions:
+Captures and combines **7 types of signals** to make intelligent routing decisions:
 
 | Signal Type | Description | Use Case |
 |------------|-------------|----------|
@@ -30,7 +30,6 @@ Captures and combines **8 types of signals** to make intelligent routing decisio
 | **fact_check** | ML-based fact-checking requirement detection | Identify queries needing fact verification |
 | **user_feedback** | User satisfaction and feedback classification | Handle follow-up messages and corrections |
 | **preference** | LLM-based route preference matching | Complex intent analysis via external LLM |
-| **complexity** | Language-agnostic query complexity classification | Route simple queries to fast models, complex to reasoning models |
 | **language** | Multi-language detection (100+ languages) | Route queries to language-specific models |
 
 **How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
@@ -67,7 +66,6 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         FactCheck[Fact Check Signals<br/>Verification Need]
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
-        Complexity[Complexity Signals<br/>Query Complexity]
         Language[Language Signals<br/>Multi-language Detection]
     end
 
@@ -92,7 +90,6 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> FactCheck
     Router --> Feedback
     Router --> Preference
-    Router --> Complexity
     Router --> Language
 
     Keyword --> Rules
@@ -101,7 +98,6 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     FactCheck --> Rules
     Feedback --> Rules
     Preference --> Rules
-    Complexity --> Rules
     Language --> Rules
 
     Rules --> ModelSelect

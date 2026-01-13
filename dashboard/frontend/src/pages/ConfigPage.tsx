@@ -160,6 +160,7 @@ interface ConfigData {
     fact_check?: Array<{ name: string; description: string }>
     user_feedbacks?: Array<{ name: string; description: string }>
     preferences?: Array<{ name: string; description: string }>
+    language?: Array<{ name: string }>
   }
   decisions?: Array<{
     name: string
@@ -232,7 +233,7 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language'
 
 interface AddSignalFormState {
   type: SignalType
@@ -2514,6 +2515,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       })
     })
 
+    // Language
+    signals?.language?.forEach(lang => {
+      allSignals.push({
+        name: lang.name,
+        type: 'Language',
+        summary: 'Language detection rule',
+        rawData: lang
+      })
+    })
+
     // Filter signals based on search
     const filteredSignals = allSignals.filter(signal =>
       signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
@@ -2541,7 +2552,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'Domain': 'rgba(147, 51, 234, 0.15)',
             'Preference': 'rgba(234, 179, 8, 0.15)',
             'Fact Check': 'rgba(34, 197, 94, 0.15)',
-            'User Feedback': 'rgba(236, 72, 153, 0.15)'
+            'User Feedback': 'rgba(236, 72, 153, 0.15)',
+            'Language': 'rgba(59, 130, 246, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>

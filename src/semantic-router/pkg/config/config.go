@@ -33,7 +33,6 @@ const (
 	SignalTypeFactCheck    = "fact_check"
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
-	SignalTypeComplexity   = "complexity"
 	SignalTypeLanguage     = "language"
 )
 
@@ -175,10 +174,6 @@ type Signals struct {
 	// Preference rules for route preference matching via external LLM
 	// When matched, outputs the preference name (route name) that best matches the conversation
 	PreferenceRules []PreferenceRule `yaml:"preference_rules,omitempty"`
-
-	// Complexity rules for query complexity signal classification
-	// When matched, outputs one of: "simple", "medium", "complex"
-	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
 
 	// Language rules for multi-language detection signal classification
 	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
@@ -1187,32 +1182,6 @@ type PreferenceRule struct {
 
 	// Description provides human-readable explanation of what this route handles
 	// This description is sent to the external LLM for route matching
-	Description string `yaml:"description,omitempty"`
-}
-
-// ComplexityRule defines a rule for query complexity signal classification
-// The complexity classifier determines query complexity using heuristics
-// and outputs one of: "simple", "medium", "complex"
-type ComplexityRule struct {
-	// Name is the signal name that can be referenced in decision rules
-	// e.g., "simple", "medium", "complex"
-	Name string `yaml:"name"`
-	// SimpleThreshold is the score threshold below which queries are classified as "simple"
-	// Default: 0.35. Can be calibrated using production data (e.g., P40 percentile).
-	// To use percentile-based calibration:
-	// 1. Collect complexity scores from production traffic
-	// 2. Calculate P40 (40th percentile) from sorted scores
-	// 3. Set this value to P40
-	SimpleThreshold *float64 `yaml:"simple_threshold,omitempty"`
-	// ComplexThreshold is the score threshold above which queries are classified as "complex"
-	// Default: 0.65. Can be calibrated using production data (e.g., P75 percentile).
-	// To use percentile-based calibration:
-	// 1. Collect complexity scores from production traffic
-	// 2. Calculate P75 (75th percentile) from sorted scores
-	// 3. Set this value to P75
-	ComplexThreshold *float64 `yaml:"complex_threshold,omitempty"`
-
-	// Description provides human-readable explanation of when this signal is triggered
 	Description string `yaml:"description,omitempty"`
 }
 

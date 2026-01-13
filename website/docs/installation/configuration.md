@@ -10,7 +10,7 @@ This guide covers the configuration options for the Semantic Router. The system 
 
 The configuration defines three main layers:
 
-1. **Signal Extraction Layer**: Define 8 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, complexity, language)
+1. **Signal Extraction Layer**: Define 7 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language)
 2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
 3. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
@@ -291,7 +291,7 @@ Quick usage:
 
 ## Signals Configuration
 
-Signals are the foundation of intelligent routing. The system supports 8 types of signals that can be combined to make routing decisions.
+Signals are the foundation of intelligent routing. The system supports 7 types of signals that can be combined to make routing decisions.
 
 ### 1. Keyword Signals - Fast Pattern Matching
 
@@ -396,35 +396,7 @@ signals:
 - Nuanced routing decisions
 - When other signals are insufficient
 
-### 7. Complexity Signals - Query Complexity Classification
-
-**Latency**: 1-5ms (with BERT tokenization) or <1ms (estimation fallback)
-
-```yaml
-signals:
-  complexity:
-    - name: "simple"
-      description: "Simple queries that can be handled by smaller, faster models"
-    - name: "medium"
-      description: "Medium complexity queries requiring moderate reasoning"
-    - name: "complex"
-      description: "Complex queries requiring advanced reasoning and larger models"
-    # Optional: Calibrate thresholds using production data
-    - name: "simple"
-      simple_threshold: 0.35  # Default, can be set to P40 percentile
-      complex_threshold: 0.65  # Default, can be set to P75 percentile
-```
-
-**Use Cases:**
-
-- Route simple queries to fast, cost-effective models
-- Route complex queries to reasoning-capable models
-- Optimize cost and latency based on query complexity
-- Language-agnostic (works with any language)
-
-**Note**: If `bert_model.model_id` is configured, uses real tokenization (more accurate). Otherwise uses estimation (faster, still accurate).
-
-### 8. Language Signals - Multi-language Detection
+### 7. Language Signals - Multi-language Detection
 
 ```yaml
 signals:
