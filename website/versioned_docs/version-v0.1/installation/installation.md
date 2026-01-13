@@ -16,7 +16,6 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 - **Python**: 3.10 or higher
 - **Docker**: Required for running the router container
-- **Optional**: HuggingFace token (only for gated models)
 
 ## Quick Start
 
@@ -115,7 +114,13 @@ The router will:
 - Start the semantic router service
 - Enable metrics on port 9190
 
-### 5. Test the Router
+### 5. Launch Dashboard
+
+```bash
+vllm-sr dashboard
+```
+
+### 6. Test the Router
 
 ```bash
 curl http://localhost:8888/v1/chat/completions \

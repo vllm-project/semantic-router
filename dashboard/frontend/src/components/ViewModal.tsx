@@ -18,6 +18,10 @@ interface ViewModalProps {
   onEdit?: () => void
   title: string
   sections: ViewSection[]
+  onPrimaryAction?: () => void
+  primaryActionLabel?: string
+  primaryActionDisabled?: boolean
+  primaryActionLoading?: boolean
 }
 
 const ViewModal: React.FC<ViewModalProps> = ({
@@ -25,7 +29,11 @@ const ViewModal: React.FC<ViewModalProps> = ({
   onClose,
   onEdit,
   title,
-  sections
+  sections,
+  onPrimaryAction,
+  primaryActionLabel,
+  primaryActionDisabled,
+  primaryActionLoading
 }) => {
   if (!isOpen) return null
 
@@ -62,6 +70,15 @@ const ViewModal: React.FC<ViewModalProps> = ({
           <button className={styles.closeFooterButton} onClick={onClose}>
             Close
           </button>
+          {primaryActionLabel && onPrimaryAction && (
+            <button
+              className={styles.primaryFooterButton}
+              onClick={onPrimaryAction}
+              disabled={primaryActionDisabled}
+            >
+              {primaryActionLoading ? 'Working...' : primaryActionLabel}
+            </button>
+          )}
           {onEdit && (
             <button className={styles.editFooterButton} onClick={onEdit}>
               Edit

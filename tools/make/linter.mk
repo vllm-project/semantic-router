@@ -11,7 +11,7 @@ markdown-lint: ## Lint all markdown files in the project
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
 		--ignore website/docs/api/crd-reference.md \
-		--ignore models
+		--ignore "models/**"
 
 markdown-lint-fix: ## Auto-fix markdown lint issues
 	@$(LOG_TARGET)
@@ -19,7 +19,7 @@ markdown-lint-fix: ## Auto-fix markdown lint issues
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
-		--ignore models \
+		--ignore "models/**" \
 		--fix
 
 yaml-lint: ## Lint all YAML files in the project

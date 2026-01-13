@@ -26,6 +26,7 @@ Before starting, ensure you have the following tools installed:
 - [minikube](https://minikube.sigs.k8s.io/docs/start/) - Local Kubernetes
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
+- [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes
 - [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) - Istio CLI
 
 We use minikube in the description below. As noted above, this guide builds upon the vsr + Istio [deployment guide](istio) from this repo hence will point to that guide for the common portions of documentation and add the incremental additional steps here.
@@ -60,7 +61,7 @@ kubectl get pods -n istio-system
 
 ## Step 3: Deploy LLM models
 
-Now deploy two LLM models similar to the [Istio guide](istio) documentation. Note from the manifest file names that these example commands are to be executed from the top folder of the repo. The counterpart of this step from the LLM-D deployment documentation is the setup of the LLM-D Model Service. To keep things simple, we do not need the LLM-D Model service for this guide.
+Now deploy two LLM models similar to the [Istio guide](istio) documentation. The counterpart of this step from the LLM-D deployment documentation is the setup of the LLM-D Model Service. To keep things simple, we do not need the LLM-D Model service for this guide.
 
 ```bash
 kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
@@ -68,14 +69,14 @@ kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
 
 ```bash
 # Create vLLM service running llama3-8b
-kubectl apply -f deploy/kubernetes/istio/vLlama3.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vLlama3.yaml
 ```
 
 This may take several (10+) minutes the first time this is run to download the model up until the vLLM pod running this model is in READY state.  Similarly also deploy the second LLM (phi4-mini) and wait for several minutes until the pod is in READY state.
 
 ```bash
 # Create vLLM service running phi4-mini
-kubectl apply -f deploy/kubernetes/istio/vPhi4.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vPhi4.yaml
 ```
 
 At the end of this you should be able to see both your vLLM pods are READY and serving these LLMs using the command below. You should also see Kubernetes services exposing the IP/ port on which these models are being served. In the example below the llama3-8b model is being served via a kubernetes service with service IP of 10.108.250.109 and port 80.
@@ -107,12 +108,12 @@ In order to show a full combination of model picking and endpoint picking, one w
 
 ```bash
 # Create the LLM-D scheduler and InferencePool for the Llama3-8b model
-kubectl apply -f deploy/kubernetes/llmd-base/inferencepool-llama.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
 ```
 
 ```bash
 # Create the LLM-D scheduler and InferencePool for the phi4-mini model
-kubectl apply -f deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
 ```
 
 ## Step 5: Additional Istio config for LLM-D connection
@@ -121,12 +122,12 @@ Add DestinationRule to allow each EPP/ LLM-D scheduler to use ExtProc without TL
 
 ```bash
 # Istio destinationrule for the Llama3-8b pool scheduler
-kubectl apply -f deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml
 ```
 
 ```bash
 # Istio destinationrule for the phi4-mini pool scheduler
-kubectl apply -f deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml
 ```
 
 ## Step 6: Update vsr config
@@ -135,11 +136,16 @@ Since this guide is based on using the same backend models as in the [Istio guid
 
 ## Step 7: Deploy vLLM Semantic Router
 
-Deploy the semantic router service with all required components:
+Deploy the semantic router service with all required components using Helm:
 
 ```bash
-# Deploy semantic router using Kustomize
-kubectl apply -k deploy/kubernetes/istio/
+# Install with custom values from GHCR OCI registry
+# (Optional) If you use a registry mirror/proxy, append: --set global.imageRegistry=<your-registry>
+helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version v0.0.0-latest \
+  --namespace vllm-semantic-router-system \
+  --create-namespace \
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llm-d/semantic-router-values/values.yaml
 
 # Wait for deployment to be ready (this may take several minutes for model downloads)
 kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semantic-router-system --timeout=600s
@@ -148,25 +154,27 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-## Step 6: Additional Istio configuration for the VSR connection
+**Note**: The values file contains the configuration for the semantic router, including model settings, categories, and routing rules. You can download and customize it from [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llm-d/semantic-router-values/values.yaml).
+
+## Step 8: Additional Istio configuration for the VSR connection
 
 Install the destinationrule and envoy filter needed for Istio gateway to use ExtProc based interface with vLLM Semantic router.
 
 ```bash
-kubectl apply -f deploy/kubernetes/istio/destinationrule.yaml
-kubectl apply -f deploy/kubernetes/istio/envoyfilter.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/destinationrule.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-## Step 7: Install gateway routes
+## Step 9: Install gateway routes
 
 Install HTTPRoutes in the Istio gateway. Note a difference here compared to the http routes used in the prior vsr + istio guide, here the backendRefs in the route matches based on point to the InferencePools which in turn point to the LLM-D schedulers for those pools instead of the backendRefs pointing to the vllm service endpoints of the models as was done in the [istio guide without llm-d](istio).
 
 ```bash
-kubectl apply -f deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
-kubectl apply -f deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
 ```
 
-## Step 8: Testing the Deployment
+## Step 10: Testing the Deployment
 
 To expose the IP on which the Istio gateway listens to client requests from outside the cluster, you can choose any standard kubernetes  option for external load balancing. We tested our feature by [deploying and configuring metallb](https://metallb.universe.tf/installation/) into the cluster to be the LoadBalancer provider. Please refer to metallb documentation for installation procedures if needed. Finally, for the minikube case, we get the external url as shown below.
 
@@ -309,17 +317,34 @@ kubectl logs -n vllm-semantic-router-system deployment/semantic-router
 
 ## Cleanup
 
+To remove the entire deployment:
+
 ```bash
+# Remove gateway routes
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
+
+# Remove Istio VSR configuration
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/envoyfilter.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/destinationrule.yaml
 
 # Remove semantic router
-kubectl delete -k deploy/kubernetes/istio/
+helm uninstall semantic-router -n vllm-semantic-router-system
+
+# Remove LLM-D DestinationRules
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml
+
+# Remove InferencePools
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
+
+# Remove LLMs
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vPhi4.yaml
+kubectl delete -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vLlama3.yaml
 
 # Remove Istio
 istioctl uninstall --purge
-
-# Remove LLMs
-kubectl delete -f deploy/kubernetes/istio/vLlama3.yaml
-kubectl delete -f deploy/kubernetes/istio/vPhi4.yaml
 
 # Stop minikube cluster
 minikube stop
