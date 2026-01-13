@@ -40,6 +40,13 @@ hallucination_mitigation:
     model_id: ""
     threshold: 0
     use_cpu: false
+feedback_detector:
+  enabled: false
+  model_id: ""
+  threshold: 0
+  use_cpu: false
+  use_modernbert: false
+  feedback_mapping_path: ""
 semantic_cache:
   backend_type: memory
   enabled: true
