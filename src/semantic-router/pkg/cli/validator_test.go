@@ -78,7 +78,7 @@ func TestValidateEndpointReachability(t *testing.T) {
 	}{
 		{
 			name:        "invalid endpoint",
-			endpoint:    "http://invalid-endpoint-that-does-not-exist-12345:9999",
+			endpoint:    "http://127.0.0.1:1",
 			expectError: true,
 		},
 		{

@@ -146,7 +146,7 @@ func TestCheckResources(t *testing.T) {
 
 func TestCheckConnectivity(t *testing.T) {
 	t.Run("invalid endpoint", func(t *testing.T) {
-		results := CheckConnectivity([]string{"http://invalid-endpoint-12345:9999"})
+		results := CheckConnectivity([]string{"http://127.0.0.1:1"})
 
 		// Should have one result
 		if len(results) != 1 {
