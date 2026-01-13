@@ -74,7 +74,7 @@ tools/bin/
 # Allow README files in model directories
 !*/trained_model/README.md
 !*/models/README.md
-models/
+models
 
 # Training data
 wikipedia_data/
