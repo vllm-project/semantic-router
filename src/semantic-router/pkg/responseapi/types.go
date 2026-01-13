@@ -53,7 +53,7 @@ type ResponseAPIRequest struct {
 	// MemoryConfig configures memory extraction behavior
 	MemoryConfig *MemoryConfig `json:"memory_config,omitempty"`
 
-	// MemoryContext provides context for memory operations
+	// MemoryContext provides user context for agentic memory features
 	MemoryContext *MemoryContext `json:"memory_context,omitempty"`
 }
 
@@ -66,10 +66,16 @@ type MemoryConfig struct {
 	AutoStore bool `json:"auto_store,omitempty"`
 }
 
-// MemoryContext provides context for memory operations
+// MemoryContext contains user identification for memory isolation.
 type MemoryContext struct {
-	// UserID is the user identifier for memory isolation
+	// UserID is the unique identifier for the user (required for memory)
 	UserID string `json:"user_id"`
+
+	// ProjectID is an optional project/tenant identifier for scoping
+	ProjectID string `json:"project_id,omitempty"`
+
+	// Scope controls memory scope: "user", "project", or "global"
+	Scope string `json:"scope,omitempty"`
 }
 
 // ResponseAPIResponse represents the response from the Response API.

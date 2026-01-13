@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -36,9 +37,15 @@ func extractAutoStore(ctx *RequestContext) bool {
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		if ctx.ResponseAPICtx.OriginalRequest != nil {
 			if ctx.ResponseAPICtx.OriginalRequest.MemoryConfig != nil {
+				logging.Infof("extractAutoStore: MemoryConfig found, AutoStore=%v", ctx.ResponseAPICtx.OriginalRequest.MemoryConfig.AutoStore) // TODO: Remove demo logging
 				return ctx.ResponseAPICtx.OriginalRequest.MemoryConfig.AutoStore
 			}
+			logging.Infof("extractAutoStore: OriginalRequest present but MemoryConfig is nil") // TODO: Remove demo logging
+		} else {
+			logging.Infof("extractAutoStore: ResponseAPICtx present but OriginalRequest is nil") // TODO: Remove demo logging
 		}
+	} else {
+		logging.Infof("extractAutoStore: ResponseAPICtx is nil or not Response API request") // TODO: Remove demo logging
 	}
 
 	// Chat Completions API is stateless by design and doesn't support auto_store.
@@ -99,31 +106,16 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 		return "", "", history, fmt.Errorf("userID is required for memory extraction but not provided. Please provide memory_context.user_id in the request, or set metadata[\"user_id\"], or include x-user-id header")
 	}
 
-	// Extract sessionID (ConversationID) for turnCounts tracking
-	// Memory extraction requires ConversationID to track turns correctly per conversation.
-	// Without ConversationID, turnCounts would leak across conversations for the same user.
+	// Extract sessionID (ConversationID) for turnCounts tracking.
+	// ConversationID is determined early during TranslateRequest and stored in context.
+	// This ensures consistent tracking across the entire request lifecycle.
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		// Case 1: Request provided ConversationID
-		if ctx.ResponseAPICtx.OriginalRequest != nil && ctx.ResponseAPICtx.OriginalRequest.ConversationID != "" {
-			sessionID = ctx.ResponseAPICtx.OriginalRequest.ConversationID
-		} else if ctx.ResponseAPICtx.ConversationHistory != nil && len(ctx.ResponseAPICtx.ConversationHistory) > 0 {
-			// Case 2: No ConversationID in request, but has PreviousResponseID (continuation)
-			// Find ConversationID from the first response in the chain
-			firstResponse := ctx.ResponseAPICtx.ConversationHistory[0]
-			if firstResponse.ConversationID != "" {
-				sessionID = firstResponse.ConversationID
-			}
-		}
+		sessionID = ctx.ResponseAPICtx.ConversationID
+	}
 
-		// Case 3: No ConversationID and no PreviousResponseID (new conversation)
-		// Generate a new ConversationID
-		if sessionID == "" {
-			sessionID = responseapi.GenerateConversationID()
-			// Store in context so we can use it in the response
-			if ctx.ResponseAPICtx != nil {
-				ctx.ResponseAPICtx.GeneratedConversationID = sessionID
-			}
-		}
+	// Safety check: ConversationID should always be set by TranslateRequest
+	if sessionID == "" {
+		return "", "", nil, fmt.Errorf("ConversationID not set in context - this should not happen")
 	}
 
 	// Extract history from ResponseAPIContext

@@ -49,9 +49,13 @@ type MemoryExtractor struct {
 // NewMemoryExtractor creates a new MemoryExtractor with the given configuration.
 // The http.Client is reused across requests for connection pooling.
 func NewMemoryExtractor(cfg *config.ExtractionConfig) *MemoryExtractor {
+	timeout := 30 * time.Second
+	if cfg.TimeoutSeconds > 0 {
+		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
+	}
 	return &MemoryExtractor{
 		config:      cfg,
-		client:      &http.Client{Timeout: 30 * time.Second},
+		client:      &http.Client{Timeout: timeout},
 		turnCounts:  make(map[string]int),
 		dedupConfig: DefaultDeduplicationConfig(),
 	}
@@ -60,9 +64,13 @@ func NewMemoryExtractor(cfg *config.ExtractionConfig) *MemoryExtractor {
 // NewMemoryExtractorWithStore creates a new MemoryExtractor with both config and store.
 // This enables ProcessResponse which handles extraction + storage with deduplication.
 func NewMemoryExtractorWithStore(cfg *config.ExtractionConfig, store Store) *MemoryExtractor {
+	timeout := 30 * time.Second
+	if cfg.TimeoutSeconds > 0 {
+		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
+	}
 	return &MemoryExtractor{
 		config:      cfg,
-		client:      &http.Client{Timeout: 30 * time.Second},
+		client:      &http.Client{Timeout: timeout},
 		store:       store,
 		turnCounts:  make(map[string]int),
 		dedupConfig: DefaultDeduplicationConfig(),
@@ -79,26 +87,49 @@ func (e *MemoryExtractor) SetDeduplicationConfig(config DeduplicationConfig) {
 // =============================================================================
 
 // extractionSystemPrompt is the system prompt for fact extraction
-const extractionSystemPrompt = `You are a memory extraction system. Extract important information from conversations.
+const extractionSystemPrompt = `You are a memory extraction system. Extract important USER information from conversations.
 
-RULES:
-1. Extract facts, preferences, decisions, and procedural knowledge
-2. ALWAYS include context - never extract isolated values
-3. Use self-contained phrases that make sense without the conversation
-4. Return ONLY valid JSON - no explanations or markdown
+CRITICAL RULES:
+1. Extract ONLY facts stated by or about the USER
+2. DO NOT extract assistant suggestions, recommendations, or general knowledge
+3. ALWAYS include context - never extract isolated values
+4. Use self-contained phrases that make sense without the conversation
+5. Return ONLY valid JSON - no explanations or markdown
+6. ALWAYS phrase facts as STATEMENTS, never as questions
+7. Include CONSTRAINTS and LIMITATIONS explicitly (cannot, must not, excluded, etc.)
+
+MEMORY TYPES:
+
+"semantic" - User's facts, preferences, constraints, knowledge:
+  - Personal info: "User's name is Alex", "User works at Acme Corp"
+  - Preferences: "User prefers window seats", "User likes spicy food"
+  - Constraints: "User is allergic to shellfish", "User's budget is $5000"
+  - Limitations: "User cannot use AWS", "User must deploy on Azure only"
+  - Tech stack: "User's project uses React frontend and Go backend"
+  - Knowledge: "User knows Python and Go", "User studied at MIT"
+
+"procedural" - User's personal workflows, routines, or processes they EXPLICITLY describe:
+  - "User's morning routine: check Slack, review PRs, then standup at 9am"
+  - "User deploys code by: running tests, then pushing to staging, then production"
+  - "User prefers to debug by: adding logs first, then using breakpoints"
+  NOTE: This is for USER's own processes, NOT assistant recommendations!
+
+WHAT NOT TO EXTRACT:
+- Assistant suggestions ("You should try the seafood restaurant")
+- General knowledge ("Python is a programming language")
+- Hypotheticals ("If I had more time, I would...")
+- Questions (never phrase as "What is user's budget?" - use statements!)
 
 EXAMPLES:
-BAD:  {"type": "semantic", "content": "budget is $10,000"}
-GOOD: {"type": "semantic", "content": "User's budget for Hawaii vacation is $10,000"}
+GOOD: [{"type": "semantic", "content": "User is lactose intolerant"}]
+GOOD: [{"type": "semantic", "content": "User's project deadline is March 15th"}]
+GOOD: [{"type": "semantic", "content": "User cannot use AWS due to company policy"}]
+GOOD: [{"type": "semantic", "content": "User's tech stack is React, Go, and PostgreSQL"}]
+GOOD: [{"type": "procedural", "content": "User's code review process: check tests, review logic, then check style"}]
+BAD:  [{"type": "semantic", "content": "What is the user's budget?"}] (question form - use statement!)
+BAD:  [{"type": "procedural", "content": "To improve code: add more tests"}] (assistant advice, not user's process)
 
-BAD:  {"type": "procedural", "content": "run npm build"}
-GOOD: {"type": "procedural", "content": "To deploy payment-service: run npm build, then docker push"}
-
-TYPES:
-- "semantic": Facts, preferences, knowledge (e.g., "User prefers direct flights")
-- "procedural": Instructions, how-to, steps (e.g., "To reset password: click forgot, enter email")
-
-Return JSON array. Empty array [] if nothing worth remembering.`
+Return JSON array. Empty array [] if nothing worth remembering about the USER.`
 
 // ExtractFacts extracts memorable facts from a conversation using an LLM.
 // This is a pure extraction function - it does NOT store the facts.
@@ -153,7 +184,7 @@ func (e *MemoryExtractor) ExtractFacts(ctx context.Context, messages []Message) 
 	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
 	logging.Infof("║ EXTRACTED FACTS (%d):                                            ║", len(facts))
 	for i, fact := range facts {
-		logging.Infof("║   %d. [%s] %s", i+1, fact.Type, truncateForLog(fact.Content, 45))
+		logging.Infof("║   %d. [%s] %s", i+1, fact.Type, fact.Content) // Full content for demo
 	}
 	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 
@@ -231,11 +262,23 @@ func (e *MemoryExtractor) ProcessResponse(
 	userID string,
 	history []Message,
 ) error {
+	// TODO: Remove demo logging after POC
+	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
+	logging.Infof("║              MEMORY EXTRACTION: ProcessResponse                  ║")
+	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
+	logging.Infof("║ sessionID: %s", sessionID)
+	logging.Infof("║ userID: %s", userID)
+	logging.Infof("║ historyLen: %d", len(history))
+	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+
 	if e.store == nil || !e.store.IsEnabled() {
+		logging.Infof("Memory extraction: SKIPPED - store not enabled (store=%v)", e.store != nil)
 		return nil // Store not enabled, skip extraction
 	}
 
 	if e.config == nil || !e.config.Enabled || e.config.Endpoint == "" {
+		logging.Infof("Memory extraction: SKIPPED - extraction not configured (config=%v, enabled=%v)",
+			e.config != nil, e.config != nil && e.config.Enabled)
 		return nil // Extraction not enabled
 	}
 
@@ -251,8 +294,13 @@ func (e *MemoryExtractor) ProcessResponse(
 		batchSize = 10 // Default: extract every 10 turns
 	}
 
+	// TODO: Remove demo logging after POC
+	logging.Infof("Memory extraction: turnCount=%d, batchSize=%d, shouldExtract=%v",
+		turnCount, batchSize, turnCount%batchSize == 0)
+
 	// Only extract every N turns
 	if turnCount%batchSize != 0 {
+		logging.Infof("Memory extraction: SKIPPED - not batch turn (turn %d, batch every %d)", turnCount, batchSize)
 		return nil
 	}
 
@@ -293,8 +341,21 @@ func (e *MemoryExtractor) storeWithDeduplication(
 	userID string,
 	fact ExtractedFact,
 ) error {
+	// TODO: Remove demo logging after POC
+	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
+	logging.Infof("║              DEDUPLICATION CHECK                                 ║")
+	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
+	logging.Infof("║ userID: %s", userID)
+	logging.Infof("║ fact.Type: %s", fact.Type)
+	logging.Infof("║ fact.Content: %s", fact.Content) // Full content for demo
+	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+
 	// Check for similar memories using deduplication logic
 	result := CheckDeduplication(ctx, e.store, userID, fact.Content, fact.Type, e.dedupConfig)
+
+	// TODO: Remove demo logging after POC
+	logging.Infof("Deduplication result: action=%s, similarity=%.3f, existingID=%v",
+		result.Action, result.Similarity, result.ExistingMemory != nil)
 
 	switch result.Action {
 	case "update":

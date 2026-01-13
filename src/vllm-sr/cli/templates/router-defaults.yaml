@@ -14,6 +14,46 @@ router_replay:
   ttl_seconds: 2592000     # 30 days retention (for persistent backends)
   async_writes: false      # Enable async writes for better performance
 
+# Agentic Memory Configuration
+# Cross-session memory that persists user facts, preferences, and context
+# Requires: Milvus for vector storage, LLM endpoint for query rewriting and extraction
+# To enable, set enabled: true and configure milvus.address + extraction.endpoint
+memory:
+  enabled: false  # Disabled by default - requires Milvus and LLM endpoint
+
+  # Milvus vector database for memory storage
+  milvus:
+    address: ""  # e.g., "localhost:19530" or "milvus-host:19530"
+    collection: "agentic_memory"
+    dimension: 384
+
+  # Embedding model for semantic similarity
+  embedding:
+    model: "all-MiniLM-L6-v2"
+    dimension: 384
+
+  # Memory retrieval settings
+  default_retrieval_limit: 5
+  default_similarity_threshold: 0.70
+
+  # Query rewriting - rewrites vague queries with conversation context
+  # Requires an OpenAI-compatible LLM endpoint
+  query_rewrite:
+    enabled: false  # Enable when you have an LLM endpoint configured
+    endpoint: ""    # e.g., "http://llm-host:8000"
+    model: ""       # e.g., "qwen3", "llama3"
+    max_tokens: 100
+    timeout_seconds: 30
+
+  # Memory extraction - extracts facts from conversations
+  # Requires an OpenAI-compatible LLM endpoint
+  extraction:
+    enabled: false  # Enable when you have an LLM endpoint configured
+    endpoint: ""    # e.g., "http://llm-host:8000"
+    model: ""       # e.g., "qwen3", "llama3"
+    batch_size: 10  # Extract every N conversation turns
+    timeout_seconds: 30
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"

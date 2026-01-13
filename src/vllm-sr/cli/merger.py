@@ -537,6 +537,12 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
 
+    # Pass through memory configuration if provided
+    if user_config.memory:
+        memory_config = user_config.memory.model_dump(exclude_none=True)
+        merged["memory"] = memory_config
+        log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
+
     log.info("✓ Configuration merged successfully")
 
     return merged

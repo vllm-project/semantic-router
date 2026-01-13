@@ -118,7 +118,7 @@ type RetrieveOptions struct {
 	// Limit is the maximum number of results to return (default: 5)
 	Limit int
 
-	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.6)
+	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.70)
 	Threshold float32
 }
 
@@ -131,7 +131,7 @@ func DefaultMemoryConfig() config.MemoryConfig {
 			Dimension: 384,
 		},
 		DefaultRetrievalLimit:      5,
-		DefaultSimilarityThreshold: 0.6,
+		DefaultSimilarityThreshold: 0.70,
 	}
 }
 

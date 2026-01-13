@@ -675,11 +675,19 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
+	// TODO: Remove demo logs after POC
+	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
+	logging.Infof("║                    MEMORY RETRIEVAL FLOW                         ║")
+	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
+	logging.Infof("║ User Query: %s", truncateForLog(userContent, 50))
+
 	// Step 1: Memory decision - should we search?
 	if !ShouldSearchMemory(ctx, userContent) {
-		logging.Debugf("Memory: Query does not require memory search, skipping")
+		logging.Infof("║ Decision: ❌ SKIP (query type not suitable for memory search)")
+		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 		return requestBody, nil
 	}
+	logging.Infof("║ Decision: ✅ SEARCH (query may benefit from memory)")
 
 	// Step 2: Extract conversation history from request body
 	// Use the existing ExtractConversationHistory function which works with raw JSON
@@ -710,9 +718,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	// Step 4: Get user ID from Response API context or request
 	userID := r.getUserIDFromContext(ctx)
 	if userID == "" {
-		logging.Debugf("Memory: No user ID available, skipping retrieval")
+		logging.Infof("║ User ID: ❌ NOT FOUND (skipping memory search)")
+		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 		return requestBody, nil
 	}
+	logging.Infof("║ User ID: %s", userID)
 
 	// Step 5: Search Milvus for relevant memories
 	retrieveOpts := memory.RetrieveOptions{
@@ -736,11 +746,18 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 
 	if len(memories) == 0 {
-		logging.Debugf("Memory: No relevant memories found for query: %s", searchQuery)
+		logging.Infof("║ Search Result: 📭 No memories found above threshold")
+		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 		return requestBody, nil
 	}
 
-	logging.Infof("Memory: Retrieved %d memories for query: %s", len(memories), searchQuery)
+	logging.Infof("║ Search Result: 📬 Found %d memories!", len(memories))
+	for i, mem := range memories {
+		if mem.Memory != nil {
+			logging.Infof("║   %d. [%s] (score: %.2f) %s", i+1, mem.Memory.Type, mem.Score, mem.Memory.Content) // Full content for demo
+		}
+	}
+	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 
 	// Step 6: Inject memories into request body
 	modifiedBody, err := InjectMemories(requestBody, memories)
@@ -761,8 +778,14 @@ func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
 func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 	// Check Response API context first
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
-		// TODO: Extract from MemoryContext when it's added to ResponseAPIRequest
-		// For now, try to extract from metadata or other fields
+		// Check MemoryContext first (primary source for agentic memory)
+		if ctx.ResponseAPICtx.OriginalRequest.MemoryContext != nil {
+			if ctx.ResponseAPICtx.OriginalRequest.MemoryContext.UserID != "" {
+				return ctx.ResponseAPICtx.OriginalRequest.MemoryContext.UserID
+			}
+		}
+
+		// Fallback to metadata
 		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
 			if userID, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok {
 				return userID
@@ -770,7 +793,5 @@ func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 		}
 	}
 
-	// TODO: Extract from request body if available
-	// For now, return empty string if not in Response API context
 	return ""
 }

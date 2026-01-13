@@ -709,22 +709,20 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 }
 
 // createMemoryStore creates a memory store based on configuration.
-// For now, it only supports Milvus backend. The Milvus address and collection
-// are expected to be configured in the memory config (or use defaults).
+// Supports Milvus backend with address/collection from MemoryConfig.Milvus.
 func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
-	// Default Milvus address if not configured
-	// TODO: Add Milvus config to MemoryConfig similar to ResponseAPIConfig
-	milvusAddress := "localhost:19530"
-	collectionName := "agentic_memory"
+	// Get Milvus address from Memory config, with fallback to defaults
+	milvusAddress := cfg.Memory.Milvus.Address
+	if milvusAddress == "" {
+		milvusAddress = "localhost:19530" // Default
+	}
 
-	// Try to get from ResponseAPI config if available (temporary until MemoryConfig has its own Milvus config)
-	if cfg.ResponseAPI.Milvus.Address != "" {
-		milvusAddress = cfg.ResponseAPI.Milvus.Address
+	collectionName := cfg.Memory.Milvus.Collection
+	if collectionName == "" {
+		collectionName = "agentic_memory" // Default
 	}
-	if cfg.ResponseAPI.Milvus.Collection != "" {
-		// Use a different collection name for memory
-		collectionName = "agentic_memory"
-	}
+
+	logging.Infof("Memory: Connecting to Milvus at %s, collection=%s", milvusAddress, collectionName)
 
 	// Create Milvus client
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -719,6 +719,9 @@ type MemoryConfig struct {
 	// Enable memory features
 	Enabled bool `yaml:"enabled"`
 
+	// Milvus configuration for memory storage
+	Milvus MemoryMilvusConfig `yaml:"milvus,omitempty"`
+
 	// Query rewriting configuration
 	QueryRewrite QueryRewriteConfig `yaml:"query_rewrite"`
 
@@ -735,6 +738,18 @@ type MemoryConfig struct {
 	// Default similarity threshold for memory retrieval (0.0-1.0)
 	// Default: 0.6
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+}
+
+// MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
+type MemoryMilvusConfig struct {
+	// Milvus server address (e.g., "localhost:19530")
+	Address string `yaml:"address"`
+
+	// Collection name for memory storage (default: "agentic_memory")
+	Collection string `yaml:"collection,omitempty"`
+
+	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	Dimension int `yaml:"dimension,omitempty"`
 }
 
 // MemoryEmbeddingConfig contains configuration for embedding generation in memory operations

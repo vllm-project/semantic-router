@@ -176,12 +176,42 @@ Given conversation history and a user query, rewrite the query to be self-contai
 for searching memories. Include relevant context from history if the query references 
 previous conversation.
 
-Rules:
+CRITICAL RULES:
+- PRESERVE THE QUERY TYPE: If the user is stating a fact, keep it as a statement. If asking a question, keep it as a question. NEVER convert statements to questions!
+- Use ONLY facts explicitly stated in the history. NEVER invent or hallucinate values!
+- If history says "$10,000" - use "$10,000" (not $1,000,000)
 - Keep the rewritten query concise (under 50 words)
 - Preserve the user's intent exactly
-- Include specific entities/topics from history if referenced (e.g., "it", "that", "the second one")
+- Replace vague references (e.g., "it", "that", "my budget") with specific context from history
+- Include CONSTRAINTS when relevant (cannot use X, must use Y, excluded, limitations)
+- For tech/deployment queries, include any mentioned technologies or platforms
 - If the query is already self-contained, return it unchanged
-- Return ONLY the rewritten query, no explanation or quotes`
+- Return ONLY the rewritten query, no explanation or quotes
+
+EXAMPLES:
+History: [user]: My project budget is $50,000 and deadline is March 15th
+Query: When is the deadline?
+Rewritten: When is the deadline for my $50,000 project?
+
+History: [user]: I'm building an e-commerce platform
+Query: I prefer React for frontend and Go for backend
+Rewritten: I prefer React for frontend and Go for backend for my e-commerce platform
+
+History: [user]: I prefer React for frontend and Go for backend
+Query: What tech should I use?
+Rewritten: What tech stack should I use considering my preference for React frontend and Go backend?
+
+History: [user]: We cannot use AWS, must deploy on Azure
+Query: Where can I deploy?
+Rewritten: Where can I deploy my project given I cannot use AWS and must use Azure?
+
+History: [user]: Building an e-commerce platform with PostgreSQL database
+Query: What database?
+Rewritten: What database should I use for my e-commerce platform using PostgreSQL?
+
+History: (no relevant context)
+Query: What is my budget?
+Rewritten: What is my project budget?`
 
 // BuildSearchQuery rewrites a query with conversation context for semantic search.
 // It uses an LLM to understand context and produce a self-contained query.
@@ -309,7 +339,7 @@ func callLLMForQueryRewrite(ctx context.Context, cfg *config.QueryRewriteConfig,
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
+	// Create HTTP request - endpoint should be OpenAI-compatible base URL
 	url := fmt.Sprintf("%s/v1/chat/completions", strings.TrimSuffix(cfg.Endpoint, "/"))
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
 	if err != nil {

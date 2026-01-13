@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,10 +98,13 @@ func TestExtractAutoStore_ResponseAPI_NotSet(t *testing.T) {
 // =============================================================================
 
 func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
+	// ConversationID is now set during TranslateRequest, not extractMemoryInfo.
+	// Tests must set ConversationID in ResponseAPIContext.
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_456", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_456",
 				MemoryContext: &responseapi.MemoryContext{
@@ -115,18 +117,21 @@ func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
 	require.NoError(t, err, "should not return error when userID is provided")
-	assert.Equal(t, "conv_456", sessionID, "should use ConversationID as sessionID")
+	assert.Equal(t, "conv_456", sessionID, "should use ConversationID from context")
 	assert.Equal(t, "user_789", userID, "should extract userID from MemoryContext")
 	assert.Empty(t, history, "should return empty history when ConversationHistory is nil")
 }
 
 func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
+	// When no ConversationID in request, TranslateRequest generates one.
+	// extractMemoryInfo just reads it from context.
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_generated_by_translate", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID, no PreviousResponseID = new conversation
+				// No ConversationID in request = new conversation
 				MemoryContext: &responseapi.MemoryContext{
 					UserID: "user_789",
 				},
@@ -137,10 +142,8 @@ func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
 	require.NoError(t, err, "should not return error when userID is provided")
-	assert.NotEmpty(t, sessionID, "should generate ConversationID for new conversation")
-	assert.True(t, strings.HasPrefix(sessionID, "conv_"), "generated ConversationID should have conv_ prefix")
+	assert.Equal(t, "conv_generated_by_translate", sessionID, "should use ConversationID from context")
 	assert.Equal(t, "user_789", userID, "should extract userID from MemoryContext")
-	assert.Equal(t, sessionID, ctx.ResponseAPICtx.GeneratedConversationID, "should store generated ConversationID in context")
 	assert.Empty(t, history)
 }
 
@@ -149,8 +152,9 @@ func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_from_translate", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID, no PreviousResponseID = new conversation
+				// No ConversationID in request
 				Metadata: map[string]string{
 					"user_id": "user_from_metadata",
 				},
@@ -161,10 +165,8 @@ func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
 	require.NoError(t, err, "should not return error when userID is provided")
-	assert.NotEmpty(t, sessionID, "should generate ConversationID for new conversation")
-	assert.True(t, strings.HasPrefix(sessionID, "conv_"), "generated ConversationID should have conv_ prefix")
+	assert.Equal(t, "conv_from_translate", sessionID, "should use ConversationID from context")
 	assert.Equal(t, "user_from_metadata", userID, "should extract userID from metadata")
-	assert.Equal(t, sessionID, ctx.ResponseAPICtx.GeneratedConversationID, "should store generated ConversationID in context")
 	assert.Empty(t, history)
 }
 
@@ -176,8 +178,9 @@ func TestExtractMemoryInfo_UserIDFromHeaders(t *testing.T) {
 		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_from_translate", // Set by TranslateRequest
 			OriginalRequest:      &responseapi.ResponseAPIRequest{
-				// No MemoryContext or Metadata, no PreviousResponseID = new conversation
+				// No MemoryContext or Metadata
 			},
 		},
 	}
@@ -185,20 +188,20 @@ func TestExtractMemoryInfo_UserIDFromHeaders(t *testing.T) {
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
 	require.NoError(t, err, "should not return error when userID is provided")
-	assert.NotEmpty(t, sessionID, "should generate ConversationID for new conversation")
-	assert.True(t, strings.HasPrefix(sessionID, "conv_"), "generated ConversationID should have conv_ prefix")
+	assert.Equal(t, "conv_from_translate", sessionID, "should use ConversationID from context")
 	assert.Equal(t, "user_from_header", userID, "should extract userID from header")
-	assert.Equal(t, sessionID, ctx.ResponseAPICtx.GeneratedConversationID, "should store generated ConversationID in context")
 	assert.Empty(t, history)
 }
 
-func TestExtractMemoryInfo_FallbackToRequestID(t *testing.T) {
+func TestExtractMemoryInfo_MissingUserID(t *testing.T) {
+	// Even with ConversationID set, userID is required for memory storage
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_123", // Set by TranslateRequest
 			OriginalRequest:      &responseapi.ResponseAPIRequest{
-				// No ConversationID, MemoryContext, or Metadata
+				// No MemoryContext or Metadata with user_id
 			},
 		},
 	}
@@ -207,14 +210,14 @@ func TestExtractMemoryInfo_FallbackToRequestID(t *testing.T) {
 
 	require.Error(t, err, "should return error when userID is missing")
 	assert.Contains(t, err.Error(), "userID is required", "error message should mention userID requirement")
-	assert.Empty(t, sessionID, "should return empty sessionID when userID is missing (no need to calculate it)")
+	assert.Empty(t, sessionID, "should return empty sessionID when userID is missing")
 	assert.Empty(t, userID, "should NOT use sessionID as userID - memory would be orphaned without real userID")
 	assert.Empty(t, history)
 }
 
 func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
-	// Test case: continuation of conversation (has PreviousResponseID, no ConversationID in request)
-	// Should find ConversationID from the first response in the chain
+	// Test case: continuation of conversation (has PreviousResponseID)
+	// TranslateRequest finds ConversationID from the chain and sets it in context
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID:             "resp_1",
@@ -246,9 +249,10 @@ func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			PreviousResponseID:   "resp_2", // Has PreviousResponseID = continuation
+			ConversationID:       "conv_existing", // Set by TranslateRequest from chain
+			PreviousResponseID:   "resp_2",        // Has PreviousResponseID = continuation
 			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID in request - should find it from chain
+				// No ConversationID in request - TranslateRequest found it from chain
 				MemoryContext: &responseapi.MemoryContext{
 					UserID: "user_789",
 				},
@@ -260,9 +264,8 @@ func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
 	require.NoError(t, err, "should not return error when userID is provided")
-	assert.Equal(t, "conv_existing", sessionID, "should find ConversationID from first response in chain")
+	assert.Equal(t, "conv_existing", sessionID, "should use ConversationID from context (found from chain)")
 	assert.Equal(t, "user_789", userID, "should extract userID from MemoryContext")
-	assert.Empty(t, ctx.ResponseAPICtx.GeneratedConversationID, "should not generate new ConversationID for continuation")
 	assert.Len(t, history, 4, "should extract history from ConversationHistory")
 }
 
@@ -296,6 +299,7 @@ func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_456", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_456",
 				MemoryContext: &responseapi.MemoryContext{
@@ -775,6 +779,7 @@ func TestExtractMemoryInfo_RealisticScenario(t *testing.T) {
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
+			ConversationID:       "conv_hawaii_trip", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_hawaii_trip",
 				MemoryContext: &responseapi.MemoryContext{
