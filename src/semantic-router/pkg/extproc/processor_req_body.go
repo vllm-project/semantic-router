@@ -193,6 +193,9 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	// Save the actual model for token tracking
 	ctx.RequestModel = matchedModel
 
+	// Capture router replay information if enabled
+	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+
 	// Handle tool selection
 	r.handleToolSelectionForRequest(openAIRequest, response, ctx)
 

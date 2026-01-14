@@ -55,6 +55,10 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				logging.Errorf("Failed to cache streaming response: %v", err)
 				// Continue even if caching fails
 			}
+
+			// For replay logging, attach the reconstructed assistant content if enabled
+			replayPayload := []byte(ctx.StreamingContent)
+			r.attachRouterReplayResponse(ctx, replayPayload, true)
 		}
 
 		// For streaming chunks, just continue (chunks are forwarded immediately)
@@ -239,6 +243,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			},
 		}
 	}
+
+	// Capture replay response payload if enabled
+	r.attachRouterReplayResponse(ctx, finalBody, true)
 
 	return response, nil
 }

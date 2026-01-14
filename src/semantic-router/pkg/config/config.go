@@ -859,7 +859,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type: "semantic-cache", "jailbreak", "pii", "system_prompt"
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -944,6 +944,29 @@ type HallucinationPluginConfig struct {
 	// Only effective when HallucinationAction is "body"
 	// When true, includes confidence score and hallucinated spans in the warning text
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
+}
+
+// RouterReplayPluginConfig configures the router_replay plugin that captures
+// routing decisions and payload snippets for later debugging and replay.
+
+type RouterReplayPluginConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// MaxRecords controls the maximum number of replay records kept in memory.
+	// Defaults to 200 when omitted or set to a non-positive value.
+	MaxRecords int `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+
+	// CaptureRequestBody controls whether the original request body should be stored.
+	// Defaults to false to avoid unintentionally persisting sensitive content.
+	CaptureRequestBody bool `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+
+	// CaptureResponseBody controls whether the final response body should be stored.
+	// Defaults to false. Enable when you want replay logs to include model output.
+	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+
+	// MaxBodyBytes caps how many bytes of request/response body are recorded.
+	// Defaults to 4096 bytes.
+	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 }
 
 // Helper methods for Decision to access plugin configurations
@@ -1114,6 +1137,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	result := &HallucinationPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetRouterReplayConfig returns the router_replay plugin configuration
+func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
+	config := d.GetPluginConfig("router_replay")
+	if config == nil {
+		return nil
+	}
+
+	result := &RouterReplayPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
 		return nil
 	}
 	return result

@@ -49,6 +49,10 @@ const (
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
 	VSRCacheHit = "x-vsr-cache-hit"
+
+	// RouterReplayID carries the identifier for a captured replay record.
+	// Value: opaque replay token
+	RouterReplayID = "x-vsr-replay-id"
 )
 
 // VSR Signal Tracking Headers

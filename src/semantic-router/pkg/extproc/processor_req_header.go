@@ -95,6 +95,10 @@ type RequestContext struct {
 
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+
+	// Router replay context
+	RouterReplayID     string                           // ID of the router replay session, if applicable
+	RouterReplayConfig *config.RouterReplayPluginConfig // Configuration for router replay, if applicable
 }
 
 // handleRequestHeaders processes the request headers
@@ -150,6 +154,10 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	tracing.SetSpanAttributes(span,
 		attribute.String(tracing.AttrHTTPMethod, method),
 		attribute.String(tracing.AttrHTTPPath, path))
+	// Router replay API (read-only): list or fetch replay records
+	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
+		return replayResp, nil
+	}
 
 	// Detect if the client expects a streaming response (SSE)
 	if accept, ok := ctx.Headers["accept"]; ok {

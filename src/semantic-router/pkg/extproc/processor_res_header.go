@@ -65,6 +65,9 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		}
 	}
 
+	// Update router replay metadata with status code and streaming flag
+	r.updateRouterReplayStatus(ctx, statusCode, ctx != nil && ctx.IsStreamingResponse)
+
 	// Prepare response headers with VSR decision tracking headers if applicable
 	var headerMutation *ext_proc.HeaderMutation
 
@@ -185,6 +188,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				Header: &core.HeaderValue{
 					Key:      headers.VSRMatchedPreference,
 					RawValue: []byte(strings.Join(ctx.VSRMatchedPreference, ",")),
+				},
+			})
+		}
+
+		// Attach router replay identifier when available
+		if ctx.RouterReplayID != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.RouterReplayID,
+					RawValue: []byte(ctx.RouterReplayID),
 				},
 			})
 		}

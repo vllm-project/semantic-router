@@ -81,6 +81,11 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
+	if replayCfg := result.Decision.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
+		cfgCopy := *replayCfg
+		ctx.RouterReplayConfig = &cfgCopy
+	}
+
 	// Extract domain category from matched rules (for VSRSelectedCategory header)
 	// MatchedRules contains rule names like "domain:math", "keyword:thinking", etc.
 	// We extract the first domain rule as the category
@@ -122,6 +127,7 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 		} else {
 			logging.Infof("Selected model from decision %s: %s", decisionName, selectedModel)
 		}
+		ctx.VSRSelectedModel = selectedModel
 
 		// Determine reasoning mode from the best model's configuration
 		if result.Decision.ModelRefs[0].UseReasoning != nil {
@@ -137,6 +143,11 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 						Probability: float32(evaluationConfidence),
 					},
 				},
+			}
+			if useReasoning {
+				ctx.VSRReasoningMode = "on"
+			} else {
+				ctx.VSRReasoningMode = "off"
 			}
 			// Note: ReasoningEffort is handled separately in req_filter_reason.go
 		}
