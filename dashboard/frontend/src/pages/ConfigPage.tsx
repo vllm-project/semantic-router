@@ -298,38 +298,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
-  const [viewModalMode, setViewModalMode] = useState<'view' | 'add-signal' | 'edit-signal' | 'add-decision' | 'edit-decision'>('view')
-
-  // the signal being edited when in edit-signal mode
-  const [editSignalContext, setEditSignalContext] = useState<{ originalName: string; originalType: SignalType } | null>(null)
-  // the decision being edited when in edit-decision mode
-  const [editDecisionContext, setEditDecisionContext] = useState<{ originalName: string } | null>(null)
-
-  const [addSignalForm, setAddSignalForm] = useState<AddSignalFormState>(() => ({
-    type: 'Keywords',
-    name: '',
-    description: '',
-    operator: 'AND',
-    keywords: '',
-    case_sensitive: false,
-    threshold: 0.8,
-    candidates: '',
-    aggregation_method: 'mean',
-    mmlu_categories: '',
-  }))
-  const [addSignalSaving, setAddSignalSaving] = useState(false)
-  const [addSignalError, setAddSignalError] = useState<string | null>(null)
-  const [decisionForm, setDecisionForm] = useState<DecisionFormState>(() => ({
-    name: '',
-    description: '',
-    priority: 1,
-    operator: 'AND',
-    conditionsJson: '[]',
-    modelRefsJson: '[]',
-    pluginsJson: '[]'
-  }))
-  const [decisionSaving, setDecisionSaving] = useState(false)
-  const [decisionError, setDecisionError] = useState<string | null>(null)
 
   // Search state
   const [decisionsSearch, setDecisionsSearch] = useState('')
@@ -471,39 +439,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     setEditModalCallback(null)
   }
 
-  const resetAddSignalForm = () => {
-    setAddSignalForm({
-      type: 'Keywords',
-      name: '',
-      description: '',
-      operator: 'AND',
-      keywords: '',
-      case_sensitive: false,
-      threshold: 0.8,
-      candidates: '',
-      aggregation_method: 'mean',
-      mmlu_categories: '',
-    })
-    setAddSignalError(null)
-    setAddSignalSaving(false)
-    setEditSignalContext(null)
-  }
-
-  const resetDecisionForm = () => {
-    setDecisionForm({
-      name: '',
-      description: '',
-      priority: 1,
-      operator: 'AND',
-      conditionsJson: '[]',
-      modelRefsJson: '[]',
-      pluginsJson: '[]'
-    })
-    setDecisionError(null)
-    setDecisionSaving(false)
-    setEditDecisionContext(null)
-  }
-
   const listInputToArray = (input: string) => input
     .split(/[\n,]/)
     .map(item => item.trim())
@@ -541,620 +476,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     cfg.decisions = (cfg.decisions || []).filter(d => d.name !== targetName)
   }
 
-  const updateAddSignalField = <K extends keyof AddSignalFormState>(field: K, value: AddSignalFormState[K]) => {
-    setAddSignalForm(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const updateDecisionField = <K extends keyof DecisionFormState>(field: K, value: DecisionFormState[K]) => {
-    setDecisionForm(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const buildAddSignalSections = (): ViewSection[] => {
-    const basicFields: ViewSection = {
-      title: 'Basic Information',
-      fields: [
-        {
-          label: 'Name',
-          value: (
-            <input
-              className={styles.addSignalInput}
-              value={addSignalForm.name}
-              onChange={(e) => updateAddSignalField('name', e.target.value)}
-              placeholder="Enter a unique signal name here"
-            />
-          ),
-          fullWidth: true
-        },
-        {
-          label: 'Type',
-          value: (
-            <select
-              className={styles.addSignalSelect}
-              value={addSignalForm.type}
-              onChange={(e) => updateAddSignalField('type', e.target.value as SignalType)}
-            >
-              <option value="Keywords">Keywords</option>
-              <option value="Embeddings">Embeddings</option>
-              <option value="Domain">Domain</option>
-              <option value="Preference">Preference</option>
-              <option value="Fact Check">Fact Check</option>
-              <option value="User Feedback">User Feedback</option>
-            </select>
-          )
-        }
-      ]
-    }
-
-    const typeFields: ViewSection = {
-      title: 'Configuration',
-      fields: []
-    }
-
-    if (addSignalForm.type === 'Keywords') {
-      typeFields.fields.push(
-        {
-          label: 'Operator',
-          value: (
-            <select
-              className={styles.addSignalSelect}
-              value={addSignalForm.operator}
-              onChange={(e) => updateAddSignalField('operator', e.target.value as 'AND' | 'OR')}
-            >
-              <option value="AND">AND</option>
-              <option value="OR">OR</option>
-            </select>
-          )
-        },
-        {
-          label: 'Case Sensitive',
-          value: (
-            <label className={styles.addSignalCheckbox}>
-              <input
-                type="checkbox"
-                checked={addSignalForm.case_sensitive}
-                onChange={(e) => updateAddSignalField('case_sensitive', e.target.checked)}
-              />
-              <span>Enable case-sensitive matching</span>
-            </label>
-          )
-        },
-        {
-          label: 'Keywords',
-          value: (
-            <textarea
-              className={styles.addSignalTextarea}
-              value={addSignalForm.keywords}
-              onChange={(e) => updateAddSignalField('keywords', e.target.value)}
-              placeholder="Comma or newline separated keywords"
-            />
-          ),
-          fullWidth: true
-        }
-      )
-    } else if (addSignalForm.type === 'Embeddings') {
-      typeFields.fields.push(
-        {
-          label: 'Threshold',
-          value: (
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.01}
-              className={styles.addSignalInput}
-              value={addSignalForm.threshold}
-              onChange={(e) => updateAddSignalField('threshold', parseFloat(e.target.value) || 0)}
-              placeholder="0.80"
-            />
-          )
-        },
-        {
-          label: 'Aggregation Method',
-          value: (
-            <input
-              className={styles.addSignalInput}
-              value={addSignalForm.aggregation_method}
-              onChange={(e) => updateAddSignalField('aggregation_method', e.target.value)}
-              placeholder="mean"
-            />
-          )
-        },
-        {
-          label: 'Candidates',
-          value: (
-            <textarea
-              className={styles.addSignalTextarea}
-              value={addSignalForm.candidates}
-              onChange={(e) => updateAddSignalField('candidates', e.target.value)}
-              placeholder="One candidate per line or comma separated"
-            />
-          ),
-          fullWidth: true
-        }
-      )
-    } else if (addSignalForm.type === 'Domain') {
-      typeFields.fields.push(
-        {
-          label: 'Description',
-          value: (
-            <textarea
-              className={styles.addSignalTextarea}
-              value={addSignalForm.description}
-              onChange={(e) => updateAddSignalField('description', e.target.value)}
-              placeholder="Short description of the domain"
-            />
-          ),
-          fullWidth: true
-        },
-        {
-          label: 'MMLU Categories',
-          value: (
-            <textarea
-              className={styles.addSignalTextarea}
-              value={addSignalForm.mmlu_categories}
-              onChange={(e) => updateAddSignalField('mmlu_categories', e.target.value)}
-              placeholder="Comma or newline separated categories"
-            />
-          ),
-          fullWidth: true
-        }
-      )
-    } else {
-      typeFields.fields.push(
-        {
-          label: 'Description',
-          value: (
-            <textarea
-              className={styles.addSignalTextarea}
-              value={addSignalForm.description}
-              onChange={(e) => updateAddSignalField('description', e.target.value)}
-              placeholder="Describe what this signal represents"
-            />
-          ),
-          fullWidth: true
-        }
-      )
-    }
-
-    const sections: ViewSection[] = [basicFields, typeFields]
-
-    if (addSignalError) {
-      sections.push({
-        title: 'Status',
-        fields: [
-          {
-            label: 'Validation',
-            value: (
-              <span style={{ color: 'var(--color-danger)' }}>
-                {addSignalError}
-              </span>
-            ),
-            fullWidth: true
-          }
-        ]
-      })
-    }
-
-    return sections
-  }
-
-  const buildDecisionSections = (): ViewSection[] => {
-    const sections: ViewSection[] = [
-      {
-        title: 'Basic Information',
-        fields: [
-          {
-            label: 'Name',
-            value: (
-              <input
-                className={styles.addSignalInput}
-                value={decisionForm.name}
-                onChange={(e) => updateDecisionField('name', e.target.value)}
-                placeholder="Enter a unique decision name"
-              />
-            ),
-            fullWidth: true
-          },
-          {
-            label: 'Description',
-            value: (
-              <textarea
-                className={styles.addSignalTextarea}
-                value={decisionForm.description}
-                onChange={(e) => updateDecisionField('description', e.target.value)}
-                placeholder="What does this decision route?"
-              />
-            ),
-            fullWidth: true
-          },
-          {
-            label: 'Priority',
-            value: (
-              <input
-                type="number"
-                min={0}
-                className={styles.addSignalInput}
-                value={decisionForm.priority}
-                onChange={(e) => updateDecisionField('priority', parseInt(e.target.value, 10) || 0)}
-                placeholder="1"
-              />
-            )
-          },
-          {
-            label: 'Rules Operator',
-            value: (
-              <select
-                className={styles.addSignalSelect}
-                value={decisionForm.operator}
-                onChange={(e) => updateDecisionField('operator', e.target.value as 'AND' | 'OR')}
-              >
-                <option value="AND">AND</option>
-                <option value="OR">OR</option>
-              </select>
-            )
-          }
-        ]
-      },
-      {
-        title: 'Conditions',
-        fields: [
-          {
-            label: 'Conditions JSON',
-            value: (
-              <textarea
-                className={styles.addSignalTextarea}
-                value={decisionForm.conditionsJson}
-                onChange={(e) => updateDecisionField('conditionsJson', e.target.value)}
-                placeholder='e.g. [{"type":"signal","name":"keyword-signal"}]'
-              />
-            ),
-            fullWidth: true
-          }
-        ]
-      },
-      {
-        title: 'Model References',
-        fields: [
-          {
-            label: 'Model Refs JSON',
-            value: (
-              <textarea
-                className={styles.addSignalTextarea}
-                value={decisionForm.modelRefsJson}
-                onChange={(e) => updateDecisionField('modelRefsJson', e.target.value)}
-                placeholder='e.g. [{"model":"gpt-4o","use_reasoning":false}]'
-              />
-            ),
-            fullWidth: true
-          }
-        ]
-      },
-      {
-        title: 'Plugins (Optional)',
-        fields: [
-          {
-            label: 'Plugins JSON',
-            value: (
-              <textarea
-                className={styles.addSignalTextarea}
-                value={decisionForm.pluginsJson}
-                onChange={(e) => updateDecisionField('pluginsJson', e.target.value)}
-                placeholder='e.g. [{"type":"logging","configuration":{"level":"info"}}]'
-              />
-            ),
-            fullWidth: true
-          }
-        ]
-      }
-    ]
-
-    if (decisionError) {
-      sections.push({
-        title: 'Status',
-        fields: [
-          {
-            label: 'Validation',
-            value: (
-              <span style={{ color: 'var(--color-danger)' }}>
-                {decisionError}
-              </span>
-            ),
-            fullWidth: true
-          }
-        ]
-      })
-    }
-
-    return sections
-  }
-
-  const handleSaveSignal = async () => {
-    // used for both adding a signal and editing an existing signal
-    if (!config) {
-      setAddSignalError('Configuration not loaded yet.')
-      return
-    }
-
-    if (!isPythonCLI) {
-      setAddSignalError('Adding signals is only supported for Python CLI configs.')
-      return
-    }
-
-    const name = addSignalForm.name.trim()
-    if (!name) {
-      setAddSignalError('Name is required.')
-      return
-    }
-
-    setAddSignalSaving(true)
-    setAddSignalError(null)
-
-    try {
-      const newConfig: ConfigData = { ...config }
-      if (!newConfig.signals) newConfig.signals = {}
-
-      const isEdit = viewModalMode === 'edit-signal' && editSignalContext
-
-      if (isEdit) {
-        // editing existing signal - remove the old one first
-        removeSignalByName(newConfig, editSignalContext.originalType, editSignalContext.originalName)
-      }
-
-      switch (addSignalForm.type) {
-        case 'Keywords': {
-          const keywords = listInputToArray(addSignalForm.keywords)
-          if (keywords.length === 0) {
-            throw new Error('Please provide at least one keyword.')
-          }
-          newConfig.signals.keywords = [
-            ...(newConfig.signals.keywords || []),
-            {
-              name,
-              operator: addSignalForm.operator,
-              keywords,
-              case_sensitive: addSignalForm.case_sensitive
-            }
-          ]
-          break
-        }
-        case 'Embeddings': {
-          const candidates = listInputToArray(addSignalForm.candidates)
-          if (candidates.length === 0) {
-            throw new Error('Please provide at least one candidate string.')
-          }
-          const threshold = Number.isFinite(addSignalForm.threshold)
-            ? Math.max(0, Math.min(1, addSignalForm.threshold))
-            : 0
-          newConfig.signals.embeddings = [
-            ...(newConfig.signals.embeddings || []),
-            {
-              name,
-              threshold,
-              candidates,
-              aggregation_method: addSignalForm.aggregation_method || 'mean'
-            }
-          ]
-          break
-        }
-        case 'Domain': {
-          const mmlu_categories = listInputToArray(addSignalForm.mmlu_categories)
-          newConfig.signals.domains = [
-            ...(newConfig.signals.domains || []),
-            {
-              name,
-              description: addSignalForm.description,
-              mmlu_categories
-            }
-          ]
-          break
-        }
-        case 'Preference': {
-          newConfig.signals.preferences = [
-            ...(newConfig.signals.preferences || []),
-            {
-              name,
-              description: addSignalForm.description
-            }
-          ]
-          break
-        }
-        case 'Fact Check': {
-          newConfig.signals.fact_check = [
-            ...(newConfig.signals.fact_check || []),
-            {
-              name,
-              description: addSignalForm.description
-            }
-          ]
-          break
-        }
-        case 'User Feedback': {
-          newConfig.signals.user_feedbacks = [
-            ...(newConfig.signals.user_feedbacks || []),
-            {
-              name,
-              description: addSignalForm.description
-            }
-          ]
-          break
-        }
-        default:
-          break
-      }
-
-      await saveConfig(newConfig)
-      resetAddSignalForm()
-      setViewModalOpen(false)
-      setViewModalMode('view')
-    } catch (err) {
-      setAddSignalError(err instanceof Error ? err.message : 'Failed to save signal')
-    } finally {
-      setAddSignalSaving(false)
-    }
-  }
-
-  const openAddSignalModal = () => {
-    if (!isPythonCLI) {
-      setViewModalMode('view')
-      setViewModalTitle('Add Signal')
-      setViewModalSections([{
-        title: 'Not supported',
-        fields: [{ label: 'Info', value: 'Adding signals is only available for Python CLI configs.', fullWidth: true }]
-      }])
-      setViewModalEditCallback(null)
-      setViewModalOpen(true)
-      return
-    }
-
-    resetAddSignalForm()
-    setViewModalMode('add-signal')
-    setViewModalTitle('Add Signal')
-    setViewModalSections([])
-    setViewModalEditCallback(null)
-    setViewModalOpen(true)
-  }
-
-  const openAddDecisionModal = () => {
-    if (!isPythonCLI) {
-      setViewModalMode('view')
-      setViewModalTitle('Add Decision')
-      setViewModalSections([{
-        title: 'Not supported',
-        fields: [{ label: 'Info', value: 'Adding decisions is only available for Python CLI configs.', fullWidth: true }]
-      }])
-      setViewModalEditCallback(null)
-      setViewModalOpen(true)
-      return
-    }
-
-    resetDecisionForm()
-    setViewModalMode('add-decision')
-    setViewModalTitle('Add Decision')
-    setViewModalSections([])
-    setViewModalEditCallback(null)
-    setViewModalOpen(true)
-  }
-
-  const handleSaveDecision = async () => {
-    if (!config) {
-      setDecisionError('Configuration not loaded yet.')
-      return
-    }
-
-    if (!isPythonCLI) {
-      setDecisionError('Decisions are only supported for Python CLI configs.')
-      return
-    }
-
-    const name = decisionForm.name.trim()
-    if (!name) {
-      setDecisionError('Name is required.')
-      return
-    }
-
-    const priority = Number.isFinite(decisionForm.priority) ? decisionForm.priority : 0
-
-    const parseArray = (label: string, raw: string) => {
-      try {
-        const parsed = raw && raw.trim() ? JSON.parse(raw) : []
-        if (!Array.isArray(parsed)) throw new Error(`${label} must be a JSON array.`)
-        return parsed
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        throw new Error(`${label} parse error: ${message}`)
-      }
-    }
-
-    setDecisionSaving(true)
-    setDecisionError(null)
-
-    try {
-      const conditionsRaw = parseArray('Conditions', decisionForm.conditionsJson || '[]')
-      const modelRefsRaw = parseArray('Model references', decisionForm.modelRefsJson || '[]')
-      const pluginsRaw = parseArray('Plugins', decisionForm.pluginsJson || '[]')
-
-      const conditions = conditionsRaw.map((c, idx) => {
-        if (!c || typeof c !== 'object') throw new Error(`Condition #${idx + 1} must be an object.`)
-        if (!c.type || !c.name) throw new Error(`Condition #${idx + 1} must include "type" and "name".`)
-        return { type: String(c.type), name: String(c.name) }
-      })
-
-      const modelRefs = modelRefsRaw.map((m, idx) => {
-        if (!m || typeof m !== 'object') throw new Error(`Model reference #${idx + 1} must be an object.`)
-        if (!m.model) throw new Error(`Model reference #${idx + 1} is missing "model".`)
-        return { model: String(m.model), use_reasoning: !!m.use_reasoning }
-      })
-
-      const plugins = pluginsRaw.map((p, idx) => {
-        if (!p || typeof p !== 'object') throw new Error(`Plugin #${idx + 1} must be an object.`)
-        if (!p.type) throw new Error(`Plugin #${idx + 1} is missing "type".`)
-        return { type: String(p.type), configuration: p.configuration || {} }
-      })
-
-      const newDecision: DecisionConfig = {
-        name,
-        description: decisionForm.description,
-        priority: priority || 0,
-        rules: {
-          operator: decisionForm.operator,
-          conditions
-        },
-        modelRefs,
-        plugins
-      }
-
-      const newConfig: ConfigData = { ...config }
-      newConfig.decisions = [...(newConfig.decisions || [])]
-
-      const isEdit = viewModalMode === 'edit-decision' && editDecisionContext
-      if (isEdit) {
-        removeDecisionByName(newConfig, editDecisionContext.originalName)
-      }
-
-      newConfig.decisions.push(newDecision)
-      await saveConfig(newConfig)
-      resetDecisionForm()
-      setViewModalOpen(false)
-      setViewModalMode('view')
-    } catch (err) {
-      setDecisionError(err instanceof Error ? err.message : 'Failed to save decision')
-    } finally {
-      setDecisionSaving(false)
-    }
-  }
-
-  const populateDecisionForm = (decision: DecisionConfig) => {
-    setDecisionForm({
-      name: decision.name,
-      description: decision.description || '',
-      priority: decision.priority ?? 1,
-      operator: decision.rules?.operator || 'AND',
-      conditionsJson: JSON.stringify(decision.rules?.conditions || [], null, 2),
-      modelRefsJson: JSON.stringify(decision.modelRefs || [], null, 2),
-      pluginsJson: JSON.stringify(decision.plugins || [], null, 2)
-    })
-  }
-
-  const handleEditDecision = (decision: DecisionConfig) => {
-    if (!isPythonCLI) {
-      alert('Editing decisions is only supported for Python CLI configs.')
-      return
-    }
-
-    populateDecisionForm(decision)
-    setEditDecisionContext({ originalName: decision.name })
-    setViewModalMode('edit-decision')
-    setViewModalTitle(`Edit Decision: ${decision.name}`)
-    setViewModalSections([])
-    setViewModalEditCallback(null)
-    setViewModalOpen(true)
-  }
 
   const handleDeleteDecision = async (decision: DecisionConfig) => {
     if (!confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
@@ -1173,13 +494,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   const handleCloseViewModal = () => {
     setViewModalOpen(false)
-    setViewModalMode('view')
-    setAddSignalSaving(false)
-    setAddSignalError(null)
-    setEditSignalContext(null)
-    setDecisionSaving(false)
-    setDecisionError(null)
-    setEditDecisionContext(null)
+    setViewModalTitle('')
+    setViewModalSections([])
+    setViewModalEditCallback(null)
   }
 
   // Get effective config value - check router defaults first, then main config
@@ -3020,15 +2337,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalTitle(`Signal: ${signal.name}`)
       setViewModalSections(sections)
       setViewModalEditCallback(() => () => handleEditSignal(signal))
-      setViewModalMode('view')
       setViewModalOpen(true)
     }
 
-    const populateFormFromSignal = (signal: UnifiedSignal) => {
-      const base: AddSignalFormState = {
-        type: signal.type,
-        name: signal.name,
-        description: signal.rawData.description || '',
+    const openSignalEditor = (mode: 'add' | 'edit', signal?: UnifiedSignal) => {
+      setViewModalOpen(false)
+      const defaultForm: AddSignalFormState = {
+        type: 'Keywords',
+        name: '',
+        description: '',
         operator: 'AND',
         keywords: '',
         case_sensitive: false,
@@ -3038,36 +2355,234 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         mmlu_categories: ''
       }
 
-      if (signal.type === 'Keywords') {
-        base.operator = signal.rawData.operator
-        base.case_sensitive = !!signal.rawData.case_sensitive
-        base.keywords = (signal.rawData.keywords || []).join('\n')
-      } else if (signal.type === 'Embeddings') {
-        base.threshold = signal.rawData.threshold ?? 0.8
-        base.aggregation_method = signal.rawData.aggregation_method || 'mean'
-        base.candidates = (signal.rawData.candidates || []).join('\n')
-      } else if (signal.type === 'Domain') {
-        base.description = signal.rawData.description || ''
-        base.mmlu_categories = (signal.rawData.mmlu_categories || []).join('\n')
+      const initialData: AddSignalFormState = mode === 'edit' && signal ? {
+        type: signal.type,
+        name: signal.name,
+        description: signal.rawData.description || '',
+        operator: signal.rawData.operator || 'AND',
+        keywords: (signal.rawData.keywords || []).join('\n'),
+        case_sensitive: !!signal.rawData.case_sensitive,
+        threshold: signal.rawData.threshold ?? 0.8,
+        candidates: (signal.rawData.candidates || []).join('\n'),
+        aggregation_method: signal.rawData.aggregation_method || 'mean',
+        mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n')
+      } : defaultForm
+
+
+      const conditionallyHideFieldExceptType = (type: SignalType) => {
+        return (formData: AddSignalFormState) => formData.type !== type
       }
 
-      setAddSignalForm(base)
+      const keywordFields: FieldConfig[] = [
+        {
+          name: 'operator',
+          label: 'Operator (keywords only)',
+          type: 'select',
+          options: ['AND', 'OR'],
+          description: 'Used when type is Keywords',
+          shouldHide: conditionallyHideFieldExceptType('Keywords')
+        },
+        {
+          name: 'case_sensitive',
+          label: 'Case Sensitive (keywords only)',
+          type: 'boolean',
+          description: 'Whether keyword matching is case sensitive',
+          shouldHide: conditionallyHideFieldExceptType('Keywords')
+        },
+        {
+          name: 'keywords',
+          label: 'Keywords',
+          type: 'textarea',
+          placeholder: 'Comma or newline separated keywords',
+          shouldHide: conditionallyHideFieldExceptType('Keywords')
+        },
+      ]
+
+
+      const embeddingFields: FieldConfig[] = [{
+        name: 'threshold',
+        label: 'Threshold (embeddings only)',
+        type: 'number',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        placeholder: '0.80',
+        shouldHide: conditionallyHideFieldExceptType('Embeddings')
+      },
+      {
+        name: 'aggregation_method',
+        label: 'Aggregation Method (embeddings only)',
+        type: 'text',
+        placeholder: 'mean',
+        shouldHide: conditionallyHideFieldExceptType('Embeddings')
+      },
+      {
+        name: 'candidates',
+        label: 'Candidates (embeddings only)',
+        type: 'textarea',
+        placeholder: 'One candidate per line or comma separated',
+        shouldHide: conditionallyHideFieldExceptType('Embeddings')
+      }]
+
+      const domainFields: FieldConfig[] = [
+        {
+          name: 'mmlu_categories',
+          label: 'MMLU Categories (domains only)',
+          type: 'textarea',
+          placeholder: 'Comma or newline separated categories',
+          shouldHide: conditionallyHideFieldExceptType('Domain')
+        }
+      ]
+      const fields: FieldConfig[] = [
+        {
+          name: 'type',
+          label: 'Type',
+          type: 'select',
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback'],
+          required: true,
+          description: 'Fields are validated based on the selected type.'
+        },
+        {
+          name: 'name',
+          label: 'Name',
+          type: 'text',
+          required: true,
+          placeholder: 'Enter a unique signal name here'
+        },
+        {
+          name: 'description',
+          label: 'Description',
+          type: 'textarea',
+          placeholder: 'Optional description for this signal'
+        },
+        ...keywordFields,
+        ...embeddingFields,
+        ...domainFields,
+      ]
+
+      const saveSignal = async (formData: AddSignalFormState) => {
+        if (!config) {
+          throw new Error('Configuration not loaded yet.')
+        }
+
+        if (!isPythonCLI) {
+          throw new Error('Editing signals is only supported for Python CLI configs.')
+        }
+
+        const name = (formData.name || '').trim()
+        if (!name) {
+          throw new Error('Name is required.')
+        }
+
+        const type = formData.type as SignalType
+        if (!type) {
+          throw new Error('Type is required.')
+        }
+
+        const newConfig: ConfigData = { ...config }
+        if (!newConfig.signals) newConfig.signals = {}
+
+        if (mode === 'edit' && signal) {
+          removeSignalByName(newConfig, signal.type, signal.name)
+        }
+
+        // type specific validations
+        switch (type) {
+          case 'Keywords': {
+            const keywords = listInputToArray(formData.keywords || '')
+            if (keywords.length === 0) {
+              throw new Error('Please provide at least one keyword.')
+            }
+            newConfig.signals.keywords = [
+              ...(newConfig.signals.keywords || []),
+              {
+                name,
+                operator: formData.operator,
+                keywords,
+                case_sensitive: !!formData.case_sensitive
+              }
+            ]
+            break
+          }
+          case 'Embeddings': {
+            const candidates = listInputToArray(formData.candidates || '')
+            if (candidates.length === 0) {
+              throw new Error('Please provide at least one candidate string.')
+            }
+            const threshold = Number.isFinite(formData.threshold)
+              ? Math.max(0, Math.min(1, formData.threshold))
+              : 0
+            newConfig.signals.embeddings = [
+              ...(newConfig.signals.embeddings || []),
+              {
+                name,
+                threshold,
+                candidates,
+                aggregation_method: formData.aggregation_method || 'mean'
+              }
+            ]
+            break
+          }
+          case 'Domain': {
+            const mmlu_categories = listInputToArray(formData.mmlu_categories || '')
+            newConfig.signals.domains = [
+              ...(newConfig.signals.domains || []),
+              {
+                name,
+                description: formData.description,
+                mmlu_categories
+              }
+            ]
+            break
+          }
+          case 'Preference': {
+            newConfig.signals.preferences = [
+              ...(newConfig.signals.preferences || []),
+              {
+                name,
+                description: formData.description
+              }
+            ]
+            break
+          }
+          case 'Fact Check': {
+            newConfig.signals.fact_check = [
+              ...(newConfig.signals.fact_check || []),
+              {
+                name,
+                description: formData.description
+              }
+            ]
+            break
+          }
+          case 'User Feedback': {
+            newConfig.signals.user_feedbacks = [
+              ...(newConfig.signals.user_feedbacks || []),
+              {
+                name,
+                description: formData.description
+              }
+            ]
+            break
+          }
+          default:
+            throw new Error('Unsupported signal type.')
+        }
+
+        await saveConfig(newConfig)
+      }
+
+      openEditModal(
+        mode === 'add' ? 'Add Signal' : `Edit Signal: ${signal?.name}`,
+        initialData,
+        fields,
+        saveSignal,
+        mode
+      )
     }
 
-    // Handle edit signal
     const handleEditSignal = (signal: UnifiedSignal) => {
-      if (!isPythonCLI) {
-        alert('Editing signals is only supported for Python CLI configs.')
-        return
-      }
-
-      populateFormFromSignal(signal)
-      setEditSignalContext({ originalName: signal.name, originalType: signal.type })
-      setViewModalMode('edit-signal')
-      setViewModalTitle(`Edit Signal: ${signal.name}`)
-      setViewModalSections([])
-      setViewModalEditCallback(null)
-      setViewModalOpen(true)
+      openSignalEditor('edit', signal)
     }
 
     // Handle delete signal
@@ -3093,7 +2608,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           searchPlaceholder="Search signals..."
           searchValue={signalsSearch}
           onSearchChange={setSignalsSearch}
-          onAdd={openAddSignalModal}
+          onAdd={() => openSignalEditor('add')}
           addButtonText="Add Signal"
         />
 
@@ -3261,8 +2776,170 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalTitle(`Decision: ${decision.name}`)
       setViewModalSections(sections)
       setViewModalEditCallback(() => () => handleEditDecision(decision))
-      setViewModalMode('view')
       setViewModalOpen(true)
+    }
+
+    const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
+      setViewModalOpen(false)
+      const defaultForm: DecisionFormState = {
+        name: '',
+        description: '',
+        priority: 1,
+        operator: 'AND',
+        conditionsJson: '[]',
+        modelRefsJson: '[]',
+        pluginsJson: '[]'
+      }
+
+      const initialData: DecisionFormState = mode === 'edit' && decision ? {
+        name: decision.name,
+        description: decision.description || '',
+        priority: decision.priority ?? 1,
+        operator: decision.rules?.operator || 'AND',
+        conditionsJson: JSON.stringify(decision.rules?.conditions || [], null, 2),
+        modelRefsJson: JSON.stringify(decision.modelRefs || [], null, 2),
+        pluginsJson: JSON.stringify(decision.plugins || [], null, 2)
+      } : defaultForm
+
+      const fields: FieldConfig[] = [
+        {
+          name: 'name',
+          label: 'Name',
+          type: 'text',
+          required: true,
+          placeholder: 'Enter a unique decision name'
+        },
+        {
+          name: 'description',
+          label: 'Description',
+          type: 'textarea',
+          placeholder: 'What does this decision route?'
+        },
+        {
+          name: 'priority',
+          label: 'Priority',
+          type: 'number',
+          min: 0,
+          placeholder: '1'
+        },
+        {
+          name: 'operator',
+          label: 'Rules Operator',
+          type: 'select',
+          options: ['AND', 'OR'],
+          required: true
+        },
+        {
+          name: 'conditionsJson',
+          label: 'Conditions JSON',
+          type: 'textarea',
+          placeholder: 'e.g. [{"type":"signal","name":"keyword-signal"}]'
+        },
+        {
+          name: 'modelRefsJson',
+          label: 'Model Refs JSON',
+          type: 'textarea',
+          placeholder: 'e.g. [{"model":"gpt-4o","use_reasoning":false}]'
+        },
+        {
+          name: 'pluginsJson',
+          label: 'Plugins JSON',
+          type: 'textarea',
+          placeholder: 'e.g. [{"type":"logging","configuration":{"level":"info"}}]'
+        }
+      ]
+
+      const parseArray = (label: string, raw: unknown) => {
+        if (Array.isArray(raw)) return raw
+        if (typeof raw === 'string') {
+          const trimmed = raw.trim()
+          const parsed = trimmed ? JSON.parse(trimmed) : []
+          if (!Array.isArray(parsed)) {
+            throw new Error(`${label} must be a JSON array.`)
+          }
+          return parsed
+        }
+        throw new Error(`${label} must be a JSON array.`)
+      }
+
+      const saveDecision = async (formData: DecisionFormState) => {
+        if (!config) {
+          throw new Error('Configuration not loaded yet.')
+        }
+
+        if (!isPythonCLI) {
+          throw new Error('Decisions are only supported for Python CLI configs.')
+        }
+
+        const name = (formData.name || '').trim()
+        if (!name) {
+          throw new Error('Name is required.')
+        }
+
+        const priority = Number.isFinite(formData.priority) ? formData.priority : 0
+
+        const conditionsRaw = parseArray('Conditions', formData.conditionsJson || '[]')
+        const modelRefsRaw = parseArray('Model references', formData.modelRefsJson || '[]')
+        const pluginsRaw = parseArray('Plugins', formData.pluginsJson || '[]')
+
+        const conditions = conditionsRaw.map((c, idx) => {
+          if (!c || typeof c !== 'object') throw new Error(`Condition #${idx + 1} must be an object.`)
+          if (!('type' in c) || !('name' in c)) throw new Error(`Condition #${idx + 1} must include "type" and "name".`)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const condition = c as any
+          return { type: String(condition.type), name: String(condition.name) }
+        })
+
+        const modelRefs = modelRefsRaw.map((m, idx) => {
+          if (!m || typeof m !== 'object') throw new Error(`Model reference #${idx + 1} must be an object.`)
+          if (!('model' in m)) throw new Error(`Model reference #${idx + 1} is missing "model".`)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ref = m as any
+          return { model: String(ref.model), use_reasoning: !!ref.use_reasoning }
+        })
+
+        const plugins = pluginsRaw.map((p, idx) => {
+          if (!p || typeof p !== 'object') throw new Error(`Plugin #${idx + 1} must be an object.`)
+          if (!('type' in p)) throw new Error(`Plugin #${idx + 1} is missing "type".`)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const plugin = p as any
+          return { type: String(plugin.type), configuration: plugin.configuration || {} }
+        })
+
+        const newDecision: DecisionConfig = {
+          name,
+          description: formData.description,
+          priority: priority || 0,
+          rules: {
+            operator: formData.operator,
+            conditions
+          },
+          modelRefs,
+          plugins
+        }
+
+        const newConfig: ConfigData = { ...config }
+        newConfig.decisions = [...(newConfig.decisions || [])]
+
+        if (mode === 'edit' && decision) {
+          removeDecisionByName(newConfig, decision.name)
+        }
+
+        newConfig.decisions.push(newDecision)
+        await saveConfig(newConfig)
+      }
+
+      openEditModal(
+        mode === 'add' ? 'Add Decision' : `Edit Decision: ${decision?.name}`,
+        initialData,
+        fields,
+        saveDecision,
+        mode
+      )
+    }
+
+    const handleEditDecision = (decision: DecisionRow) => {
+      openDecisionEditor('edit', decision)
     }
 
     return (
@@ -3288,7 +2965,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           searchPlaceholder="Search decisions..."
           searchValue={decisionsSearch}
           onSearchChange={setDecisionsSearch}
-          onAdd={openAddDecisionModal}
+          onAdd={() => openDecisionEditor('add')}
           addButtonText="Add Decision"
         />
 
@@ -3545,7 +3222,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalTitle(`Model: ${model.name}`)
       setViewModalSections(sections)
       setViewModalEditCallback(() => () => handleEditModel(model))
-      setViewModalMode('view')
       setViewModalOpen(true)
     }
 
@@ -3829,7 +3505,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalTitle(`Reasoning Family: ${familyName}`)
       setViewModalSections(sections)
       setViewModalEditCallback(() => () => handleEditReasoningFamily(familyName))
-      setViewModalMode('view')
       setViewModalOpen(true)
     }
 
@@ -4077,26 +3752,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
   }
 
-  const viewModalSectionsToRender = viewModalMode === 'add-signal'
-    ? buildAddSignalSections()
-    : viewModalMode === 'edit-signal'
-      ? buildAddSignalSections()
-      : viewModalMode === 'add-decision'
-        ? buildDecisionSections()
-        : viewModalMode === 'edit-decision'
-          ? buildDecisionSections()
-          : viewModalSections
-
-  const viewModalTitleToRender = viewModalMode === 'add-signal'
-    ? 'Add Signal'
-    : viewModalMode === 'edit-signal'
-      ? 'Edit Signal'
-      : viewModalMode === 'add-decision'
-        ? 'Add Decision'
-        : viewModalMode === 'edit-decision'
-          ? 'Edit Decision'
-          : viewModalTitle
-
   return (
     <div className={styles.container}>
 
@@ -4140,28 +3795,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={viewModalMode === 'view' ? viewModalEditCallback || undefined : undefined}
-        title={viewModalTitleToRender}
-        sections={viewModalSectionsToRender}
-        primaryActionLabel={viewModalMode === 'add-signal'
-          ? (addSignalSaving ? 'Creating...' : 'Create Signal')
-          : viewModalMode === 'edit-signal'
-            ? (addSignalSaving ? 'Saving...' : 'Save Changes')
-            : viewModalMode === 'add-decision'
-              ? (decisionSaving ? 'Creating...' : 'Create Decision')
-              : viewModalMode === 'edit-decision'
-                ? (decisionSaving ? 'Saving...' : 'Save Changes')
-                : undefined}
-        primaryActionDisabled={
-          (viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && (addSignalSaving || !addSignalForm.name.trim()) ||
-          (viewModalMode === 'add-decision' || viewModalMode === 'edit-decision') && (decisionSaving || !decisionForm.name.trim())
-        }
-        primaryActionLoading={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && addSignalSaving || (viewModalMode === 'add-decision' || viewModalMode === 'edit-decision') && decisionSaving}
-        onPrimaryAction={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal')
-          ? handleSaveSignal
-          : (viewModalMode === 'add-decision' || viewModalMode === 'edit-decision')
-            ? handleSaveDecision
-            : undefined}
+        onEdit={viewModalEditCallback || undefined}
+        title={viewModalTitle}
+        sections={viewModalSections}
       />
     </div>
   )
