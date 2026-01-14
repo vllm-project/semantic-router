@@ -49,7 +49,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           versions: {
             'current': {
-              label: 'Next 🚧',
+              label: '🚧 Next',
               path: 'next',
               badge: true,
             },
@@ -173,22 +173,7 @@ const config: Config = {
           label: 'Blog',
           position: 'left',
         },
-        {
-          to: '/news',
-          label: 'News',
-          position: 'left',
-        },
-        {
-          type: 'dropdown',
-          label: 'Roadmap',
-          position: 'left',
-          items: [
-            {
-              label: 'v0.1',
-              to: '/roadmap/v0.1',
-            },
-          ],
-        },
+
         {
           type: 'dropdown',
           label: 'Community',
@@ -214,13 +199,10 @@ const config: Config = {
               label: 'Code of Conduct',
               to: '/community/code-of-conduct',
             },
+
             {
               type: 'html',
               value: '<hr style="margin: 0.3rem 0;">',
-            },
-            {
-              label: 'GitHub Discussions',
-              href: 'https://github.com/vllm-project/semantic-router/discussions',
             },
             {
               label: 'GitHub Issues',
@@ -230,12 +212,12 @@ const config: Config = {
         },
         {
           href: 'https://github.com/vllm-project/semantic-router',
-          label: 'GitHub',
+          className: 'header-github-link',
           position: 'right',
         },
         {
           href: 'https://huggingface.co/LLM-Semantic-Router',
-          label: '🤗 Hugging Face',
+          className: 'header-hf-link',
           position: 'right',
         },
       ],
@@ -308,14 +290,7 @@ const config: Config = {
               label: 'Publications',
               to: '/publications',
             },
-            {
-              label: 'News',
-              to: '/news',
-            },
-            {
-              label: 'Roadmap',
-              to: '/roadmap/v0.1',
-            },
+
             {
               label: 'License',
               href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',

@@ -498,21 +498,7 @@
   "workGroups.contact.title": {
     "message": "联系我们"
   },
-  "news.readMore": {
-    "message": "阅读更多 →"
-  },
-  "news.title": {
-    "message": "新闻与文章"
-  },
-  "news.description": {
-    "message": "获取关于 vLLM Semantic Router 的最新新闻、研究论文、博客文章及其对 LLM 推理效率影响的文章。"
-  },
-  "news.contribute.title": {
-    "message": "投稿新闻"
-  },
-  "news.contribute.description": {
-    "message": "知道关于 vLLM Semantic Router 的文章、博客或出版物想要在此展示？"
-  },
+
   "publications.title": {
     "message": "论文与演讲"
   },
@@ -525,21 +511,7 @@
   "publications.talks.title": {
     "message": "会议演讲"
   },
-  "roadmap.v01.title": {
-    "message": "路线图 v0.1"
-  },
-  "roadmap.v01.subtitle": {
-    "message": "产品化智能路由与全面评估"
-  },
-  "roadmap.releaseGoal.title": {
-    "message": "发布目标"
-  },
-  "roadmap.deliverables.title": {
-    "message": "P0 关键交付物"
-  },
-  "roadmap.criteria.title": {
-    "message": "优先级标准"
-  },
+
   "promotion.title": {
     "message": "社区晋升 🚀"
   },
