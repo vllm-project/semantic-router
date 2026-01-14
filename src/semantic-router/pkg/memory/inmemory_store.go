@@ -43,7 +43,7 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 	defer s.mu.Unlock()
 
 	// Generate embedding if not already set
-	if len(memory.Embedding) == 0 {
+	if memory.Embedding == nil || len(memory.Embedding) == 0 {
 		embedding, err := candle_binding.GetEmbedding(memory.Content, 0)
 		if err != nil {
 			return err
