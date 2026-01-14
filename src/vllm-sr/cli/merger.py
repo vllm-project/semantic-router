@@ -224,6 +224,10 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
             "access_key": model.access_key,
         }
 
+        # Add api_format if provided
+        if model.api_format:
+            model_config[model.name]["api_format"] = model.api_format
+
         # Add pricing if provided
         if model.pricing:
             model_config[model.name]["pricing"] = {

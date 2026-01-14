@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"slices"
 )
 
@@ -88,6 +89,31 @@ func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, c
 		}
 	}
 	return 0, 0, "", false
+}
+
+// GetModelAPIFormat returns the API format for the given model.
+// Returns APIFormatAnthropic if configured, otherwise APIFormatOpenAI (default).
+func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
+	if c == nil || c.ModelConfig == nil {
+		return APIFormatOpenAI
+	}
+	if modelConfig, ok := c.ModelConfig[modelName]; ok && modelConfig.APIFormat != "" {
+		return modelConfig.APIFormat
+	}
+	return APIFormatOpenAI
+}
+
+// GetModelAccessKey returns the access key for the given model.
+func (c *RouterConfig) GetModelAccessKey(modelName string) string {
+	if c == nil || c.ModelConfig == nil {
+		return ""
+	}
+	if modelConfig, ok := c.ModelConfig[modelName]; ok {
+		rawKey := modelConfig.AccessKey
+		expandedKey := os.ExpandEnv(rawKey)
+		return expandedKey
+	}
+	return ""
 }
 
 // GetDecisionPIIPolicy returns the PII policy for a given decision

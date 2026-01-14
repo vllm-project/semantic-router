@@ -202,6 +202,9 @@ class Model(BaseModel):
     # Model parameter size (e.g., "1b", "7b", "70b", "100m")
     # Used by confidence algorithm to determine model order (smallest first)
     param_size: Optional[str] = None
+    # API format: "openai" (default) or "anthropic"
+    # When set to "anthropic", the router translates requests to Anthropic Messages API
+    api_format: Optional[str] = None
 
 
 class ReasoningFamily(BaseModel):

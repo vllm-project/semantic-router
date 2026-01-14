@@ -104,6 +104,11 @@ type RequestContext struct {
 	// Looper context
 	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
 	LooperIteration int  // The iteration number if this is a looper request
+
+	// External API routing context (for Envoy-routed external API requests)
+	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
+	// Empty string means standard OpenAI-compatible backend (no transformation needed)
+	APIFormat string
 }
 
 // handleRequestHeaders processes the request headers

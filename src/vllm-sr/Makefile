@@ -76,7 +76,7 @@ dev-serve:
 	@echo "Using config: $(CONFIG_FILE)"
 	@echo "Docker image: $(FULL_IMAGE)"
 	@echo ""
-	python -m cli.main serve $(CONFIG_FILE) --image $(FULL_IMAGE)
+	python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE)
 
 # Development test - just generate configs
 dev-test: install
@@ -170,7 +170,7 @@ docker-run: docker-build
 	@echo "Starting vLLM Semantic Router container..."
 	@echo "Config: $(CONFIG_FILE)"
 	@echo "Image: $(FULL_IMAGE)"
-	python -m cli.main serve $(CONFIG_FILE) --image $(FULL_IMAGE)
+	python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE)
 
 docker-stop:
 	@echo "Stopping vLLM Semantic Router..."
@@ -255,7 +255,7 @@ with open('$(CONFIG_FILE)', 'r') as f: \
 	"
 	@echo ""
 	@echo "5. Starting service with local image..."
-	@python -m cli.main serve $(CONFIG_FILE) --image $(FULL_IMAGE) --image-pull-policy never &
+	@python -m cli.main serve --config $(CONFIG_FILE) --image $(FULL_IMAGE) --image-pull-policy never &
 	@echo ""
 	@echo "6. Waiting for services to start (30 seconds)..."
 	@sleep 30
