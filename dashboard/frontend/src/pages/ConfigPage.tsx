@@ -234,6 +234,17 @@ interface ConfigPageProps {
 }
 
 type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language'
+type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
+
+interface DecisionFormState {
+  name: string
+  description: string
+  priority: number
+  operator: 'AND' | 'OR'
+  conditionsJson: string
+  modelRefsJson: string
+  pluginsJson: string
+}
 
 interface AddSignalFormState {
   type: SignalType
@@ -287,10 +298,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
-  const [viewModalMode, setViewModalMode] = useState<'view' | 'add-signal' | 'edit-signal'>('view')
+  const [viewModalMode, setViewModalMode] = useState<'view' | 'add-signal' | 'edit-signal' | 'add-decision' | 'edit-decision'>('view')
 
   // the signal being edited when in edit-signal mode
   const [editSignalContext, setEditSignalContext] = useState<{ originalName: string; originalType: SignalType } | null>(null)
+  // the decision being edited when in edit-decision mode
+  const [editDecisionContext, setEditDecisionContext] = useState<{ originalName: string } | null>(null)
 
   const [addSignalForm, setAddSignalForm] = useState<AddSignalFormState>(() => ({
     type: 'Keywords',
@@ -306,6 +319,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   }))
   const [addSignalSaving, setAddSignalSaving] = useState(false)
   const [addSignalError, setAddSignalError] = useState<string | null>(null)
+  const [decisionForm, setDecisionForm] = useState<DecisionFormState>(() => ({
+    name: '',
+    description: '',
+    priority: 1,
+    operator: 'AND',
+    conditionsJson: '[]',
+    modelRefsJson: '[]',
+    pluginsJson: '[]'
+  }))
+  const [decisionSaving, setDecisionSaving] = useState(false)
+  const [decisionError, setDecisionError] = useState<string | null>(null)
 
   // Search state
   const [decisionsSearch, setDecisionsSearch] = useState('')
@@ -465,6 +489,21 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     setEditSignalContext(null)
   }
 
+  const resetDecisionForm = () => {
+    setDecisionForm({
+      name: '',
+      description: '',
+      priority: 1,
+      operator: 'AND',
+      conditionsJson: '[]',
+      modelRefsJson: '[]',
+      pluginsJson: '[]'
+    })
+    setDecisionError(null)
+    setDecisionSaving(false)
+    setEditDecisionContext(null)
+  }
+
   const listInputToArray = (input: string) => input
     .split(/[\n,]/)
     .map(item => item.trim())
@@ -498,8 +537,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
   }
 
+  const removeDecisionByName = (cfg: ConfigData, targetName: string) => {
+    cfg.decisions = (cfg.decisions || []).filter(d => d.name !== targetName)
+  }
+
   const updateAddSignalField = <K extends keyof AddSignalFormState>(field: K, value: AddSignalFormState[K]) => {
     setAddSignalForm(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const updateDecisionField = <K extends keyof DecisionFormState>(field: K, value: DecisionFormState[K]) => {
+    setDecisionForm(prev => ({
       ...prev,
       [field]: value
     }))
@@ -694,6 +744,136 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return sections
   }
 
+  const buildDecisionSections = (): ViewSection[] => {
+    const sections: ViewSection[] = [
+      {
+        title: 'Basic Information',
+        fields: [
+          {
+            label: 'Name',
+            value: (
+              <input
+                className={styles.addSignalInput}
+                value={decisionForm.name}
+                onChange={(e) => updateDecisionField('name', e.target.value)}
+                placeholder="Enter a unique decision name"
+              />
+            ),
+            fullWidth: true
+          },
+          {
+            label: 'Description',
+            value: (
+              <textarea
+                className={styles.addSignalTextarea}
+                value={decisionForm.description}
+                onChange={(e) => updateDecisionField('description', e.target.value)}
+                placeholder="What does this decision route?"
+              />
+            ),
+            fullWidth: true
+          },
+          {
+            label: 'Priority',
+            value: (
+              <input
+                type="number"
+                min={0}
+                className={styles.addSignalInput}
+                value={decisionForm.priority}
+                onChange={(e) => updateDecisionField('priority', parseInt(e.target.value, 10) || 0)}
+                placeholder="1"
+              />
+            )
+          },
+          {
+            label: 'Rules Operator',
+            value: (
+              <select
+                className={styles.addSignalSelect}
+                value={decisionForm.operator}
+                onChange={(e) => updateDecisionField('operator', e.target.value as 'AND' | 'OR')}
+              >
+                <option value="AND">AND</option>
+                <option value="OR">OR</option>
+              </select>
+            )
+          }
+        ]
+      },
+      {
+        title: 'Conditions',
+        fields: [
+          {
+            label: 'Conditions JSON',
+            value: (
+              <textarea
+                className={styles.addSignalTextarea}
+                value={decisionForm.conditionsJson}
+                onChange={(e) => updateDecisionField('conditionsJson', e.target.value)}
+                placeholder='e.g. [{"type":"signal","name":"keyword-signal"}]'
+              />
+            ),
+            fullWidth: true
+          }
+        ]
+      },
+      {
+        title: 'Model References',
+        fields: [
+          {
+            label: 'Model Refs JSON',
+            value: (
+              <textarea
+                className={styles.addSignalTextarea}
+                value={decisionForm.modelRefsJson}
+                onChange={(e) => updateDecisionField('modelRefsJson', e.target.value)}
+                placeholder='e.g. [{"model":"gpt-4o","use_reasoning":false}]'
+              />
+            ),
+            fullWidth: true
+          }
+        ]
+      },
+      {
+        title: 'Plugins (Optional)',
+        fields: [
+          {
+            label: 'Plugins JSON',
+            value: (
+              <textarea
+                className={styles.addSignalTextarea}
+                value={decisionForm.pluginsJson}
+                onChange={(e) => updateDecisionField('pluginsJson', e.target.value)}
+                placeholder='e.g. [{"type":"logging","configuration":{"level":"info"}}]'
+              />
+            ),
+            fullWidth: true
+          }
+        ]
+      }
+    ]
+
+    if (decisionError) {
+      sections.push({
+        title: 'Status',
+        fields: [
+          {
+            label: 'Validation',
+            value: (
+              <span style={{ color: 'var(--color-danger)' }}>
+                {decisionError}
+              </span>
+            ),
+            fullWidth: true
+          }
+        ]
+      })
+    }
+
+    return sections
+  }
+
   const handleSaveSignal = async () => {
     // used for both adding a signal and editing an existing signal
     if (!config) {
@@ -840,12 +1020,166 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     setViewModalOpen(true)
   }
 
+  const openAddDecisionModal = () => {
+    if (!isPythonCLI) {
+      setViewModalMode('view')
+      setViewModalTitle('Add Decision')
+      setViewModalSections([{
+        title: 'Not supported',
+        fields: [{ label: 'Info', value: 'Adding decisions is only available for Python CLI configs.', fullWidth: true }]
+      }])
+      setViewModalEditCallback(null)
+      setViewModalOpen(true)
+      return
+    }
+
+    resetDecisionForm()
+    setViewModalMode('add-decision')
+    setViewModalTitle('Add Decision')
+    setViewModalSections([])
+    setViewModalEditCallback(null)
+    setViewModalOpen(true)
+  }
+
+  const handleSaveDecision = async () => {
+    if (!config) {
+      setDecisionError('Configuration not loaded yet.')
+      return
+    }
+
+    if (!isPythonCLI) {
+      setDecisionError('Decisions are only supported for Python CLI configs.')
+      return
+    }
+
+    const name = decisionForm.name.trim()
+    if (!name) {
+      setDecisionError('Name is required.')
+      return
+    }
+
+    const priority = Number.isFinite(decisionForm.priority) ? decisionForm.priority : 0
+
+    const parseArray = (label: string, raw: string) => {
+      try {
+        const parsed = raw && raw.trim() ? JSON.parse(raw) : []
+        if (!Array.isArray(parsed)) throw new Error(`${label} must be a JSON array.`)
+        return parsed
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        throw new Error(`${label} parse error: ${message}`)
+      }
+    }
+
+    setDecisionSaving(true)
+    setDecisionError(null)
+
+    try {
+      const conditionsRaw = parseArray('Conditions', decisionForm.conditionsJson || '[]')
+      const modelRefsRaw = parseArray('Model references', decisionForm.modelRefsJson || '[]')
+      const pluginsRaw = parseArray('Plugins', decisionForm.pluginsJson || '[]')
+
+      const conditions = conditionsRaw.map((c, idx) => {
+        if (!c || typeof c !== 'object') throw new Error(`Condition #${idx + 1} must be an object.`)
+        if (!c.type || !c.name) throw new Error(`Condition #${idx + 1} must include "type" and "name".`)
+        return { type: String(c.type), name: String(c.name) }
+      })
+
+      const modelRefs = modelRefsRaw.map((m, idx) => {
+        if (!m || typeof m !== 'object') throw new Error(`Model reference #${idx + 1} must be an object.`)
+        if (!m.model) throw new Error(`Model reference #${idx + 1} is missing "model".`)
+        return { model: String(m.model), use_reasoning: !!m.use_reasoning }
+      })
+
+      const plugins = pluginsRaw.map((p, idx) => {
+        if (!p || typeof p !== 'object') throw new Error(`Plugin #${idx + 1} must be an object.`)
+        if (!p.type) throw new Error(`Plugin #${idx + 1} is missing "type".`)
+        return { type: String(p.type), configuration: p.configuration || {} }
+      })
+
+      const newDecision: DecisionConfig = {
+        name,
+        description: decisionForm.description,
+        priority: priority || 0,
+        rules: {
+          operator: decisionForm.operator,
+          conditions
+        },
+        modelRefs,
+        plugins
+      }
+
+      const newConfig: ConfigData = { ...config }
+      newConfig.decisions = [...(newConfig.decisions || [])]
+
+      const isEdit = viewModalMode === 'edit-decision' && editDecisionContext
+      if (isEdit) {
+        removeDecisionByName(newConfig, editDecisionContext.originalName)
+      }
+
+      newConfig.decisions.push(newDecision)
+      await saveConfig(newConfig)
+      resetDecisionForm()
+      setViewModalOpen(false)
+      setViewModalMode('view')
+    } catch (err) {
+      setDecisionError(err instanceof Error ? err.message : 'Failed to save decision')
+    } finally {
+      setDecisionSaving(false)
+    }
+  }
+
+  const populateDecisionForm = (decision: DecisionConfig) => {
+    setDecisionForm({
+      name: decision.name,
+      description: decision.description || '',
+      priority: decision.priority ?? 1,
+      operator: decision.rules?.operator || 'AND',
+      conditionsJson: JSON.stringify(decision.rules?.conditions || [], null, 2),
+      modelRefsJson: JSON.stringify(decision.modelRefs || [], null, 2),
+      pluginsJson: JSON.stringify(decision.plugins || [], null, 2)
+    })
+  }
+
+  const handleEditDecision = (decision: DecisionConfig) => {
+    if (!isPythonCLI) {
+      alert('Editing decisions is only supported for Python CLI configs.')
+      return
+    }
+
+    populateDecisionForm(decision)
+    setEditDecisionContext({ originalName: decision.name })
+    setViewModalMode('edit-decision')
+    setViewModalTitle(`Edit Decision: ${decision.name}`)
+    setViewModalSections([])
+    setViewModalEditCallback(null)
+    setViewModalOpen(true)
+  }
+
+  const handleDeleteDecision = async (decision: DecisionConfig) => {
+    if (!confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
+      return
+    }
+
+    if (!config || !isPythonCLI) {
+      alert('Deleting decisions is only supported for Python CLI configs.')
+      return
+    }
+
+    const newConfig: ConfigData = { ...config }
+    removeDecisionByName(newConfig, decision.name)
+    await saveConfig(newConfig)
+  }
+
   const handleCloseViewModal = () => {
     setViewModalOpen(false)
     setViewModalMode('view')
     setAddSignalSaving(false)
     setAddSignalError(null)
     setEditSignalContext(null)
+    setDecisionSaving(false)
+    setDecisionError(null)
+    setEditDecisionContext(null)
   }
 
   // Get effective config value - check router defaults first, then main config
@@ -2931,21 +3265,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalOpen(true)
     }
 
-    // Handle edit decision (placeholder for now)
-    const handleEditDecision = (decision: DecisionRow) => {
-      setViewModalOpen(false)
-      // TODO: Implement edit functionality
-      console.log('Edit decision:', decision)
-    }
-
-    // Handle delete decision (placeholder for now)
-    const handleDeleteDecision = (decision: DecisionRow) => {
-      if (confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
-        // TODO: Implement delete functionality
-        console.log('Delete decision:', decision)
-      }
-    }
-
     return (
       <div className={styles.sectionPanel}>
         {/* Default Model Info */}
@@ -2969,7 +3288,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           searchPlaceholder="Search decisions..."
           searchValue={decisionsSearch}
           onSearchChange={setDecisionsSearch}
-          onAdd={() => console.log('Add decision')}
+          onAdd={openAddDecisionModal}
           addButtonText="Add Decision"
         />
 
@@ -3762,13 +4081,21 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     ? buildAddSignalSections()
     : viewModalMode === 'edit-signal'
       ? buildAddSignalSections()
-      : viewModalSections
+      : viewModalMode === 'add-decision'
+        ? buildDecisionSections()
+        : viewModalMode === 'edit-decision'
+          ? buildDecisionSections()
+          : viewModalSections
 
   const viewModalTitleToRender = viewModalMode === 'add-signal'
     ? 'Add Signal'
     : viewModalMode === 'edit-signal'
       ? 'Edit Signal'
-      : viewModalTitle
+      : viewModalMode === 'add-decision'
+        ? 'Add Decision'
+        : viewModalMode === 'edit-decision'
+          ? 'Edit Decision'
+          : viewModalTitle
 
   return (
     <div className={styles.container}>
@@ -3820,10 +4147,21 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           ? (addSignalSaving ? 'Creating...' : 'Create Signal')
           : viewModalMode === 'edit-signal'
             ? (addSignalSaving ? 'Saving...' : 'Save Changes')
+            : viewModalMode === 'add-decision'
+              ? (decisionSaving ? 'Creating...' : 'Create Decision')
+              : viewModalMode === 'edit-decision'
+                ? (decisionSaving ? 'Saving...' : 'Save Changes')
+                : undefined}
+        primaryActionDisabled={
+          (viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && (addSignalSaving || !addSignalForm.name.trim()) ||
+          (viewModalMode === 'add-decision' || viewModalMode === 'edit-decision') && (decisionSaving || !decisionForm.name.trim())
+        }
+        primaryActionLoading={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && addSignalSaving || (viewModalMode === 'add-decision' || viewModalMode === 'edit-decision') && decisionSaving}
+        onPrimaryAction={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal')
+          ? handleSaveSignal
+          : (viewModalMode === 'add-decision' || viewModalMode === 'edit-decision')
+            ? handleSaveDecision
             : undefined}
-        primaryActionDisabled={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && (addSignalSaving || !addSignalForm.name.trim())}
-        primaryActionLoading={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') && addSignalSaving}
-        onPrimaryAction={(viewModalMode === 'add-signal' || viewModalMode === 'edit-signal') ? handleSaveSignal : undefined}
       />
     </div>
   )
