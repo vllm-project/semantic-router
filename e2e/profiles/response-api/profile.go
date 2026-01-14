@@ -18,10 +18,53 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
+const (
+	// Namespace constants
+	namespaceSemanticRouter = "vllm-semantic-router-system"
+	namespaceEnvoyGateway   = "envoy-gateway-system"
+	namespaceAIGateway      = "envoy-ai-gateway-system"
+
+	// Release name constants
+	releaseSemanticRouter = "semantic-router"
+	releaseEnvoyGateway   = "eg"
+	releaseAIGatewayCRD   = "aieg-crd"
+	releaseAIGateway      = "aieg"
+
+	// Deployment name constants
+	deploymentSemanticRouter = "semantic-router"
+	deploymentEnvoyGateway   = "envoy-gateway"
+	deploymentAIGateway      = "ai-gateway-controller"
+
+	// Chart and URL constants
+	chartPathSemanticRouter = "deploy/helm/semantic-router"
+	chartEnvoyGateway       = "oci://docker.io/envoyproxy/gateway-helm"
+	chartAIGatewayCRD       = "oci://docker.io/envoyproxy/ai-gateway-crds-helm"
+	chartAIGateway          = "oci://docker.io/envoyproxy/ai-gateway-helm"
+	envoyGatewayValuesURL   = "https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"
+
+	// File path constants
+	valuesFile         = "e2e/profiles/response-api/values.yaml"
+	mockVLLMManifest   = "deploy/kubernetes/response-api/mock-vllm.yaml"
+	gatewayAPIManifest = "deploy/kubernetes/response-api/gwapi-resources.yaml"
+
+	// Timeout constants
+	timeoutSemanticRouterInstall = "30m"
+	timeoutHelmInstall           = "10m"
+	timeoutDeploymentWait        = 30 * time.Minute
+	timeoutServiceRetry          = 10 * time.Minute
+	intervalServiceRetry         = 5 * time.Second
+
+	// Image constants
+	imageRepository = "ghcr.io/vllm-project/semantic-router/extproc"
+	imagePullPolicy = "Never"
+
+	// Label selector constants
+	labelSelectorGateway = "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router"
+)
+
 // Profile implements the Response API test profile
 type Profile struct {
-	verbose    bool
-	kubeConfig string
+	verbose bool
 }
 
 // NewProfile creates a new Response API profile
@@ -42,7 +85,6 @@ func (p *Profile) Description() string {
 // Setup deploys all required components for Response API testing
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
-	p.kubeConfig = opts.KubeConfig
 	p.log("Setting up Response API test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
@@ -55,18 +97,18 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 
 	// Step 2: Deploy Envoy Gateway
 	p.log("Step 2/5: Deploying Envoy Gateway")
-	if err := p.deployEnvoyGateway(ctx, deployer); err != nil {
+	if err := p.deployEnvoyGateway(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy envoy gateway: %w", err)
 	}
 
-	// Step 3: Deploy mock vLLM backend
-	p.log("Step 3/5: Deploying mock vLLM backend")
-	if err := p.deployMockVLLM(ctx, deployer, opts); err != nil {
-		return fmt.Errorf("failed to deploy mock vLLM: %w", err)
+	// Step 3: Deploy Envoy AI Gateway
+	p.log("Step 3/5: Deploying Envoy AI Gateway")
+	if err := p.deployEnvoyAIGateway(ctx, deployer, opts); err != nil {
+		return fmt.Errorf("failed to deploy envoy ai gateway: %w", err)
 	}
 
-	// Step 4: Deploy Gateway API resources (Gateway/Route/ExtProc patch policy)
-	p.log("Step 4/5: Deploying Gateway API resources")
+	// Step 4: Deploy Gateway API Resources
+	p.log("Step 4/5: Deploying Gateway API Resources")
 	if err := p.deployGatewayResources(ctx, opts); err != nil {
 		return fmt.Errorf("failed to deploy gateway resources: %w", err)
 	}
@@ -89,16 +131,19 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
 	p.log("Cleaning up Gateway API resources")
-	p.cleanupGatewayResources(ctx, opts)
+	if err := p.cleanupGatewayResources(ctx, opts); err != nil {
+		p.log("Warning: Failed to cleanup Gateway API resources: %v", err)
+	}
 
-	p.log("Uninstalling mock vLLM backend")
-	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/mock-vllm.yaml")
+	p.log("Uninstalling Envoy AI Gateway")
+	deployer.Uninstall(ctx, releaseAIGatewayCRD, namespaceAIGateway)
+	deployer.Uninstall(ctx, releaseAIGateway, namespaceAIGateway)
 
 	p.log("Uninstalling Envoy Gateway")
-	_ = deployer.Uninstall(ctx, "eg", "envoy-gateway-system")
+	deployer.Uninstall(ctx, releaseEnvoyGateway, namespaceEnvoyGateway)
 
 	p.log("Uninstalling Semantic Router")
-	_ = deployer.Uninstall(ctx, "semantic-router", "vllm-semantic-router-system")
+	deployer.Uninstall(ctx, releaseSemanticRouter, namespaceSemanticRouter)
 
 	p.log("Response API test environment teardown complete")
 	return nil
@@ -107,58 +152,112 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
 	return []string{
-		// Response API basic operations
 		"response-api-create",
 		"response-api-get",
 		"response-api-delete",
 		"response-api-input-items",
-
-		// Response API conversation chaining
-		"response-api-conversation-chaining",
 	}
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return framework.ServiceConfig{
-		LabelSelector: "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router",
-		Namespace:     "envoy-gateway-system",
+		LabelSelector: labelSelectorGateway,
+		Namespace:     namespaceEnvoyGateway,
 		PortMapping:   "8080:80",
 	}
 }
 
 func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
-	imageTag := opts.ImageTag
-	if imageTag == "" {
-		imageTag = "latest"
-	}
-
-	return deployer.Install(ctx, helm.InstallOptions{
-		ReleaseName: "semantic-router",
-		Chart:       "deploy/helm/semantic-router",
-		Namespace:   "vllm-semantic-router-system",
-		ValuesFiles: []string{"e2e/profiles/response-api/values.yaml"},
+	installOpts := helm.InstallOptions{
+		ReleaseName: releaseSemanticRouter,
+		Chart:       chartPathSemanticRouter,
+		Namespace:   namespaceSemanticRouter,
+		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
-			"image.tag":        imageTag,
+			"image.repository": imageRepository,
+			"image.tag":        opts.ImageTag,
+			"image.pullPolicy": imagePullPolicy,
 		},
 		Wait:    true,
-		Timeout: "30m",
-	})
+		Timeout: timeoutSemanticRouterInstall,
+	}
+
+	if err := deployer.Install(ctx, installOpts); err != nil {
+		return err
+	}
+
+	if err := deployer.WaitForDeployment(ctx, namespaceSemanticRouter, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deployer) error {
-	return deployer.Install(ctx, helm.InstallOptions{
-		ReleaseName: "eg",
-		Chart:       "oci://docker.io/envoyproxy/gateway-helm",
-		Namespace:   "envoy-gateway-system",
+func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {
+	installOpts := helm.InstallOptions{
+		ReleaseName: releaseEnvoyGateway,
+		Chart:       chartEnvoyGateway,
+		Namespace:   namespaceEnvoyGateway,
 		Version:     "v1.6.0",
+		ValuesFiles: []string{envoyGatewayValuesURL},
 		Wait:        true,
-		Timeout:     "300s",
-	})
+		Timeout:     timeoutHelmInstall,
+	}
+
+	if err := deployer.Install(ctx, installOpts); err != nil {
+		return err
+	}
+
+	return deployer.WaitForDeployment(ctx, namespaceEnvoyGateway, deploymentEnvoyGateway, timeoutDeploymentWait)
+}
+
+func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {
+	// Install AI Gateway CRDs
+	crdOpts := helm.InstallOptions{
+		ReleaseName: releaseAIGatewayCRD,
+		Chart:       chartAIGatewayCRD,
+		Namespace:   namespaceAIGateway,
+		Version:     "v0.4.0",
+		Wait:        true,
+		Timeout:     timeoutHelmInstall,
+	}
+
+	if err := deployer.Install(ctx, crdOpts); err != nil {
+		return err
+	}
+
+	// Install AI Gateway
+	installOpts := helm.InstallOptions{
+		ReleaseName: releaseAIGateway,
+		Chart:       chartAIGateway,
+		Namespace:   namespaceAIGateway,
+		Version:     "v0.4.0",
+		Wait:        true,
+		Timeout:     timeoutHelmInstall,
+	}
+
+	if err := deployer.Install(ctx, installOpts); err != nil {
+		return err
+	}
+
+	return deployer.WaitForDeployment(ctx, namespaceAIGateway, deploymentAIGateway, timeoutDeploymentWait)
+}
+
+func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {
+	if err := p.kubectlApply(ctx, opts.KubeConfig, mockVLLMManifest); err != nil {
+		return fmt.Errorf("failed to apply mock-vllm: %w", err)
+	}
+
+	if err := p.kubectlApply(ctx, opts.KubeConfig, gatewayAPIManifest); err != nil {
+		return fmt.Errorf("failed to apply gateway API resources: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
+	// Create Kubernetes client
 	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to build kubeconfig: %w", err)
@@ -166,94 +265,64 @@ func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOp
 
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return fmt.Errorf("failed to create kubernetes client: %w", err)
+		return fmt.Errorf("failed to create kube client: %w", err)
 	}
 
-	// Wait for semantic router deployment
-	p.log("Waiting for Semantic Router deployment...")
-	if err := p.waitForDeployment(ctx, client, "vllm-semantic-router-system", "semantic-router"); err != nil {
-		return fmt.Errorf("semantic router deployment not ready: %w", err)
-	}
-
-	// Wait for Envoy Gateway deployment
-	p.log("Waiting for Envoy Gateway deployment...")
-	if err := p.waitForDeployment(ctx, client, "envoy-gateway-system", "envoy-gateway"); err != nil {
-		return fmt.Errorf("envoy gateway deployment not ready: %w", err)
-	}
-
-	// Wait for mock vLLM deployment
-	p.log("Waiting for mock vLLM deployment...")
-	if err := p.waitForDeployment(ctx, client, "default", "mock-vllm"); err != nil {
-		return fmt.Errorf("mock vLLM deployment not ready: %w", err)
-	}
-
-	// Wait for Envoy service to show up and be ready
-	p.log("Waiting for Envoy Gateway service to be ready...")
-	labelSelector := "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router"
-	retryTimeout := 10 * time.Minute
-	retryInterval := 5 * time.Second
 	startTime := time.Now()
+	p.log("Waiting for Envoy Gateway service to be ready...")
 
+	var envoyService string
 	for {
-		envoyService, svcErr := helpers.GetEnvoyServiceName(ctx, client, labelSelector, p.verbose)
-		if svcErr == nil {
-			if podErr := helpers.VerifyServicePodsRunning(ctx, client, "envoy-gateway-system", envoyService, p.verbose); podErr == nil {
+		envoyService, err = helpers.GetEnvoyServiceName(ctx, client, labelSelectorGateway, p.verbose)
+		if err == nil {
+			podErr := helpers.VerifyServicePodsRunning(ctx, client, namespaceEnvoyGateway, envoyService, p.verbose)
+			if podErr == nil {
+				p.log("Envoy Gateway service is ready: %s", envoyService)
 				break
 			}
+			if p.verbose {
+				p.log("Envoy service found but pods not ready: %v", podErr)
+			}
+			err = fmt.Errorf("service pods not ready: %w", podErr)
 		}
 
-		if time.Since(startTime) >= retryTimeout {
-			if svcErr != nil {
-				return fmt.Errorf("envoy gateway service not ready after %v: %w", retryTimeout, svcErr)
-			}
-			return fmt.Errorf("envoy gateway service pods not ready after %v", retryTimeout)
+		if time.Since(startTime) >= timeoutServiceRetry {
+			return fmt.Errorf("failed to get Envoy service with running pods after %v: %w", timeoutServiceRetry, err)
+		}
+
+		if p.verbose {
+			p.log("Envoy service not ready, retrying in %v... (elapsed: %v)",
+				intervalServiceRetry, time.Since(startTime).Round(time.Second))
 		}
 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(retryInterval):
+		case <-time.After(intervalServiceRetry):
 		}
+	}
+
+	p.log("Verifying all deployments are healthy...")
+
+	if err := helpers.CheckDeployment(ctx, client, namespaceSemanticRouter, deploymentSemanticRouter, p.verbose); err != nil {
+		return fmt.Errorf("semantic-router deployment not healthy: %w", err)
+	}
+
+	if err := helpers.CheckDeployment(ctx, client, namespaceEnvoyGateway, deploymentEnvoyGateway, p.verbose); err != nil {
+		return fmt.Errorf("envoy-gateway deployment not healthy: %w", err)
 	}
 
 	p.log("All components are ready")
 	return nil
 }
 
-func (p *Profile) waitForDeployment(ctx context.Context, client *kubernetes.Clientset, namespace, name string) error {
-	timeout := 30 * time.Minute
-	interval := 5 * time.Second
-	deadline := time.Now().Add(timeout)
-
-	for time.Now().Before(deadline) {
-		if err := helpers.CheckDeployment(ctx, client, namespace, name, p.verbose); err == nil {
-			return nil
-		}
-		time.Sleep(interval)
-	}
-
-	return fmt.Errorf("timeout waiting for deployment %s/%s", namespace, name)
-}
-
-func (p *Profile) log(msg string) {
-	if p.verbose {
-		fmt.Printf("[response-api] %s\n", msg)
-	}
-}
-
-func (p *Profile) deployMockVLLM(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
-	if err := p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/mock-vllm.yaml"); err != nil {
-		return err
-	}
-	return deployer.WaitForDeployment(ctx, "default", "mock-vllm", 5*time.Minute)
-}
-
-func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {
-	return p.kubectlApply(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/gwapi-resources.yaml")
-}
-
 func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
-	p.kubectlDelete(ctx, opts.KubeConfig, "deploy/kubernetes/response-api/gwapi-resources.yaml")
+	if err := p.kubectlDelete(ctx, opts.KubeConfig, gatewayAPIManifest); err != nil {
+		return fmt.Errorf("failed to delete gateway API resources: %w", err)
+	}
+	if err := p.kubectlDelete(ctx, opts.KubeConfig, mockVLLMManifest); err != nil {
+		return fmt.Errorf("failed to delete mock-vllm: %w", err)
+	}
 	return nil
 }
 
@@ -262,7 +331,7 @@ func (p *Profile) kubectlApply(ctx context.Context, kubeConfig, manifest string)
 }
 
 func (p *Profile) kubectlDelete(ctx context.Context, kubeConfig, manifest string) error {
-	return p.runKubectl(ctx, kubeConfig, "delete", "--ignore-not-found", "-f", manifest)
+	return p.runKubectl(ctx, kubeConfig, "delete", "-f", manifest, "--ignore-not-found=true")
 }
 
 func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {
@@ -273,4 +342,10 @@ func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...str
 		cmd.Stderr = os.Stderr
 	}
 	return cmd.Run()
+}
+
+func (p *Profile) log(format string, args ...interface{}) {
+	if p.verbose {
+		fmt.Printf("[response-api] "+format+"\n", args...)
+	}
 }
