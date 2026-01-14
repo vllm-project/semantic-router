@@ -139,19 +139,9 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		os.RemoveAll(tempDir)
 	})
 
-	// Helper function to check if ModelFactory is initialized
-	isModelFactoryInitialized := func() bool {
-		// Try to get embedding models info to check if ModelFactory is initialized
-		_, err := candle_binding.GetEmbeddingModelsInfo()
-		return err == nil
-	}
-
 	Describe("Tools Database Loading", func() {
 		Context("with valid tools database path", func() {
 			It("should load tools from toolsDBPath successfully", func() {
-				if !isModelFactoryInitialized() {
-					Skip("ModelFactory not initialized - skipping test")
-				}
 				cfg.ToolSelection.Tools.Enabled = true
 				cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
 				cfg.ToolSelection.Tools.TopK = 3
@@ -229,9 +219,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select top-1 tool when topK=1", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.TopK = 1
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("What's the weather like?", 1)
@@ -241,9 +228,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select top-2 tools when topK=2", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.TopK = 2
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("search weather forecast", 2)
@@ -253,9 +237,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select top-3 tools when topK=3", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.TopK = 3
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("calculate math and search", 3)
@@ -265,9 +246,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should limit results to available tools when topK > tool count", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.TopK = 10
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 10)
@@ -277,9 +255,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should return most relevant tools first", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.TopK = 3
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather forecast temperature", 3)
@@ -302,9 +277,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should filter out tools below threshold with threshold=0.7", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.7}[0]
 
 			// Recreate router with new threshold
@@ -323,9 +295,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should include more tools with lower threshold=0.2", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			// Recreate router with new threshold
@@ -340,9 +309,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should return empty list when no tools meet high threshold", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
 			// Recreate router with new threshold
@@ -357,9 +323,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should respect both topK and threshold constraints", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.5}[0]
 			cfg.ToolSelection.Tools.TopK = 2
 
@@ -448,9 +411,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		Context("with fallbackToEmpty=false", func() {
 			It("should keep original tools when no tools meet threshold", func() {
-				if !isModelFactoryInitialized() {
-					Skip("ModelFactory not initialized - skipping test")
-				}
 				cfg.ToolSelection.Tools.FallbackToEmpty = false
 				cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
@@ -490,9 +450,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select weather tool for weather query", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("What's the weather like today?", 3)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(selectedTools)).To(BeNumerically(">", 0))
@@ -500,9 +457,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select calculate tool for math query", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("Calculate 25 + 37", 3)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(selectedTools)).To(BeNumerically(">", 0))
@@ -515,9 +469,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select search tool for search query", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("Search for latest news", 3)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(selectedTools)).To(BeNumerically(">", 0))
@@ -529,9 +480,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select email tool for email query", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("Send an email to John", 3)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(selectedTools)).To(BeNumerically(">", 0))
@@ -543,9 +491,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should handle queries that match multiple categories", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("search for weather information and calculate temperature", 3)
 			Expect(err).NotTo(HaveOccurred())
 			// Should return up to 3 relevant tools
@@ -647,9 +592,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should load tools with correct categories", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			allTools := router.ToolsDatabase.GetAllTools()
 			Expect(allTools).To(HaveLen(4))
 			// Verify categories are preserved in the database
@@ -658,9 +600,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should load tools with correct tags", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			allTools := router.ToolsDatabase.GetAllTools()
 			Expect(allTools).To(HaveLen(4))
 			// Tags are used internally for semantic matching
@@ -671,9 +610,6 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should handle tools from different categories", func() {
-			if !isModelFactoryInitialized() {
-				Skip("ModelFactory not initialized - skipping test")
-			}
 			// Test that tools from multiple categories can be selected
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather and email", 5)
 			Expect(err).NotTo(HaveOccurred())

@@ -470,16 +470,6 @@ func CreateTestConfig() *config.RouterConfig {
 		}
 	}
 
-	// Check if category model files exist - only configure category classification if available
-	categoryModelID := ""
-	categoryMappingPath := ""
-	if _, err := os.Stat("../../../../models/mom-domain-classifier"); err == nil {
-		if _, err := os.Stat("../../../../models/mom-domain-classifier/category_mapping.json"); err == nil {
-			categoryModelID = "../../../../models/mom-domain-classifier"
-			categoryMappingPath = "../../../../models/mom-domain-classifier/category_mapping.json"
-		}
-	}
-
 	return &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			BertModel: config.BertModel{
@@ -495,10 +485,10 @@ func CreateTestConfig() *config.RouterConfig {
 			},
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
-					ModelID:             categoryModelID,
+					ModelID:             "../../../../models/mom-domain-classifier",
 					UseCPU:              true,
 					UseModernBERT:       true,
-					CategoryMappingPath: categoryMappingPath,
+					CategoryMappingPath: "../../../../models/mom-domain-classifier/category_mapping.json",
 				},
 				MCPCategoryModel: config.MCPCategoryModel{
 					Enabled: false, // MCP not used in tests
@@ -581,17 +571,9 @@ func CreateTestConfig() *config.RouterConfig {
 // CreateTestRouter creates a properly initialized router for testing
 func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	// Create mock components
-	// Only load category mapping if the file exists
-	// This allows tests to run without model files in CI environments
-	var categoryMapping *classification.CategoryMapping
-	var err error
-	if cfg.CategoryMappingPath != "" {
-		if _, statErr := os.Stat(cfg.CategoryMappingPath); statErr == nil {
-			categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
-			if err != nil {
-				return nil, err
-			}
-		}
+	categoryMapping, err := classification.LoadCategoryMapping(cfg.CategoryMappingPath)
+	if err != nil {
+		return nil, err
 	}
 
 	// Only load PII mapping if the file exists
@@ -1102,14 +1084,9 @@ var _ = Describe("Security Checks", func() {
 
 	Context("with jailbreak detection enabled", func() {
 		BeforeEach(func() {
-			// Check if jailbreak model exists - skip if not available
-			jailbreakModelPath := "../../../../models/mom-jailbreak-classifier"
-			if _, err := os.Stat(jailbreakModelPath); os.IsNotExist(err) {
-				Skip("Jailbreak model not available - skipping test")
-			}
-
 			cfg.PromptGuard.Enabled = true
-			cfg.PromptGuard.ModelID = jailbreakModelPath
+			// TODO: Use a real model path here; this should be moved to an integration test later.
+			cfg.PromptGuard.ModelID = "../../../../models/mom-jailbreak-classifier"
 			cfg.PromptGuard.JailbreakMappingPath = "/path/to/jailbreak.json"
 			cfg.PromptGuard.UseModernBERT = true
 			cfg.PromptGuard.UseCPU = true
@@ -1187,16 +1164,12 @@ var _ = Describe("ExtProc Package", func() {
 		It("should handle missing model files gracefully", func() {
 			cfg := CreateTestConfig()
 			// Intentionally use invalid paths to test error handling
-			// Since CreateTestRouter now handles missing files gracefully,
-			// we test that it doesn't fail when files are missing
-			cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath = "/nonexistent/path/category_mapping.json"
-			cfg.InlineModels.Classifier.CategoryModel.ModelID = "/nonexistent/path/model"
-			cfg.InlineModels.Classifier.PIIModel.PIIMappingPath = "/nonexistent/path/pii_mapping.json"
-			cfg.InlineModels.Classifier.PIIModel.ModelID = "/nonexistent/path/pii_model"
+			cfg.CategoryMappingPath = "/nonexistent/path/category_mapping.json"
+			cfg.PIIMappingPath = "/nonexistent/path/pii_mapping.json"
 
 			_, err := CreateTestRouter(cfg)
-			// Should succeed even with missing files (they're optional)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
 		})
 	})
 
@@ -1225,11 +1198,8 @@ var _ = Describe("ExtProc Package", func() {
 		It("should have valid classifier configuration", func() {
 			cfg := CreateTestConfig()
 
-			// Category model configuration is optional - only check if files exist
-			// In CI environments without category models, these may be empty
-			if cfg.InlineModels.Classifier.CategoryModel.ModelID != "" {
-				Expect(cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
-			}
+			Expect(cfg.InlineModels.Classifier.CategoryModel.ModelID).NotTo(BeEmpty())
+			Expect(cfg.InlineModels.Classifier.CategoryModel.CategoryMappingPath).NotTo(BeEmpty())
 			// PII model configuration is optional - only check if files exist
 			// In CI environments without PII models, these may be empty
 			if cfg.InlineModels.Classifier.PIIModel.ModelID != "" {

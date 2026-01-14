@@ -629,14 +629,8 @@ var _ = Describe("FactCheckClassifier Integration", func() {
 	)
 
 	BeforeEach(func() {
-		// Check if fact-check model exists - skip if not available
-		factCheckModelPath := "../../../../models/mom-halugate-sentinel"
-		if _, err := os.Stat(factCheckModelPath); os.IsNotExist(err) {
-			Skip("Fact-check model not available - skipping test")
-		}
-
 		cfg = &config.FactCheckModelConfig{
-			ModelID:   factCheckModelPath,
+			ModelID:   "../../../../models/mom-halugate-sentinel",
 			Threshold: 0.7,
 		}
 		var err error
