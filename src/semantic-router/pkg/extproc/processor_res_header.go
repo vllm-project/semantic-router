@@ -18,6 +18,19 @@ import (
 
 // handleResponseHeaders processes the response headers
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	// If this is a looper internal request, skip most processing and just continue
+	if ctx.LooperRequest {
+		return &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_ResponseHeaders{
+				ResponseHeaders: &ext_proc.HeadersResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}, nil
+	}
+
 	var statusCode int
 	var isSuccessful bool
 

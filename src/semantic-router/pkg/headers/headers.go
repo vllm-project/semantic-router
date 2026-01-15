@@ -136,3 +136,38 @@ const (
 	// Value: "true"
 	VerificationContextMissing = "x-vsr-verification-context-missing"
 )
+
+// Looper Request Headers
+// These headers are added to looper internal requests to identify them
+// and allow the extproc to skip plugin processing for looper requests.
+const (
+	// VSRLooperRequest indicates this is an internal looper request.
+	// When present, extproc should skip plugin processing (jailbreak, PII, hallucination, etc.)
+	// and pass the request directly to the backend.
+	// Value: "true"
+	VSRLooperRequest = "x-vsr-looper-request"
+
+	// VSRLooperIteration indicates the current iteration number in the looper loop.
+	// Value: "1", "2", "3", etc.
+	VSRLooperIteration = "x-vsr-looper-iteration"
+)
+
+// Looper Response Headers
+// These headers are added to responses when looper mode is used.
+const (
+	// VSRLooperModel indicates the final model used by the looper.
+	// Value: model name (e.g., "qwen-max")
+	VSRLooperModel = "x-vsr-looper-model"
+
+	// VSRLooperModelsUsed contains the comma-separated list of models that were called.
+	// Value: "qwen-flash,qwen-max" (example)
+	VSRLooperModelsUsed = "x-vsr-looper-models-used"
+
+	// VSRLooperIterations indicates the total number of model calls made.
+	// Value: "2", "3", etc.
+	VSRLooperIterations = "x-vsr-looper-iterations"
+
+	// VSRLooperAlgorithm indicates the algorithm used by the looper.
+	// Value: "confidence", "ratings", "cost-aware"
+	VSRLooperAlgorithm = "x-vsr-looper-algorithm"
+)

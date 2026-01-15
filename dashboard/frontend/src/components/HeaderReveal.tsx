@@ -65,6 +65,23 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Signal: Preference',
     description: 'User preference match',
   },
+  // Looper headers
+  'x-vsr-looper-model': {
+    label: 'Final Model',
+    description: 'The model that produced the final response',
+  },
+  'x-vsr-looper-models-used': {
+    label: 'Collaborative Models',
+    description: 'All models called during multi-model routing',
+  },
+  'x-vsr-looper-iterations': {
+    label: 'Iterations',
+    description: 'Number of model calls made',
+  },
+  'x-vsr-looper-algorithm': {
+    label: 'Algorithm',
+    description: 'The multi-model algorithm used (confidence, ratings)',
+  },
 }
 
 const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRevealProps) => {

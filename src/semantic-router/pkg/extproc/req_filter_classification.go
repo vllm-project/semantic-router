@@ -7,12 +7,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
-// performDecisionEvaluationAndModelSelection performs decision evaluation using DecisionEngine
+// performDecisionEvaluation performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
 // Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
 // hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
+func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
@@ -52,6 +52,10 @@ func (r *OpenAIRouter) performDecisionEvaluationAndModelSelection(originalModel 
 	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
+
+	// Set fact-check context fields from signal results
+	// This replaces the old performFactCheckClassification call to avoid duplicate computation
+	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 
 	// Log signal evaluation results
 	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v",

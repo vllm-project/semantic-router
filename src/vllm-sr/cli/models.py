@@ -90,6 +90,66 @@ class ModelRef(BaseModel):
 
     model: str
     use_reasoning: Optional[bool] = False
+    lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
+
+
+class HybridWeightsConfig(BaseModel):
+    """Weights configuration for hybrid confidence method."""
+
+    logprob_weight: Optional[float] = 0.5  # Weight for avg_logprob (default: 0.5)
+    margin_weight: Optional[float] = 0.5  # Weight for margin (default: 0.5)
+
+
+class ConfidenceAlgorithmConfig(BaseModel):
+    """Configuration for confidence algorithm.
+
+    This algorithm tries smaller models first and escalates to larger models if confidence is low.
+    """
+
+    # Confidence evaluation method
+    # - "avg_logprob": Use average logprob across all tokens (default)
+    # - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
+    # - "hybrid": Use weighted combination of both methods
+    confidence_method: Optional[str] = "avg_logprob"
+
+    # Threshold for escalation (meaning depends on confidence_method)
+    # For avg_logprob: negative, closer to 0 = more confident (default: -1.0)
+    # For margin: positive, higher = more confident (default: 0.5)
+    # For hybrid: 0-1 normalized score (default: 0.5)
+    threshold: Optional[float] = None
+
+    # Hybrid weights (only used when confidence_method="hybrid")
+    hybrid_weights: Optional[HybridWeightsConfig] = None
+
+    # Behavior on model call failure: "skip" or "fail"
+    on_error: Optional[str] = "skip"
+
+
+class ConcurrentAlgorithmConfig(BaseModel):
+    """Configuration for concurrent algorithm.
+
+    This algorithm executes all models concurrently and aggregates results (arena mode).
+    """
+
+    # Maximum number of concurrent model calls (default: no limit)
+    max_concurrent: Optional[int] = None
+
+    # Behavior on model call failure: "skip" or "fail"
+    on_error: Optional[str] = "skip"
+
+
+class AlgorithmConfig(BaseModel):
+    """Algorithm configuration for multi-model decisions.
+
+    Specifies how multiple models in a decision should be orchestrated.
+    """
+
+    # Algorithm type: "sequential", "confidence", "concurrent"
+    type: str
+
+    # Algorithm-specific configurations (only one should be set based on type)
+    confidence: Optional[ConfidenceAlgorithmConfig] = None
+    concurrent: Optional[ConcurrentAlgorithmConfig] = None
 
 
 class PluginConfig(BaseModel):
@@ -107,6 +167,7 @@ class Decision(BaseModel):
     priority: int
     rules: Rules
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
+    algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     plugins: Optional[List[PluginConfig]] = []
 
     class Config:
@@ -138,6 +199,9 @@ class Model(BaseModel):
     access_key: Optional[str] = None
     reasoning_family: Optional[str] = None
     pricing: Optional[ModelPricing] = None
+    # Model parameter size (e.g., "1b", "7b", "70b", "100m")
+    # Used by confidence algorithm to determine model order (smallest first)
+    param_size: Optional[str] = None
 
 
 class ReasoningFamily(BaseModel):

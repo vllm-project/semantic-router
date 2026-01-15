@@ -62,6 +62,19 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Preference',
     type: 'info',
   },
+  // Looper headers
+  'x-vsr-looper-models-used': {
+    label: 'Collaborative Models',
+    type: 'success',
+  },
+  'x-vsr-looper-iterations': {
+    label: 'Iterations',
+    type: 'info',
+  },
+  'x-vsr-looper-algorithm': {
+    label: 'Algorithm',
+    type: 'info',
+  },
 }
 
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
