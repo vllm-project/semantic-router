@@ -2798,7 +2798,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           case 'embedding':
             return config?.signals?.embeddings?.map((e) => e.name) || []
           default:
-            return []
+            return ["ABC"]
         }
       }
 
@@ -2835,7 +2835,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         value: DecisionFormState['conditions'],
         onChange: (value: DecisionFormState['conditions']) => void
       ) => {
-        const rows = (Array.isArray(value) ? value : []).length ? value : [{ type: 'signal', name: '' }]
+        const rows = (Array.isArray(value) ? value : []).length ? value : [{ type: 'keyword', name: '' }]
 
         const updateItem = (index: number, key: 'type' | 'name', val: string) => {
           const next = rows.map((item, idx) => {
@@ -2850,10 +2850,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
         const removeItem = (index: number) => {
           const next = rows.filter((_, idx) => idx !== index)
-          onChange(next.length ? next : [{ type: 'signal', name: '' }])
+          onChange(next.length ? next : [{ type: 'keyword', name: '' }])
         }
 
-        const addItem = () => onChange([...rows, { type: 'signal', name: '' }])
+        const addItem = () => onChange([...rows, { type: 'keyword', name: '' }])
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -2882,10 +2882,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
                 >
                   <option value="" disabled>Select name</option>
-                  {getConditionNameOptions(cond?.type).map((opt) => (
+                  {getConditionNameOptions(cond?.type as DecisionConditionType).map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
-                  {getConditionNameOptions(cond?.type).length === 0 && (
+                  {getConditionNameOptions(cond?.type as DecisionConditionType).length === 0 && (
                     <option value="" disabled>No matching signals</option>
                   )}
                 </select>
