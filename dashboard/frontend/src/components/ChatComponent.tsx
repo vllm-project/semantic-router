@@ -5,6 +5,12 @@ import MarkdownRenderer from './MarkdownRenderer'
 import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 
+// Choice represents a single model's response in ratings mode
+interface Choice {
+  content: string
+  model?: string
+}
+
 interface Message {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -12,6 +18,8 @@ interface Message {
   timestamp: Date
   isStreaming?: boolean
   headers?: Record<string, string>
+  // For ratings mode: multiple choices from different models
+  choices?: Choice[]
 }
 
 interface ChatComponentProps {
@@ -158,6 +166,11 @@ const ChatComponent = ({
         'x-vsr-matched-fact-check',
         'x-vsr-matched-user-feedback',
         'x-vsr-matched-preference',
+        // Looper headers
+        'x-vsr-looper-model',
+        'x-vsr-looper-models-used',
+        'x-vsr-looper-iterations',
+        'x-vsr-looper-algorithm',
       ]
 
       headerKeys.forEach(key => {
@@ -180,7 +193,10 @@ const ChatComponent = ({
       }
 
       const decoder = new TextDecoder()
-      let accumulatedContent = ''
+      // Track content for each choice (for ratings mode)
+      const choiceContents: Map<number, { content: string; model?: string }> = new Map()
+      // Check if this is ratings mode (multiple choices)
+      let isRatingsMode = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -196,13 +212,53 @@ const ChatComponent = ({
 
             try {
               const parsed = JSON.parse(data)
-              const content = parsed.choices?.[0]?.delta?.content || ''
-              if (content) {
-                accumulatedContent += content
+              const choices = parsed.choices || []
+
+              // Detect ratings mode (multiple choices)
+              if (choices.length > 1) {
+                isRatingsMode = true
+              }
+
+              // Process each choice
+              for (const choice of choices) {
+                const index = choice.index ?? 0
+                const content = choice.delta?.content || ''
+                const model = choice.model
+
+                if (!choiceContents.has(index)) {
+                  choiceContents.set(index, { content: '', model })
+                }
+
+                const current = choiceContents.get(index)!
+                if (content) {
+                  current.content += content
+                }
+                if (model && !current.model) {
+                  current.model = model
+                }
+              }
+
+              // Update message state
+              if (isRatingsMode) {
+                // Ratings mode: update choices array
+                const choicesArray: Choice[] = []
+                choiceContents.forEach((value, index) => {
+                  choicesArray[index] = { content: value.content, model: value.model }
+                })
                 setMessages(prev =>
                   prev.map(m =>
                     m.id === assistantMessageId
-                      ? { ...m, content: accumulatedContent }
+                      ? { ...m, content: choicesArray[0]?.content || '', choices: choicesArray }
+                      : m
+                  )
+                )
+              } else {
+                // Single choice mode
+                const firstChoice = choiceContents.get(0)
+                setMessages(prev =>
+                  prev.map(m =>
+                    m.id === assistantMessageId
+                      ? { ...m, content: firstChoice?.content || '' }
                       : m
                   )
                 )
@@ -214,10 +270,22 @@ const ChatComponent = ({
         }
       }
 
+      // Finalize message
+      const finalChoices: Choice[] | undefined = isRatingsMode
+        ? Array.from(choiceContents.entries())
+            .sort(([a], [b]) => a - b)
+            .map(([, v]) => ({ content: v.content, model: v.model }))
+        : undefined
+
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantMessageId
-            ? { ...m, isStreaming: false, headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined }
+            ? {
+                ...m,
+                isStreaming: false,
+                headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
+                choices: finalChoices
+              }
             : m
         )
       )
@@ -347,25 +415,46 @@ const ChatComponent = ({
                   <div className={styles.messageRole}>
                     {message.role === 'user' ? 'You' : 'vLLM SR'}
                   </div>
-                  <div className={styles.messageText}>
-                    {message.role === 'assistant' && message.content ? (
-                      <>
-                        <MarkdownRenderer content={message.content} />
-                        {message.isStreaming && (
-                          <span className={styles.cursor}>▊</span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {message.content || (message.isStreaming && (
-                          <span className={styles.cursor}>▊</span>
-                        ))}
-                        {message.isStreaming && message.content && (
-                          <span className={styles.cursor}>▊</span>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {/* Ratings mode: multiple choices */}
+                  {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
+                    <div className={styles.ratingsChoices}>
+                      {message.choices.map((choice, idx) => (
+                        <div key={idx} className={styles.choiceCard}>
+                          <div className={styles.choiceHeader}>
+                            <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
+                            <span className={styles.choiceIndex}>Choice {idx + 1}</span>
+                          </div>
+                          <div className={styles.choiceContent}>
+                            <MarkdownRenderer content={choice.content} />
+                            {message.isStreaming && idx === 0 && (
+                              <span className={styles.cursor}>▊</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Single choice mode */
+                    <div className={styles.messageText}>
+                      {message.role === 'assistant' && message.content ? (
+                        <>
+                          <MarkdownRenderer content={message.content} />
+                          {message.isStreaming && (
+                            <span className={styles.cursor}>▊</span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {message.content || (message.isStreaming && (
+                            <span className={styles.cursor}>▊</span>
+                          ))}
+                          {message.isStreaming && message.content && (
+                            <span className={styles.cursor}>▊</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                   {message.role === 'assistant' && message.headers && (
                     <HeaderDisplay headers={message.headers} />
                   )}

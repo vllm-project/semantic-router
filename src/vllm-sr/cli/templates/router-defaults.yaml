@@ -157,4 +157,17 @@ observability:
       service_version: "v0.1.0"
       deployment_environment: "development"
 
+# Looper Configuration
+# The looper handles multi-model orchestration for decisions with multiple model_refs
+# It makes HTTP calls through Envoy to execute algorithms like confidence routing
+# NOTE: Looper requests include "x-vsr-looper-request: true" header, so ExtProc skips
+#       plugin processing to avoid infinite loops
+looper:
+  enabled: true  # Enable looper for multi-model decisions
+  # Endpoint points to Envoy (same container), which handles load balancing and auth
+  # Port should match listener port (default: 8888)
+  endpoint: "http://localhost:8888/v1/chat/completions"
+  timeout_seconds: 120  # Timeout in seconds for each model call
+  headers: {}  # Optional headers (e.g., {"Authorization": "Bearer xxx"})
+
 clear_route_cache: true

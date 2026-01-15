@@ -19,6 +19,21 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Decrement active request count for queue depth estimation
 	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
 
+	// If this is a looper internal request, skip all processing and just continue
+	// The response will be handled by the looper client directly
+	if ctx.LooperRequest {
+		logging.Debugf("[Looper] Skipping response body processing for internal request")
+		return &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_ResponseBody{
+				ResponseBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}, nil
+	}
+
 	// Process the response for caching
 	responseBody := v.ResponseBody.Body
 
@@ -55,6 +70,10 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				logging.Errorf("Failed to cache streaming response: %v", err)
 				// Continue even if caching fails
 			}
+
+			// For replay logging, attach the reconstructed assistant content if enabled
+			replayPayload := []byte(ctx.StreamingContent)
+			r.attachRouterReplayResponse(ctx, replayPayload, true)
 		}
 
 		// For streaming chunks, just continue (chunks are forwarded immediately)
@@ -141,7 +160,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 
 	// Update the cache
 	if ctx.RequestID != "" && responseBody != nil {
-		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody)
+		// Get decision-specific TTL; handle nil router config gracefully
+		ttlSeconds := -1 // use cache default when Config is not available
+		if r != nil && r.Config != nil {
+			ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		}
+		err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds)
 		if err != nil {
 			logging.Errorf("Error updating cache: %v", err)
 			// Continue even if cache update fails
@@ -234,6 +258,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			},
 		}
 	}
+
+	// Capture replay response payload if enabled
+	r.attachRouterReplayResponse(ctx, finalBody, true)
 
 	return response, nil
 }
@@ -389,11 +416,13 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 			// This is a fallback - ideally we'd have the original body
 			requestBody = []byte("{}")
 		}
-		err = r.Cache.AddEntry(ctx.RequestID, ctx.RequestModel, ctx.RequestQuery, requestBody, reconstructedJSON)
+		// Get decision-specific TTL
+		ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		err = r.Cache.AddEntry(ctx.RequestID, ctx.RequestModel, ctx.RequestQuery, requestBody, reconstructedJSON, ttlSeconds)
 		if err != nil {
 			logging.Errorf("Error caching streaming response with AddEntry: %v", err)
 			// Fall back to UpdateWithResponse in case AddEntry fails
-			err = r.Cache.UpdateWithResponse(ctx.RequestID, reconstructedJSON)
+			err = r.Cache.UpdateWithResponse(ctx.RequestID, reconstructedJSON, ttlSeconds)
 			if err != nil {
 				logging.Errorf("Error caching streaming response with UpdateWithResponse: %v", err)
 				return err
@@ -404,7 +433,9 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		}
 	} else if ctx.RequestID != "" {
 		// Fall back to UpdateWithResponse if we don't have query/model
-		err = r.Cache.UpdateWithResponse(ctx.RequestID, reconstructedJSON)
+		// Get decision-specific TTL
+		ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(ctx.VSRSelectedDecisionName)
+		err = r.Cache.UpdateWithResponse(ctx.RequestID, reconstructedJSON, ttlSeconds)
 		if err != nil {
 			logging.Errorf("Error caching streaming response: %v", err)
 			return err

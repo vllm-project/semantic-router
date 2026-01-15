@@ -185,11 +185,29 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 }
 
 // AddPendingRequest stores a request that is awaiting its response
-func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (c *InMemoryCache) AddPendingRequest(
+	requestID string,
+	model string,
+	query string,
+	requestBody []byte,
+	ttlSeconds int,
+) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
+	}
+
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("InMemoryCache.AddPendingRequest: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	// Determine effective TTL: use provided value or fall back to cache default
+	effectiveTTL := ttlSeconds
+	if ttlSeconds == -1 {
+		effectiveTTL = c.ttlSeconds
 	}
 
 	// Generate semantic embedding using the configured model
@@ -221,6 +239,12 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 		Timestamp:    now,
 		LastAccessAt: now,
 		HitCount:     0,
+		TTLSeconds:   ttlSeconds,
+	}
+
+	// Calculate expiration time if TTL is set
+	if effectiveTTL > 0 {
+		entry.ExpiresAt = now.Add(time.Duration(effectiveTTL) * time.Second)
 	}
 
 	c.entries = append(c.entries, entry)
@@ -231,15 +255,15 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
 
 	// Register with expiration heap for efficient TTL cleanup
-	if c.ttlSeconds > 0 {
-		c.expirationHeap.Add(requestID, entryIndex, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+	if effectiveTTL > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, entry.ExpiresAt)
 	}
 
 	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
 	c.addEntryToHNSWIndex(entryIndex, embedding)
 
-	logging.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t)",
-		len(c.entries), len(embedding), c.useHNSW)
+	logging.Debugf("InMemoryCache.AddPendingRequest: added pending entry (total entries: %d, embedding_dim: %d, useHNSW: %t, ttl=%d)",
+		len(c.entries), len(embedding), c.useHNSW, effectiveTTL)
 
 	// Record metrics
 	metrics.RecordCacheOperation("memory", "add_pending", "success", time.Since(start).Seconds())
@@ -249,7 +273,7 @@ func (c *InMemoryCache) AddPendingRequest(requestID string, model string, query 
 }
 
 // UpdateWithResponse completes a pending request by adding the response
-func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !c.enabled {
@@ -263,14 +287,32 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 	c.cleanupExpiredEntries()
 
 	// Locate the pending request and complete it
+	now := time.Now()
 	for i, entry := range c.entries {
 		if entry.RequestID == requestID && entry.ResponseBody == nil {
 			// Complete the cache entry with the response
 			c.entries[i].ResponseBody = responseBody
-			c.entries[i].Timestamp = time.Now()
-			c.entries[i].LastAccessAt = time.Now()
-			logging.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes)",
-				len(responseBody))
+			c.entries[i].Timestamp = now
+			c.entries[i].LastAccessAt = now
+
+			// Update TTL if provided (ttlSeconds != -1)
+			// If ttlSeconds == 0, this means we shouldn't cache - but entry already exists, so just mark as complete
+			if ttlSeconds != -1 {
+				c.entries[i].TTLSeconds = ttlSeconds
+				// Recalculate expiration time
+				effectiveTTL := ttlSeconds
+				if ttlSeconds == -1 {
+					effectiveTTL = c.ttlSeconds
+				}
+				if effectiveTTL > 0 {
+					c.entries[i].ExpiresAt = now.Add(time.Duration(effectiveTTL) * time.Second)
+					// Update expiration heap with new expiration time
+					c.expirationHeap.UpdateExpiration(requestID, c.entries[i].ExpiresAt)
+				}
+			}
+
+			logging.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes, ttl=%d)",
+				len(responseBody), c.entries[i].TTLSeconds)
 
 			// Record successful completion
 			metrics.RecordCacheOperation("memory", "update_response", "success", time.Since(start).Seconds())
@@ -284,11 +326,28 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 }
 
 // AddEntry stores a complete request-response pair in the cache
-func (c *InMemoryCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (c *InMemoryCache) AddEntry(
+	requestID string,
+	model string,
+	query string,
+	requestBody []byte,
+	responseBody []byte,
+	ttlSeconds int,
+) error {
 	start := time.Now()
 
 	if !c.enabled {
 		return nil
+	}
+
+	if ttlSeconds == 0 {
+		logging.Debugf("InMemoryCache.AddEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	effectiveTTL := ttlSeconds
+	if ttlSeconds == -1 {
+		effectiveTTL = c.ttlSeconds
 	}
 
 	// Generate semantic embedding using the configured model
@@ -320,6 +379,12 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 		Timestamp:    now,
 		LastAccessAt: now,
 		HitCount:     0,
+		TTLSeconds:   ttlSeconds,
+	}
+
+	// Calculate expiration time if TTL is set
+	if effectiveTTL > 0 {
+		entry.ExpiresAt = now.Add(time.Duration(effectiveTTL) * time.Second)
 	}
 
 	c.entries = append(c.entries, entry)
@@ -330,15 +395,15 @@ func (c *InMemoryCache) AddEntry(requestID string, model string, query string, r
 	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
 
 	// Register with expiration heap for efficient TTL cleanup
-	if c.ttlSeconds > 0 {
-		c.expirationHeap.Add(requestID, entryIndex, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+	if effectiveTTL > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, entry.ExpiresAt)
 	}
 
 	// Add to HNSW index if enabled. Do not call c.hnswIndex.addNode directly to keep in sync with entries slice when evictions/cleanups occurred.
 	c.addEntryToHNSWIndex(entryIndex, embedding)
 
-	logging.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t)",
-		len(c.entries), len(requestBody), len(responseBody), c.useHNSW)
+	logging.Debugf("InMemoryCache.AddEntry: added complete entry (total entries: %d, request_size: %d, response_size: %d, useHNSW: %t, ttl=%d)",
+		len(c.entries), len(requestBody), len(responseBody), c.useHNSW, effectiveTTL)
 	logging.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend": "memory",
 		"query":   query,
@@ -676,6 +741,12 @@ func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
 
 // isExpired checks if a cache entry has expired based on its last access time
 func (c *InMemoryCache) isExpired(entry CacheEntry, now time.Time) bool {
+	// Check per-entry expiration first
+	if !entry.ExpiresAt.IsZero() {
+		return now.After(entry.ExpiresAt)
+	}
+
+	// Fall back to global TTL for backward compatibility
 	if c.ttlSeconds <= 0 {
 		return false
 	}
@@ -696,8 +767,15 @@ func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
 		c.notifyAccessToEvictionPolicy(entryIndex, target.RequestID)
 
 		// Extend TTL in expiration heap (sliding window TTL)
-		if c.ttlSeconds > 0 {
-			c.expirationHeap.UpdateExpiration(target.RequestID, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+		// Use per-entry TTL if set, otherwise use global TTL
+		effectiveTTL := c.ttlSeconds
+		if c.entries[entryIndex].TTLSeconds > 0 {
+			effectiveTTL = c.entries[entryIndex].TTLSeconds
+		}
+		if effectiveTTL > 0 {
+			newExpiresAt := now.Add(time.Duration(effectiveTTL) * time.Second)
+			c.entries[entryIndex].ExpiresAt = newExpiresAt
+			c.expirationHeap.UpdateExpiration(target.RequestID, newExpiresAt)
 		}
 		return
 	}
@@ -712,8 +790,15 @@ func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
 			c.notifyAccessToEvictionPolicy(i, target.RequestID)
 
 			// Extend TTL in expiration heap (sliding window TTL)
-			if c.ttlSeconds > 0 {
-				c.expirationHeap.UpdateExpiration(target.RequestID, now.Add(time.Duration(c.ttlSeconds)*time.Second))
+			// Use per-entry TTL if set, otherwise use global TTL
+			effectiveTTL := c.ttlSeconds
+			if c.entries[i].TTLSeconds > 0 {
+				effectiveTTL = c.entries[i].TTLSeconds
+			}
+			if effectiveTTL > 0 {
+				newExpiresAt := now.Add(time.Duration(effectiveTTL) * time.Second)
+				c.entries[i].ExpiresAt = newExpiresAt
+				c.expirationHeap.UpdateExpiration(target.RequestID, newExpiresAt)
 			}
 			break
 		}

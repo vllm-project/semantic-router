@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -14,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
@@ -28,6 +30,7 @@ type OpenAIRouter struct {
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
+	ReplayRecorder       *routerreplay.Recorder
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -183,6 +186,16 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
+	replayMax := routerreplay.DefaultMaxRecords
+	for _, d := range cfg.Decisions {
+		if replayCfg := d.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
+			if replayCfg.MaxRecords > replayMax {
+				replayMax = replayCfg.MaxRecords
+			}
+		}
+	}
+	replayRecorder := routerreplay.NewRecorder(replayMax)
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -191,9 +204,55 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
+		ReplayRecorder:       replayRecorder,
 	}
 
 	return router, nil
+}
+
+// handleRouterReplayAPI serves read-only endpoints for router replay records.
+func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
+	// If recorder is not initialized, the feature is effectively disabled.
+	if r.ReplayRecorder == nil {
+		return nil
+	}
+
+	// Strip query string
+	if idx := strings.Index(path, "?"); idx != -1 {
+		path = path[:idx]
+	}
+
+	base := "/v1/router_replay"
+	if path == base || path == base+"/" {
+		if method != "GET" {
+			return r.createErrorResponse(405, "method not allowed")
+		}
+
+		records := r.ReplayRecorder.ListAllRecords()
+		payload := map[string]interface{}{
+			"object": "router_replay.list",
+			"count":  len(records),
+			"data":   records,
+		}
+		return r.createJSONResponse(200, payload)
+	}
+
+	if strings.HasPrefix(path, base+"/") {
+		if method != "GET" {
+			return r.createErrorResponse(405, "method not allowed")
+		}
+		replayID := strings.TrimPrefix(path, base+"/")
+		if replayID == "" {
+			return r.createErrorResponse(400, "replay id is required")
+		}
+
+		if rec, ok := r.ReplayRecorder.GetRecord(replayID); ok {
+			return r.createJSONResponse(200, rec)
+		}
+		return r.createErrorResponse(404, "replay record not found")
+	}
+
+	return nil
 }
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON body

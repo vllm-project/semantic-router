@@ -14,7 +14,7 @@ sidebar_position: 4
 
 配置定义了三个主要层：
 
-1. **Signal Extraction Layer（信号提取层）**：定义 6 种类型的信号（keyword、embedding、domain、fact_check、user_feedback、preference）
+1. **Signal Extraction Layer（信号提取层）**：定义 7 种类型的信号（keyword、embedding、domain、fact_check、user_feedback、preference、language）
 2. **Decision Engine（决策引擎）**：使用 AND/OR 运算符组合信号以做出路由决策
 3. **Plugin Chain（插件链）**：配置用于缓存、安全和优化的插件
 
@@ -295,7 +295,7 @@ default_reasoning_effort: "medium"
 
 ## 信号配置
 
-信号是智能路由的基础。系统支持 6 种类型的信号，可以组合起来做出路由决策。
+信号是智能路由的基础。系统支持 7 种类型的信号，可以组合起来做出路由决策。
 
 ### 1. 关键词信号 - 快速模式匹配
 
@@ -399,6 +399,30 @@ signals:
 - 通过外部 LLM 进行复杂意图分析
 - 细致的路由决策
 - 当其他信号不足时
+
+### 7. 语言信号 - 多语言检测
+
+```yaml
+signals:
+  language:
+    - name: "en"
+      description: "English language queries"
+    - name: "es"
+      description: "Spanish language queries"
+    - name: "zh"
+      description: "Chinese language queries"
+    - name: "ru"
+      description: "Russian language queries"
+    - name: "fr"
+      description: "French language queries"
+```
+
+**用例：**
+
+- 将查询路由到特定语言的模型
+- 应用特定语言的策略
+- 支持多语言应用
+- 通过 whatlanggo 库支持 100 多种本地化语言
 
 ## 决策规则 - 信号融合
 

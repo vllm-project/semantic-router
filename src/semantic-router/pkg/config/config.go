@@ -33,6 +33,7 @@ const (
 	SignalTypeFactCheck    = "fact_check"
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
+	SignalTypeLanguage     = "language"
 )
 
 // RouterConfig represents the main configuration for the LLM Router
@@ -63,6 +64,8 @@ type RouterConfig struct {
 	SemanticCache `yaml:"semantic_cache"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
+	// Looper configuration for multi-model execution strategies
+	Looper LooperConfig `yaml:"looper,omitempty"`
 	// LLMObservability for LLM tracing, metrics, and logging
 	LLMObservability `yaml:",inline"`
 	// API server configuration
@@ -173,6 +176,10 @@ type Signals struct {
 	// Preference rules for route preference matching via external LLM
 	// When matched, outputs the preference name (route name) that best matches the conversation
 	PreferenceRules []PreferenceRule `yaml:"preference_rules,omitempty"`
+
+	// Language rules for multi-language detection signal classification
+	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
+	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -309,6 +316,35 @@ type MCPCategoryModel struct {
 	ToolName       string            `yaml:"tool_name,omitempty"` // Optional: will auto-discover if not specified
 	Threshold      float32           `yaml:"threshold"`
 	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+}
+
+// LooperConfig defines the configuration for multi-model execution looper
+type LooperConfig struct {
+	// Endpoint is the OpenAI-compatible API endpoint to call for model execution
+	// Example: "http://localhost:8080/v1/chat/completions"
+	Endpoint string `yaml:"endpoint"`
+
+	// Timeout is the maximum duration for each model call (default: 30s)
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
+
+	// RetryCount is the number of retries for failed model calls (default: 0)
+	RetryCount int `yaml:"retry_count,omitempty"`
+
+	// Headers are additional headers to include in requests to the endpoint
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+// IsEnabled returns true if the looper endpoint is configured
+func (l *LooperConfig) IsEnabled() bool {
+	return l.Endpoint != ""
+}
+
+// GetTimeout returns the configured timeout or default (30 seconds)
+func (l *LooperConfig) GetTimeout() int {
+	if l.TimeoutSeconds <= 0 {
+		return 30
+	}
+	return l.TimeoutSeconds
 }
 
 type SemanticCache struct {
@@ -615,6 +651,44 @@ type ExternalModelConfig struct {
 	AccessKey string `yaml:"access_key,omitempty"`
 }
 
+// ToolFilteringWeights defines per-signal weights for advanced tool filtering.
+// All fields are optional and only used when advanced filtering is enabled.
+type ToolFilteringWeights struct {
+	Embed    *float32 `yaml:"embed,omitempty"`
+	Lexical  *float32 `yaml:"lexical,omitempty"`
+	Tag      *float32 `yaml:"tag,omitempty"`
+	Name     *float32 `yaml:"name,omitempty"`
+	Category *float32 `yaml:"category,omitempty"`
+}
+
+// AdvancedToolFilteringConfig represents opt-in advanced tool filtering settings.
+type AdvancedToolFilteringConfig struct {
+	// Enable advanced tool filtering.
+	Enabled bool `yaml:"enabled"`
+
+	// Candidate pool size before secondary filtering.
+	CandidatePoolSize *int `yaml:"candidate_pool_size,omitempty"`
+
+	// Minimum lexical overlap for keyword filtering.
+	MinLexicalOverlap *int `yaml:"min_lexical_overlap,omitempty"`
+
+	// Minimum combined score threshold (0.0-1.0).
+	MinCombinedScore *float32 `yaml:"min_combined_score,omitempty"`
+
+	// Weights for combined scoring.
+	Weights ToolFilteringWeights `yaml:"weights,omitempty"`
+
+	// Enable category-based filtering.
+	UseCategoryFilter *bool `yaml:"use_category_filter,omitempty"`
+
+	// Minimum confidence required for category filtering (0.0-1.0).
+	CategoryConfidenceThreshold *float32 `yaml:"category_confidence_threshold,omitempty"`
+
+	// Explicit allow/block lists for tool names.
+	AllowTools []string `yaml:"allow_tools,omitempty"`
+	BlockTools []string `yaml:"block_tools,omitempty"`
+}
+
 // ToolsConfig represents configuration for automatic tool selection
 type ToolsConfig struct {
 	// Enable automatic tool selection
@@ -632,6 +706,9 @@ type ToolsConfig struct {
 
 	// Fallback behavior: if true, return empty tools on failure; if false, return error
 	FallbackToEmpty bool `yaml:"fallback_to_empty"`
+
+	// Advanced tool filtering (opt-in).
+	AdvancedFiltering *AdvancedToolFilteringConfig `yaml:"advanced_filtering,omitempty"`
 }
 
 // HallucinationMitigationConfig represents configuration for hallucination mitigation
@@ -763,6 +840,11 @@ type ModelParams struct {
 	// Access key for authentication with the model endpoint
 	// When set, router will add "Authorization: Bearer {access_key}" header to requests
 	AccessKey string `yaml:"access_key,omitempty"`
+
+	// ParamSize represents the model parameter size (e.g., "10b", "5b", "100m")
+	// Used by confidence algorithm to determine model order.
+	// Larger parameter count typically means more capable but slower/costlier model.
+	ParamSize string `yaml:"param_size,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -843,8 +925,73 @@ type Decision struct {
 	// ModelRefs contains model references for this decision (currently only supports one model)
 	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
 
+	// Algorithm defines the multi-model execution strategy when multiple ModelRefs are configured.
+	// When nil or not specified, only the first ModelRef is used.
+	Algorithm *AlgorithmConfig `yaml:"algorithm,omitempty"`
+
 	// Plugins contains policy configurations applied after rule matching
 	Plugins []DecisionPlugin `yaml:"plugins,omitempty"`
+}
+
+// AlgorithmConfig defines how multiple models should be executed and aggregated
+type AlgorithmConfig struct {
+	// Type specifies the algorithm type: "confidence", "ratings"
+	// - "confidence": Try smaller models first, escalate to larger models if confidence is low
+	// - "ratings": Execute all models concurrently and return multiple choices for comparison
+	Type string `yaml:"type"`
+
+	// Algorithm-specific configurations (only one should be set based on Type)
+	Confidence *ConfidenceAlgorithmConfig `yaml:"confidence,omitempty"`
+	Ratings    *RatingsAlgorithmConfig    `yaml:"ratings,omitempty"`
+}
+
+// ConfidenceAlgorithmConfig configures the confidence algorithm
+// This algorithm tries smaller models first and escalates to larger models if confidence is low
+type ConfidenceAlgorithmConfig struct {
+	// ConfidenceMethod specifies how to evaluate model confidence
+	// - "avg_logprob": Use average logprob across all tokens (default)
+	// - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
+	// - "hybrid": Use weighted combination of both methods
+	ConfidenceMethod string `yaml:"confidence_method,omitempty"`
+
+	// Threshold is the confidence threshold for escalation
+	// For avg_logprob: logprobs are negative, higher (closer to 0) = more confident
+	//   - Default: -1.0 (very permissive)
+	//   - Typical range: -2.0 to -0.1
+	// For margin: positive values, higher = more confident
+	//   - Default: 0.5
+	//   - Typical range: 0.1 to 2.0
+	// For hybrid: normalized score between 0 and 1
+	//   - Default: 0.5
+	Threshold float64 `yaml:"threshold,omitempty"`
+
+	// HybridWeights configures weights for hybrid method (only used when confidence_method="hybrid")
+	// LogprobWeight + MarginWeight should equal 1.0
+	HybridWeights *HybridWeightsConfig `yaml:"hybrid_weights,omitempty"`
+
+	// OnError defines behavior when a model call fails: "skip" or "fail"
+	// - "skip": Skip the failed model and try the next one (default)
+	// - "fail": Return error immediately
+	OnError string `yaml:"on_error,omitempty"`
+}
+
+// HybridWeightsConfig configures weights for hybrid confidence method
+type HybridWeightsConfig struct {
+	LogprobWeight float64 `yaml:"logprob_weight,omitempty"` // Weight for avg_logprob (default: 0.5)
+	MarginWeight  float64 `yaml:"margin_weight,omitempty"`  // Weight for margin (default: 0.5)
+}
+
+// RatingsAlgorithmConfig configures the ratings algorithm
+// This algorithm executes all models concurrently and returns multiple choices for comparison
+type RatingsAlgorithmConfig struct {
+	// MaxConcurrent limits the number of concurrent model calls
+	// Default: no limit (all models called concurrently)
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
+
+	// OnError defines behavior when a model call fails: "skip" or "fail"
+	// - "skip": Skip the failed model and return remaining results (default)
+	// - "fail": Return error if any model fails
+	OnError string `yaml:"on_error,omitempty"`
 }
 
 // ModelRef represents a reference to a model (without score field)
@@ -859,7 +1006,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type: "semantic-cache", "jailbreak", "pii", "system_prompt"
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -875,6 +1022,7 @@ type DecisionPlugin struct {
 type SemanticCachePluginConfig struct {
 	Enabled             bool     `json:"enabled" yaml:"enabled"`
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
+	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"` // Per-entry TTL (0 = do not cache, nil = use global default)
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
@@ -943,6 +1091,29 @@ type HallucinationPluginConfig struct {
 	// Only effective when HallucinationAction is "body"
 	// When true, includes confidence score and hallucinated spans in the warning text
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
+}
+
+// RouterReplayPluginConfig configures the router_replay plugin that captures
+// routing decisions and payload snippets for later debugging and replay.
+
+type RouterReplayPluginConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// MaxRecords controls the maximum number of replay records kept in memory.
+	// Defaults to 200 when omitted or set to a non-positive value.
+	MaxRecords int `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+
+	// CaptureRequestBody controls whether the original request body should be stored.
+	// Defaults to false to avoid unintentionally persisting sensitive content.
+	CaptureRequestBody bool `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+
+	// CaptureResponseBody controls whether the final response body should be stored.
+	// Defaults to false. Enable when you want replay logs to include model output.
+	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+
+	// MaxBodyBytes caps how many bytes of request/response body are recorded.
+	// Defaults to 4096 bytes.
+	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 }
 
 // Helper methods for Decision to access plugin configurations
@@ -1118,6 +1289,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	return result
 }
 
+// GetRouterReplayConfig returns the router_replay plugin configuration
+func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
+	config := d.GetPluginConfig("router_replay")
+	if config == nil {
+		return nil
+	}
+
+	result := &RouterReplayPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
+		return nil
+	}
+	return result
+}
+
 // RuleCombination defines how to combine multiple rule conditions with AND/OR operators
 type RuleCombination struct {
 	// Operator specifies how to combine conditions: "AND" or "OR"
@@ -1176,6 +1362,18 @@ type PreferenceRule struct {
 
 	// Description provides human-readable explanation of what this route handles
 	// This description is sent to the external LLM for route matching
+	Description string `yaml:"description,omitempty"`
+}
+
+// LanguageRule defines a rule for multi-language detection signal classification
+// The language classifier detects the query language and outputs language codes
+// e.g., "en" (English), "es" (Spanish), "zh" (Chinese), "fr" (French)
+type LanguageRule struct {
+	// Name is the language code that can be referenced in decision rules
+	// e.g., "en", "es", "zh", "fr", "de", "ja"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of the language
 	Description string `yaml:"description,omitempty"`
 }
 

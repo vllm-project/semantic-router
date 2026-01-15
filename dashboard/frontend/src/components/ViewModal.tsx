@@ -25,7 +25,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   onClose,
   onEdit,
   title,
-  sections
+  sections,
 }) => {
   if (!isOpen) return null
 

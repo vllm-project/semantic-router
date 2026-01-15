@@ -263,6 +263,20 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 			}
 		}
 
+	case "router_replay":
+		var cfg config.RouterReplayPluginConfig
+		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&cfg); err != nil {
+			return fmt.Errorf("failed to unmarshal router_replay config: %w", err)
+		}
+		if cfg.MaxRecords < 0 {
+			return fmt.Errorf("router_replay max_records cannot be negative")
+		}
+		if cfg.MaxBodyBytes < 0 {
+			return fmt.Errorf("router_replay max_body_bytes cannot be negative")
+		}
+
 	default:
 		return fmt.Errorf("unknown plugin type: %s", pluginType)
 	}

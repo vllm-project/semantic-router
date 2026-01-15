@@ -7,21 +7,38 @@ import (
 func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 	registry := ToLegacyRegistry()
 
-	// Test PII model paths
-	piiRepo := "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-	piiTests := []string{
+	// Test BERT LoRA PII model paths
+	piiLoraRepo := "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
+	piiLoraTests := []string{
 		"models/mom-pii-classifier",
-		"models/pii_classifier_modernbert-base_presidio_token_model",
-		"models/pii_classifier_modernbert-base_model",
 		"models/lora_pii_detector_bert-base-uncased_model",
 		"models/pii-detector",
 		"pii-detector",
 	}
-	for _, path := range piiTests {
+	for _, path := range piiLoraTests {
 		if repo, ok := registry[path]; !ok {
 			t.Errorf("Expected %s to be in registry", path)
-		} else if repo != piiRepo {
-			t.Errorf("Expected %s to map to %s, got %s", path, piiRepo, repo)
+		} else if repo != piiLoraRepo {
+			t.Errorf("Expected %s to map to %s, got %s", path, piiLoraRepo, repo)
+		}
+	}
+
+	// Test ModernBERT PII model paths
+	piiModernBertRepo := "llm-semantic-router/mmbert-pii-detector-merged"
+	piiModernBertTests := []string{
+		"models/mom-mmbert-pii-detector",
+		"models/pii_classifier_modernbert-base_presidio_token_model",
+		"models/pii_classifier_modernbert-base_model",
+		"models/pii_classifier_modernbert_model",
+		"models/pii_classifier_modernbert_ai4privacy_token_model",
+		"models/mmbert-pii-detector",
+		"mmbert-pii-detector",
+	}
+	for _, path := range piiModernBertTests {
+		if repo, ok := registry[path]; !ok {
+			t.Errorf("Expected %s to be in registry", path)
+		} else if repo != piiModernBertRepo {
+			t.Errorf("Expected %s to map to %s, got %s", path, piiModernBertRepo, repo)
 		}
 	}
 
@@ -47,6 +64,7 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 	jailbreakTests := []string{
 		"models/mom-jailbreak-classifier",
 		"models/jailbreak_classifier_modernbert-base_model",
+		"models/jailbreak_classifier_modernbert_model",
 		"models/lora_jailbreak_classifier_bert-base-uncased_model",
 		"models/jailbreak-detector",
 		"jailbreak-detector",
@@ -70,13 +88,13 @@ func TestGetModelByPath_FindsByAlias(t *testing.T) {
 		t.Errorf("Expected LocalPath to be models/mom-pii-classifier, got %s", model.LocalPath)
 	}
 
-	// Test finding by old alias
+	// Test finding by old alias (now maps to ModernBERT model)
 	model = GetModelByPath("models/pii_classifier_modernbert-base_presidio_token_model")
 	if model == nil {
 		t.Fatal("Expected to find model by old alias path")
 	}
-	if model.LocalPath != "models/mom-pii-classifier" {
-		t.Errorf("Expected LocalPath to be models/mom-pii-classifier, got %s", model.LocalPath)
+	if model.LocalPath != "models/mom-mmbert-pii-detector" {
+		t.Errorf("Expected LocalPath to be models/mom-mmbert-pii-detector, got %s", model.LocalPath)
 	}
 
 	// Test finding by short alias

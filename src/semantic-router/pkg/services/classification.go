@@ -325,7 +325,12 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		// Fallback to traditional classification
 		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(req.Text)
 		if err != nil {
-			return nil, fmt.Errorf("classification failed: %w", err)
+			// Graceful fallback when classification fails
+			// When domain signal was skipped due to low confidence and no decision matches,
+			// fall back to "other" category instead of returning an error
+			logging.Warnf("Classification fallback failed: %v, using default 'other' category", err)
+			category = "other"
+			confidence = 0.0
 		}
 	}
 

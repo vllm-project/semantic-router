@@ -284,10 +284,16 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !h.enabled {
+		return nil
+	}
+
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("HybridCache.AddPendingRequest: skipping cache (ttl_seconds=0)")
 		return nil
 	}
 
@@ -299,7 +305,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store in Milvus (write-through)
-	if err := h.milvusCache.AddPendingRequest(requestID, model, query, requestBody); err != nil {
+	if err := h.milvusCache.AddPendingRequest(requestID, model, query, requestBody, ttlSeconds); err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("milvus add pending failed: %w", err)
 	}
@@ -319,8 +325,8 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	h.idMap[entryIndex] = requestID
 	h.addNodeHybrid(entryIndex, embedding)
 
-	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s",
-		entryIndex, requestID)
+	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s, ttl=%d",
+		entryIndex, requestID, ttlSeconds)
 
 	metrics.RecordCacheOperation("hybrid", "add_pending", "success", time.Since(start).Seconds())
 	metrics.UpdateCacheEntries("hybrid", len(h.embeddings))
@@ -329,7 +335,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !h.enabled {
@@ -337,24 +343,30 @@ func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte) 
 	}
 
 	// Update in Milvus
-	if err := h.milvusCache.UpdateWithResponse(requestID, responseBody); err != nil {
+	if err := h.milvusCache.UpdateWithResponse(requestID, responseBody, ttlSeconds); err != nil {
 		metrics.RecordCacheOperation("hybrid", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("milvus update failed: %w", err)
 	}
 
 	// HNSW index already has the embedding, no update needed there
 
-	logging.Debugf("HybridCache.UpdateWithResponse: updated milvusID=%s", requestID)
+	logging.Debugf("HybridCache.UpdateWithResponse: updated milvusID=%s, ttl=%d", requestID, ttlSeconds)
 	metrics.RecordCacheOperation("hybrid", "update_response", "success", time.Since(start).Seconds())
 
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
 	if !h.enabled {
+		return nil
+	}
+
+	// Handle TTL=0: skip caching entirely
+	if ttlSeconds == 0 {
+		logging.Debugf("HybridCache.AddEntry: skipping cache (ttl_seconds=0)")
 		return nil
 	}
 
@@ -366,7 +378,7 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	}
 
 	// Store in Milvus (write-through)
-	if err := h.milvusCache.AddEntry(requestID, model, query, requestBody, responseBody); err != nil {
+	if err := h.milvusCache.AddEntry(requestID, model, query, requestBody, responseBody, ttlSeconds); err != nil {
 		metrics.RecordCacheOperation("hybrid", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("milvus add entry failed: %w", err)
 	}
@@ -386,8 +398,8 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	h.idMap[entryIndex] = requestID
 	h.addNodeHybrid(entryIndex, embedding)
 
-	logging.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s",
-		entryIndex, requestID)
+	logging.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s, ttl=%d",
+		entryIndex, requestID, ttlSeconds)
 	logging.LogEvent("hybrid_cache_entry_added", map[string]interface{}{
 		"backend": "hybrid",
 		"query":   query,

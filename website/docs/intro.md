@@ -20,7 +20,7 @@ We are building the **System Level Intelligence** for Mixture-of-Models (MoM), b
 
 ### Signal-Driven Decision Engine
 
-Captures and combines **6 types of signals** to make intelligent routing decisions:
+Captures and combines **7 types of signals** to make intelligent routing decisions:
 
 | Signal Type | Description | Use Case |
 |------------|-------------|----------|
@@ -30,6 +30,7 @@ Captures and combines **6 types of signals** to make intelligent routing decisio
 | **fact_check** | ML-based fact-checking requirement detection | Identify queries needing fact verification |
 | **user_feedback** | User satisfaction and feedback classification | Handle follow-up messages and corrections |
 | **preference** | LLM-based route preference matching | Complex intent analysis via external LLM |
+| **language** | Multi-language detection (100+ languages) | Route queries to language-specific models |
 
 **How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
 
@@ -65,6 +66,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         FactCheck[Fact Check Signals<br/>Verification Need]
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
+        Language[Language Signals<br/>Multi-language Detection]
     end
 
     subgraph "Decision Engine"
@@ -88,6 +90,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> FactCheck
     Router --> Feedback
     Router --> Preference
+    Router --> Language
 
     Keyword --> Rules
     Embedding --> Rules
@@ -95,6 +98,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     FactCheck --> Rules
     Feedback --> Rules
     Preference --> Rules
+    Language --> Rules
 
     Rules --> ModelSelect
     ModelSelect --> Cache
@@ -170,7 +174,7 @@ Step-by-step guides for implementing intelligent routing, semantic caching, cont
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](./community/overview) for details.
 
 ## License
 
