@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -63,6 +64,7 @@ type SignalMatches struct {
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	LatencyRules      []string // Latency rule names that matched based on model TPOT
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -147,7 +149,11 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 	for _, condition := range rules.Conditions {
 		conditionMatched := false
 
-		switch condition.Type {
+		// Normalize condition type to lowercase for case-insensitive matching
+		// All signal types are normalized to match constants and switch cases
+		normalizedType := strings.ToLower(strings.TrimSpace(condition.Type))
+
+		switch normalizedType {
 		case "keyword":
 			conditionMatched = slices.Contains(signals.KeywordRules, condition.Name)
 		case "embedding":
@@ -166,6 +172,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
 		case "language":
 			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
+		case "latency":
+			conditionMatched = slices.Contains(signals.LatencyRules, condition.Name)
 		default:
 			continue
 		}
