@@ -34,9 +34,9 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 ### 1. Keyword Signal
 
-**内容**：使用 AND/OR 运算符的快速模式匹配
-**延迟**：小于 1ms
-**用例**：确定性路由、合规性、安全性
+- **内容**：使用 AND/OR 运算符的快速模式匹配
+- **延迟**：小于 1ms
+- **用例**：确定性路由、合规性、安全性
 
 ```yaml
 signals:
@@ -50,9 +50,9 @@ signals:
 
 ### 2. Embedding Signal
 
-**内容**：使用 embedding 的语义相似度
-**延迟**：10-50ms
-**用例**：意图检测、释义处理
+- **内容**：使用 embedding 的语义相似度
+- **延迟**：10-50ms
+- **用例**：意图检测、释义处理
 
 ```yaml
 signals:
@@ -68,9 +68,9 @@ signals:
 
 ### 3. Domain Signal
 
-**内容**：MMLU 领域分类（14 个类别）
-**延迟**：50-100ms
-**用例**：学术和专业领域路由
+- **内容**：MMLU 领域分类（14 个类别）
+- **延迟**：50-100ms
+- **用例**：学术和专业领域路由
 
 ```yaml
 signals:
@@ -83,9 +83,9 @@ signals:
 
 ### 4. Fact Check Signal
 
-**内容**：基于机器学习的需要事实验证的查询检测
-**延迟**：50-100ms
-**用例**：医疗保健、金融服务、教育
+- **内容**：基于机器学习的需要事实验证的查询检测
+- **延迟**：50-100ms
+- **用例**：医疗保健、金融服务、教育
 
 ```yaml
 signals:
@@ -98,9 +98,9 @@ signals:
 
 ### 5. User Feedback Signal
 
-**内容**：用户反馈和更正的分类
-**延迟**：50-100ms
-**用例**：客户支持、自适应学习
+- **内容**：用户反馈和更正的分类
+- **延迟**：50-100ms
+- **用例**：客户支持、自适应学习
 
 ```yaml
 signals:
@@ -113,9 +113,9 @@ signals:
 
 ### 6. Preference Signal
 
-**内容**：基于 LLM 的路由偏好匹配
-**延迟**：200-500ms
-**用例**：复杂意图分析
+- **内容**：基于 LLM 的路由偏好匹配
+- **延迟**：200-500ms
+- **用例**：复杂意图分析
 
 ```yaml
 signals:
@@ -132,9 +132,9 @@ signals:
 
 ### 7. Language Signal
 
-**内容**：多语言检测（100 多种本地化语言）
-**延迟**：小于 1ms
-**用例**：路由查询特定语言的模型或采用特定语言的策略
+- **内容**：多语言检测（100 多种本地化语言）
+- **延迟**：小于 1ms
+- **用例**：路由查询特定语言的模型或采用特定语言的策略
 
 ```yaml
 signals:
@@ -149,8 +149,8 @@ signals:
       description: "Russian language queries"
 ```
 
-**示例**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
-**示例**："你好，世界" → Chinese (zh) → Chinese model
+- **示例 1**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
+- **示例 2**："你好，世界" → Chinese (zh) → Chinese model
 
 ## Signal 如何组合
 
@@ -168,9 +168,8 @@ decisions:
           name: "mathematics"
 ```
 
-**逻辑**：**仅当**关键词 AND (并且) 领域都匹配时，路由到 advanced_math
-
-**用例**：高置信度路由（减少误报）
+- **逻辑**：**仅当**关键词 AND (并且) 领域都匹配时，路由到 advanced_math
+- **用例**：高置信度路由（减少误报）
 
 ### OR 运算符 - 任意匹配
 
@@ -186,9 +185,8 @@ decisions:
           name: "code_debug"
 ```
 
-**逻辑**：**如果**关键词 OR (或者) 嵌入匹配，路由到 code_help
-
-**用例**：广泛覆盖（减少漏报）
+- **逻辑**：**如果**关键词 OR (或者) 嵌入匹配，路由到 code_help
+- **用例**：广泛覆盖（减少漏报）
 
 ### 嵌套逻辑 - 复杂规则
 
@@ -208,9 +206,8 @@ decisions:
               name: "factual_queries"
 ```
 
-**逻辑**：如果 (数学领域) AND (证明关键词 OR 需要事实核查) 则路由
-
-**用例**：复杂路由场景
+- **逻辑**：如果 (数学领域) AND (证明关键词 OR 需要事实核查) 则路由
+- **用例**：复杂路由场景
 
 ## 真实世界示例
 
