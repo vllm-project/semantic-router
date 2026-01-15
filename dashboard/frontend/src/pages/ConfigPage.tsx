@@ -9,6 +9,7 @@ import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
 import {
   ConfigFormat,
   detectConfigFormat,
+  DecisionConditionType
 } from '../types/config'
 
 interface VLLMEndpoint {
@@ -2783,7 +2784,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       setViewModalOpen(false)
       const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding'] as const
 
-      const getConditionNameOptions = (type?: string) => {
+      const getConditionNameOptions = (type?: DecisionConditionType) => {
+        // derive condition name options based on signals configured
         switch (type) {
           case 'keyword':
             return config?.signals?.keywords?.map((k) => k.name) || []
@@ -2805,7 +2807,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         description: '',
         priority: 1,
         operator: 'AND',
-        conditions: [{ type: 'signal', name: '' }],
+        conditions: [{ type: 'keyword', name: '' }],
         modelRefs: [{ model: '', use_reasoning: false }],
         plugins: []
       }
