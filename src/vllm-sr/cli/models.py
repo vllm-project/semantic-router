@@ -67,6 +67,14 @@ class Language(BaseModel):
     description: str
 
 
+class Latency(BaseModel):
+    """Latency signal configuration."""
+
+    name: str
+    max_tpot: float
+    description: str
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -77,6 +85,7 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
+    latency: Optional[List[Latency]] = []
 
 
 class Condition(BaseModel):

@@ -166,16 +166,25 @@ signals:
       description: "English language queries"
     - name: "es"
       description: "Spanish language queries"
-    - name: "ru"
-      description: "Russian language queries"
     - name: "zh"
       description: "Chinese language queries"
     - name: "fr"
       description: "French language queries"
+    - name: "ru"
+      description: "Russian language queries"
     - name: "de"
       description: "German language queries"
     - name: "ja"
       description: "Japanese language queries"
+
+  # latency - Latency-based routing signals (TPOT-based)
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.05  # 50ms per token
+      description: "For real-time chat applications requiring fast responses"
+    - name: "medium_latency"
+      max_tpot: 0.15  # 150ms per token
+      description: "For standard applications with moderate latency tolerance"
 
 # Decisions - Routing logic
 decisions:

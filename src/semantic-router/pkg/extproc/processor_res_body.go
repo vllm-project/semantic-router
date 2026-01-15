@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -129,6 +130,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		if completionTokens > 0 {
 			timePerToken := completionLatency.Seconds() / float64(completionTokens)
 			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+			// Update latency classifier cache for real-time routing decisions
+			// Note: ctx.RequestModel should match the model name used in decision ModelRefs
+			// (either ModelRef.Model or ModelRef.LoRAName, depending on selection)
+			// UpdateTPOT will trim whitespace to ensure canonical matching
+			logging.Debugf("Updating TPOT cache for model: %q, TPOT: %.4f", ctx.RequestModel, timePerToken)
+			classification.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 
 		// Record windowed model metrics for load balancing

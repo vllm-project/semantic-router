@@ -66,6 +66,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Language',
     type: 'info',
   },
+  'x-vsr-matched-latency': {
+    label: 'Latency',
+    type: 'info',
+  },
   // Looper headers
   'x-vsr-looper-models-used': {
     label: 'Collaborative Models',
