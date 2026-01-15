@@ -30,7 +30,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **为什么这很重要**：多个 signal 共同投票比任何单一 signal 做出更准确的决策。
 
-## 6 种 Signal 类型
+## 7 种 Signal 类型
 
 ### 1. Keyword Signal
 
@@ -129,6 +129,28 @@ signals:
 ```
 
 **示例**："Write a story about dragons" → 偏好创意路由
+
+### 7. Language Signal
+
+**内容**：多语言检测（100 多种本地化语言）
+**延迟**：小于 1ms
+**用例**：路由查询特定语言的模型或采用特定语言的策略
+
+```yaml
+signals:
+  language:
+    - name: "en"
+      description: "English language queries"
+    - name: "es"
+      description: "Spanish language queries"
+    - name: "zh"
+      description: "Chinese language queries"
+    - name: "ru"
+      description: "Russian language queries"
+```
+
+**示例**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
+**示例**："你好，世界" → Chinese (zh) → Chinese model
 
 ## Signal 如何组合
 

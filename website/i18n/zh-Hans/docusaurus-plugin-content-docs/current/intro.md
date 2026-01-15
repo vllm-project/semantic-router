@@ -24,7 +24,7 @@ translation:
 
 ### Signal-Driven Decision Engine
 
-捕获并结合 **6 种类型的信号**以做出智能路由决策：
+捕获并结合 **7 种类型的信号**以做出智能路由决策：
 
 | 信号类型 | 描述 | 用例 |
 |------------|-------------|----------|
@@ -34,6 +34,7 @@ translation:
 | **fact_check** | 基于 ML 的事实核查需求检测 | 识别需要事实验证的查询 |
 | **user_feedback** | 用户满意度和反馈分类 | 处理后续消息和更正 |
 | **preference** | 基于 LLM 的路由偏好匹配 | 通过外部 LLM 进行复杂意图分析 |
+| **language** | 多语言检测（100 多种本地化语言） | 路由查询特定语言的模型 |
 
 **工作原理**：从请求中提取信号，在决策规则中使用 AND/OR 运算符进行组合，并用于选择最佳模型和配置。
 
@@ -69,6 +70,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         FactCheck[Fact Check Signals<br/>Verification Need]
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
+        Language[Language Signals<br/>Multi-language Detection]
     end
 
     subgraph "Decision Engine"
@@ -92,6 +94,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> FactCheck
     Router --> Feedback
     Router --> Preference
+    Router --> Language
 
     Keyword --> Rules
     Embedding --> Rules
@@ -99,6 +102,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     FactCheck --> Rules
     Feedback --> Rules
     Preference --> Rules
+    Language --> Rules
 
     Rules --> ModelSelect
     ModelSelect --> Cache
