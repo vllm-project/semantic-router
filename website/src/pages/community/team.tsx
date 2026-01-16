@@ -52,12 +52,12 @@ const allTeamMembers: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: 'AI Networking',
-    company: 'Tencent',
+    role: 'Intelligent Routing',
+    company: 'vLLM',
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: 'AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
+    bio: 'Intelligent Routing at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
     memberType: 'maintainer',
   },
   {

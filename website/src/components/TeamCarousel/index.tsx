@@ -35,8 +35,8 @@ const teamMembers: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: 'AI Networking',
-    company: 'Tencent',
+    role: 'Intelligent Routing',
+    company: 'vLLM',
     avatar: '/img/team/xunzhuo.png',
     memberType: 'maintainer',
   },
