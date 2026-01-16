@@ -157,7 +157,7 @@ def safe_json_loads(payload: str) -> object:
 
 
 class TopicPool:
-    """Builds seed topics from industry, academic, and API domains."""
+    """Builds seed topics from industry, academic, and tool domains."""
 
     INDUSTRY = [
         "finance_risk",
@@ -168,35 +168,39 @@ class TopicPool:
         "legal_contracts",
         "cyber_security",
         "gaming_design",
+        "media_entertainment",
     ]
     ACADEMIC = [
-        "mathematics",
-        "physics",
-        "chemistry",
-        "biology",
-        "computer_science",
+        # mmlu-like topics
+        "business",
+        "law",
         "psychology",
-        "economics",
-        "philosophy",
+        "biology",
+        "chemistry",
         "history",
-        "statistics",
-        "machine_learning",
-        "linguistics",
+        "health",
+        "economics",
+        "math",
+        "physics",
+        "computer_science",
+        "philosophy",
+        "engineering",
+        "other",
     ]
-    API = [
-        "cloud_resource_provisioning",
-        "payments_and_invoicing",
-        "maps_and_routing",
-        "email_and_calendar",
-        "data_analytics",
-        "devops_ci_cd",
-        "feature_flagging",
-        "observability_alerting",
+    TOOL = [
+        "code_generation",
+        "code_debugging",
+        "data_analysis",
+        "image_generation",
+        "text_summarization",
+        "translation",
+        "email_composition",
+        "web_search",
     ]
 
     @classmethod
     def all(cls) -> List[str]:
-        return list(dict.fromkeys(cls.INDUSTRY + cls.ACADEMIC + cls.API))
+        return list(dict.fromkeys(cls.INDUSTRY + cls.ACADEMIC + cls.TOOL))
 
 
 class RoutePolicyGenerator:
