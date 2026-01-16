@@ -1,6 +1,7 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
+import Link from '@docusaurus/Link'
 import styles from './promotion.module.css'
 
 interface PromotionRule {
@@ -74,35 +75,47 @@ interface PromotionCardProps {
 }
 
 const PromotionCard: React.FC<PromotionCardProps> = ({ rule }) => {
+  const ruleId = rule.role.toLowerCase()
+
   return (
     <div className={styles.promotionCard} style={{ borderColor: rule.color }}>
       <div className={styles.cardHeader}>
         <span className={styles.roleIcon}>{rule.icon}</span>
-        <h3 className={styles.roleTitle} style={{ color: rule.color }}>{rule.role}</h3>
+        <h3 className={styles.roleTitle} style={{ color: rule.color }}>
+          <Translate id={`promotion.role.${ruleId}.title`}>{rule.role}</Translate>
+        </h3>
         <span className={styles.permissions} style={{ backgroundColor: rule.color }}>
-          {rule.permissions}
+          <Translate id={`promotion.role.${ruleId}.permissions`}>{rule.permissions}</Translate>
         </span>
       </div>
 
       <div className={styles.cardContent}>
         <div className={styles.requirements}>
-          <h4>📋 Requirements</h4>
-          <p className={styles.mainRequirement}>{rule.requirements}</p>
+          <h4><Translate id="promotion.card.requirements">📋 Requirements</Translate></h4>
+          <p className={styles.mainRequirement}>
+            <Translate id={`promotion.role.${ruleId}.requirements`}>{rule.requirements}</Translate>
+          </p>
           <ul className={styles.detailsList}>
             {rule.details.map((detail, index) => (
-              <li key={index}>{detail}</li>
+              <li key={index}>
+                <Translate id={`promotion.role.${ruleId}.details.${index}`}>{detail}</Translate>
+              </li>
             ))}
           </ul>
         </div>
 
         <div className={styles.timeline}>
-          <h4>⏰ Timeline</h4>
-          <p>{rule.timeline}</p>
+          <h4><Translate id="promotion.card.timeline">⏰ Timeline</Translate></h4>
+          <p>
+            <Translate id={`promotion.role.${ruleId}.timeline`}>{rule.timeline}</Translate>
+          </p>
         </div>
 
         <div className={styles.application}>
-          <h4>📝 How to Apply</h4>
-          <p>{rule.application}</p>
+          <h4><Translate id="promotion.card.application">📝 How to Apply</Translate></h4>
+          <p>
+            <Translate id={`promotion.role.${ruleId}.application`}>{rule.application}</Translate>
+          </p>
         </div>
       </div>
     </div>
@@ -131,32 +144,35 @@ const Promotion: React.FC = () => {
             </h2>
             <div className={styles.overviewContent}>
               <div className={styles.overviewCard}>
-                <h3>🎯 Promotion Timing</h3>
+                <h3><Translate id="promotion.timing.title">🎯 Promotion Timing</Translate></h3>
                 <p>
-                  Promotions occur after each release, with
-                  <strong> 2-3 month</strong>
+                  <Translate id="promotion.timing.desc.prefix">Promotions occur after each release, with</Translate>
+                  <strong>
+                    {' '}
+                    <Translate id="promotion.timing.desc.strong">2-3 month</Translate>
+                  </strong>
                   {' '}
-                  intervals between releases
+                  <Translate id="promotion.timing.desc.suffix">intervals between releases</Translate>
                 </p>
               </div>
               <div className={styles.overviewCard}>
-                <h3>🏆 Promotion Principles</h3>
-                <p>Evaluated based on sustained contributions, technical capabilities, and community engagement</p>
+                <h3><Translate id="promotion.principles.title">🏆 Promotion Principles</Translate></h3>
+                <p><Translate id="promotion.principles.desc">Evaluated based on sustained contributions, technical capabilities, and community engagement</Translate></p>
               </div>
               <div className={styles.overviewCard}>
-                <h3>📈 Growth Path</h3>
+                <h3><Translate id="promotion.growth.title">📈 Growth Path</Translate></h3>
                 <div className={styles.growthPathSimple}>
                   <span className={styles.pathText}>
-                    <strong>Reviewer</strong>
+                    <strong><Translate id="promotion.role.reviewer.title">Reviewer</Translate></strong>
                     {' '}
                     →
-                    <strong>Committer</strong>
+                    <strong><Translate id="promotion.role.committer.title">Committer</Translate></strong>
                     {' '}
                     →
-                    <strong>Maintainer</strong>
+                    <strong><Translate id="promotion.role.maintainer.title">Maintainer</Translate></strong>
                   </span>
                   <p className={styles.pathDescription}>
-                    Progressive advancement through sustained contributions and community engagement
+                    <Translate id="promotion.growth.desc">Progressive advancement through sustained contributions and community engagement</Translate>
                   </p>
                 </div>
               </div>
@@ -169,7 +185,9 @@ const Promotion: React.FC = () => {
               <Translate id="promotion.rules.title">Promotion Rules</Translate>
             </h2>
             <p className={styles.rulesDescription}>
-              Detailed requirements and permissions for each role. Each role builds upon the previous one with increasing responsibilities and impact.
+              <Translate id="promotion.rules.description">
+                Detailed requirements and permissions for each role. Each role builds upon the previous one with increasing responsibilities and impact.
+              </Translate>
             </p>
             <div className={styles.rulesGrid}>
               {promotionRules.map((rule, index) => (
@@ -187,29 +205,29 @@ const Promotion: React.FC = () => {
               <div className={styles.step}>
                 <div className={styles.stepNumber}>1</div>
                 <div className={styles.stepContent}>
-                  <h3>Self-Assessment</h3>
-                  <p>Confirm you meet the contribution requirements for the desired role</p>
+                  <h3><Translate id="promotion.process.step1.title">Self-Assessment</Translate></h3>
+                  <p><Translate id="promotion.process.step1.desc">Confirm you meet the contribution requirements for the desired role</Translate></p>
                 </div>
               </div>
               <div className={styles.step}>
                 <div className={styles.stepNumber}>2</div>
                 <div className={styles.stepContent}>
-                  <h3>Submit Application</h3>
-                  <p>After a release, create a GitHub Issue to apply for the corresponding role</p>
+                  <h3><Translate id="promotion.process.step2.title">Submit Application</Translate></h3>
+                  <p><Translate id="promotion.process.step2.desc">After a release, create a GitHub Issue to apply for the corresponding role</Translate></p>
                 </div>
               </div>
               <div className={styles.step}>
                 <div className={styles.stepNumber}>3</div>
                 <div className={styles.stepContent}>
-                  <h3>Community Review</h3>
-                  <p>Existing maintainer team will evaluate your contributions</p>
+                  <h3><Translate id="promotion.process.step3.title">Community Review</Translate></h3>
+                  <p><Translate id="promotion.process.step3.desc">Existing maintainer team will evaluate your contributions</Translate></p>
                 </div>
               </div>
               <div className={styles.step}>
                 <div className={styles.stepNumber}>4</div>
                 <div className={styles.stepContent}>
-                  <h3>Permission Grant</h3>
-                  <p>Upon approval, you'll receive the corresponding GitHub permissions</p>
+                  <h3><Translate id="promotion.process.step4.title">Permission Grant</Translate></h3>
+                  <p><Translate id="promotion.process.step4.desc">Upon approval, you'll receive the corresponding GitHub permissions</Translate></p>
                 </div>
               </div>
             </div>
@@ -220,16 +238,16 @@ const Promotion: React.FC = () => {
               🚀
               <Translate id="promotion.getStarted.title">Get Started</Translate>
             </h2>
-            <p>Ready to begin your contribution journey?</p>
+            <p><Translate id="promotion.getStarted.desc">Ready to begin your contribution journey?</Translate></p>
             <div className={styles.actionButtons}>
-              <a href="/community/work-groups" className={styles.actionButton}>
-                🏷️ View Work Groups
-              </a>
-              <a href="/community/contributing" className={styles.actionButton}>
-                📖 Contributing Guide
-              </a>
+              <Link to="/community/work-groups" className={styles.actionButton}>
+                <Translate id="promotion.getStarted.workGroups">🏷️ View Work Groups</Translate>
+              </Link>
+              <Link to="/community/contributing" className={styles.actionButton}>
+                <Translate id="promotion.getStarted.contributing">📖 Contributing Guide</Translate>
+              </Link>
               <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer" className={styles.actionButton}>
-                📝 Submit Application
+                <Translate id="promotion.getStarted.apply">📝 Submit Application</Translate>
               </a>
             </div>
           </section>
