@@ -16,17 +16,15 @@ The Semantic Router Operator provides a Kubernetes-native way to deploy and mana
 - **🎯 Production Features**: HPA, ingress, service mesh integration, and pod disruption budgets
 - **🛡️ Secure by Default**: Drops all capabilities, prevents privilege escalation
 
-## Quick Start
-
-### Prerequisites
+## Prerequisites
 
 - Kubernetes 1.24+ or OpenShift 4.12+
 - `kubectl` or `oc` CLI configured
 - Cluster admin access (for CRD installation)
 
-### Installation
+## Installation
 
-#### Option 1: Using Kustomize (Standard Kubernetes)
+### Option 1: Using Kustomize (Standard Kubernetes)
 
 ```bash
 # Clone the repository
@@ -46,7 +44,7 @@ Verify the operator is running:
 kubectl get pods -n semantic-router-operator-system
 ```
 
-#### Option 2: Using OLM (OpenShift)
+### Option 2: Using OLM (OpenShift)
 
 For OpenShift deployments using Operator Lifecycle Manager:
 
@@ -62,9 +60,7 @@ make podman-push IMG=quay.io/<your-org>/semantic-router-operator:latest
 make openshift-deploy
 ```
 
-See the [OpenShift Quick Start Guide](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/OPENSHIFT_QUICKSTART.md) for detailed instructions.
-
-### Deploy Your First Router
+## Deploy Your First Router
 
 Create a `my-router.yaml` file:
 
@@ -139,7 +135,7 @@ Apply the configuration:
 kubectl apply -f my-router.yaml
 ```
 
-### Verify Deployment
+## Verify Deployment
 
 ```bash
 # Check the SemanticRouter resource
@@ -213,7 +209,6 @@ When running on OpenShift, the operator:
 - **Security Context**: Does NOT set `runAsUser`, `runAsGroup`, or `fsGroup`
 - **Rationale**: Lets OpenShift SCCs assign UIDs/GIDs from the namespace's allowed range
 - **Compatible with**: `restricted` SCC (default) and custom SCCs
-- **Log Message**: `"Detected OpenShift platform - will use OpenShift-compatible security contexts"`
 
 ### Standard Kubernetes
 
@@ -221,7 +216,6 @@ When running on standard Kubernetes, the operator:
 
 - **Security Context**: Sets `runAsUser: 1000`, `fsGroup: 1000`, `runAsNonRoot: true`
 - **Rationale**: Provides secure defaults for pod security policies/standards
-- **Log Message**: `"Detected standard Kubernetes platform - will use standard security contexts"`
 
 ### Both Platforms
 
@@ -679,62 +673,7 @@ kubectl logs -n semantic-router-operator-system \
 # "Detected standard Kubernetes platform - will use standard security contexts"
 ```
 
-## Migration from Helm
-
-If you're currently using Helm to deploy semantic router:
-
-### 1. Export Current Configuration
-
-```bash
-# Get current Helm values
-helm get values my-router -n semantic-router > current-values.yaml
-```
-
-### 2. Convert to SemanticRouter CR
-
-Map Helm values to CR format (most fields map directly):
-
-```yaml
-# Helm: replicas
-# CR: spec.replicas
-
-# Helm: image.repository + image.tag
-# CR: spec.image.repository + spec.image.tag
-
-# Helm: config.bert_model
-# CR: spec.config.bert_model
-```
-
-### 3. Apply CR and Verify
-
-```bash
-# Apply the SemanticRouter CR
-kubectl apply -f semantic-router-cr.yaml
-
-# Wait for resources to be created
-kubectl wait --for=condition=Available semanticrouter/my-router --timeout=5m
-
-# Verify
-kubectl get semanticrouter,deployment,service
-```
-
-### 4. Delete Helm Release
-
-Once verified:
-
-```bash
-helm uninstall my-router -n semantic-router
-```
-
-**Benefits of Operator vs Helm:**
-
-- ✅ Better lifecycle management and automatic updates
-- ✅ Platform-aware security contexts (OpenShift/Kubernetes)
-- ✅ Easier configuration updates (just edit CR)
-- ✅ Status conditions and health reporting
-- ✅ Integrated with Kubernetes ecosystem (kubectl, GitOps)
-
-## Development and Contributing
+## Development
 
 ### Local Development
 
@@ -773,13 +712,9 @@ make deploy IMG=semantic-router-operator:dev
 kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 ```
 
-## API Reference
-
-For the complete CRD API reference, see [CRD Reference](../../api/crd-reference).
-
 ## Next Steps
 
 - [Configure semantic router features](../configuration)
 - [Set up monitoring and observability](../../tutorials/observability/dashboard)
-- [Deploy with different deployment strategies](../installation.md)
+- [Explore other deployment options](../installation.md)
 - [Join the community](../../community/overview)
