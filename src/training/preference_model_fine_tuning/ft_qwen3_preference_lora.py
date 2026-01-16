@@ -11,7 +11,7 @@ Dataset formats:
   * Custom JSONL: each line -> {"text": "...", "preference": "label"}
 
 Minimal usage:
-  python ft_qwen3_preference_lora.py --mode train --model-name Qwen/Qwen3-0.6B-Instruct --output-dir ./qwen3_pref_lora
+  python ft_qwen3_preference_lora.py --mode train --model-name Qwen/Qwen3-1.7B-Instruct --output-dir ./qwen3_pref_lora
   python ft_qwen3_preference_lora.py --mode test --model-path ./qwen3_pref_lora --prompt "Need low-latency mobile inference"
 """
 
@@ -320,7 +320,11 @@ def load_peft_model(model_path: str):
 def parse_args():
     p = argparse.ArgumentParser(description="LoRA preference fine-tune with Qwen3")
     p.add_argument("--mode", choices=["train", "test"], default="train")
-    p.add_argument("--model-name", default="Qwen/Qwen3-0.6B-Instruct")
+    p.add_argument(
+        "--model-name",
+        default="Qwen/Qwen3-1.7B-Instruct",
+        help="Base model name for train mode",
+    )
     p.add_argument("--model-path", help="Path to trained adapter for test mode")
     p.add_argument("--output-dir", default="./qwen3_preference_lora")
     p.add_argument("--dataset-path", help="Optional JSONL dataset path")
