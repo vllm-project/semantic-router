@@ -527,42 +527,144 @@ class PreferenceModelDataPipeline:
         output_path: Path,
         clean_samples: int = 30000,
         augmented_samples: int = 20000,
+        policy_checkpoint: Optional[Path] = None,
+        phase1_checkpoint: Optional[Path] = None,
+        phase2_checkpoint: Optional[Path] = None,
     ):
+        """
+        If checkpoints are provided:
+        If they exists on disk, load from them instead of regenerating.
+        If they do not exists on disk, write them after generation.
+        """
         self.policy_generator = policy_generator
         self.conversation_synthesizer = conversation_synthesizer
         self.augmentation_engine = augmentation_engine
         self.output_path = output_path
         self.clean_samples = clean_samples
         self.augmented_samples = augmented_samples
+        self.policy_checkpoint = policy_checkpoint
+        self.phase1_checkpoint = phase1_checkpoint
+        self.phase2_checkpoint = phase2_checkpoint
 
     def run(self) -> None:
-        logging.info("Starting policy synthesis")
-        seeds = TopicPool.all()
-        policies = self.policy_generator.generate(seeds, policies_per_seed=4)
-        logging.info("Curated %d policies", len(policies))
+        policies = self._maybe_load_policies()
+        if policies is None:
+            logging.info("Starting policy synthesis")
+            seeds = TopicPool.all()
+            policies = self.policy_generator.generate(seeds, policies_per_seed=4)
+            logging.info("Curated %d policies", len(policies))
+            self._maybe_write_policies(policies)
 
         logging.info("Generating clean conversations")
-        clean = self.conversation_synthesizer.synthesize(
-            policies, target_samples=self.clean_samples
-        )
-        logging.info("Generated %d clean samples", len(clean))
+        clean = self._maybe_load_samples(self.phase1_checkpoint)
+        if clean is None:
+            clean = self.conversation_synthesizer.synthesize(
+                policies, target_samples=self.clean_samples
+            )
+            logging.info("Generated %d clean samples", len(clean))
+            if self.phase1_checkpoint:
+                logging.info(
+                    "Writing phase-1 checkpoint with %d clean samples to %s",
+                    len(clean),
+                    self.phase1_checkpoint,
+                )
+                self._write_jsonl(clean, path=self.phase1_checkpoint)
 
         logging.info("Applying augmentations")
         self.augmentation_engine.available_policies = policies
-        augmented = self.augmentation_engine.augment(
-            clean, target_size=self.augmented_samples
-        )
-        logging.info("Generated %d augmented samples", len(augmented))
+        augmented = self._maybe_load_samples(self.phase2_checkpoint)
+        if augmented is None:
+            augmented = self.augmentation_engine.augment(
+                clean, target_size=self.augmented_samples
+            )
+            logging.info("Generated %d augmented samples", len(augmented))
+            if self.phase2_checkpoint:
+                logging.info(
+                    "Writing phase-2 checkpoint with %d augmented samples to %s",
+                    len(augmented),
+                    self.phase2_checkpoint,
+                )
+                self._write_jsonl(augmented, path=self.phase2_checkpoint)
 
         all_samples = clean + augmented
         logging.info("Writing %d samples to %s", len(all_samples), self.output_path)
-        self._write_jsonl(all_samples)
+        self._write_jsonl(all_samples, path=self.output_path)
 
-    def _write_jsonl(self, samples: List[ConversationSample]) -> None:
-        self.output_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.output_path.open("w", encoding="utf-8") as f:
+    def _write_jsonl(self, samples: List[ConversationSample], path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
             for sample in samples:
                 f.write(json.dumps(sample_to_dict(sample), ensure_ascii=False) + "\n")
+
+    def _maybe_write_policies(self, policies: List[RoutePolicy]) -> None:
+        if not self.policy_checkpoint:
+            return
+        self.policy_checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        payload = [
+            {"label": p.label, "description": p.description, "seed": p.seed}
+            for p in policies
+        ]
+        with self.policy_checkpoint.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    def _maybe_load_policies(self) -> Optional[List[RoutePolicy]]:
+        if not self.policy_checkpoint or not self.policy_checkpoint.exists():
+            return None
+        with self.policy_checkpoint.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        policies: List[RoutePolicy] = []
+        for item in data or []:
+            label = item.get("label")
+            if not label:
+                continue
+            policies.append(
+                RoutePolicy(
+                    label=label,
+                    description=item.get("description"),
+                    seed=item.get("seed"),
+                )
+            )
+        logging.info(
+            "Loaded %d policies from checkpoint %s",
+            len(policies),
+            self.policy_checkpoint,
+        )
+        return policies
+
+    def _maybe_load_samples(
+        self, checkpoint: Optional[Path]
+    ) -> Optional[List[ConversationSample]]:
+        if not checkpoint or not checkpoint.exists():
+            return None
+        samples: List[ConversationSample] = []
+        with checkpoint.open("r", encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                conversation = [
+                    ConversationMessage(role=t["role"], content=t["content"])
+                    for t in obj.get("conversation", [])
+                ]
+                policies = [
+                    RoutePolicy(
+                        label=p.get("label", ""),
+                        description=p.get("description"),
+                        seed=p.get("seed"),
+                    )
+                    for p in obj.get("route_policies", [])
+                    if p.get("label")
+                ]
+                samples.append(
+                    ConversationSample(
+                        conversation=conversation,
+                        route_policies=policies,
+                        ground_truth_label=obj.get("ground_truth_label", ""),
+                        phase=obj.get("phase", "clean"),
+                        augmentations=obj.get("augmentations", []),
+                        meta=obj.get("meta", {}),
+                    )
+                )
+        logging.info("Loaded %d samples from %s", len(samples), checkpoint)
+        return samples
 
 
 ###############################################################################
@@ -591,7 +693,12 @@ def sample_to_dict(sample: ConversationSample) -> Dict[str, object]:
 ###############################################################################
 
 
-def build_default_pipeline(output_path: str) -> PreferenceModelDataPipeline:
+def build_default_pipeline(
+    output_path: str,
+    policy_checkpoint: Optional[str] = None,
+    phase1_checkpoint: Optional[str] = None,
+    phase2_checkpoint: Optional[str] = None,
+) -> PreferenceModelDataPipeline:
     """Factory with sensible defaults for quick runs."""
 
     proposer = LLMClient(model="gpt-4o-mini")
@@ -614,6 +721,9 @@ def build_default_pipeline(output_path: str) -> PreferenceModelDataPipeline:
         conversation_synthesizer=synthesizer,
         augmentation_engine=augmentation_engine,
         output_path=Path(output_path),
+        policy_checkpoint=Path(policy_checkpoint) if policy_checkpoint else None,
+        phase1_checkpoint=Path(phase1_checkpoint) if phase1_checkpoint else None,
+        phase2_checkpoint=Path(phase2_checkpoint) if phase2_checkpoint else None,
     )
     return pipeline
 
