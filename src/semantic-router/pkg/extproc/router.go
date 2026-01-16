@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -31,6 +33,8 @@ type OpenAIRouter struct {
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
 	ReplayRecorder       *routerreplay.Recorder
+	anthropicClients     map[string]*anthropic.Client
+	anthropicClientsMu   sync.RWMutex
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -352,4 +356,40 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 
 	logging.Infof("Tools database loaded successfully from: %s", r.Config.Tools.ToolsDBPath)
 	return nil
+}
+
+// getCachedAnthropicClient returns a cached client if it exists, nil otherwise.
+func (r *OpenAIRouter) getCachedAnthropicClient(modelName string) *anthropic.Client {
+	r.anthropicClientsMu.RLock()
+	defer r.anthropicClientsMu.RUnlock()
+	if r.anthropicClients == nil {
+		return nil
+	}
+	return r.anthropicClients[modelName]
+}
+
+// getAnthropicClient returns an Anthropic client thread-safely for the given model, creating it lazily if needed.
+func (r *OpenAIRouter) getAnthropicClient(modelName string) (*anthropic.Client, error) {
+	if client := r.getCachedAnthropicClient(modelName); client != nil {
+		return client, nil
+	}
+
+	r.anthropicClientsMu.Lock()
+	defer r.anthropicClientsMu.Unlock()
+	if r.anthropicClients == nil {
+		r.anthropicClients = make(map[string]*anthropic.Client)
+	}
+	if client, ok := r.anthropicClients[modelName]; ok {
+		return client, nil
+	}
+	apiKey := r.Config.GetModelAccessKey(modelName)
+	if apiKey == "" {
+		return nil, fmt.Errorf("no access_key configured for Anthropic model %s", modelName)
+	}
+
+	client := anthropic.NewClient(apiKey)
+	r.anthropicClients[modelName] = client
+
+	logging.Infof("Created Anthropic client for model: %s", modelName)
+	return client, nil
 }

@@ -126,6 +126,7 @@ const sidebars: SidebarsConfig = {
         'cookbook/classifier-tuning',
         'cookbook/pii-policy',
         'cookbook/vllm-endpoints',
+        'cookbook/anthropic-models',
       ],
     },
     {
