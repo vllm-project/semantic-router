@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -120,23 +123,27 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		return decisionName, evaluationConfidence, reasoningDecision, ""
 	}
 
-	// Select best model from the decision's ModelRefs (only for auto models)
+	// Select best model from the decision's ModelRefs using configured selection algorithm
 	if len(result.Decision.ModelRefs) > 0 {
-		modelRef := result.Decision.ModelRefs[0]
+		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
+		// Pass decision's algorithm config for per-decision algorithm override
+		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm)
+
 		// Use LoRA name if specified, otherwise use the base model name
-		selectedModel = modelRef.Model
-		if modelRef.LoRAName != "" {
-			selectedModel = modelRef.LoRAName
-			logging.Infof("Selected model from decision %s: %s (LoRA adapter for base model %s)",
-				decisionName, selectedModel, modelRef.Model)
+		selectedModel = selectedModelRef.Model
+		if selectedModelRef.LoRAName != "" {
+			selectedModel = selectedModelRef.LoRAName
+			logging.Infof("Selected model from decision %s: %s (LoRA adapter for base model %s) using %s selection",
+				decisionName, selectedModel, selectedModelRef.Model, usedMethod)
 		} else {
-			logging.Infof("Selected model from decision %s: %s", decisionName, selectedModel)
+			logging.Infof("Selected model from decision %s: %s using %s selection",
+				decisionName, selectedModel, usedMethod)
 		}
 		ctx.VSRSelectedModel = selectedModel
 
-		// Determine reasoning mode from the best model's configuration
-		if result.Decision.ModelRefs[0].UseReasoning != nil {
-			useReasoning := *result.Decision.ModelRefs[0].UseReasoning
+		// Determine reasoning mode from the selected model's configuration
+		if selectedModelRef.UseReasoning != nil {
+			useReasoning := *selectedModelRef.UseReasoning
 			reasoningDecision = entropy.ReasoningDecision{
 				UseReasoning:     useReasoning,
 				Confidence:       evaluationConfidence,
@@ -163,4 +170,114 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 
 	return decisionName, evaluationConfidence, reasoningDecision, selectedModel
+}
+
+// selectModelFromCandidates uses the configured selection algorithm to choose the best model
+// from the decision's candidate models. Falls back to first model if selection fails.
+// The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
+// Returns the selected model and the method name used for logging.
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+	if len(modelRefs) == 0 {
+		return nil, ""
+	}
+
+	// If only one model, no need for selection algorithm
+	if len(modelRefs) == 1 {
+		return &modelRefs[0], "single"
+	}
+
+	// Determine selection method: per-decision algorithm takes precedence over global config
+	method := r.getSelectionMethod(algorithm)
+
+	// Get selector from registry
+	var selector selection.Selector
+	if r.ModelSelector != nil {
+		selector, _ = r.ModelSelector.Get(method)
+	}
+
+	// Fallback to first model if no selector available
+	if selector == nil {
+		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
+		return &modelRefs[0], string(method)
+	}
+
+	// Build selection context with cost/quality weights
+	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
+
+	selCtx := &selection.SelectionContext{
+		Query:           query,
+		DecisionName:    decisionName,
+		CandidateModels: modelRefs,
+		CostWeight:      costWeight,
+		QualityWeight:   qualityWeight,
+	}
+
+	// Perform selection
+	result, err := selector.Select(context.Background(), selCtx)
+	if err != nil {
+		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
+		return &modelRefs[0], string(method)
+	}
+
+	// Find the selected model in the candidates
+	for i := range modelRefs {
+		if modelRefs[i].Model == result.SelectedModel ||
+			modelRefs[i].LoRAName == result.SelectedModel {
+			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
+				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
+			// Record selection metrics
+			selection.RecordSelection(string(method), decisionName, result.SelectedModel, result.Score)
+			return &modelRefs[i], string(method)
+		}
+	}
+
+	// Fallback if selected model not found in candidates (shouldn't happen)
+	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
+	return &modelRefs[0], string(method)
+}
+
+// getSelectionMethod determines which selection algorithm to use.
+// Per-decision algorithm is the primary configuration (aligned with looper pattern).
+// Defaults to static selection if no algorithm is specified.
+func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) selection.SelectionMethod {
+	// Check per-decision algorithm (aligned with looper pattern)
+	if algorithm != nil && algorithm.Type != "" {
+		switch algorithm.Type {
+		case "elo":
+			return selection.MethodElo
+		case "router_dc":
+			return selection.MethodRouterDC
+		case "automix":
+			return selection.MethodAutoMix
+		case "hybrid":
+			return selection.MethodHybrid
+		case "static":
+			return selection.MethodStatic
+		case "confidence", "ratings":
+			// These are looper algorithms, not selection algorithms
+			// Fall through to default
+		}
+	}
+
+	// Default to static selection (use first model)
+	return selection.MethodStatic
+}
+
+// getSelectionWeights returns cost and quality weights based on algorithm config.
+// Uses per-decision config only (aligned with looper pattern).
+func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (float64, float64) {
+	// Check per-decision algorithm config
+	if algorithm != nil {
+		if algorithm.AutoMix != nil && algorithm.AutoMix.CostQualityTradeoff > 0 {
+			cost := algorithm.AutoMix.CostQualityTradeoff
+			return cost, 1.0 - cost
+		}
+		if algorithm.Hybrid != nil && algorithm.Hybrid.CostWeight > 0 {
+			cost := algorithm.Hybrid.CostWeight
+			return cost, 1.0 - cost
+		}
+	}
+
+	// Default: equal weighting (0.5 cost, 0.5 quality)
+	return 0.5, 0.5
 }
