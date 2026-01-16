@@ -1,18 +1,14 @@
 """
-LoRA fine-tuning for preference extraction with Qwen3 (causal LM).
+Fine-tuning for preference extraction with Qwen3 (causal LM).
 The model learns to emit a single preference label given a user request or brief dialog.
-
-Modes:
-  - train: fits a LoRA adapter on Qwen3 using synthetic or user-provided data
-  - test:  loads a saved adapter and generates a preference label for a prompt
 
 Dataset formats:
   * Synthetic (default): four labels {fast_small, high_quality, lowest_cost, guardrail_first}
   * Custom JSONL: each line -> {"text": "...", "preference": "label"}
 
 Minimal usage:
-  python ft_qwen3_preference_lora.py --mode train --model-name Qwen/Qwen3-1.7B-Instruct --output-dir ./qwen3_pref_lora
-  python ft_qwen3_preference_lora.py --mode test --model-path ./qwen3_pref_lora --prompt "Need low-latency mobile inference"
+  python ft_qwen3_preference.py --mode train --model-name Qwen/Qwen3-1.7B-Instruct --output-dir ./qwen3_pref
+  python ft_qwen3_preference.py --mode test --model-path ./qwen3_pref --prompt "Need low-latency mobile inference"
 """
 
 import argparse
