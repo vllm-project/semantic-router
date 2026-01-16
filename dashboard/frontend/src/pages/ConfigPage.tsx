@@ -9,6 +9,7 @@ import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
 import {
   ConfigFormat,
   detectConfigFormat,
+  DecisionConditionType
 } from '../types/config'
 
 interface VLLMEndpoint {
@@ -241,9 +242,9 @@ interface DecisionFormState {
   description: string
   priority: number
   operator: 'AND' | 'OR'
-  conditionsJson: string
-  modelRefsJson: string
-  pluginsJson: string
+  conditions: { type: string; name: string }[]
+  modelRefs: { model: string; use_reasoning: boolean }[]
+  plugins: { type: string; configuration: string | Record<string, unknown> }[]
 }
 
 interface AddSignalFormState {
@@ -2781,14 +2782,34 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
       setViewModalOpen(false)
+      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding'] as const
+
+      const getConditionNameOptions = (type?: DecisionConditionType) => {
+        // derive condition name options based on signals configured
+        switch (type) {
+          case 'keyword':
+            return config?.signals?.keywords?.map((k) => k.name) || []
+          case 'domain':
+            return config?.signals?.domains?.map((d) => d.name) || []
+          case 'preference':
+            return config?.signals?.preferences?.map((p) => p.name) || []
+          case 'user_feedback':
+            return config?.signals?.user_feedbacks?.map((u) => u.name) || []
+          case 'embedding':
+            return config?.signals?.embeddings?.map((e) => e.name) || []
+          default:
+            return ["ABC"]
+        }
+      }
+
       const defaultForm: DecisionFormState = {
         name: '',
         description: '',
         priority: 1,
         operator: 'AND',
-        conditionsJson: '[]',
-        modelRefsJson: '[]',
-        pluginsJson: '[]'
+        conditions: [{ type: 'keyword', name: '' }],
+        modelRefs: [{ model: '', use_reasoning: false }],
+        plugins: []
       }
 
       const initialData: DecisionFormState = mode === 'edit' && decision ? {
@@ -2796,10 +2817,275 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         description: decision.description || '',
         priority: decision.priority ?? 1,
         operator: decision.rules?.operator || 'AND',
-        conditionsJson: JSON.stringify(decision.rules?.conditions || [], null, 2),
-        modelRefsJson: JSON.stringify(decision.modelRefs || [], null, 2),
-        pluginsJson: JSON.stringify(decision.plugins || [], null, 2)
+        conditions: (decision.rules?.conditions || []).map((cond) => ({
+          type: cond.type,
+          name: cond.name
+        })),
+        modelRefs: (decision.modelRefs || []).map((ref) => ({
+          model: ref.model,
+          use_reasoning: !!ref.use_reasoning
+        })),
+        plugins: (decision.plugins || []).map((plugin) => ({
+          type: plugin.type,
+          configuration: JSON.stringify(plugin.configuration || {}, null, 2)
+        }))
       } : defaultForm
+
+      const renderConditionsEditor = (
+        value: DecisionFormState['conditions'],
+        onChange: (value: DecisionFormState['conditions']) => void
+      ) => {
+        const rows = (Array.isArray(value) ? value : []).length ? value : [{ type: 'keyword', name: '' }]
+
+        const updateItem = (index: number, key: 'type' | 'name', val: string) => {
+          const next = rows.map((item, idx) => {
+            if (idx !== index) return item
+            if (key === 'type') {
+              return { type: val, name: '' }
+            }
+            return { ...item, [key]: val }
+          })
+          onChange(next)
+        }
+
+        const removeItem = (index: number) => {
+          const next = rows.filter((_, idx) => idx !== index)
+          onChange(next.length ? next : [{ type: 'keyword', name: '' }])
+        }
+
+        const addItem = () => onChange([...rows, { type: 'keyword', name: '' }])
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {rows.map((cond, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr auto',
+                  gap: '0.5rem',
+                  alignItems: 'center'
+                }}
+              >
+                <select
+                  value={cond?.type || conditionTypeOptions[0]}
+                  onChange={(e) => updateItem(idx, 'type', e.target.value)}
+                  style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                >
+                  {conditionTypeOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <select
+                  value={cond?.name || ''}
+                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                  style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                >
+                  <option value="" disabled>Select name</option>
+                  {getConditionNameOptions(cond?.type as DecisionConditionType).map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  {getConditionNameOptions(cond?.type as DecisionConditionType).length === 0 && (
+                    <option value="" disabled>No matching signals</option>
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeItem(idx)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 6,
+                    border: '1px solid var(--color-border)',
+                    background: 'transparent',
+                    color: 'var(--color-text)'
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addItem}
+              style={{
+                width: 'fit-content',
+                padding: '0.5rem 0.75rem',
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+                background: 'transparent',
+                color: 'var(--color-text)'
+              }}
+            >
+              Add Condition
+            </button>
+          </div>
+        )
+      }
+
+      const renderModelRefsEditor = (
+        value: DecisionFormState['modelRefs'],
+        onChange: (value: DecisionFormState['modelRefs']) => void
+      ) => {
+        const rows = (Array.isArray(value) ? value : []).length ? value : [{ model: '', use_reasoning: false }]
+
+        const updateItem = (index: number, key: 'model' | 'use_reasoning', val: string | boolean) => {
+          const next = rows.map((item, idx) => idx === index ? { ...item, [key]: val } : item)
+          onChange(next)
+        }
+
+        const removeItem = (index: number) => {
+          const next = rows.filter((_, idx) => idx !== index)
+          onChange(next.length ? next : [{ model: '', use_reasoning: false }])
+        }
+
+        const addItem = () => onChange([...rows, { model: '', use_reasoning: false }])
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {rows.map((ref, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto auto',
+                  gap: '0.5rem',
+                  alignItems: 'center'
+                }}
+              >
+                <input
+                  type="text"
+                  value={ref?.model || ''}
+                  onChange={(e) => updateItem(idx, 'model', e.target.value)}
+                  placeholder="Model name (e.g. gpt-4o)"
+                  style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--color-text-secondary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!ref?.use_reasoning}
+                    onChange={(e) => updateItem(idx, 'use_reasoning', e.target.checked)}
+                  />
+                  Use reasoning
+                </label>
+                <button
+                  type="button"
+                  onClick={() => removeItem(idx)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 6,
+                    border: '1px solid var(--color-border)',
+                    background: 'transparent',
+                    color: 'var(--color-text)'
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addItem}
+              style={{
+                width: 'fit-content',
+                padding: '0.5rem 0.75rem',
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+                background: 'transparent',
+                color: 'var(--color-text)'
+              }}
+            >
+              Add Model Reference
+            </button>
+          </div>
+        )
+      }
+
+      const renderPluginsEditor = (
+        value: DecisionFormState['plugins'],
+        onChange: (value: DecisionFormState['plugins']) => void
+      ) => {
+        const rows = Array.isArray(value) ? value : []
+
+        const updateItem = (index: number, key: 'type' | 'configuration', val: string | Record<string, unknown>) => {
+          const next = rows.map((item, idx) => idx === index ? { ...item, [key]: val } : item)
+          onChange(next)
+        }
+
+        const removeItem = (index: number) => {
+          const next = rows.filter((_, idx) => idx !== index)
+          onChange(next)
+        }
+
+        const addItem = () => onChange([...rows, { type: '', configuration: '' }])
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {rows.map((plugin, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr',
+                  gap: '0.5rem',
+                  padding: '0.75rem',
+                  borderRadius: 8,
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={plugin?.type || ''}
+                    onChange={(e) => updateItem(idx, 'type', e.target.value)}
+                    placeholder="Plugin type (e.g. logging)"
+                    style={{ padding: '0.55rem 0.75rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeItem(idx)}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: 6,
+                      border: '1px solid var(--color-border)',
+                      background: 'transparent',
+                      color: 'var(--color-text)'
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea
+                  value={typeof plugin?.configuration === 'string' ? plugin.configuration : JSON.stringify(plugin?.configuration || {}, null, 2)}
+                  onChange={(e) => updateItem(idx, 'configuration', e.target.value)}
+                  placeholder='Configuration JSON (optional)'
+                  rows={4}
+                  style={{
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: 6,
+                    border: '1px solid var(--color-border)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.9rem'
+                  }}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addItem}
+              style={{
+                width: 'fit-content',
+                padding: '0.5rem 0.75rem',
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+                background: 'transparent',
+                color: 'var(--color-text)'
+              }}
+            >
+              Add Plugin
+            </button>
+          </div>
+        )
+      }
 
       const fields: FieldConfig[] = [
         {
@@ -2830,37 +3116,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           required: true
         },
         {
-          name: 'conditionsJson',
-          label: 'Conditions JSON',
-          type: 'textarea',
-          placeholder: 'e.g. [{"type":"signal","name":"keyword-signal"}]'
+          name: 'conditions',
+          label: 'Conditions',
+          type: 'custom',
+          description: 'Add routing conditions (type and name).',
+          customRender: renderConditionsEditor
         },
         {
-          name: 'modelRefsJson',
-          label: 'Model Refs JSON',
-          type: 'textarea',
-          placeholder: 'e.g. [{"model":"gpt-4o","use_reasoning":false}]'
+          name: 'modelRefs',
+          label: 'Model References',
+          type: 'custom',
+          description: 'Set target models and whether to enable reasoning.',
+          customRender: renderModelRefsEditor
         },
         {
-          name: 'pluginsJson',
-          label: 'Plugins JSON',
-          type: 'textarea',
-          placeholder: 'e.g. [{"type":"logging","configuration":{"level":"info"}}]'
+          name: 'plugins',
+          label: 'Plugins',
+          type: 'custom',
+          description: 'Optional plugins applied to this decision.',
+          customRender: renderPluginsEditor
         }
       ]
-
-      const parseArray = (label: string, raw: unknown) => {
-        if (Array.isArray(raw)) return raw
-        if (typeof raw === 'string') {
-          const trimmed = raw.trim()
-          const parsed = trimmed ? JSON.parse(trimmed) : []
-          if (!Array.isArray(parsed)) {
-            throw new Error(`${label} must be a JSON array.`)
-          }
-          return parsed
-        }
-        throw new Error(`${label} must be a JSON array.`)
-      }
 
       const saveDecision = async (formData: DecisionFormState) => {
         if (!config) {
@@ -2878,32 +3154,53 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
         const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-        const conditionsRaw = parseArray('Conditions', formData.conditionsJson || '[]')
-        const modelRefsRaw = parseArray('Model references', formData.modelRefsJson || '[]')
-        const pluginsRaw = parseArray('Plugins', formData.pluginsJson || '[]')
-
-        const conditions = conditionsRaw.map((c, idx) => {
-          if (!c || typeof c !== 'object') throw new Error(`Condition #${idx + 1} must be an object.`)
-          if (!('type' in c) || !('name' in c)) throw new Error(`Condition #${idx + 1} must include "type" and "name".`)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const condition = c as any
-          return { type: String(condition.type), name: String(condition.name) }
+        const normalizedConditions = (formData.conditions || []).filter((c) => (c?.type || '').trim() || (c?.name || '').trim())
+        const conditions = normalizedConditions.map((c, idx) => {
+          const type = (c?.type || '').trim()
+          const name = (c?.name || '').trim()
+          if (!type || !name) {
+            throw new Error(`Condition #${idx + 1} needs both type and name.`)
+          }
+          return { type, name }
         })
 
-        const modelRefs = modelRefsRaw.map((m, idx) => {
-          if (!m || typeof m !== 'object') throw new Error(`Model reference #${idx + 1} must be an object.`)
-          if (!('model' in m)) throw new Error(`Model reference #${idx + 1} is missing "model".`)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const ref = m as any
-          return { model: String(ref.model), use_reasoning: !!ref.use_reasoning }
+        const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
+        const modelRefs = normalizedModelRefs.map((m, idx) => {
+          const model = (m?.model || '').trim()
+          if (!model) {
+            throw new Error(`Model reference #${idx + 1} is missing a model name.`)
+          }
+          return { model, use_reasoning: !!m?.use_reasoning }
         })
 
-        const plugins = pluginsRaw.map((p, idx) => {
-          if (!p || typeof p !== 'object') throw new Error(`Plugin #${idx + 1} must be an object.`)
-          if (!('type' in p)) throw new Error(`Plugin #${idx + 1} is missing "type".`)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const plugin = p as any
-          return { type: String(plugin.type), configuration: plugin.configuration || {} }
+        const normalizedPlugins = (formData.plugins || []).filter((p) => {
+          const hasType = (p?.type || '').trim()
+          const hasConfigString = typeof p?.configuration === 'string' && (p.configuration as string).trim()
+          const hasConfigObject = p?.configuration && typeof p.configuration === 'object'
+          return hasType || hasConfigString || hasConfigObject
+        })
+
+        const plugins = normalizedPlugins.map((p, idx) => {
+          const type = (p?.type || '').trim()
+          if (!type) {
+            throw new Error(`Plugin #${idx + 1} must include a type.`)
+          }
+
+          let configuration: Record<string, unknown> = {}
+          if (typeof p?.configuration === 'string') {
+            const trimmed = p.configuration.trim()
+            if (trimmed) {
+              try {
+                configuration = JSON.parse(trimmed)
+              } catch {
+                throw new Error(`Plugin #${idx + 1} configuration must be valid JSON.`)
+              }
+            }
+          } else if (p?.configuration && typeof p.configuration === 'object') {
+            configuration = p.configuration as Record<string, unknown>
+          }
+
+          return { type, configuration }
         })
 
         const newDecision: DecisionConfig = {

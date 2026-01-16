@@ -54,10 +54,25 @@ spec:
   connection:
     bufferLimit: 50Mi
 ---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-default-to-semantic-router
+  namespace: vllm-semantic-router-system
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: default
+  to:
+  - group: ""
+    kind: Service
+    name: semantic-router
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: semantic-router
+  name: response-api
   namespace: default
 spec:
   parentRefs:
@@ -71,8 +86,9 @@ spec:
         value: /
     backendRefs:
     - name: mock-vllm
-      kind: Service
+      namespace: default
       port: 8000
+      weight: 1
     timeouts:
       request: 60s
       backendRequest: 60s
@@ -132,4 +148,3 @@ spec:
     kind: Gateway
     name: semantic-router
   type: JSONPatch
-

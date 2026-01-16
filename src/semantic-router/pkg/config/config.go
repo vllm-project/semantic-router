@@ -64,6 +64,8 @@ type RouterConfig struct {
 	SemanticCache `yaml:"semantic_cache"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
+	// Looper configuration for multi-model execution strategies
+	Looper LooperConfig `yaml:"looper,omitempty"`
 	// LLMObservability for LLM tracing, metrics, and logging
 	LLMObservability `yaml:",inline"`
 	// API server configuration
@@ -314,6 +316,35 @@ type MCPCategoryModel struct {
 	ToolName       string            `yaml:"tool_name,omitempty"` // Optional: will auto-discover if not specified
 	Threshold      float32           `yaml:"threshold"`
 	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
+}
+
+// LooperConfig defines the configuration for multi-model execution looper
+type LooperConfig struct {
+	// Endpoint is the OpenAI-compatible API endpoint to call for model execution
+	// Example: "http://localhost:8080/v1/chat/completions"
+	Endpoint string `yaml:"endpoint"`
+
+	// Timeout is the maximum duration for each model call (default: 30s)
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
+
+	// RetryCount is the number of retries for failed model calls (default: 0)
+	RetryCount int `yaml:"retry_count,omitempty"`
+
+	// Headers are additional headers to include in requests to the endpoint
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+// IsEnabled returns true if the looper endpoint is configured
+func (l *LooperConfig) IsEnabled() bool {
+	return l.Endpoint != ""
+}
+
+// GetTimeout returns the configured timeout or default (30 seconds)
+func (l *LooperConfig) GetTimeout() int {
+	if l.TimeoutSeconds <= 0 {
+		return 30
+	}
+	return l.TimeoutSeconds
 }
 
 type SemanticCache struct {
@@ -809,6 +840,11 @@ type ModelParams struct {
 	// Access key for authentication with the model endpoint
 	// When set, router will add "Authorization: Bearer {access_key}" header to requests
 	AccessKey string `yaml:"access_key,omitempty"`
+
+	// ParamSize represents the model parameter size (e.g., "10b", "5b", "100m")
+	// Used by confidence algorithm to determine model order.
+	// Larger parameter count typically means more capable but slower/costlier model.
+	ParamSize string `yaml:"param_size,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -889,8 +925,73 @@ type Decision struct {
 	// ModelRefs contains model references for this decision (currently only supports one model)
 	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
 
+	// Algorithm defines the multi-model execution strategy when multiple ModelRefs are configured.
+	// When nil or not specified, only the first ModelRef is used.
+	Algorithm *AlgorithmConfig `yaml:"algorithm,omitempty"`
+
 	// Plugins contains policy configurations applied after rule matching
 	Plugins []DecisionPlugin `yaml:"plugins,omitempty"`
+}
+
+// AlgorithmConfig defines how multiple models should be executed and aggregated
+type AlgorithmConfig struct {
+	// Type specifies the algorithm type: "confidence", "ratings"
+	// - "confidence": Try smaller models first, escalate to larger models if confidence is low
+	// - "ratings": Execute all models concurrently and return multiple choices for comparison
+	Type string `yaml:"type"`
+
+	// Algorithm-specific configurations (only one should be set based on Type)
+	Confidence *ConfidenceAlgorithmConfig `yaml:"confidence,omitempty"`
+	Ratings    *RatingsAlgorithmConfig    `yaml:"ratings,omitempty"`
+}
+
+// ConfidenceAlgorithmConfig configures the confidence algorithm
+// This algorithm tries smaller models first and escalates to larger models if confidence is low
+type ConfidenceAlgorithmConfig struct {
+	// ConfidenceMethod specifies how to evaluate model confidence
+	// - "avg_logprob": Use average logprob across all tokens (default)
+	// - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
+	// - "hybrid": Use weighted combination of both methods
+	ConfidenceMethod string `yaml:"confidence_method,omitempty"`
+
+	// Threshold is the confidence threshold for escalation
+	// For avg_logprob: logprobs are negative, higher (closer to 0) = more confident
+	//   - Default: -1.0 (very permissive)
+	//   - Typical range: -2.0 to -0.1
+	// For margin: positive values, higher = more confident
+	//   - Default: 0.5
+	//   - Typical range: 0.1 to 2.0
+	// For hybrid: normalized score between 0 and 1
+	//   - Default: 0.5
+	Threshold float64 `yaml:"threshold,omitempty"`
+
+	// HybridWeights configures weights for hybrid method (only used when confidence_method="hybrid")
+	// LogprobWeight + MarginWeight should equal 1.0
+	HybridWeights *HybridWeightsConfig `yaml:"hybrid_weights,omitempty"`
+
+	// OnError defines behavior when a model call fails: "skip" or "fail"
+	// - "skip": Skip the failed model and try the next one (default)
+	// - "fail": Return error immediately
+	OnError string `yaml:"on_error,omitempty"`
+}
+
+// HybridWeightsConfig configures weights for hybrid confidence method
+type HybridWeightsConfig struct {
+	LogprobWeight float64 `yaml:"logprob_weight,omitempty"` // Weight for avg_logprob (default: 0.5)
+	MarginWeight  float64 `yaml:"margin_weight,omitempty"`  // Weight for margin (default: 0.5)
+}
+
+// RatingsAlgorithmConfig configures the ratings algorithm
+// This algorithm executes all models concurrently and returns multiple choices for comparison
+type RatingsAlgorithmConfig struct {
+	// MaxConcurrent limits the number of concurrent model calls
+	// Default: no limit (all models called concurrently)
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
+
+	// OnError defines behavior when a model call fails: "skip" or "fail"
+	// - "skip": Skip the failed model and return remaining results (default)
+	// - "fail": Return error if any model fails
+	OnError string `yaml:"on_error,omitempty"`
 }
 
 // ModelRef represents a reference to a model (without score field)

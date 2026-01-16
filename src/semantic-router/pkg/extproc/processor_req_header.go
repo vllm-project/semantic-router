@@ -100,6 +100,10 @@ type RequestContext struct {
 	// Router replay context
 	RouterReplayID     string                           // ID of the router replay session, if applicable
 	RouterReplayConfig *config.RouterReplayPluginConfig // Configuration for router replay, if applicable
+
+	// Looper context
+	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
+	LooperIteration int  // The iteration number if this is a looper request
 }
 
 // handleRequestHeaders processes the request headers
@@ -141,6 +145,11 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		// Store request ID if present (case-insensitive)
 		if strings.ToLower(h.Key) == headers.RequestID {
 			ctx.RequestID = headerValue
+		}
+		// Check for looper request header
+		if h.Key == headers.VSRLooperRequest && headerValue == "true" {
+			ctx.LooperRequest = true
+			logging.Infof("Detected looper internal request, will skip plugin processing")
 		}
 	}
 

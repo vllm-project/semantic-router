@@ -20,10 +20,6 @@ signals:
       keywords:
         - "calculate"
         - "equation"
-        - "solve"
-        - "compute"
-        - "derivative"
-        - "integral"
       case_sensitive: false
 
     - name: "code_keywords"
@@ -31,9 +27,13 @@ signals:
       keywords:
         - "function"
         - "class"
-        - "debug"
-        - "compile"
-        - "algorithm"
+      case_sensitive: false
+
+    - name: "looper_keywords"
+      operator: "OR"
+      keywords:
+        - "looper"
+        - "collaborative"
       case_sensitive: false
 
   # Embedding-based signals (semantic similarity)
@@ -260,12 +260,66 @@ decisions:
           enabled: true
           similarity_threshold: 0.85
 
+  # Size-aware routing example: Try smaller models first, escalate if confidence is low
+  - name: "confidence_route"
+    description: "Cost-efficient routing: try small model first, escalate if needed"
+    priority: 40
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+        - type: "keyword"
+          name: "looper_keywords"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"    # param_size defined in providers.models
+      - model: "openai/gpt-5.2"
+    algorithm:
+      type: "confidence"
+      confidence:
+        # Confidence evaluation method (all normalized to 0-1, higher = more confident):
+        # - "avg_logprob": Based on average token logprob
+        # - "margin": Based on margin between top-1 and top-2 tokens
+        # - "hybrid": Weighted combination of both
+        confidence_method: "margin"
+        threshold: 0.9      # Escalate to larger model if confidence < threshold (0-1)
+        # For hybrid method, configure weights:
+        # hybrid_weights:
+        #   logprob_weight: 0.4
+        #   margin_weight: 0.6
+        on_error: "skip"    # Skip failed models, try next
+
+  # Ratings algorithm example: Use multiple models, select best based on ratings
+  - name: "ratings_route"
+    description: "Route using ratings algorithm for model selection"
+    priority: 60
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "looper_keywords"
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"    # param_size defined in providers.models
+      - model: "openai/gpt-5.2"
+    algorithm:
+      type: "ratings"
+      ratings:
+        on_error: "skip"    # Skip failed models, try next
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+
 # LLM - Backend model configuration
 providers:
   # Model configuration
+  # param_size is used by confidence algorithm to sort models (smallest first)
   models:
     - name: "openai/gpt-oss-120b"
       reasoning_family: "gpt-oss"
+      param_size: "120b"  # Used for confidence routing
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
@@ -273,6 +327,7 @@ providers:
           protocol: "http"
       access_key: "jGNm/R0CpwDQsvJoaABrymRTrGKt7B63dikib7hW8EyMISRJr"
     - name: "openai/gpt-5.2"
+      param_size: "330b"  # Used for confidence routing
       endpoints:
         - name: "external_provider"
           weight: 1
@@ -291,4 +346,3 @@ providers:
 
   # Default reasoning effort level
   default_reasoning_effort: "high"
-  

@@ -762,10 +762,15 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			} else {
 				// Map class index to category name
 				if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
-					if categoryName != "" {
-						mu.Lock()
-						results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
-						mu.Unlock()
+					// Only add domain if confidence meets threshold
+					// Without this check, low-confidence misclassifications can still match decisions,
+					// causing incorrect routing for typo-laden text
+					if result.Confidence >= c.Config.CategoryModel.Threshold {
+						if categoryName != "" {
+							mu.Lock()
+							results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+							mu.Unlock()
+						}
 					}
 				}
 			}

@@ -30,9 +30,9 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 ### 1. Keyword Signals
 
-**What**: Fast pattern matching with AND/OR operators
-**Latency**: Less than 1ms
-**Use Case**: Deterministic routing, compliance, security
+- **What**: Fast pattern matching with AND/OR operators
+- **Latency**: Less than 1ms
+- **Use Case**: Deterministic routing, compliance, security
 
 ```yaml
 signals:
@@ -46,9 +46,9 @@ signals:
 
 ### 2. Embedding Signals
 
-**What**: Semantic similarity using embeddings
-**Latency**: 10-50ms
-**Use Case**: Intent detection, paraphrase handling
+- **What**: Semantic similarity using embeddings
+- **Latency**: 10-50ms
+- **Use Case**: Intent detection, paraphrase handling
 
 ```yaml
 signals:
@@ -64,9 +64,9 @@ signals:
 
 ### 3. Domain Signals
 
-**What**: MMLU domain classification (14 categories)
-**Latency**: 50-100ms
-**Use Case**: Academic and professional domain routing
+- **What**: MMLU domain classification (14 categories)
+- **Latency**: 50-100ms
+- **Use Case**: Academic and professional domain routing
 
 ```yaml
 signals:
@@ -79,9 +79,9 @@ signals:
 
 ### 4. Fact Check Signals
 
-**What**: ML-based detection of queries needing fact verification
-**Latency**: 50-100ms
-**Use Case**: Healthcare, financial services, education
+- **What**: ML-based detection of queries needing fact verification
+- **Latency**: 50-100ms
+- **Use Case**: Healthcare, financial services, education
 
 ```yaml
 signals:
@@ -94,9 +94,9 @@ signals:
 
 ### 5. User Feedback Signals
 
-**What**: Classification of user feedback and corrections
-**Latency**: 50-100ms
-**Use Case**: Customer support, adaptive learning
+- **What**: Classification of user feedback and corrections
+- **Latency**: 50-100ms
+- **Use Case**: Customer support, adaptive learning
 
 ```yaml
 signals:
@@ -109,9 +109,9 @@ signals:
 
 ### 6. Preference Signals
 
-**What**: LLM-based route preference matching
-**Latency**: 200-500ms
-**Use Case**: Complex intent analysis
+- **What**: LLM-based route preference matching
+- **Latency**: 200-500ms
+- **Use Case**: Complex intent analysis
 
 ```yaml
 signals:
@@ -128,9 +128,9 @@ signals:
 
 ### 7. Language Signals
 
-**What**: Multi-language detection (100+ languages)
-**Latency**: Less than 1ms
-**Use Case**: Route queries to language-specific models or apply language-specific policies
+- **What**: Multi-language detection (100+ languages)
+- **Latency**: Less than 1ms
+- **Use Case**: Route queries to language-specific models or apply language-specific policies
 
 ```yaml
 signals:
@@ -145,8 +145,8 @@ signals:
       description: "Russian language queries"
 ```
 
-**Example**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
-**Example**: "你好，世界" → Chinese (zh) → Chinese model
+- **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
+- **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
 ## How Signals Combine
 
@@ -164,9 +164,8 @@ decisions:
           name: "mathematics"
 ```
 
-**Logic**: Route to advanced_math **only if** both keyword AND domain match
-
-**Use Case**: High-confidence routing (reduce false positives)
+- **Logic**: Route to advanced_math **only if** both keyword AND domain match
+- **Use Case**: High-confidence routing (reduce false positives)
 
 ### OR Operator - Any Can Match
 
@@ -182,9 +181,8 @@ decisions:
           name: "code_debug"
 ```
 
-**Logic**: Route to code_help **if** keyword OR embedding matches
-
-**Use Case**: Broad coverage (reduce false negatives)
+- **Logic**: Route to code_help **if** keyword OR embedding matches
+- **Use Case**: Broad coverage (reduce false negatives)
 
 ### Nested Logic - Complex Rules
 
@@ -204,9 +202,8 @@ decisions:
               name: "factual_queries"
 ```
 
-**Logic**: Route if (mathematics domain) AND (proof keywords OR needs fact checking)
-
-**Use Case**: Complex routing scenarios
+- **Logic**: Route if (mathematics domain) AND (proof keywords OR needs fact checking)
+- **Use Case**: Complex routing scenarios
 
 ## Real-World Example
 

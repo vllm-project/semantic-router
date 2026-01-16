@@ -13,8 +13,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
-// performSecurityChecks performs PII and jailbreak detection with category-specific settings
-func (r *OpenAIRouter) performSecurityChecks(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+// performJailbreaks performs PII and jailbreak detection with category-specific settings
+func (r *OpenAIRouter) performJailbreaks(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string) (*ext_proc.ProcessingResponse, bool) {
 	// Perform PII classification on all message content
 	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
 

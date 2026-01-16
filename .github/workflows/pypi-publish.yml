@@ -2,8 +2,10 @@ name: Publish Python Package to PyPI
 
 on:
   push:
+    branches:
+      - main  # Triggers on every push to main branch
     tags:
-      - 'v*'  # Triggers on version tags like v0.1.0, v0.2.0, etc.
+      - 'v*'  # Also triggers on version tags like v0.1.0, v0.2.0, etc.
   workflow_dispatch:  # Allow manual triggering
     inputs:
       version:
@@ -32,28 +34,47 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Extract version from tag or input
+      - name: Extract version from tag, input, or pyproject.toml
         id: extract_version
+        working-directory: src/vllm-sr
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ -n "${{ inputs.version }}" ]; then
               VERSION="${{ inputs.version }}"
               echo "version=$VERSION" >> $GITHUB_OUTPUT
               echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+              echo "is_dev=false" >> $GITHUB_OUTPUT
             else
               echo "::error::Version input is required for manual dispatch"
               exit 1
             fi
-          else
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Extract from tag - this is a release version
             TAG="${GITHUB_REF#refs/tags/}"
             VERSION="${TAG#v}"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "is_dev=false" >> $GITHUB_OUTPUT
+          else
+            # Push to main - generate development version
+            BASE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+            TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+
+            # Generate dev version: 0.1.0.dev20240115123456
+            # Note: PyPI doesn't allow local version identifiers (+git.xxx)
+            DEV_VERSION="${BASE_VERSION}.dev${TIMESTAMP}"
+
+            echo "version=$DEV_VERSION" >> $GITHUB_OUTPUT
+            echo "tag=v$DEV_VERSION" >> $GITHUB_OUTPUT
+            echo "is_dev=true" >> $GITHUB_OUTPUT
+            echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+            echo "commit_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+            echo "Publishing development version: $DEV_VERSION (commit: ${{ github.sha }})"
           fi
-          echo "Publishing version: $VERSION"
 
       - name: Verify package version matches tag
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/')
         working-directory: src/vllm-sr
         run: |
           PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
@@ -70,6 +91,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install build twine
+
+      - name: Update version in pyproject.toml for dev builds
+        if: steps.extract_version.outputs.is_dev == 'true'
+        working-directory: src/vllm-sr
+        run: |
+          echo "Updating version to ${{ steps.extract_version.outputs.version }}"
+          sed -i.bak 's/^version = .*/version = "${{ steps.extract_version.outputs.version }}"/' pyproject.toml
+          echo "Updated pyproject.toml:"
+          grep '^version = ' pyproject.toml
 
       - name: Build package
         working-directory: src/vllm-sr
@@ -131,7 +161,7 @@ jobs:
           echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vllm-sr==${{ steps.extract_version.outputs.version }}"
 
       - name: Publish to PyPI
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         working-directory: src/vllm-sr
         env:
           TWINE_USERNAME: __token__
@@ -141,7 +171,7 @@ jobs:
           twine upload dist/* --verbose
 
       - name: Create GitHub Release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.extract_version.outputs.tag }}
@@ -151,11 +181,11 @@ jobs:
           generate_release_notes: true
           body: |
             ## Installation
-            
+
             ```bash
             pip install vllm-sr==${{ steps.extract_version.outputs.version }}
             ```
-            
+
             ## What's Changed
             See the full changelog below.
           files: |
@@ -168,13 +198,35 @@ jobs:
           echo "## 🎉 Package Published Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.extract_version.outputs.is_dev }}" = "true" ]; then
+            echo "**Type:** Development Release 🚧" >> $GITHUB_STEP_SUMMARY
+            echo "**Base Version:** ${{ steps.extract_version.outputs.base_version }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Commit:** [\`${{ steps.extract_version.outputs.commit_sha }}\`](https://github.com/${{ github.repository }}/commit/${{ steps.extract_version.outputs.commit_sha }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Type:** Stable Release ✅" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Installation" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "pip install vllm-sr==${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.extract_version.outputs.is_dev }}" = "true" ]; then
+            echo "# Install this specific development version:" >> $GITHUB_STEP_SUMMARY
+            echo "pip install vllm-sr==${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Or install the latest development version:" >> $GITHUB_STEP_SUMMARY
+            echo "pip install --pre vllm-sr" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "pip install vllm-sr==${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Links" >> $GITHUB_STEP_SUMMARY
           echo "- [PyPI Package](https://pypi.org/project/vllm-sr/${{ steps.extract_version.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY
-          echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.extract_version.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.extract_version.outputs.is_dev }}" = "false" ]; then
+            echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.extract_version.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
+          fi
 

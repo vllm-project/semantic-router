@@ -92,8 +92,10 @@ export interface Signals {
 // DECISIONS - Routing logic
 // =============================================================================
 
+
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding'
 export interface DecisionCondition {
-  type: 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding'
+  type: DecisionConditionType
   name: string
 }
 

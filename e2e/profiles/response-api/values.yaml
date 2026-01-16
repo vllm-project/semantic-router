@@ -7,53 +7,62 @@ image:
   pullPolicy: Never
 
 config:
-  # Disable unrelated features for deterministic Response API tests.
-  bert_model:
-    model_id: ""
-    threshold: 0.6
-    use_cpu: true
-
-  semantic_cache:
-    enabled: false
-    backend_type: "memory"
-    similarity_threshold: 0.8
-    max_entries: 1000
-    ttl_seconds: 3600
-    eviction_policy: "fifo"
-
-  tools:
-    enabled: false
-    top_k: 3
-    similarity_threshold: 0.2
-    tools_db_path: "config/tools_db.json"
-    fallback_to_empty: true
-
-  prompt_guard:
-    enabled: false
-    use_modernbert: false
-    model_id: ""
-    threshold: 0.7
-    use_cpu: true
-    jailbreak_mapping_path: ""
-
-  classifier:
-    category_model:
-      model_id: ""
-      use_modernbert: false
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: ""
-    pii_model:
-      model_id: ""
-      threshold: 0.7
-      use_cpu: true
-      pii_mapping_path: ""
-
+  # Response API Configuration - only feature enabled
   response_api:
     enabled: true
     store_backend: "memory"
     ttl_seconds: 86400
     max_responses: 1000
+
+  # vLLM Endpoints - required for Response API to forward requests
+  vllm_endpoints:
+    - name: "test-endpoint"
+      address: "mock-vllm.default.svc.cluster.local"
+      port: 8000
+      weight: 1
+
+  # Minimal model config to satisfy validation (matches mock-vllm /v1/models)
+  model_config:
+    "openai/gpt-oss-20b":
+      use_reasoning: false
+      preferred_endpoints: ["test-endpoint"]
+
+  # Minimal categories and decisions to satisfy validation
+  categories:
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+      mmlu_categories: ["other"]
+
+  strategy: "priority"
+
+  decisions:
+    - name: "default_decision"
+      description: "Default catch-all decision"
+      priority: 1
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: "openai/gpt-oss-20b"
+          use_reasoning: false
+
+  default_model: "openai/gpt-oss-20b"
+
+  # Classifier configuration - disable PII and category models for Response API
+  classifier:
+    category_model:
+      model_id: ""
+      threshold: 0.6
+      use_cpu: true
+      use_modernbert: false
+      category_mapping_path: ""
+    pii_model:
+      model_id: ""
+      threshold: 1.0
+      use_cpu: true
+      pii_mapping_path: ""
 
   api:
     batch_classification:
@@ -72,8 +81,8 @@ config:
 
 resources:
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: "2"
+    memory: "2Gi"
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: "500m"
+    memory: "1Gi"

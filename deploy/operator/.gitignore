@@ -1,0 +1,43 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+testbin/
+Dockerfile.cross
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+cover.out
+cover.html
+
+# Kubernetes Generated files
+config/crd/bases/*.yaml
+!config/crd/bases/vllm.ai_*.yaml
+
+# editor and IDE paraphernalia
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OSX
+.DS_Store
+
+# Operator SDK
+# Note: bundle/ is committed because it contains the OLM bundle manifests
+dist/
+
+# Go
+go.work
+go.work.sum
+
+# Temporary files
+*.tmp
+*.log

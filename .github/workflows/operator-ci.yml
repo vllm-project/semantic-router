@@ -1,0 +1,555 @@
+name: Operator CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'deploy/operator/**'
+      - '.github/workflows/operator-ci.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'deploy/operator/**'
+      - '.github/workflows/operator-ci.yml'
+
+env:
+  GO_VERSION: '1.23'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./deploy/operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run go fmt
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted:"
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.62.2
+
+      - name: Run golangci-lint
+        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./deploy/operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./deploy/operator/coverage.out
+          flags: operator
+          name: operator-coverage
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./deploy/operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build operator binary
+        run: make build
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-binary
+          path: deploy/operator/bin/manager
+          retention-days: 7
+
+  manifests:
+    name: Verify Manifests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./deploy/operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install controller-gen
+        run: |
+          GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0
+
+      - name: Generate manifests
+        run: make manifests
+
+      - name: Verify no changes
+        run: |
+          git diff --exit-code || (echo "Generated manifests are out of date. Run 'make manifests' and commit the changes." && exit 1)
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build operator image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./deploy/operator
+          file: ./deploy/operator/Dockerfile
+          push: false
+          tags: semantic-router-operator:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/operator-image.tar
+
+      - name: Build bundle image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./deploy/operator
+          file: ./deploy/operator/bundle/Dockerfile
+          push: false
+          tags: semantic-router-operator-bundle:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/bundle-image.tar
+
+      - name: Upload operator image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-image
+          path: /tmp/operator-image.tar
+          retention-days: 1
+
+      - name: Upload bundle image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-image
+          path: /tmp/bundle-image.tar
+          retention-days: 1
+
+  bundle-validate:
+    name: Validate OLM Bundle
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./deploy/operator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install operator-sdk
+        run: |
+          export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
+          export OS=$(uname | awk '{print tolower($0)}')
+          export OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/download/v1.34.1
+          curl -LO ${OPERATOR_SDK_DL_URL}/operator-sdk_${OS}_${ARCH}
+          chmod +x operator-sdk_${OS}_${ARCH}
+          sudo mv operator-sdk_${OS}_${ARCH} /usr/local/bin/operator-sdk
+
+      - name: Validate bundle
+        run: operator-sdk bundle validate ./bundle
+
+  integration-test:
+    name: Integration Test (kind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [build, docker-build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install kind
+        run: |
+          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Create kind cluster
+        run: |
+          cat <<EOF | kind create cluster --name operator-test --config=-
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+          - role: control-plane
+          EOF
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Download operator binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: operator-binary
+          path: deploy/operator/bin
+
+      - name: Make operator binary executable
+        run: chmod +x deploy/operator/bin/manager
+
+      - name: Download operator image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: operator-image
+          path: /tmp
+
+      - name: Load operator image into Docker
+        run: docker load --input /tmp/operator-image.tar
+
+      - name: Load operator image into kind
+        run: kind load docker-image semantic-router-operator:test --name operator-test
+
+      - name: Install CRDs
+        run: |
+          cd deploy/operator
+          make install
+
+      - name: Deploy operator
+        run: |
+          cd deploy/operator
+          # Update image in kustomization
+          cd config/manager
+          kustomize edit set image controller=semantic-router-operator:test
+          cd ../..
+          # Deploy operator
+          make deploy IMG=semantic-router-operator:test
+
+      - name: Wait for operator deployment to be created
+        run: |
+          echo "Waiting for operator deployment to be created..."
+          for i in {1..30}; do
+            DEPLOYMENT=$(kubectl get deployment -n semantic-router-operator-system -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$DEPLOYMENT" ]; then
+              echo "Found deployment: $DEPLOYMENT"
+              echo "OPERATOR_DEPLOYMENT=$DEPLOYMENT" >> $GITHUB_ENV
+              break
+            fi
+            echo "Waiting for deployment creation... (attempt $i/30)"
+            sleep 2
+          done
+          if [ -z "$DEPLOYMENT" ]; then
+            echo "ERROR: Deployment not found after 60 seconds"
+            kubectl get all -n semantic-router-operator-system
+            exit 1
+          fi
+
+      - name: Wait for operator deployment to be ready
+        run: |
+          kubectl wait --for=condition=available --timeout=120s \
+            deployment/${{ env.OPERATOR_DEPLOYMENT }} \
+            -n semantic-router-operator-system
+
+      - name: Check operator logs
+        if: always()
+        run: |
+          echo "=== Operator Logs ==="
+          # Try to get deployment name from env, fallback to label selector
+          DEPLOYMENT="${{ env.OPERATOR_DEPLOYMENT }}"
+          if [ -z "$DEPLOYMENT" ]; then
+            DEPLOYMENT=$(kubectl get deployment -n semantic-router-operator-system -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          fi
+          if [ -n "$DEPLOYMENT" ]; then
+            kubectl logs -n semantic-router-operator-system \
+              deployment/$DEPLOYMENT \
+              --all-containers --tail=100 || true
+          else
+            echo "Could not find operator deployment"
+            kubectl get all -n semantic-router-operator-system || true
+          fi
+
+      - name: Create test namespace
+        run: |
+          kubectl create namespace semantic-router-test
+
+      - name: Create test SemanticRouter CR
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: vllm.ai/v1alpha1
+          kind: SemanticRouter
+          metadata:
+            name: test-router
+            namespace: semantic-router-test
+          spec:
+            replicas: 1
+            image:
+              repository: ghcr.io/vllm-project/semantic-router/extproc
+              tag: latest
+              pullPolicy: IfNotPresent
+            service:
+              type: ClusterIP
+              grpc:
+                port: 50051
+                targetPort: 50051
+              api:
+                port: 8080
+                targetPort: 8080
+            resources:
+              limits:
+                memory: "2Gi"
+                cpu: "1"
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+            persistence:
+              enabled: false
+            startupProbe:
+              enabled: true
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 60
+            # Minimal config for testing - avoids downloading large models
+            config:
+              bert_model:
+                model_id: "models/mom-embedding-light"
+                threshold: "0.6"
+                use_cpu: true
+              semantic_cache:
+                enabled: true
+                backend_type: "memory"
+                max_entries: 100
+              tools:
+                enabled: false
+              prompt_guard:
+                enabled: false
+              classifier:
+                category_model:
+                  model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+                  use_cpu: true
+                pii_model:
+                  model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+                  use_cpu: true
+              api:
+                batch_classification:
+                  max_batch_size: 50
+                  metrics:
+                    enabled: true
+              observability:
+                tracing:
+                  enabled: false
+            toolsDb:
+            - tool:
+                type: "function"
+                function:
+                  name: "test_tool"
+                  description: "Test tool for CI"
+                  parameters:
+                    type: "object"
+                    properties:
+                      input:
+                        type: "string"
+                    required: ["input"]
+              description: "Test tool"
+              category: "test"
+              tags: ["test"]
+          EOF
+
+      - name: Wait for SemanticRouter deployment to be created
+        run: |
+          echo "Waiting for deployment to be created..."
+          for i in {1..30}; do
+            if kubectl get deployment test-router -n semantic-router-test 2>/dev/null; then
+              echo "Deployment found!"
+              break
+            fi
+            echo "Waiting for deployment creation... (attempt $i/30)"
+            sleep 2
+          done
+
+      - name: Verify resources created
+        run: |
+          echo "=== Checking Deployment ==="
+          kubectl get deployment test-router -n semantic-router-test -o yaml || true
+
+          echo "=== Checking Service ==="
+          kubectl get service test-router -n semantic-router-test || true
+
+          echo "=== Checking ConfigMap ==="
+          kubectl get configmap -n semantic-router-test || true
+
+          echo "=== Checking ServiceAccount ==="
+          kubectl get serviceaccount -n semantic-router-test || true
+
+          echo "=== Checking Pods ==="
+          kubectl get pods -n semantic-router-test || true
+
+      - name: Wait for semantic router pod to start
+        run: |
+          echo "Waiting for pod to be created..."
+          for i in {1..60}; do
+            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [ -n "$POD_NAME" ]; then
+              echo "Pod $POD_NAME found!"
+              break
+            fi
+            echo "Waiting for pod creation... (attempt $i/60)"
+            sleep 2
+          done
+
+      - name: Wait for semantic router pod to be ready
+        run: |
+          echo "Waiting for pod to be ready (downloading models may take several minutes)..."
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/instance=test-router \
+            -n semantic-router-test \
+            --timeout=300s || {
+              echo "Pod failed to become ready within 5 minutes"
+              echo "=== Pod Status ==="
+              kubectl get pods -n semantic-router-test -o wide
+              echo "=== Pod Events ==="
+              kubectl get events -n semantic-router-test --sort-by='.lastTimestamp'
+              echo "=== Pod Logs ==="
+              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+              if [ -n "$POD_NAME" ]; then
+                kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=100 || true
+              fi
+              exit 1
+            }
+
+      - name: Check semantic router pod status
+        if: always()
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -n semantic-router-test -o wide || true
+
+          echo "=== Pod Events ==="
+          kubectl get events -n semantic-router-test --sort-by='.lastTimestamp' || true
+
+      - name: Get semantic router logs
+        if: always()
+        run: |
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          if [ -n "$POD_NAME" ]; then
+            echo "=== Semantic Router Pod Logs ==="
+            kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=200 || true
+          else
+            echo "No pod found to get logs from"
+          fi
+
+      - name: Verify deployment reconciliation
+        run: |
+          echo "=== Checking SemanticRouter Status ==="
+          kubectl get semanticrouter test-router -n semantic-router-test -o yaml || true
+
+          echo "=== Verifying Deployment Exists ==="
+          if kubectl get deployment test-router -n semantic-router-test; then
+            echo "✓ Deployment successfully created by operator"
+          else
+            echo "✗ Deployment not found"
+            exit 1
+          fi
+
+          echo "=== Verifying Service Exists ==="
+          if kubectl get service test-router -n semantic-router-test; then
+            echo "✓ Service successfully created by operator"
+          else
+            echo "✗ Service not found"
+            exit 1
+          fi
+
+      - name: Test service connectivity
+        run: |
+          echo "=== Testing Service Endpoints ==="
+          kubectl get endpoints -n semantic-router-test test-router || true
+
+      - name: Upload operator logs
+        if: always()
+        run: |
+          mkdir -p /tmp/operator-logs
+          # Try to get deployment name from env, fallback to label selector
+          DEPLOYMENT="${{ env.OPERATOR_DEPLOYMENT }}"
+          if [ -z "$DEPLOYMENT" ]; then
+            DEPLOYMENT=$(kubectl get deployment -n semantic-router-operator-system -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          fi
+          if [ -n "$DEPLOYMENT" ]; then
+            kubectl logs -n semantic-router-operator-system \
+              deployment/$DEPLOYMENT \
+              --all-containers > /tmp/operator-logs/operator.log || true
+          fi
+
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          if [ -n "$POD_NAME" ]; then
+            kubectl logs $POD_NAME -n semantic-router-test --all-containers > /tmp/operator-logs/semantic-router.log || true
+          fi
+
+          kubectl get all -n semantic-router-test -o yaml > /tmp/operator-logs/resources.yaml || true
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-integration-logs
+          path: /tmp/operator-logs/
+          retention-days: 7
+
+      - name: Clean up
+        if: always()
+        run: |
+          kind delete cluster --name operator-test || true

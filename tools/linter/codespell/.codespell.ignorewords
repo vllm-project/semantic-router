@@ -13,3 +13,27 @@ Sie
 # NPM package names (not spelling errors)
 devlop
 trough
+# Intentional typos for typo augmentation training (ft_linear_lora_consistency.py)
+teh
+adn
+taht
+wiht
+tihs
+hvae
+thier
+tehre
+tehse
+thsoe
+waht
+wehn
+wehre
+whcih
+expalin
+calculte
+follwing
+strcture
+# Kubernetes operators (not spelling errors)
+NotIn
+notin
+# Cloud provider acronyms (not spelling errors)
+AKS

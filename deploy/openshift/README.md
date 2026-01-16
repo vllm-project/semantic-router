@@ -137,12 +137,20 @@ oc get route prometheus -n vllm-semantic-router-system -o jsonpath='{.spec.host}
 API_ROUTE=$(oc get route semantic-router-api -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
 
 # Test health endpoint
-curl https://$API_ROUTE/health
+curl -k https://$API_ROUTE/health
 
 # Test classification
-curl -X POST https://$API_ROUTE/api/v1/classify/intent \
+curl -k -X POST https://$API_ROUTE/api/v1/classify/intent \
   -H "Content-Type: application/json" \
   -d '{"text": "What is machine learning?"}'
+
+# Get the Envoy route (for chat completions endpoint)
+ENVOY_ROUTE=$(oc get route envoy-http -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
+
+# Test auto routing (hits a model backend via Envoy)
+curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
 
 ## Architecture Differences from Kubernetes
