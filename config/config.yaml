@@ -20,7 +20,8 @@ response_api:
 
 semantic_cache:
   enabled: true
-  backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
+  backend_type: "redis"  # Options: "memory", "milvus", "redis" or "hybrid"
+  backend_config_path: "config/semantic-cache/redis.yaml"  # Backend configuration (inherited by all domains)
   similarity_threshold: 0.8
   max_entries: 1000  # Only applies to memory backend
   ttl_seconds: 3600
@@ -39,6 +40,146 @@ semantic_cache:
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
   embedding_model: "qwen3"
+
+  # Per-domain cache configurations (optional)
+  # When configured, each domain gets its own dedicated cache instance with domain-specific settings
+  #
+  # IMPORTANT: Domains automatically inherit global settings (backend_type, backend_config_path, embedding_model)
+  # when not explicitly specified. This means you only need to override what's different per domain!
+  #
+  # You can use either preset models (embedding_model) or custom models (embedding_model_path):
+  # - embedding_model: "bert", "qwen3", or "gemma" (preset models)
+  # - embedding_model_path: path to your custom domain-specific model (e.g., "models/math-cache-model")
+  # When embedding_model_path is specified, it overrides embedding_model
+
+  # Global cache fallback configuration (used when domain is not configured in 'domains' map)
+  global_cache:
+    enabled: true
+    similarity_threshold: 0.75
+    ttl_seconds: 3600
+    embedding_model: "bert"  # Or use embedding_model_path: "models/general-cache-model"
+    # backend_type and backend_config_path inherited from semantic_cache above
+
+  # Per-domain cache configurations
+  domains:
+    # Health/Medical domain - only override what's different from global
+    health:
+      enabled: true
+      namespace: "medical"
+      embedding_model_path: "models/medical-cache-model"  # Custom trained for medical domain
+      # backend_type and backend_config_path inherited from semantic_cache above
+      similarity_threshold: 0.95  # Higher threshold for medical precision
+      ttl_seconds: 86400  # 24 hours
+
+    # Mathematics domain - uses custom trained model
+    math:
+      enabled: true
+      namespace: "mathematics"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model_path: "models/math-cache-model"  # Custom model for math domain
+      similarity_threshold: 0.85
+      ttl_seconds: 3600  # 1 hour
+
+    # Computer Science domain - uses custom coding model
+    computer_science:
+      enabled: true
+      namespace: "programming"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model_path: "models/coding-cache-model"  # Custom model for coding domain
+      similarity_threshold: 0.80
+      ttl_seconds: 7200  # 2 hours
+
+    # Business/Finance domain - uses custom trained model
+    business:
+      enabled: true
+      namespace: "business"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model_path: "models/finance-cache-model"  # Custom model for finance domain
+      similarity_threshold: 0.85
+      ttl_seconds: 14400  # 4 hours
+
+    # Psychology domain - uses preset Gemma model
+    psychology:
+      enabled: true
+      namespace: "psychology"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model: "gemma"  # Override to use Gemma instead of global BERT
+      similarity_threshold: 0.92
+      ttl_seconds: 43200  # 12 hours
+
+    # Law domain - high precision
+    law:
+      enabled: true
+      namespace: "legal"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.90
+      ttl_seconds: 21600  # 6 hours
+
+    # Biology domain
+    biology:
+      enabled: true
+      namespace: "biology"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.88
+      ttl_seconds: 10800  # 3 hours
+
+    # Chemistry domain
+    chemistry:
+      enabled: true
+      namespace: "chemistry"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.88
+      ttl_seconds: 10800  # 3 hours
+
+    # Physics domain - benefits from Qwen3 for complex physics
+    physics:
+      enabled: true
+      namespace: "physics"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model: "qwen3"  # Override to use Qwen3 for physics
+      similarity_threshold: 0.87
+      ttl_seconds: 7200  # 2 hours
+
+    # Engineering domain
+    engineering:
+      enabled: true
+      namespace: "engineering"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.85
+      ttl_seconds: 7200  # 2 hours
+
+    # Economics domain
+    economics:
+      enabled: true
+      namespace: "economics"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.85
+      ttl_seconds: 7200  # 2 hours
+
+    # History domain
+    history:
+      enabled: true
+      namespace: "history"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.82
+      ttl_seconds: 14400  # 4 hours
+
+    # Philosophy domain - benefits from Gemma
+    philosophy:
+      enabled: true
+      namespace: "philosophy"
+      # backend_type and backend_config_path inherited from semantic_cache
+      embedding_model: "gemma"  # Override to use Gemma for philosophy
+      similarity_threshold: 0.85
+      ttl_seconds: 14400  # 4 hours
+
+    # General/Other domain - catch-all with lower threshold
+    other:
+      enabled: true
+      namespace: "general"
+      # backend_type, backend_config_path, embedding_model inherited from semantic_cache
+      similarity_threshold: 0.75
+      ttl_seconds: 1800  # 30 minutes
 
 tools:
   enabled: true

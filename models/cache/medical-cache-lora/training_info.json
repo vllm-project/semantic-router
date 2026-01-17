@@ -1,0 +1,6 @@
+{
+  "base_model": "sentence-transformers/all-MiniLM-L12-v2",
+  "architecture": "LoRA fine-tuned BERT",
+  "task": "cache embedding",
+  "loss": "Multiple Negatives Ranking (MNR)"
+}
