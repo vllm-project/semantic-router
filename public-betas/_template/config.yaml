@@ -1,0 +1,154 @@
+# Public Beta Configuration Template
+# Copy this directory to create your own public beta
+# Rename the directory to your beta name (kebab-case, e.g., "my-project")
+
+# =============================================================================
+# METADATA
+# =============================================================================
+
+# Unique identifier for this beta (must match directory name)
+name: "REPLACE_WITH_YOUR_BETA_NAME"
+
+# Description of what you're testing
+description: "Brief description of your public beta purpose"
+
+# GitHub usernames who can manage this beta instance
+# These users will have SSH access to the instance
+owners:
+  - "your-github-username"
+  # - "collaborator-username"
+
+# =============================================================================
+# DIGITALOCEAN GPU INSTANCE (AMD MI300X)
+# =============================================================================
+
+instance:
+  # DigitalOcean region (GPU-enabled regions)
+  # Options: nyc1, nyc3, sfo2, sfo3, ams3, tor1
+  region: "nyc1"
+  
+  # Droplet size (AMD GPU instances)
+  # Options:
+  #   - gd-40vcpu-160gb-400gb-1x-amd-mi300x  (1x MI300X, 192GB HBM3)
+  #   - gpu-h100x1-80gb                       (1x H100, 80GB - if available)
+  #   - s-1vcpu-1gb                           (CPU only, for testing)
+  size: "gd-40vcpu-160gb-400gb-1x-amd-mi300x"
+  
+  # Base OS image (Ubuntu with ROCm drivers pre-installed by DigitalOcean)
+  image: "ubuntu-22-04-x64"
+  
+  # Tags for resource management (auto-added: public-beta, semantic-router, pr-{number})
+  tags:
+    - "my-project-tag"
+
+# =============================================================================
+# VLLM CONFIGURATION (ROCm/AMD GPU)
+# =============================================================================
+
+vllm:
+  # HuggingFace model ID
+  # Popular choices for AMD MI300X (192GB HBM3):
+  #   - Qwen/Qwen2.5-7B-Instruct
+  #   - Qwen/Qwen2.5-32B-Instruct
+  #   - Qwen/Qwen2.5-72B-Instruct
+  #   - meta-llama/Llama-3.1-8B-Instruct
+  #   - meta-llama/Llama-3.1-70B-Instruct
+  #   - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+  #   - mistralai/Mixtral-8x7B-Instruct-v0.1
+  model: "Qwen/Qwen2.5-7B-Instruct"
+  
+  # Tensor parallelism (number of GPUs to use)
+  # MI300X instances typically have 1 GPU with 192GB memory
+  tensor_parallel_size: 1
+  
+  # GPU memory utilization (0.0-1.0)
+  gpu_memory_utilization: 0.9
+  
+  # Maximum sequence length
+  max_model_len: 32768
+  
+  # vLLM API port
+  port: 8000
+  
+  # Additional vLLM arguments for ROCm
+  extra_args: []
+
+# =============================================================================
+# SEMANTIC ROUTER CONFIGURATION
+# =============================================================================
+
+semantic_router:
+  # Configuration source
+  # Options:
+  #   - "default"  : Use the default config/config.yaml from the repo
+  #   - "custom"   : Use the custom_config section below (merged with default)
+  #   - "file"     : Use a custom config file path
+  config_source: "default"
+  
+  # Custom inline configuration (only used if config_source: "custom")
+  # This will be merged with the default configuration
+  custom_config:
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      similarity_threshold: 0.8
+      embedding_model: "qwen3"
+    
+    prompt_guard:
+      enabled: true
+      threshold: 0.7
+    
+    classifier:
+      category_model:
+        model_id: "models/mom-domain-classifier"
+        threshold: 0.6
+
+# =============================================================================
+# NETWORKING & FIREWALL
+# =============================================================================
+
+networking:
+  # UFW Firewall rules (auto-configured)
+  # Default allowed ports:
+  #   - 22/tcp    (SSH)
+  #   - 8080/tcp  (Semantic Router API)
+  #   - 8801/tcp  (Envoy Proxy - main entry point)
+  #   - 9190/tcp  (Prometheus Metrics)
+  
+  # Additional ports to open (optional)
+  additional_ports: []
+  #   - port: 3000
+  #     protocol: tcp
+  #     comment: "Dashboard"
+  
+  # IP allowlist (CIDR notation) - if empty, all IPs allowed for open ports
+  # SSH is always restricted to configured SSH keys regardless of this setting
+  allowed_ips: []
+  #   - "1.2.3.4/32"
+  #   - "10.0.0.0/8"
+
+# =============================================================================
+# LIFECYCLE (PR-based)
+# =============================================================================
+# 
+# Instance lifecycle is tied to the PR status:
+#   - PR Approved    → Instance created automatically
+#   - PR Updated     → Configuration synced to running instance
+#   - PR Closed      → Instance deleted automatically
+#   - PR Merged      → Instance deleted automatically
+#
+# No manual provisioning or teardown needed!
+
+lifecycle:
+  # Optional: Maximum duration in hours (instance auto-deletes after this time)
+  # Leave commented out for PR-based lifecycle only
+  # max_duration_hours: 24
+  
+  # Notification settings
+  notifications:
+    # Post comment when instance is ready
+    on_ready: true
+    # Post comment when configuration is updated
+    on_updated: true
+    # Post comment when instance is deleted
+    on_deleted: true
