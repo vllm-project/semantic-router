@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from dataset_pipeline import (
     RoutePolicyGenerator,
     TopicPool,
 )
+
+# pytest src/training/preference_model_fine_tuning/test_dataset_pipeline.py --log-cli-level=DEBUG
 
 
 class DummyLLMClient:
@@ -93,7 +96,7 @@ def test_pipeline_runs_with_mock_llm(tmp_path: Path, monkeypatch: pytest.MonkeyP
         intent_model=dummy_llm, dialogue_model=dummy_llm, verifier=dummy_llm
     )
     augmentation_engine = AugmentationEngine(available_policies=[])
-
+    logging.info("Starting pipeline run test...")
     pipeline = PreferenceModelDataPipeline(
         policy_generator=policy_generator,
         conversation_synthesizer=synthesizer,
@@ -102,7 +105,6 @@ def test_pipeline_runs_with_mock_llm(tmp_path: Path, monkeypatch: pytest.MonkeyP
         clean_samples=2,
         augmented_samples=1,
     )
-
     pipeline.run()
 
     assert pipeline.output_path.exists()
@@ -126,3 +128,7 @@ def test_pipeline_runs_with_mock_llm(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert augmented_rows
     assert augmented_rows[0]["augmentations"]
     assert augmented_rows[0]["ground_truth_policy"]
+
+    # cleanup
+    # delete the created file
+    pipeline.output_path.unlink()
