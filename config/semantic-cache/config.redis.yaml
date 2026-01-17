@@ -8,7 +8,9 @@ semantic_cache:
   backend_type: "redis"  # Using Redis vector database for semantic cache
   similarity_threshold: 0.80  # Global threshold (lowered for better matching)
   ttl_seconds: 3600
-  redis: # Inline Redis configuration
+
+  # Redis configuration example
+  redis:
     # Connection Settings
     connection:
       # Redis server host (change for production deployment)
@@ -69,7 +71,7 @@ semantic_cache:
       auto_create_index: true
       # Print detailed error messages
       verbose_errors: true
-  # (Deprecated) Or you can set up the redis connection using below config:
+  # (Deprecated) Or you can set up the redis connection using the below config:
   # backend_config_path: "config/semantic-cache/redis.yaml"
 
   # Embedding model for semantic similarity matching
