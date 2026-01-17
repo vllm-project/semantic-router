@@ -35,6 +35,9 @@ jobs:
         with:
           version: ${{ env.HELM_VERSION }}
 
+      - name: Build chart dependencies
+        run: helm dependency build ${{ env.CHART_PATH }}
+
       - name: Lint chart
         run: helm lint ${{ env.CHART_PATH }}
 

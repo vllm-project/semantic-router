@@ -136,7 +136,10 @@ helm-package: ## Package the Helm chart
 helm-package:
 	@$(LOG_TARGET)
 	@mkdir -p ./dist
-	@helm package $(HELM_CHART_PATH) --destination ./dist
+	@tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	cp -a $(HELM_CHART_PATH) "$$tmp_dir/chart"; \
+	helm package -u "$$tmp_dir/chart" --destination ./dist
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm chart packaged successfully"
 	@ls -lh ./dist/semantic-router-*.tgz
 
