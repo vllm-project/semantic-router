@@ -31,6 +31,8 @@ pub enum TokenizationStrategy {
     BERT,
     /// ModernBERT models (U32 tokens, optimized padding)
     ModernBERT,
+    /// mmBERT models (multilingual ModernBERT, U32 tokens, 256k vocab, 8192 max length)
+    MmBERT,
     /// LoRA-enabled models (I32 tokens, LoRA-specific handling)
     LoRA,
     /// Long-context embedding models (varies by model)
@@ -196,8 +198,15 @@ impl UnifiedTokenizer {
         let config = TokenizationConfig {
             tokenization_strategy,
             token_data_type: match tokenization_strategy {
-                TokenizationStrategy::ModernBERT => TokenDataType::U32,
+                TokenizationStrategy::ModernBERT | TokenizationStrategy::MmBERT => {
+                    TokenDataType::U32
+                }
                 _ => TokenDataType::I32,
+            },
+            // mmBERT supports 8192 max length, ModernBERT uses 512
+            max_length: match tokenization_strategy {
+                TokenizationStrategy::MmBERT => 8192,
+                _ => 512,
             },
             ..Default::default()
         };
@@ -333,14 +342,16 @@ impl UnifiedTokenizer {
 impl DualPathTokenizer for UnifiedTokenizer {
     fn tokenize(&self, text: &str) -> Result<TokenizationResult> {
         let mode = match self.config.tokenization_strategy {
-            TokenizationStrategy::ModernBERT => TokenizationMode::ModernBertBatch,
+            TokenizationStrategy::ModernBERT | TokenizationStrategy::MmBERT => {
+                TokenizationMode::ModernBertBatch
+            }
             TokenizationStrategy::LoRA => TokenizationMode::LoRA,
             _ => TokenizationMode::Single,
         };
 
         match mode {
             TokenizationMode::ModernBertBatch => {
-                // ModernBERT uses batch processing even for single text
+                // ModernBERT and mmBERT use batch processing even for single text
                 let tokenizer = self.configure_for_mode(mode)?;
                 let encodings = tokenizer
                     .encode_batch(vec![text], self.config.add_special_tokens)
@@ -360,7 +371,9 @@ impl DualPathTokenizer for UnifiedTokenizer {
 
     fn tokenize_batch(&self, texts: &[&str]) -> Result<BatchTokenizationResult> {
         let mode = match self.config.tokenization_strategy {
-            TokenizationStrategy::ModernBERT => TokenizationMode::ModernBertBatch,
+            TokenizationStrategy::ModernBERT | TokenizationStrategy::MmBERT => {
+                TokenizationMode::ModernBertBatch
+            }
             _ => TokenizationMode::Batch,
         };
 
@@ -467,11 +480,40 @@ pub fn detect_tokenization_strategy(tokenizer_path: &str) -> Result<Tokenization
     // This is a heuristic approach - in practice, you'd pass strategy explicitly
     let vocab_size = tokenizer.get_vocab_size(false);
 
-    if vocab_size > 50000 {
+    // mmBERT has vocab_size of 256000 for multilingual support
+    if vocab_size >= 200000 {
+        Ok(TokenizationStrategy::MmBERT)
+    } else if vocab_size > 50000 {
         Ok(TokenizationStrategy::ModernBERT)
     } else {
         Ok(TokenizationStrategy::BERT)
     }
+}
+
+/// Detect if a model is mmBERT from config.json
+pub fn detect_mmbert_from_config(config_path: &str) -> Result<bool> {
+    let config_str = std::fs::read_to_string(config_path).map_err(E::msg)?;
+    let config: serde_json::Value = serde_json::from_str(&config_str).map_err(E::msg)?;
+
+    // Check for mmBERT-specific characteristics:
+    // 1. vocab_size >= 200000 (mmBERT uses 256000)
+    // 2. model_type == "modernbert"
+    // 3. position_embedding_type == "sans_pos" (RoPE-based)
+    let vocab_size = config
+        .get("vocab_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let model_type = config
+        .get("model_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let position_embedding_type = config
+        .get("position_embedding_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    // mmBERT has large vocab (256000) and uses modernbert architecture with sans_pos
+    Ok(vocab_size >= 200000 && model_type == "modernbert" && position_embedding_type == "sans_pos")
 }
 
 /// Legacy C-compatible tokenization result structure
@@ -586,6 +628,48 @@ pub fn create_lora_compatibility_tokenizer(
     let config = TokenizationConfig {
         tokenization_strategy: TokenizationStrategy::LoRA,
         token_data_type: TokenDataType::U32, // LoRA typically uses u32
+        ..Default::default()
+    };
+
+    let unified_tokenizer = UnifiedTokenizer::new(tokenizer, config, device)?;
+    Ok(Box::new(unified_tokenizer))
+}
+
+/// Create a tokenizer for mmBERT compatibility (multilingual ModernBERT)
+///
+/// mmBERT is a multilingual encoder built on ModernBERT architecture with:
+/// - 256k vocabulary for 1800+ language support
+/// - 8192 max sequence length
+/// - RoPE positional embeddings (sans_pos)
+pub fn create_mmbert_compatibility_tokenizer(
+    tokenizer: Tokenizer,
+    device: Device,
+) -> Result<Box<dyn DualPathTokenizer>> {
+    let config = TokenizationConfig {
+        tokenization_strategy: TokenizationStrategy::MmBERT,
+        token_data_type: TokenDataType::U32,
+        max_length: 8192,               // mmBERT supports 8k context
+        pad_token_id: 0,                // mmBERT pad_token_id from config
+        pad_token: "<pad>".to_string(), // mmBERT uses <pad> token
+        ..Default::default()
+    };
+
+    let unified_tokenizer = UnifiedTokenizer::new(tokenizer, config, device)?;
+    Ok(Box::new(unified_tokenizer))
+}
+
+/// Create a tokenizer for mmBERT with custom max length
+pub fn create_mmbert_compatibility_tokenizer_with_max_length(
+    tokenizer: Tokenizer,
+    device: Device,
+    max_length: usize,
+) -> Result<Box<dyn DualPathTokenizer>> {
+    let config = TokenizationConfig {
+        tokenization_strategy: TokenizationStrategy::MmBERT,
+        token_data_type: TokenDataType::U32,
+        max_length,
+        pad_token_id: 0,
+        pad_token: "<pad>".to_string(),
         ..Default::default()
     };
 

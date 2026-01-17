@@ -423,6 +423,172 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
     }
 }
 
+// ============================================================================
+// mmBERT (Multilingual ModernBERT) Initialization Functions
+// ============================================================================
+
+// Global static for mmBERT classifier
+pub static MMBERT_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static MMBERT_TOKEN_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
+> = OnceLock::new();
+
+/// Initialize mmBERT classifier (multilingual ModernBERT)
+///
+/// mmBERT is a multilingual encoder supporting 1800+ languages with:
+/// - 256k vocabulary
+/// - 8192 max sequence length
+/// - RoPE positional embeddings
+///
+/// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+///
+/// # Returns
+/// - true if initialization succeeded
+/// - false if initialization failed
+#[no_mangle]
+pub extern "C" fn init_mmbert_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "🌐 Initializing mmBERT (multilingual) classifier from: {}",
+        model_id
+    );
+
+    // Explicitly load as Multilingual variant
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual,
+    ) {
+        Ok(model) => {
+            let is_multilingual = model.is_multilingual();
+            eprintln!("   ✓ mmBERT loaded (is_multilingual: {})", is_multilingual);
+            MMBERT_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT classifier with auto-detection
+///
+/// This function auto-detects whether a model is mmBERT (multilingual) or standard ModernBERT
+/// based on the model's config.json (vocab_size >= 200000 and position_embedding_type == "sans_pos").
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+///
+/// # Returns
+/// - true if initialization succeeded
+/// - false if initialization failed
+#[no_mangle]
+pub extern "C" fn init_mmbert_classifier_auto(model_id: *const c_char, use_cpu: bool) -> bool {
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!("🔍 Auto-detecting ModernBERT variant from: {}", model_id);
+
+    // Load with auto-detection (will detect mmBERT from config.json)
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(
+        model_id,
+        use_cpu,
+    ) {
+        Ok(model) => {
+            let variant = model.variant();
+            let is_multilingual = model.is_multilingual();
+            eprintln!("   ✓ Detected variant: {:?} (multilingual: {})", variant, is_multilingual);
+            MMBERT_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT token classifier (multilingual)
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+///
+/// # Returns
+/// - true if initialization succeeded
+/// - false if initialization failed
+#[no_mangle]
+pub extern "C" fn init_mmbert_token_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "🌐 Initializing mmBERT (multilingual) token classifier from: {}",
+        model_id
+    );
+
+    // Explicitly load as Multilingual variant
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual,
+    ) {
+        Ok(classifier) => {
+            let is_multilingual = classifier.is_multilingual();
+            eprintln!("   ✓ mmBERT token classifier loaded (is_multilingual: {})", is_multilingual);
+            MMBERT_TOKEN_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT token classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Check if a model is mmBERT (multilingual) based on config.json
+///
+/// Returns true if the model has vocab_size >= 200000 and uses sans_pos position embeddings.
+///
+/// # Safety
+/// - `config_path` must be a valid null-terminated C string pointing to config.json
+#[no_mangle]
+pub extern "C" fn is_mmbert_model(config_path: *const c_char) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let config_path = unsafe {
+        match CStr::from_ptr(config_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    match ModernBertVariant::detect_from_config(config_path) {
+        Ok(variant) => variant == ModernBertVariant::Multilingual,
+        Err(_) => false,
+    }
+}
+
 /// Initialize ModernBERT fact-check classifier (halugate-sentinel model)
 ///
 /// This initializes the halugate-sentinel ModernBERT model for classifying
