@@ -77,6 +77,13 @@ observability:
       enabled: false
       model_metrics: false
       queue_depth_estimation: false
+    dynamic_scoring:
+      enabled: false
+      weights:
+        accuracy: 0
+        latency: 0
+        cost: 0
+      normalization: {}
 api:
   batch_classification:
     metrics:
