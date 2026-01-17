@@ -1,3 +1,39 @@
+{{- $config := deepCopy .Values.config -}}
+{{- $semanticCache := (get $config "semantic_cache") | default (dict) -}}
+{{- $responseAPI := (get $config "response_api") | default (dict) -}}
+{{- $observability := (get $config "observability") | default (dict) -}}
+{{- $tracing := (get $observability "tracing") | default (dict) -}}
+{{- $tracingExporter := (get $tracing "exporter") | default (dict) -}}
+{{- $semanticBackend := (get $semanticCache "backend_type") | default "" -}}
+{{- $responseBackend := (get $responseAPI "store_backend") | default "" -}}
+{{- $responseEnabled := (get $responseAPI "enabled") | default false -}}
+{{- $tracingEnabled := (get $tracing "enabled") | default false -}}
+
+{{- if and .Values.dependencies.semanticCache.redis.enabled (eq $semanticBackend "redis") -}}
+{{- $_ := set $semanticCache "backend_config_path" "config/semantic-cache.redis.yaml" -}}
+{{- end -}}
+{{- if and .Values.dependencies.semanticCache.milvus.enabled (eq $semanticBackend "milvus") -}}
+{{- $_ := set $semanticCache "backend_config_path" "config/semantic-cache.milvus.yaml" -}}
+{{- end -}}
+
+{{- if and $responseEnabled .Values.dependencies.responseApi.milvus.enabled (eq $responseBackend "milvus") -}}
+{{- $milvus := (get $responseAPI "milvus") | default (dict) -}}
+{{- $_ := set $milvus "address" (include "semantic-router.responseApi.milvusAddress" .) -}}
+{{- $_ := set $milvus "database" .Values.dependencies.responseApi.milvus.database -}}
+{{- $_ := set $milvus "response_collection" .Values.dependencies.responseApi.milvus.responseCollection -}}
+{{- $_ := set $milvus "conversation_collection" .Values.dependencies.responseApi.milvus.conversationCollection -}}
+{{- $_ := set $responseAPI "milvus" $milvus -}}
+{{- end -}}
+
+{{- if and $tracingEnabled .Values.dependencies.observability.jaeger.enabled -}}
+{{- $_ := set $tracingExporter "endpoint" (include "semantic-router.jaeger.otlpEndpoint" .) -}}
+{{- $_ := set $tracing "exporter" $tracingExporter -}}
+{{- $_ := set $observability "tracing" $tracing -}}
+{{- end -}}
+
+{{- $_ := set $config "semantic_cache" $semanticCache -}}
+{{- $_ := set $config "response_api" $responseAPI -}}
+{{- $_ := set $config "observability" $observability -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,6 +43,68 @@ metadata:
     {{- include "semantic-router.labels" . | nindent 4 }}
 data:
   config.yaml: |
-    {{- toYaml .Values.config | nindent 4 }}
+    {{- toYaml $config | nindent 4 }}
   tools_db.json: |
     {{- toJson .Values.toolsDb | nindent 4 }}
+  {{- if .Values.dependencies.semanticCache.redis.enabled }}
+  semantic-cache.redis.yaml: |
+    connection:
+      host: "{{ include "semantic-router.semanticCache.redisHost" . }}"
+      port: {{ .Values.dependencies.semanticCache.redis.port }}
+      database: {{ .Values.dependencies.semanticCache.redis.database }}
+      password: "{{ .Values.dependencies.semanticCache.redis.password }}"
+      timeout: {{ .Values.dependencies.semanticCache.redis.timeout }}
+      tls:
+        enabled: {{ .Values.dependencies.semanticCache.redis.tls.enabled }}
+    index:
+      name: "{{ .Values.dependencies.semanticCache.redis.index.name }}"
+      prefix: "{{ .Values.dependencies.semanticCache.redis.index.prefix }}"
+      vector_field:
+        name: "{{ .Values.dependencies.semanticCache.redis.index.vectorFieldName }}"
+        dimension: 384
+        metric_type: "{{ .Values.dependencies.semanticCache.redis.index.metricType }}"
+      index_type: "{{ .Values.dependencies.semanticCache.redis.index.indexType }}"
+      params:
+        M: {{ .Values.dependencies.semanticCache.redis.index.params.m }}
+        efConstruction: {{ .Values.dependencies.semanticCache.redis.index.params.efConstruction }}
+    search:
+      topk: {{ .Values.dependencies.semanticCache.redis.search.topk }}
+    development:
+      drop_index_on_startup: {{ .Values.dependencies.semanticCache.redis.development.dropIndexOnStartup }}
+      auto_create_index: {{ .Values.dependencies.semanticCache.redis.development.autoCreateIndex }}
+      verbose_errors: {{ .Values.dependencies.semanticCache.redis.development.verboseErrors }}
+  {{- end }}
+  {{- if .Values.dependencies.semanticCache.milvus.enabled }}
+  semantic-cache.milvus.yaml: |
+    connection:
+      host: "{{ include "semantic-router.semanticCache.milvusHost" . }}"
+      port: {{ .Values.dependencies.semanticCache.milvus.port }}
+      database: "{{ .Values.dependencies.semanticCache.milvus.database }}"
+      timeout: {{ .Values.dependencies.semanticCache.milvus.timeout }}
+      auth:
+        enabled: {{ .Values.dependencies.semanticCache.milvus.auth.enabled }}
+        username: "{{ .Values.dependencies.semanticCache.milvus.auth.username }}"
+        password: "{{ .Values.dependencies.semanticCache.milvus.auth.password }}"
+      tls:
+        enabled: {{ .Values.dependencies.semanticCache.milvus.tls.enabled }}
+    collection:
+      name: "{{ .Values.dependencies.semanticCache.milvus.collection.name }}"
+      description: "{{ .Values.dependencies.semanticCache.milvus.collection.description }}"
+      vector_field:
+        name: "{{ .Values.dependencies.semanticCache.milvus.collection.vectorFieldName }}"
+        dimension: 384
+        metric_type: "{{ .Values.dependencies.semanticCache.milvus.collection.metricType }}"
+      index:
+        type: "{{ .Values.dependencies.semanticCache.milvus.collection.index.type }}"
+        params:
+          M: {{ .Values.dependencies.semanticCache.milvus.collection.index.params.m }}
+          efConstruction: {{ .Values.dependencies.semanticCache.milvus.collection.index.params.efConstruction }}
+    search:
+      params:
+        ef: {{ .Values.dependencies.semanticCache.milvus.search.params.ef }}
+      topk: {{ .Values.dependencies.semanticCache.milvus.search.topk }}
+    development:
+      drop_collection_on_startup: {{ .Values.dependencies.semanticCache.milvus.development.dropCollectionOnStartup }}
+      auto_create_collection: {{ .Values.dependencies.semanticCache.milvus.development.autoCreateCollection }}
+      verbose_errors: {{ .Values.dependencies.semanticCache.milvus.development.verboseErrors }}
+  {{- end }}

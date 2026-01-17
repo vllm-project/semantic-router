@@ -227,6 +227,12 @@ config:
     ttl_seconds: 3600
     eviction_policy: "fifo"
 
+  response_api:
+    enabled: false
+    store_backend: "memory"
+    ttl_seconds: 86400
+    max_responses: 1000
+
   # Tools configuration
   tools:
     enabled: true
@@ -432,3 +438,116 @@ env:
         name: hf-token-secret
         key: token
         optional: true  # Alternative env var name used by huggingface-cli
+
+dependencies:
+  semanticCache:
+    redis:
+      enabled: false
+      host: ""
+      port: 6379
+      database: 0
+      password: ""
+      timeout: 30
+      tls:
+        enabled: false
+      index:
+        name: "semantic_cache_idx"
+        prefix: "doc:"
+        vectorFieldName: "embedding"
+        metricType: "COSINE"
+        indexType: "HNSW"
+        params:
+          m: 16
+          efConstruction: 64
+      search:
+        topk: 1
+      development:
+        dropIndexOnStartup: false
+        autoCreateIndex: true
+        verboseErrors: true
+    milvus:
+      enabled: false
+      host: ""
+      port: 19530
+      database: "semantic_router_cache"
+      timeout: 30
+      auth:
+        enabled: false
+        username: ""
+        password: ""
+      tls:
+        enabled: false
+      collection:
+        name: "semantic_cache"
+        description: "Semantic cache for LLM request-response pairs"
+        vectorFieldName: "embedding"
+        metricType: "IP"
+        index:
+          type: "HNSW"
+          params:
+            m: 16
+            efConstruction: 64
+      search:
+        params:
+          ef: 64
+        topk: 10
+      development:
+        dropCollectionOnStartup: false
+        autoCreateCollection: true
+        verboseErrors: true
+  responseApi:
+    redis:
+      enabled: false
+      host: ""
+      port: 6379
+      database: 0
+      password: ""
+      timeout: 30
+      tls:
+        enabled: false
+    milvus:
+      enabled: false
+      host: ""
+      port: 19530
+      database: "semantic_router_cache"
+      responseCollection: "semantic_router_responses"
+      conversationCollection: "semantic_router_conversations"
+  observability:
+    jaeger:
+      enabled: false
+      otlpGrpcPort: 4317
+      serviceName: ""
+    prometheus:
+      enabled: false
+    grafana:
+      enabled: false
+      adminUser: "admin"
+      adminPassword: "admin"
+
+semantic-cache-redis:
+  architecture: standalone
+  auth:
+    enabled: false
+
+response-api-redis:
+  architecture: standalone
+  auth:
+    enabled: false
+
+semantic-cache-milvus:
+  cluster:
+    enabled: false
+
+jaeger:
+  allInOne:
+    image:
+      tag: "latest"
+
+prometheus:
+  server:
+    image:
+      tag: "v2.53.0"
+
+grafana:
+  image:
+    tag: "11.5.1"

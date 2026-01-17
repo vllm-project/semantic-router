@@ -81,3 +81,41 @@ Get the PVC name
 {{- printf "%s-models" (include "semantic-router.fullname" .) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Resolve semantic cache Redis host for dependency-based deployments.
+*/}}
+{{- define "semantic-router.semanticCache.redisHost" -}}
+{{- if .Values.dependencies.semanticCache.redis.host -}}
+{{- .Values.dependencies.semanticCache.redis.host -}}
+{{- else -}}
+{{- printf "%s-semantic-cache-redis-master" .Release.Name -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve semantic cache Milvus host for dependency-based deployments.
+*/}}
+{{- define "semantic-router.semanticCache.milvusHost" -}}
+{{- if .Values.dependencies.semanticCache.milvus.host -}}
+{{- .Values.dependencies.semanticCache.milvus.host -}}
+{{- else -}}
+{{- printf "%s-semantic-cache-milvus" .Release.Name -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve Response API Milvus address for dependency-based deployments.
+*/}}
+{{- define "semantic-router.responseApi.milvusAddress" -}}
+{{- $host := .Values.dependencies.responseApi.milvus.host | default (printf "%s-semantic-cache-milvus" .Release.Name) -}}
+{{- printf "%s:%d" $host (int .Values.dependencies.responseApi.milvus.port) -}}
+{{- end }}
+
+{{/*
+Resolve Jaeger OTLP endpoint for dependency-based deployments.
+*/}}
+{{- define "semantic-router.jaeger.otlpEndpoint" -}}
+{{- $serviceName := .Values.dependencies.observability.jaeger.serviceName | default (printf "%s-jaeger" .Release.Name) -}}
+{{- printf "%s:%d" $serviceName (int .Values.dependencies.observability.jaeger.otlpGrpcPort) -}}
+{{- end }}

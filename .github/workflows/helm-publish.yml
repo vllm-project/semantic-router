@@ -41,7 +41,7 @@ jobs:
       - name: Package chart
         id: package
         run: |
-          helm package ${{ env.CHART_PATH }} --version v0.0.0-latest --destination .
+          helm package -u ${{ env.CHART_PATH }} --version v0.0.0-latest --destination .
           echo "name=$(ls *.tgz)" >> $GITHUB_OUTPUT
 
       - name: Upload packaged chart
@@ -69,31 +69,31 @@ jobs:
           version: ${{ env.HELM_VERSION }}
 
       - name: Publish chart
-        env:
-          CHART: ${{ needs.validate-and-package.outputs.chart-name }}
-          REPO: ${{ env.REGISTRY }}/$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')/charts
         run: |
+          CHART="${{ needs.validate-and-package.outputs.chart-name }}"
+          REPO="${{ env.REGISTRY }}/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/charts"
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
           helm push "$CHART" "oci://$REPO"
           helm registry logout ${{ env.REGISTRY }}
 
       - name: Create release summary
         run: |
+          REPOSITORY_OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 📦 Helm Chart Published
 
           **Chart:** \`${{ env.CHART_NAME }}\`
           **Version:** \`v0.0.0-latest\`
-          **Registry:** \`${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts\`
+          **Registry:** \`${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts\`
 
           ### Installation
 
           \`\`\`bash
           # Pull the chart
-          helm pull oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }} --version v0.0.0-latest
+          helm pull oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} --version v0.0.0-latest
 
           # Install directly
-          helm install semantic-router oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }} \\
+          helm install semantic-router oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} \\
             --version v0.0.0-latest \\
             --namespace vllm-semantic-router-system \\
             --create-namespace
@@ -102,7 +102,7 @@ jobs:
           ### Upgrade
 
           \`\`\`bash
-          helm upgrade semantic-router oci://${{ env.REGISTRY }}/${{ env.REPOSITORY_OWNER_LOWER }}/charts/${{ env.CHART_NAME }} \\
+          helm upgrade semantic-router oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} \\
             --version v0.0.0-latest \\
             --namespace vllm-semantic-router-system
           \`\`\`
