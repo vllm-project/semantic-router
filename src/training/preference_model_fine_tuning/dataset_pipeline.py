@@ -25,7 +25,8 @@ Phase 2 (augmentation):
 The pipeline emits JSONL with fields:
         {
                 "conversation": [{"role": "user|assistant", "content": "..."}, ...],
-                "route_policies": [{"label": "...", "description": "..."}, ...],
+                "all_policies": [{"label": "...", "description": "..."}, ...],
+                "ground_truth_policy": {"label": "...", "description": "..."},
                 "ground_truth_label": "...",
                 "phase": "clean" | "augmented",
                 "augmentations": ["irrelevance_injection", ...],
@@ -359,7 +360,7 @@ class ConversationSynthesizer:
             # this is in theory part of data augmentation, but we do it here for simplicity
             all_policies = [policy] + random.sample(
                 [p for p in policies if p.label != policy.label],
-                k=random.randint(5, min(20, len(policies) - 1)),
+                k=random.randint(2, min(20, len(policies) - 1)),
             )
             sample = ConversationSample(
                 conversation=conversation,
@@ -692,13 +693,27 @@ class PreferenceModelDataPipeline:
                         description=p.get("description"),
                         seed=p.get("seed"),
                     )
-                    for p in obj.get("route_policies", [])
+                    for p in obj.get("all_policies", [])
                     if p.get("label")
                 ]
+                ground_truth_policy = obj.get("ground_truth_policy", {})
+                if not ground_truth_policy.get("label"):
+                    raise ValueError(f"Invalid ground truth policy in checkpoint {obj}")
+                if ground_truth_policy.get("label") != obj.get(
+                    "ground_truth_label", ""
+                ):
+                    raise ValueError(f"Ground truth label mismatch in checkpoint {obj}")
                 samples.append(
                     ConversationSample(
                         conversation=conversation,
-                        route_policies=policies,
+                        all_policies=policies,
+                        ground_truth_policy=RoutePolicy(
+                            label=obj.get("ground_truth_policy", {}).get("label", ""),
+                            description=obj.get("ground_truth_policy", {}).get(
+                                "description"
+                            ),
+                            seed=obj.get("ground_truth_policy", {}).get("seed"),
+                        ),
                         ground_truth_label=obj.get("ground_truth_label", ""),
                         phase=obj.get("phase", "clean"),
                         augmentations=obj.get("augmentations", []),
@@ -719,10 +734,15 @@ def sample_to_dict(sample: ConversationSample) -> Dict[str, object]:
         "conversation": [
             {"role": t.role, "content": t.content} for t in sample.conversation
         ],
-        "route_policies": [
+        "all_policies": [
             {"label": p.label, "description": p.description, "seed": p.seed}
-            for p in sample.route_policies
+            for p in sample.all_policies
         ],
+        "ground_truth_policy": {
+            "label": sample.ground_truth_policy.label,
+            "description": sample.ground_truth_policy.description,
+            "seed": sample.ground_truth_policy.seed,
+        },
         "ground_truth_label": sample.ground_truth_label,
         "phase": sample.phase,
         "augmentations": sample.augmentations,
