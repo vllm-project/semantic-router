@@ -495,7 +495,7 @@ type SemanticCache struct {
 	// Milvus configuration
 	Milvus *MilvusConfig `yaml:"milvus,omitempty"`
 
-	// Path to backend-specific configuration file
+	// BackendConfigPath is a path to the backend-specific configuration file (Deprecated)
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
 	// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
