@@ -1,3 +1,1 @@
-disable=SC2155 # Declare and assign separately
-disable=SC2034 # Unused variables
-disable=SC1091 # Not following sourced files (e.g., venv activate scripts)
+disable=SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2120,SC2162

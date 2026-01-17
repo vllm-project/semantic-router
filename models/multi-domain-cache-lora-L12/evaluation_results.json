@@ -1,0 +1,26 @@
+[
+  {
+    "domain": "Medical",
+    "baseline_margin": 0.44156545400619507,
+    "lora_margin": 0.55169677734375,
+    "absolute_improvement": 0.11013132333755493,
+    "relative_improvement": 24.94110870361328,
+    "domain_specific_baseline": 35.6
+  },
+  {
+    "domain": "Law",
+    "baseline_margin": 0.4942026734352112,
+    "lora_margin": 0.6269757151603699,
+    "absolute_improvement": 0.1327730417251587,
+    "relative_improvement": 26.866111755371094,
+    "domain_specific_baseline": 23.2
+  },
+  {
+    "domain": "Programming",
+    "baseline_margin": 0.2415318489074707,
+    "lora_margin": 0.2696329951286316,
+    "absolute_improvement": 0.02810114622116089,
+    "relative_improvement": 11.634551048278809,
+    "domain_specific_baseline": 15.6
+  }
+]
