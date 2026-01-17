@@ -1,6 +1,7 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
+import Link from '@docusaurus/Link'
 import styles from './work-groups.module.css'
 
 interface WorkGroup {
@@ -95,29 +96,39 @@ interface WorkGroupCardProps {
 }
 
 const WorkGroupCard: React.FC<WorkGroupCardProps> = ({ group }) => {
+  const groupId = group.name.replace(/\s+/g, '').toLowerCase()
+
   return (
     <div className={styles.workGroupCard}>
       <div className={styles.cardHeader}>
         <span className={styles.icon}>{group.icon}</span>
-        <h3 className={styles.groupName}>{group.name}</h3>
+        <h3 className={styles.groupName}>
+          <Translate id={`workGroups.group.${groupId}.name`}>{group.name}</Translate>
+        </h3>
         <span className={styles.label}>{group.label}</span>
       </div>
-      <p className={styles.description}>{group.description}</p>
+      <p className={styles.description}>
+        <Translate id={`workGroups.group.${groupId}.description`}>{group.description}</Translate>
+      </p>
 
       <div className={styles.skillsSection}>
-        <h4>Skills Needed:</h4>
+        <h4><Translate id="workGroups.card.skillsNeeded">Skills Needed:</Translate></h4>
         <ul className={styles.skillsList}>
           {group.skills && group.skills.map((skill, index) => (
-            <li key={index}>{skill}</li>
+            <li key={index}>
+              <Translate id={`workGroups.group.${groupId}.skills.${index}`}>{skill}</Translate>
+            </li>
           ))}
         </ul>
       </div>
 
       <div className={styles.needsSection}>
-        <h4>Current Needs:</h4>
+        <h4><Translate id="workGroups.card.currentNeeds">Current Needs:</Translate></h4>
         <ul className={styles.needsList}>
           {group.needs && group.needs.map((need, index) => (
-            <li key={index}>{need}</li>
+            <li key={index}>
+              <Translate id={`workGroups.group.${groupId}.needs.${index}`}>{need}</Translate>
+            </li>
           ))}
         </ul>
       </div>
@@ -143,10 +154,12 @@ const WorkGroups: React.FC = () => {
               <Translate id="workGroups.init.title">WG Initialization</Translate>
             </h2>
             <p>
-              We are looking for interests around vLLM Semantic Router project and separate it into different WGs.
+              <Translate id="workGroups.init.description">
+                We are looking for interests around vLLM Semantic Router project and separate it into different WGs.
+              </Translate>
             </p>
             <p>
-              Please comment on
+              <Translate id="workGroups.init.comment.prefix">Please comment on</Translate>
               {' '}
               <a
                 href="https://github.com/vllm-project/semantic-router/issues/15"
@@ -157,7 +170,7 @@ const WorkGroups: React.FC = () => {
                 GitHub Issue #15
               </a>
               {' '}
-              if you are interested in one or more.
+              <Translate id="workGroups.init.comment.suffix">if you are interested in one or more.</Translate>
             </p>
           </section>
 
@@ -166,7 +179,11 @@ const WorkGroups: React.FC = () => {
               ⛰️
               <Translate id="workGroups.community.title">vLLM Semantic Router Community WG</Translate>
             </h2>
-            <p>This section is about setting WG around this project, to gather focus on specify areas.</p>
+            <p>
+              <Translate id="workGroups.community.description">
+                This section is about setting WG around this project, to gather focus on specify areas.
+              </Translate>
+            </p>
 
             <div className={styles.workGroupsGrid}>
               {workingGroups.map((group, index) => (
@@ -181,9 +198,11 @@ const WorkGroups: React.FC = () => {
               <Translate id="workGroups.promotion.title">Community Promotion</Translate>
             </h2>
             <p>
-              We are grateful for any contributions, and if you show consistent contributions to the above specify area,
-              you will be promoting as its maintainer after votes from maintainer team, and you will be invited to
-              semantic-router-maintainer group, and granted WRITE access to this repo.
+              <Translate id="workGroups.promotion.description">
+                We are grateful for any contributions, and if you show consistent contributions to the above specify area,
+                you will be promoting as its maintainer after votes from maintainer team, and you will be invited to
+                semantic-router-maintainer group, and granted WRITE access to this repo.
+              </Translate>
             </p>
           </section>
 
@@ -191,23 +210,23 @@ const WorkGroups: React.FC = () => {
             <h2><Translate id="workGroups.getInvolved.title">How to Get Involved</Translate></h2>
             <ol className={styles.stepsList}>
               <li>
-                <strong>Choose Your Interest Area:</strong>
+                <strong><Translate id="workGroups.step1.title">Choose Your Interest Area:</Translate></strong>
                 {' '}
-                Review the working groups above and identify which areas align with your skills and interests
+                <Translate id="workGroups.step1.desc">Review the working groups above and identify which areas align with your skills and interests</Translate>
               </li>
               <li>
-                <strong>Join the Discussion:</strong>
+                <strong><Translate id="workGroups.step2.title">Join the Discussion:</Translate></strong>
                 {' '}
-                Comment on
+                <Translate id="workGroups.step2.desc.prefix">Comment on</Translate>
                 {' '}
                 <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer">GitHub Issue #15</a>
                 {' '}
-                to express your interest
+                <Translate id="workGroups.step2.desc.suffix">to express your interest</Translate>
               </li>
               <li>
-                <strong>Start Contributing:</strong>
+                <strong><Translate id="workGroups.step3.title">Start Contributing:</Translate></strong>
                 {' '}
-                Look for issues labeled with the corresponding area tags (e.g.,
+                <Translate id="workGroups.step3.desc">Look for issues labeled with the corresponding area tags (e.g.,</Translate>
                 {' '}
                 <code>area/document</code>
                 ,
@@ -216,30 +235,30 @@ const WorkGroups: React.FC = () => {
                 )
               </li>
               <li>
-                <strong>Collaborate:</strong>
+                <strong><Translate id="workGroups.step4.title">Collaborate:</Translate></strong>
                 {' '}
-                Connect with other community members working in the same areas
+                <Translate id="workGroups.step4.desc">Connect with other community members working in the same areas</Translate>
               </li>
             </ol>
           </section>
 
           <section className={styles.contact}>
             <h2><Translate id="workGroups.contact.title">Contact</Translate></h2>
-            <p>For questions about working groups or to get involved:</p>
+            <p><Translate id="workGroups.contact.desc">For questions about working groups or to get involved:</Translate></p>
             <ul>
               <li>
-                Open an issue on
+                <Translate id="workGroups.contact.issue">Open an issue on</Translate>
                 <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer"> GitHub</a>
               </li>
               <li>
-                Join the discussion on
+                <Translate id="workGroups.contact.discussion">Join the discussion on</Translate>
                 <a href="https://github.com/vllm-project/semantic-router/issues/15" target="_blank" rel="noopener noreferrer"> Issue #15</a>
               </li>
               <li>
-                Check out our
-                <a href="/docs/intro"> documentation</a>
+                <Translate id="workGroups.contact.docs">Check out our</Translate>
+                <Link to="/docs/intro"> documentation</Link>
                 {' '}
-                to get started
+                <Translate id="workGroups.contact.start">to get started</Translate>
               </li>
             </ul>
           </section>
